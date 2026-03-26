@@ -88,9 +88,47 @@ Read these documents in order:
 
 Build a checklist from the contract's `successCriteria` array. This is your evaluation framework. Every criterion gets tested independently.
 
-### Step 2: Run Configured Evaluation Strategies
+### Step 2: Visual Verification FIRST (for frontend/UI projects)
 
-Read `evaluator.strategies` from `bober.config.json`. Execute each configured strategy in order.
+**Before running ANY automated strategy**, if this sprint involves UI/frontend changes, you MUST visually verify the output. This is NOT optional. This is the FIRST thing you do.
+
+**Start the dev server and take screenshots:**
+```bash
+# Check what dev command to use
+cat bober.config.json | grep -A1 '"dev"'
+
+# Start the dev server (use the configured command, or npm run dev)
+npm run dev &
+DEV_PID=$!
+sleep 8
+
+# Screenshot the main page
+npx playwright screenshot http://localhost:3000 /tmp/bober-eval-home.png --full-page 2>&1
+
+# Screenshot any other routes relevant to this sprint
+# e.g., npx playwright screenshot http://localhost:3000/dashboard /tmp/bober-eval-dashboard.png --full-page 2>&1
+```
+
+**READ the screenshot(s).** You are a multimodal model — you can see images. Look at each screenshot and verify:
+- Does the page render without blank areas or broken layouts?
+- Are all sections from the sprint's success criteria visible?
+- Does the typography, spacing, and color look intentional and cohesive?
+- Are there any obvious visual bugs (overlapping elements, text overflow, missing images)?
+- Does it match what the success criteria describe?
+
+If the screenshot shows ANY visual problems, note them as failures BEFORE running automated tests. Visual bugs that automated tests cannot catch are the whole point of this step.
+
+**Do NOT kill the dev server yet** — you'll need it for Playwright tests in the next step.
+
+If `npx playwright screenshot` is not available, fall back to:
+```bash
+curl -s http://localhost:3000 | head -100
+```
+And analyze the HTML structure for obvious issues.
+
+### Step 3: Run Configured Evaluation Strategies
+
+Read `evaluator.strategies` from `bober.config.json`. Execute each configured strategy in order. **The dev server should still be running from Step 2.**
 
 **For each strategy, record:**
 - Strategy type
@@ -98,6 +136,11 @@ Read `evaluator.strategies` from `bober.config.json`. Execute each configured st
 - Full output (stdout and stderr)
 - Pass/fail determination
 - Whether this strategy is `required` (blocking) or optional
+
+**After all strategies are done, kill the dev server:**
+```bash
+kill $DEV_PID 2>/dev/null
+```
 
 **Strategy execution:**
 
@@ -187,7 +230,7 @@ This strategy requires careful execution:
 - Execute the custom command specified
 - Interpret output based on the strategy's config
 
-### Step 3: Verify Success Criteria
+### Step 4: Verify Success Criteria
 
 Go through EVERY success criterion in the contract, one by one. For each:
 
@@ -202,7 +245,7 @@ Go through EVERY success criterion in the contract, one by one. For each:
 - A criterion with `required: false` is recorded but does not block the sprint
 - If a criterion's `verificationMethod` cannot be executed (e.g., Playwright not set up), mark it as `"skipped"` with a clear reason. If it was `required`, escalate this as a configuration issue.
 
-### Step 4: Check Principles Adherence
+### Step 5: Check Principles Adherence
 
 If `.bober/principles.md` exists, verify the Generator's output adheres to the project principles:
 
@@ -212,7 +255,7 @@ If `.bober/principles.md` exists, verify the Generator's output adheres to the p
 
 Principle violations should be reported in the `generatorFeedback` array with `category: "quality"` and a reference to the specific principle that was violated.
 
-### Step 5: Check for Regressions
+### Step 6: Check for Regressions
 
 Beyond the contract's criteria, check for regressions:
 
@@ -220,7 +263,7 @@ Beyond the contract's criteria, check for regressions:
 2. **Does the build still work?** Even if the contract is about backend code, verify the full build.
 3. **Were any existing files modified in unexpected ways?** Use `git diff` to review all changes. Flag any changes to files NOT mentioned in the contract's `estimatedFiles`.
 
-### Step 6: Produce Structured EvalResult
+### Step 7: Produce Structured EvalResult
 
 Generate the following JSON structure:
 
@@ -282,7 +325,7 @@ Generate the following JSON structure:
 }
 ```
 
-### Step 7: Save and Report
+### Step 8: Save and Report
 
 1. **Save the EvalResult** to `.bober/eval-results/<evalId>.json`
    - IMPORTANT: You do not have Write tools. Output the EvalResult JSON and the orchestrator will save it.

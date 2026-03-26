@@ -28,7 +28,7 @@
       { "type": "lint", "required": true },
       { "type": "build", "required": true },
       { "type": "unit-test", "required": true },
-      { "type": "playwright", "required": false }
+      { "type": "playwright", "required": true }
     ],
     "maxIterations": 3
   },
