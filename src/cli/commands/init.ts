@@ -1,5 +1,6 @@
-import { writeFile, readFile, appendFile } from "node:fs/promises";
-import { join, basename } from "node:path";
+import { writeFile, readFile, appendFile, readdir } from "node:fs/promises";
+import { join, basename, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import prompts from "prompts";
 import chalk from "chalk";
 
@@ -8,7 +9,7 @@ import { createDefaultConfig } from "../../config/schema.js";
 import { configExists } from "../../config/loader.js";
 import { getDefaults, getPresetNames } from "../../config/defaults.js";
 import { ensureBoberDir } from "../../state/index.js";
-import { fileExists } from "../../utils/fs.js";
+import { fileExists, ensureDir } from "../../utils/fs.js";
 import { logger } from "../../utils/logger.js";
 
 // ── Preset metadata ──────────────────────────────────────────────
@@ -618,6 +619,88 @@ function buildStrategyChoices(
   ];
 }
 
+// ── Install Claude Code slash commands ───────────────────────────
+
+/**
+ * Copy SKILL.md files from the package's skills/ directory into
+ * the project's .claude/commands/ directory so they appear as
+ * /bober-plan, /bober-sprint, etc. in Claude Code.
+ *
+ * Also copies agent definitions into .claude/agents/.
+ */
+async function installClaudeCommands(projectRoot: string): Promise<void> {
+  const __filename = fileURLToPath(import.meta.url);
+  // From dist/cli/commands/init.js → go up to package root
+  const packageRoot = join(dirname(__filename), "..", "..", "..");
+
+  const commandsDir = join(projectRoot, ".claude", "commands");
+  await ensureDir(commandsDir);
+
+  // Map skill directories to command file names
+  const skillMap: Record<string, string> = {
+    "bober.plan": "bober-plan.md",
+    "bober.sprint": "bober-sprint.md",
+    "bober.eval": "bober-eval.md",
+    "bober.run": "bober-run.md",
+    "bober.react": "bober-react.md",
+    "bober.brownfield": "bober-brownfield.md",
+    "bober.solidity": "bober-solidity.md",
+    "bober.anchor": "bober-anchor.md",
+  };
+
+  const skillsRoot = join(packageRoot, "skills");
+  let installed = 0;
+
+  for (const [skillDir, cmdFile] of Object.entries(skillMap)) {
+    const srcSkill = join(skillsRoot, skillDir, "SKILL.md");
+    const destCmd = join(commandsDir, cmdFile);
+    if (await fileExists(srcSkill)) {
+      const content = await readFile(srcSkill, "utf-8");
+
+      // Also append reference docs inline if they exist
+      const refsDir = join(skillsRoot, skillDir, "references");
+      let refs = "";
+      try {
+        const refFiles = await readdir(refsDir);
+        for (const refFile of refFiles) {
+          if (refFile.endsWith(".md")) {
+            const refContent = await readFile(join(refsDir, refFile), "utf-8");
+            refs += `\n\n---\n\n<!-- Reference: ${refFile} -->\n\n${refContent}`;
+          }
+        }
+      } catch {
+        // No references directory — that's fine
+      }
+
+      await writeFile(destCmd, content + refs, "utf-8");
+      installed++;
+    }
+  }
+
+  // Copy agent definitions
+  const agentsDir = join(projectRoot, ".claude", "agents");
+  await ensureDir(agentsDir);
+
+  const agentFiles = ["bober-planner.md", "bober-generator.md", "bober-evaluator.md"];
+  const agentsSrc = join(packageRoot, "agents");
+
+  for (const agentFile of agentFiles) {
+    const src = join(agentsSrc, agentFile);
+    const dest = join(agentsDir, agentFile);
+    if (await fileExists(src)) {
+      const content = await readFile(src, "utf-8");
+      await writeFile(dest, content, "utf-8");
+    }
+  }
+
+  if (installed > 0) {
+    logger.success(
+      `Installed ${installed} slash commands in .claude/commands/`,
+    );
+    logger.success(`Installed agent definitions in .claude/agents/`);
+  }
+}
+
 interface ConfigShape {
   project: {
     name: string;
@@ -663,6 +746,9 @@ async function writeConfig(
     logger.success("Created .gitignore with .bober/");
   }
 
+  // Install Claude Code slash commands into .claude/commands/
+  await installClaudeCommands(projectRoot);
+
   // Print summary
   console.log();
   console.log(chalk.bold("Setup complete!"));
@@ -679,11 +765,10 @@ async function writeConfig(
   );
   console.log();
   console.log("Next steps:");
-  console.log(
-    `  ${chalk.gray("$")} ${chalk.green("npx agent-bober run")} ${chalk.gray('"build a todo app"')}`,
-  );
-  console.log(
-    `  ${chalk.gray("$")} ${chalk.green("npx agent-bober plan")} ${chalk.gray('"add user authentication"')}`,
-  );
+  console.log(`  ${chalk.gray("$")} ${chalk.green("claude")}                    ${chalk.gray("# Open Claude Code in this dir")}`);
+  console.log(`  ${chalk.green("/bober-plan")}                  ${chalk.gray("# Describe your feature")}`);
+  console.log(`  ${chalk.green("/bober-run")}                   ${chalk.gray("# Full autonomous pipeline")}`);
+  console.log();
+  console.log(`  ${chalk.gray("Or via CLI:")} ${chalk.green("npx agent-bober plan")} ${chalk.gray('"your feature"')}`);
   console.log();
 }

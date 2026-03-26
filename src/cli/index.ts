@@ -76,7 +76,8 @@ async function main(): Promise<void> {
       if (opts.verbose) logger.verbose = true;
 
       const preset = cmdOpts?.preset ?? presetArg;
-      const projectRoot = await resolveProjectRoot(opts.config);
+      // Init always uses cwd — the user is in the directory they want to init
+      const projectRoot = process.cwd();
       await runInitCommand(projectRoot, { preset });
     });
 
