@@ -80,7 +80,19 @@ E) Not applicable (no UI in this project)
 F) Other (please describe)
 ```
 
-If the user provides an argument with this command (e.g., `/bober-principles "performance-first, minimal dependencies"`), incorporate those into the principles directly and skip redundant questions.
+## Step 2a: Expand Raw Input (if user provides a prompt/argument)
+
+If the user provides text with this command — whether a short note like `"performance-first, minimal dependencies"` or a long paste of requirements, a PRD, or rough notes — your job is to **intelligently expand and elevate** that input into a polished principles document:
+
+1. **Extract** all implicit and explicit principles from the user's input
+2. **Expand** vague statements into specific, actionable standards. Example: "make it fast" → "**Performance:** Target < 3s initial page load. Use code splitting and lazy loading. Optimize images with next/image or equivalent. No blocking API calls on initial render."
+3. **Infer** principles the user didn't state but clearly imply. If they describe a medical SaaS product, infer security and compliance principles. If they describe a DeFi protocol, infer audit-readiness and gas optimization.
+4. **Organize** everything into the principles document structure (Mission, Users, Quality Standards, Technical Principles, Design Principles)
+5. **Fill gaps** by asking 1-2 targeted follow-up questions ONLY for things you truly cannot infer. Don't ask obvious questions.
+
+The goal: the user pastes rough notes, you produce a comprehensive, opinionated principles document that makes them say "yes, exactly — and I didn't even think of those."
+
+Skip the interview (Step 2) entirely when the user provides substantive input. Go straight to generating the document.
 
 ## Step 3: Generate Principles Document
 
