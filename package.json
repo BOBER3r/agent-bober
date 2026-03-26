@@ -1,6 +1,6 @@
 {
   "name": "agent-bober",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Generator-Evaluator multi-agent harness for building applications autonomously with Claude. Implements planner, sprint, and evaluator patterns.",
   "type": "module",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
     "claude-code",
     "plugin"
   ],
-  "author": "bober4ik",
+  "author": "BOBER3r",
   "license": "MIT",
   "repository": {
     "type": "git",

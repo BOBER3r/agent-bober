@@ -65,18 +65,19 @@ npx agent-bober init brownfield
 
 Then in Claude Code:
 ```
-/bober:plan         # Describe your feature, get a structured plan
-/bober:sprint       # Execute the next sprint
-/bober:eval         # Evaluate the sprint output
-/bober:run          # Full autonomous pipeline
+/bober-principles   # Define project standards (optional but recommended)
+/bober-plan         # Describe your feature, get a structured plan
+/bober-sprint       # Execute the next sprint
+/bober-eval         # Evaluate the sprint output
+/bober-run          # Full autonomous pipeline
 ```
 
 Specialized workflows:
 ```
-/bober:react        # React web app workflow
-/bober:solidity     # EVM smart contract workflow
-/bober:anchor       # Solana program workflow
-/bober:brownfield   # Existing codebase workflow
+/bober-react        # React web app workflow
+/bober-solidity     # EVM smart contract workflow
+/bober-anchor       # Solana program workflow
+/bober-brownfield   # Existing codebase workflow
 ```
 
 ---
@@ -87,14 +88,15 @@ Specialized workflows:
 
 | Command | Description |
 |---|---|
-| `/bober:plan` | Plan any feature -- stack-agnostic |
-| `/bober:sprint` | Execute the next sprint contract |
-| `/bober:eval` | Evaluate current sprint output |
-| `/bober:run` | Full autonomous pipeline |
-| `/bober:react` | React web application workflow |
-| `/bober:solidity` | EVM smart contract workflow |
-| `/bober:anchor` | Solana program workflow |
-| `/bober:brownfield` | Existing codebase workflow |
+| `/bober-principles` | Define project principles — AI expands your rough notes into standards |
+| `/bober-plan` | Plan any feature — stack-agnostic, sprint-decomposed |
+| `/bober-sprint` | Execute the next sprint contract |
+| `/bober-eval` | Evaluate current sprint output |
+| `/bober-run` | Full autonomous pipeline (plan + sprint + eval loop) |
+| `/bober-react` | React web application workflow |
+| `/bober-solidity` | EVM smart contract workflow |
+| `/bober-anchor` | Solana program workflow |
+| `/bober-brownfield` | Existing codebase workflow |
 
 ### CLI
 
@@ -492,4 +494,4 @@ This project is inspired by and implements the patterns from Anthropic's [**"Har
 
 ## License
 
-[MIT](LICENSE) -- Copyright (c) 2026 bober4ik
+[MIT](LICENSE) -- Copyright (c) 2026 BOBER3r
