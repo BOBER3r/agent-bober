@@ -101,13 +101,39 @@ Specialized workflows:
 ### CLI
 
 ```bash
-npx agent-bober init [preset]       # Initialize project (nextjs, react-vite, solidity, anchor, api-node, python-api, brownfield)
-npx agent-bober plan                # Run the planner
+npx agent-bober init [preset]       # Initialize project
+npx agent-bober plan "feature"      # Run the planner
 npx agent-bober sprint              # Execute next sprint
 npx agent-bober eval                # Evaluate current sprint
-npx agent-bober run                 # Full autonomous loop
-npx agent-bober status              # Show plan progress
+npx agent-bober run "feature"       # Full autonomous loop
 ```
+
+### Fully Autonomous Mode (no human in the loop)
+
+**Option A: Claude Code (recommended)**
+
+Launch Claude Code with auto-accept permissions, then run the pipeline:
+
+```bash
+cd your-project
+agent-bober init nextjs
+claude --dangerously-skip-permissions
+# Inside Claude Code:
+/bober-run Build a complete dashboard with auth, CRUD, and charts
+```
+
+Claude will plan, build, evaluate, rework, and iterate without asking you anything. Come back to a finished project.
+
+**Option B: CLI with API key**
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+cd your-project
+agent-bober init nextjs
+agent-bober run "Build a complete dashboard with auth, CRUD, and charts"
+```
+
+The CLI uses the Anthropic SDK directly — no approval prompts at all.
 
 ---
 
