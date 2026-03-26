@@ -1,0 +1,9 @@
+{
+  "name": "bober",
+  "description": "Generator-Evaluator multi-agent harness for building applications autonomously with Claude",
+  "version": "0.1.0",
+  "author": { "name": "bober4ik" },
+  "homepage": "https://github.com/bober4ik/agent-bober",
+  "repository": "https://github.com/bober4ik/agent-bober",
+  "license": "MIT"
+}

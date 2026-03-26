@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor state
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test and coverage
+coverage/
+.vitest/
+
+# Runtime data
+*.pid
+*.seed
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Bober runtime state (managed per-project, not in the package itself)
+.bober/snapshots/

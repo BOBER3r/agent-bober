@@ -1,0 +1,67 @@
+{
+  "name": "agent-bober",
+  "version": "0.1.0",
+  "description": "Generator-Evaluator multi-agent harness for building applications autonomously with Claude. Implements planner, sprint, and evaluator patterns.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "agent-bober": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "agent",
+    "harness",
+    "multi-agent",
+    "autonomous",
+    "generator-evaluator",
+    "claude-code",
+    "plugin"
+  ],
+  "author": "bober4ik",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bober4ik/agent-bober"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "agents/",
+    "hooks/",
+    "scripts/",
+    "templates/",
+    ".claude-plugin/"
+  ],
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "execa": "^9.5.2",
+    "glob": "^11.0.1",
+    "ora": "^8.1.1",
+    "prompts": "^2.4.2",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.13.0",
+    "@types/prompts": "^2.4.9",
+    "@typescript-eslint/eslint-plugin": "^8.22.0",
+    "@typescript-eslint/parser": "^8.22.0",
+    "eslint": "^9.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

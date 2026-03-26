@@ -1,0 +1,425 @@
+import type { BoberConfig } from "../config/schema.js";
+import type { PlanSpec } from "../contracts/spec.js";
+import type { SprintContract } from "../contracts/sprint-contract.js";
+import {
+  createContract,
+  updateContractStatus,
+} from "../contracts/sprint-contract.js";
+import type { EvaluationRunResult } from "../evaluators/registry.js";
+import {
+  createHandoff,
+  summarizeOlderSprints,
+} from "./context-handoff.js";
+import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
+import { runPlanner } from "./planner-agent.js";
+import { runGenerator } from "./generator-agent.js";
+import type { GeneratorResult } from "./generator-agent.js";
+import { runEvaluatorAgent } from "./evaluator-agent.js";
+import {
+  ensureBoberDir,
+  saveContract,
+  updateContract,
+  appendHistory,
+} from "../state/index.js";
+import { commitAll, getCurrentBranch, getChangedFiles } from "../utils/git.js";
+import { logger } from "../utils/logger.js";
+
+// ── Types ──────────────────────────────────────────────────────────
+
+export interface PipelineResult {
+  success: boolean;
+  spec: PlanSpec;
+  completedSprints: SprintContract[];
+  failedSprints: SprintContract[];
+  totalCost?: number;
+  duration: number;
+}
+
+interface SprintCycleResult {
+  contract: SprintContract;
+  evaluation?: EvaluationRunResult;
+  generatorResult?: GeneratorResult;
+}
+
+// ── Interrupt handling ─────────────────────────────────────────────
+
+let interrupted = false;
+
+function setupInterruptHandler(): () => void {
+  interrupted = false;
+
+  const handler = (): void => {
+    if (interrupted) {
+      // Second SIGINT — force exit
+      logger.error("Force interrupted. Exiting immediately.");
+      process.exit(1);
+    }
+    interrupted = true;
+    logger.warn("Interrupt received. Finishing current sprint, then stopping...");
+  };
+
+  process.on("SIGINT", handler);
+  return () => {
+    process.removeListener("SIGINT", handler);
+  };
+}
+
+// ── Project context helper ─────────────────────────────────────────
+
+async function buildProjectContext(
+  projectRoot: string,
+  config: BoberConfig,
+): Promise<ProjectContext> {
+  let currentBranch: string;
+  try {
+    currentBranch = await getCurrentBranch(projectRoot);
+  } catch {
+    currentBranch = "unknown";
+  }
+
+  return {
+    name: config.project.name,
+    type: config.project.type,
+    techStack: [],
+    entryPoints: [],
+    currentBranch,
+  };
+}
+
+// ── Sprint cycle ───────────────────────────────────────────────────
+
+async function runSprintCycle(
+  contract: SprintContract,
+  spec: PlanSpec,
+  completedContracts: SprintContract[],
+  projectRoot: string,
+  config: BoberConfig,
+  projectContext: ProjectContext,
+): Promise<SprintCycleResult> {
+  const maxIterations = config.evaluator.maxIterations;
+  let currentContract = updateContractStatus(contract, "in-progress");
+  await updateContract(projectRoot, currentContract);
+
+  let lastEvaluation: EvaluationRunResult | undefined;
+  let lastGeneratorResult: GeneratorResult | undefined;
+
+  for (let iteration = 1; iteration <= maxIterations; iteration++) {
+    if (interrupted) {
+      logger.warn(`Sprint ${currentContract.id} interrupted at iteration ${iteration}.`);
+      break;
+    }
+
+    logger.progress(iteration, maxIterations, `Sprint ${currentContract.id} iteration`);
+
+    // Build evaluation feedback from prior round
+    const evalFeedback = lastEvaluation
+      ? lastEvaluation.summary
+      : "";
+
+    // Summarize older sprints to save context
+    const completedSummaryHandoff = createHandoff({
+      from: iteration === 1 ? "planner" : "evaluator",
+      to: "generator",
+      projectContext,
+      spec,
+      currentContract,
+      sprintHistory: completedContracts,
+      instructions: `Implement sprint: ${currentContract.feature}\n\n${currentContract.description}`,
+      changedFiles: lastGeneratorResult?.filesChanged ?? [],
+      issues: evalFeedback ? [evalFeedback] : [],
+    });
+
+    // Compact older sprint history if needed
+    const compactedHandoff = summarizeOlderSprints(completedSummaryHandoff, 3);
+
+    // ── Generate ───────────────────────────────────────────────
+    logger.phase(`Sprint ${currentContract.id} - Generate (Round ${iteration})`);
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "generator-start",
+      phase: "generating",
+      sprintId: currentContract.id,
+      details: { iteration },
+    });
+
+    const generatorResult = await runGenerator(
+      compactedHandoff,
+      projectRoot,
+      config,
+    );
+    lastGeneratorResult = generatorResult;
+
+    if (!generatorResult.success) {
+      logger.warn(`Generator reported failure: ${generatorResult.notes}`);
+      currentContract = {
+        ...currentContract,
+        generatorNotes: generatorResult.notes,
+      };
+      await updateContract(projectRoot, currentContract);
+
+      if (iteration < maxIterations) {
+        logger.info("Retrying generation...");
+        continue;
+      }
+
+      // Max iterations reached, mark as needs-rework
+      currentContract = updateContractStatus(currentContract, "needs-rework");
+      currentContract = {
+        ...currentContract,
+        evaluatorFeedback: "Generator failed to complete the implementation.",
+      };
+      await updateContract(projectRoot, currentContract);
+      return { contract: currentContract, generatorResult };
+    }
+
+    currentContract = {
+      ...currentContract,
+      generatorNotes: generatorResult.notes,
+    };
+
+    // Auto-commit if enabled
+    if (config.generator.autoCommit) {
+      try {
+        const commitHash = await commitAll(
+          projectRoot,
+          `bober: ${currentContract.feature} (sprint ${currentContract.id}, round ${iteration})`,
+        );
+        logger.success(`Committed: ${commitHash}`);
+        lastGeneratorResult = { ...generatorResult, commitHash };
+      } catch (err) {
+        logger.debug(
+          `Auto-commit skipped: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    // ── Evaluate ──────────────────────────────────────────────
+    logger.phase(`Sprint ${currentContract.id} - Evaluate (Round ${iteration})`);
+
+    currentContract = updateContractStatus(currentContract, "evaluating");
+    await updateContract(projectRoot, currentContract);
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "evaluator-start",
+      phase: "evaluating",
+      sprintId: currentContract.id,
+      details: { iteration },
+    });
+
+    // Build handoff for evaluator
+    let changedFiles: string[];
+    try {
+      changedFiles = await getChangedFiles(projectRoot);
+    } catch {
+      changedFiles = generatorResult.filesChanged;
+    }
+
+    const evalHandoff: ContextHandoff = {
+      ...compactedHandoff,
+      from: "generator",
+      to: "evaluator",
+      changedFiles,
+    };
+
+    const evaluation = await runEvaluatorAgent(
+      evalHandoff,
+      projectRoot,
+      config,
+    );
+    lastEvaluation = evaluation;
+
+    if (evaluation.passed) {
+      logger.success(`Sprint ${currentContract.id} passed all evaluations!`);
+
+      currentContract = updateContractStatus(currentContract, "passed");
+      currentContract = {
+        ...currentContract,
+        evaluatorFeedback: evaluation.summary,
+      };
+      await updateContract(projectRoot, currentContract);
+
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "sprint-passed",
+        phase: "complete",
+        sprintId: currentContract.id,
+        details: { iteration, feedback: evaluation.summary },
+      });
+
+      return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
+    }
+
+    // Evaluation failed
+    logger.warn(
+      `Evaluation failed (round ${iteration}/${maxIterations}): ${evaluation.summary.slice(0, 200)}`,
+    );
+
+    currentContract = {
+      ...currentContract,
+      evaluatorFeedback: evaluation.summary,
+    };
+    await updateContract(projectRoot, currentContract);
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "evaluation-failed",
+      phase: "rework",
+      sprintId: currentContract.id,
+      details: { iteration, feedback: evaluation.summary },
+    });
+
+    if (iteration >= maxIterations) {
+      logger.error(
+        `Sprint ${currentContract.id} exceeded max iterations (${maxIterations}).`,
+      );
+      currentContract = updateContractStatus(currentContract, "needs-rework");
+      await updateContract(projectRoot, currentContract);
+      return { contract: currentContract, evaluation };
+    }
+
+    logger.info("Feeding evaluation feedback into next iteration...");
+  }
+
+  // Should not normally reach here
+  return { contract: currentContract, evaluation: lastEvaluation };
+}
+
+// ── Main pipeline ──────────────────────────────────────────────────
+
+/**
+ * Run the complete orchestration pipeline:
+ *
+ * 1. **Plan** — Call the planner agent to produce a PlanSpec
+ * 2. **Sprint loop** — For each feature, create sprint contracts and
+ *    run the generate-evaluate-iterate cycle
+ * 3. **Result** — Return aggregated results
+ *
+ * Each agent invocation is a FRESH call (new message thread). Context
+ * is carried via the ContextHandoff document.
+ */
+export async function runPipeline(
+  userPrompt: string,
+  projectRoot: string,
+  config: BoberConfig,
+): Promise<PipelineResult> {
+  const startTime = Date.now();
+  const cleanup = setupInterruptHandler();
+
+  try {
+    // Ensure .bober/ directory structure exists
+    await ensureBoberDir(projectRoot);
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "pipeline-start",
+      phase: "init",
+      details: { userPrompt: userPrompt.slice(0, 200) },
+    });
+
+    // ── Phase 1: Planning ────────────────────────────────────────
+    const spec = await runPlanner(userPrompt, projectRoot, config);
+
+    logger.info(`Plan: "${spec.title}" with ${spec.features.length} features`);
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "planning-complete",
+      phase: "planning",
+      details: {
+        specId: spec.id,
+        featureCount: spec.features.length,
+      },
+    });
+
+    // ── Phase 2: Sprint loop ─────────────────────────────────────
+    logger.phase("Sprint Execution");
+
+    // Create sprint contracts from features
+    const contracts: SprintContract[] = [];
+    for (const feature of spec.features) {
+      const contract = createContract(
+        feature.title,
+        feature.description,
+        feature.acceptanceCriteria.map((ac, idx) => ({
+          id: `${feature.id}-criterion-${idx + 1}`,
+          description: ac,
+          verificationMethod: "agent-evaluation",
+        })),
+      );
+      contracts.push(contract);
+      await saveContract(projectRoot, contract);
+    }
+
+    const completedSprints: SprintContract[] = [];
+    const failedSprints: SprintContract[] = [];
+
+    const projectContext = await buildProjectContext(projectRoot, config);
+    const maxSprints = Math.min(contracts.length, config.sprint.maxSprints);
+
+    for (let i = 0; i < maxSprints; i++) {
+      if (interrupted) {
+        logger.warn("Pipeline interrupted by user.");
+        break;
+      }
+
+      const contract = contracts[i];
+      logger.progress(i + 1, maxSprints, contract.feature);
+
+      const result = await runSprintCycle(
+        contract,
+        spec,
+        completedSprints,
+        projectRoot,
+        config,
+        projectContext,
+      );
+
+      if (result.contract.status === "passed") {
+        completedSprints.push(result.contract);
+      } else {
+        failedSprints.push(result.contract);
+
+        // Check if we should continue after failure
+        if (
+          config.sprint.requireContracts &&
+          result.contract.status !== "needs-rework"
+        ) {
+          logger.error(
+            `Sprint ${result.contract.id} failed and contracts are required. Stopping pipeline.`,
+          );
+          break;
+        }
+      }
+    }
+
+    // ── Phase 3: Results ─────────────────────────────────────────
+    logger.phase("Pipeline Complete");
+
+    const duration = Date.now() - startTime;
+    const success =
+      failedSprints.length === 0 && completedSprints.length > 0;
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "pipeline-complete",
+      phase: success ? "complete" : "failed",
+      details: {
+        completed: completedSprints.length,
+        failed: failedSprints.length,
+        durationMs: duration,
+      },
+    });
+
+    return {
+      success,
+      spec,
+      completedSprints,
+      failedSprints,
+      duration,
+    };
+  } finally {
+    cleanup();
+  }
+}

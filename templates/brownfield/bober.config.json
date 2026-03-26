@@ -1,0 +1,37 @@
+{
+  "project": {
+    "name": "",
+    "type": "brownfield",
+    "description": "Existing codebase — conservative, incremental changes"
+  },
+  "planner": {
+    "maxClarifications": 5,
+    "model": "opus"
+  },
+  "generator": {
+    "model": "sonnet",
+    "maxTurnsPerSprint": 50,
+    "autoCommit": true,
+    "branchPattern": "bober/{feature-name}"
+  },
+  "evaluator": {
+    "model": "sonnet",
+    "strategies": [
+      { "type": "typecheck", "required": true },
+      { "type": "lint", "required": true },
+      { "type": "unit-test", "required": true }
+    ],
+    "maxIterations": 5
+  },
+  "sprint": {
+    "maxSprints": 10,
+    "requireContracts": true,
+    "sprintSize": "small"
+  },
+  "pipeline": {
+    "maxIterations": 15,
+    "requireApproval": true,
+    "contextReset": "always"
+  },
+  "commands": {}
+}

@@ -1,0 +1,52 @@
+{
+  "project": {
+    "name": "",
+    "type": "react-fullstack",
+    "description": "React + Vite frontend with Express backend"
+  },
+  "planner": {
+    "maxClarifications": 5,
+    "model": "opus",
+    "contextFiles": [
+      "package.json",
+      "tsconfig.json",
+      "vite.config.ts",
+      "server/index.ts"
+    ]
+  },
+  "generator": {
+    "model": "sonnet",
+    "maxTurnsPerSprint": 50,
+    "autoCommit": true,
+    "branchPattern": "bober/{feature-name}"
+  },
+  "evaluator": {
+    "model": "sonnet",
+    "strategies": [
+      { "type": "typecheck", "required": true },
+      { "type": "lint", "required": true },
+      { "type": "build", "required": true },
+      { "type": "unit-test", "required": true },
+      { "type": "playwright", "required": false }
+    ],
+    "maxIterations": 3
+  },
+  "sprint": {
+    "maxSprints": 10,
+    "requireContracts": true,
+    "sprintSize": "medium"
+  },
+  "pipeline": {
+    "maxIterations": 20,
+    "requireApproval": false,
+    "contextReset": "always"
+  },
+  "commands": {
+    "install": "npm install",
+    "build": "npm run build",
+    "test": "npm test",
+    "lint": "npm run lint",
+    "dev": "npm run dev",
+    "typecheck": "npx tsc --noEmit"
+  }
+}
