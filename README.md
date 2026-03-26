@@ -447,7 +447,7 @@ bash scripts/run-eval.sh /path/to/project
 Contributions are welcome. To set up the development environment:
 
 ```bash
-git clone https://github.com/bober4ik/agent-bober.git
+git clone https://github.com/BOBER3r/agent-bober.git
 cd agent-bober
 npm install
 npm run build
