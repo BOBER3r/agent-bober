@@ -9,6 +9,7 @@ import { createUnitTestEvaluator } from "./builtin/unit-test.js";
 import { createPlaywrightEvaluator } from "./builtin/playwright.js";
 import { createApiCheckEvaluator } from "./builtin/api-check.js";
 import { createBuildCheckEvaluator } from "./builtin/build-check.js";
+import { createCommandRunnerEvaluator } from "./builtin/command-runner.js";
 import { loadPlugins } from "./plugin-loader.js";
 
 // ── Sprint Evaluation Aggregate ────────────────────────────────────
@@ -72,14 +73,31 @@ export class EvaluatorRegistry {
   /**
    * Get the appropriate plugin for a given strategy.
    *
-   * For "custom" strategies, looks up by the `strategy.plugin` name.
-   * For built-in strategies, looks up by `strategy.type`.
+   * Resolution order:
+   * 1. If strategy has a `plugin` field → look up by plugin name
+   * 2. If strategy type matches a registered plugin → use it
+   * 3. If strategy has a `command` field → create an on-the-fly command runner
+   * 4. Otherwise → undefined (strategy will be skipped)
    */
   getForStrategy(strategy: EvalStrategy): EvaluatorPlugin | undefined {
-    if (strategy.type === "custom" && strategy.plugin) {
+    // Explicit plugin reference (e.g. type:"custom" + plugin:"./my-eval.ts")
+    if (strategy.plugin && this.plugins.has(strategy.plugin)) {
       return this.plugins.get(strategy.plugin);
     }
-    return this.plugins.get(strategy.type);
+
+    // Built-in or previously registered plugin
+    if (this.plugins.has(strategy.type)) {
+      return this.plugins.get(strategy.type);
+    }
+
+    // Inline command shorthand (e.g. type:"k6", command:"k6 run load.js")
+    if (strategy.command) {
+      const label = strategy.label ?? strategy.type;
+      const timeout = (strategy.config?.["timeout"] as number | undefined) ?? 120_000;
+      return createCommandRunnerEvaluator(label, strategy.command, timeout);
+    }
+
+    return undefined;
   }
 
   /**

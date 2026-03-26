@@ -43,3 +43,8 @@ export {
   BuildCheckEvaluator,
   createBuildCheckEvaluator,
 } from "./builtin/build-check.js";
+
+export {
+  CommandRunnerEvaluator,
+  createCommandRunnerEvaluator,
+} from "./builtin/command-runner.js";

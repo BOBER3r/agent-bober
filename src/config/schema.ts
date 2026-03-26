@@ -37,7 +37,12 @@ export const ContextResetSchema = z.enum([
 ]);
 export type ContextReset = z.infer<typeof ContextResetSchema>;
 
-export const EvalStrategyTypeSchema = z.enum([
+/**
+ * Well-known built-in evaluator strategy types.
+ * The type field also accepts ANY string — unknown types are resolved
+ * by looking for a matching registered plugin or the `command` field.
+ */
+export const BUILTIN_STRATEGY_TYPES = [
   "typecheck",
   "lint",
   "unit-test",
@@ -45,16 +50,27 @@ export const EvalStrategyTypeSchema = z.enum([
   "api-check",
   "build",
   "custom",
-]);
-export type EvalStrategyType = z.infer<typeof EvalStrategyTypeSchema>;
+] as const;
+export type BuiltinStrategyType = (typeof BUILTIN_STRATEGY_TYPES)[number];
+
+export const EvalStrategyTypeSchema = z.string().min(1);
+export type EvalStrategyType = string;
 
 // ── Eval Strategy ───────────────────────────────────────────────────
 
 export const EvalStrategySchema = z.object({
+  /** Strategy type — built-in name OR any custom name (e.g. "k6", "anchor-verify", "slither"). */
   type: EvalStrategyTypeSchema,
+  /** Path to a custom plugin module (for type "custom" or any non-built-in type). */
   plugin: z.string().optional(),
+  /** Shell command to run directly — shorthand alternative to writing a plugin file. */
+  command: z.string().optional(),
+  /** Whether this strategy must pass for the sprint to pass. */
   required: z.boolean(),
+  /** Arbitrary config passed to the evaluator plugin. */
   config: z.record(z.string(), z.unknown()).optional(),
+  /** Human-readable label (defaults to type if not set). */
+  label: z.string().optional(),
 });
 export type EvalStrategy = z.infer<typeof EvalStrategySchema>;
 
