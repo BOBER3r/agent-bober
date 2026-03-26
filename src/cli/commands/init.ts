@@ -382,13 +382,13 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
   ]);
 
   // Ask strategies separately so multiselect works properly
+  console.log(chalk.gray("\n  ↑↓ Navigate  ⎵ Space = toggle  ⏎ Enter = confirm\n"));
   const stratAnswer = await prompts({
     type: "multiselect",
     name: "strategies",
-    message: "Evaluation strategies (Space to toggle, Enter when done):",
+    message: "Evaluation strategies:",
     choices: buildStrategyChoices(suggestedStrats),
     instructions: false,
-    hint: "Use arrow keys to move, Space to select/deselect, Enter to confirm",
   });
 
   const answers = { ...modelAnswers, ...stratAnswer };
@@ -583,34 +583,35 @@ async function greenfieldFlow(
 function buildStrategyChoices(
   suggestedStrats: EvalStrategyType[],
 ): Array<{ title: string; value: EvalStrategyType; selected: boolean }> {
+  const suggested = new Set(suggestedStrats);
   return [
     {
-      title: "TypeScript Check",
+      title: `TypeScript Check${suggested.has("typecheck") ? " (recommended)" : ""}`,
       value: "typecheck" as EvalStrategyType,
-      selected: suggestedStrats.includes("typecheck"),
+      selected: suggested.has("typecheck"),
     },
     {
-      title: "Lint",
+      title: `Lint${suggested.has("lint") ? " (recommended)" : ""}`,
       value: "lint" as EvalStrategyType,
-      selected: suggestedStrats.includes("lint"),
+      selected: suggested.has("lint"),
     },
     {
-      title: "Unit Tests",
+      title: `Unit Tests${suggested.has("unit-test") ? " (recommended)" : ""}`,
       value: "unit-test" as EvalStrategyType,
-      selected: suggestedStrats.includes("unit-test"),
+      selected: suggested.has("unit-test"),
     },
     {
-      title: "Build",
+      title: `Build${suggested.has("build") ? " (recommended)" : ""}`,
       value: "build" as EvalStrategyType,
-      selected: suggestedStrats.includes("build"),
+      selected: suggested.has("build"),
     },
     {
-      title: "Playwright E2E",
+      title: `Playwright E2E${suggested.has("playwright") ? " (recommended)" : ""}`,
       value: "playwright" as EvalStrategyType,
-      selected: suggestedStrats.includes("playwright"),
+      selected: suggested.has("playwright"),
     },
     {
-      title: "API Check",
+      title: `API Check${suggested.has("api-check") ? " (recommended)" : ""}`,
       value: "api-check" as EvalStrategyType,
       selected: suggestedStrats.includes("api-check"),
     },
