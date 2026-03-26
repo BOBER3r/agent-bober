@@ -6,7 +6,8 @@
     { "type": "typecheck", "required": true },
     { "type": "lint", "required": true },
     { "type": "build", "required": true },
-    { "type": "unit-test", "required": true }
+    { "type": "unit-test", "required": true },
+    { "type": "playwright", "required": false }
   ], "maxIterations": 3 },
   "sprint": { "maxSprints": 10, "requireContracts": true, "sprintSize": "medium" },
   "pipeline": { "maxIterations": 20, "requireApproval": false, "contextReset": "always" },

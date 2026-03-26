@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { execa } from "execa";
 
@@ -61,6 +61,89 @@ async function hasPlaywright(projectRoot: string): Promise<boolean> {
   }
 }
 
+async function hasPlaywrightConfig(projectRoot: string): Promise<boolean> {
+  const configNames = [
+    "playwright.config.ts",
+    "playwright.config.js",
+    "playwright.config.mjs",
+  ];
+  for (const name of configNames) {
+    try {
+      await readFile(join(projectRoot, name), "utf-8");
+      return true;
+    } catch {
+      // continue
+    }
+  }
+  return false;
+}
+
+async function hasE2eTests(projectRoot: string): Promise<boolean> {
+  try {
+    const entries = await readdir(join(projectRoot, "e2e"));
+    return entries.some(
+      (e) => e.endsWith(".spec.ts") || e.endsWith(".spec.js") || e.endsWith(".test.ts") || e.endsWith(".test.js"),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check if a specific port is in use by attempting to parse lsof output.
+ * Returns true if the port appears to be in use.
+ */
+async function isPortInUse(port: number): Promise<boolean> {
+  try {
+    const result = await execa("lsof", ["-i", `:${port}`, "-t"], {
+      reject: false,
+      timeout: 5000,
+    });
+    return result.exitCode === 0 && (result.stdout ?? "").trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Extract the port number from a playwright.config.ts or bober.config.json.
+ * Falls back to 3000 if nothing can be determined.
+ */
+async function detectPort(
+  projectRoot: string,
+  config: BoberConfig,
+): Promise<number> {
+  // Try to parse port from playwright.config.ts
+  try {
+    const pwConfig = await readFile(
+      join(projectRoot, "playwright.config.ts"),
+      "utf-8",
+    );
+    // Look for port: <number> in the webServer block
+    const portMatch = pwConfig.match(/port\s*:\s*(\d+)/);
+    if (portMatch) {
+      return parseInt(portMatch[1], 10);
+    }
+    // Look for baseURL with port
+    const urlMatch = pwConfig.match(/baseURL\s*:\s*['"]https?:\/\/[^:]+:(\d+)/);
+    if (urlMatch) {
+      return parseInt(urlMatch[1], 10);
+    }
+  } catch {
+    // No playwright config — continue
+  }
+
+  // Try to extract port from the dev command
+  const devCmd = config.commands.dev ?? "";
+  const portFlag = devCmd.match(/--port\s+(\d+)|--port=(\d+)|-p\s+(\d+)/);
+  if (portFlag) {
+    const portStr = portFlag[1] ?? portFlag[2] ?? portFlag[3];
+    if (portStr) return parseInt(portStr, 10);
+  }
+
+  return 3000;
+}
+
 interface FlatTest {
   title: string;
   status: "passed" | "failed" | "timedOut" | "skipped" | "interrupted";
@@ -114,6 +197,40 @@ function parsePlaywrightJson(raw: string): PlaywrightJsonReport | null {
   }
 }
 
+/**
+ * Collect screenshot paths from the test-results directory.
+ * Scans one level of subdirectories (Playwright creates one folder per test).
+ */
+async function collectScreenshots(projectRoot: string): Promise<string[]> {
+  const screenshots: string[] = [];
+  const resultsDir = join(projectRoot, "test-results");
+
+  try {
+    const topEntries = await readdir(resultsDir);
+    for (const topEntry of topEntries) {
+      const subDir = join(resultsDir, topEntry);
+      try {
+        const subEntries = await readdir(subDir);
+        for (const entry of subEntries) {
+          if (
+            entry.endsWith(".png") ||
+            entry.endsWith(".jpg") ||
+            entry.endsWith(".jpeg")
+          ) {
+            screenshots.push(join("test-results", topEntry, entry));
+          }
+        }
+      } catch {
+        // Not a directory or inaccessible — skip
+      }
+    }
+  } catch {
+    // test-results directory does not exist — that's fine
+  }
+
+  return screenshots;
+}
+
 // ── Dev server management ──────────────────────────────────────────
 
 interface DevServerHandle {
@@ -124,7 +241,7 @@ interface DevServerHandle {
 async function startDevServer(
   projectRoot: string,
   devCommand: string,
-  waitMs: number = 5000,
+  waitMs: number = 8000,
 ): Promise<DevServerHandle> {
   const [cmd, ...args] = devCommand.split(/\s+/);
   const child = execa(cmd, args, {
@@ -140,7 +257,19 @@ async function startDevServer(
   return {
     process: child,
     kill: () => {
-      child.kill("SIGTERM");
+      try {
+        child.kill("SIGTERM");
+        // Give SIGTERM a moment, then force kill
+        setTimeout(() => {
+          try {
+            child.kill("SIGKILL");
+          } catch {
+            // Process already dead
+          }
+        }, 3000);
+      } catch {
+        // Process already dead
+      }
     },
   };
 }
@@ -161,14 +290,65 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
     const { projectRoot, config, strategy } = context;
     const timestamp = new Date().toISOString();
     const timeout = (strategy.config?.timeout as number) ?? DEFAULT_TIMEOUT_MS;
-    const shouldStartServer = (strategy.config?.startServer as boolean) ?? true;
+
+    // Check if Playwright is installed at all
+    if (!(await hasPlaywright(projectRoot))) {
+      return {
+        evaluator: this.name,
+        passed: true,
+        score: undefined,
+        details: [],
+        summary: "Playwright not installed. Skipped.",
+        feedback:
+          "Playwright is not installed in this project. Run /bober-playwright setup to initialize. Marked as skipped, not failed.",
+        timestamp,
+      };
+    }
+
+    // Check if playwright.config.ts exists
+    if (!(await hasPlaywrightConfig(projectRoot))) {
+      return {
+        evaluator: this.name,
+        passed: true,
+        score: undefined,
+        details: [],
+        summary: "Playwright config not found. Skipped.",
+        feedback:
+          "No playwright.config.ts found. Run /bober-playwright setup to create one. Marked as skipped, not failed.",
+        timestamp,
+      };
+    }
+
+    // Check if there are any E2E test files
+    if (!(await hasE2eTests(projectRoot))) {
+      return {
+        evaluator: this.name,
+        passed: true,
+        score: undefined,
+        details: [],
+        summary: "No E2E test files found. Skipped.",
+        feedback:
+          "No test files found in e2e/ directory. Use /bober-playwright to generate tests. Marked as skipped, not failed.",
+        timestamp,
+      };
+    }
+
+    // Detect the port and check if the webServer block will handle the dev server
+    const port = await detectPort(projectRoot, config);
+    const hasWebServerConfig = await this.configHasWebServer(projectRoot);
 
     let server: DevServerHandle | null = null;
 
     try {
-      // Start dev server if configured and requested.
-      if (shouldStartServer && config.commands.dev) {
-        server = await startDevServer(projectRoot, config.commands.dev);
+      // Only start a separate dev server if:
+      // 1. The playwright config does NOT have a webServer block (Playwright won't start one)
+      // 2. The port is not already in use (someone else started it)
+      // 3. There is a dev command configured
+      if (!hasWebServerConfig && config.commands.dev) {
+        const portBusy = await isPortInUse(port);
+        if (!portBusy) {
+          server = await startDevServer(projectRoot, config.commands.dev);
+        }
       }
 
       return await this.runPlaywright(projectRoot, strategy, timeout, timestamp);
@@ -176,6 +356,22 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
       if (server) {
         server.kill();
       }
+    }
+  }
+
+  /**
+   * Check if the playwright.config.ts has a webServer configuration block.
+   * If it does, Playwright will manage the dev server itself.
+   */
+  private async configHasWebServer(projectRoot: string): Promise<boolean> {
+    try {
+      const configContent = await readFile(
+        join(projectRoot, "playwright.config.ts"),
+        "utf-8",
+      );
+      return configContent.includes("webServer");
+    } catch {
+      return false;
     }
   }
 
@@ -207,10 +403,15 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
       });
 
       const allOutput = result.all ?? result.stdout ?? "";
-      const report = parsePlaywrightJson(allOutput);
+
+      // Also try reading the JSON results file directly (more reliable than stdout parsing)
+      let report = parsePlaywrightJson(allOutput);
+      if (!report) {
+        report = await this.readJsonResultsFile(projectRoot);
+      }
 
       if (report) {
-        return this.buildFromReport(report, timestamp);
+        return this.buildFromReport(report, projectRoot, timestamp);
       }
 
       // Couldn't parse JSON — fall back to exit code.
@@ -249,10 +450,38 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
     }
   }
 
-  private buildFromReport(
+  /**
+   * Try to read the JSON results file from the e2e-results directory.
+   * This is more reliable than parsing stdout because the JSON reporter
+   * writes directly to a file.
+   */
+  private async readJsonResultsFile(
+    projectRoot: string,
+  ): Promise<PlaywrightJsonReport | null> {
+    const possiblePaths = [
+      join(projectRoot, "e2e-results", "results.json"),
+      join(projectRoot, "test-results.json"),
+      join(projectRoot, "playwright-report", "results.json"),
+    ];
+
+    for (const filePath of possiblePaths) {
+      try {
+        const raw = await readFile(filePath, "utf-8");
+        const report = parsePlaywrightJson(raw);
+        if (report) return report;
+      } catch {
+        // File doesn't exist — try next
+      }
+    }
+
+    return null;
+  }
+
+  private async buildFromReport(
     report: PlaywrightJsonReport,
+    projectRoot: string,
     timestamp: string,
-  ): EvalResult {
+  ): Promise<EvalResult> {
     const allTests: FlatTest[] = [];
     for (const suite of report.suites) {
       allTests.push(...flattenSuites(suite));
@@ -267,11 +496,29 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
 
     const details: EvalDetail[] = [];
 
+    // Collect screenshots from the test-results directory for enriching feedback
+    const screenshots = await collectScreenshots(projectRoot);
+
     for (const test of allTests) {
       if (test.status === "failed" || test.status === "timedOut") {
         let message = test.error ?? `Test ${test.status}`;
+
+        // Include screenshot path from the test attachment or from the directory scan
         if (test.screenshot) {
           message += `\nScreenshot: ${test.screenshot}`;
+        } else {
+          // Try to find a matching screenshot by test name
+          const matchingScreenshot = screenshots.find((s) =>
+            s.toLowerCase().includes(
+              test.title
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .slice(0, 40),
+            ),
+          );
+          if (matchingScreenshot) {
+            message += `\nScreenshot: ${matchingScreenshot}`;
+          }
         }
 
         details.push({
@@ -292,6 +539,14 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
     if (failed > 0) summaryParts.push(`${failed} failed`);
     if (skipped > 0) summaryParts.push(`${skipped} skipped`);
     summaryParts.push(`${total} total`);
+
+    // Append screenshot summary if failures have screenshots
+    const screenshotCount = details.filter((d) =>
+      d.message.includes("Screenshot:"),
+    ).length;
+    if (screenshotCount > 0) {
+      summaryParts.push(`${screenshotCount} failure screenshot(s) captured`);
+    }
 
     return {
       evaluator: this.name,
@@ -316,14 +571,42 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
       const loc = d.file ? `  ${d.file}${d.line ? `:${d.line}` : ""}` : "  (unknown)";
       lines.push(`${loc}`);
       lines.push(`    ${d.criterion}: ${d.message.split("\n")[0]}`);
+
+      // Include screenshot info if present
+      const screenshotLine = d.message.split("\n").find((l) => l.startsWith("Screenshot:"));
+      if (screenshotLine) {
+        lines.push(`    ${screenshotLine}`);
+      }
     }
     if (details.length > 10) {
       lines.push(`  ... and ${details.length - 10} more failures`);
     }
+
+    lines.push("");
+    lines.push("Investigate the failing assertions and fix either the UI code or the test expectations.");
+    lines.push("Check test-results/ for failure screenshots if available.");
+
     return lines.join("\n");
   }
 
   private errorResult(err: unknown, timestamp: string): EvalResult {
+    const message = err instanceof Error ? err.message : String(err);
+
+    // Detect specific error conditions for better feedback
+    let feedback = `Playwright could not be run: ${message}`;
+    if (message.includes("ENOENT") || message.includes("not found")) {
+      feedback =
+        "Playwright binary not found. Run 'npx playwright install chromium' to install browser binaries.";
+    } else if (message.includes("ETIMEDOUT") || message.includes("timeout")) {
+      feedback =
+        "Playwright tests timed out. This usually means the dev server failed to start or the application is hanging. " +
+        "Check playwright.config.ts webServer settings and verify the dev server starts correctly with the configured command.";
+    } else if (message.includes("ERR_CONNECTION_REFUSED")) {
+      feedback =
+        "Could not connect to the dev server. Verify the port in playwright.config.ts matches the dev server port " +
+        "and that the dev server starts successfully.";
+    }
+
     return {
       evaluator: this.name,
       passed: false,
@@ -332,12 +615,12 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
         {
           criterion: "Playwright execution",
           passed: false,
-          message: err instanceof Error ? err.message : String(err),
+          message,
           severity: "error",
         },
       ],
       summary: "Playwright E2E tests failed to execute.",
-      feedback: `Playwright could not be run: ${err instanceof Error ? err.message : String(err)}`,
+      feedback,
       timestamp,
     };
   }

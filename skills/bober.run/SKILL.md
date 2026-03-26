@@ -4,9 +4,9 @@ description: Full autonomous pipeline — plan a feature, execute all sprints, e
 argument-hint: <task-description>
 ---
 
-# bober.run — Full Pipeline Orchestrator
+# bober.run — Multi-Agent Pipeline Orchestrator
 
-You are running the **bober.run** skill. This is the top-level orchestrator that runs the entire Generator-Evaluator pipeline from start to finish: planning, sprint execution, evaluation, and iteration. The user provides a task description and you deliver a working implementation.
+You are the **orchestrator** for the bober.run pipeline. You do NOT plan, code, or evaluate yourself. You spawn subagents for each of those roles using the **Agent tool**, coordinate the flow between them, and track progress. Each subagent runs in its own isolated context window, receiving only the information you explicitly pass in its prompt.
 
 ## Autonomous Mode
 
@@ -20,206 +20,504 @@ This command is designed to run **fully autonomously** — do NOT stop to ask th
 
 The user launched this command to walk away and come back to a finished product. Respect that intent.
 
-## Overview
-
-The pipeline follows this flow:
+## Architecture — True Multi-Agent Orchestration
 
 ```
-User Task Description
-       |
-       v
-  [1. PLAN] -----> PlanSpec + Sprint Contracts
-       |
-       v
-  [2. SPRINT LOOP]
-       |
-       +----> [2a. Generate] ---> Code changes
-       |            |
-       |            v
-       |      [2b. Evaluate] ---> Pass/Fail
-       |            |
-       |       fail + retries left?
-       |            |
-       |       yes: feedback --> [2a. Generate]
-       |       no:  escalate
-       |
-       |      pass: next sprint
-       |
-       v
-  [3. COMPLETE] ---> All sprints done
+ORCHESTRATOR (you — this session)
+  │
+  ├─ 1. Read bober.config.json, .bober/principles.md
+  ├─ 2. Run check-prereqs.sh
+  │
+  ├─ 3. SPAWN planner subagent (Agent tool)
+  │     └─ Planner reads codebase, generates PlanSpec + sprint contracts
+  │     └─ Saves to .bober/specs/ and .bober/contracts/
+  │     └─ Returns: spec ID and contract list
+  │
+  ├─ 4. For each sprint contract:
+  │     │
+  │     ├─ 4a. Build context handoff (JSON in the prompt)
+  │     │       (spec, contract, previous feedback, principles)
+  │     │
+  │     ├─ 4b. SPAWN generator subagent (Agent tool)
+  │     │       └─ Receives handoff as prompt
+  │     │       └─ Implements the sprint, commits code
+  │     │       └─ Returns: completion report JSON
+  │     │
+  │     ├─ 4c. SPAWN evaluator subagent (Agent tool)
+  │     │       └─ Receives handoff + generator report
+  │     │       └─ Runs eval strategies (typecheck, lint, test, playwright)
+  │     │       └─ Returns: eval result JSON with pass/fail
+  │     │
+  │     ├─ 4d. If FAILED and retries < maxIterations:
+  │     │       └─ Add evaluator feedback to handoff
+  │     │       └─ Go to 4b (spawn FRESH generator with feedback)
+  │     │
+  │     └─ 4e. If PASSED: update contract status, log, next sprint
+  │
+  └─ 5. Final summary
 ```
 
-## Step 1: Initialize and Plan
+**Critical rules for you as orchestrator:**
+- NEVER do the planning, coding, or evaluating yourself — ALWAYS delegate to subagents via the Agent tool.
+- After spawning a subagent, READ the files it created to get the actual results (the subagent's return value is a summary, but files on disk are the source of truth).
+- Keep your own context clean — only track orchestration state (which sprint, which iteration, pass/fail), not implementation details.
+- Each subagent spawn is a FRESH context — this is the whole point. It prevents context degradation over long pipelines.
+- Log progress to `.bober/progress.md` and `.bober/history.jsonl` between every phase transition.
+- Print clear phase banners so progress is visible in the terminal.
 
-### 1a. Check Project State
+---
+
+## Step 1: Initialize
+
+### 1a. Read Project Configuration
 
 Read `bober.config.json`. If it does not exist:
-- Ask the user the minimal initialization questions: project name, mode (greenfield vs brownfield), and what they are building
-- Determine the appropriate `mode` and `preset` (if any) from the user's description
-- Create `bober.config.json` with appropriate defaults
-- Create the `.bober/` directory structure
+- Ask the user the minimal initialization questions: project name, mode (greenfield vs brownfield), and what they are building.
+- Determine the appropriate `mode` and `preset` (if any) from the user's description.
+- Create `bober.config.json` with appropriate defaults.
+- Create the `.bober/` directory structure.
 
 If `bober.config.json` exists, read the configuration.
 
-### 1b. Check for Existing Plans
+Read `.bober/principles.md` if it exists. You will pass the principles text into every subagent prompt.
+
+### 1b. Run Prerequisites Check
+
+```bash
+bash scripts/check-prereqs.sh
+```
+
+If it fails, report the missing prerequisites and stop.
+
+### 1c. Check for Existing Plans
 
 Read `.bober/specs/` and `.bober/progress.md`. If there is an existing plan with incomplete sprints:
 
-- If the user provided a new task description that clearly differs from the existing plan → create a new plan (option B)
-- If the user provided no task or a task that matches the existing plan → resume from the next incomplete sprint (option A)
-- Log your decision but do NOT ask the user — autonomous mode means you decide and move forward
+- If the user provided a new task description that clearly differs from the existing plan: create a new plan (go to Step 2)
+- If the user provided no task or a task that matches the existing plan: resume from the next incomplete sprint (skip to Step 3)
+- Log your decision but do NOT ask the user — autonomous mode means you decide and move forward.
 
-### 1c. Run the Planning Phase
+Log event:
+```json
+{"event":"pipeline-started","timestamp":"<ISO-8601>","task":"<task description>"}
+```
 
-If creating a new plan, execute the bober.plan workflow:
+---
 
-1. Gather codebase context (read key files, survey structure)
-2. Ask 3-5 clarifying questions about the task
-3. Wait for user responses
-4. Generate the PlanSpec with sprint decomposition
-5. Save everything to `.bober/`
+## Step 2: Spawn the Planner Subagent
 
-**Configuration values that matter:**
-- `planner.maxClarifications`: Max questions to ask
-- `sprint.maxSprints`: Maximum number of sprints in the plan
-- `sprint.sprintSize`: Size calibration for sprint decomposition
+Use the **Agent tool** to spawn a planner subagent.
 
-Report the plan summary to the user and proceed.
+**How to call the Agent tool:**
 
-## Step 2: Sprint Execution Loop
+```
+Agent tool call:
+  description: "Plan feature: <title from task description>"
+  prompt: <the full prompt below>
+```
+
+**Build the planner prompt with ALL of these sections:**
+
+```
+You are the Bober Planner subagent. You have been spawned by the orchestrator to create a plan.
+
+## Your Task
+<paste the user's task description here>
+
+## Project Configuration (bober.config.json)
+<paste the full contents of bober.config.json here>
+
+## Project Principles (.bober/principles.md)
+<paste the full contents of .bober/principles.md here, or "No principles file found." if it does not exist>
+
+## Existing Specs
+<list any existing spec IDs from .bober/specs/, or "None" if no prior specs>
+
+## Instructions
+1. Read the codebase to understand the project structure (use Glob and Grep to survey, Read to examine key files).
+2. Generate a PlanSpec with sprint decomposition.
+3. Save the PlanSpec to .bober/specs/<specId>.json
+4. Save each SprintContract to .bober/contracts/<contractId>.json
+5. Update .bober/progress.md with the plan summary.
+6. Append to .bober/history.jsonl: {"event":"plan-created","specId":"...","timestamp":"...","sprintCount":N}
+
+IMPORTANT: You are running as a subagent — do NOT ask clarifying questions. Infer reasonable defaults from the codebase and task description. If something is genuinely ambiguous, document your assumption in the PlanSpec's "assumptions" field.
+
+## Your Response
+When done, respond with EXACTLY this JSON structure (no other text):
+{
+  "specId": "<the spec ID you created>",
+  "title": "<plan title>",
+  "sprintCount": <number>,
+  "contractIds": ["<contract-id-1>", "<contract-id-2>", ...],
+  "summary": "<2-3 sentence summary of the plan>"
+}
+```
+
+**After the planner subagent returns:**
+
+1. Parse the planner's response to extract `specId` and `contractIds`.
+2. Read `.bober/specs/<specId>.json` to verify it was created.
+3. Read each contract file in `.bober/contracts/` to verify they exist.
+4. Print the plan summary:
+   ```
+   === PLAN CREATED ===
+   Spec: <specId>
+   Title: <title>
+   Sprints: <count>
+   1. <Sprint 1 title>
+   2. <Sprint 2 title>
+   ...
+   ```
+5. If the planner subagent failed or returned an error, report it and stop the pipeline.
+
+---
+
+## Step 3: Sprint Execution Loop
 
 Load the sprint contracts from `.bober/contracts/` in order. For each sprint with status `proposed` or `needs-rework`:
 
-### 2a. Pre-Sprint Checks
+### 3a. Pre-Sprint Checks
 
-1. **Verify dependencies:** All sprints in `dependsOn` must have status `completed`
-2. **Verify build state:** The project must build before starting a new sprint
+1. **Verify dependencies:** All sprints in `dependsOn` must have status `completed`.
+2. **Verify build state:** The project must build before starting a new sprint.
    ```bash
-   # Run configured build/compile command (varies by stack)
-   # e.g., npm run build, anchor build, forge build, cargo build
+   # Run configured build/compile command from bober.config.json commands.build
    ```
-   If the build is broken BEFORE the sprint starts, stop and report this to the user. Do not start a sprint on a broken codebase.
-3. **Verify git state:** Ensure we are on the correct feature branch
+   If the build is broken BEFORE the sprint starts, stop and report this to the user.
+3. **Verify git state:** Ensure we are on the correct feature branch.
    ```bash
    git branch --show-current
    ```
 4. **Check iteration budget:** Read `pipeline.maxIterations` from config. Track total iterations across all sprints. If the budget is exhausted, stop.
 
-### 2b. Contract Negotiation
+Print phase banner:
+```
+=== SPRINT <N>/<total>: <title> ===
+Iteration: 1 of <maxIterations>
+Budget used: <used>/<max> total iterations
+```
+
+### 3b. Contract Negotiation
 
 If the sprint status is `proposed`:
-- Review success criteria for executability
-- Verify evaluation strategies are available
-- Adjust criteria if needed
 - Update status to `in-progress`
+- Save the updated contract back to `.bober/contracts/`
+- Log event:
+  ```json
+  {"event":"sprint-started","contractId":"...","specId":"...","timestamp":"..."}
+  ```
 
-### 2c. Generate
+### 3c. Build the Context Handoff
 
-Create a ContextHandoff for the Generator:
-- Include the contract, project context, config, and any evaluator feedback (for retries)
-- Include summaries of completed sprints
-- Include relevant file paths
+Build a context handoff JSON. This is the ONLY information the subagent receives — it must be self-contained.
 
-Spawn the `bober-generator` subagent.
+**Context Handoff structure:**
+```json
+{
+  "handoffId": "handoff-<contractId>-gen-<iteration>",
+  "type": "to-generator",
+  "contractId": "<contract ID>",
+  "specId": "<spec ID>",
+  "timestamp": "<ISO-8601>",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "<Brief project description from PlanSpec>",
+    "completedSprints": [
+      {
+        "contractId": "<ID>",
+        "title": "<title>",
+        "summary": "<what was built>"
+      }
+    ],
+    "currentBranch": "<git branch name>",
+    "relevantFiles": ["<key files the generator should read>"]
+  },
+  "contract": { "<full SprintContract object>" },
+  "config": {
+    "commands": { "<commands section from bober.config.json>" },
+    "generator": { "<generator section from bober.config.json>" }
+  },
+  "principles": "<full text of .bober/principles.md or null>",
+  "evaluatorFeedback": null
+}
+```
 
-After generation:
-- Read the Generator's completion report
-- Verify commits were made
-- Proceed to evaluation
+For retry iterations (iteration > 1), populate `evaluatorFeedback` with the evaluator's failure details.
 
-### 2d. Evaluate
+Save the handoff to `.bober/handoffs/<handoffId>.json`.
 
-Create a ContextHandoff for the Evaluator:
-- Include the contract, Generator's report, config
+### 3d. Spawn the Generator Subagent
 
-Spawn the `bober-evaluator` subagent.
+Use the **Agent tool** to spawn a generator subagent.
 
-After evaluation:
-- Read the EvalResult
-- Save it to `.bober/eval-results/`
-- Determine pass/fail
+**How to call the Agent tool:**
 
-### 2e. Process Result
+```
+Agent tool call:
+  description: "Sprint <N>: <sprint title>"
+  prompt: <the full prompt below>
+```
+
+**Build the generator prompt:**
+
+```
+You are the Bober Generator subagent. You have been spawned by the orchestrator to implement a sprint.
+
+## Context Handoff
+<paste the FULL handoff JSON here — this is ALL the context you get>
+
+## Instructions
+1. Read the SprintContract at .bober/contracts/<contractId>.json
+2. Read the PlanSpec at .bober/specs/<specId>.json for broader context
+3. Read bober.config.json for commands configuration
+4. Read .bober/principles.md if it exists — adhere to all principles strictly
+5. Read the files listed in the contract's estimatedFiles
+6. Implement the sprint according to the contract's success criteria
+7. Self-verify: run build, typecheck, lint, and test commands
+8. Commit your changes with proper messages (format: "bober(<sprint-N>): <description>")
+9. Work on the feature branch, never on main/master
+
+<IF iteration > 1>
+## IMPORTANT — This is a RETRY (iteration <N>)
+The previous attempt failed evaluation. Here is the evaluator's feedback:
+<paste evaluator feedback JSON>
+
+Focus on fixing the specific failures listed above. Read the feedback line by line before making any changes.
+</IF>
+
+## Your Response
+When done, respond with EXACTLY this JSON structure (no other text):
+{
+  "contractId": "<contract ID>",
+  "status": "complete | partial | blocked",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-X-Y",
+      "met": true/false,
+      "evidence": "<verification evidence>"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "<file path>",
+      "action": "created | modified | deleted",
+      "description": "<what changed>"
+    }
+  ],
+  "testsAdded": ["<test file paths>"],
+  "commits": ["<hash> - <message>"],
+  "blockers": ["<any unresolved issues>"],
+  "notes": "<additional context for the evaluator>"
+}
+```
+
+**After the generator subagent returns:**
+
+1. Parse the generator's response to extract the completion report.
+2. Verify commits were made: `git log --oneline -5`
+3. Save the generator report to `.bober/handoffs/gen-report-<contractId>-<iteration>.json`
+4. Log event:
+   ```json
+   {"event":"sprint-iteration-started","contractId":"...","iteration":N,"timestamp":"..."}
+   ```
+5. If the generator subagent crashed or returned an error, mark the sprint as `needs-rework` and log it.
+
+### 3e. Spawn the Evaluator Subagent
+
+Use the **Agent tool** to spawn an evaluator subagent.
+
+**How to call the Agent tool:**
+
+```
+Agent tool call:
+  description: "Evaluate sprint <N>: <sprint title>"
+  prompt: <the full prompt below>
+```
+
+**Build the evaluator prompt:**
+
+```
+You are the Bober Evaluator subagent. You have been spawned by the orchestrator to evaluate a sprint.
+
+## Sprint Contract
+<paste the full SprintContract JSON>
+
+## Generator's Completion Report
+<paste the generator's completion report JSON>
+
+## Project Configuration
+<paste relevant sections of bober.config.json: commands, evaluator>
+
+## Project Principles
+<paste full text of .bober/principles.md or "No principles file found.">
+
+## Context
+- Contract ID: <contractId>
+- Spec ID: <specId>
+- Sprint: <N> of <total>
+- Iteration: <N>
+- Branch: <current git branch>
+- Changed files (per generator): <list of files>
+
+## Instructions
+1. Read the SprintContract at .bober/contracts/<contractId>.json
+2. Read bober.config.json for configured eval strategies and commands
+3. Run each configured evaluation strategy (typecheck, lint, build, unit-test, playwright, api-check) using the commands from config
+4. Verify EVERY success criterion in the contract one by one
+5. Check for regressions (pre-existing tests still passing, build stability)
+6. Check adherence to project principles
+7. Produce a structured EvalResult
+
+IMPORTANT: You do NOT have Write or Edit tools. Output the EvalResult JSON in your response, and the orchestrator will save it to disk.
+
+## Your Response
+When done, respond with EXACTLY this JSON structure (no other text):
+{
+  "evalId": "eval-<contractId>-<iteration>",
+  "contractId": "<contract ID>",
+  "specId": "<spec ID>",
+  "timestamp": "<ISO-8601>",
+  "iteration": <N>,
+  "overallResult": "pass | fail",
+  "score": {
+    "criteriaTotal": <N>,
+    "criteriaPassed": <N>,
+    "criteriaFailed": <N>,
+    "criteriaSkipped": <N>,
+    "requiredPassed": <N>,
+    "requiredFailed": <N>,
+    "requiredTotal": <N>
+  },
+  "strategyResults": [
+    {
+      "strategy": "<type>",
+      "required": true/false,
+      "result": "pass | fail | skipped",
+      "output": "<relevant output>",
+      "details": "<explanation>"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-X-Y",
+      "description": "<criterion>",
+      "required": true/false,
+      "result": "pass | fail | skipped",
+      "evidence": "<evidence>",
+      "feedback": "<failure details if failed>"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "<2-3 sentence summary>"
+}
+```
+
+**After the evaluator subagent returns:**
+
+1. Parse the evaluator's response to extract the EvalResult.
+2. Save the EvalResult to `.bober/eval-results/eval-<contractId>-<iteration>.json` (the evaluator cannot write files).
+3. Determine pass/fail from the `overallResult` field.
+
+### 3f. Process the Evaluation Result
 
 **On PASS:**
-1. Update contract status to `completed`
-2. Update `.bober/progress.md`
-3. Log to `.bober/history.jsonl`
-4. Report milestone to user:
+1. Update contract status to `completed` and save to `.bober/contracts/`.
+2. Update `.bober/progress.md`.
+3. Log event:
+   ```json
+   {"event":"sprint-completed","contractId":"...","specId":"...","iteration":N,"timestamp":"..."}
    ```
-   Sprint <N>/<total> PASSED: <title>
+4. Print milestone:
+   ```
+   === Sprint <N>/<total> PASSED ===
+   Title: <title>
+   Iteration: <M>
    Progress: [=====>    ] <N>/<total> sprints complete
    Next: <next sprint title>
    ```
-5. Move to next sprint
+5. Move to next sprint.
 
 **On FAIL with retries remaining:**
-1. Check if iteration count < `evaluator.maxIterations` (default: 3)
-2. Feed evaluator feedback back to Generator (go to 2c)
-3. Report retry:
+1. Check if iteration < `evaluator.maxIterations` (default: 3).
+2. Log event:
+   ```json
+   {"event":"sprint-iteration-failed","contractId":"...","iteration":N,"failedCriteria":[...],"timestamp":"..."}
    ```
-   Sprint <N> iteration <M> failed. Retrying with evaluator feedback...
-   Failed: <brief failure summary>
+3. Print retry notice:
    ```
+   === Sprint <N> iteration <M> FAILED ===
+   Failed criteria: <list>
+   Retrying (iteration <M+1> of <maxIterations>)...
+   ```
+4. Build a NEW context handoff with evaluator feedback included.
+5. Go back to step 3d (spawn a FRESH generator subagent with the feedback).
 
-**On FAIL with no retries:**
-1. Update contract status to `needs-rework`
-2. Decide whether to continue or stop based on severity:
-   - If the failure is in a non-blocking sprint (nothing depends on it), skip and continue
-   - If the failure blocks subsequent sprints, stop the pipeline
-3. Report to user with full context
+**On FAIL with no retries remaining:**
+1. Update contract status to `needs-rework` and save.
+2. Log event:
+   ```json
+   {"event":"sprint-failed","contractId":"...","specId":"...","totalIterations":N,"timestamp":"..."}
+   ```
+3. Decide whether to continue or stop:
+   - If the failure is in a non-blocking sprint (nothing depends on it), skip and continue.
+   - If the failure blocks subsequent sprints, stop the pipeline.
+4. Print failure report with full context.
 
-### 2f. Context Reset
+### 3g. Context Reset
 
-After each sprint completes (pass or fail), check `pipeline.contextReset`:
-- `always`: Fresh context for the next sprint. The next sprint's Generator receives only its handoff document.
-- `on-threshold`: Continue with current context unless it is getting large. If context exceeds a reasonable threshold (use your judgment), reset.
-- `never`: Carry all context forward (not recommended for long pipelines).
+After each sprint completes (pass or fail), check `pipeline.contextReset` from config:
+- `always`: Fresh context for the next sprint. The next sprint's Generator receives only its handoff document. (This is the default with subagent architecture — each spawn IS a fresh context.)
+- `on-threshold`: Same as `always` with subagents, since each subagent is already isolated.
+- `never`: Carry summary forward in the handoff. Still a fresh subagent, but with richer handoff.
 
-### 2g. Iteration Budget
+### 3h. Iteration Budget
 
 Track total Generator-Evaluator iterations across all sprints:
-- Each Generator+Evaluator cycle counts as 1 iteration
-- When total iterations reach `pipeline.maxIterations` (default: 20), stop the pipeline regardless of sprint status
-- Report the budget status:
+- Each Generator+Evaluator cycle counts as 1 iteration.
+- When total iterations reach `pipeline.maxIterations` (default: 20), stop the pipeline.
+- Print budget status after each cycle:
   ```
   Iteration budget: <used>/<max>
   ```
 
-## Step 3: Completion
+---
+
+## Step 4: Completion
 
 When all sprints are complete (or the pipeline stops):
 
 ### All Sprints Passed
 
 ```
-## Pipeline Complete
+=== PIPELINE COMPLETE ===
 
 All <N> sprints passed successfully.
 
 ### Results
-1. [PASS] Sprint 1: <title>
-2. [PASS] Sprint 2: <title>
+1. [PASS] Sprint 1: <title> — iteration <M>
+2. [PASS] Sprint 2: <title> — iteration <M>
 ...
 
 ### Statistics
 - Total iterations: <N>
 - Sprints: <N>/<N> passed
-- Time: <start> to <end>
+- Subagents spawned: <count>
 
 ### What Was Built
 <Brief summary of the complete feature>
 
 ### Next Steps
 - Review the code on branch: bober/<feature-slug>
-- Run the test suite: npm test
-- Merge to main when ready: git merge bober/<feature-slug>
+- Run the test suite: <configured test command>
+- Merge to main when ready
 ```
 
 ### Pipeline Stopped (failures or budget exhausted)
 
 ```
-## Pipeline Stopped
+=== PIPELINE STOPPED ===
 
 Completed <M> of <N> sprints. Stopped because: <reason>
 
@@ -242,6 +540,8 @@ Sprint 3: <title>
 - Run /bober.plan to revise the plan
 ```
 
+---
+
 ## Human Escalation Protocol
 
 Escalate to the user (pause and ask) when:
@@ -257,6 +557,8 @@ Escalate to the user (pause and ask) when:
 3. **Ambiguous situation:** If the codebase state is unclear, the build is broken from external causes, or there is a conflict with existing code, escalate rather than guessing.
 
 4. **Halfway checkpoint:** For plans with 5+ sprints, pause after completing half the sprints to report progress and ask if the user wants to continue, adjust, or stop.
+
+---
 
 ## Progress Tracking
 
@@ -288,6 +590,7 @@ Last updated: <timestamp>
 ### Pipeline Statistics
 - Total iterations used: 4 / 20
 - Sprints completed: 2 / 5
+- Subagents spawned: 6
 ```
 
 And keep `.bober/history.jsonl` updated with events:
@@ -301,10 +604,14 @@ And keep `.bober/history.jsonl` updated with events:
 - `pipeline-stopped`
 - `human-escalation`
 
-## Error Recovery
+---
 
+## Error Handling
+
+- **Subagent crash/timeout:** If a subagent call via the Agent tool fails or returns an error, catch it. Log the error, mark the sprint as `needs-rework`, and decide whether to retry or escalate. Do NOT let a subagent failure crash the entire pipeline.
+- **Subagent returns malformed response:** If you cannot parse the subagent's JSON response, read the files on disk (`.bober/specs/`, `.bober/contracts/`, `.bober/eval-results/`) as the source of truth. The subagent may have saved files correctly even if its response text was garbled.
 - **Git conflicts:** Pause and report to user. Do not auto-resolve.
 - **npm install failures:** Try once. If it fails, report to user.
 - **Dev server won't start:** Needed for API checks and Playwright. Report as a configuration issue.
-- **Out of context window:** If the conversation is getting extremely long, proactively reset context by summarizing progress and starting a fresh handoff.
-- **Previous sprint broke something:** If a completed sprint's code is causing issues in a later sprint, note this but do not go back and modify completed sprints. Instead, have the current sprint fix the issue within its scope.
+- **Out of context window:** With subagent architecture, this is largely mitigated — each subagent gets a fresh context. If YOUR orchestrator context gets long, summarize completed sprints more aggressively in the handoff documents.
+- **Previous sprint broke something:** If a completed sprint's code is causing issues in a later sprint, note this but do not go back and modify completed sprints. Instead, include the issue details in the current sprint's generator handoff so it can fix the problem within its scope.
