@@ -213,9 +213,36 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 | `playwright` | Runs Playwright E2E tests |
 | `api-check` | Validates API endpoints respond correctly |
 
+### Inline Command Evaluators
+
+The strategy type is **open** — you can use any name and provide a shell command directly. No plugin file needed:
+
+```json
+{
+  "evaluator": {
+    "strategies": [
+      { "type": "typecheck", "required": true },
+      { "type": "lint", "required": true },
+      { "type": "k6", "command": "k6 run load-test.js", "required": false, "label": "Load Test" },
+      { "type": "slither", "command": "slither .", "required": true, "label": "Security Audit" },
+      { "type": "anchor-verify", "command": "anchor verify", "required": true },
+      { "type": "cargo-test", "command": "cargo test", "required": true },
+      { "type": "pytest", "command": "pytest --tb=short", "required": true },
+      { "type": "mypy", "command": "mypy . --strict", "required": false }
+    ]
+  }
+}
+```
+
+Any strategy with a `command` field runs that command and checks the exit code (0 = pass). Error output is parsed and included in the evaluator feedback. You can set a custom `timeout` in the config:
+
+```json
+{ "type": "k6", "command": "k6 run load.js", "required": false, "config": { "timeout": 300000 } }
+```
+
 ### Custom Evaluator Plugins
 
-You can write custom evaluators that implement the `EvaluatorPlugin` interface:
+For more complex evaluation logic, write a plugin that implements the `EvaluatorPlugin` interface:
 
 ```typescript
 import type { EvaluatorPlugin, EvalContext, EvalResult } from "agent-bober";
@@ -224,18 +251,19 @@ const myPlugin: EvaluatorPlugin = {
   name: "My Custom Check",
   description: "Validates something specific to my project",
 
-  async canRun(projectRoot, config) {
-    // Return true if this evaluator can run
+  async canRun(_projectRoot, _config) {
     return true;
   },
 
   async evaluate(context: EvalContext): Promise<EvalResult> {
-    // Run your checks and return structured results
     return {
-      strategy: "custom",
+      evaluator: "my-custom-check",
       passed: true,
+      score: 100,
       details: [],
       summary: "All checks passed",
+      feedback: "Everything looks good.",
+      timestamp: new Date().toISOString(),
     };
   },
 };
@@ -243,7 +271,7 @@ const myPlugin: EvaluatorPlugin = {
 export default () => myPlugin;
 ```
 
-Register custom plugins in `bober.config.json`:
+Register plugins in `bober.config.json`:
 
 ```json
 {
