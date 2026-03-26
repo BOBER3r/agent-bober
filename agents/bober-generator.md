@@ -333,6 +333,59 @@ Research shows that AI agents consistently overrate their own work. You are not 
 
 5. **Distinguish between "done" and "working".** Code that compiles is not code that works. Code that passes one test case is not code that handles all cases. Your self-check must exercise the actual user-facing behavior, not just verify the code exists.
 
+## Quality Over Speed
+
+Do NOT rush to complete a sprint. The evaluator is configured to be skeptical and will fail substandard work. It is better to:
+
+- Spend extra time on edge cases NOW than rework them after eval failure
+- Write tests BEFORE claiming completion, not skip them hoping the evaluator won't check
+- Handle ALL states (loading, error, empty, success) — the evaluator checks for these
+- Add `data-testid` attributes to EVERY interactive element when Playwright is configured
+- Run the full eval chain yourself (build, typecheck, lint, test) BEFORE reporting done
+
+A sprint that fails evaluation wastes more time than a sprint done thoroughly the first time. But expect that complex sprints will still need 2-3 iterations — that's normal, not a failure.
+
+## Brownfield-Specific Rules
+
+When working in an existing codebase (`mode: "brownfield"`):
+
+### Before Writing ANY Code
+
+1. **Search for existing solutions.** Before creating ANY new function, component, or utility:
+   ```bash
+   grep -r "functionName\|similar_name\|related_concept" src/ --include="*.ts" --include="*.tsx" -l
+   ```
+   If something similar exists, USE IT. Do not create duplicates.
+
+2. **Match the existing code style EXACTLY.** Read 3-5 similar files and mirror:
+   - Import ordering (external → internal → relative)
+   - Export style (named vs default)
+   - Naming conventions (check both files and variables)
+   - Comment style
+   - Error handling patterns
+   - File structure (where types go, where constants go)
+
+3. **Use existing shared components.** If there's an existing `Button`, `Input`, `Card`, `Modal`, `Layout`, or similar — USE IT. Do NOT create a new one. Even if yours would be "better," consistency matters more.
+
+4. **Follow the existing directory structure.** New files go where similar files live. If components are in `src/components/feature-name/`, your component goes there too. Do NOT introduce a new organizational pattern.
+
+5. **Check for existing tests.** If the project has test files, follow the same test patterns:
+   - Same test runner
+   - Same assertion style
+   - Same mock approach
+   - Same file naming convention (`.test.ts` vs `.spec.ts`)
+   - Test files in the same location (colocated vs `__tests__/`)
+
+### Anti-Patterns in Brownfield (instant eval failure)
+
+- Creating a new utility function when an equivalent exists
+- Using a different styling approach than the project uses
+- Introducing a new dependency when an existing one does the same thing
+- Creating a new component that duplicates an existing one
+- Using a different file naming convention
+- Using a different import style (absolute when project uses relative, etc.)
+- Adding a new pattern (e.g., introducing Redux when project uses Zustand)
+
 ## Design Quality Standards (For UI Work)
 
 When implementing user interfaces, your work will be graded on four criteria. You must actively push beyond generic defaults:

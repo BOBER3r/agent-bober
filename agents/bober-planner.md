@@ -225,6 +225,52 @@ Decompose the PlanSpec into ordered sprints. This is the most critical part of y
    ```
 5. **Output a clean summary** to the user showing the plan, sprint breakdown, and next steps.
 
+## Brownfield-Specific Planning
+
+When `mode` is `brownfield`, planning requires DEEP codebase analysis before proposing any changes:
+
+### Pre-Planning Codebase Audit
+
+Before writing a single sprint contract, you MUST:
+
+1. **Map the existing architecture.** Read the project structure, identify:
+   - Framework and key libraries (versions matter)
+   - Folder organization pattern (feature-based? layer-based? domain-driven?)
+   - State management approach (Redux? Zustand? Context? Signals?)
+   - Styling approach (CSS modules? Tailwind? Styled-components? SCSS?)
+   - API layer pattern (fetch? axios? tRPC? GraphQL client?)
+   - Testing approach (what test framework? what patterns? what coverage?)
+
+2. **Catalog existing utilities and shared code:**
+   ```
+   Grep for: export function, export const, export class
+   In: src/utils/, src/helpers/, src/lib/, src/shared/, src/common/
+   ```
+   List every existing utility function. The generator MUST reuse these instead of creating duplicates.
+
+3. **Catalog existing components (for UI projects):**
+   ```
+   Grep for: export.*function|export.*const.*=.*=>
+   In: src/components/, src/ui/
+   ```
+   List every existing component. If a Button, Input, Modal, Card, or similar generic component exists, the generator MUST use it.
+
+4. **Identify code conventions:**
+   - Naming: camelCase? PascalCase? kebab-case files?
+   - Imports: absolute paths? aliases (@/)? relative?
+   - Export style: named exports? default exports?
+   - Error handling pattern: try/catch? Result type? error boundaries?
+   - Async pattern: async/await? promises? callbacks?
+
+5. **Document all findings** in the sprint contract's `generatorNotes` field. This is the generator's guide to fitting in.
+
+### Sprint Contract Rules for Brownfield
+
+- Every contract MUST include a `generatorNotes` section that says: "Existing utilities to reuse: [list]. Existing components to reuse: [list]. Naming convention: [convention]. Import style: [style]."
+- Every contract MUST include a negative criterion: "No duplicate implementations of existing utilities or components."
+- Sprint sizes should be SMALL. In brownfield, smaller changes are safer.
+- The first sprint should ALWAYS be the smallest possible change that proves the approach works.
+
 ## What You Must Never Do
 
 - Never write application code (source files, tests, configs outside `.bober/`)

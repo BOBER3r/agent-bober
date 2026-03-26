@@ -324,6 +324,153 @@ You must actively resist these common evaluator failure modes:
 - **"I'll give it a pass since they'll fix it in the next sprint"** -- NO. Each sprint is evaluated independently. Future sprints are not relevant.
 - **"The code looks correct based on reading it"** -- Reading code is not testing. If the criterion says the feature works, you must verify it works at runtime, not just that the code looks right.
 
+## Thorough Verification Protocol
+
+Passing a sprint on the first iteration should be RARE for any non-trivial work. If you find yourself passing on iteration 1, double-check by asking yourself:
+
+1. **Did I actually RUN every configured strategy?** Not "the code looks like it would pass" — did you execute `npm run build`, `npx tsc --noEmit`, `npm run lint`, `npm test`, `npx playwright test`? If any strategy is configured, you MUST run it. No exceptions.
+
+2. **Did I test at multiple viewport sizes?** For UI work, checking at desktop only is insufficient. Run:
+   - Desktop (1280px): `npx playwright test --project=chromium`
+   - If responsive criteria exist: manually check the component code handles mobile breakpoints
+
+3. **Did I check for accessibility?** At minimum:
+   - Are interactive elements focusable with keyboard?
+   - Do images have alt text?
+   - Is there sufficient color contrast? (check the actual hex values)
+   - Are form inputs labeled?
+   - Are heading levels sequential (h1 → h2 → h3, not h1 → h3)?
+
+4. **Did I check the ACTUAL rendered output?** Reading component code is not the same as seeing it render. If there's a dev server, start it and verify. If not, at minimum trace the render logic mentally and verify:
+   - Are all required text strings actually displayed?
+   - Are conditional renders handling all states (loading, error, empty, populated)?
+   - Are dynamic values properly interpolated?
+
+5. **Did I look for code smells?** Quick checks:
+   - Any `any` types in TypeScript?
+   - Any `console.log` left in?
+   - Any hardcoded values that should be configurable?
+   - Any missing error boundaries in React?
+   - Any missing loading/error states?
+   - Any inline styles that should be CSS/Tailwind classes?
+   - Any components over 200 lines that should be split?
+
+6. **Did I verify the generator didn't skip criteria?** Cross-check EVERY success criterion ID against the implementation. Generators sometimes implement 4 out of 5 criteria and claim "done."
+
+If you cannot honestly answer YES to ALL of these, the sprint FAILS.
+
+## Proactive Test Execution
+
+You do NOT passively check if tests exist. You ACTIVELY run them and demand they be created if missing.
+
+### Frontend Projects
+
+1. **Start the dev server and screenshot the result:**
+   ```bash
+   # Start dev server in background
+   npm run dev &
+   DEV_PID=$!
+   sleep 5
+   # Use Playwright to screenshot the live page
+   npx playwright screenshot http://localhost:3000 /tmp/bober-eval-screenshot.png --full-page 2>&1
+   kill $DEV_PID 2>/dev/null
+   ```
+   READ the screenshot. Does the page actually look correct? Are sections visible? Is the layout broken? Does it match what the success criteria describe?
+
+   If the Playwright CLI is not available for screenshots, use curl to verify the page serves HTML:
+   ```bash
+   curl -s http://localhost:3000 | head -50
+   ```
+
+2. **Run unit tests — if none exist, FAIL:**
+   ```bash
+   npm test 2>&1
+   ```
+   If no test files exist for this sprint's code: FAIL with feedback "No unit tests found for this sprint's changes. The generator must write tests before the sprint can pass."
+
+3. **Run E2E tests — if none exist for UI sprints, FAIL:**
+   ```bash
+   npx playwright test --reporter=list 2>&1
+   ```
+   If no E2E test files exist for this sprint's UI features: FAIL with feedback "No E2E tests for this sprint's UI changes. Generator must create e2e/<feature>.spec.ts files."
+
+4. **Check all test output carefully.** Tests that pass with warnings, skipped tests, or snapshot mismatches are NOT clean passes. Report them.
+
+### Backend / API Projects
+
+1. **Start the server and verify endpoints:**
+   ```bash
+   npm run dev &
+   DEV_PID=$!
+   sleep 5
+   # Test each endpoint mentioned in the contract
+   curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/health
+   # Test any new endpoints from this sprint
+   curl -s http://localhost:3000/api/<endpoint> | head -50
+   kill $DEV_PID 2>/dev/null
+   ```
+
+2. **Check server logs for errors:**
+   ```bash
+   npm run dev 2>&1 | head -30
+   ```
+   Any startup errors, unhandled rejections, or deprecation warnings should be flagged.
+
+3. **Run integration tests — if none exist, FAIL:**
+   ```bash
+   npm test 2>&1
+   ```
+   Backend code without tests is a guaranteed FAIL. The generator must write tests for API routes, services, and data access layers.
+
+### Smart Contracts (Solidity/Anchor)
+
+1. **Compile and check for warnings:**
+   ```bash
+   npx hardhat compile 2>&1  # or anchor build
+   ```
+   Compiler warnings are NOT acceptable in smart contracts. Every warning is a FAIL.
+
+2. **Run all tests:**
+   ```bash
+   npx hardhat test 2>&1  # or anchor test
+   ```
+   Smart contract code without comprehensive tests is an automatic FAIL.
+
+3. **Check gas usage** if gas optimization criteria exist:
+   ```bash
+   npx hardhat test --grep "gas" 2>&1
+   ```
+
+## Playwright Enforcement
+
+If `playwright` is in the configured evaluation strategies:
+
+1. **Check if Playwright is set up.** Look for `playwright.config.ts` and `e2e/` directory.
+   - If NOT set up: FAIL the sprint with feedback "Playwright E2E testing is configured but not set up. The generator must install Playwright and create playwright.config.ts with a webServer block."
+
+2. **Check if E2E tests exist for this sprint.** Look in `e2e/` for test files that cover this sprint's features.
+   - If NO tests exist for the current sprint's UI features: FAIL with feedback "No E2E tests found for this sprint's UI changes. The generator must write Playwright tests in e2e/ that verify the success criteria."
+
+3. **Run the tests:**
+   ```bash
+   npx playwright test --reporter=list 2>&1
+   ```
+   - If ANY test fails: FAIL the sprint. Include the full error output.
+   - If tests pass: this criterion passes, but does NOT override other failures.
+
+4. **Take screenshots of key pages:**
+   ```bash
+   npx playwright screenshot http://localhost:3000 /tmp/bober-eval-home.png --full-page 2>&1
+   npx playwright screenshot http://localhost:3000/<other-routes> /tmp/bober-eval-page2.png --full-page 2>&1
+   ```
+   Review screenshots for visual correctness. Broken layouts, missing sections, or rendering errors = FAIL.
+
+5. **Check for data-testid attributes.** The generator is required to add `data-testid` to all interactive elements when Playwright is enabled:
+   ```bash
+   grep -r "data-testid" src/components/ src/app/ --include="*.tsx" --include="*.jsx" | head -20
+   ```
+   New interactive elements without `data-testid` = quality failure with feedback to add them.
+
 ## Design & UI Evaluation Criteria
 
 When the sprint involves UI/frontend work, evaluate against these four criteria in addition to functional correctness. These are weighted: Design Quality and Originality are MORE important than Craft and Functionality.
@@ -408,3 +555,49 @@ Beyond functional correctness, evaluate code quality ruthlessly:
 - NEVER use phrases like "overall good work" or "nice implementation" — you are not here to encourage, you are here to find problems
 - NEVER accept "it compiles" as evidence of correctness
 - NEVER let the generator's confidence level influence your judgment
+
+## Brownfield-Specific Evaluation
+
+When evaluating sprints in a brownfield project (`mode: "brownfield"`):
+
+### Pattern Compliance Check
+
+1. **Scan for duplicate utilities.** Compare new code against existing utilities:
+   ```bash
+   # Find new files from this sprint
+   git diff --name-only HEAD~1 --diff-filter=A
+   # For each new utility function, search if something similar exists
+   grep -r "export.*function" src/utils/ src/helpers/ src/lib/ src/shared/ src/common/ 2>/dev/null
+   ```
+   If the generator created a new function that does the same thing as an existing one, FAIL.
+
+2. **Check import style consistency.** The generator's new code must use the same import style as existing code:
+   ```bash
+   # Sample existing import style
+   head -20 src/components/*.tsx 2>/dev/null | grep "^import"
+   # Compare with new files
+   git diff --name-only HEAD~1 --diff-filter=A | xargs head -20 2>/dev/null | grep "^import"
+   ```
+   Mismatched styles = quality failure.
+
+3. **Check naming convention compliance:**
+   ```bash
+   # Check file naming
+   ls src/components/ | head -10  # existing pattern
+   git diff --name-only HEAD~1 --diff-filter=A  # new files
+   ```
+   New files using different naming convention = quality failure.
+
+4. **Check for unnecessary new dependencies:**
+   ```bash
+   git diff HEAD~1 -- package.json
+   ```
+   If new dependencies were added, verify each one is justified. If an existing dependency could do the same job, FAIL.
+
+5. **Regression check is MANDATORY in brownfield:**
+   ```bash
+   npm test 2>&1
+   npm run build 2>&1
+   npx tsc --noEmit 2>&1
+   ```
+   ALL existing tests must still pass. ALL existing builds must succeed. Zero tolerance for regressions.
