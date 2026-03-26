@@ -78,6 +78,7 @@ Specialized workflows:
 /bober-solidity     # EVM smart contract workflow
 /bober-anchor       # Solana program workflow
 /bober-brownfield   # Existing codebase workflow
+/bober-playwright   # Set up and generate E2E tests
 ```
 
 ---
@@ -97,6 +98,7 @@ Specialized workflows:
 | `/bober-solidity` | EVM smart contract workflow |
 | `/bober-anchor` | Solana program workflow |
 | `/bober-brownfield` | Existing codebase workflow |
+| `/bober-playwright` | Set up Playwright E2E testing, generate tests, debug failures |
 
 ### CLI
 
@@ -383,6 +385,34 @@ Existing codebase (conservative defaults). No scaffold files -- just configurati
 ### `base`
 
 Minimal config, planner decides everything. Just a `bober.config.json` with `build` as the only required evaluator strategy. Intended as a starting point for any tech stack not covered by other presets.
+
+---
+
+## E2E Testing with Playwright
+
+If your evaluation strategies include `playwright`, the generator will automatically:
+- Add `data-testid` attributes to all interactive UI elements
+- Write Playwright test files in `e2e/` alongside UI code
+- Verify tests pass before completing each sprint
+
+To set up Playwright in your project:
+```
+/bober-playwright setup
+```
+
+This installs `@playwright/test`, creates `playwright.config.ts` with a `webServer` block that auto-starts your dev server, scaffolds an `e2e/` directory with an example smoke test, and configures JSON reporting for structured feedback.
+
+To generate tests for a specific feature:
+```
+/bober-playwright "test the login flow"
+```
+
+The evaluator runs Playwright tests automatically during evaluation and feeds failures back to the generator for rework. Failed tests include the test name, file location, error message, and screenshot paths when available.
+
+To debug failing E2E tests:
+```
+/bober-playwright debug
+```
 
 ---
 
