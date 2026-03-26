@@ -373,10 +373,11 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
       name: "generatorModel",
       message: "Generator model:",
       choices: [
+        { title: "Opus (best quality)", value: "opus" },
         { title: "Sonnet (recommended)", value: "sonnet" },
-        { title: "Haiku (faster)", value: "haiku" },
+        { title: "Haiku (faster, cheaper)", value: "haiku" },
       ],
-      initial: 0,
+      initial: 1,
     },
   ]);
 
@@ -516,10 +517,11 @@ async function greenfieldFlow(
       name: "generatorModel",
       message: "Generator model:",
       choices: [
+        { title: "Opus (best quality)", value: "opus" },
         { title: "Sonnet (recommended)", value: "sonnet" },
-        { title: "Haiku (faster)", value: "haiku" },
+        { title: "Haiku (faster, cheaper)", value: "haiku" },
       ],
-      initial: 0,
+      initial: 1,
     },
   ]);
 
