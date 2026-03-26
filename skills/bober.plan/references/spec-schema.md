@@ -22,7 +22,8 @@ PlanSpec files are stored at: `.bober/specs/<specId>.json`
   "updatedAt": "string (required, ISO-8601 datetime)",
   "title": "string (required, 3-80 characters)",
   "description": "string (required, 2-3 sentences)",
-  "projectType": "string (required, one of: react-fullstack, brownfield, generic)",
+  "mode": "string (required, one of: greenfield, brownfield)",
+  "preset": "string (optional, e.g.: nextjs, react-vite, solidity, anchor, api-node, python-api)",
   "status": "string (required, one of: planned, in-progress, completed, archived)",
 
   "assumptions": [
@@ -87,7 +88,8 @@ PlanSpec files are stored at: `.bober/specs/<specId>.json`
 | `updatedAt` | ISO-8601 timestamp of last modification. |
 | `title` | Human-readable feature title. Should be concise and descriptive. |
 | `description` | 2-3 sentence summary of the feature and its user value. |
-| `projectType` | Must match the `project.type` in `bober.config.json`. |
+| `mode` | Must match the `project.mode` in `bober.config.json` (`greenfield` or `brownfield`). |
+| `preset` | Must match the `project.preset` in `bober.config.json`, if set (e.g., `nextjs`, `solidity`, `anchor`). |
 | `status` | Lifecycle state: `planned` (not started), `in-progress` (sprints running), `completed` (all sprints done), `archived` (abandoned or superseded). |
 
 ### Features Array
@@ -151,7 +153,8 @@ Bad criteria:
   "updatedAt": "2026-03-26T10:00:00Z",
   "title": "User Authentication System",
   "description": "A complete user authentication system supporting email/password registration and login, with session management and protected routes. This enables the application to identify users and restrict access to authorized content.",
-  "projectType": "react-fullstack",
+  "mode": "greenfield",
+  "preset": "react-vite",
   "status": "planned",
   "assumptions": [
     "The application does not currently have any authentication system",

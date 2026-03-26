@@ -47,7 +47,7 @@ function findNextPendingSprint(
 
 async function buildProjectContext(
   projectRoot: string,
-  config: { project: { name: string; type: string } },
+  config: { project: { name: string; mode: string } },
 ): Promise<ProjectContext> {
   let currentBranch: string;
   try {
@@ -58,7 +58,7 @@ async function buildProjectContext(
 
   return {
     name: config.project.name,
-    type: config.project.type,
+    type: config.project.mode,
     techStack: [],
     entryPoints: [],
     currentBranch,

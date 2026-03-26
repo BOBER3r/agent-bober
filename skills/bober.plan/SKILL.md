@@ -14,20 +14,28 @@ First, check if `bober.config.json` exists in the project root.
 
 **If `bober.config.json` does NOT exist:**
 
-Guide the user through initialization. Ask:
+Guide the user through initialization. Ask open-ended questions to understand what they want to build:
 
 ```
 I don't see a bober.config.json in this project. Let me set one up.
 
-**What type of project is this?**
-A) React + Backend (Vite/Next.js frontend, Node/Express/FastAPI backend)
-B) Brownfield — adding features to an existing codebase
-C) Generic — other project type
+**Is this a new project or an existing codebase?**
+A) New project (greenfield) -- starting from scratch
+B) Existing codebase (brownfield) -- adding to or modifying existing code
+
+**What are you building?** (e.g., "a task management web app", "an ERC-20 token", "a REST API", "a CLI tool", "a Solana NFT marketplace")
 
 **What is the project name?** (e.g., "my-todo-app")
 ```
 
-After the user answers, create `bober.config.json` using the appropriate defaults from the project type. Use the schema defined in `src/config/schema.ts` and defaults from `src/config/defaults.ts` as reference. Auto-detect commands by examining `package.json` scripts if available.
+Based on the user's answers, determine the appropriate `mode` and `preset`:
+- `mode`: `"greenfield"` for new projects, `"brownfield"` for existing codebases
+- `preset`: Match to a known preset if applicable (`"nextjs"`, `"react-vite"`, `"solidity"`, `"anchor"`, `"api-node"`, `"python-api"`), or omit if the project does not fit a preset
+- `stack`: Infer stack details from the user's description (e.g., `{ "frontend": "react", "backend": "express", "database": "postgresql" }`)
+
+The planner should be able to plan ANY type of project -- web apps, APIs, smart contracts, CLI tools, mobile apps, libraries, data pipelines, etc. Do not limit the user to predefined categories.
+
+Create `bober.config.json` using the appropriate defaults from the mode and preset. Use the schema defined in `src/config/schema.ts` and defaults from `src/config/defaults.ts` as reference. Auto-detect commands by examining `package.json`, `Cargo.toml`, `Anchor.toml`, `hardhat.config.*`, `foundry.toml`, or other project manifests if available.
 
 Then create the `.bober/` directory structure:
 ```bash
@@ -39,7 +47,8 @@ Create `.bober/progress.md` with initial content:
 # Bober Progress
 
 Project: <project-name>
-Type: <project-type>
+Mode: <greenfield|brownfield>
+Preset: <preset or "custom">
 Initialized: <date>
 
 ---
@@ -47,7 +56,7 @@ Initialized: <date>
 
 Create `.bober/history.jsonl` with the initialization event:
 ```json
-{"event":"project-initialized","projectName":"...","projectType":"...","timestamp":"..."}
+{"event":"project-initialized","projectName":"...","mode":"...","preset":"...","timestamp":"..."}
 ```
 
 **If `bober.config.json` EXISTS:** Read it and proceed to Step 2.
@@ -63,8 +72,8 @@ Read the following files if they exist (skip those that do not):
 5. Any files listed in `planner.contextFiles` from the config
 
 Survey the project structure:
-- Use Glob with patterns like `src/**/*.ts`, `src/**/*.tsx`, `app/**/*`, `pages/**/*` to understand the file layout
-- Use Grep to find key patterns: route definitions (`app.get`, `app.post`, `router`, `Route`, `path:`), database/ORM usage (`prisma`, `drizzle`, `sequelize`, `knex`, `mongoose`), state management (`useState`, `useReducer`, `zustand`, `redux`), authentication patterns
+- Use Glob with patterns appropriate to the stack to understand the file layout (e.g., `src/**/*.ts`, `contracts/**/*.sol`, `programs/**/*.rs`, `app/**/*`, `pages/**/*`)
+- Use Grep to find key patterns relevant to the project type: route definitions, database/ORM usage, state management, smart contract interfaces, program instructions, authentication patterns, etc.
 - Read `.bober/specs/` to check for existing plans
 - Read `.bober/progress.md` to understand current project state
 
@@ -229,7 +238,7 @@ Run `/bober.sprint` to begin executing Sprint 1, or `/bober.run` to execute the 
 
 ## Error Handling
 
-- If the project has no `package.json` and no obvious project structure, ask the user if this is a new project and what tech stack they want
+- If the project has no manifest file (`package.json`, `Cargo.toml`, `pyproject.toml`, etc.) and no obvious project structure, ask the user if this is a new project and what they want to build
 - If existing specs conflict with the new feature request, flag the conflict and ask the user how to proceed
 - If the feature is too large for `sprint.maxSprints` sprints, suggest breaking it into multiple PlanSpecs or increasing the sprint size
 - If the user's answers to clarifying questions contradict each other, point out the contradiction and ask for resolution

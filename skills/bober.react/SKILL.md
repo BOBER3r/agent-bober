@@ -1,19 +1,19 @@
 ---
 name: bober.react
-description: React + backend full-stack workflow — scaffold, plan, and build React apps with a Node/Python backend and database.
+description: React-based web application workflow — scaffold, plan, and build React apps with Vite or Next.js, optional backend, and database. This is one of several specialized workflows; use it specifically for React-based web applications.
 argument-hint: <app-description>
 ---
 
-# bober.react — React Full-Stack Workflow
+# bober.react — React Web Application Workflow
 
-You are running the **bober.react** skill. This is a specialized workflow for building React-based full-stack applications. It combines project scaffolding, planning, and execution optimized for the React + Backend + Database stack.
+You are running the **bober.react** skill. This is a specialized workflow for building React-based web applications. It combines project scaffolding, planning, and execution optimized for the React ecosystem. For other project types (smart contracts, APIs, CLI tools, etc.), use the appropriate specialized skill or the generic `bober.run` pipeline.
 
 ## When to Use This Skill
 
-Use `bober.react` instead of `bober.run` when:
+Use `bober.react` when:
 - Building a new React-based web application from scratch (greenfield)
 - Adding a major feature to an existing React application
-- The project involves: React frontend + API backend + database
+- The project involves: React frontend, optionally with an API backend and/or database
 
 ## Stack Assumptions
 
@@ -101,7 +101,8 @@ Create or update `bober.config.json` with React-optimized defaults:
 {
   "project": {
     "name": "<project-name>",
-    "type": "react-fullstack",
+    "mode": "greenfield",
+    "preset": "react-vite",
     "description": "<user's app description>"
   },
   "planner": {
@@ -153,7 +154,7 @@ Create or update `bober.config.json` with React-optimized defaults:
 }
 ```
 
-Adjust commands based on what actually exists in `package.json` scripts.
+Adjust commands based on what actually exists in `package.json` scripts. If using Next.js, set `"preset": "nextjs"` instead of `"react-vite"` and adjust context files and commands accordingly (e.g., `next.config.js` instead of `vite.config.ts`).
 
 ## Step 3: Scaffold (Greenfield Only)
 

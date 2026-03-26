@@ -5,7 +5,8 @@
 # Usage:
 #   bash scripts/init-project.sh <template>
 #
-# Templates: react-fullstack, brownfield, generic
+# Templates: base, brownfield
+# Presets:   nextjs, react-vite, solidity, anchor, api-node, python-api
 # ──────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -23,17 +24,30 @@ if [[ -z "$TEMPLATE" ]]; then
   echo "Usage: bash scripts/init-project.sh <template>"
   echo ""
   echo "Available templates:"
-  echo "  react-fullstack   React 19 + Vite + Express + TypeScript"
-  echo "  brownfield        Existing codebase (conservative settings)"
-  echo "  generic           Minimal configuration (customize yourself)"
+  echo "  base            Minimal greenfield configuration (customize yourself)"
+  echo "  brownfield      Existing codebase (conservative settings)"
+  echo ""
+  echo "Available presets:"
+  echo "  nextjs          Next.js full-stack app"
+  echo "  react-vite      React + Vite + any backend"
+  echo "  solidity        EVM smart contracts (Hardhat/Foundry)"
+  echo "  anchor          Solana programs (Anchor/Rust)"
+  echo "  api-node        Node.js API (Express/NestJS/Fastify)"
+  echo "  python-api      Python API (FastAPI/Django)"
   exit 1
 fi
 
-TEMPLATE_DIR="$TEMPLATES_DIR/$TEMPLATE"
+# Resolve template directory — presets live under templates/presets/
+if [[ "$TEMPLATE" == "base" || "$TEMPLATE" == "brownfield" ]]; then
+  TEMPLATE_DIR="$TEMPLATES_DIR/$TEMPLATE"
+else
+  TEMPLATE_DIR="$TEMPLATES_DIR/presets/$TEMPLATE"
+fi
 
 if [[ ! -d "$TEMPLATE_DIR" ]]; then
   echo "Error: Unknown template '$TEMPLATE'."
-  echo "Available templates: react-fullstack, brownfield, generic"
+  echo "Available templates: base, brownfield"
+  echo "Available presets: nextjs, react-vite, solidity, anchor, api-node, python-api"
   exit 1
 fi
 
@@ -92,7 +106,7 @@ else
   echo "  Created CLAUDE.md"
 fi
 
-# ── Copy scaffold files (react-fullstack only) ─────────────────────
+# ── Copy scaffold files (preset templates with scaffold dirs) ───────
 
 if [[ -d "$TEMPLATE_DIR/scaffold" ]]; then
   echo ""
@@ -146,9 +160,34 @@ echo ""
 echo "Next steps:"
 echo ""
 
-if [[ "$TEMPLATE" == "react-fullstack" ]]; then
+if [[ "$TEMPLATE" == "react-vite" ]]; then
   echo "  1. npm install"
   echo "  2. npm run dev              # start frontend + backend"
+  echo "  3. /bober:plan              # create your first plan"
+  echo "  4. /bober:sprint            # run the first sprint"
+elif [[ "$TEMPLATE" == "nextjs" ]]; then
+  echo "  1. npm install"
+  echo "  2. npm run dev              # start Next.js dev server"
+  echo "  3. /bober:plan              # create your first plan"
+  echo "  4. /bober:sprint            # run the first sprint"
+elif [[ "$TEMPLATE" == "solidity" ]]; then
+  echo "  1. npm install"
+  echo "  2. npx hardhat compile      # compile contracts"
+  echo "  3. /bober:plan              # create your first plan"
+  echo "  4. /bober:sprint            # run the first sprint"
+elif [[ "$TEMPLATE" == "anchor" ]]; then
+  echo "  1. anchor build             # build the program"
+  echo "  2. anchor test              # run tests"
+  echo "  3. /bober:plan              # create your first plan"
+  echo "  4. /bober:sprint            # run the first sprint"
+elif [[ "$TEMPLATE" == "api-node" ]]; then
+  echo "  1. npm install"
+  echo "  2. npm run dev              # start the API server"
+  echo "  3. /bober:plan              # create your first plan"
+  echo "  4. /bober:sprint            # run the first sprint"
+elif [[ "$TEMPLATE" == "python-api" ]]; then
+  echo "  1. pip install -r requirements.txt  # or: poetry install"
+  echo "  2. uvicorn app.main:app --reload    # start the API server"
   echo "  3. /bober:plan              # create your first plan"
   echo "  4. /bober:sprint            # run the first sprint"
 elif [[ "$TEMPLATE" == "brownfield" ]]; then
@@ -156,7 +195,7 @@ elif [[ "$TEMPLATE" == "brownfield" ]]; then
   echo "     with your project's build, test, lint, and dev commands."
   echo "  2. /bober:plan              # create your first plan"
   echo "  3. /bober:sprint            # run the first sprint"
-elif [[ "$TEMPLATE" == "generic" ]]; then
+elif [[ "$TEMPLATE" == "base" ]]; then
   echo "  1. Edit bober.config.json to match your project setup."
   echo "  2. Edit CLAUDE.md with your project's conventions."
   echo "  3. /bober:plan              # create your first plan"

@@ -2,12 +2,19 @@ import { z } from "zod";
 
 // ── Enums & Primitives ──────────────────────────────────────────────
 
-export const ProjectTypeSchema = z.enum([
-  "react-fullstack",
-  "brownfield",
-  "generic",
-]);
-export type ProjectType = z.infer<typeof ProjectTypeSchema>;
+export const ProjectModeSchema = z.enum(["greenfield", "brownfield"]);
+export type ProjectMode = z.infer<typeof ProjectModeSchema>;
+
+export const StackSchema = z.object({
+  frontend: z.string().optional(),
+  backend: z.string().optional(),
+  blockchain: z.string().optional(),
+  testing: z.string().optional(),
+  database: z.string().optional(),
+  language: z.string().optional(),
+  other: z.array(z.string()).optional(),
+});
+export type Stack = z.infer<typeof StackSchema>;
 
 export const ModelChoiceSchema = z.enum([
   "sonnet",
@@ -55,7 +62,9 @@ export type EvalStrategy = z.infer<typeof EvalStrategySchema>;
 
 export const ProjectSectionSchema = z.object({
   name: z.string().min(1, "Project name is required"),
-  type: ProjectTypeSchema,
+  mode: ProjectModeSchema,
+  preset: z.string().optional(),
+  stack: StackSchema.optional(),
   description: z.string().optional(),
 });
 export type ProjectSection = z.infer<typeof ProjectSectionSchema>;
@@ -125,25 +134,33 @@ export type BoberConfig = z.infer<typeof BoberConfigSchema>;
  * Allows every field to be optional except `project` which is always required.
  */
 export const PartialBoberConfigSchema = BoberConfigSchema.deepPartial().extend({
-  project: ProjectSectionSchema,
+  project: z.object({
+    name: z.string().min(1, "Project name is required").optional(),
+    mode: ProjectModeSchema,
+    preset: z.string().optional(),
+    stack: StackSchema.optional(),
+    description: z.string().optional(),
+  }),
 });
 export type PartialBoberConfig = z.infer<typeof PartialBoberConfigSchema>;
 
 // ── Factory ─────────────────────────────────────────────────────────
 
 /**
- * Create a full default config for a given project type.
+ * Create a full default config for a given project mode and optional preset.
  * Callers can override any section by passing a partial config.
  */
 export function createDefaultConfig(
   projectName: string,
-  projectType: ProjectType,
+  mode: ProjectMode,
+  preset?: string,
   overrides: Partial<Omit<BoberConfig, "project">> = {},
 ): BoberConfig {
   const base: BoberConfig = {
     project: {
       name: projectName,
-      type: projectType,
+      mode,
+      preset,
     },
     planner: {
       maxClarifications: 5,
@@ -157,7 +174,7 @@ export function createDefaultConfig(
     },
     evaluator: {
       model: "sonnet",
-      strategies: defaultStrategiesForType(projectType),
+      strategies: defaultStrategiesForMode(mode, preset),
       maxIterations: 3,
     },
     sprint: {
@@ -180,25 +197,17 @@ export function createDefaultConfig(
   };
 }
 
-function defaultStrategiesForType(type: ProjectType): EvalStrategy[] {
-  switch (type) {
-    case "react-fullstack":
-      return [
-        { type: "typecheck", required: true },
-        { type: "lint", required: true },
-        { type: "build", required: true },
-        { type: "playwright", required: false },
-      ];
-    case "brownfield":
-      return [
-        { type: "typecheck", required: true },
-        { type: "lint", required: true },
-        { type: "unit-test", required: true },
-      ];
-    case "generic":
-      return [
-        { type: "build", required: true },
-        { type: "lint", required: false },
-      ];
+function defaultStrategiesForMode(mode: ProjectMode, _preset?: string): EvalStrategy[] {
+  if (mode === "brownfield") {
+    return [
+      { type: "typecheck", required: true },
+      { type: "lint", required: true },
+      { type: "unit-test", required: true },
+    ];
   }
+  // greenfield
+  return [
+    { type: "build", required: true },
+    { type: "lint", required: false },
+  ];
 }

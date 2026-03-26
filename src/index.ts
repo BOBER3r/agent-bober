@@ -2,16 +2,19 @@
 
 export {
   type BoberConfig,
-  type ProjectType,
+  type ProjectMode,
+  type Stack,
   type ModelChoice,
   type EvalStrategy,
   type EvalStrategyType,
+  StackSchema,
+  ProjectModeSchema,
   createDefaultConfig,
 } from "./config/schema.js";
 
 export { loadConfig, configExists } from "./config/loader.js";
 
-export { getDefaults } from "./config/defaults.js";
+export { getDefaults, getPresetNames } from "./config/defaults.js";
 
 // ── Contracts ──────────────────────────────────────────────────────
 

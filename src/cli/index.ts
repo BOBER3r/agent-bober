@@ -68,14 +68,16 @@ async function main(): Promise<void> {
 
   // ── init ────────────────────────────────────────────────────────
   program
-    .command("init")
+    .command("init [preset]")
     .description("Initialize bober in the current project")
-    .action(async () => {
+    .option("-p, --preset <name>", "Use a specific stack preset")
+    .action(async (presetArg?: string, cmdOpts?: { preset?: string }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
       if (opts.verbose) logger.verbose = true;
 
+      const preset = cmdOpts?.preset ?? presetArg;
       const projectRoot = await resolveProjectRoot(opts.config);
-      await runInitCommand(projectRoot);
+      await runInitCommand(projectRoot, { preset });
     });
 
   // ── plan ────────────────────────────────────────────────────────

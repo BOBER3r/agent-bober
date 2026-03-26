@@ -377,9 +377,9 @@ The evaluator should continue running all strategies even if an early one fails,
 
 ---
 
-## Default Strategy Sets by Project Type
+## Default Strategy Sets by Preset
 
-### react-fullstack
+### nextjs / react-vite
 ```json
 [
   { "type": "typecheck", "required": true },

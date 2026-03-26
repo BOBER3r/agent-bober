@@ -1,0 +1,10 @@
+{
+  "project": { "name": "my-api", "mode": "greenfield", "preset": "api-node" },
+  "evaluator": { "model": "sonnet", "strategies": [
+    { "type": "typecheck", "required": true },
+    { "type": "lint", "required": true },
+    { "type": "unit-test", "required": true },
+    { "type": "api-check", "required": false }
+  ], "maxIterations": 3 },
+  "commands": { "build": "npm run build", "test": "npm test", "lint": "npm run lint", "typecheck": "npx tsc --noEmit", "dev": "npm run dev" }
+}

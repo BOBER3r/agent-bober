@@ -53,7 +53,7 @@ export function createSpec(
     id,
     title,
     description,
-    projectType: "generic",
+    projectType: "greenfield",
     techStack: [],
     features: features.map((f, idx) => ({
       ...f,

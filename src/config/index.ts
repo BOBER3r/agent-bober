@@ -1,6 +1,7 @@
 export {
   // Zod schemas
-  ProjectTypeSchema,
+  ProjectModeSchema,
+  StackSchema,
   ModelChoiceSchema,
   GeneratorModelSchema,
   SprintSizeSchema,
@@ -17,7 +18,8 @@ export {
   BoberConfigSchema,
   PartialBoberConfigSchema,
   // Types
-  type ProjectType,
+  type ProjectMode,
+  type Stack,
   type ModelChoice,
   type GeneratorModel,
   type SprintSize,
@@ -38,9 +40,8 @@ export {
 } from "./schema.js";
 
 export {
-  reactFullstackDefaults,
-  brownfieldDefaults,
-  genericDefaults,
+  KNOWN_PRESETS,
+  getPresetNames,
   getDefaults,
 } from "./defaults.js";
 

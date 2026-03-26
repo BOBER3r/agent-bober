@@ -1,0 +1,9 @@
+{
+  "project": { "name": "my-contracts", "mode": "greenfield", "preset": "solidity" },
+  "evaluator": { "model": "sonnet", "strategies": [
+    { "type": "build", "required": true },
+    { "type": "lint", "required": true },
+    { "type": "unit-test", "required": true }
+  ], "maxIterations": 3 },
+  "commands": { "build": "npx hardhat compile", "test": "npx hardhat test", "lint": "npx solhint 'contracts/**/*.sol'" }
+}

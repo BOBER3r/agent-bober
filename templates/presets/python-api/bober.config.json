@@ -1,0 +1,9 @@
+{
+  "project": { "name": "my-api", "mode": "greenfield", "preset": "python-api" },
+  "evaluator": { "model": "sonnet", "strategies": [
+    { "type": "lint", "required": true },
+    { "type": "unit-test", "required": true },
+    { "type": "api-check", "required": false }
+  ], "maxIterations": 3 },
+  "commands": { "test": "pytest", "lint": "ruff check .", "typecheck": "mypy ." }
+}

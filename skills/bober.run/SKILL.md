@@ -42,7 +42,8 @@ User Task Description
 ### 1a. Check Project State
 
 Read `bober.config.json`. If it does not exist:
-- Ask the user the minimal initialization questions (project name, project type)
+- Ask the user the minimal initialization questions: project name, mode (greenfield vs brownfield), and what they are building
+- Determine the appropriate `mode` and `preset` (if any) from the user's description
 - Create `bober.config.json` with appropriate defaults
 - Create the `.bober/` directory structure
 
@@ -87,8 +88,8 @@ Load the sprint contracts from `.bober/contracts/` in order. For each sprint wit
 1. **Verify dependencies:** All sprints in `dependsOn` must have status `completed`
 2. **Verify build state:** The project must build before starting a new sprint
    ```bash
-   # Run configured build command
-   npm run build 2>&1
+   # Run configured build/compile command (varies by stack)
+   # e.g., npm run build, anchor build, forge build, cargo build
    ```
    If the build is broken BEFORE the sprint starts, stop and report this to the user. Do not start a sprint on a broken codebase.
 3. **Verify git state:** Ensure we are on the correct feature branch
@@ -258,7 +259,8 @@ Throughout the pipeline, keep `.bober/progress.md` updated:
 # Bober Progress
 
 Project: <name>
-Type: <type>
+Mode: <mode>
+Preset: <preset or "custom">
 Initialized: <date>
 Last updated: <timestamp>
 

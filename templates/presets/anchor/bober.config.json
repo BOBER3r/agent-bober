@@ -1,0 +1,9 @@
+{
+  "project": { "name": "my-program", "mode": "greenfield", "preset": "anchor" },
+  "evaluator": { "model": "sonnet", "strategies": [
+    { "type": "build", "required": true },
+    { "type": "unit-test", "required": true },
+    { "type": "lint", "required": true }
+  ], "maxIterations": 3 },
+  "commands": { "build": "anchor build", "test": "anchor test", "lint": "cargo clippy -- -D warnings" }
+}

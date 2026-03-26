@@ -79,7 +79,7 @@ async function buildProjectContext(
 
   return {
     name: config.project.name,
-    type: config.project.type,
+    type: config.project.mode,
     techStack: [],
     entryPoints: [],
     currentBranch,

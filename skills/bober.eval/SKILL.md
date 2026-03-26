@@ -42,8 +42,12 @@ Before running evaluation strategies, verify the environment:
 
 1. **Check if dependencies are installed:**
    ```bash
-   # Check if node_modules exists (for Node.js projects)
-   ls node_modules/.package-lock.json 2>/dev/null
+   # Check for installed dependencies (varies by stack)
+   # Node.js: ls node_modules/.package-lock.json 2>/dev/null
+   # Rust/Anchor: check target/ directory
+   # Solidity/Hardhat: ls node_modules/.package-lock.json 2>/dev/null
+   # Solidity/Foundry: check lib/ directory
+   # Python: check venv or .venv
    ```
    If dependencies are not installed, run the configured install command first.
 
@@ -63,34 +67,34 @@ Before running evaluation strategies, verify the environment:
 
 Run each strategy configured in `evaluator.strategies` from the config. Execute them in this order for fastest feedback on failures:
 
-### Priority 1: Build Verification
+### Priority 1: Build/Compile Verification
 ```bash
-# Use commands.build from config
-npm run build 2>&1
+# Use commands.build from config (varies by stack)
+# e.g., npm run build, anchor build, forge build, cargo build, etc.
 ```
 - Record the full output
 - If the build fails, most other checks are unreliable -- still run them but note this
 
-### Priority 2: Type Checking
+### Priority 2: Type Checking / Static Analysis
 ```bash
-# Use commands.typecheck from config
-npx tsc --noEmit 2>&1
+# Use commands.typecheck from config (varies by stack)
+# e.g., npx tsc --noEmit, cargo clippy, solhint, mypy, etc.
 ```
 - Record every type error with file path and line number
 - Count total errors
 
 ### Priority 3: Linting
 ```bash
-# Use commands.lint from config
-npm run lint 2>&1
+# Use commands.lint from config (varies by stack)
+# e.g., npm run lint, solhint, clippy, ruff, etc.
 ```
 - Record every lint error (ignore warnings unless they indicate real problems)
 - Count total errors
 
 ### Priority 4: Unit Tests
 ```bash
-# Use commands.test from config
-npm test 2>&1
+# Use commands.test from config (varies by stack)
+# e.g., npm test, anchor test, forge test, pytest, etc.
 ```
 - Record which tests passed and which failed
 - For failures, record the test name, expected vs actual output, and file location

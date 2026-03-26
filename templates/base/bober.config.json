@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "",
-    "type": "generic",
+    "mode": "greenfield",
     "description": ""
   },
   "planner": {

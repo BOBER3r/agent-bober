@@ -15,7 +15,7 @@ Before starting, verify these exist:
 - At least one PlanSpec in `.bober/specs/`
 - At least one SprintContract in `.bober/contracts/`
 
-If any are missing, tell the user to run `/bober.plan` first.
+If any are missing, tell the user to run `/bober:plan` first.
 
 ## Step 1: Identify the Target Sprint
 

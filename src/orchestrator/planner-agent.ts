@@ -33,7 +33,7 @@ You must output ONLY valid JSON matching this schema:
   "id": "spec-<timestamp>",
   "title": "Short plan title",
   "description": "Detailed description of what will be built",
-  "projectType": "react-fullstack" | "brownfield" | "generic",
+  "projectType": "<mode>[ / <preset>]",
   "techStack": ["list", "of", "technologies"],
   "features": [
     {

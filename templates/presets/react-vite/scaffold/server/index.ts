@@ -6,10 +6,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
 
-// ── Middleware ──────────────────────────────────────────────────────
+// -- Middleware ----------------------------------------------------------
 app.use(express.json());
 
-// ── API Routes ─────────────────────────────────────────────────────
+// -- API Routes ----------------------------------------------------------
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -18,7 +18,7 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// ── Static Serving (production) ────────────────────────────────────
+// -- Static Serving (production) -----------------------------------------
 // In production, serve the built Vite client from dist/client.
 if (process.env.NODE_ENV === "production") {
   const clientDist = path.resolve(__dirname, "../client");
@@ -30,7 +30,7 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-// ── Start ──────────────────────────────────────────────────────────
+// -- Start ---------------------------------------------------------------
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });

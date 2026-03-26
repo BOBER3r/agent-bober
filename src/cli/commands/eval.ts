@@ -95,7 +95,7 @@ export async function runEvalCommand(
 
   const projectContext: ProjectContext = {
     name: config.project.name,
-    type: config.project.type,
+    type: config.project.mode,
     techStack: spec.techStack,
     entryPoints: [],
     currentBranch,

@@ -1,7 +1,8 @@
 {
   "project": {
     "name": "",
-    "type": "react-fullstack",
+    "mode": "greenfield",
+    "preset": "react-vite",
     "description": "React + Vite frontend with Express backend"
   },
   "planner": {

@@ -134,7 +134,7 @@ Create `bober.config.json` with brownfield-specific defaults:
 {
   "project": {
     "name": "<detected from package.json>",
-    "type": "brownfield",
+    "mode": "brownfield",
     "description": "<inferred from README or package.json>"
   },
   "planner": {

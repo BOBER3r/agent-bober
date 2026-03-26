@@ -40,35 +40,43 @@ agent-bober also works as a **Claude Code plugin**. If you install it as a depen
 
 ## Quick Start
 
-### New React + Express Project
-
+### Any Project
 ```bash
-mkdir my-app && cd my-app
-npx agent-bober init react-fullstack
-npm install
+npx agent-bober init
 ```
 
-Then in Claude Code:
+Interactive setup -- describe what you want to build, pick a preset or let the planner decide.
 
+### With a Preset
+```bash
+npx agent-bober init nextjs         # Next.js full-stack app
+npx agent-bober init react-vite     # React + Vite
+npx agent-bober init solidity       # EVM smart contracts (Hardhat)
+npx agent-bober init anchor         # Solana programs (Anchor)
+npx agent-bober init api-node       # Node.js API
+npx agent-bober init python-api     # Python API (FastAPI)
 ```
-/bober:plan       # Describe your feature, get a structured plan
-/bober:sprint     # Execute the first sprint
-/bober:eval       # Evaluate the sprint output
-/bober:run        # Run the full plan end-to-end (plan -> sprint -> eval loop)
-```
 
-### Existing Codebase (Brownfield)
-
+### Existing Codebase
 ```bash
 cd your-existing-project
 npx agent-bober init brownfield
 ```
 
 Then in Claude Code:
-
 ```
-/bober:brownfield   # Analyze codebase, configure, and start planning
-/bober:plan         # Plan a feature in the context of existing code
+/bober:plan         # Describe your feature, get a structured plan
+/bober:sprint       # Execute the next sprint
+/bober:eval         # Evaluate the sprint output
+/bober:run          # Full autonomous pipeline
+```
+
+Specialized workflows:
+```
+/bober:react        # React web app workflow
+/bober:solidity     # EVM smart contract workflow
+/bober:anchor       # Solana program workflow
+/bober:brownfield   # Existing codebase workflow
 ```
 
 ---
@@ -79,17 +87,19 @@ Then in Claude Code:
 
 | Command | Description |
 |---|---|
-| `/bober:plan` | Activate the Planner agent. Analyzes your project, asks clarifying questions, and produces a PlanSpec with sprint contracts. |
-| `/bober:sprint` | Execute the next pending sprint contract. The Generator agent writes code according to the contract. |
-| `/bober:eval` | Run the Evaluator against the current sprint. Checks typecheck, lint, build, tests, and any custom strategies. |
-| `/bober:run` | Full autonomous loop: plan (if needed) then iterate sprint/eval until all contracts pass. |
-| `/bober:react` | Shortcut: initialize a React full-stack project and start planning. |
-| `/bober:brownfield` | Shortcut: detect the existing tech stack, configure bober, and start planning. |
+| `/bober:plan` | Plan any feature -- stack-agnostic |
+| `/bober:sprint` | Execute the next sprint contract |
+| `/bober:eval` | Evaluate current sprint output |
+| `/bober:run` | Full autonomous pipeline |
+| `/bober:react` | React web application workflow |
+| `/bober:solidity` | EVM smart contract workflow |
+| `/bober:anchor` | Solana program workflow |
+| `/bober:brownfield` | Existing codebase workflow |
 
 ### CLI
 
 ```bash
-npx agent-bober init <template>     # Initialize project (react-fullstack, brownfield, generic)
+npx agent-bober init [preset]       # Initialize project (nextjs, react-vite, solidity, anchor, api-node, python-api, brownfield)
 npx agent-bober plan                # Run the planner
 npx agent-bober sprint              # Execute next sprint
 npx agent-bober eval                # Evaluate current sprint
@@ -110,8 +120,9 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
   // ── Project ─────────────────────────────────────
   "project": {
     "name": "my-app",                     // Project name
-    "type": "react-fullstack",            // "react-fullstack" | "brownfield" | "generic"
-    "description": "Optional description"
+    "mode": "greenfield",                 // "greenfield" | "brownfield"
+    "preset": "nextjs",                   // Optional: "nextjs" | "react-vite" | "solidity" | "anchor" | "api-node" | "python-api"
+    "description": "A task management app with real-time collaboration"
   },
 
   // ── Planner ─────────────────────────────────────
@@ -246,30 +257,76 @@ Register custom plugins in `bober.config.json`:
 
 ---
 
-## Project Templates
+## Presets
 
-### `react-fullstack`
+### `nextjs`
 
-Full-stack starter with React 19, Vite 6, Express 5, and TypeScript. Includes:
+Next.js full-stack (App Router, API routes, Prisma). Includes:
 
-- Vite dev server with API proxy to Express
+- Next.js with TypeScript, Tailwind CSS, ESLint
+- API routes for backend logic
+- Prisma ORM for database access
+- Vitest for unit tests, Playwright for E2E
+
+### `react-vite`
+
+React + Vite + any backend. Includes:
+
+- Vite dev server with React and TypeScript
 - Vitest for unit tests, Playwright for E2E
 - ESLint configured for TypeScript + React
-- Separate `tsconfig.json` for client and server
-- Concurrent dev scripts for frontend + backend
+- Flexible backend pairing (Express, Fastify, etc.)
+
+### `solidity`
+
+EVM smart contracts (Hardhat/Foundry). Includes:
+
+- Hardhat or Foundry project setup
+- OpenZeppelin Contracts integration
+- Solhint for linting
+- Hardhat tests or Forge tests
+- Deployment and verification scripts
+
+### `anchor`
+
+Solana programs (Anchor/Rust). Includes:
+
+- Anchor project setup with program scaffold
+- TypeScript integration tests
+- Cargo clippy for Rust linting
+- IDL generation and client SDK
+- Deployment scripts for devnet/mainnet
+
+### `api-node`
+
+Node.js API (Express/NestJS/Fastify). Includes:
+
+- TypeScript API project structure
+- Testing with Vitest or Jest
+- ESLint and TypeScript strict mode
+- Database integration (Prisma/Drizzle)
+
+### `python-api`
+
+Python API (FastAPI/Django). Includes:
+
+- FastAPI or Django project structure
+- pytest for testing
+- Ruff/Black for linting and formatting
+- SQLAlchemy or Django ORM for database access
 
 ### `brownfield`
 
-For existing codebases. No scaffold files -- just configuration:
+Existing codebase (conservative defaults). No scaffold files -- just configuration:
 
 - Conservative sprint sizes (`small`)
 - Higher evaluator iteration limit (5 rework cycles)
 - Requires user approval between sprints
 - Emphasizes reading existing patterns before making changes
 
-### `generic`
+### `base`
 
-Minimal configuration. Just a `bober.config.json` with `build` as the only required evaluator strategy. Intended as a starting point for any tech stack.
+Minimal config, planner decides everything. Just a `bober.config.json` with `build` as the only required evaluator strategy. Intended as a starting point for any tech stack not covered by other presets.
 
 ---
 
@@ -346,7 +403,7 @@ For environments where you need to run bober operations outside of Claude Code:
 
 ```bash
 # Initialize a new project
-bash scripts/init-project.sh react-fullstack
+bash scripts/init-project.sh nextjs
 
 # Detect an existing project's stack
 bash scripts/detect-stack.sh /path/to/project

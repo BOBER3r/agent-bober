@@ -10,6 +10,57 @@ import {
 import { getDefaults } from "./defaults.js";
 
 /**
+ * Migrate a v1 config (with `project.type`) to the v2 format (with `project.mode` / `project.preset`).
+ * Returns the input unchanged if it is not a v1 config.
+ */
+function migrateV1Config(raw: unknown): unknown {
+  if (
+    typeof raw !== "object" ||
+    raw === null ||
+    !("project" in raw)
+  ) {
+    return raw;
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const project = obj.project as Record<string, unknown> | undefined;
+
+  if (!project || typeof project !== "object" || !("type" in project)) {
+    return raw;
+  }
+
+  const oldType = project.type;
+
+  // Already migrated or not a v1 type
+  if (typeof oldType !== "string") {
+    return raw;
+  }
+
+  const migrated = { ...obj, project: { ...project } };
+  const migratedProject = migrated.project as Record<string, unknown>;
+  delete migratedProject.type;
+
+  switch (oldType) {
+    case "react-fullstack":
+      migratedProject.mode = "greenfield";
+      migratedProject.preset = "react-vite";
+      break;
+    case "brownfield":
+      migratedProject.mode = "brownfield";
+      break;
+    case "generic":
+      migratedProject.mode = "greenfield";
+      break;
+    default:
+      // Unknown old type — treat as greenfield
+      migratedProject.mode = "greenfield";
+      break;
+  }
+
+  return migrated;
+}
+
+/**
  * Config file candidate paths, searched in order.
  */
 const CONFIG_CANDIDATES = [
@@ -115,8 +166,11 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
     );
   }
 
-  // Validate partial config (project is required, everything else optional)
-  const partialResult = PartialBoberConfigSchema.safeParse(parsed);
+  // Apply v1 migration before validation
+  const migrated = migrateV1Config(parsed);
+
+  // Validate partial config (project.mode is required, everything else optional)
+  const partialResult = PartialBoberConfigSchema.safeParse(migrated);
   if (!partialResult.success) {
     const issues = partialResult.error.issues
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
@@ -125,12 +179,18 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
   }
 
   const partial = partialResult.data;
-  const defaults = getDefaults(partial.project.type);
+  const defaults = getDefaults(partial.project.mode, partial.project.preset);
 
   // Build a complete config by deep-merging defaults with user overrides
   const merged = deepMerge(
     {
-      project: partial.project,
+      project: {
+        name: partial.project.name ?? "unnamed",
+        mode: partial.project.mode,
+        preset: partial.project.preset,
+        stack: partial.project.stack,
+        description: partial.project.description,
+      },
       planner: defaults.planner ?? {
         maxClarifications: 5,
         model: "opus" as const,

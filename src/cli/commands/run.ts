@@ -82,7 +82,7 @@ export async function runRunCommand(
   console.log();
   console.log(chalk.bold.blue("  agent-bober"));
   console.log(chalk.gray(`  Project: ${config.project.name}`));
-  console.log(chalk.gray(`  Type: ${config.project.type}`));
+  console.log(chalk.gray(`  Mode: ${config.project.mode}`));
   console.log(chalk.gray(`  Task: ${task.slice(0, 80)}${task.length > 80 ? "..." : ""}`));
   console.log();
 
