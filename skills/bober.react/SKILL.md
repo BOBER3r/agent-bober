@@ -2,6 +2,10 @@
 name: bober.react
 description: React-based web application workflow — scaffold, plan, and build React apps with Vite or Next.js, optional backend, and database. This is one of several specialized workflows; use it specifically for React-based web applications.
 argument-hint: <app-description>
+handoffs:
+  - label: "Plan Feature"
+    command: /bober-plan
+    prompt: "Plan the feature for this React project"
 ---
 
 # bober.react — React Web Application Workflow
@@ -320,6 +324,11 @@ After all sprints pass, run a final comprehensive check:
    - Test the app locally: npm run dev
    - When satisfied, merge to main
    ```
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-plan` — Plan the feature for this React project
 
 ## Error Handling
 

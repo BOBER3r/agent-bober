@@ -2,6 +2,10 @@
 name: bober.solidity
 description: "EVM smart contract development workflow. Scaffolds Hardhat or Foundry projects, plans contract architecture, implements with security best practices, and evaluates with compilation, linting, and test coverage. Use when building Solidity smart contracts, DeFi protocols, NFT projects, or DAOs."
 argument-hint: <contract-description>
+handoffs:
+  - label: "Plan Contract"
+    command: /bober-plan
+    prompt: "Plan the smart contract feature"
 ---
 
 # bober.solidity — EVM Smart Contract Workflow
@@ -406,6 +410,11 @@ The evaluator MUST check for these common vulnerability patterns:
 8. **Centralization risks:** Single admin key controlling critical functions. Mitigate with multisig, timelock, or governance.
 9. **Storage collisions:** In upgradeable contracts, storage layout changes between versions. Mitigate with storage gaps, ERC-7201 namespaced storage.
 10. **Unchecked return values:** Not checking return values of `transfer`, `approve`, or low-level calls. Mitigate with SafeERC20 or explicit checks.
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-plan` — Plan the smart contract feature
 
 ## Error Handling
 

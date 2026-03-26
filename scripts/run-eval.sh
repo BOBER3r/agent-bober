@@ -6,10 +6,19 @@
 #   bash scripts/run-eval.sh [project-dir]
 #
 # Reads bober.config.json to determine which strategies to run,
-# executes each in order, and outputs a combined JSON result.
+# executes each in order, and outputs a structured JSON result
+# with per-strategy pass/fail status.
 # ──────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source shared utilities if available
+if [[ -f "$SCRIPT_DIR/common.sh" ]]; then
+  # shellcheck source=common.sh
+  source "$SCRIPT_DIR/common.sh"
+fi
 
 PROJECT_DIR="${1:-.}"
 PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
@@ -160,16 +169,20 @@ for i in "${!RESULTS[@]}"; do
 done
 RESULTS_JSON+="]"
 
-# Output combined result as JSON
+# Output combined result as structured JSON
 cat <<EOF
 {
+  "status": "$( [[ "$OVERALL_PASS" == "true" ]] && echo "ok" || echo "error" )",
   "overall": "$( [[ "$OVERALL_PASS" == "true" ]] && echo "pass" || echo "fail" )",
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "projectDir": "$PROJECT_DIR",
-  "strategiesRun": $STRATEGY_COUNT,
-  "passed": $PASS_COUNT,
-  "failed": $FAIL_COUNT,
-  "skipped": $SKIP_COUNT,
-  "results": $RESULTS_JSON
+  "summary": {
+    "strategiesRun": $STRATEGY_COUNT,
+    "passed": $PASS_COUNT,
+    "failed": $FAIL_COUNT,
+    "skipped": $SKIP_COUNT
+  },
+  "results": $RESULTS_JSON,
+  "message": "$( [[ "$OVERALL_PASS" == "true" ]] && echo "All required strategies passed" || echo "One or more required strategies failed" )"
 }
 EOF

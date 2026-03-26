@@ -2,6 +2,10 @@
 name: bober.anchor
 description: "Solana program development workflow using Anchor. Plans program architecture, implements with proper account validation, and evaluates with build, test, and security checks. Use when building Solana programs, SPL tokens, or on-chain applications."
 argument-hint: <program-description>
+handoffs:
+  - label: "Plan Program"
+    command: /bober-plan
+    prompt: "Plan the Solana program feature"
 ---
 
 # bober.anchor — Solana Program Workflow
@@ -354,6 +358,11 @@ After all sprints pass, run a final comprehensive check:
    - Deploy to devnet: anchor deploy --provider.cluster devnet
    - Test with the client SDK
    ```
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-plan` — Plan the Solana program feature
 
 ## Error Handling
 

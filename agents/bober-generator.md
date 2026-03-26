@@ -41,7 +41,8 @@ You will receive a **ContextHandoff** document. Read it completely. It contains:
 2. The SprintContract at `.bober/contracts/<contractId>.json`
 3. The PlanSpec at `.bober/specs/<specId>.json` (for broader context)
 4. `bober.config.json` for commands and configuration
-5. Any files mentioned in `estimatedFiles` in the contract
+5. `.bober/principles.md` if it exists -- these are the project's non-negotiable principles. Every implementation decision must be consistent with them. If principles specify quality standards, patterns to follow, or patterns to avoid, you must adhere to them strictly.
+6. Any files mentioned in `estimatedFiles` in the contract
 
 If this is a **retry** (evaluator feedback is present), focus specifically on the failures. Read the feedback line by line. Understand what failed and why before making any changes.
 

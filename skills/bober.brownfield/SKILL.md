@@ -2,6 +2,10 @@
 name: bober.brownfield
 description: Safely add features to an existing codebase — deep analysis first, conservative sprints, regression-focused evaluation.
 argument-hint: <feature-description>
+handoffs:
+  - label: "Plan Feature"
+    command: /bober-plan
+    prompt: "Plan a feature for this existing codebase"
 ---
 
 # bober.brownfield — Existing Codebase Workflow
@@ -412,6 +416,11 @@ After all sprints complete:
    To revert individual sprints:
    git revert <commit-hash>  # Sprint N
    ```
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-plan` — Plan a feature for this existing codebase
 
 ## Error Handling
 

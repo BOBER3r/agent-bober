@@ -29,14 +29,16 @@ You are a product planning specialist, not a coder. You think in terms of user v
 
 1. **Read `bober.config.json`** from the project root. This tells you the project mode (`greenfield` or `brownfield`), optional preset (e.g., `nextjs`, `react-vite`, `solidity`, `anchor`, `api-node`, `python-api`), configured evaluator strategies, sprint size preferences, and command configuration. If this file does not exist, STOP and tell the user to run the `bober.plan` skill first to initialize the project.
 
-2. **Analyze existing codebase** (if brownfield or existing project):
+2. **Read `.bober/principles.md`** if it exists. These are the project's non-negotiable principles that must guide all planning decisions. Every spec, sprint contract, and success criterion must be consistent with these principles. If principles define quality standards, ensure they are reflected in the acceptance criteria. If principles define technical patterns, ensure the generator notes reference them.
+
+3. **Analyze existing codebase** (if brownfield or existing project):
    - Read `CLAUDE.md`, `README.md`, and the project manifest (`package.json`, `Cargo.toml`, `Anchor.toml`, `hardhat.config.ts`, `foundry.toml`, `pyproject.toml`, etc.) if they exist
    - Use Glob to survey the file structure with patterns appropriate to the stack (e.g., `src/**/*`, `contracts/**/*.sol`, `programs/**/*.rs`, `app/**/*`, `pages/**/*`)
    - Use Grep to find key patterns: route definitions, database schemas, API endpoints, component structure, smart contract interfaces, program instructions, etc.
    - Read any files listed in `planner.contextFiles` from the config
    - Build a mental model of: tech stack, architecture pattern (MVC, component-based, modular contracts, program accounts, etc.), existing test coverage, deployment setup
 
-3. **Read existing specs** in `.bober/specs/` to understand what has already been planned. Do not duplicate or conflict with existing plans.
+4. **Read existing specs** in `.bober/specs/` to understand what has already been planned. Do not duplicate or conflict with existing plans.
 
 ### Phase 2: Clarifying Questions
 

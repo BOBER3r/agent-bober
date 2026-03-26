@@ -204,3 +204,45 @@ fi
 
 echo ""
 echo "Run /bober:plan to start planning your first feature."
+
+# ── Structured JSON summary ────────────────────────────────────────
+
+CREATED_FILES=()
+[[ -f "$PROJECT_DIR/.bober/progress.md" ]] && CREATED_FILES+=("\".bober/progress.md\"")
+[[ -f "$PROJECT_DIR/.bober/history.jsonl" ]] && CREATED_FILES+=("\".bober/history.jsonl\"")
+[[ -f "$PROJECT_DIR/bober.config.json" ]] && CREATED_FILES+=("\"bober.config.json\"")
+[[ -f "$PROJECT_DIR/CLAUDE.md" ]] && CREATED_FILES+=("\"CLAUDE.md\"")
+
+CREATED_JSON="["
+for i in "${!CREATED_FILES[@]}"; do
+  [[ $i -gt 0 ]] && CREATED_JSON+=","
+  CREATED_JSON+="${CREATED_FILES[$i]}"
+done
+CREATED_JSON+="]"
+
+CREATED_DIRS=()
+[[ -d "$PROJECT_DIR/.bober/specs" ]] && CREATED_DIRS+=("\".bober/specs/\"")
+[[ -d "$PROJECT_DIR/.bober/contracts" ]] && CREATED_DIRS+=("\".bober/contracts/\"")
+[[ -d "$PROJECT_DIR/.bober/evaluations" ]] && CREATED_DIRS+=("\".bober/evaluations/\"")
+[[ -d "$PROJECT_DIR/.bober/snapshots" ]] && CREATED_DIRS+=("\".bober/snapshots/\"")
+
+DIRS_JSON="["
+for i in "${!CREATED_DIRS[@]}"; do
+  [[ $i -gt 0 ]] && DIRS_JSON+=","
+  DIRS_JSON+="${CREATED_DIRS[$i]}"
+done
+DIRS_JSON+="]"
+
+echo ""
+cat <<INIT_JSON
+{
+  "status": "ok",
+  "template": "$TEMPLATE",
+  "projectDir": "$PROJECT_DIR",
+  "projectName": "$(basename "$PROJECT_DIR")",
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "createdFiles": $CREATED_JSON,
+  "createdDirs": $DIRS_JSON,
+  "message": "Project initialized successfully with template: $TEMPLATE"
+}
+INIT_JSON

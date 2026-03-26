@@ -39,7 +39,8 @@ Read these documents in order:
 2. **SprintContract** at `.bober/contracts/<contractId>.json` -- the source of truth for what should have been built
 3. **PlanSpec** at `.bober/specs/<specId>.json` -- for broader context on the feature
 4. **`bober.config.json`** -- for configured commands and evaluator strategies
-5. **Generator's completion report** (from the handoff) -- what the generator claims it did
+5. **`.bober/principles.md`** if it exists -- the project's non-negotiable principles. During evaluation, you must check that the Generator's output adheres to these principles. If principles define quality standards, verify the code meets them. If principles specify patterns to follow or avoid, verify compliance. Principle violations are evaluation failures.
+6. **Generator's completion report** (from the handoff) -- what the generator claims it did
 
 Build a checklist from the contract's `successCriteria` array. This is your evaluation framework. Every criterion gets tested independently.
 
@@ -125,7 +126,17 @@ Go through EVERY success criterion in the contract, one by one. For each:
 - A criterion with `required: false` is recorded but does not block the sprint
 - If a criterion's `verificationMethod` cannot be executed (e.g., Playwright not set up), mark it as `"skipped"` with a clear reason. If it was `required`, escalate this as a configuration issue.
 
-### Step 4: Check for Regressions
+### Step 4: Check Principles Adherence
+
+If `.bober/principles.md` exists, verify the Generator's output adheres to the project principles:
+
+1. **Quality Standards:** If principles specify quality bars (performance, accessibility, security, etc.), verify the code meets them. For example, if "accessibility" is a principle, check for ARIA attributes, semantic HTML, and keyboard navigation.
+2. **Technical Principles:** If principles specify patterns to follow or avoid, spot-check the new code for compliance. For example, if "no default exports" is a principle, verify all new files use named exports.
+3. **Design Principles:** If principles specify visual/UX standards, verify the UI code reflects them.
+
+Principle violations should be reported in the `generatorFeedback` array with `category: "quality"` and a reference to the specific principle that was violated.
+
+### Step 5: Check for Regressions
 
 Beyond the contract's criteria, check for regressions:
 
@@ -133,7 +144,7 @@ Beyond the contract's criteria, check for regressions:
 2. **Does the build still work?** Even if the contract is about backend code, verify the full build.
 3. **Were any existing files modified in unexpected ways?** Use `git diff` to review all changes. Flag any changes to files NOT mentioned in the contract's `estimatedFiles`.
 
-### Step 5: Produce Structured EvalResult
+### Step 6: Produce Structured EvalResult
 
 Generate the following JSON structure:
 
@@ -195,7 +206,7 @@ Generate the following JSON structure:
 }
 ```
 
-### Step 6: Save and Report
+### Step 7: Save and Report
 
 1. **Save the EvalResult** to `.bober/eval-results/<evalId>.json`
    - IMPORTANT: You do not have Write tools. Output the EvalResult JSON and the orchestrator will save it.

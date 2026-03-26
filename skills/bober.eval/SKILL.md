@@ -2,6 +2,13 @@
 name: bober.eval
 description: Run an independent evaluation of the current sprint state against its contract, producing structured pass/fail feedback.
 argument-hint: "[contract-id]"
+handoffs:
+  - label: "Rework Sprint"
+    command: /bober-sprint
+    prompt: "Rework the failed sprint with evaluator feedback"
+  - label: "Next Sprint"
+    command: /bober-sprint
+    prompt: "Move to the next sprint"
 ---
 
 # bober.eval — Standalone Evaluation Skill
@@ -226,6 +233,12 @@ Present results in a clear, human-readable format:
 ### Summary
 <2-3 sentence summary>
 ```
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-sprint` — Rework the failed sprint with evaluator feedback, or move to the next sprint
+- `/bober-sprint` — Execute the next sprint if evaluation passed
 
 ## Anti-Leniency Reminders
 

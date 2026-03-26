@@ -646,6 +646,7 @@ async function installClaudeCommands(projectRoot: string): Promise<void> {
     "bober.brownfield": "bober-brownfield.md",
     "bober.solidity": "bober-solidity.md",
     "bober.anchor": "bober-anchor.md",
+    "bober.principles": "bober-principles.md",
   };
 
   const skillsRoot = join(packageRoot, "skills");

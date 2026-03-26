@@ -2,6 +2,13 @@
 name: bober.plan
 description: Transform a feature idea into a comprehensive plan with sprint contracts, clarifying questions, and acceptance criteria.
 argument-hint: <feature-description>
+handoffs:
+  - label: "Start Building"
+    command: /bober-sprint
+    prompt: "Execute the first sprint from the plan"
+  - label: "Full Autonomous Run"
+    command: /bober-run
+    prompt: "Run all sprints from the plan autonomously"
 ---
 
 # bober.plan — Feature Planning Skill
@@ -235,6 +242,12 @@ Key criteria: <list 2-3 most important success criteria>
 ### Next Steps
 Run `/bober.sprint` to begin executing Sprint 1, or `/bober.run` to execute the full pipeline.
 ```
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-sprint` — Start building by executing the first sprint from the plan
+- `/bober-run` — Run all sprints from the plan autonomously
 
 ## Error Handling
 

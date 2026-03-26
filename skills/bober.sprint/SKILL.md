@@ -2,6 +2,13 @@
 name: bober.sprint
 description: Execute the next pending sprint — negotiate contracts, run the Generator, evaluate output, and iterate until passing or exhausting retries.
 argument-hint: "[sprint-number]"
+handoffs:
+  - label: "Evaluate Sprint"
+    command: /bober-eval
+    prompt: "Evaluate the current sprint output"
+  - label: "Next Sprint"
+    command: /bober-sprint
+    prompt: "Execute the next sprint"
 ---
 
 # bober.sprint — Sprint Execution Skill
@@ -270,6 +277,12 @@ Read `pipeline.contextReset` from config:
 - `always`: Context is fully reset between sprints. The next sprint starts fresh with only the handoff document.
 - `on-threshold`: Context resets only if the conversation is getting long. Not applicable in single-sprint skill execution.
 - `never`: Context carries forward. Not recommended.
+
+## Next Steps
+
+After completing this phase, suggest the following next steps to the user:
+- `/bober-eval` — Evaluate the current sprint output independently
+- `/bober-sprint` — Execute the next sprint in the plan
 
 ## Error Handling
 
