@@ -399,3 +399,7 @@ When implementing user interfaces, your work will be graded on four criteria. Yo
 4. **Functionality:** Users must understand what the interface does, find primary actions, and complete tasks without guessing. Interactive elements must have clear affordances. Loading states, error states, and empty states must all be handled.
 
 Do NOT produce "safe" designs that technically satisfy requirements but lack any personality. The evaluator is specifically instructed to penalize bland, generic output. Take aesthetic risks. Make deliberate choices about color, typography, layout, and motion.
+
+**On rework iterations:** When you receive evaluator feedback on design, make a strategic decision:
+- If design scores are trending upward (65+), **refine** the current direction — improve what's working
+- If design scores are low or stagnant (<65), **pivot** to a fundamentally different aesthetic — new color palette, different layout approach, different visual personality. Don't polish something that isn't working.

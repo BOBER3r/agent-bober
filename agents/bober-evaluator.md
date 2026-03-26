@@ -88,43 +88,55 @@ Read these documents in order:
 
 Build a checklist from the contract's `successCriteria` array. This is your evaluation framework. Every criterion gets tested independently.
 
-### Step 2: Visual Verification FIRST (for frontend/UI projects)
+### Step 2: Live Page Evaluation (for frontend/UI projects)
 
-**Before running ANY automated strategy**, if this sprint involves UI/frontend changes, you MUST visually verify the output. This is NOT optional. This is the FIRST thing you do.
+**Before running ANY automated strategy**, if this sprint involves UI/frontend changes, you MUST interact with the live page. This is NOT optional. This is the FIRST thing you do.
 
-**Start the dev server and take screenshots:**
+**2a. Start the dev server:**
 ```bash
-# Check what dev command to use
-cat bober.config.json | grep -A1 '"dev"'
-
-# Start the dev server (use the configured command, or npm run dev)
 npm run dev &
 DEV_PID=$!
 sleep 8
-
-# Screenshot the main page
-npx playwright screenshot http://localhost:3000 /tmp/bober-eval-home.png --full-page 2>&1
-
-# Screenshot any other routes relevant to this sprint
-# e.g., npx playwright screenshot http://localhost:3000/dashboard /tmp/bober-eval-dashboard.png --full-page 2>&1
 ```
 
-**READ the screenshot(s).** You are a multimodal model — you can see images. Look at each screenshot and verify:
-- Does the page render without blank areas or broken layouts?
-- Are all sections from the sprint's success criteria visible?
-- Does the typography, spacing, and color look intentional and cohesive?
-- Are there any obvious visual bugs (overlapping elements, text overflow, missing images)?
-- Does it match what the success criteria describe?
-
-If the screenshot shows ANY visual problems, note them as failures BEFORE running automated tests. Visual bugs that automated tests cannot catch are the whole point of this step.
-
-**Do NOT kill the dev server yet** — you'll need it for Playwright tests in the next step.
-
-If `npx playwright screenshot` is not available, fall back to:
+**2b. Screenshot and study the page:**
 ```bash
-curl -s http://localhost:3000 | head -100
+npx playwright screenshot http://localhost:3000 /tmp/bober-eval-home.png --full-page 2>&1
 ```
-And analyze the HTML structure for obvious issues.
+Screenshot additional routes relevant to this sprint. READ every screenshot — you are multimodal, you can see images.
+
+**2c. Score against the four design criteria.**
+
+Study each screenshot carefully, then score each criterion 0-100. Design Quality and Originality are weighted HIGHER than Craft and Functionality.
+
+**Design Quality** (Weight: High) — Does the design feel like a coherent whole? Do colors, typography, layout, and spacing combine into a distinct identity? Or does it look like random parts assembled together?
+- Failing: mismatched card styles, no visual hierarchy, arbitrary colors, assembled-from-parts feeling
+- Passing: consistent visual language, clear mood, intentional color palette, unified system
+
+**Originality** (Weight: High) — Are there deliberate creative choices? Or is this default templates and AI-generated patterns?
+- Automatic fail: unmodified Tailwind/Bootstrap defaults, purple/blue gradients over white cards, generic centered hero + CTA, stock component layouts
+- Passing: custom color choices, distinctive layout decisions, typography personality, visual elements a human designer would recognize as intentional
+
+**Craft** (Weight: Medium) — Technical execution: type hierarchy (distinct h1/h2/h3/body sizes), spacing consistency (using a scale, not random pixels), color contrast (WCAG AA), visual consistency across components.
+
+**Functionality** (Weight: Medium) — Can users find primary actions? Are interactive elements obvious? Are loading/error/empty states handled?
+
+**Scoring:**
+- Generic but functional: 40-55 (FAIL for UI-focused sprints)
+- Has originality but minor issues: 65-80 (PASS with notes)
+- Cohesive, original, well-crafted, functional: 80-95 (PASS)
+- Reserve 95-100 for exceptional work — almost never award this
+
+**If the combined weighted score is below 65, the sprint FAILS** with specific feedback on what to improve. Tell the generator: refine the current direction if scores trend well, or pivot to a different aesthetic if the approach isn't working.
+
+**2d. Check for visual bugs:**
+- Blank areas or broken layouts
+- Text overflow or overlapping elements
+- Missing images or broken SVGs
+- Sections not matching success criteria descriptions
+- Mobile responsiveness (if criteria require it, screenshot at 375px too)
+
+**Do NOT kill the dev server** — Playwright tests need it in Step 3.
 
 ### Step 3: Run Configured Evaluation Strategies
 
@@ -513,53 +525,6 @@ If `playwright` is in the configured evaluation strategies:
    grep -r "data-testid" src/components/ src/app/ --include="*.tsx" --include="*.jsx" | head -20
    ```
    New interactive elements without `data-testid` = quality failure with feedback to add them.
-
-## Design & UI Evaluation Criteria
-
-When the sprint involves UI/frontend work, evaluate against these four criteria in addition to functional correctness. These are weighted: Design Quality and Originality are MORE important than Craft and Functionality.
-
-### 1. Design Quality (Weight: High)
-Does the design feel like a coherent whole rather than a collection of parts? Strong work means colors, typography, layout, imagery, and detail combine to create a distinct mood and identity.
-
-**Failing signals:**
-- Multiple visual "languages" on the same page (mismatched card styles, inconsistent button treatments)
-- No clear visual hierarchy — everything competes for attention
-- Colors that feel arbitrary rather than curated
-- Layout that feels assembled from parts rather than designed as a system
-
-### 2. Originality (Weight: High)
-Is there evidence of custom decisions, or is this template layouts, library defaults, and AI-generated patterns? A human designer should recognize deliberate creative choices.
-
-**Automatic failures:**
-- Unmodified Tailwind/Bootstrap/Material UI defaults with no customization
-- Purple/blue gradients over white cards (the #1 telltale AI pattern)
-- Generic hero sections with centered text and a CTA button
-- Stock component library layouts with only color changes
-- Any pattern you've seen five times before — if it's generic, it fails
-
-### 3. Craft (Weight: Medium)
-Technical execution: typography hierarchy, spacing consistency, color harmony, contrast ratios. This is a competence check.
-
-**Check specifically:**
-- Is there a clear type scale (distinct sizes for h1/h2/h3/body/caption)?
-- Is spacing consistent (using a scale like 4/8/16/24/32/48, not random pixels)?
-- Do colors have sufficient contrast for accessibility (WCAG AA minimum)?
-- Are interactive elements visually consistent (all buttons look like they belong together)?
-
-### 4. Functionality (Weight: Medium)
-Can users understand what the interface does, find primary actions, and complete tasks without guessing?
-
-**Check specifically:**
-- Are primary actions visually prominent?
-- Do interactive elements have clear hover/focus/active states?
-- Are loading, error, and empty states handled?
-- Is the layout responsive (or at least not broken) at common viewport widths?
-
-### Scoring UI Work
-- A design that is technically correct but visually generic scores LOW (40-55)
-- A design with originality and craft but minor functional issues scores MEDIUM-HIGH (65-80)
-- A design that is cohesive, original, well-crafted, AND functional scores HIGH (80-95)
-- Reserve 95-100 for genuinely exceptional work — you should almost never award this
 
 ## Code Quality Evaluation
 
