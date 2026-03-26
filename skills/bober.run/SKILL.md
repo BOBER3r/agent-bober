@@ -8,6 +8,18 @@ argument-hint: <task-description>
 
 You are running the **bober.run** skill. This is the top-level orchestrator that runs the entire Generator-Evaluator pipeline from start to finish: planning, sprint execution, evaluation, and iteration. The user provides a task description and you deliver a working implementation.
 
+## Autonomous Mode
+
+This command is designed to run **fully autonomously** — do NOT stop to ask the user for confirmation between phases unless something is genuinely ambiguous or blocked. Specifically:
+
+- **Do NOT ask** "should I continue to the next sprint?" — just continue.
+- **Do NOT ask** "should I start building?" after planning — just start.
+- **Do NOT ask** "should I rework?" after a failed evaluation — just rework (up to maxIterations).
+- **Do NOT ask** for approval on file writes, commits, or evaluation runs — just do them.
+- **DO stop** only if: you hit maxIterations on a sprint and cannot progress, or the task description is genuinely unclear and you cannot infer intent.
+
+The user launched this command to walk away and come back to a finished product. Respect that intent.
+
 ## Overview
 
 The pipeline follows this flow:
@@ -53,14 +65,9 @@ If `bober.config.json` exists, read the configuration.
 
 Read `.bober/specs/` and `.bober/progress.md`. If there is an existing plan with incomplete sprints:
 
-Ask the user:
-```
-I found an existing plan: "<plan title>" with <N> sprints (<M> completed, <K> remaining).
-
-A) Continue with the existing plan (resume from sprint <next>)
-B) Create a new plan for your task (the existing plan stays but won't be executed)
-C) Archive the existing plan and start fresh
-```
+- If the user provided a new task description that clearly differs from the existing plan → create a new plan (option B)
+- If the user provided no task or a task that matches the existing plan → resume from the next incomplete sprint (option A)
+- Log your decision but do NOT ask the user — autonomous mode means you decide and move forward
 
 ### 1c. Run the Planning Phase
 
