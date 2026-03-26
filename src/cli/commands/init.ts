@@ -343,21 +343,21 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
 
   const suggestedStrats = suggestStrategies(stack);
 
-  // Ask for project name, strategies, and model preferences
-  const answers = await prompts([
-    {
-      type: "text",
-      name: "name",
-      message: "Project name:",
-      initial: basename(projectRoot),
-    },
-    {
-      type: "multiselect",
-      name: "strategies",
-      message: "Evaluation strategies to enable:",
-      choices: buildStrategyChoices(suggestedStrats),
-      hint: "Space to toggle, Enter to confirm",
-    },
+  // Ask project name first
+  const nameAnswer = await prompts({
+    type: "text",
+    name: "name",
+    message: `Project name: (default: ${basename(projectRoot)})`,
+  });
+
+  const projectName = (nameAnswer.name as string | undefined)?.trim() || basename(projectRoot);
+  if (!projectName) {
+    logger.info("Init cancelled.");
+    return;
+  }
+
+  // Ask model preferences
+  const modelAnswers = await prompts([
     {
       type: "select",
       name: "plannerModel",
@@ -380,10 +380,17 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
     },
   ]);
 
-  if (!answers.name) {
-    logger.info("Init cancelled.");
-    return;
-  }
+  // Ask strategies separately so multiselect works properly
+  const stratAnswer = await prompts({
+    type: "multiselect",
+    name: "strategies",
+    message: "Evaluation strategies (Space to toggle, Enter when done):",
+    choices: buildStrategyChoices(suggestedStrats),
+    instructions: false,
+    hint: "Use arrow keys to move, Space to select/deselect, Enter to confirm",
+  });
+
+  const answers = { ...modelAnswers, ...stratAnswer };
 
   const mode: ProjectMode = "brownfield";
   const strategies = (answers.strategies as EvalStrategyType[]).map(
@@ -394,7 +401,7 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
   );
 
   const defaults = getDefaults(mode);
-  const config = createDefaultConfig(answers.name as string, mode, undefined, {
+  const config = createDefaultConfig(projectName, mode, undefined, {
     planner: {
       ...(defaults.planner ?? { maxClarifications: 5, model: "opus" }),
       model: answers.plannerModel as "opus" | "sonnet" | "haiku",
@@ -479,14 +486,21 @@ async function greenfieldFlow(
   const defaultStrats =
     defaults.evaluator?.strategies?.map((s) => s.type) ?? [];
 
-  // Ask project name, model preferences, and strategies
-  const answers = await prompts([
-    {
-      type: "text",
-      name: "name",
-      message: "Project name:",
-      initial: basename(projectRoot),
-    },
+  // Ask project name first
+  const nameAnswer = await prompts({
+    type: "text",
+    name: "name",
+    message: `Project name: (default: ${basename(projectRoot)})`,
+  });
+
+  const projectName = (nameAnswer.name as string | undefined)?.trim() || basename(projectRoot);
+  if (!projectName) {
+    logger.info("Init cancelled.");
+    return;
+  }
+
+  // Ask model preferences
+  const modelAnswers = await prompts([
     {
       type: "select",
       name: "plannerModel",
@@ -507,19 +521,19 @@ async function greenfieldFlow(
       ],
       initial: 0,
     },
-    {
-      type: "multiselect",
-      name: "strategies",
-      message: "Evaluation strategies to enable:",
-      choices: buildStrategyChoices(defaultStrats),
-      hint: "Space to toggle, Enter to confirm",
-    },
   ]);
 
-  if (!answers.name) {
-    logger.info("Init cancelled.");
-    return;
-  }
+  // Ask strategies separately so multiselect works properly
+  const stratAnswer = await prompts({
+    type: "multiselect",
+    name: "strategies",
+    message: "Evaluation strategies (Space to toggle, Enter when done):",
+    choices: buildStrategyChoices(defaultStrats),
+    instructions: false,
+    hint: "Use arrow keys to move, Space to select/deselect, Enter to confirm",
+  });
+
+  const answers = { ...modelAnswers, ...stratAnswer };
 
   const strategies = (answers.strategies as EvalStrategyType[]).map(
     (type: EvalStrategyType) => ({
@@ -529,7 +543,7 @@ async function greenfieldFlow(
   );
 
   const config = createDefaultConfig(
-    answers.name as string,
+    projectName,
     mode,
     selectedPreset,
     {
