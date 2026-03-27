@@ -8,59 +8,14 @@ import { PlanSpecSchema } from "../contracts/spec.js";
 import { saveSpec } from "../state/index.js";
 import { fileExists } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
+import { resolveModel } from "./model-resolver.js";
+import { loadAgentDefinition } from "./agent-loader.js";
+import { buildToolSet } from "./tools/index.js";
+import { runAgenticLoop } from "./agentic-loop.js";
 
-// ── Model mapping ──────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────
 
-function resolveModel(choice: string): string {
-  switch (choice) {
-    case "opus":
-      return "claude-sonnet-4-20250514";
-    case "sonnet":
-      return "claude-sonnet-4-20250514";
-    case "haiku":
-      return "claude-haiku-4-20250414";
-    default:
-      return "claude-sonnet-4-20250514";
-  }
-}
-
-// ── System prompt ──────────────────────────────────────────────────
-
-const PLANNER_SYSTEM_PROMPT = `You are the Bober Planner agent. Your job is to take a user's project description and produce a detailed plan specification (PlanSpec) as JSON.
-
-You must output ONLY valid JSON matching this schema:
-{
-  "id": "spec-<timestamp>",
-  "title": "Short plan title",
-  "description": "Detailed description of what will be built",
-  "projectType": "<mode>[ / <preset>]",
-  "techStack": ["list", "of", "technologies"],
-  "features": [
-    {
-      "id": "feature-1",
-      "title": "Feature title",
-      "description": "What this feature does",
-      "priority": "must" | "should" | "could",
-      "estimatedSprints": 1,
-      "acceptanceCriteria": ["Criterion 1", "Criterion 2"]
-    }
-  ],
-  "nonFunctional": ["NFR 1", "NFR 2"],
-  "constraints": ["Constraint 1"],
-  "createdAt": "<ISO datetime>",
-  "updatedAt": "<ISO datetime>"
-}
-
-Guidelines:
-- Break the project into small, independently testable features.
-- Each feature should be completable in 1-3 sprints.
-- Order features by dependency — foundational features first.
-- "must" priority features are the MVP. "should" are important. "could" are nice-to-have.
-- Acceptance criteria must be specific and verifiable.
-- Consider the project's existing tech stack and configuration.
-- Keep sprint sizes reasonable — each sprint should produce a working increment.
-
-Output ONLY the JSON object. No markdown fences, no explanation, just the JSON.`;
+const PLANNER_MAX_TURNS = 15;
 
 // ── Context gathering ──────────────────────────────────────────────
 
@@ -112,8 +67,9 @@ async function gatherProjectContext(
 /**
  * Run the planner agent to produce a PlanSpec from a user prompt.
  *
- * Uses the Anthropic SDK to create a single-turn message with the
- * planner system prompt and project context.
+ * Uses a multi-turn agentic loop with read-only tools so the planner
+ * can explore the codebase. The system prompt is loaded from
+ * `agents/bober-planner.md`.
  */
 export async function runPlanner(
   userPrompt: string,
@@ -124,59 +80,73 @@ export async function runPlanner(
   logger.info("Gathering project context...");
 
   const context = await gatherProjectContext(projectRoot, config);
+
+  // Load agent definition (system prompt from .md file)
+  const agentDef = await loadAgentDefinition("bober-planner", projectRoot);
   const model = resolveModel(config.planner.model);
+
+  // Build tool set (planner gets read-only tools)
+  const toolSet = buildToolSet("planner", projectRoot);
 
   const client = new Anthropic();
 
   const userMessage = `# Task Description
 ${userPrompt}
 
+# Project Root
+${projectRoot}
+
 # Project Context
 ${context}
 
-Produce a PlanSpec JSON for this project. Remember: output ONLY valid JSON, no markdown fences.`;
+Explore the codebase using your tools if you need more context, then produce a PlanSpec JSON.
+Your final response must contain ONLY valid JSON matching the PlanSpec schema (no markdown fences, no explanation).`;
 
-  logger.info(`Calling planner model (${config.planner.model})...`);
-  logger.debug(`Using model: ${model}`);
+  logger.info(`Calling planner model (${config.planner.model} → ${model})...`);
 
-  const response = await client.messages.create({
+  const result = await runAgenticLoop({
+    client,
     model,
-    max_tokens: 8192,
-    system: PLANNER_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: userMessage,
-      },
-    ],
+    systemPrompt: agentDef.systemPrompt,
+    userMessage,
+    tools: toolSet.schemas,
+    toolHandlers: toolSet.handlers,
+    maxTurns: PLANNER_MAX_TURNS,
+    maxTokens: 16384,
+    onToolUse: (name, input) => {
+      const inputStr =
+        typeof input === "object" && input !== null
+          ? JSON.stringify(input).slice(0, 100)
+          : String(input);
+      logger.debug(`  [planner] ${name}(${inputStr})`);
+    },
   });
 
-  // Extract text content from the response
-  let responseText = "";
-  for (const block of response.content) {
-    if (block.type === "text") {
-      responseText += block.text;
-    }
-  }
+  logger.debug(
+    `Planner completed in ${result.turnsUsed} turns (tools: ${result.toolsCalled.length})`,
+  );
 
-  logger.debug("Raw planner response received, parsing...");
-
-  // Try to extract JSON from the response
-  const spec = parsePlanSpec(responseText);
+  // Parse the final response for PlanSpec JSON
+  const spec = parsePlanSpec(result.finalText);
 
   // Save to .bober/specs/
   await saveSpec(projectRoot, spec);
-  logger.success(`Plan saved: ${spec.title} (${spec.features.length} features)`);
+  logger.success(
+    `Plan saved: ${spec.title} (${spec.features.length} features)`,
+  );
 
   return spec;
 }
+
+// ── JSON parser ────────────────────────────────────────────────────
 
 /**
  * Parse the planner response text into a validated PlanSpec.
  */
 function parsePlanSpec(text: string): PlanSpec {
-  // Try direct parse first
   let parsed: unknown;
+
+  // Try direct parse first
   try {
     parsed = JSON.parse(text.trim());
   } catch {
@@ -186,7 +156,7 @@ function parsePlanSpec(text: string): PlanSpec {
       try {
         parsed = JSON.parse(fenceMatch[1].trim());
       } catch {
-        // Fall through to error
+        // Fall through
       }
     }
 

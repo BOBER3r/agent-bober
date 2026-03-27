@@ -112,9 +112,32 @@ async function runSprintCycle(
     logger.progress(iteration, maxIterations, `Sprint ${currentContract.id} iteration`);
 
     // Build evaluation feedback from prior round
-    const evalFeedback = lastEvaluation
-      ? lastEvaluation.summary
-      : "";
+    // Pass structured feedback (not just summary) so the generator
+    // gets detailed per-criterion failures, file:line references, etc.
+    const evalFeedbackParts: string[] = [];
+    if (lastEvaluation) {
+      for (const result of lastEvaluation.results) {
+        const status = result.passed ? "PASS" : "FAIL";
+        evalFeedbackParts.push(
+          `[${status}] ${result.evaluator}${result.score !== undefined ? ` (score: ${result.score}/100)` : ""}`,
+        );
+        evalFeedbackParts.push(`  Summary: ${result.summary}`);
+
+        const failures = result.details.filter((d) => !d.passed);
+        for (const detail of failures) {
+          const loc = detail.file
+            ? ` at ${detail.file}${detail.line !== undefined ? `:${detail.line}` : ""}`
+            : "";
+          evalFeedbackParts.push(
+            `  [${detail.severity.toUpperCase()}] ${detail.message}${loc}`,
+          );
+        }
+
+        if (!result.passed && result.feedback) {
+          evalFeedbackParts.push(`  Feedback: ${result.feedback}`);
+        }
+      }
+    }
 
     // Summarize older sprints to save context
     const completedSummaryHandoff = createHandoff({
@@ -126,7 +149,7 @@ async function runSprintCycle(
       sprintHistory: completedContracts,
       instructions: `Implement sprint: ${currentContract.feature}\n\n${currentContract.description}`,
       changedFiles: lastGeneratorResult?.filesChanged ?? [],
-      issues: evalFeedback ? [evalFeedback] : [],
+      issues: evalFeedbackParts.length > 0 ? evalFeedbackParts : [],
     });
 
     // Compact older sprint history if needed

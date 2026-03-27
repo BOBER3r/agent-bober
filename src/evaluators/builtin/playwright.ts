@@ -292,15 +292,30 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
     const timeout = (strategy.config?.timeout as number) ?? DEFAULT_TIMEOUT_MS;
 
     // Check if Playwright is installed at all
+    // When strategy is required, missing prerequisites = FAIL (not skip)
+    const isRequired = strategy.required;
+
     if (!(await hasPlaywright(projectRoot))) {
       return {
         evaluator: this.name,
-        passed: true,
-        score: undefined,
-        details: [],
-        summary: "Playwright not installed. Skipped.",
+        passed: !isRequired,
+        score: isRequired ? 0 : undefined,
+        details: isRequired
+          ? [
+              {
+                criterion: "Playwright installation",
+                passed: false,
+                message:
+                  "Playwright is configured as a required evaluation strategy but is not installed.",
+                severity: "error" as const,
+              },
+            ]
+          : [],
+        summary: isRequired
+          ? "FAIL: Playwright is required but not installed."
+          : "Playwright not installed. Skipped.",
         feedback:
-          "Playwright is not installed in this project. Run /bober-playwright setup to initialize. Marked as skipped, not failed.",
+          "Playwright is not installed in this project. Run /bober-playwright setup to initialize.",
         timestamp,
       };
     }
@@ -309,12 +324,24 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
     if (!(await hasPlaywrightConfig(projectRoot))) {
       return {
         evaluator: this.name,
-        passed: true,
-        score: undefined,
-        details: [],
-        summary: "Playwright config not found. Skipped.",
+        passed: !isRequired,
+        score: isRequired ? 0 : undefined,
+        details: isRequired
+          ? [
+              {
+                criterion: "Playwright config",
+                passed: false,
+                message:
+                  "Playwright is configured as a required strategy but no playwright.config.ts was found.",
+                severity: "error" as const,
+              },
+            ]
+          : [],
+        summary: isRequired
+          ? "FAIL: Playwright is required but config is missing."
+          : "Playwright config not found. Skipped.",
         feedback:
-          "No playwright.config.ts found. Run /bober-playwright setup to create one. Marked as skipped, not failed.",
+          "No playwright.config.ts found. Run /bober-playwright setup to create one.",
         timestamp,
       };
     }
@@ -323,12 +350,24 @@ export class PlaywrightEvaluator implements EvaluatorPlugin {
     if (!(await hasE2eTests(projectRoot))) {
       return {
         evaluator: this.name,
-        passed: true,
-        score: undefined,
-        details: [],
-        summary: "No E2E test files found. Skipped.",
+        passed: !isRequired,
+        score: isRequired ? 0 : undefined,
+        details: isRequired
+          ? [
+              {
+                criterion: "E2E test files",
+                passed: false,
+                message:
+                  "Playwright is configured as a required strategy but no E2E test files exist in e2e/ directory.",
+                severity: "error" as const,
+              },
+            ]
+          : [],
+        summary: isRequired
+          ? "FAIL: Playwright is required but no E2E tests exist."
+          : "No E2E test files found. Skipped.",
         feedback:
-          "No test files found in e2e/ directory. Use /bober-playwright to generate tests. Marked as skipped, not failed.",
+          "No test files found in e2e/ directory. The generator must create Playwright tests.",
         timestamp,
       };
     }

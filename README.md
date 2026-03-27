@@ -451,15 +451,20 @@ To debug failing E2E tests:
 
 This architecture implements the patterns described in Anthropic's [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps) by Prithvi Rajasekaran. The key insight from that research: separating code generation from code evaluation creates a feedback loop that catches errors early and dramatically improves output quality. In their tests, a solo agent produced broken output in 20 minutes, while the full harness produced a polished, working application — demonstrating that multi-agent orchestration with honest evaluation is worth the investment.
 
-- **Planner** (Claude Opus): High-reasoning model for decomposing complex features into clear, testable sprint contracts. Thinks about scope, dependencies, and risk.
-- **Generator** (Claude Sonnet): Fast, capable model for writing code. Works within the boundaries of a single sprint contract.
-- **Evaluator** (Claude Sonnet): Runs automated checks (typecheck, lint, build, tests) and provides structured feedback. If a sprint fails evaluation, the Generator gets specific rework instructions.
+### Agentic Tool-Use Architecture
+
+Each agent runs as a **multi-turn agentic loop** with tool access via the Anthropic SDK. System prompts are loaded from the detailed agent definitions in `agents/bober-*.md` (300-600 lines of role-specific instructions, anti-leniency protocols, and evaluation criteria).
+
+- **Planner** (Claude Opus): Explores the codebase via read-only tools (`read_file`, `glob`, `grep`), then produces sprint-decomposed plans. Thinks about scope, dependencies, and risk.
+- **Generator** (Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Reads existing code, writes implementation, runs tests, and commits — all autonomously within the sprint contract boundaries.
+- **Evaluator** (Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` — deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs — only report them with precise feedback.
 
 The separation ensures that:
-1. The Generator cannot "mark its own homework" -- an independent evaluation step catches issues.
+1. The Generator cannot "mark its own homework" — an independent evaluation step with its own tool access catches issues through actual runtime verification, not just reading the generator's self-report.
 2. Sprint contracts provide clear scope boundaries, preventing feature creep.
-3. Automated checks run after every sprint, not just at the end.
+3. Automated checks (programmatic evaluators) + agent-based qualitative evaluation run after every sprint.
 4. Context resets between sprints keep the Generator focused and prevent context degradation.
+5. The Evaluator's anti-leniency protocol ensures passing on the first iteration is rare for non-trivial work.
 
 ### State Management
 
@@ -522,10 +527,11 @@ agent-bober/
     config/           Config schema, loader, defaults
     contracts/        Sprint contract and eval result types
     evaluators/       Built-in evaluator plugins
-    orchestrator/     Context handoff and agent coordination
+    orchestrator/     Agent runners, agentic loop, tool infrastructure
+      tools/          Tool schemas, sandboxed handlers, role-based sets
     state/            State management for .bober/ directory
     utils/            Shared utilities
-  agents/             Agent system prompts (.md files)
+  agents/             Agent system prompts (.md files, loaded at runtime)
   skills/             Claude Code slash command definitions
   templates/          Project templates and scaffolds
   hooks/              Claude Code hooks

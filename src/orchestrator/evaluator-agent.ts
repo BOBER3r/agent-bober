@@ -11,66 +11,25 @@ import {
 import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
+import { resolveModel } from "./model-resolver.js";
+import { loadAgentDefinition } from "./agent-loader.js";
+import { buildToolSet } from "./tools/index.js";
+import { runAgenticLoop } from "./agentic-loop.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
 
-// ── Model mapping ──────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────
 
-function resolveModel(choice: string): string {
-  switch (choice) {
-    case "opus":
-      return "claude-sonnet-4-20250514";
-    case "sonnet":
-      return "claude-sonnet-4-20250514";
-    case "haiku":
-      return "claude-haiku-4-20250414";
-    default:
-      return "claude-sonnet-4-20250514";
-  }
-}
-
-// ── Agent Evaluation System Prompt ─────────────────────────────────
-
-const EVALUATOR_SYSTEM_PROMPT = `You are the Bober Evaluator agent. Your job is to qualitatively assess whether a sprint's implementation meets its contract criteria.
-
-You will receive:
-- The sprint contract with success criteria
-- The context handoff with implementation notes
-- Results from automated checks (typecheck, lint, tests, etc.)
-
-For each success criterion that cannot be automatically verified, assess whether it has been met based on the implementation description and changed files.
-
-Output format — respond with a JSON object:
-{
-  "evaluator": "Agent Evaluation",
-  "passed": true/false,
-  "score": 0-100,
-  "details": [
-    {
-      "criterion": "criterion id or description",
-      "passed": true/false,
-      "message": "explanation",
-      "severity": "error" | "warning" | "info"
-    }
-  ],
-  "summary": "Overall assessment",
-  "feedback": "Actionable feedback for the generator if anything needs fixing",
-  "timestamp": "<ISO datetime>"
-}
-
-Guidelines:
-- Be thorough but fair. If the implementation reasonably meets a criterion, mark it as passed.
-- If automated checks already cover a criterion, you can defer to their results.
-- Focus on criteria that require human-like judgment: code quality, architectural decisions, completeness.
-- Provide specific, actionable feedback when something fails.
-
-Output ONLY the JSON object. No markdown fences, no explanation.`;
+const EVALUATOR_MAX_TURNS = 25;
 
 // ── Main ───────────────────────────────────────────────────────────
 
 /**
  * Run the evaluator agent, combining programmatic evaluation (plugins)
- * with agent-based qualitative evaluation.
+ * with agent-based qualitative evaluation using tools.
+ *
+ * The evaluator agent can read files, run bash commands (tests, dev server,
+ * screenshots), and search the codebase — but CANNOT write or edit files.
  *
  * @param handoff  Context handoff for the current sprint.
  * @param projectRoot  Absolute path to the project.
@@ -97,9 +56,10 @@ export async function runEvaluatorAgent(
 
   let changedFiles: string[];
   try {
-    changedFiles = handoff.changedFiles.length > 0
-      ? handoff.changedFiles
-      : await getChangedFiles(projectRoot);
+    changedFiles =
+      handoff.changedFiles.length > 0
+        ? handoff.changedFiles
+        : await getChangedFiles(projectRoot);
   } catch {
     changedFiles = handoff.changedFiles;
   }
@@ -117,15 +77,16 @@ export async function runEvaluatorAgent(
     logger.debug(`  [${icon}] ${result.evaluator}: ${result.summary}`);
   }
 
-  // 2. Agent evaluation — qualitative assessment via Claude
+  // 2. Agent evaluation — qualitative assessment via agentic loop with tools
   logger.info("Running agent evaluation...");
   const agentResult = await runAgentEvaluation(
     handoff,
     programmaticEval.results,
+    projectRoot,
     config,
   );
 
-  // 3. Combine results: merge the agent result into the programmatic evaluation
+  // 3. Combine results
   const allResults = [...programmaticEval.results, agentResult];
 
   const scoredResults = allResults.filter((r) => r.score !== undefined);
@@ -157,55 +118,130 @@ export async function runEvaluatorAgent(
   return evaluation;
 }
 
+// ── Agent evaluation with tools ────────────────────────────────────
+
 /**
- * Run the agent-based qualitative evaluation.
+ * Run the agent-based qualitative evaluation using a multi-turn agentic
+ * loop with bash, read_file, glob, and grep tools.
+ *
+ * The evaluator can run commands, take screenshots, inspect code, start
+ * dev servers, and curl endpoints — but CANNOT write or edit files.
  */
 async function runAgentEvaluation(
   handoff: ContextHandoff,
   programmaticResults: EvalResult[],
+  projectRoot: string,
   config: BoberConfig,
 ): Promise<EvalResult> {
-  const model = resolveModel(config.evaluator.model);
-  const client = new Anthropic();
   const timestamp = new Date().toISOString();
 
-  const handoffJson = serializeHandoff(handoff);
+  try {
+    // Load agent definition (system prompt from .md file)
+    const agentDef = await loadAgentDefinition("bober-evaluator", projectRoot);
+    const model = resolveModel(config.evaluator.model);
 
-  const programmaticSummary = programmaticResults
-    .map((r) => `[${r.passed ? "PASS" : "FAIL"}] ${r.evaluator}: ${r.summary}`)
-    .join("\n");
+    // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit)
+    const toolSet = buildToolSet("evaluator", projectRoot);
 
-  const userMessage = `# Context Handoff
+    const client = new Anthropic();
+    const handoffJson = serializeHandoff(handoff);
+
+    // Format programmatic results for context
+    const programmaticSummary = programmaticResults
+      .map((r) => {
+        const lines = [`[${r.passed ? "PASS" : "FAIL"}] ${r.evaluator}: ${r.summary}`];
+        if (!r.passed && r.feedback) {
+          lines.push(`  Feedback: ${r.feedback}`);
+        }
+        for (const detail of r.details) {
+          if (!detail.passed) {
+            const loc = detail.file
+              ? ` at ${detail.file}${detail.line !== undefined ? `:${detail.line}` : ""}`
+              : "";
+            lines.push(
+              `  [${detail.severity.toUpperCase()}] ${detail.message}${loc}`,
+            );
+          }
+        }
+        return lines.join("\n");
+      })
+      .join("\n\n");
+
+    const contract = handoff.currentContract;
+    const criteriaList = contract?.successCriteria
+      ?.map(
+        (c, i) =>
+          `${i + 1}. [${c.id}] ${c.description} (verification: ${c.verificationMethod})`,
+      )
+      .join("\n") ?? "No criteria found.";
+
+    const userMessage = `# Context Handoff
 ${handoffJson}
 
-# Automated Check Results
+# Project Root
+${projectRoot}
+
+# Automated Check Results (already completed)
 ${programmaticSummary}
 
-Evaluate whether the sprint contract criteria have been met. Focus on criteria that automated checks cannot verify.
+# Success Criteria to Verify
+${criteriaList}
 
-Output ONLY a JSON object matching the EvalResult schema. No markdown fences.`;
+# Your Task
+Evaluate whether the sprint contract criteria have been met. Use your tools to:
+1. Read the relevant source files to verify implementation
+2. Run the dev server and test the application if applicable
+3. Take Playwright screenshots if applicable: \`npx playwright screenshot http://localhost:3000 /tmp/bober-eval.png --full-page\`
+4. Run any additional verification commands
+5. Check for regressions
 
-  try {
-    const response = await client.messages.create({
+Be skeptical. Verify independently. Do not trust the generator's self-report alone.
+
+Your final response must contain ONLY a JSON object matching this schema (no markdown fences):
+{
+  "evaluator": "Agent Evaluation",
+  "passed": true/false,
+  "score": 0-100,
+  "details": [
+    {
+      "criterion": "criterion id or description",
+      "passed": true/false,
+      "message": "explanation with evidence",
+      "severity": "error" | "warning" | "info",
+      "file": "file path if applicable",
+      "line": 123
+    }
+  ],
+  "summary": "Overall assessment",
+  "feedback": "Actionable feedback for the generator if anything needs fixing",
+  "timestamp": "${timestamp}"
+}`;
+
+    logger.info(
+      `Calling evaluator model (${config.evaluator.model} → ${model})...`,
+    );
+
+    const result = await runAgenticLoop({
+      client,
       model,
-      max_tokens: 4096,
-      system: EVALUATOR_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: userMessage,
-        },
-      ],
+      systemPrompt: agentDef.systemPrompt,
+      userMessage,
+      tools: toolSet.schemas,
+      toolHandlers: toolSet.handlers,
+      maxTurns: EVALUATOR_MAX_TURNS,
+      maxTokens: 16384,
+      onToolUse: (name, input) => {
+        const inp = input as Record<string, unknown>;
+        const inputStr = JSON.stringify(inp).slice(0, 120);
+        logger.debug(`  [evaluator] ${name}(${inputStr})`);
+      },
     });
 
-    let responseText = "";
-    for (const block of response.content) {
-      if (block.type === "text") {
-        responseText += block.text;
-      }
-    }
+    logger.debug(
+      `Evaluator completed in ${result.turnsUsed} turns (${result.toolsCalled.length} tool calls)`,
+    );
 
-    return parseEvalResult(responseText, timestamp);
+    return parseEvalResult(result.finalText, timestamp);
   } catch (err) {
     logger.warn(
       `Agent evaluation failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -222,6 +258,8 @@ Output ONLY a JSON object matching the EvalResult schema. No markdown fences.`;
     };
   }
 }
+
+// ── JSON parser ────────────────────────────────────────────────────
 
 /**
  * Parse the evaluator agent's response into an EvalResult.

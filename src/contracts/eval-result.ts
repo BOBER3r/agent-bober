@@ -17,6 +17,44 @@ export const EvalDetailSchema = z.object({
 });
 export type EvalDetail = z.infer<typeof EvalDetailSchema>;
 
+// ── Structured feedback types (for enriched results) ────────────────
+
+export const CriterionResultSchema = z.object({
+  criterionId: z.string(),
+  description: z.string(),
+  required: z.boolean(),
+  result: z.enum(["pass", "fail", "skipped"]),
+  evidence: z.string().optional(),
+  feedback: z.string().optional(),
+});
+export type CriterionResult = z.infer<typeof CriterionResultSchema>;
+
+export const RegressionSchema = z.object({
+  description: z.string(),
+  evidence: z.string(),
+  severity: z.enum(["critical", "major", "minor"]),
+});
+export type Regression = z.infer<typeof RegressionSchema>;
+
+export const GeneratorFeedbackItemSchema = z.object({
+  priority: z.enum(["critical", "high", "medium", "low"]),
+  category: z.enum([
+    "bug",
+    "missing-feature",
+    "regression",
+    "quality",
+    "performance",
+  ]),
+  file: z.string().optional(),
+  line: z.number().optional(),
+  description: z.string(),
+  expected: z.string().optional(),
+  reproduction: z.string().optional(),
+});
+export type GeneratorFeedbackItem = z.infer<
+  typeof GeneratorFeedbackItemSchema
+>;
+
 // ── Eval Result ─────────────────────────────────────────────────────
 
 export const EvalResultSchema = z.object({
@@ -27,6 +65,13 @@ export const EvalResultSchema = z.object({
   summary: z.string(),
   feedback: z.string(),
   timestamp: z.string().datetime(),
+  // Enriched fields (optional, populated by agent evaluator)
+  iteration: z.number().int().min(1).optional(),
+  contractId: z.string().optional(),
+  criteriaResults: z.array(CriterionResultSchema).optional(),
+  regressions: z.array(RegressionSchema).optional(),
+  designScore: z.number().min(0).max(100).optional(),
+  generatorFeedback: z.array(GeneratorFeedbackItemSchema).optional(),
 });
 export type EvalResult = z.infer<typeof EvalResultSchema>;
 

@@ -35,6 +35,9 @@ export {
 export {
   type EvalResult,
   type EvalDetail,
+  type CriterionResult,
+  type Regression,
+  type GeneratorFeedbackItem,
   type SprintEvaluation as ContractSprintEvaluation,
   aggregateResults,
   formatFeedback,
@@ -64,6 +67,26 @@ export {
   runPipeline,
   type PipelineResult,
 } from "./orchestrator/pipeline.js";
+
+export { resolveModel } from "./orchestrator/model-resolver.js";
+
+export {
+  loadAgentDefinition,
+  clearAgentCache,
+  type AgentDefinition,
+} from "./orchestrator/agent-loader.js";
+
+export {
+  buildToolSet,
+  type ToolSet,
+  type AgentRole,
+} from "./orchestrator/tools/index.js";
+
+export {
+  runAgenticLoop,
+  type AgenticLoopParams,
+  type AgenticLoopResult,
+} from "./orchestrator/agentic-loop.js";
 
 // ── Evaluators ─────────────────────────────────────────────────────
 
