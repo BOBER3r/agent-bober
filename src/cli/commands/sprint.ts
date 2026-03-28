@@ -25,6 +25,8 @@ import { logger } from "../../utils/logger.js";
 export interface SprintCommandOptions {
   verbose?: boolean;
   continue?: boolean;
+  /** Override AI provider for all roles. Overrides config.planner/generator/evaluator.provider. */
+  provider?: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -85,6 +87,17 @@ export async function runSprintCommand(
     );
     logger.info('Run "npx agent-bober init" to create a configuration.');
     return;
+  }
+
+  // Apply --provider override for all roles
+  if (options.provider) {
+    config = {
+      ...config,
+      planner: { ...config.planner, provider: options.provider },
+      generator: { ...config.generator, provider: options.provider },
+      evaluator: { ...config.evaluator, provider: options.provider },
+    };
+    logger.info(`Provider override: ${options.provider}`);
   }
 
   await ensureBoberDir(projectRoot);

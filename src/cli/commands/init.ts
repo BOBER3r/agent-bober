@@ -12,6 +12,170 @@ import { ensureBoberDir } from "../../state/index.js";
 import { fileExists, ensureDir } from "../../utils/fs.js";
 import { logger } from "../../utils/logger.js";
 
+// ── Provider types ────────────────────────────────────────────────
+
+type SupportedProvider = "anthropic" | "openai" | "google" | "openai-compat";
+
+interface ProviderModelOptions {
+  planner: Array<{ title: string; value: string }>;
+  generator: Array<{ title: string; value: string }>;
+  defaultPlanner: number;
+  defaultGenerator: number;
+}
+
+function getProviderModelOptions(provider: SupportedProvider): ProviderModelOptions {
+  switch (provider) {
+    case "openai":
+      return {
+        planner: [
+          { title: "GPT-4.1 (best quality)", value: "gpt-4.1" },
+          { title: "o3 (reasoning)", value: "o3" },
+          { title: "o4-mini (fast reasoning)", value: "o4-mini" },
+          { title: "GPT-4.1-mini (faster, cheaper)", value: "gpt-4.1-mini" },
+        ],
+        generator: [
+          { title: "GPT-4.1 (best quality)", value: "gpt-4.1" },
+          { title: "GPT-4.1-mini (recommended)", value: "gpt-4.1-mini" },
+          { title: "o4-mini (fast reasoning)", value: "o4-mini" },
+          { title: "o3 (reasoning)", value: "o3" },
+        ],
+        defaultPlanner: 0,
+        defaultGenerator: 1,
+      };
+    case "google":
+      return {
+        planner: [
+          { title: "Gemini Pro (best quality)", value: "gemini-pro" },
+          { title: "Gemini Flash (faster, cheaper)", value: "gemini-flash" },
+        ],
+        generator: [
+          { title: "Gemini Pro (best quality)", value: "gemini-pro" },
+          { title: "Gemini Flash (recommended)", value: "gemini-flash" },
+        ],
+        defaultPlanner: 0,
+        defaultGenerator: 1,
+      };
+    case "openai-compat":
+      return {
+        // Free-form text input — no preset list
+        planner: [],
+        generator: [],
+        defaultPlanner: 0,
+        defaultGenerator: 0,
+      };
+    case "anthropic":
+    default:
+      return {
+        planner: [
+          { title: "Opus (best quality)", value: "opus" },
+          { title: "Sonnet (balanced)", value: "sonnet" },
+        ],
+        generator: [
+          { title: "Opus (best quality)", value: "opus" },
+          { title: "Sonnet (recommended)", value: "sonnet" },
+          { title: "Haiku (faster, cheaper)", value: "haiku" },
+        ],
+        defaultPlanner: 0,
+        defaultGenerator: 1,
+      };
+  }
+}
+
+/**
+ * Ask provider-appropriate model questions.
+ *
+ * For openai-compat the user types a free-form model name.
+ * For all other providers, a select list is shown.
+ */
+async function askModelPreferences(
+  provider: SupportedProvider,
+): Promise<{ plannerModel: string; generatorModel: string }> {
+  const opts = getProviderModelOptions(provider);
+
+  if (provider === "openai-compat") {
+    const answers = await prompts([
+      {
+        type: "text",
+        name: "plannerModel",
+        message: "Planner model (e.g. llama3, mistral):",
+        initial: "llama3",
+        validate: (v: string) => v.trim().length > 0 || "Model name is required",
+      },
+      {
+        type: "text",
+        name: "generatorModel",
+        message: "Generator model (e.g. llama3, mistral):",
+        initial: "llama3",
+        validate: (v: string) => v.trim().length > 0 || "Model name is required",
+      },
+    ]);
+    return {
+      plannerModel: (answers.plannerModel as string | undefined) ?? "llama3",
+      generatorModel: (answers.generatorModel as string | undefined) ?? "llama3",
+    };
+  }
+
+  const answers = await prompts([
+    {
+      type: "select",
+      name: "plannerModel",
+      message: "Planner model:",
+      choices: opts.planner,
+      initial: opts.defaultPlanner,
+    },
+    {
+      type: "select",
+      name: "generatorModel",
+      message: "Generator model:",
+      choices: opts.generator,
+      initial: opts.defaultGenerator,
+    },
+  ]);
+
+  return {
+    plannerModel: (answers.plannerModel as string | undefined) ?? opts.planner[opts.defaultPlanner]?.value ?? "sonnet",
+    generatorModel: (answers.generatorModel as string | undefined) ?? opts.generator[opts.defaultGenerator]?.value ?? "sonnet",
+  };
+}
+
+/**
+ * Ask the user which AI provider they want to use.
+ * Returns null if the user cancels.
+ */
+async function askProvider(): Promise<SupportedProvider | null> {
+  const { provider } = await prompts({
+    type: "select",
+    name: "provider",
+    message: "Which AI provider?",
+    choices: [
+      {
+        title: "Anthropic (Claude)",
+        description: "Opus, Sonnet, Haiku — requires ANTHROPIC_API_KEY",
+        value: "anthropic",
+      },
+      {
+        title: "OpenAI",
+        description: "GPT-4.1, o3, o4-mini — requires OPENAI_API_KEY",
+        value: "openai",
+      },
+      {
+        title: "Google Gemini",
+        description: "Gemini Pro, Flash — requires GOOGLE_API_KEY or GEMINI_API_KEY",
+        value: "google",
+      },
+      {
+        title: "OpenAI-Compatible / Ollama",
+        description: "Any OpenAI-compatible server (Ollama, vLLM, etc.) — no API key needed",
+        value: "openai-compat",
+      },
+    ],
+    initial: 0,
+  });
+
+  if (provider === undefined) return null;
+  return provider as SupportedProvider;
+}
+
 // ── Preset metadata ──────────────────────────────────────────────
 
 interface PresetInfo {
@@ -357,30 +521,15 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
     return;
   }
 
-  // Ask model preferences
-  const modelAnswers = await prompts([
-    {
-      type: "select",
-      name: "plannerModel",
-      message: "Planner model:",
-      choices: [
-        { title: "Opus (best quality)", value: "opus" },
-        { title: "Sonnet (balanced)", value: "sonnet" },
-      ],
-      initial: 0,
-    },
-    {
-      type: "select",
-      name: "generatorModel",
-      message: "Generator model:",
-      choices: [
-        { title: "Opus (best quality)", value: "opus" },
-        { title: "Sonnet (recommended)", value: "sonnet" },
-        { title: "Haiku (faster, cheaper)", value: "haiku" },
-      ],
-      initial: 1,
-    },
-  ]);
+  // Ask provider selection
+  const provider = await askProvider();
+  if (provider === null) {
+    logger.info("Init cancelled.");
+    return;
+  }
+
+  // Ask model preferences (conditional on provider)
+  const { plannerModel, generatorModel } = await askModelPreferences(provider);
 
   // Ask strategies separately so multiselect works properly
   console.log(chalk.gray("\n  ↑↓ Navigate  ⎵ Space = toggle  ⏎ Enter = confirm\n"));
@@ -392,10 +541,8 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
     instructions: false,
   });
 
-  const answers = { ...modelAnswers, ...stratAnswer };
-
   const mode: ProjectMode = "brownfield";
-  const strategies = (answers.strategies as EvalStrategyType[]).map(
+  const strategies = (stratAnswer.strategies as EvalStrategyType[]).map(
     (type: EvalStrategyType) => ({
       type,
       required: type === "typecheck" || type === "build" || type === "lint",
@@ -406,7 +553,8 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
   const config = createDefaultConfig(projectName, mode, undefined, {
     planner: {
       ...(defaults.planner ?? { maxClarifications: 5, model: "opus" }),
-      model: answers.plannerModel as "opus" | "sonnet" | "haiku",
+      model: plannerModel,
+      provider,
     },
     generator: {
       ...(defaults.generator ?? {
@@ -415,16 +563,18 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
         autoCommit: true,
         branchPattern: "bober/{feature-name}",
       }),
-      model: answers.generatorModel as "sonnet" | "opus" | "haiku",
+      model: generatorModel,
+      provider,
     },
     evaluator: {
-      model: "sonnet",
+      model: generatorModel,
       strategies,
       maxIterations: defaults.evaluator?.maxIterations ?? 3,
+      provider,
     },
   });
 
-  await writeConfig(projectRoot, config, mode, strategies);
+  await writeConfig(projectRoot, config, mode, strategies, undefined, provider);
 }
 
 // ── Greenfield flow ──────────────────────────────────────────────
@@ -501,30 +651,15 @@ async function greenfieldFlow(
     return;
   }
 
-  // Ask model preferences
-  const modelAnswers = await prompts([
-    {
-      type: "select",
-      name: "plannerModel",
-      message: "Planner model:",
-      choices: [
-        { title: "Opus (best quality)", value: "opus" },
-        { title: "Sonnet (balanced)", value: "sonnet" },
-      ],
-      initial: 0,
-    },
-    {
-      type: "select",
-      name: "generatorModel",
-      message: "Generator model:",
-      choices: [
-        { title: "Opus (best quality)", value: "opus" },
-        { title: "Sonnet (recommended)", value: "sonnet" },
-        { title: "Haiku (faster, cheaper)", value: "haiku" },
-      ],
-      initial: 1,
-    },
-  ]);
+  // Ask provider selection
+  const provider = await askProvider();
+  if (provider === null) {
+    logger.info("Init cancelled.");
+    return;
+  }
+
+  // Ask model preferences (conditional on provider)
+  const { plannerModel, generatorModel } = await askModelPreferences(provider);
 
   // Ask strategies separately so multiselect works properly
   const stratAnswer = await prompts({
@@ -536,9 +671,7 @@ async function greenfieldFlow(
     hint: "Use arrow keys to move, Space to select/deselect, Enter to confirm",
   });
 
-  const answers = { ...modelAnswers, ...stratAnswer };
-
-  const strategies = (answers.strategies as EvalStrategyType[]).map(
+  const strategies = (stratAnswer.strategies as EvalStrategyType[]).map(
     (type: EvalStrategyType) => ({
       type,
       required: type === "typecheck" || type === "build",
@@ -552,7 +685,8 @@ async function greenfieldFlow(
     {
       planner: {
         ...(defaults.planner ?? { maxClarifications: 5, model: "opus" }),
-        model: answers.plannerModel as "opus" | "sonnet" | "haiku",
+        model: plannerModel,
+        provider,
       },
       generator: {
         ...(defaults.generator ?? {
@@ -561,12 +695,14 @@ async function greenfieldFlow(
           autoCommit: true,
           branchPattern: "bober/{feature-name}",
         }),
-        model: answers.generatorModel as "sonnet" | "opus" | "haiku",
+        model: generatorModel,
+        provider,
       },
       evaluator: {
-        model: "sonnet",
+        model: generatorModel,
         strategies,
         maxIterations: defaults.evaluator?.maxIterations ?? 3,
+        provider,
       },
     },
   );
@@ -576,7 +712,7 @@ async function greenfieldFlow(
     config.project.description = description;
   }
 
-  await writeConfig(projectRoot, config, mode, strategies, selectedPreset);
+  await writeConfig(projectRoot, config, mode, strategies, selectedPreset, provider);
 }
 
 // ── Shared helpers ───────────────────────────────────────────────
@@ -710,9 +846,9 @@ interface ConfigShape {
     preset?: string;
     description?: string;
   };
-  planner: { model: string };
-  generator: { model: string };
-  evaluator: { strategies: Array<{ type: string }> };
+  planner: { model: string; provider?: string };
+  generator: { model: string; provider?: string };
+  evaluator: { strategies: Array<{ type: string }>; provider?: string };
 }
 
 async function writeConfig(
@@ -721,6 +857,7 @@ async function writeConfig(
   mode: ProjectMode,
   strategies: Array<{ type: string; required: boolean }>,
   preset?: string,
+  provider?: SupportedProvider,
 ): Promise<void> {
   // Write config
   const configPath = join(projectRoot, "bober.config.json");
@@ -759,6 +896,9 @@ async function writeConfig(
   console.log(`  Mode:        ${chalk.cyan(mode)}`);
   if (preset) {
     console.log(`  Preset:      ${chalk.cyan(preset)}`);
+  }
+  if (provider) {
+    console.log(`  Provider:    ${chalk.cyan(provider)}`);
   }
   console.log(`  Planner:     ${chalk.cyan(config.planner.model)}`);
   console.log(`  Generator:   ${chalk.cyan(config.generator.model)}`);

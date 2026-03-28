@@ -138,8 +138,11 @@ export type {
 } from "./providers/types.js";
 
 export { AnthropicAdapter } from "./providers/anthropic.js";
+export { OpenAIAdapter } from "./providers/openai.js";
+export { GoogleAdapter } from "./providers/google.js";
+export { OpenAICompatAdapter } from "./providers/openai-compat.js";
 
-export { createClient, type ProviderName } from "./providers/factory.js";
+export { createClient, validateApiKey, type ProviderName } from "./providers/factory.js";
 
 // ── Utils ──────────────────────────────────────────────────────────
 
