@@ -52,7 +52,12 @@ export async function runGenerator(
   // Build tool set (generator gets full access)
   const toolSet = buildToolSet("generator", projectRoot);
 
-  const client = createClient();
+  const client = createClient(
+    config.generator.provider ?? null,
+    config.generator.endpoint ?? null,
+    config.generator.providerConfig,
+    config.generator.model,
+  );
   const handoffJson = serializeHandoff(handoff);
 
   const userMessage = `# Context Handoff

@@ -88,7 +88,12 @@ export async function runPlanner(
   // Build tool set (planner gets read-only tools)
   const toolSet = buildToolSet("planner", projectRoot);
 
-  const client = createClient();
+  const client = createClient(
+    config.planner.provider ?? null,
+    config.planner.endpoint ?? null,
+    config.planner.providerConfig,
+    config.planner.model,
+  );
 
   const userMessage = `# Task Description
 ${userPrompt}

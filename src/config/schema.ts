@@ -16,16 +16,11 @@ export const StackSchema = z.object({
 });
 export type Stack = z.infer<typeof StackSchema>;
 
-export const ModelChoiceSchema = z.enum([
-  "sonnet",
-  "opus",
-  "haiku",
-  "inherit",
-]);
-export type ModelChoice = z.infer<typeof ModelChoiceSchema>;
+export const ModelChoiceSchema = z.string().min(1);
+export type ModelChoice = string;
 
-export const GeneratorModelSchema = z.enum(["sonnet", "opus", "haiku"]);
-export type GeneratorModel = z.infer<typeof GeneratorModelSchema>;
+export const GeneratorModelSchema = z.string().min(1);
+export type GeneratorModel = string;
 
 export const SprintSizeSchema = z.enum(["small", "medium", "large"]);
 export type SprintSize = z.infer<typeof SprintSizeSchema>;
@@ -89,6 +84,9 @@ export const PlannerSectionSchema = z.object({
   maxClarifications: z.number().int().min(0).default(5),
   model: ModelChoiceSchema.default("opus"),
   contextFiles: z.array(z.string()).optional(),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
 });
 export type PlannerSection = z.infer<typeof PlannerSectionSchema>;
 
@@ -97,6 +95,9 @@ export const GeneratorSectionSchema = z.object({
   maxTurnsPerSprint: z.number().int().min(1).default(50),
   autoCommit: z.boolean().default(true),
   branchPattern: z.string().default("bober/{feature-name}"),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
 });
 export type GeneratorSection = z.infer<typeof GeneratorSectionSchema>;
 
@@ -105,6 +106,9 @@ export const EvaluatorSectionSchema = z.object({
   strategies: z.array(EvalStrategySchema),
   maxIterations: z.number().int().min(1).default(3),
   plugins: z.array(z.string()).optional(),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 

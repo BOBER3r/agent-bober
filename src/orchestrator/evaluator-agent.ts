@@ -142,7 +142,12 @@ async function runAgentEvaluation(
     // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit)
     const toolSet = buildToolSet("evaluator", projectRoot);
 
-    const client = createClient();
+    const client = createClient(
+      config.evaluator.provider ?? null,
+      config.evaluator.endpoint ?? null,
+      config.evaluator.providerConfig,
+      config.evaluator.model,
+    );
     const handoffJson = serializeHandoff(handoff);
 
     // Format programmatic results for context
