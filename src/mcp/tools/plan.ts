@@ -5,9 +5,13 @@
 
 import { cwd } from "node:process";
 
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+
 import { configExists, loadConfig } from "../../config/loader.js";
+import { createContract } from "../../contracts/sprint-contract.js";
+import type { SprintContract } from "../../contracts/sprint-contract.js";
 import { runPlanner } from "../../orchestrator/planner-agent.js";
-import { ensureBoberDir } from "../../state/index.js";
+import { ensureBoberDir, saveContract } from "../../state/index.js";
 import { registerTool } from "./registry.js";
 
 // ── Registration ─────────────────────────────────────────────────────
@@ -41,11 +45,10 @@ export function registerPlanTool(): void {
       // Check config exists before attempting to load
       const hasConfig = await configExists(projectRoot);
       if (!hasConfig) {
-        return JSON.stringify({
-          error:
-            "No bober.config.json found. Run bober_init first to initialise the project.",
-          projectRoot,
-        });
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          "No bober.config.json found. Run bober_init first.",
+        );
       }
 
       let config;
@@ -63,6 +66,22 @@ export function registerPlanTool(): void {
       try {
         const spec = await runPlanner(task, projectRoot, config);
 
+        // Generate sprint contracts from features (same as pipeline.ts)
+        const contracts: SprintContract[] = [];
+        for (const feature of spec.features) {
+          const contract = createContract(
+            feature.title,
+            feature.description,
+            feature.acceptanceCriteria.map((ac, idx) => ({
+              id: `${feature.id}-criterion-${idx + 1}`,
+              description: ac,
+              verificationMethod: "agent-evaluation",
+            })),
+          );
+          contracts.push(contract);
+          await saveContract(projectRoot, contract);
+        }
+
         const summary = {
           id: spec.id,
           title: spec.title,
@@ -70,8 +89,9 @@ export function registerPlanTool(): void {
           projectType: spec.projectType,
           techStack: spec.techStack,
           sprintCount: spec.features.length,
-          sprints: spec.features.map((f) => ({
+          sprints: spec.features.map((f, idx) => ({
             id: f.id,
+            contractId: contracts[idx]?.id,
             feature: f.title,
             description: f.description,
             priority: f.priority,
@@ -79,6 +99,7 @@ export function registerPlanTool(): void {
             criteriaCount: f.acceptanceCriteria.length,
             status: "proposed",
           })),
+          contractIds: contracts.map((c) => c.id),
           nonFunctional: spec.nonFunctional,
           constraints: spec.constraints,
           savedTo: `.bober/specs/${spec.id}.json`,

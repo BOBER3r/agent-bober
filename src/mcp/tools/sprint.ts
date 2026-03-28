@@ -5,6 +5,8 @@
 
 import { cwd } from "node:process";
 
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+
 import { configExists, loadConfig } from "../../config/loader.js";
 import type { SprintContract } from "../../contracts/sprint-contract.js";
 import { updateContractStatus } from "../../contracts/sprint-contract.js";
@@ -86,11 +88,10 @@ export function registerSprintTool(): void {
 
       const hasConfig = await configExists(projectRoot);
       if (!hasConfig) {
-        return JSON.stringify({
-          error:
-            "No bober.config.json found. Run bober_init first to initialise the project.",
-          projectRoot,
-        });
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          "No bober.config.json found. Run bober_init first.",
+        );
       }
 
       let config;

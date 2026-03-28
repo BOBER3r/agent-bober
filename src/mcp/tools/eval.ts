@@ -6,6 +6,8 @@
 
 import { cwd } from "node:process";
 
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
+
 import { configExists, loadConfig } from "../../config/loader.js";
 import { createHandoff } from "../../orchestrator/context-handoff.js";
 import type { ProjectContext } from "../../orchestrator/context-handoff.js";
@@ -51,11 +53,10 @@ export function registerEvalTool(): void {
 
       const hasConfig = await configExists(projectRoot);
       if (!hasConfig) {
-        return JSON.stringify({
-          error:
-            "No bober.config.json found. Run bober_init first to initialise the project.",
-          projectRoot,
-        });
+        throw new McpError(
+          ErrorCode.InvalidRequest,
+          "No bober.config.json found. Run bober_init first.",
+        );
       }
 
       let config;
