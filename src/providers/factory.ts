@@ -1,13 +1,12 @@
 import { AnthropicAdapter } from "./anthropic.js";
+import { OpenAIAdapter } from "./openai.js";
 import type { LLMClient } from "./types.js";
 import { resolveProviderModel } from "../orchestrator/model-resolver.js";
 
 /**
  * The set of provider names currently supported.
- * Additional providers (openai, google, openai-compat) will be added
- * in subsequent sprints.
  */
-export type ProviderName = "anthropic";
+export type ProviderName = "anthropic" | "openai";
 
 /**
  * Create an LLMClient for the given provider.
@@ -31,8 +30,7 @@ export function createClient(
   providerConfig?: Record<string, unknown>,
   model?: string,
 ): LLMClient {
-  // endpoint will be consumed by future OpenAI-compat adapters; unused for now
-  void endpoint;
+  // endpoint is used by OpenAI and openai-compat adapters as a base URL
 
   // Resolve provider: explicit wins; otherwise infer from model shorthand
   let resolvedProvider: string;
@@ -51,12 +49,25 @@ export function createClient(
       ? providerConfig["apiKey"]
       : undefined;
 
+  // Resolve the model ID (for cases where provider was inferred from shorthand)
+  const resolvedModelId =
+    !provider && model
+      ? resolveProviderModel(model).modelId
+      : model ?? resolvedProvider;
+
   switch (resolvedProvider) {
     case "anthropic":
       return new AnthropicAdapter(apiKey);
+    case "openai":
+      return new OpenAIAdapter(
+        resolvedModelId,
+        apiKey ?? process.env["OPENAI_API_KEY"],
+        endpoint ?? undefined,
+        providerConfig,
+      );
     default:
       throw new Error(
-        `Unsupported provider: "${resolvedProvider}". Currently supported providers: anthropic.`,
+        `Unsupported provider: "${resolvedProvider}". Supported providers: anthropic, openai.`,
       );
   }
 }
