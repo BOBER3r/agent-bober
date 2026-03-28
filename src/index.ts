@@ -148,3 +148,8 @@ export { createClient, validateApiKey, type ProviderName } from "./providers/fac
 
 export { logger, Logger } from "./utils/logger.js";
 export { findProjectRoot } from "./utils/fs.js";
+
+// ── MCP Server ──────────────────────────────────────────────────────
+
+export { createBoberMCPServer } from "./mcp/index.js";
+export { RunManager } from "./mcp/run-manager.js";
