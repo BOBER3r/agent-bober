@@ -1,10 +1,13 @@
 // ── Tool Registration ───────────────────────────────────────────────
 //
 // This file is the central place where all MCP tools are registered.
-// Sprint 1 registers a placeholder bober_ping tool to validate the system
-// end-to-end. Real workflow tools will be added in Sprint 2.
+// Import each tool module's register function here and call it once.
 
 import { registerTool } from "./registry.js";
+import { registerInitTool } from "./init.js";
+import { registerPlanTool } from "./plan.js";
+import { registerSprintTool } from "./sprint.js";
+import { registerEvalTool } from "./eval.js";
 
 /**
  * Registers all built-in agent-bober MCP tools into the global registry.
@@ -12,8 +15,7 @@ import { registerTool } from "./registry.js";
  */
 export function registerAllTools(): void {
   // ── bober_ping ─────────────────────────────────────────────────
-  // Placeholder tool to verify the MCP server is reachable and that the
-  // tool dispatch path works. Useful for smoke-testing IDE integrations.
+  // Lightweight health-check tool. Useful for smoke-testing IDE integrations.
   registerTool({
     name: "bober_ping",
     description:
@@ -28,6 +30,12 @@ export function registerAllTools(): void {
       return "pong";
     },
   });
+
+  // ── Core workflow tools ─────────────────────────────────────────
+  registerInitTool();
+  registerPlanTool();
+  registerSprintTool();
+  registerEvalTool();
 }
 
 export { registerTool, getAllTools, getTool } from "./registry.js";
