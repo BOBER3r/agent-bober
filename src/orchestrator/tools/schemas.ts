@@ -1,13 +1,12 @@
-import type Anthropic from "@anthropic-ai/sdk";
-
-type Tool = Anthropic.Messages.Tool;
+import type { ToolDef } from "../../providers/types.js";
 
 /**
- * Tool schema definitions for the Anthropic messages API.
- * Each schema matches the `Tool` interface expected by `client.messages.create()`.
+ * Tool schema definitions using the provider-agnostic ToolDef type.
+ * Each schema describes a tool that can be passed to any LLM provider
+ * via the appropriate adapter.
  */
 
-export const bashTool: Tool = {
+export const bashTool: ToolDef = {
   name: "bash",
   description:
     "Execute a shell command in the project directory. Use for running builds, tests, linters, git commands, dev servers, curl, etc. The command runs with the project root as cwd.",
@@ -28,7 +27,7 @@ export const bashTool: Tool = {
   },
 };
 
-export const readFileTool: Tool = {
+export const readFileTool: ToolDef = {
   name: "read_file",
   description:
     "Read a file's contents. Returns the file content with line numbers. Use offset and limit to read specific sections of large files.",
@@ -53,7 +52,7 @@ export const readFileTool: Tool = {
   },
 };
 
-export const writeFileTool: Tool = {
+export const writeFileTool: ToolDef = {
   name: "write_file",
   description:
     "Create a new file or overwrite an existing file. Parent directories are created automatically. Use edit_file for targeted modifications to existing files.",
@@ -74,7 +73,7 @@ export const writeFileTool: Tool = {
   },
 };
 
-export const editFileTool: Tool = {
+export const editFileTool: ToolDef = {
   name: "edit_file",
   description:
     "Apply a targeted find-and-replace edit to an existing file. The old_text must match exactly (including whitespace and indentation). Replaces only the first occurrence.",
@@ -100,7 +99,7 @@ export const editFileTool: Tool = {
   },
 };
 
-export const globTool: Tool = {
+export const globTool: ToolDef = {
   name: "glob",
   description:
     'Find files matching a glob pattern. Returns a list of matching file paths relative to the search directory. Example patterns: "**/*.ts", "src/components/**/*.tsx", "*.json".',
@@ -121,7 +120,7 @@ export const globTool: Tool = {
   },
 };
 
-export const grepTool: Tool = {
+export const grepTool: ToolDef = {
   name: "grep",
   description:
     "Search file contents using a regular expression pattern. Returns matching lines with file paths and line numbers.",
@@ -153,7 +152,7 @@ export const grepTool: Tool = {
 };
 
 /** All available tool schemas, keyed by tool name. */
-export const TOOL_SCHEMAS: Record<string, Tool> = {
+export const TOOL_SCHEMAS: Record<string, ToolDef> = {
   bash: bashTool,
   read_file: readFileTool,
   write_file: writeFileTool,
