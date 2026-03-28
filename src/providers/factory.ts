@@ -1,12 +1,14 @@
 import { AnthropicAdapter } from "./anthropic.js";
 import { OpenAIAdapter } from "./openai.js";
+import { GoogleAdapter } from "./google.js";
+import { OpenAICompatAdapter } from "./openai-compat.js";
 import type { LLMClient } from "./types.js";
 import { resolveProviderModel } from "../orchestrator/model-resolver.js";
 
 /**
  * The set of provider names currently supported.
  */
-export type ProviderName = "anthropic" | "openai";
+export type ProviderName = "anthropic" | "openai" | "google" | "openai-compat";
 
 /**
  * Create an LLMClient for the given provider.
@@ -65,9 +67,32 @@ export function createClient(
         endpoint ?? undefined,
         providerConfig,
       );
+    case "google":
+      return new GoogleAdapter(
+        resolvedModelId,
+        apiKey ?? process.env["GOOGLE_API_KEY"] ?? process.env["GEMINI_API_KEY"],
+      );
+    case "openai-compat": {
+      // Resolve endpoint: explicit arg wins, then model resolution (for ollama/ prefix),
+      // then providerConfig, then error.
+      const resolvedEndpoint =
+        endpoint ??
+        (!provider && model ? resolveProviderModel(model).endpoint : undefined) ??
+        (typeof providerConfig?.["endpoint"] === "string"
+          ? providerConfig["endpoint"]
+          : undefined);
+
+      if (!resolvedEndpoint) {
+        throw new Error(
+          'OpenAI-compatible provider requires an endpoint. Set endpoint in provider config or use the "ollama/" model prefix.',
+        );
+      }
+
+      return new OpenAICompatAdapter(resolvedEndpoint, resolvedModelId, apiKey);
+    }
     default:
       throw new Error(
-        `Unsupported provider: "${resolvedProvider}". Supported providers: anthropic, openai.`,
+        `Unsupported provider: "${resolvedProvider}". Supported providers: anthropic, openai, google, openai-compat.`,
       );
   }
 }
