@@ -119,7 +119,37 @@ export {
   loadHistory,
 } from "./state/index.js";
 
+// ── Providers ──────────────────────────────────────────────────────
+
+export type {
+  JsonSchemaProperty,
+  JsonSchemaObject,
+  ToolDef,
+  ToolCall,
+  ToolResult,
+  TextMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  Message,
+  ChatParams,
+  ChatResponse,
+  StopReason,
+  LLMClient,
+} from "./providers/types.js";
+
+export { AnthropicAdapter } from "./providers/anthropic.js";
+export { OpenAIAdapter } from "./providers/openai.js";
+export { GoogleAdapter } from "./providers/google.js";
+export { OpenAICompatAdapter } from "./providers/openai-compat.js";
+
+export { createClient, validateApiKey, type ProviderName } from "./providers/factory.js";
+
 // ── Utils ──────────────────────────────────────────────────────────
 
 export { logger, Logger } from "./utils/logger.js";
 export { findProjectRoot } from "./utils/fs.js";
+
+// ── MCP Server ──────────────────────────────────────────────────────
+
+export { createBoberMCPServer } from "./mcp/index.js";
+export { RunManager } from "./mcp/run-manager.js";

@@ -3,9 +3,11 @@
 [![npm version](https://img.shields.io/npm/v/agent-bober.svg)](https://www.npmjs.com/package/agent-bober)
 [![license](https://img.shields.io/npm/l/agent-bober.svg)](https://github.com/BOBER3r/agent-bober/blob/main/LICENSE)
 
-**Generator-Evaluator multi-agent harness for building applications autonomously with Claude.**
+**Generator-Evaluator multi-agent harness for building applications autonomously with any LLM.**
 
-Inspired by Anthropic's engineering publication [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps), agent-bober implements the Generator-Evaluator multi-agent pattern as a reusable, installable workflow. It orchestrates multiple Claude agents in a structured loop: a **Planner** decomposes your idea into sprint contracts, a **Generator** writes the code, and an **Evaluator** independently verifies each sprint against its contract before moving on. The result is autonomous, high-quality software development with built-in guardrails, context resets, and brutally honest evaluation.
+Inspired by Anthropic's engineering publication [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps), agent-bober implements the Generator-Evaluator multi-agent pattern as a reusable, installable workflow. It orchestrates AI agents in a structured loop: a **Planner** decomposes your idea into sprint contracts, a **Generator** writes the code, and an **Evaluator** independently verifies each sprint against its contract before moving on. The result is autonomous, high-quality software development with built-in guardrails, context resets, and brutally honest evaluation.
+
+Works with **Claude, GPT, Gemini, Ollama**, and any OpenAI-compatible endpoint. Mix and match providers per agent role.
 
 ```
 You describe a feature
@@ -39,7 +41,12 @@ npm install -g agent-bober
 npx agent-bober init
 ```
 
-agent-bober also works as a **Claude Code plugin**. If you install it as a dependency or globally, Claude Code will detect the plugin manifest and make `/bober:*` slash commands available in your sessions.
+agent-bober works in multiple environments:
+
+- **Claude Code** -- Plugin with 10 slash commands (`/bober-plan`, `/bober-run`, etc.)
+- **Cursor / Windsurf** -- MCP server with 10 tools in the chat interface
+- **Any MCP-compatible IDE** -- MCP server via stdio transport
+- **Any terminal** -- CLI commands (`npx agent-bober run "feature"`)
 
 ## Quick Start
 
@@ -48,7 +55,7 @@ agent-bober also works as a **Claude Code plugin**. If you install it as a depen
 npx agent-bober init
 ```
 
-Interactive setup -- describe what you want to build, pick a preset or let the planner decide.
+Interactive setup -- pick your AI provider, choose a preset, describe what you want to build.
 
 ### With a Preset
 ```bash
@@ -86,14 +93,113 @@ Specialized workflows:
 
 ---
 
+## Multi-Provider Support
+
+agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. Mix and match -- Opus for planning, GPT-4.1 for generation, local Ollama for evaluation.
+
+### Supported Providers
+
+| Provider | Models | API Key |
+|----------|--------|---------|
+| **Anthropic** (default) | `opus`, `sonnet`, `haiku` | `ANTHROPIC_API_KEY` |
+| **OpenAI** | `gpt-4.1`, `gpt-4.1-mini`, `o3`, `o4-mini` | `OPENAI_API_KEY` |
+| **Google Gemini** | `gemini-pro`, `gemini-flash` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
+| **OpenAI-Compatible** | Any model (Ollama, LM Studio, Groq, DeepSeek, etc.) | Optional |
+
+### Configuration
+
+Set providers per agent role in `bober.config.json`:
+
+```jsonc
+{
+  "planner": {
+    "provider": "anthropic",
+    "model": "opus"
+  },
+  "generator": {
+    "provider": "openai",
+    "model": "gpt-4.1"
+  },
+  "evaluator": {
+    "provider": "openai-compat",
+    "model": "llama3.1:70b",
+    "endpoint": "http://localhost:11434/v1"
+  }
+}
+```
+
+Model shorthands auto-resolve to the correct provider:
+- `"opus"` / `"sonnet"` / `"haiku"` -- Anthropic
+- `"gpt-4.1"` / `"o3"` / `"o4-mini"` -- OpenAI
+- `"gemini-pro"` / `"gemini-flash"` -- Google
+- `"ollama/llama3"` -- OpenAI-compatible at localhost:11434
+
+Override provider for all roles from the CLI:
+```bash
+npx agent-bober run "feature" --provider openai
+```
+
+Provider SDKs (`openai`, `@google/generative-ai`) are **optional peer dependencies** -- install only what you use. Only `@anthropic-ai/sdk` is required by default.
+
+---
+
+## MCP Server (Cursor, Windsurf, etc.)
+
+agent-bober includes an MCP (Model Context Protocol) server that exposes all functionality as tools in any MCP-compatible IDE.
+
+### Setup for Cursor
+
+Add to `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "bober": {
+      "command": "npx",
+      "args": ["agent-bober", "mcp"]
+    }
+  }
+}
+```
+
+### Setup for Windsurf
+
+Add to your Windsurf MCP configuration:
+```json
+{
+  "mcpServers": {
+    "bober": {
+      "command": "npx",
+      "args": ["agent-bober", "mcp"]
+    }
+  }
+}
+```
+
+### Available MCP Tools
+
+| Tool | Type | Description |
+|------|------|-------------|
+| `bober_init` | sync | Initialize project config and `.bober/` directory |
+| `bober_plan` | sync | Plan a feature, create sprint contracts |
+| `bober_sprint` | sync | Execute the next sprint (generator + evaluator loop) |
+| `bober_eval` | sync | Evaluate a sprint independently |
+| `bober_run` | async | Full autonomous pipeline (returns immediately, poll with status) |
+| `bober_status` | poll | Check pipeline progress or read current status |
+| `bober_contracts` | read | List all sprint contracts or read a specific one |
+| `bober_spec` | read | Read the current PlanSpec |
+| `bober_principles` | read/write | Read or set project principles |
+| `bober_config` | read/write | Read or update `bober.config.json` |
+
+---
+
 ## Commands
 
 ### Slash Commands (Claude Code)
 
 | Command | Description |
 |---|---|
-| `/bober-principles` | Define project principles — AI expands your rough notes into standards |
-| `/bober-plan` | Plan any feature — stack-agnostic, sprint-decomposed |
+| `/bober-principles` | Define project principles -- AI expands your rough notes into standards |
+| `/bober-plan` | Plan any feature -- stack-agnostic, sprint-decomposed |
 | `/bober-sprint` | Execute the next sprint contract |
 | `/bober-eval` | Evaluate current sprint output |
 | `/bober-run` | Full autonomous pipeline (plan + sprint + eval loop) |
@@ -106,11 +212,12 @@ Specialized workflows:
 ### CLI
 
 ```bash
-npx agent-bober init [preset]       # Initialize project
+npx agent-bober init [preset]       # Initialize project (with provider selection)
 npx agent-bober plan "feature"      # Run the planner
 npx agent-bober sprint              # Execute next sprint
 npx agent-bober eval                # Evaluate current sprint
 npx agent-bober run "feature"       # Full autonomous loop
+npx agent-bober mcp                 # Start MCP server (Cursor/Windsurf)
 ```
 
 ### Fully Autonomous Mode (no human in the loop)
@@ -138,7 +245,16 @@ agent-bober init nextjs
 agent-bober run "Build a complete dashboard with auth, CRUD, and charts"
 ```
 
-The CLI uses the Anthropic SDK directly — no approval prompts at all.
+The CLI uses the Anthropic SDK directly -- no approval prompts at all.
+
+**Option C: With a different provider**
+
+```bash
+export OPENAI_API_KEY=sk-...
+cd your-project
+agent-bober init nextjs
+agent-bober run "Build a complete dashboard with auth, CRUD, and charts" --provider openai
+```
 
 ---
 
@@ -150,7 +266,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
 ```jsonc
 {
-  // ── Project ─────────────────────────────────────
+  // -- Project -----------------------------------------
   "project": {
     "name": "my-app",                     // Project name
     "mode": "greenfield",                 // "greenfield" | "brownfield"
@@ -158,26 +274,35 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "description": "A task management app with real-time collaboration"
   },
 
-  // ── Planner ─────────────────────────────────────
+  // -- Planner -----------------------------------------
   "planner": {
+    "provider": "anthropic",              // "anthropic" | "openai" | "google" | "openai-compat"
+    "model": "opus",                      // Any model string or shorthand
+    "endpoint": null,                     // Custom base URL (for openai-compat)
+    "providerConfig": {},                 // Provider-specific settings
     "maxClarifications": 5,               // Max clarifying questions (0 to skip)
-    "model": "opus",                      // Model for planning: "opus" | "sonnet" | "haiku"
     "contextFiles": [                     // Extra files the planner should read
       "docs/architecture.md"
     ]
   },
 
-  // ── Generator ───────────────────────────────────
+  // -- Generator ---------------------------------------
   "generator": {
-    "model": "sonnet",                    // Model for code generation
+    "provider": "anthropic",              // "anthropic" | "openai" | "google" | "openai-compat"
+    "model": "sonnet",                    // Any model string or shorthand
+    "endpoint": null,                     // Custom base URL (for openai-compat)
+    "providerConfig": {},                 // Provider-specific settings
     "maxTurnsPerSprint": 50,              // Max tool-use turns per sprint
     "autoCommit": true,                   // Auto-commit after each sprint
     "branchPattern": "bober/{feature-name}" // Git branch naming
   },
 
-  // ── Evaluator ───────────────────────────────────
+  // -- Evaluator ---------------------------------------
   "evaluator": {
-    "model": "sonnet",                    // Model for evaluation reasoning
+    "provider": "anthropic",              // "anthropic" | "openai" | "google" | "openai-compat"
+    "model": "sonnet",                    // Any model string or shorthand
+    "endpoint": null,                     // Custom base URL (for openai-compat)
+    "providerConfig": {},                 // Provider-specific settings
     "strategies": [                       // Evaluation strategies to run
       { "type": "typecheck", "required": true },
       { "type": "lint",      "required": true },
@@ -189,21 +314,21 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "plugins": []                         // Custom evaluator plugin paths
   },
 
-  // ── Sprint ──────────────────────────────────────
+  // -- Sprint ------------------------------------------
   "sprint": {
     "maxSprints": 10,                     // Max sprints per plan
     "requireContracts": true,             // Require contract agreement before coding
     "sprintSize": "medium"                // "small" | "medium" | "large"
   },
 
-  // ── Pipeline ────────────────────────────────────
+  // -- Pipeline ----------------------------------------
   "pipeline": {
     "maxIterations": 20,                  // Max total iterations across all sprints
     "requireApproval": false,             // Pause for user approval between sprints
     "contextReset": "always"              // "always" | "on-threshold" | "never"
   },
 
-  // ── Commands ────────────────────────────────────
+  // -- Commands ----------------------------------------
   "commands": {
     "install":   "npm install",
     "build":     "npm run build",
@@ -248,7 +373,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
 ### Inline Command Evaluators
 
-The strategy type is **open** — you can use any name and provide a shell command directly. No plugin file needed:
+The strategy type is **open** -- you can use any name and provide a shell command directly. No plugin file needed:
 
 ```json
 {
@@ -452,18 +577,18 @@ To debug failing E2E tests:
 
 ### The Generator-Evaluator Pattern
 
-This architecture implements the patterns described in Anthropic's [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps) by Prithvi Rajasekaran. The key insight from that research: separating code generation from code evaluation creates a feedback loop that catches errors early and dramatically improves output quality. In their tests, a solo agent produced broken output in 20 minutes, while the full harness produced a polished, working application — demonstrating that multi-agent orchestration with honest evaluation is worth the investment.
+This architecture implements the patterns described in Anthropic's [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps) by Prithvi Rajasekaran. The key insight from that research: separating code generation from code evaluation creates a feedback loop that catches errors early and dramatically improves output quality. In their tests, a solo agent produced broken output in 20 minutes, while the full harness produced a polished, working application -- demonstrating that multi-agent orchestration with honest evaluation is worth the investment.
 
-### Agentic Tool-Use Architecture
+### Provider-Agnostic Architecture
 
-Each agent runs as a **multi-turn agentic loop** with tool access via the Anthropic SDK. System prompts are loaded from the detailed agent definitions in `agents/bober-*.md` (300-600 lines of role-specific instructions, anti-leniency protocols, and evaluation criteria).
+Each agent runs as a **multi-turn agentic loop** with tool access via the unified `LLMClient` interface. The provider layer abstracts away the differences between Anthropic, OpenAI, Google, and OpenAI-compatible APIs. System prompts are loaded from the detailed agent definitions in `agents/bober-*.md` (300-600 lines of role-specific instructions, anti-leniency protocols, and evaluation criteria).
 
-- **Planner** (Claude Opus): Explores the codebase via read-only tools (`read_file`, `glob`, `grep`), then produces sprint-decomposed plans. Thinks about scope, dependencies, and risk.
-- **Generator** (Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Reads existing code, writes implementation, runs tests, and commits — all autonomously within the sprint contract boundaries.
-- **Evaluator** (Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` — deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs — only report them with precise feedback.
+- **Planner** (default: Claude Opus): Explores the codebase via read-only tools (`read_file`, `glob`, `grep`), then produces sprint-decomposed plans. Thinks about scope, dependencies, and risk.
+- **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Reads existing code, writes implementation, runs tests, and commits -- all autonomously within the sprint contract boundaries.
+- **Evaluator** (default: Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` -- deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs -- only report them with precise feedback.
 
 The separation ensures that:
-1. The Generator cannot "mark its own homework" — an independent evaluation step with its own tool access catches issues through actual runtime verification, not just reading the generator's self-report.
+1. The Generator cannot "mark its own homework" -- an independent evaluation step with its own tool access catches issues through actual runtime verification, not just reading the generator's self-report.
 2. Sprint contracts provide clear scope boundaries, preventing feature creep.
 3. Automated checks (programmatic evaluators) + agent-based qualitative evaluation run after every sprint.
 4. Context resets between sprints keep the Generator focused and prevent context degradation.
@@ -477,8 +602,8 @@ All bober state lives in the `.bober/` directory:
 .bober/
   specs/           PlanSpec JSON files
   contracts/       SprintContract JSON files
-  evaluations/     Evaluation result logs
-  snapshots/       Context snapshots (gitignored)
+  eval-results/    Evaluation result logs
+  handoffs/        Context handoff documents
   progress.md      Human-readable progress tracker
   history.jsonl    Machine-readable event log
 ```
@@ -530,8 +655,11 @@ agent-bober/
     config/           Config schema, loader, defaults
     contracts/        Sprint contract and eval result types
     evaluators/       Built-in evaluator plugins
+    mcp/              MCP server and tool definitions
+      tools/          10 MCP tools (init, plan, sprint, eval, run, status, etc.)
     orchestrator/     Agent runners, agentic loop, tool infrastructure
       tools/          Tool schemas, sandboxed handlers, role-based sets
+    providers/        LLM provider adapters (Anthropic, OpenAI, Google, OpenAI-compat)
     state/            State management for .bober/ directory
     utils/            Shared utilities
   agents/             Agent system prompts (.md files, loaded at runtime)

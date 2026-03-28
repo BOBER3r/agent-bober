@@ -13,6 +13,7 @@ import { runPlanCommand } from "./commands/plan.js";
 import { runSprintCommand } from "./commands/sprint.js";
 import { runEvalCommand } from "./commands/eval.js";
 import { runRunCommand } from "./commands/run.js";
+import { createBoberMCPServer } from "../mcp/server.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -85,7 +86,11 @@ async function main(): Promise<void> {
   program
     .command("plan [task]")
     .description("Create a plan for a task")
-    .action(async (task?: string) => {
+    .option(
+      "--provider <name>",
+      "Override AI provider for all roles (anthropic, openai, google, openai-compat)",
+    )
+    .action(async (task?: string, cmdOpts?: { provider?: string }) => {
       const opts = program.opts<{
         verbose?: boolean;
         config?: string;
@@ -95,6 +100,7 @@ async function main(): Promise<void> {
       const projectRoot = await resolveProjectRoot(opts.config);
       await runPlanCommand(task, projectRoot, {
         verbose: opts.verbose,
+        provider: cmdOpts?.provider,
       });
     });
 
@@ -103,13 +109,18 @@ async function main(): Promise<void> {
     .command("sprint")
     .description("Run the next sprint")
     .option("--continue", "Continue to subsequent sprints after completion")
-    .action(async (cmdOpts: { continue?: boolean }) => {
+    .option(
+      "--provider <name>",
+      "Override AI provider for all roles (anthropic, openai, google, openai-compat)",
+    )
+    .action(async (cmdOpts: { continue?: boolean; provider?: string }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
       const projectRoot = await resolveProjectRoot(opts.config);
       await runSprintCommand(projectRoot, {
         verbose: opts.verbose,
         continue: cmdOpts.continue,
+        provider: cmdOpts.provider,
       });
     });
 
@@ -118,13 +129,18 @@ async function main(): Promise<void> {
     .command("eval")
     .description("Run evaluation on the current sprint")
     .option("-s, --sprint <id>", "Sprint ID to evaluate")
-    .action(async (cmdOpts: { sprint?: string }) => {
+    .option(
+      "--provider <name>",
+      "Override AI provider for all roles (anthropic, openai, google, openai-compat)",
+    )
+    .action(async (cmdOpts: { sprint?: string; provider?: string }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
       const projectRoot = await resolveProjectRoot(opts.config);
       await runEvalCommand(projectRoot, {
         verbose: opts.verbose,
         sprint: cmdOpts.sprint,
+        provider: cmdOpts.provider,
       });
     });
 
@@ -132,13 +148,32 @@ async function main(): Promise<void> {
   program
     .command("run [task]")
     .description("Run the full autonomous pipeline (plan + sprint loop)")
-    .action(async (task?: string) => {
+    .option(
+      "--provider <name>",
+      "Override AI provider for all roles (anthropic, openai, google, openai-compat)",
+    )
+    .action(async (task?: string, cmdOpts?: { provider?: string }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
       const projectRoot = await resolveProjectRoot(opts.config);
       await runRunCommand(task, projectRoot, {
         verbose: opts.verbose,
+        provider: cmdOpts?.provider,
       });
+    });
+
+  // ── mcp ─────────────────────────────────────────────────────────
+  program
+    .command("mcp")
+    .description(
+      "Start the agent-bober MCP server (stdio transport for Cursor/Windsurf)",
+    )
+    .action(async () => {
+      const opts = program.opts<{ config?: string }>();
+      const projectRoot = await resolveProjectRoot(opts.config);
+      // stdout is reserved for MCP JSON-RPC — do NOT use logger or console.log
+      await createBoberMCPServer(projectRoot);
+      // Keep the process alive; the server holds an open stdin reader
     });
 
   // ── Parse ───────────────────────────────────────────────────────

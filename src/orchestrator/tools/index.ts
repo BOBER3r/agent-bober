@@ -1,4 +1,4 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { ToolDef } from "../../providers/types.js";
 
 import { TOOL_SCHEMAS } from "./schemas.js";
 import { createToolHandlers } from "./handlers.js";
@@ -8,13 +8,11 @@ export type { ToolHandler } from "./handlers.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
-type Tool = Anthropic.Messages.Tool;
-
 export type AgentRole = "planner" | "generator" | "evaluator";
 
 export interface ToolSet {
-  /** Tool schemas to pass to `client.messages.create({ tools })`. */
-  schemas: Tool[];
+  /** Tool schemas to pass to the LLM client. Provider-agnostic ToolDef format. */
+  schemas: ToolDef[];
   /** Handler functions keyed by tool name. */
   handlers: Map<string, ToolHandler>;
 }
@@ -44,7 +42,7 @@ export function buildToolSet(
   const toolNames = ROLE_TOOLS[role];
   const allHandlers = createToolHandlers(projectRoot);
 
-  const schemas: Tool[] = [];
+  const schemas: ToolDef[] = [];
   const handlers = new Map<string, ToolHandler>();
 
   for (const name of toolNames) {

@@ -12,6 +12,8 @@ import { logger } from "../../utils/logger.js";
 
 export interface RunCommandOptions {
   verbose?: boolean;
+  /** Override AI provider for all roles. Overrides config.planner/generator/evaluator.provider. */
+  provider?: string;
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────
@@ -73,6 +75,17 @@ export async function runRunCommand(
       `Failed to load config: ${err instanceof Error ? err.message : String(err)}`,
     );
     return;
+  }
+
+  // Apply --provider override for all roles
+  if (options.provider) {
+    config = {
+      ...config,
+      planner: { ...config.planner, provider: options.provider },
+      generator: { ...config.generator, provider: options.provider },
+      evaluator: { ...config.evaluator, provider: options.provider },
+    };
+    logger.info(`Provider override: ${options.provider}`);
   }
 
   // Ensure .bober directory

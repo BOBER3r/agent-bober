@@ -1,5 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
-
 import type { BoberConfig } from "../config/schema.js";
 import type { ContextHandoff } from "./context-handoff.js";
 import { serializeHandoff } from "./context-handoff.js";
@@ -9,6 +7,7 @@ import {
   runEvaluation,
 } from "../evaluators/registry.js";
 import type { EvaluationRunResult } from "../evaluators/registry.js";
+import { createClient } from "../providers/factory.js";
 import { getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
@@ -143,7 +142,12 @@ async function runAgentEvaluation(
     // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit)
     const toolSet = buildToolSet("evaluator", projectRoot);
 
-    const client = new Anthropic();
+    const client = createClient(
+      config.evaluator.provider ?? null,
+      config.evaluator.endpoint ?? null,
+      config.evaluator.providerConfig,
+      config.evaluator.model,
+    );
     const handoffJson = serializeHandoff(handoff);
 
     // Format programmatic results for context

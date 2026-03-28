@@ -1,18 +1,13 @@
-import type Anthropic from "@anthropic-ai/sdk";
+import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage, ToolResult } from "../providers/types.js";
 
 import type { ToolHandler } from "./tools/index.js";
 import { logger } from "../utils/logger.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
-type Tool = Anthropic.Messages.Tool;
-type MessageParam = Anthropic.Messages.MessageParam;
-type ContentBlockParam = Anthropic.Messages.ContentBlockParam;
-type ToolResultBlockParam = Anthropic.Messages.ToolResultBlockParam;
-
 export interface AgenticLoopParams {
-  /** Anthropic SDK client instance. */
-  client: Anthropic;
+  /** Provider-agnostic LLM client. */
+  client: LLMClient;
   /** Model ID (resolved via model-resolver). */
   model: string;
   /** System prompt (loaded from agent .md file). */
@@ -20,7 +15,7 @@ export interface AgenticLoopParams {
   /** Initial user message (task description, handoff, etc.). */
   userMessage: string;
   /** Tool schemas to pass to the API. */
-  tools: Tool[];
+  tools: ToolDef[];
   /** Handler functions for each tool, keyed by name. */
   toolHandlers: Map<string, ToolHandler>;
   /** Max tool-use round trips before stopping. */
@@ -49,17 +44,6 @@ export interface AgenticLoopResult {
   stopReason: string;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────
-
-function extractText(
-  content: Anthropic.Messages.ContentBlock[],
-): string {
-  return content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-}
-
 // ── Main loop ──────────────────────────────────────────────────────
 
 /**
@@ -69,6 +53,9 @@ function extractText(
  * responds with tool_use, we execute the tools and feed results back.
  * This continues until the model stops requesting tools or maxTurns
  * is exceeded.
+ *
+ * Uses provider-agnostic types throughout. The LLMClient implementation
+ * handles all conversion to/from provider-specific formats.
  *
  * @returns The final text response and metadata about the conversation.
  */
@@ -88,7 +75,7 @@ export async function runAgenticLoop(
     onTurnComplete,
   } = params;
 
-  const messages: MessageParam[] = [
+  const messages: Message[] = [
     { role: "user", content: userMessage },
   ];
 
@@ -100,14 +87,14 @@ export async function runAgenticLoop(
   for (let turn = 1; turn <= maxTurns; turn++) {
     logger.debug(`Agentic loop turn ${turn}/${maxTurns}...`);
 
-    let response: Anthropic.Messages.Message;
+    let response;
     try {
-      response = await client.messages.create({
+      response = await client.chat({
         model,
-        max_tokens: maxTokens,
         system: systemPrompt,
-        tools: tools.length > 0 ? tools : undefined,
         messages,
+        tools: tools.length > 0 ? tools : undefined,
+        maxTokens,
       });
     } catch (err) {
       // Handle context window exhaustion or other API errors
@@ -127,16 +114,14 @@ export async function runAgenticLoop(
     }
 
     // Accumulate usage
-    totalInputTokens += response.usage?.input_tokens ?? 0;
-    totalOutputTokens += response.usage?.output_tokens ?? 0;
+    totalInputTokens += response.usage.inputTokens;
+    totalOutputTokens += response.usage.outputTokens;
 
-    // Extract text from this response
-    const turnText = extractText(response.content);
-    const turnStopReason = response.stop_reason ?? "unknown";
+    const turnStopReason = response.stopReason;
 
     // If the model is done (no more tool use), return
-    if (response.stop_reason !== "tool_use") {
-      finalText = turnText;
+    if (response.stopReason !== "tool_use") {
+      finalText = response.text;
 
       return {
         finalText,
@@ -150,22 +135,22 @@ export async function runAgenticLoop(
       };
     }
 
-    // Model wants to use tools — process tool_use blocks
-    // Append the assistant's full response (including tool_use blocks)
-    messages.push({
+    // Model wants to use tools — append the assistant's full response
+    // (text + tool calls) as an AssistantMessage.
+    const assistantMessage: AssistantMessage = {
       role: "assistant",
-      content: response.content as unknown as ContentBlockParam[],
-    });
+      content: response.text,
+      toolCalls: response.toolCalls,
+    };
+    messages.push(assistantMessage);
 
     // Execute each tool and collect results
-    const toolResults: ToolResultBlockParam[] = [];
+    const toolResults: ToolResult[] = [];
     const turnTools: string[] = [];
 
-    for (const block of response.content) {
-      if (block.type !== "tool_use") continue;
-
-      const toolName = block.name;
-      const toolInput = block.input as Record<string, unknown>;
+    for (const toolCall of response.toolCalls) {
+      const toolName = toolCall.name;
+      const toolInput = toolCall.input;
       turnTools.push(toolName);
       allToolsCalled.push(toolName);
 
@@ -175,10 +160,9 @@ export async function runAgenticLoop(
       if (!handler) {
         logger.warn(`Unknown tool requested: "${toolName}"`);
         toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
+          toolUseId: toolCall.id,
           content: `Error: Unknown tool "${toolName}". Available tools: ${[...toolHandlers.keys()].join(", ")}`,
-          is_error: true,
+          isError: true,
         });
         continue;
       }
@@ -186,28 +170,28 @@ export async function runAgenticLoop(
       try {
         const result = await handler(toolInput);
         toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
+          toolUseId: toolCall.id,
           content: result.output,
-          is_error: result.isError,
+          isError: result.isError,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         logger.warn(`Tool "${toolName}" threw: ${message}`);
         toolResults.push({
-          type: "tool_result",
-          tool_use_id: block.id,
+          toolUseId: toolCall.id,
           content: `Error: Tool execution failed: ${message}`,
-          is_error: true,
+          isError: true,
         });
       }
     }
 
-    // Append tool results as a user message
-    messages.push({
+    // Append tool results as a ToolResultMessage (user role).
+    // The adapter converts this to provider-specific format.
+    const toolResultMessage: ToolResultMessage = {
       role: "user",
-      content: toolResults as ContentBlockParam[],
-    });
+      toolResults,
+    };
+    messages.push(toolResultMessage);
 
     onTurnComplete?.(turn, turnTools);
   }
