@@ -108,6 +108,10 @@ export async function createBoberMCPServer(
         ],
       };
     } catch (err: unknown) {
+      // Re-throw McpError as-is so the client gets the intended error code/message
+      if (err instanceof McpError) {
+        throw err;
+      }
       const message = err instanceof Error ? err.message : String(err);
       throw new McpError(ErrorCode.InternalError, `Tool execution failed: ${message}`);
     }
