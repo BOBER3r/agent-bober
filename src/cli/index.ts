@@ -13,6 +13,7 @@ import { runPlanCommand } from "./commands/plan.js";
 import { runSprintCommand } from "./commands/sprint.js";
 import { runEvalCommand } from "./commands/eval.js";
 import { runRunCommand } from "./commands/run.js";
+import { createBoberMCPServer } from "../mcp/server.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -159,6 +160,20 @@ async function main(): Promise<void> {
         verbose: opts.verbose,
         provider: cmdOpts?.provider,
       });
+    });
+
+  // ── mcp ─────────────────────────────────────────────────────────
+  program
+    .command("mcp")
+    .description(
+      "Start the agent-bober MCP server (stdio transport for Cursor/Windsurf)",
+    )
+    .action(async () => {
+      const opts = program.opts<{ config?: string }>();
+      const projectRoot = await resolveProjectRoot(opts.config);
+      // stdout is reserved for MCP JSON-RPC — do NOT use logger or console.log
+      await createBoberMCPServer(projectRoot);
+      // Keep the process alive; the server holds an open stdin reader
     });
 
   // ── Parse ───────────────────────────────────────────────────────
