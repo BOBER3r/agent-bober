@@ -58,16 +58,56 @@ export interface ToolCall {
 // ── Message types ───────────────────────────────────────────────────
 
 /**
- * A message in the conversation history.
- *
- * Content can be a plain string (user/assistant text) or an opaque
- * provider-specific value for tool results. Adapters handle serialization.
+ * A tool result item, returned by the agent after executing a tool.
+ * Used within ToolResultMessage to correlate results with tool call IDs.
  */
-export interface Message {
+export interface ToolResult {
+  /** The ID of the tool call this result corresponds to. */
+  toolUseId: string;
+  /** The output text from the tool execution. */
+  content: string;
+  /** Whether this result represents a tool execution error. */
+  isError?: boolean;
+}
+
+/**
+ * An assistant message that contains both optional text and tool call requests.
+ */
+export interface AssistantMessage {
+  role: "assistant";
+  /** Text portion of the response (may be empty when only tool calls are present). */
+  content: string;
+  /** Tool calls the assistant wants to execute. */
+  toolCalls: ToolCall[];
+}
+
+/**
+ * A user message that carries tool execution results back to the model.
+ */
+export interface ToolResultMessage {
+  role: "user";
+  /** Tool results keyed by tool call ID. */
+  toolResults: ToolResult[];
+}
+
+/**
+ * A plain text message from user or assistant.
+ */
+export interface TextMessage {
   role: "user" | "assistant";
-  /** Text content or provider-specific encoded content. */
+  /** Text content. */
   content: string;
 }
+
+/**
+ * A message in the conversation history.
+ *
+ * Three variants:
+ * - TextMessage: plain user or assistant text
+ * - AssistantMessage: assistant response that includes tool call requests
+ * - ToolResultMessage: user message carrying tool execution results
+ */
+export type Message = TextMessage | AssistantMessage | ToolResultMessage;
 
 // ── Chat params / response ──────────────────────────────────────────
 

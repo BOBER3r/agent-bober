@@ -1,10 +1,10 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { PlanSpecSchema } from "../contracts/spec.js";
+import { createClient } from "../providers/factory.js";
 import { saveSpec } from "../state/index.js";
 import { fileExists } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
@@ -88,7 +88,7 @@ export async function runPlanner(
   // Build tool set (planner gets read-only tools)
   const toolSet = buildToolSet("planner", projectRoot);
 
-  const client = new Anthropic();
+  const client = createClient();
 
   const userMessage = `# Task Description
 ${userPrompt}

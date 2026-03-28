@@ -7,6 +7,7 @@ import type {
   ToolDef,
   ToolCall,
   StopReason,
+  Message,
 } from "./types.js";
 
 // ── Conversion helpers ──────────────────────────────────────────────
@@ -67,13 +68,67 @@ function normalizeContent(
   return { text, toolCalls };
 }
 
+/**
+ * Convert a provider-agnostic Message to an Anthropic MessageParam.
+ *
+ * Handles three message variants:
+ * - TextMessage: plain string content for user or assistant
+ * - AssistantMessage: assistant turn with optional text + tool_use blocks
+ * - ToolResultMessage: user turn carrying tool_result blocks
+ */
+function toAnthropicMessage(
+  message: Message,
+): Anthropic.Messages.MessageParam {
+  // ToolResultMessage: user turn with tool results
+  if ("toolResults" in message) {
+    const content: Anthropic.Messages.ToolResultBlockParam[] =
+      message.toolResults.map((tr) => ({
+        type: "tool_result" as const,
+        tool_use_id: tr.toolUseId,
+        content: tr.content,
+        is_error: tr.isError ?? false,
+      }));
+    return { role: "user", content };
+  }
+
+  // AssistantMessage: assistant turn with tool calls (and optional text)
+  if ("toolCalls" in message && message.toolCalls.length > 0) {
+    const content: Anthropic.Messages.ContentBlockParam[] = [];
+
+    // Include text block if there is text content
+    if (message.content) {
+      content.push({ type: "text", text: message.content });
+    }
+
+    // Append tool_use blocks
+    for (const tc of message.toolCalls) {
+      content.push({
+        type: "tool_use",
+        id: tc.id,
+        name: tc.name,
+        input: tc.input,
+      });
+    }
+
+    return { role: "assistant", content };
+  }
+
+  // TextMessage: plain string content
+  return {
+    role: message.role,
+    content: (message as { role: "user" | "assistant"; content: string }).content,
+  };
+}
+
 // ── AnthropicAdapter ────────────────────────────────────────────────
 
 /**
  * LLMClient implementation that wraps the Anthropic SDK.
  *
- * Converts ToolDef[] to Anthropic.Messages.Tool[] before each request
- * and normalizes Anthropic responses to ChatResponse after.
+ * Converts ToolDef[] to Anthropic.Messages.Tool[] before each request,
+ * converts provider-agnostic Message[] (including tool call/result variants)
+ * to Anthropic MessageParam[], and normalizes Anthropic responses to
+ * ChatResponse after each call.
  */
 export class AnthropicAdapter implements LLMClient {
   private readonly client: Anthropic;
@@ -85,15 +140,9 @@ export class AnthropicAdapter implements LLMClient {
   async chat(params: ChatParams): Promise<ChatResponse> {
     const { model, system, messages, tools, maxTokens = 16384 } = params;
 
-    // Convert provider-agnostic messages to Anthropic format.
-    // All messages in our types are plain text at this layer --
-    // the agentic loop will be refactored in sprint 2 to pass
-    // pre-serialized content. For now, cast content as string.
+    // Convert provider-agnostic Message[] to Anthropic MessageParam[]
     const anthropicMessages: Anthropic.Messages.MessageParam[] =
-      messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      messages.map(toAnthropicMessage);
 
     // Convert ToolDef[] to Anthropic.Messages.Tool[]
     const anthropicTools =

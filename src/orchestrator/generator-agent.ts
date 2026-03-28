@@ -1,8 +1,7 @@
-import Anthropic from "@anthropic-ai/sdk";
-
 import type { BoberConfig } from "../config/schema.js";
 import type { ContextHandoff } from "./context-handoff.js";
 import { serializeHandoff } from "./context-handoff.js";
+import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
@@ -53,7 +52,7 @@ export async function runGenerator(
   // Build tool set (generator gets full access)
   const toolSet = buildToolSet("generator", projectRoot);
 
-  const client = new Anthropic();
+  const client = createClient();
   const handoffJson = serializeHandoff(handoff);
 
   const userMessage = `# Context Handoff

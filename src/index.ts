@@ -119,6 +119,28 @@ export {
   loadHistory,
 } from "./state/index.js";
 
+// ── Providers ──────────────────────────────────────────────────────
+
+export type {
+  JsonSchemaProperty,
+  JsonSchemaObject,
+  ToolDef,
+  ToolCall,
+  ToolResult,
+  TextMessage,
+  AssistantMessage,
+  ToolResultMessage,
+  Message,
+  ChatParams,
+  ChatResponse,
+  StopReason,
+  LLMClient,
+} from "./providers/types.js";
+
+export { AnthropicAdapter } from "./providers/anthropic.js";
+
+export { createClient, type ProviderName } from "./providers/factory.js";
+
 // ── Utils ──────────────────────────────────────────────────────────
 
 export { logger, Logger } from "./utils/logger.js";
