@@ -2,7 +2,7 @@
  * Verifies that registerAllTools() registers exactly 10 tools.
  */
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // We need a fresh registry for each test to avoid contamination from
 // the module-scoped singleton. We do this by re-importing with dynamic imports
