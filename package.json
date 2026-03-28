@@ -1,7 +1,7 @@
 {
   "name": "agent-bober",
   "version": "0.7.0",
-  "description": "Generator-Evaluator multi-agent harness for building applications autonomously with Claude. Implements planner, sprint, and evaluator patterns.",
+  "description": "Generator-Evaluator multi-agent harness for building applications autonomously with any LLM. Supports Claude, GPT, Gemini, Ollama. Includes MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,13 +17,18 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "claude",
     "agent",
     "harness",
     "multi-agent",
     "autonomous",
     "generator-evaluator",
     "claude-code",
+    "cursor",
+    "mcp",
+    "claude",
+    "openai",
+    "gemini",
+    "ollama",
     "plugin"
   ],
   "author": "BOBER3r",
