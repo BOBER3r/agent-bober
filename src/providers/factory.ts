@@ -31,19 +31,17 @@ export function createClient(
   providerConfig?: Record<string, unknown>,
   model?: string,
 ): LLMClient {
+  // endpoint will be consumed by future OpenAI-compat adapters; unused for now
+  void endpoint;
+
   // Resolve provider: explicit wins; otherwise infer from model shorthand
   let resolvedProvider: string;
-  let resolvedEndpoint: string | undefined = endpoint ?? undefined;
 
   if (provider) {
     resolvedProvider = provider;
   } else if (model) {
     const resolved = resolveProviderModel(model);
     resolvedProvider = resolved.provider;
-    // Only use the inferred endpoint when the caller didn't supply one
-    if (!resolvedEndpoint && resolved.endpoint) {
-      resolvedEndpoint = resolved.endpoint;
-    }
   } else {
     resolvedProvider = "anthropic";
   }
