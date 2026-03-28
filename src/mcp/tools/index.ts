@@ -8,6 +8,8 @@ import { registerInitTool } from "./init.js";
 import { registerPlanTool } from "./plan.js";
 import { registerSprintTool } from "./sprint.js";
 import { registerEvalTool } from "./eval.js";
+import { registerRunTool } from "./run.js";
+import { registerStatusTool } from "./status.js";
 
 /**
  * Registers all built-in agent-bober MCP tools into the global registry.
@@ -36,6 +38,10 @@ export function registerAllTools(): void {
   registerPlanTool();
   registerSprintTool();
   registerEvalTool();
+
+  // ── Async pipeline tools ────────────────────────────────────────
+  registerRunTool();
+  registerStatusTool();
 }
 
 export { registerTool, getAllTools, getTool } from "./registry.js";
