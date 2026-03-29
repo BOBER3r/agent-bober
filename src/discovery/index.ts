@@ -9,6 +9,8 @@
 
 export { scanProject } from "./scanner.js";
 export { synthesizePrinciples, validatePrinciplesMarkdown } from "./synthesizer.js";
+export { generateEvalConfig } from "./config-generator.js";
+export type { EvalConfig } from "./config-generator.js";
 
 export type {
   DiscoveryReport,
