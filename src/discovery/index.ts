@@ -8,6 +8,7 @@
  */
 
 export { scanProject } from "./scanner.js";
+export { synthesizePrinciples, validatePrinciplesMarkdown } from "./synthesizer.js";
 
 export type {
   DiscoveryReport,
