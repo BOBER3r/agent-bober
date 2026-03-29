@@ -5,6 +5,8 @@
 
 **Generator-Evaluator multi-agent harness for building applications autonomously with any LLM.**
 
+[agentbober.com](https://agentbober.com) | [npm](https://www.npmjs.com/package/agent-bober) | [GitHub](https://github.com/BOBER3r/agent-bober)
+
 Inspired by Anthropic's engineering publication [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps), agent-bober implements the Generator-Evaluator multi-agent pattern as a reusable, installable workflow. It orchestrates AI agents in a structured loop: a **Planner** decomposes your idea into sprint contracts, a **Generator** writes the code, and an **Evaluator** independently verifies each sprint against its contract before moving on. The result is autonomous, high-quality software development with built-in guardrails, context resets, and brutally honest evaluation.
 
 Works with **Claude, GPT, Gemini, Ollama**, and any OpenAI-compatible endpoint. Mix and match providers per agent role.
@@ -72,6 +74,8 @@ npx agent-bober init python-api     # Python API (FastAPI)
 cd your-existing-project
 npx agent-bober init brownfield
 ```
+
+Brownfield init **auto-discovers your codebase**: scans package.json scripts, CI configs, git history, file naming patterns, import conventions, test setup, and documentation. It auto-generates project principles and configures evaluator strategies with the correct commands -- no manual setup needed.
 
 Then in Claude Code:
 ```
@@ -189,6 +193,53 @@ Add to your Windsurf MCP configuration:
 | `bober_spec` | read | Read the current PlanSpec |
 | `bober_principles` | read/write | Read or set project principles |
 | `bober_config` | read/write | Read or update `bober.config.json` |
+
+---
+
+## Brownfield Auto-Discovery
+
+When you run `bober init brownfield` (or use the `bober_init` MCP tool with mode=brownfield), agent-bober deeply analyzes your existing codebase and automatically:
+
+### What It Scans
+
+| Area | What It Reads | What It Detects |
+|------|---------------|-----------------|
+| **Package scripts** | `package.json` scripts, lockfiles | Build/test/lint/typecheck commands, package manager (npm/yarn/pnpm/bun) |
+| **CI/CD** | `.github/workflows/*.yml`, `.gitlab-ci.yml` | CI check commands, deployment steps |
+| **Git history** | Last 50 commits, branch names | Commit message format (conventional commits, prefixes), branch naming strategy |
+| **Code conventions** | Samples up to 20 source files | File naming (camelCase/kebab-case/PascalCase), import style, export patterns, TypeScript strictness |
+| **Test setup** | Test files, framework configs | Test framework, file naming pattern (*.test.ts vs *.spec.ts), mocking library, coverage config |
+| **Documentation** | README.md, CONTRIBUTING.md, CLAUDE.md, .cursorrules, docs/ | Existing standards and guidelines |
+
+### What It Produces
+
+1. **`.bober/principles.md`** -- Comprehensive project principles synthesized by a single LLM call from the scan data. Each rule includes file path examples from your actual codebase and notes any inconsistencies (e.g., "Most files use camelCase but `src/utils/parse-config.ts` uses kebab-case").
+
+2. **`bober.config.json`** -- Evaluator strategies with real, PM-qualified command strings (e.g., `{ type: "lint", command: "pnpm run lint", required: true }`), plus CI-derived custom strategies labeled `(from CI)`.
+
+### How It Works
+
+```bash
+$ npx agent-bober init brownfield
+
+Analyzing codebase...
+
+Detected: TypeScript, React, Vite, ESLint, Vitest, Playwright
+Package manager: pnpm
+Git: conventional commits (feat:/fix:), feature/* branches
+Tests: vitest, *.test.ts, co-located
+
+Auto-configured strategies:
+  typecheck  pnpm run typecheck  (required)
+  lint       pnpm run lint       (required)
+  build      pnpm run build      (required)
+  unit-test  pnpm run test       (required)
+  playwright npx playwright test (optional)
+
+Look good? [Y/n]
+```
+
+The `/bober-principles` command also triggers auto-discovery when called with no arguments in a brownfield project -- it analyzes the codebase instead of asking interview questions.
 
 ---
 
@@ -503,11 +554,13 @@ Python API (FastAPI/Django). Includes:
 
 ### `brownfield`
 
-Existing codebase (conservative defaults). No scaffold files -- just configuration:
+Existing codebase with **intelligent auto-discovery**:
 
+- Deep codebase scan: package scripts, CI configs, git history, code conventions, test setup
+- Auto-generated project principles from discovered patterns
+- Evaluator strategies auto-configured with real commands from your scripts and CI
 - Conservative sprint sizes (`small`)
 - Higher evaluator iteration limit (5 rework cycles)
-- Requires user approval between sprints
 - Emphasizes reading existing patterns before making changes
 
 ### `base`
@@ -654,6 +707,8 @@ agent-bober/
     cli/              CLI entry point (commander)
     config/           Config schema, loader, defaults
     contracts/        Sprint contract and eval result types
+    discovery/        Brownfield auto-discovery (scanner, synthesizer, config generator)
+      scanners/       Sub-scanners (package-scripts, ci-checks, git, code, tests, docs)
     evaluators/       Built-in evaluator plugins
     mcp/              MCP server and tool definitions
       tools/          10 MCP tools (init, plan, sprint, eval, run, status, etc.)
@@ -684,6 +739,13 @@ agent-bober/
 This project is inspired by and implements the patterns from Anthropic's [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps) by Prithvi Rajasekaran. The paper demonstrated that separating generation from evaluation, using sprint contracts, and applying context resets between agents dramatically improves the quality of autonomously built software. agent-bober packages these patterns into a reusable tool.
 
 ---
+
+## Links
+
+- [agentbober.com](https://agentbober.com) -- Official website
+- [npm](https://www.npmjs.com/package/agent-bober) -- Package registry
+- [GitHub](https://github.com/BOBER3r/agent-bober) -- Source code
+- [Anthropic Research](https://www.anthropic.com/engineering/harness-design-long-running-apps) -- The paper that inspired this project
 
 ## License
 
