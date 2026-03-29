@@ -14,6 +14,9 @@ import type { ProjectMode } from "../../config/schema.js";
 import { getPresetNames } from "../../config/defaults.js";
 import { ensureBoberDir } from "../../state/index.js";
 import { registerTool } from "./registry.js";
+import { scanProject } from "../../discovery/scanner.js";
+import { generateEvalConfig } from "../../discovery/config-generator.js";
+import { synthesizePrinciples } from "../../discovery/synthesizer.js";
 
 // ── Registration ─────────────────────────────────────────────────────
 
@@ -99,7 +102,107 @@ export function registerInitTool(): void {
         );
       }
 
-      // Build config
+      // ── Brownfield: run auto-discovery pipeline ────────────────────
+      if (mode === "brownfield") {
+        process.stderr.write(`[bober_init] Running brownfield auto-discovery for ${projectRoot}\n`);
+
+        const report = await scanProject(projectRoot);
+        const evalConfig = generateEvalConfig(report);
+
+        const config = createDefaultConfig(projectName, mode, undefined, {
+          planner: {
+            maxClarifications: 5,
+            model: "opus",
+            provider,
+          },
+          generator: {
+            model: "sonnet",
+            maxTurnsPerSprint: 50,
+            autoCommit: true,
+            branchPattern: "bober/{feature-name}",
+            provider,
+          },
+          evaluator: {
+            model: "sonnet",
+            strategies: evalConfig.strategies,
+            maxIterations: 3,
+            provider,
+          },
+          commands: evalConfig.commands,
+        });
+
+        // Write bober.config.json
+        const configPath = join(projectRoot, "bober.config.json");
+        await writeFile(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+
+        // Create .bober/ directory structure
+        await ensureBoberDir(projectRoot);
+
+        // Synthesize principles
+        let principles: string | null = null;
+        let principlesError: string | null = null;
+        try {
+          principles = await synthesizePrinciples(report, projectRoot, config);
+          const principlesPath = join(projectRoot, ".bober", "principles.md");
+          await writeFile(principlesPath, principles, "utf-8");
+        } catch (err) {
+          principlesError = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`[bober_init] Could not synthesize principles: ${principlesError}\n`);
+        }
+
+        // Build discovery summary for response
+        const stack = report.detectedStack;
+        const detectedTech: string[] = [];
+        if (stack) {
+          if (stack.hasTypescript) detectedTech.push("TypeScript");
+          if (stack.hasReact) detectedTech.push("React");
+          if (stack.hasNext) detectedTech.push("Next.js");
+          if (stack.hasVite) detectedTech.push("Vite");
+          if (stack.hasEslint) detectedTech.push("ESLint");
+          if (stack.hasVitest) detectedTech.push("Vitest");
+          if (stack.hasJest) detectedTech.push("Jest");
+          if (stack.hasPlaywright) detectedTech.push("Playwright");
+          if (stack.hasNestjs) detectedTech.push("NestJS");
+          if (stack.hasFastify) detectedTech.push("Fastify");
+          if (stack.hasExpress) detectedTech.push("Express");
+          if (stack.hasPython) detectedTech.push("Python");
+          if (stack.hasRust) detectedTech.push("Rust");
+        }
+
+        process.stderr.write(
+          `[bober_init] Initialised brownfield project "${projectName}" in ${projectRoot}\n`,
+        );
+
+        return JSON.stringify(
+          {
+            status: "initialised",
+            projectName,
+            mode,
+            provider,
+            configPath,
+            boberDir: join(projectRoot, ".bober"),
+            discovery: {
+              detectedTech,
+              packageManager: report.packageManager,
+              strategies: evalConfig.strategies.map((s) => s.type),
+              commands: evalConfig.commands,
+            },
+            principles: principles ?? null,
+            principlesError,
+            message: alreadyExists
+              ? "Existing configuration was overwritten using auto-discovery."
+              : "Brownfield project initialised with auto-discovered configuration.",
+            nextStep: principles
+              ? "Run bober_plan with a task description to generate a sprint plan."
+              : "Run /bober-principles to generate project principles, then bober_plan.",
+          },
+          null,
+          2,
+        );
+      }
+
+      // ── Greenfield: use preset/default config ──────────────────────
+
       const config = createDefaultConfig(projectName, mode, rawPreset, {
         planner: {
           maxClarifications: 5,

@@ -37,7 +37,40 @@ If the user wants to update, proceed to Step 3 with the existing content as a st
 
 Proceed to Step 2.
 
-## Step 2: Interview the User
+## Step 2: Auto-Discovery (Brownfield mode)
+
+**Check this FIRST before interviewing the user.**
+
+If `bober.config.json` exists with `"mode": "brownfield"` AND no arguments were provided to this command:
+
+1. **Run the auto-discovery pipeline** — analyze the codebase to discover conventions:
+   - Read and parse `package.json` to detect scripts, dependencies, and package manager
+   - Scan `.github/workflows/` or `.gitlab-ci.yml` to identify CI checks
+   - Read recent git log to detect commit style (conventional commits, prefix patterns)
+   - Sample source files to detect naming conventions, import style, export style, TypeScript patterns
+   - Find test files to identify the testing framework and file patterns
+
+2. **Generate principles from discovered patterns** — synthesize the discovered conventions into a structured `principles.md` document using the same format as Step 3. Ground every rule in actual evidence from the codebase scan.
+
+3. **Show the generated principles** to the user:
+   ```
+   I analyzed your codebase and discovered these conventions:
+
+   <generated principles content>
+   ```
+
+4. **Ask for additions or confirmation:**
+   ```
+   Want to add or modify anything? You can provide additional notes or say "looks good".
+   ```
+
+5. **If the user provides additions**, merge them into the generated principles document. Expand any short notes into full principle statements following the quality rules in Step 3.
+
+6. **Save to `.bober/principles.md`** and proceed to Step 4 (Confirm and Report).
+
+The existing interview flow (below) applies only to greenfield projects or when arguments are provided.
+
+## Step 2a: Interview the User (Greenfield or with args)
 
 Ask the user 3-5 targeted questions to understand their project principles. Adapt the questions based on whether `bober.config.json` exists and what it reveals about the project type.
 
@@ -80,7 +113,7 @@ E) Not applicable (no UI in this project)
 F) Other (please describe)
 ```
 
-## Step 2a: Expand Raw Input (if user provides a prompt/argument)
+## Step 2b: Expand Raw Input (if user provides a prompt/argument)
 
 If the user provides text with this command — whether a short note like `"performance-first, minimal dependencies"` or a long paste of requirements, a PRD, or rough notes — your job is to **intelligently expand and elevate** that input into a polished principles document:
 
@@ -92,7 +125,7 @@ If the user provides text with this command — whether a short note like `"perf
 
 The goal: the user pastes rough notes, you produce a comprehensive, opinionated principles document that makes them say "yes, exactly — and I didn't even think of those."
 
-Skip the interview (Step 2) entirely when the user provides substantive input. Go straight to generating the document.
+Skip the interview (Step 2a) entirely when the user provides substantive input. Go straight to generating the document.
 
 ## Step 3: Generate Principles Document
 

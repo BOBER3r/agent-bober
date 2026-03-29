@@ -11,6 +11,9 @@ import { getDefaults, getPresetNames } from "../../config/defaults.js";
 import { ensureBoberDir } from "../../state/index.js";
 import { fileExists, ensureDir } from "../../utils/fs.js";
 import { logger } from "../../utils/logger.js";
+import { scanProject } from "../../discovery/scanner.js";
+import { generateEvalConfig } from "../../discovery/config-generator.js";
+import { synthesizePrinciples } from "../../discovery/synthesizer.js";
 
 // ── Provider types ────────────────────────────────────────────────
 
@@ -496,7 +499,190 @@ export async function runInitCommand(
 // ── Brownfield flow ──────────────────────────────────────────────
 
 async function brownfieldFlow(projectRoot: string): Promise<void> {
-  logger.info("Detecting project tech stack...");
+  // ── Step 1: Deep scan ──────────────────────────────────────────
+  process.stdout.write(chalk.cyan("  Analyzing codebase..."));
+  const report = await scanProject(projectRoot);
+  process.stdout.write(" " + chalk.green("done\n"));
+
+  const evalConfig = generateEvalConfig(report);
+  const stack = report.detectedStack;
+  const pm = report.packageManager;
+  const git = report.gitConventions;
+  const tests = report.testConventions;
+
+  // ── Step 2: Display discovery summary ─────────────────────────
+  console.log();
+  console.log(chalk.bold("Discovery results:"));
+  console.log();
+
+  // Stack
+  const stackItems: string[] = [];
+  if (stack) {
+    if (stack.hasTypescript) stackItems.push("TypeScript");
+    if (stack.hasReact) stackItems.push("React");
+    if (stack.hasNext) stackItems.push("Next.js");
+    if (stack.hasVite) stackItems.push("Vite");
+    if (stack.hasEslint) stackItems.push("ESLint");
+    if (stack.hasPlaywright) stackItems.push("Playwright");
+    if (stack.hasVitest) stackItems.push("Vitest");
+    if (stack.hasJest) stackItems.push("Jest");
+    if (stack.hasNestjs) stackItems.push("NestJS");
+    if (stack.hasFastify) stackItems.push("Fastify");
+    if (stack.hasExpress) stackItems.push("Express");
+    if (stack.hasPython) stackItems.push("Python");
+    if (stack.hasRust) stackItems.push("Rust");
+  }
+  console.log(
+    `  ${chalk.bold("Stack:")}          ${stackItems.length > 0 ? chalk.cyan(stackItems.join(", ")) : chalk.gray("(not detected)")}`,
+  );
+
+  // Package manager
+  console.log(
+    `  ${chalk.bold("Package manager:")} ${pm ? chalk.cyan(pm) : chalk.gray("(not detected)")}`,
+  );
+
+  // Git conventions
+  if (git) {
+    const commitStyle = git.usesConventionalCommits
+      ? "conventional commits"
+      : git.mostCommonPrefix
+        ? `prefix: "${git.mostCommonPrefix}"`
+        : "no consistent pattern";
+    console.log(`  ${chalk.bold("Git commits:")}    ${chalk.cyan(commitStyle)}`);
+    if (git.branchPatterns.length > 0) {
+      console.log(`  ${chalk.bold("Branch pattern:")} ${chalk.cyan(git.branchPatterns[0])}`);
+    }
+  }
+
+  // Test framework
+  if (tests) {
+    console.log(
+      `  ${chalk.bold("Test framework:")} ${chalk.cyan(tests.framework)} (${tests.testFileCount} test files)`,
+    );
+  }
+
+  // Commands
+  console.log();
+  console.log(chalk.bold("Auto-configured commands:"));
+  const cmds = evalConfig.commands;
+  if (cmds.install) console.log(`  install:   ${chalk.cyan(cmds.install)}`);
+  if (cmds.build) console.log(`  build:     ${chalk.cyan(cmds.build)}`);
+  if (cmds.test) console.log(`  test:      ${chalk.cyan(cmds.test)}`);
+  if (cmds.lint) console.log(`  lint:      ${chalk.cyan(cmds.lint)}`);
+  if (cmds.typecheck) console.log(`  typecheck: ${chalk.cyan(cmds.typecheck)}`);
+
+  // Strategies
+  console.log();
+  console.log(chalk.bold("Auto-configured strategies:"));
+  for (const strat of evalConfig.strategies) {
+    const req = strat.required ? chalk.red(" (required)") : chalk.gray(" (optional)");
+    const cmd = strat.command ? chalk.gray(` → ${strat.command}`) : "";
+    console.log(`  - ${chalk.cyan(strat.type)}${req}${cmd}`);
+  }
+
+  // ── Step 3: Confirmation ───────────────────────────────────────
+  console.log();
+  const { confirmed } = await prompts({
+    type: "confirm",
+    name: "confirmed",
+    message: "Look good?",
+    initial: true,
+  });
+
+  if (!confirmed) {
+    logger.info("Falling back to manual configuration...");
+    await brownfieldManualFlow(projectRoot);
+    return;
+  }
+
+  // ── Step 4: Project name ───────────────────────────────────────
+  const nameAnswer = await prompts({
+    type: "text",
+    name: "name",
+    message: `Project name: (default: ${basename(projectRoot)})`,
+  });
+
+  const projectName = (nameAnswer.name as string | undefined)?.trim() || basename(projectRoot);
+  if (!projectName) {
+    logger.info("Init cancelled.");
+    return;
+  }
+
+  // ── Step 5: Provider + model selection ────────────────────────
+  const provider = await askProvider();
+  if (provider === null) {
+    logger.info("Init cancelled.");
+    return;
+  }
+
+  const { plannerModel, generatorModel } = await askModelPreferences(provider);
+
+  // ── Step 6: Build config using discovered strategies/commands ─
+  const mode: ProjectMode = "brownfield";
+  const defaults = getDefaults(mode);
+
+  const config = createDefaultConfig(projectName, mode, undefined, {
+    planner: {
+      ...(defaults.planner ?? { maxClarifications: 5, model: "opus" }),
+      model: plannerModel,
+      provider,
+    },
+    generator: {
+      ...(defaults.generator ?? {
+        model: "sonnet",
+        maxTurnsPerSprint: 50,
+        autoCommit: true,
+        branchPattern: "bober/{feature-name}",
+      }),
+      model: generatorModel,
+      provider,
+    },
+    evaluator: {
+      model: generatorModel,
+      strategies: evalConfig.strategies,
+      maxIterations: defaults.evaluator?.maxIterations ?? 3,
+      provider,
+    },
+    commands: evalConfig.commands,
+  });
+
+  // Write bober.config.json first (synthesizePrinciples needs a BoberConfig)
+  await writeConfig(projectRoot, config, mode, evalConfig.strategies, undefined, provider);
+
+  // ── Step 7: Synthesize principles ─────────────────────────────
+  console.log();
+  process.stdout.write(chalk.cyan("  Synthesizing project principles..."));
+  let principles: string | null = null;
+  try {
+    principles = await synthesizePrinciples(report, projectRoot, config);
+    process.stdout.write(" " + chalk.green("done\n"));
+  } catch (err) {
+    process.stdout.write(" " + chalk.yellow("skipped (LLM unavailable)\n"));
+    logger.warn(
+      `Could not synthesize principles: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  if (principles) {
+    const principlesPath = join(projectRoot, ".bober", "principles.md");
+    await writeFile(principlesPath, principles, "utf-8");
+    logger.success(`Generated .bober/principles.md`);
+
+    // Show a brief preview
+    const lines = principles.split("\n").slice(0, 10);
+    console.log();
+    console.log(chalk.bold("Principles preview:"));
+    console.log(chalk.gray(lines.join("\n")));
+    if (principles.split("\n").length > 10) {
+      console.log(chalk.gray("  ... (see .bober/principles.md for full document)"));
+    }
+    console.log();
+  }
+}
+
+// ── Brownfield manual fallback flow ──────────────────────────────
+
+async function brownfieldManualFlow(projectRoot: string): Promise<void> {
   const stack = await detectTechStack(projectRoot);
   const detections = formatDetections(stack);
 
