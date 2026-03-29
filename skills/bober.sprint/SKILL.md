@@ -148,8 +148,12 @@ Save the handoff to `.bober/handoffs/<handoffId>.json`.
 ```
 Agent tool call:
   description: "Sprint <N>: <sprint title>"
+  subagent_type: bober-generator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+IMPORTANT: Use `mode: auto` or `mode: bypassPermissions` — the generator needs full write access to create/edit files, run bash commands, and commit.
 
 **Generator prompt:**
 
@@ -209,8 +213,12 @@ When done, respond with EXACTLY this JSON structure (no other text):
 ```
 Agent tool call:
   description: "Evaluate sprint <N>: <sprint title>"
+  subagent_type: bober-evaluator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+NOTE: The evaluator needs `mode: auto` for bash access (running tests, builds). It has no write/edit tools by agent definition.
 
 **Evaluator prompt:**
 

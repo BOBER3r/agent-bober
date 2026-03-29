@@ -113,8 +113,12 @@ Use the **Agent tool** to spawn a planner subagent.
 ```
 Agent tool call:
   description: "Plan feature: <title from task description>"
+  subagent_type: bober-planner
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+IMPORTANT: The planner MUST have write access (`mode: auto` or `mode: bypassPermissions`) so it can save specs and contracts directly to `.bober/`. Do NOT use `mode: plan` — that makes the agent read-only and forces a wasteful second pass to write files.
 
 **Build the planner prompt with ALL of these sections:**
 
@@ -256,8 +260,12 @@ Use the **Agent tool** to spawn a generator subagent.
 ```
 Agent tool call:
   description: "Sprint <N>: <sprint title>"
+  subagent_type: bober-generator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+IMPORTANT: The generator MUST have full write access (`mode: auto` or `mode: bypassPermissions`) — it writes code, runs commands, and commits.
 
 **Build the generator prompt:**
 
@@ -332,8 +340,12 @@ Use the **Agent tool** to spawn an evaluator subagent.
 ```
 Agent tool call:
   description: "Evaluate sprint <N>: <sprint title>"
+  subagent_type: bober-evaluator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+NOTE: The evaluator has read + bash access but NO write/edit tools (enforced by the agent definition, not by mode). Use `mode: auto` so it can run bash commands (tests, builds, dev server).
 
 **Build the evaluator prompt:**
 

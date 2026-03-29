@@ -66,8 +66,12 @@ Use the **Agent tool** to spawn an evaluator subagent.
 ```
 Agent tool call:
   description: "Evaluate: <sprint title>"
+  subagent_type: bober-evaluator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+IMPORTANT: Use `mode: auto` — the evaluator needs bash access to run tests, builds, and verification commands.
 
 **Build the evaluator prompt with ALL of these sections:**
 
