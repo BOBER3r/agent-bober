@@ -261,8 +261,8 @@ describe("generateEvalConfig() CI-derived strategies", () => {
     const lintStrategies = strategies.filter((s) => s.type === "lint");
     // Should only have one lint strategy (from package scripts, not CI)
     expect(lintStrategies).toHaveLength(1);
-    // The core strategy does not have an inline command
-    expect(lintStrategies[0]?.command).toBeUndefined();
+    // The core strategy carries the pm-qualified run command
+    expect(lintStrategies[0]?.command).toBe("npm run lint");
   });
 
   it("deduplicates identical CI commands (same type produced twice)", () => {

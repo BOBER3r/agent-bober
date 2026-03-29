@@ -61,19 +61,19 @@ function generateCoreStrategies(report: DiscoveryReport): EvalStrategy[] {
   const strategies: EvalStrategy[] = [];
 
   if (categorized.typecheck) {
-    strategies.push({ type: "typecheck", required: true });
+    strategies.push({ type: "typecheck", required: true, command: categorized.typecheck.runCommand });
   }
 
   if (categorized.lint) {
-    strategies.push({ type: "lint", required: true });
+    strategies.push({ type: "lint", required: true, command: categorized.lint.runCommand });
   }
 
   if (categorized.build) {
-    strategies.push({ type: "build", required: true });
+    strategies.push({ type: "build", required: true, command: categorized.build.runCommand });
   }
 
   if (categorized.test) {
-    strategies.push({ type: "unit-test", required: true });
+    strategies.push({ type: "unit-test", required: true, command: categorized.test.runCommand });
   }
 
   return strategies;
