@@ -153,3 +153,10 @@ export { findProjectRoot } from "./utils/fs.js";
 
 export { createBoberMCPServer } from "./mcp/index.js";
 export { RunManager } from "./mcp/run-manager.js";
+
+// ── Discovery ────────────────────────────────────────────────────────
+
+export { scanProject } from "./discovery/scanner.js";
+export { synthesizePrinciples } from "./discovery/synthesizer.js";
+export { generateEvalConfig } from "./discovery/config-generator.js";
+export type { DiscoveryReport } from "./discovery/types.js";
