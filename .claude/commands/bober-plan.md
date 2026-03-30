@@ -164,9 +164,49 @@ C) Major revision needed: [what to change]
 
 Wait for the user's response before proceeding. Incorporate any corrections into the design document (re-save it) and then continue to Step 6.
 
-## Step 6: Generate the PlanSpec
+## Step 6: Generate Structure Outline
 
-After the design document is reviewed and approved, generate a complete PlanSpec. Follow the schema documented in `skills/bober.plan/references/spec-schema.md`.
+After the design document is approved, generate a structure outline and save it to `.bober/outlines/<specId>-outline.md`.
+
+Use this template for each phase:
+
+```
+## Phase N: <title>
+**Key Changes:** <types, signatures, interfaces that will be added or modified>
+**Files:** <files created or modified>
+**Test Checkpoint:** <how to verify this phase works independently>
+**Depends On:** <nothing | Phase M>
+```
+
+**Vertical slice validation:** After generating the initial outline, self-check each phase. If any phase is purely horizontal (only database, only API, only UI), restructure it into a vertical slice before saving.
+
+- BAD: "Phase 1: All database schemas" / "Phase 2: All API endpoints" / "Phase 3: All UI components"
+- GOOD: "Phase 1: User registration (form + endpoint + DB table + migration + test)"
+
+Keep the outline to 100 lines or fewer.
+
+**In interactive mode, present the outline to the user:**
+
+```
+Here is the structure outline for this feature. Each phase is a vertical slice that delivers working, testable functionality:
+
+[outline content]
+
+---
+
+How would you like to proceed?
+
+A) Approve — proceed to contract generation
+B) Reorder phases — specify the new order
+C) Request more detail on a specific phase — which phase?
+D) Reject and restructure — describe what to change
+```
+
+Wait for the user's response. Apply any requested changes (re-save the outline) before continuing to Step 7.
+
+## Step 7: Generate the PlanSpec
+
+After the structure outline is reviewed and approved, generate a complete PlanSpec. Follow the schema documented in `skills/bober.plan/references/spec-schema.md`.
 
 **PlanSpec generation rules:**
 
@@ -182,7 +222,7 @@ After the design document is reviewed and approved, generate a complete PlanSpec
 7. **Non-functional requirements:** Performance, security, accessibility, reliability considerations
 8. **Tech notes:** Integration points, data model overview, security considerations
 
-## Step 7: Decompose into Sprint Contracts
+## Step 8: Decompose into Sprint Contracts
 
 Decompose the PlanSpec into ordered sprints. This is the most critical step.
 
@@ -207,23 +247,27 @@ Decompose the PlanSpec into ordered sprints. This is the most critical step.
 
 Follow the contract schema documented in `skills/bober.sprint/references/contract-schema.md`.
 
+**Outline alignment:** Each sprint contract MUST correspond to one phase from the approved structure outline. The vertical slice property from the outline must be preserved in the contract.
+
 **For each sprint contract, include:**
 - `generatorNotes`: Specific guidance for the Generator -- what patterns to follow, what files to look at, known gotchas
 - `evaluatorNotes`: Specific guidance for the Evaluator -- what to test, how to verify each criterion, what edge cases to check
 
-## Step 8: Save Everything
+## Step 9: Save Everything
 
 Save all artifacts to the `.bober/` directory:
 
 1. **Design Discussion Document:** `.bober/designs/<specId>-design.md` (already saved in Step 5)
 
-2. **PlanSpec:** `.bober/specs/<specId>.json`
+2. **Structure Outline:** `.bober/outlines/<specId>-outline.md` (already saved in Step 6)
+
+3. **PlanSpec:** `.bober/specs/<specId>.json`
    - `specId` format: `spec-<YYYYMMDD>-<slug>` where slug is a kebab-case version of the title (max 30 chars)
 
-3. **Sprint Contracts:** `.bober/contracts/<contractId>.json` for each sprint
+4. **Sprint Contracts:** `.bober/contracts/<contractId>.json` for each sprint
    - `contractId` format: `sprint-<specId>-<sprint-number>`
 
-4. **Update `.bober/progress.md`:**
+5. **Update `.bober/progress.md`:**
    ```markdown
    ## Plan: <title>
    - Spec: <specId>
@@ -237,12 +281,12 @@ Save all artifacts to the `.bober/` directory:
    ...
    ```
 
-5. **Append to `.bober/history.jsonl`:**
+6. **Append to `.bober/history.jsonl`:**
    ```json
    {"event":"plan-created","specId":"...","title":"...","sprintCount":N,"timestamp":"..."}
    ```
 
-## Step 9: Output Summary
+## Step 10: Output Summary
 
 Present a clean, readable summary to the user:
 

@@ -39,8 +39,13 @@ export {
   readDesign,
 } from "./design-state.js";
 
+export {
+  saveOutline,
+  readOutline,
+} from "./outline-state.js";
+
 const BOBER_DIR = ".bober";
-const SUBDIRS = ["contracts", "specs", "research", "designs"] as const;
+const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines"] as const;
 
 /**
  * Ensure the `.bober/` directory and all required subdirectories exist,

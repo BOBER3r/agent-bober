@@ -151,9 +151,46 @@ List any design questions that remain unresolved after the Q&A phase. These are 
 
 Save this document before proceeding to Phase 3.
 
-### Phase 3: PlanSpec Generation
+### Phase 3: Structure Outline
 
-After receiving answers, generate a complete PlanSpec JSON document.
+After the design document is saved, generate a structure outline before writing any sprint contracts. This is the project's "C header file" — it shows the shape of the solution without implementation detail.
+
+**Outline generation rules:**
+
+1. Derive phases directly from the design document's Desired End State and Patterns to Follow sections.
+2. Use this template for every phase:
+   ```
+   ## Phase N: <title>
+   **Key Changes:** <types, signatures, interfaces that will be added or modified>
+   **Files:** <files created or modified>
+   **Test Checkpoint:** <how to verify this phase works independently — command, assertion, or observable behavior>
+   **Depends On:** <nothing | Phase M>
+   ```
+3. The entire outline MUST be 100 lines or fewer (including the header).
+4. Save the outline to `.bober/outlines/<specId>-outline.md`.
+
+**Vertical slice validation (self-check before saving):**
+
+After generating the initial outline, examine each phase and apply this test:
+
+- BAD — horizontal layer (entire phase touches only one layer of the stack):
+  - "Phase 1: All database schemas and migrations"
+  - "Phase 2: All API route handlers"
+  - "Phase 3: All React components"
+- GOOD — vertical slice (each phase delivers an end-to-end working increment):
+  - "Phase 1: User registration (registration form + POST /api/register endpoint + users DB table + migration + unit test)"
+  - "Phase 2: Login and session (login form + POST /api/login endpoint + session management + protected route guard + test)"
+
+**If any phase is horizontal, restructure the outline before saving:**
+- Merge horizontal phases into vertical slices that span the relevant layers
+- Ensure each phase could be demonstrated to a user after it is complete
+- A phase that only modifies database schema files is horizontal — combine it with the API and UI changes that consume that schema
+
+After validation, save the corrected outline.
+
+### Phase 4: PlanSpec Generation
+
+After the structure outline is approved, generate a complete PlanSpec JSON document.
 
 **PlanSpec structure:**
 ```json
@@ -207,9 +244,11 @@ After receiving answers, generate a complete PlanSpec JSON document.
 }
 ```
 
-### Phase 4: Sprint Decomposition
+### Phase 5: Sprint Decomposition
 
 Decompose the PlanSpec into ordered sprints. This is the most critical part of your job.
+
+**Outline alignment rule (required):** Each sprint contract MUST correspond to one phase from the approved structure outline. The vertical slice property from the outline must be preserved in the contract — a sprint that covers only a single layer (database, API, or UI in isolation) violates this rule and must be merged or restructured before saving.
 
 **Sprint sizing rules based on `sprint.sprintSize` config:**
 - `small`: 30-60 minutes of generator work. 1-2 files changed. Single concern.
@@ -257,7 +296,7 @@ Decompose the PlanSpec into ordered sprints. This is the most critical part of y
 - For UI features, include criteria that describe observable behavior, not internal implementation
 - Mark `required: true` for must-pass criteria; `required: false` for nice-to-have checks
 
-### Phase 5: Save and Report
+### Phase 6: Save and Report
 
 1. **Save the design discussion document** to `.bober/designs/<specId>-design.md` (generated in Phase 2.5)
 2. **Save the PlanSpec** to `.bober/specs/<specId>.json`
