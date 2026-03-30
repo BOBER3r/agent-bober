@@ -19,15 +19,15 @@ function researchPath(projectRoot: string, id: string): string {
  * Serialize a ResearchDoc to markdown format for storage.
  */
 function serializeToMarkdown(doc: ResearchDoc): string {
-  const questionsList = doc.explorationQuestions
+  const questionsList = doc.questions
     .map((q, i) => `${i + 1}. ${q}`)
     .join("\n");
 
   return `# Research Document
 
 **Research ID:** ${doc.id}
-**Generated:** ${doc.generatedAt}
-**Questions Explored:** ${doc.questionsAnswered}/${doc.explorationQuestions.length}
+**Generated:** ${doc.timestamp}
+**Questions Explored:** ${doc.questionsAnswered}/${doc.questions.length}
 **Files Explored:** ${doc.filesExplored.length}
 
 ---
@@ -98,11 +98,11 @@ function parseMarkdown(content: string, id: string): ResearchDoc {
 
   // Extract metadata from the header block
   const generatedMatch = /\*\*Generated:\*\* (.+)/.exec(content);
-  const generatedAt = generatedMatch ? generatedMatch[1].trim() : new Date().toISOString();
+  const timestamp = generatedMatch ? generatedMatch[1].trim() : new Date().toISOString();
 
   // Extract exploration questions
   const questionsSection = extractSection("Exploration Questions");
-  const explorationQuestions = questionsSection
+  const questions = questionsSection
     .split("\n")
     .filter((line) => /^\d+\.\s/.test(line))
     .map((line) => line.replace(/^\d+\.\s+/, "").trim())
@@ -119,12 +119,13 @@ function parseMarkdown(content: string, id: string): ResearchDoc {
   const questionsAnsweredMatch = /\*\*Questions Explored:\*\* (\d+)\//.exec(content);
   const questionsAnswered = questionsAnsweredMatch
     ? parseInt(questionsAnsweredMatch[1], 10)
-    : explorationQuestions.length;
+    : questions.length;
 
   return {
     id,
-    generatedAt,
-    explorationQuestions,
+    timestamp,
+    questions,
+    findings: content,
     sections,
     filesExplored,
     questionsAnswered,
