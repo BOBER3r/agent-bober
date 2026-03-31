@@ -96,11 +96,11 @@ Build a concise mental model of:
 The user provided a feature description as the argument to this skill. If the description is:
 - **Clear and specific** (e.g., "Add user authentication with email/password and Google OAuth"): Proceed to clarifying questions
 - **Vague** (e.g., "make it better"): Ask the user to be more specific about what they want before proceeding
-- **Very detailed** (e.g., a multi-paragraph spec): Still ask clarifying questions — focus on Integration Risk, Pattern Conflicts, and Regression Risk that even a detailed spec may not address
+- **Very detailed** (e.g., a multi-paragraph spec): You may skip some clarifying questions if the user has already answered them
 
-## Step 4: Ask Clarifying Questions (Always Required)
+## Step 4: Ask Clarifying Questions
 
-Ask **3 to 5** targeted clarifying questions. This step is mandatory regardless of how detailed the feature description is.
+Ask **3 to 5** targeted clarifying questions. The number depends on the complexity of the feature and how much context the codebase already provides.
 
 **Question format:**
 ```
@@ -134,79 +134,9 @@ Draw from the reference file at `skills/bober.plan/references/clarification-guid
 
 **Maximum questions:** Respect `planner.maxClarifications` from the config (default: 5).
 
-## Step 5: Generate Design Discussion Document
+## Step 5: Generate the PlanSpec
 
-After receiving the user's answers to the clarifying questions, generate a design discussion document BEFORE writing the PlanSpec. Save it to `.bober/designs/<specId>-design.md`.
-
-The design document must include these sections (target ~200 lines total):
-
-1. **Current State** — What exists today that is relevant. Reference specific files and line numbers.
-2. **Desired End State** — What new files and behaviors will exist after implementation.
-3. **Patterns to Follow** — Specific file paths in the codebase the Generator should use as models.
-4. **Resolved Design Decisions** — Each clarifying Q&A pair with the decision and its rationale. Cite codebase evidence.
-5. **Open Questions** — Any remaining unknowns with brief notes on what was assumed.
-
-**Present the design document to the user with this prompt:**
-
-```
-I've drafted a design discussion document for this feature. Please review it before I generate the full plan:
-
-[design document content]
-
----
-
-Does this accurately capture the intent and approach? Any corrections or additions before I proceed to generate the PlanSpec and sprint contracts?
-
-A) Looks good — proceed with the plan
-B) Minor corrections: [your notes]
-C) Major revision needed: [what to change]
-```
-
-Wait for the user's response before proceeding. Incorporate any corrections into the design document (re-save it) and then continue to Step 6.
-
-## Step 6: Generate Structure Outline
-
-After the design document is approved, generate a structure outline and save it to `.bober/outlines/<specId>-outline.md`.
-
-Use this template for each phase:
-
-```
-## Phase N: <title>
-**Key Changes:** <types, signatures, interfaces that will be added or modified>
-**Files:** <files created or modified>
-**Test Checkpoint:** <how to verify this phase works independently>
-**Depends On:** <nothing | Phase M>
-```
-
-**Vertical slice validation:** After generating the initial outline, self-check each phase. If any phase is purely horizontal (only database, only API, only UI), restructure it into a vertical slice before saving.
-
-- BAD: "Phase 1: All database schemas" / "Phase 2: All API endpoints" / "Phase 3: All UI components"
-- GOOD: "Phase 1: User registration (form + endpoint + DB table + migration + test)"
-
-Keep the outline to 100 lines or fewer.
-
-**In interactive mode, present the outline to the user:**
-
-```
-Here is the structure outline for this feature. Each phase is a vertical slice that delivers working, testable functionality:
-
-[outline content]
-
----
-
-How would you like to proceed?
-
-A) Approve — proceed to contract generation
-B) Reorder phases — specify the new order
-C) Request more detail on a specific phase — which phase?
-D) Reject and restructure — describe what to change
-```
-
-Wait for the user's response. Apply any requested changes (re-save the outline) before continuing to Step 7.
-
-## Step 7: Generate the PlanSpec
-
-After the structure outline is reviewed and approved, generate a complete PlanSpec. Follow the schema documented in `skills/bober.plan/references/spec-schema.md`.
+After receiving the user's answers, generate a complete PlanSpec. Follow the schema documented in `skills/bober.plan/references/spec-schema.md`.
 
 **PlanSpec generation rules:**
 
@@ -222,7 +152,7 @@ After the structure outline is reviewed and approved, generate a complete PlanSp
 7. **Non-functional requirements:** Performance, security, accessibility, reliability considerations
 8. **Tech notes:** Integration points, data model overview, security considerations
 
-## Step 8: Decompose into Sprint Contracts
+## Step 6: Decompose into Sprint Contracts
 
 Decompose the PlanSpec into ordered sprints. This is the most critical step.
 
@@ -247,34 +177,31 @@ Decompose the PlanSpec into ordered sprints. This is the most critical step.
 
 Follow the contract schema documented in `skills/bober.sprint/references/contract-schema.md`.
 
-**Outline alignment:** Each sprint contract MUST correspond to one phase from the approved structure outline. The vertical slice property from the outline must be preserved in the contract.
-
 **For each sprint contract, include:**
 - `generatorNotes`: Specific guidance for the Generator -- what patterns to follow, what files to look at, known gotchas
 - `evaluatorNotes`: Specific guidance for the Evaluator -- what to test, how to verify each criterion, what edge cases to check
 
-## Step 9: Save Everything
+## Step 7: Save Everything
 
 Save all artifacts to the `.bober/` directory:
 
-1. **Design Discussion Document:** `.bober/designs/<specId>-design.md` (already saved in Step 5)
-
-2. **Structure Outline:** `.bober/outlines/<specId>-outline.md` (already saved in Step 6)
-
-3. **PlanSpec:** `.bober/specs/<specId>.json`
+1. **PlanSpec:** `.bober/specs/<specId>.json`
    - `specId` format: `spec-<YYYYMMDD>-<slug>` where slug is a kebab-case version of the title (max 30 chars)
 
-4. **Sprint Contracts:** `.bober/contracts/<contractId>.json` for each sprint
+2. **Sprint Contracts:** `.bober/contracts/<contractId>.json` for each sprint
    - `contractId` format: `sprint-<specId>-<sprint-number>`
 
-5. **Update `.bober/progress.md`:**
+3. **Update `.bober/progress.md`:**
    ```markdown
    ## Plan: <title>
    - Spec: <specId>
-   - Research: complete (.bober/research/<researchId>.md) | pending
-   - Design: complete (.bober/designs/<specId>-design.md) | pending
-   - Outline: complete (.bober/outlines/<specId>-outline.md) | pending
+   - Created: <date>
+   - Sprints: <count>
    - Status: planned
+   - Research: complete | pending
+   - Architecture: complete (.bober/architecture/<id>-architecture.md) | pending | N/A
+   - Design: complete | pending
+   - Outline: complete | pending
 
    ### Sprint Breakdown
    1. [proposed] <Sprint 1 title> -- <1-line description>
@@ -282,12 +209,14 @@ Save all artifacts to the `.bober/` directory:
    ...
    ```
 
-6. **Append to `.bober/history.jsonl`:**
+   Include the Architecture line only when `pipeline.architectPhase` is `true` in the config. Set the value to "N/A" if the phase was not used.
+
+4. **Append to `.bober/history.jsonl`:**
    ```json
    {"event":"plan-created","specId":"...","title":"...","sprintCount":N,"timestamp":"..."}
    ```
 
-## Step 10: Output Summary
+## Step 8: Output Summary
 
 Present a clean, readable summary to the user:
 
@@ -442,43 +371,6 @@ Clarify expected behavior in failure scenarios.
 **When to ask:** When the feature has obvious failure modes that the user might not have considered.
 
 **When to skip:** For simple features where error handling is straightforward.
-
-### 8. Integration Risk Assessment
-
-Identify whether the feature could break existing integrations or violate interface contracts.
-
-**Templates:**
-- "This feature modifies [module/API]. Are there other parts of the codebase that consume this interface? A) Yes, and they need updating, B) Yes, but they are backward-compatible, C) No known consumers"
-- "Does [feature] introduce new external service dependencies? A) Yes — [service] (credentials needed), B) Yes — mock/stub is fine for now, C) No external dependencies"
-- "Could changes to [shared module] affect [downstream feature]? A) Yes, regression tests cover this, B) Yes, but no tests exist — we should add them, C) No impact expected"
-
-**When to ask:** Always ask at least one integration risk question for brownfield projects. Skip only when the change is provably isolated (a new file with no shared dependencies).
-
-### 9. Existing Pattern Conflicts
-
-Detect whether the proposed approach would conflict with established codebase patterns.
-
-**Templates:**
-- "The existing codebase uses [pattern A] for [concern]. Should this feature follow the same pattern, or is there a reason to deviate? A) Follow existing pattern, B) Deviate — here's why: [reason], C) Hybrid approach"
-- "Your project's [naming/folder/export] convention is [X]. Should new code for this feature follow the same convention? A) Yes, B) No — this is a new domain that warrants a different convention"
-- "I see [pattern] used in [file]. Should [feature] reuse this, or introduce a parallel implementation? A) Reuse existing, B) New implementation — the use case is different enough"
-
-**When to ask:** Whenever the feature touches code near existing patterns that could conflict. Always ask at least one question in this category for brownfield projects.
-
-**When to skip:** Greenfield projects with no established patterns yet.
-
-### 10. Regression Risk Areas
-
-Surface which existing features may be affected by this change.
-
-**Templates:**
-- "The feature touches [shared code/module]. Which existing features depend on it? A) [List features] — we should add regression tests, B) None that I know of, C) I'm not sure"
-- "Are there end-to-end tests for the flows that [feature] touches? A) Yes, they cover this, B) Partial coverage — we should add more, C) No E2E tests exist"
-- "What is the risk profile of this change? A) High — touches core shared logic used everywhere, B) Medium — touches a well-defined module with some consumers, C) Low — isolated change with no shared state"
-
-**When to ask:** For any change that touches shared modules, exported functions, database schemas, or API contracts. Always include at least one regression question in brownfield projects.
-
-**When to skip:** When the change only adds new, isolated files with no modifications to existing ones.
 
 ## Inferring Answers from Codebase Analysis
 

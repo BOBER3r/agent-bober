@@ -665,6 +665,10 @@ Last updated: <timestamp>
 - Spec: <specId>
 - Created: <date>
 - Status: in-progress
+- Research: complete | pending
+- Architecture: complete (.bober/architecture/<id>-architecture.md) | pending | N/A
+- Design: complete | pending
+- Outline: complete | pending
 
 ### Sprint Breakdown
 1. [completed] Sprint 1: <title> -- Passed on iteration 1
@@ -678,6 +682,8 @@ Last updated: <timestamp>
 - Sprints completed: 2 / 5
 - Subagents spawned: 6
 ```
+
+Include the Architecture line in all plans. Set to "complete (.bober/architecture/<id>-architecture.md)" after the architect phase runs, "pending" while in progress, or "N/A" if `pipeline.architectPhase` is `false`.
 
 And keep `.bober/history.jsonl` updated with events:
 - `pipeline-started`

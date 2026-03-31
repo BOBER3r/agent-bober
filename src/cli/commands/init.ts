@@ -971,6 +971,7 @@ async function installClaudeCommands(projectRoot: string): Promise<void> {
     "bober.principles": "bober-principles.md",
     "bober.playwright": "bober-playwright.md",
     "bober.research": "bober-research.md",
+    "bober.architect": "bober-architect.md",
   };
 
   const skillsRoot = join(packageRoot, "skills");
@@ -1006,7 +1007,7 @@ async function installClaudeCommands(projectRoot: string): Promise<void> {
   const agentsDir = join(projectRoot, ".claude", "agents");
   await ensureDir(agentsDir);
 
-  const agentFiles = ["bober-planner.md", "bober-generator.md", "bober-evaluator.md", "bober-researcher.md"];
+  const agentFiles = ["bober-planner.md", "bober-generator.md", "bober-evaluator.md", "bober-researcher.md", "bober-architect.md"];
   const agentsSrc = join(packageRoot, "agents");
 
   for (const agentFile of agentFiles) {
