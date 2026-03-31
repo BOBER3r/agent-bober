@@ -1,6 +1,6 @@
 {
   "name": "agent-bober",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Generator-Evaluator multi-agent harness for building applications autonomously with any LLM. Supports Claude, GPT, Gemini, Ollama. Includes MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",
