@@ -21,6 +21,8 @@ import {
   saveContract,
   updateContract,
   appendHistory,
+  readDesign,
+  readOutline,
 } from "../state/index.js";
 import { commitAll, getCurrentBranch, getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
@@ -345,13 +347,61 @@ export async function runPipeline(
     // ── Phase 0: Research (optional) ────────────────────────────
     let researchDoc;
     if (config.pipeline.researchPhase !== false) {
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "research-started",
+        phase: "planning",
+        details: { userPrompt: userPrompt.slice(0, 200) },
+      });
+
       researchDoc = await runResearch(userPrompt, projectRoot, config);
+
+      const researchLineCount = researchDoc.findings.split("\n").length;
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "research-completed",
+        phase: "planning",
+        details: {
+          researchId: researchDoc.id,
+          lineCount: researchLineCount,
+          filesExplored: researchDoc.filesExplored.length,
+          questionsAnswered: researchDoc.questionsAnswered,
+        },
+      });
     }
 
     // ── Phase 1: Planning ────────────────────────────────────────
     const spec = await runPlanner(userPrompt, projectRoot, config, researchDoc);
 
     logger.info(`Plan: "${spec.title}" with ${spec.features.length} features`);
+
+    // Log design-created event if design doc was saved by the planner
+    try {
+      const designContent = await readDesign(projectRoot, spec.id);
+      const designLineCount = designContent.split("\n").length;
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "design-created",
+        phase: "planning",
+        details: { specId: spec.id, lineCount: designLineCount },
+      });
+    } catch {
+      // Design doc is optional — planner may not have saved it
+    }
+
+    // Log outline-created event if outline was saved by the planner
+    try {
+      const outlineContent = await readOutline(projectRoot, spec.id);
+      const outlineLineCount = outlineContent.split("\n").length;
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "outline-created",
+        phase: "planning",
+        details: { specId: spec.id, lineCount: outlineLineCount },
+      });
+    } catch {
+      // Outline is optional — planner may not have saved it
+    }
 
     await appendHistory(projectRoot, {
       timestamp: new Date().toISOString(),

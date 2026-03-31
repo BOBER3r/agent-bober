@@ -152,6 +152,10 @@ Your final response text must be a JSON object:
 
 ---
 
+## Size Limit
+
+Your research document MUST NOT exceed 300 lines. If your findings are extensive, prioritize the most relevant information and summarize less critical sections. The 300-line limit is enforced by the orchestrator — content beyond that will be truncated automatically.
+
 ## What You Must Never Do
 
 - **Phase 1:** Never read files, never make tool calls, never suggest implementations

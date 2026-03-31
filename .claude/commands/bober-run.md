@@ -110,6 +110,12 @@ Log event:
 {"event":"pipeline-started","timestamp":"<ISO-8601>","task":"<task description>"}
 ```
 
+History events for the pipeline phases:
+- Before spawning the research subagent: `{"event":"research-started","phase":"planning","timestamp":"...","details":{"userPrompt":"..."}}`
+- After the research subagent returns: `{"event":"research-completed","phase":"planning","timestamp":"...","details":{"researchId":"...","lineCount":N}}`
+- After the planner creates the design doc: `{"event":"design-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}`
+- After the planner creates the outline: `{"event":"outline-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}`
+
 ---
 
 ## Step 1.5: Research Phase (when `pipeline.researchPhase` is true)
@@ -174,9 +180,9 @@ When done, respond with EXACTLY this JSON structure (no other text):
 1. Parse the response to extract `researchId`.
 2. Read `.bober/research/<researchId>.json` to verify it was created and contains findings.
 3. Pass the research findings to the planner (include the full `findings` field from the ResearchDoc in the planner prompt).
-4. Log event:
+4. Log events:
    ```json
-   {"event":"research-complete","researchId":"...","timestamp":"...","questionsAnswered":N}
+   {"event":"research-completed","phase":"planning","researchId":"...","timestamp":"...","details":{"researchId":"...","lineCount":N,"questionsAnswered":N}}
    ```
 5. Print:
    ```
@@ -251,7 +257,15 @@ When done, respond with EXACTLY this JSON structure (no other text):
 1. Parse the planner's response to extract `specId` and `contractIds`.
 2. Read `.bober/specs/<specId>.json` to verify it was created.
 3. Read each contract file in `.bober/contracts/` to verify they exist.
-4. Print the plan summary:
+4. If `.bober/designs/<specId>-design.md` exists, log:
+   ```json
+   {"event":"design-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}
+   ```
+5. If `.bober/outlines/<specId>-outline.md` exists, log:
+   ```json
+   {"event":"outline-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}
+   ```
+6. Print the plan summary:
    ```
    === PLAN CREATED ===
    Spec: <specId>
@@ -261,7 +275,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
    2. <Sprint 2 title>
    ...
    ```
-5. If the planner subagent failed or returned an error, report it and stop the pipeline.
+7. If the planner subagent failed or returned an error, report it and stop the pipeline.
 
 ---
 
@@ -669,7 +683,9 @@ Last updated: <timestamp>
 
 ## Plan: <title>
 - Spec: <specId>
-- Created: <date>
+- Research: complete (.bober/research/<researchId>.md) | pending
+- Design: complete (.bober/designs/<specId>-design.md) | pending
+- Outline: complete (.bober/outlines/<specId>-outline.md) | pending
 - Status: in-progress
 
 ### Sprint Breakdown
@@ -687,6 +703,10 @@ Last updated: <timestamp>
 
 And keep `.bober/history.jsonl` updated with events:
 - `pipeline-started`
+- `research-started` (before the research subagent is spawned)
+- `research-completed` (after research returns, includes `researchId` and `lineCount`)
+- `design-created` (after planner saves design doc, includes `specId` and `lineCount`)
+- `outline-created` (after planner saves outline, includes `specId` and `lineCount`)
 - `sprint-started`
 - `sprint-iteration-started`
 - `sprint-iteration-completed` (with pass/fail)

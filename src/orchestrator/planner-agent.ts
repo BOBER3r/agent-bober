@@ -17,6 +17,23 @@ import type { ResearchDoc } from "./research-agent.js";
 // ── Constants ──────────────────────────────────────────────────────
 
 const PLANNER_MAX_TURNS = 15;
+const RESEARCH_MAX_LINES = 300;
+
+// ── Research truncation ────────────────────────────────────────────
+
+/**
+ * Truncate research findings to a maximum number of lines.
+ * If the findings exceed the limit, the first maxLines lines are kept
+ * and a note is appended indicating that the full document is on disk.
+ */
+function truncateResearch(findings: string, maxLines: number = RESEARCH_MAX_LINES): string {
+  const lines = findings.split("\n");
+  if (lines.length <= maxLines) return findings;
+  return (
+    lines.slice(0, maxLines).join("\n") +
+    "\n\n... (truncated — full research doc saved to disk)"
+  );
+}
 
 // ── Context gathering ──────────────────────────────────────────────
 
@@ -98,7 +115,7 @@ export async function runPlanner(
   );
 
   const researchSection = researchDoc
-    ? `\n\n## Research Findings\n${researchDoc.findings}`
+    ? `\n\n## Research Findings\n${truncateResearch(researchDoc.findings)}`
     : "";
 
   const userMessage = `# Task Description

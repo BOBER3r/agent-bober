@@ -271,8 +271,9 @@ Save all artifacts to the `.bober/` directory:
    ```markdown
    ## Plan: <title>
    - Spec: <specId>
-   - Created: <date>
-   - Sprints: <count>
+   - Research: complete (.bober/research/<researchId>.md) | pending
+   - Design: complete (.bober/designs/<specId>-design.md) | pending
+   - Outline: complete (.bober/outlines/<specId>-outline.md) | pending
    - Status: planned
 
    ### Sprint Breakdown

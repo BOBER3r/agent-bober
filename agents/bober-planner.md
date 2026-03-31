@@ -104,7 +104,7 @@ D) Other: [Let me specify]
 
 After questions are resolved (either answered by the user or self-answered in autonomous mode), generate a design discussion document and save it to `.bober/designs/<specId>-design.md`.
 
-**Design document sections (target ~200 lines total):**
+**Design document sections (target ~200 lines total — the design document MUST NOT exceed 200 lines):**
 
 ```markdown
 # Design Discussion: <feature title>
@@ -166,7 +166,7 @@ After the design document is saved, generate a structure outline before writing 
    **Test Checkpoint:** <how to verify this phase works independently — command, assertion, or observable behavior>
    **Depends On:** <nothing | Phase M>
    ```
-3. The entire outline MUST be 100 lines or fewer (including the header).
+3. The outline MUST NOT exceed 100 lines (including the header). If the outline would be longer, consolidate phases or summarize phase details to stay within the limit.
 4. Save the outline to `.bober/outlines/<specId>-outline.md`.
 
 **Vertical slice validation (self-check before saving):**
