@@ -1,23 +1,15 @@
 /**
- * Verifies that registerAllTools() registers exactly 10 tools.
+ * Verifies that registerAllTools() registers all expected tools.
  */
 
 import { describe, it, expect } from "vitest";
 
-// We need a fresh registry for each test to avoid contamination from
-// the module-scoped singleton. We do this by re-importing with dynamic imports
-// and clearing state manually. Instead, we test the exported registry
-// directly by counting after registration.
-
 describe("registerAllTools()", () => {
-  it("registers exactly 10 tools", async () => {
-    // Dynamic import ensures we get a clean module scope for the registry.
-    // Use a side-effect-free import of the registry, then check the count
-    // after calling registerAllTools.
+  it("registers exactly 17 tools", async () => {
     const { registerAllTools, getAllTools } = await import("./index.js");
     registerAllTools();
     const tools = getAllTools();
-    expect(tools.length).toBe(10);
+    expect(tools.length).toBe(17);
   });
 
   it("includes all expected tool names", async () => {
@@ -28,7 +20,14 @@ describe("registerAllTools()", () => {
       "bober_plan",
       "bober_sprint",
       "bober_eval",
+      "bober_architect",
+      "bober_research",
       "bober_run",
+      "bober_brownfield",
+      "bober_react",
+      "bober_solidity",
+      "bober_anchor",
+      "bober_playwright",
       "bober_status",
       "bober_contracts",
       "bober_spec",

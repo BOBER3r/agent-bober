@@ -199,7 +199,14 @@ Add to your Windsurf MCP configuration:
 | `bober_plan` | sync | Plan a feature, create sprint contracts |
 | `bober_sprint` | sync | Execute the next sprint (generator + evaluator loop) |
 | `bober_eval` | sync | Evaluate a sprint independently |
+| `bober_architect` | sync | Solution architecture -- 5-checkpoint flow producing docs + ADRs |
+| `bober_research` | sync | Two-phase codebase research -- fact-only analysis |
 | `bober_run` | async | Full autonomous pipeline (returns immediately, poll with status) |
+| `bober_brownfield` | async | Brownfield pipeline for existing codebases |
+| `bober_react` | async | React web application pipeline (Vite or Next.js) |
+| `bober_solidity` | async | EVM smart contract pipeline (Hardhat/Foundry) |
+| `bober_anchor` | async | Solana program pipeline (Anchor) |
+| `bober_playwright` | sync | Set up, run, or check Playwright E2E tests |
 | `bober_status` | poll | Check pipeline progress or read current status |
 | `bober_contracts` | read | List all sprint contracts or read a specific one |
 | `bober_spec` | read | Read the current PlanSpec |
