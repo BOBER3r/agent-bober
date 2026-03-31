@@ -18,6 +18,7 @@ import type { ResearchDoc } from "./research-agent.js";
 
 const PLANNER_MAX_TURNS = 15;
 const RESEARCH_MAX_LINES = 300;
+const ARCHITECT_MAX_LINES = 200;
 
 // ── Research truncation ────────────────────────────────────────────
 
@@ -32,6 +33,18 @@ function truncateResearch(findings: string, maxLines: number = RESEARCH_MAX_LINE
   return (
     lines.slice(0, maxLines).join("\n") +
     "\n\n... (truncated — full research doc saved to disk)"
+  );
+}
+
+/**
+ * Truncate an architecture document to keep the planner's context manageable.
+ */
+function truncateArchitecture(doc: string, maxLines: number = ARCHITECT_MAX_LINES): string {
+  const lines = doc.split("\n");
+  if (lines.length <= maxLines) return doc;
+  return (
+    lines.slice(0, maxLines).join("\n") +
+    "\n\n... (truncated — full architecture doc saved to .bober/architecture/)"
   );
 }
 
@@ -94,6 +107,7 @@ export async function runPlanner(
   projectRoot: string,
   config: BoberConfig,
   researchDoc?: ResearchDoc,
+  architectDoc?: string,
 ): Promise<PlanSpec> {
   logger.phase("Planning Phase");
   logger.info("Gathering project context...");
@@ -118,6 +132,10 @@ export async function runPlanner(
     ? `\n\n## Research Findings\n${truncateResearch(researchDoc.findings)}`
     : "";
 
+  const architectSection = architectDoc
+    ? `\n\n## Architecture\n${truncateArchitecture(architectDoc)}`
+    : "";
+
   const userMessage = `# Task Description
 ${userPrompt}
 
@@ -125,7 +143,7 @@ ${userPrompt}
 ${projectRoot}
 
 # Project Context
-${context}${researchSection}
+${context}${researchSection}${architectSection}
 
 Explore the codebase using your tools if you need more context, then produce a PlanSpec JSON.
 Your final response must contain ONLY valid JSON matching the PlanSpec schema (no markdown fences, no explanation).`;

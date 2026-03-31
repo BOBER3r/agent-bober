@@ -13,6 +13,7 @@ import {
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
 import { runPlanner } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
+import { runArchitect } from "./architect-agent.js";
 import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
@@ -370,8 +371,55 @@ export async function runPipeline(
       });
     }
 
+    // ── Phase 0b: Architecture (optional) ───────────────────────
+    let architectDoc: string | undefined;
+    if (config.pipeline.architectPhase) {
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "architect-started",
+        phase: "planning",
+        details: { userPrompt: userPrompt.slice(0, 200) },
+      });
+
+      const architectResult = await runArchitect(
+        userPrompt,
+        projectRoot,
+        config,
+        researchDoc?.findings,
+      );
+
+      // Log a checkpoint event for each ADR produced (one per decision)
+      for (let i = 0; i < architectResult.decisionCount; i++) {
+        await appendHistory(projectRoot, {
+          timestamp: new Date().toISOString(),
+          event: "architect-checkpoint",
+          phase: "planning",
+          details: {
+            architectId: architectResult.id,
+            checkpointNumber: i + 1,
+          },
+        });
+      }
+
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "architect-completed",
+        phase: "planning",
+        details: {
+          architectId: architectResult.id,
+          componentCount: architectResult.componentCount,
+          decisionCount: architectResult.decisionCount,
+          documentLines: architectResult.document.split("\n").length,
+        },
+      });
+
+      // Pass only the document string to the planner — not the full result
+      // object. The adrs are already saved to disk.
+      architectDoc = architectResult.document;
+    }
+
     // ── Phase 1: Planning ────────────────────────────────────────
-    const spec = await runPlanner(userPrompt, projectRoot, config, researchDoc);
+    const spec = await runPlanner(userPrompt, projectRoot, config, researchDoc, architectDoc);
 
     logger.info(`Plan: "${spec.title}" with ${spec.features.length} features`);
 
