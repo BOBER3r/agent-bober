@@ -28,11 +28,28 @@ export {
   updateProgress,
 } from "./history.js";
 
+export {
+  saveResearch,
+  readResearch,
+  listResearch,
+} from "./research-state.js";
+
+export {
+  saveDesign,
+  readDesign,
+} from "./design-state.js";
+
+export {
+  saveOutline,
+  readOutline,
+} from "./outline-state.js";
+
 const BOBER_DIR = ".bober";
-const SUBDIRS = ["contracts", "specs"] as const;
+const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines"] as const;
 
 /**
- * Ensure the `.bober/` directory and all required subdirectories exist.
+ * Ensure the `.bober/` directory and all required subdirectories exist,
+ * including the `research/` subdirectory for research documents.
  */
 export async function ensureBoberDir(projectRoot: string): Promise<void> {
   const boberRoot = join(projectRoot, BOBER_DIR);

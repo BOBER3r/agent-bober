@@ -12,10 +12,28 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import type { ResearchDoc } from "./research-agent.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
 const PLANNER_MAX_TURNS = 15;
+const RESEARCH_MAX_LINES = 300;
+
+// ── Research truncation ────────────────────────────────────────────
+
+/**
+ * Truncate research findings to a maximum number of lines.
+ * If the findings exceed the limit, the first maxLines lines are kept
+ * and a note is appended indicating that the full document is on disk.
+ */
+function truncateResearch(findings: string, maxLines: number = RESEARCH_MAX_LINES): string {
+  const lines = findings.split("\n");
+  if (lines.length <= maxLines) return findings;
+  return (
+    lines.slice(0, maxLines).join("\n") +
+    "\n\n... (truncated — full research doc saved to disk)"
+  );
+}
 
 // ── Context gathering ──────────────────────────────────────────────
 
@@ -75,6 +93,7 @@ export async function runPlanner(
   userPrompt: string,
   projectRoot: string,
   config: BoberConfig,
+  researchDoc?: ResearchDoc,
 ): Promise<PlanSpec> {
   logger.phase("Planning Phase");
   logger.info("Gathering project context...");
@@ -95,6 +114,10 @@ export async function runPlanner(
     config.planner.model,
   );
 
+  const researchSection = researchDoc
+    ? `\n\n## Research Findings\n${truncateResearch(researchDoc.findings)}`
+    : "";
+
   const userMessage = `# Task Description
 ${userPrompt}
 
@@ -102,7 +125,7 @@ ${userPrompt}
 ${projectRoot}
 
 # Project Context
-${context}
+${context}${researchSection}
 
 Explore the codebase using your tools if you need more context, then produce a PlanSpec JSON.
 Your final response must contain ONLY valid JSON matching the PlanSpec schema (no markdown fences, no explanation).`;

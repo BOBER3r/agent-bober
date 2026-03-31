@@ -98,6 +98,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       maxIterations: 20,
       requireApproval: false,
       contextReset: "always",
+      researchPhase: true,
     },
     commands: {
       install: "npm install",
@@ -186,6 +187,7 @@ const greenfieldBase: Partial<BoberConfig> = {
     maxIterations: 20,
     requireApproval: false,
     contextReset: "always",
+    researchPhase: true,
   },
   commands: {},
 };
@@ -215,6 +217,7 @@ const brownfieldBase: Partial<BoberConfig> = {
     maxIterations: 20,
     requireApproval: true,
     contextReset: "always",
+    researchPhase: true,
   },
   commands: {},
 };

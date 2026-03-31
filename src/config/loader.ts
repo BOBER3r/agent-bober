@@ -215,6 +215,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         maxIterations: 20,
         requireApproval: false,
         contextReset: "always" as const,
+        researchPhase: true,
       },
       commands: defaults.commands ?? {},
     },

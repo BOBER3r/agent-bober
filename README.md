@@ -15,9 +15,14 @@ Works with **Claude, GPT, Gemini, Ollama**, and any OpenAI-compatible endpoint. 
 You describe a feature
         |
         v
+  +------------+
+  | Researcher |   Two-phase codebase analysis: generates questions,
+  +------------+   then explores with NO feature knowledge. Facts only.
+        |
+        v
   +-----------+
-  |  Planner  |   Asks clarifying questions, produces a PlanSpec
-  +-----------+   with sprint contracts and acceptance criteria.
+  |  Planner  |   Mandatory questions, design discussion doc,
+  +-----------+   structure outline, then sprint contracts.
         |
         v
   +-----------+     +-----------+
@@ -80,6 +85,7 @@ Brownfield init **auto-discovers your codebase**: scans package.json scripts, CI
 Then in Claude Code:
 ```
 /bober-principles   # Define project standards (optional but recommended)
+/bober-research     # Two-phase codebase research (facts only, no opinions)
 /bober-plan         # Describe your feature, get a structured plan
 /bober-sprint       # Execute the next sprint
 /bober-eval         # Evaluate the sprint output
@@ -250,10 +256,11 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 | Command | Description |
 |---|---|
 | `/bober-principles` | Define project principles -- AI expands your rough notes into standards |
-| `/bober-plan` | Plan any feature -- stack-agnostic, sprint-decomposed |
+| `/bober-research` | Two-phase codebase research -- opinion-free facts for planning |
+| `/bober-plan` | Plan any feature -- research, questions, design doc, outline, contracts |
 | `/bober-sprint` | Execute the next sprint contract |
 | `/bober-eval` | Evaluate current sprint output |
-| `/bober-run` | Full autonomous pipeline (plan + sprint + eval loop) |
+| `/bober-run` | Full autonomous pipeline (research + plan + sprint + eval loop) |
 | `/bober-react` | React web application workflow |
 | `/bober-solidity` | EVM smart contract workflow |
 | `/bober-anchor` | Solana program workflow |
@@ -374,6 +381,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
   // -- Pipeline ----------------------------------------
   "pipeline": {
+    "researchPhase": true,                // Run two-phase research before planning (default: true)
     "maxIterations": 20,                  // Max total iterations across all sprints
     "requireApproval": false,             // Pause for user approval between sprints
     "contextReset": "always"              // "always" | "on-threshold" | "never"
@@ -609,10 +617,13 @@ To debug failing E2E tests:
               .bober/specs/      .bober/contracts/
                     |                   |
                     v                   v
-  User Idea --> [Planner] --> PlanSpec + SprintContracts
+  User Idea --> [Researcher] --> Research Doc (facts only)
+                    |
+                    v
+              [Planner] --> Questions → Design Doc → Outline → Contracts
                                         |
                                         v
-                                  [Generator]
+                                  [Generator]  (receives ONLY contract + principles)
                                     |     ^
                                     v     | (rework feedback)
                                 [Evaluator]
@@ -636,8 +647,9 @@ This architecture implements the patterns described in Anthropic's [**"Harness d
 
 Each agent runs as a **multi-turn agentic loop** with tool access via the unified `LLMClient` interface. The provider layer abstracts away the differences between Anthropic, OpenAI, Google, and OpenAI-compatible APIs. System prompts are loaded from the detailed agent definitions in `agents/bober-*.md` (300-600 lines of role-specific instructions, anti-leniency protocols, and evaluation criteria).
 
-- **Planner** (default: Claude Opus): Explores the codebase via read-only tools (`read_file`, `glob`, `grep`), then produces sprint-decomposed plans. Thinks about scope, dependencies, and risk.
-- **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Reads existing code, writes implementation, runs tests, and commits -- all autonomously within the sprint contract boundaries.
+- **Researcher** (default: Claude Opus): Two isolated context windows. Phase 1 generates exploration questions from the feature description. Phase 2 explores the codebase using ONLY those questions -- no feature knowledge, producing a fact-only research document. This prevents the planner from hallucinating patterns that don't exist.
+- **Planner** (default: Claude Opus): Receives the research doc, generates mandatory clarification questions (self-answers in autonomous mode with codebase evidence), produces a design discussion doc for alignment, then a structure outline enforcing vertical slice decomposition, and finally sprint contracts.
+- **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Receives ONLY the sprint contract and principles -- no research, design, or outline artifacts (context distillation). Reads existing code, writes implementation, runs tests, and commits autonomously.
 - **Evaluator** (default: Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` -- deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs -- only report them with precise feedback.
 
 The separation ensures that:
@@ -655,6 +667,9 @@ All bober state lives in the `.bober/` directory:
 .bober/
   specs/           PlanSpec JSON files
   contracts/       SprintContract JSON files
+  research/        Research documents (fact-only codebase analysis)
+  designs/         Design discussion documents
+  outlines/        Structure outlines (vertical slice decomposition)
   eval-results/    Evaluation result logs
   handoffs/        Context handoff documents
   progress.md      Human-readable progress tracker
@@ -715,7 +730,7 @@ agent-bober/
     orchestrator/     Agent runners, agentic loop, tool infrastructure
       tools/          Tool schemas, sandboxed handlers, role-based sets
     providers/        LLM provider adapters (Anthropic, OpenAI, Google, OpenAI-compat)
-    state/            State management for .bober/ directory
+    state/            State management for .bober/ directory (research, design, outline artifacts)
     utils/            Shared utilities
   agents/             Agent system prompts (.md files, loaded at runtime)
   skills/             Claude Code slash command definitions
