@@ -1,6 +1,6 @@
 {
   "name": "agent-bober",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "Generator-Evaluator multi-agent harness for building applications autonomously with any LLM. Supports Claude, GPT, Gemini, Ollama. Includes MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",
@@ -51,7 +51,9 @@
     "hooks/",
     "scripts/",
     "templates/",
-    ".claude-plugin/"
+    ".claude-plugin/",
+    "README.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
