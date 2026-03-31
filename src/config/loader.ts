@@ -216,6 +216,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         requireApproval: false,
         contextReset: "always" as const,
         researchPhase: true,
+        architectPhase: false,
       },
       commands: defaults.commands ?? {},
     },

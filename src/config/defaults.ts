@@ -99,6 +99,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       requireApproval: false,
       contextReset: "always",
       researchPhase: true,
+      architectPhase: false,
     },
     commands: {
       install: "npm install",
@@ -188,6 +189,7 @@ const greenfieldBase: Partial<BoberConfig> = {
     requireApproval: false,
     contextReset: "always",
     researchPhase: true,
+    architectPhase: false,
   },
   commands: {},
 };
@@ -218,6 +220,7 @@ const brownfieldBase: Partial<BoberConfig> = {
     requireApproval: true,
     contextReset: "always",
     researchPhase: true,
+    architectPhase: false,
   },
   commands: {},
 };

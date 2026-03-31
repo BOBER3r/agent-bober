@@ -28,41 +28,48 @@ ORCHESTRATOR (you — this session)
   ├─ 1. Read bober.config.json, .bober/principles.md
   ├─ 2. Run check-prereqs.sh
   │
-  ├─ 2.5. SPAWN research subagent (Agent tool) [if pipeline.researchPhase is true]
-  │     └─ Phase 1: generates exploration questions from the feature description
-  │     └─ Phase 2: explores codebase answering each question (no feature knowledge)
-  │     └─ Saves ResearchDoc to .bober/research/<researchId>.json
-  │     └─ Returns: researchId and summary of findings
-  │     └─ Research doc is passed to planner prompt; NOT forwarded to generators
+  ├─ 3a. SPAWN researcher subagent (if pipeline.researchPhase is true)
+  │      └─ Researcher explores codebase, produces ResearchDoc
+  │      └─ Saves to .bober/research/
+  │      └─ Returns: research ID and findings summary
   │
-  ├─ 3. SPAWN planner subagent (Agent tool)
-  │     └─ Receives research findings in context (if research was run)
-  │     └─ Planner reads codebase, generates PlanSpec + sprint contracts
+  ├─ 3b. SPAWN architect subagent (if pipeline.architectPhase is true)
+  │      └─ Architect runs 5-checkpoint flow in autonomous mode
+  │      └─ Uses research doc (if available) as codebase context
+  │      └─ Saves architecture doc to .bober/architecture/
+  │      └─ Saves ADRs to .bober/architecture/
+  │      └─ Returns: architecture ID, componentCount, decisionCount
+  │      └─ Architecture doc is passed to planner ONLY (not to generator or evaluator)
+  │
+  ├─ 4. SPAWN planner subagent (Agent tool)
+  │     └─ Planner reads codebase, receives research + architecture context
+  │     └─ Generates PlanSpec + sprint contracts
   │     └─ Saves to .bober/specs/ and .bober/contracts/
   │     └─ Returns: spec ID and contract list
   │
-  ├─ 4. For each sprint contract:
+  ├─ 5. For each sprint contract:
   │     │
-  │     ├─ 4a. Build context handoff (JSON in the prompt)
+  │     ├─ 5a. Build context handoff (JSON in the prompt)
   │     │       (spec, contract, previous feedback, principles)
+  │     │       NOTE: Architecture doc is NOT included in generator/evaluator handoffs
   │     │
-  │     ├─ 4b. SPAWN generator subagent (Agent tool)
+  │     ├─ 5b. SPAWN generator subagent (Agent tool)
   │     │       └─ Receives handoff as prompt
   │     │       └─ Implements the sprint, commits code
   │     │       └─ Returns: completion report JSON
   │     │
-  │     ├─ 4c. SPAWN evaluator subagent (Agent tool)
+  │     ├─ 5c. SPAWN evaluator subagent (Agent tool)
   │     │       └─ Receives handoff + generator report
   │     │       └─ Runs eval strategies (typecheck, lint, test, playwright)
   │     │       └─ Returns: eval result JSON with pass/fail
   │     │
-  │     ├─ 4d. If FAILED and retries < maxIterations:
+  │     ├─ 5d. If FAILED and retries < maxIterations:
   │     │       └─ Add evaluator feedback to handoff
-  │     │       └─ Go to 4b (spawn FRESH generator with feedback)
+  │     │       └─ Go to 5b (spawn FRESH generator with feedback)
   │     │
-  │     └─ 4e. If PASSED: update contract status, log, next sprint
+  │     └─ 5e. If PASSED: update contract status, log, next sprint
   │
-  └─ 5. Final summary
+  └─ 6. Final summary
 ```
 
 **Critical rules for you as orchestrator:**
@@ -110,91 +117,61 @@ Log event:
 {"event":"pipeline-started","timestamp":"<ISO-8601>","task":"<task description>"}
 ```
 
-History events for the pipeline phases:
-- Before spawning the research subagent: `{"event":"research-started","phase":"planning","timestamp":"...","details":{"userPrompt":"..."}}`
-- After the research subagent returns: `{"event":"research-completed","phase":"planning","timestamp":"...","details":{"researchId":"...","lineCount":N}}`
-- After the planner creates the design doc: `{"event":"design-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}`
-- After the planner creates the outline: `{"event":"outline-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}`
-
 ---
 
-## Step 1.5: Research Phase (when `pipeline.researchPhase` is true)
+## Step 1d: Architect Phase (Conditional)
 
-Check `bober.config.json`. If `pipeline.researchPhase` is `true` (the default), spawn a research subagent before the planner.
+If `pipeline.architectPhase` is `true` in `bober.config.json`, run the architect phase between research and planning. Default is `false` — this is opt-in for complex projects.
 
-**Why research first:** The two-phase research process explores the codebase without knowing what feature is being built. This factual codebase analysis is then passed to the planner so the plan is grounded in real code structure, not assumptions.
-
-**When to skip:** Set `pipeline.researchPhase: false` in `bober.config.json` to skip research (useful for re-runs or simple changes where codebase structure is already well understood).
-
-Use the **Agent tool** to spawn a research subagent:
+Use the **Agent tool** to spawn an architect subagent:
 
 ```
 Agent tool call:
-  description: "Research codebase for: <task description>"
+  description: "Architect: <title from task description>"
+  subagent_type: bober-architect
+  mode: auto
   prompt: <the full prompt below>
 ```
 
-**Build the research prompt:**
+**Build the architect prompt:**
 
 ```
-You are the Bober Researcher subagent. You have been spawned by the orchestrator to research the codebase.
+You are the Bober Architect subagent. You have been spawned to produce an architecture document.
 
-## Feature Description (for question generation only)
+## Feature Description
 <paste the user's task description here>
 
-## Project Configuration (bober.config.json)
-<paste the full contents of bober.config.json here>
+## Architecture ID
+<generate: arch-<YYYYMMDD>-<slug>>
 
 ## Project Root
-<absolute path to the project root>
+<project root path>
+
+## Research Findings (if available)
+<paste research doc findings, truncated to 300 lines if needed, or omit section if no research>
 
 ## Instructions
-Run the two-phase research process:
-
-Phase 1 — Question Generation:
-  Read the feature description and generate 5–8 specific exploration questions that will guide
-  codebase analysis. Questions must be self-contained and answerable by reading files.
-
-Phase 2 — Codebase Exploration:
-  Explore the codebase using ONLY the questions (NOT the feature description).
-  For each question, use Glob, Grep, and Read to gather factual findings.
-  Document architecture, patterns, key files, integration points, test coverage, and risk areas.
-
-Save the ResearchDoc to .bober/research/<researchId>.json
-
-IMPORTANT: Phase 2 must NOT include the feature description — only the questions.
+Run all 5 checkpoints in autonomous mode. Self-discuss at each checkpoint with codebase evidence.
+Save architecture doc to .bober/architecture/<id>-architecture.md
+Save ADRs to .bober/architecture/<id>-adr-N.md
 
 ## Your Response
-When done, respond with EXACTLY this JSON structure (no other text):
-{
-  "researchId": "<the research ID>",
-  "questionsGenerated": <N>,
-  "questionsAnswered": <N>,
-  "filesExplored": <N>,
-  "findingsSummary": "<2-3 sentence summary of key findings>"
-}
+{ "architectureId": "...", "componentCount": N, "decisionCount": N, "summary": "..." }
 ```
 
-**After the research subagent returns:**
+**After the architect subagent returns:**
 
-1. Parse the response to extract `researchId`.
-2. Read `.bober/research/<researchId>.json` to verify it was created and contains findings.
-3. Pass the research findings to the planner (include the full `findings` field from the ResearchDoc in the planner prompt).
-4. Log events:
+1. Parse the response to extract `architectureId`, `componentCount`, `decisionCount`.
+2. Read `.bober/architecture/<architectureId>-architecture.md` to verify it was saved.
+3. Log events:
    ```json
-   {"event":"research-completed","phase":"planning","researchId":"...","timestamp":"...","details":{"researchId":"...","lineCount":N,"questionsAnswered":N}}
+   {"event":"architect-started","timestamp":"...","phase":"planning"}
+   {"event":"architect-checkpoint","timestamp":"...","phase":"planning","details":{"checkpointNumber":N}}
+   {"event":"architect-completed","timestamp":"...","phase":"planning","details":{"architectId":"...","componentCount":N,"decisionCount":N}}
    ```
-5. Print:
-   ```
-   === RESEARCH COMPLETE ===
-   Research ID: <researchId>
-   Questions answered: <N>/<N>
-   Files explored: <N>
-   Key findings: <findingsSummary>
-   ```
+4. Pass the architecture document content to the planner in Step 2 (under `## Architecture Document`).
 
-**Important — context distillation:**
-The research doc is passed ONLY to the planner. It is NOT forwarded to generator subagents. Generators receive only their sprint contract, principles, and completed sprint summaries. This keeps generator context focused and prevents stale research from polluting implementation decisions.
+**Context distillation rule:** The architecture document is passed to the planner ONLY. Do NOT include it in generator or evaluator handoffs. The planner uses it to inform sprint decomposition; the generator and evaluator work from the spec and contracts.
 
 ---
 
@@ -207,8 +184,12 @@ Use the **Agent tool** to spawn a planner subagent.
 ```
 Agent tool call:
   description: "Plan feature: <title from task description>"
+  subagent_type: bober-planner
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+IMPORTANT: The planner MUST have write access (`mode: auto` or `mode: bypassPermissions`) so it can save specs and contracts directly to `.bober/`. Do NOT use `mode: plan` — that makes the agent read-only and forces a wasteful second pass to write files.
 
 **Build the planner prompt with ALL of these sections:**
 
@@ -224,16 +205,15 @@ You are the Bober Planner subagent. You have been spawned by the orchestrator to
 ## Project Principles (.bober/principles.md)
 <paste the full contents of .bober/principles.md here, or "No principles file found." if it does not exist>
 
+## Architecture Document (if architectPhase ran)
+<paste the full architecture document here, or omit section if architectPhase was false>
+
 ## Existing Specs
 <list any existing spec IDs from .bober/specs/, or "None" if no prior specs>
 
-## Research Findings
-<If pipeline.researchPhase is true, paste the full `findings` field from the ResearchDoc here.
- If research was skipped, write "No research findings (researchPhase disabled).">
-
 ## Instructions
 1. Read the codebase to understand the project structure (use Glob and Grep to survey, Read to examine key files).
-2. Generate a PlanSpec with sprint decomposition.
+2. Generate a PlanSpec with sprint decomposition, informed by the architecture document above if present.
 3. Save the PlanSpec to .bober/specs/<specId>.json
 4. Save each SprintContract to .bober/contracts/<contractId>.json
 5. Update .bober/progress.md with the plan summary.
@@ -257,15 +237,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
 1. Parse the planner's response to extract `specId` and `contractIds`.
 2. Read `.bober/specs/<specId>.json` to verify it was created.
 3. Read each contract file in `.bober/contracts/` to verify they exist.
-4. If `.bober/designs/<specId>-design.md` exists, log:
-   ```json
-   {"event":"design-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}
-   ```
-5. If `.bober/outlines/<specId>-outline.md` exists, log:
-   ```json
-   {"event":"outline-created","phase":"planning","timestamp":"...","details":{"specId":"...","lineCount":N}}
-   ```
-6. Print the plan summary:
+4. Print the plan summary:
    ```
    === PLAN CREATED ===
    Spec: <specId>
@@ -275,7 +247,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
    2. <Sprint 2 title>
    ...
    ```
-7. If the planner subagent failed or returned an error, report it and stop the pipeline.
+5. If the planner subagent failed or returned an error, report it and stop the pipeline.
 
 ---
 
@@ -362,8 +334,12 @@ Use the **Agent tool** to spawn a generator subagent.
 ```
 Agent tool call:
   description: "Sprint <N>: <sprint title>"
+  subagent_type: bober-generator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+IMPORTANT: The generator MUST have full write access (`mode: auto` or `mode: bypassPermissions`) — it writes code, runs commands, and commits.
 
 **Build the generator prompt:**
 
@@ -438,8 +414,12 @@ Use the **Agent tool** to spawn an evaluator subagent.
 ```
 Agent tool call:
   description: "Evaluate sprint <N>: <sprint title>"
+  subagent_type: bober-evaluator
+  mode: auto
   prompt: <the full prompt below>
 ```
+
+NOTE: The evaluator has read + bash access but NO write/edit tools (enforced by the agent definition, not by mode). Use `mode: auto` so it can run bash commands (tests, builds, dev server).
 
 **Build the evaluator prompt:**
 
@@ -683,10 +663,12 @@ Last updated: <timestamp>
 
 ## Plan: <title>
 - Spec: <specId>
-- Research: complete (.bober/research/<researchId>.md) | pending
-- Design: complete (.bober/designs/<specId>-design.md) | pending
-- Outline: complete (.bober/outlines/<specId>-outline.md) | pending
+- Created: <date>
 - Status: in-progress
+- Research: complete | pending
+- Architecture: complete (.bober/architecture/<id>-architecture.md) | pending | N/A
+- Design: complete | pending
+- Outline: complete | pending
 
 ### Sprint Breakdown
 1. [completed] Sprint 1: <title> -- Passed on iteration 1
@@ -701,12 +683,10 @@ Last updated: <timestamp>
 - Subagents spawned: 6
 ```
 
+Include the Architecture line in all plans. Set to "complete (.bober/architecture/<id>-architecture.md)" after the architect phase runs, "pending" while in progress, or "N/A" if `pipeline.architectPhase` is `false`.
+
 And keep `.bober/history.jsonl` updated with events:
 - `pipeline-started`
-- `research-started` (before the research subagent is spawned)
-- `research-completed` (after research returns, includes `researchId` and `lineCount`)
-- `design-created` (after planner saves design doc, includes `specId` and `lineCount`)
-- `outline-created` (after planner saves outline, includes `specId` and `lineCount`)
 - `sprint-started`
 - `sprint-iteration-started`
 - `sprint-iteration-completed` (with pass/fail)

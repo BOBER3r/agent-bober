@@ -124,6 +124,7 @@ export const PipelineSectionSchema = z.object({
   requireApproval: z.boolean().default(false),
   contextReset: ContextResetSchema.default("always"),
   researchPhase: z.boolean().default(true),
+  architectPhase: z.boolean().default(false),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -208,6 +209,7 @@ export function createDefaultConfig(
       requireApproval: false,
       contextReset: "always",
       researchPhase: true,
+      architectPhase: false,
     },
     commands: {},
   };

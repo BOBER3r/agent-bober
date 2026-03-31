@@ -20,6 +20,11 @@ You describe a feature
   +------------+   then explores with NO feature knowledge. Facts only.
         |
         v
+  +------------+   (optional — set pipeline.architectPhase: true)
+  |  Architect |   5-checkpoint solution design: components, data flow,
+  +------------+   ADRs, and architecture doc. Output goes to planner only.
+        |
+        v
   +-----------+
   |  Planner  |   Mandatory questions, design discussion doc,
   +-----------+   structure outline, then sprint contracts.
@@ -86,6 +91,7 @@ Then in Claude Code:
 ```
 /bober-principles   # Define project standards (optional but recommended)
 /bober-research     # Two-phase codebase research (facts only, no opinions)
+/bober-architect    # Solution architecture design (optional, for complex features)
 /bober-plan         # Describe your feature, get a structured plan
 /bober-sprint       # Execute the next sprint
 /bober-eval         # Evaluate the sprint output
@@ -257,6 +263,7 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 |---|---|
 | `/bober-principles` | Define project principles -- AI expands your rough notes into standards |
 | `/bober-research` | Two-phase codebase research -- opinion-free facts for planning |
+| `/bober-architect` | Solution architecture workflow -- 5-checkpoint discussion producing architecture docs + ADRs |
 | `/bober-plan` | Plan any feature -- research, questions, design doc, outline, contracts |
 | `/bober-sprint` | Execute the next sprint contract |
 | `/bober-eval` | Evaluate current sprint output |
@@ -382,6 +389,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
   // -- Pipeline ----------------------------------------
   "pipeline": {
     "researchPhase": true,                // Run two-phase research before planning (default: true)
+    "architectPhase": false,              // Run solution architecture phase before planning (default: false)
     "maxIterations": 20,                  // Max total iterations across all sprints
     "requireApproval": false,             // Pause for user approval between sprints
     "contextReset": "always"              // "always" | "on-threshold" | "never"
@@ -668,6 +676,7 @@ All bober state lives in the `.bober/` directory:
   specs/           PlanSpec JSON files
   contracts/       SprintContract JSON files
   research/        Research documents (fact-only codebase analysis)
+  architecture/    Architecture documents and ADRs (optional architect phase)
   designs/         Design discussion documents
   outlines/        Structure outlines (vertical slice decomposition)
   eval-results/    Evaluation result logs

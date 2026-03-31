@@ -37,71 +37,7 @@ Use `bober.brownfield` instead of `bober.run` when:
 
 Before planning anything, perform a thorough analysis of the existing codebase. This is the most important step in brownfield work -- skip it and you will break things.
 
-### 1a. Research Phase (CRISPY Two-Phase Research)
-
-Run the two-phase research process as the foundation for all subsequent analysis. The research agent explores the codebase systematically before you or the planner interpret what needs to change.
-
-**Why research first in brownfield:** Brownfield codebases have patterns, constraints, and coupling that are easy to miss. The research agent's factual, opinion-free exploration surfaces these before any planning decisions are made.
-
-Spawn a research subagent (Agent tool):
-
-```
-Agent tool call:
-  description: "Research brownfield codebase for: <feature description>"
-  prompt: <research prompt>
-```
-
-Build the research prompt:
-
-```
-You are the Bober Researcher subagent. You have been spawned to research an existing codebase.
-
-## Feature Description (for question generation only — do NOT share with Phase 2)
-<feature description>
-
-## Project Root
-<absolute path>
-
-## Instructions
-Run the two-phase research process focused on brownfield concerns:
-
-Phase 1 — Generate 5–8 questions targeting:
-  - What existing code paths will the new feature touch?
-  - What patterns does this codebase enforce that must be followed?
-  - Which files are high-coupling risk (imported widely)?
-  - What test coverage exists in the affected areas?
-  - What are the existing integration points and interfaces?
-  - What database schema or state management patterns exist?
-  - What build/deploy constraints exist?
-
-Phase 2 — Explore codebase answering ONLY the questions (no feature knowledge).
-  Document: architecture overview, existing patterns, key files, integration points,
-  test coverage, risk areas.
-
-Save the ResearchDoc to .bober/research/<researchId>.json
-
-## Your Response
-{
-  "researchId": "<ID>",
-  "questionsGenerated": N,
-  "questionsAnswered": N,
-  "filesExplored": N,
-  "findingsSummary": "<2-3 sentence summary>"
-}
-```
-
-After research completes:
-1. Read `.bober/research/<researchId>.json` to verify the ResearchDoc was saved.
-2. Use the research findings to guide Steps 1b–1d below (do not re-read files the research already covered).
-3. Pass the research `findings` field to the planner in Step 4.
-4. **Do NOT forward** the research doc to generator subagents — generators receive only their sprint contract and principles.
-
-Log event:
-```json
-{"event":"brownfield-research-complete","researchId":"...","timestamp":"..."}
-```
-
-### 1b. Tech Stack Detection
+### 1a. Tech Stack Detection
 
 Read and analyze:
 - `package.json` (or equivalent: `requirements.txt`, `Cargo.toml`, `go.mod`)
@@ -122,7 +58,7 @@ CI/CD: GitHub Actions
 Deployment: Vercel (frontend), Railway (backend)
 ```
 
-### 1c. Architecture Mapping
+### 1b. Architecture Mapping
 
 Use Glob and Grep to map the architecture. Reference `skills/bober.brownfield/references/codebase-analysis.md` for the full methodology.
 
@@ -156,7 +92,7 @@ Use Glob and Grep to map the architecture. Reference `skills/bober.brownfield/re
   npm test 2>&1 | tail -20
   ```
 
-### 1d. Pattern Extraction
+### 1c. Pattern Extraction
 
 Identify the coding patterns used throughout the codebase. The Generator MUST follow these exactly.
 
@@ -172,7 +108,7 @@ Identify the coding patterns used throughout the codebase. The Generator MUST fo
 
 Document these patterns explicitly in the Generator notes for each sprint contract.
 
-### 1e. Risk Assessment
+### 1d. Risk Assessment
 
 Identify areas of risk:
 - **High-coupling areas:** Files imported by many other files -- changing these is high risk
@@ -300,17 +236,43 @@ Before any changes, record baselines that the evaluator will check against:
 
 The evaluator will compare post-sprint results against these baselines to detect regressions.
 
+## Step 3b: Architect Phase (Conditional, Strongly Recommended for Brownfield)
+
+If `pipeline.architectPhase` is `true` in `bober.config.json`, run the architect phase before planning. For brownfield projects, this phase is especially valuable: it produces an architecture document that captures the existing system design and how the new feature integrates, which informs safer sprint decomposition.
+
+To enable:
+```json
+{
+  "pipeline": {
+    "architectPhase": true
+  }
+}
+```
+
+**Brownfield-specific architect instructions:**
+
+The architect subagent in brownfield mode should:
+1. Read the existing codebase architecture (using Step 1b analysis as input)
+2. Focus Checkpoint 1 on what existing components are affected by the new feature
+3. Use Checkpoint 3 to define exact interface changes to existing components (not just new ones)
+4. Use Checkpoint 4 to map integration risks in terms of the existing system
+5. Document backward compatibility constraints as ADRs
+
+**Context distillation rule (same as standard pipeline):**
+- Architecture doc → planner only
+- Generator and evaluator do NOT receive the architecture doc
+- The planner uses it to decompose sprints with awareness of existing patterns and integration points
+
+After the architect phase:
+1. Read `.bober/architecture/<id>-architecture.md` to verify output
+2. Log `architect-started`, `architect-checkpoint`, `architect-completed` events to `.bober/history.jsonl`
+3. Pass the architecture doc to the planner under `## Architecture Document`
+
+---
+
 ## Step 4: Plan with Brownfield Constraints
 
-Run the planning workflow with these additional constraints. Pass the research findings (from Step 1a) to the planner as part of the prompt — the planner uses this to make informed sprint decomposition decisions based on factual codebase structure.
-
-**Include in the planner prompt:**
-```
-## Research Findings
-<paste the full `findings` field from the ResearchDoc saved at .bober/research/<researchId>.json>
-```
-
-**Note on context distillation:** The research findings go only to the planner. Generator subagents do NOT receive the research doc — they receive only their sprint contract, completed sprint summaries, and principles. This is intentional: by the time generators run, the research has already shaped the sprint decomposition.
+Run the planning workflow with these additional constraints:
 
 ### Brownfield-Specific Clarifying Questions
 
