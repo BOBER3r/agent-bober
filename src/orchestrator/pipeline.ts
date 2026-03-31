@@ -12,6 +12,7 @@ import {
 } from "./context-handoff.js";
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
 import { runPlanner } from "./planner-agent.js";
+import { runResearch } from "./research-agent.js";
 import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
@@ -341,8 +342,14 @@ export async function runPipeline(
       details: { userPrompt: userPrompt.slice(0, 200) },
     });
 
+    // ── Phase 0: Research (optional) ────────────────────────────
+    let researchDoc;
+    if (config.pipeline.researchPhase !== false) {
+      researchDoc = await runResearch(userPrompt, projectRoot, config);
+    }
+
     // ── Phase 1: Planning ────────────────────────────────────────
-    const spec = await runPlanner(userPrompt, projectRoot, config);
+    const spec = await runPlanner(userPrompt, projectRoot, config, researchDoc);
 
     logger.info(`Plan: "${spec.title}" with ${spec.features.length} features`);
 

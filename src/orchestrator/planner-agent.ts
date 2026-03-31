@@ -12,6 +12,7 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import type { ResearchDoc } from "./research-agent.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ export async function runPlanner(
   userPrompt: string,
   projectRoot: string,
   config: BoberConfig,
+  researchDoc?: ResearchDoc,
 ): Promise<PlanSpec> {
   logger.phase("Planning Phase");
   logger.info("Gathering project context...");
@@ -95,6 +97,10 @@ export async function runPlanner(
     config.planner.model,
   );
 
+  const researchSection = researchDoc
+    ? `\n\n## Research Findings\n${researchDoc.findings}`
+    : "";
+
   const userMessage = `# Task Description
 ${userPrompt}
 
@@ -102,7 +108,7 @@ ${userPrompt}
 ${projectRoot}
 
 # Project Context
-${context}
+${context}${researchSection}
 
 Explore the codebase using your tools if you need more context, then produce a PlanSpec JSON.
 Your final response must contain ONLY valid JSON matching the PlanSpec schema (no markdown fences, no explanation).`;

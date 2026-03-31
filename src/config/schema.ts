@@ -123,6 +123,7 @@ export const PipelineSectionSchema = z.object({
   maxIterations: z.number().int().min(1).default(20),
   requireApproval: z.boolean().default(false),
   contextReset: ContextResetSchema.default("always"),
+  researchPhase: z.boolean().default(true),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -206,6 +207,7 @@ export function createDefaultConfig(
       maxIterations: 20,
       requireApproval: false,
       contextReset: "always",
+      researchPhase: true,
     },
     commands: {},
   };
