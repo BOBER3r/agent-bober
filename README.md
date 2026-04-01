@@ -30,6 +30,11 @@ You describe a feature
   +-----------+   structure outline, then sprint contracts.
         |
         v
+  +-----------+
+  |  Curator  |   Reads codebase FOR the sprint: extracts patterns,
+  +-----------+   utils, affected files, test templates. Saves briefing.
+        |
+        v
   +-----------+     +-----------+
   | Generator | --> | Evaluator |   Writes code, then verifies it:
   +-----------+     +-----------+   typecheck, lint, build, tests.
@@ -358,6 +363,16 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     ]
   },
 
+  // -- Curator (NEW in 0.11.0) -------------------------
+  "curator": {
+    "provider": "anthropic",              // "anthropic" | "openai" | "google" | "openai-compat"
+    "model": "opus",                      // Default: opus (thorough codebase analysis)
+    "endpoint": null,                     // Custom base URL (for openai-compat)
+    "providerConfig": {},                 // Provider-specific settings
+    "maxTurns": 25,                       // Max tool-use turns for curation
+    "enabled": true                       // Set false to skip curation (generator explores on its own)
+  },
+
   // -- Generator ---------------------------------------
   "generator": {
     "provider": "anthropic",              // "anthropic" | "openai" | "google" | "openai-compat"
@@ -638,7 +653,11 @@ To debug failing E2E tests:
               [Planner] --> Questions → Design Doc → Outline → Contracts
                                         |
                                         v
-                                  [Generator]  (receives ONLY contract + principles)
+                                  [Curator]  (reads codebase for THIS sprint,
+                                    |         produces Sprint Briefing with
+                                    |         patterns, utils, impact analysis)
+                                    v
+                                  [Generator]  (receives briefing + contract + principles)
                                     |     ^
                                     v     | (rework feedback)
                                 [Evaluator]
@@ -664,7 +683,8 @@ Each agent runs as a **multi-turn agentic loop** with tool access via the unifie
 
 - **Researcher** (default: Claude Opus): Two isolated context windows. Phase 1 generates exploration questions from the feature description. Phase 2 explores the codebase using ONLY those questions -- no feature knowledge, producing a fact-only research document. This prevents the planner from hallucinating patterns that don't exist.
 - **Planner** (default: Claude Opus): Receives the research doc, generates mandatory clarification questions (self-answers in autonomous mode with codebase evidence), produces a design discussion doc for alignment, then a structure outline enforcing vertical slice decomposition, and finally sprint contracts.
-- **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Receives ONLY the sprint contract and principles -- no research, design, or outline artifacts (context distillation). Reads existing code, writes implementation, runs tests, and commits autonomously.
+- **Curator** (default: Claude Opus): Read-only codebase analysis scoped to a single sprint. For each sprint contract, reads the target files, extracts relevant code sections, inventories existing utilities the generator must reuse, identifies affected files and tests, gathers testing patterns, and produces a structured Sprint Briefing saved to `.bober/briefings/`. Runs once per sprint before the generator. Configurable via `curator` section in config.
+- **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Receives the Sprint Briefing (curated patterns, utils, impact analysis) plus the sprint contract and principles -- no research, design, or outline artifacts (context distillation). Starts coding immediately instead of exploring the codebase.
 - **Evaluator** (default: Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` -- deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs -- only report them with precise feedback.
 
 The separation ensures that:
@@ -686,6 +706,7 @@ All bober state lives in the `.bober/` directory:
   architecture/    Architecture documents and ADRs (optional architect phase)
   designs/         Design discussion documents
   outlines/        Structure outlines (vertical slice decomposition)
+  briefings/       Sprint Briefings (curated codebase context per sprint)
   eval-results/    Evaluation result logs
   handoffs/        Context handoff documents
   progress.md      Human-readable progress tracker

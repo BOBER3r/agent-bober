@@ -14,6 +14,7 @@ import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
 import { runPlanner } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
 import { runArchitect } from "./architect-agent.js";
+import { runCurator } from "./curator-agent.js";
 import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
@@ -106,6 +107,54 @@ async function runSprintCycle(
 
   let lastEvaluation: EvaluationRunResult | undefined;
   let lastGeneratorResult: GeneratorResult | undefined;
+
+  // ── Curate (once, before the first generator attempt) ─────────
+  // The curator explores the codebase and saves a Sprint Briefing to
+  // .bober/briefings/<contractId>-briefing.md. The generator reads it
+  // from disk as its first action.
+  const curatorEnabled = config.curator?.enabled !== false;
+
+  if (curatorEnabled) {
+    logger.phase(`Sprint ${currentContract.id} - Curate`);
+
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "curator-start",
+      phase: "curating",
+      sprintId: currentContract.id,
+      details: { feature: currentContract.feature },
+    });
+
+    try {
+      const briefing = await runCurator(
+        currentContract,
+        spec,
+        completedContracts,
+        projectRoot,
+        config,
+      );
+
+      logger.success(
+        `Curator analyzed ${briefing.filesAnalyzed.length} files, found ${briefing.patternsFound} patterns, ${briefing.utilsIdentified} utils`,
+      );
+
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "curator-complete",
+        phase: "curating",
+        sprintId: currentContract.id,
+        details: {
+          filesAnalyzed: briefing.filesAnalyzed.length,
+          patternsFound: briefing.patternsFound,
+          utilsIdentified: briefing.utilsIdentified,
+        },
+      });
+    } catch (err) {
+      logger.warn(
+        `Curator failed: ${err instanceof Error ? err.message : String(err)}. Generator will proceed without briefing.`,
+      );
+    }
+  }
 
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     if (interrupted) {

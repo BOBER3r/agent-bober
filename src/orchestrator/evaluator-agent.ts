@@ -171,14 +171,6 @@ async function runAgentEvaluation(
       })
       .join("\n\n");
 
-    const contract = handoff.currentContract;
-    const criteriaList = contract?.successCriteria
-      ?.map(
-        (c, i) =>
-          `${i + 1}. [${c.id}] ${c.description} (verification: ${c.verificationMethod})`,
-      )
-      .join("\n") ?? "No criteria found.";
-
     const userMessage = `# Context Handoff
 ${handoffJson}
 
@@ -188,8 +180,8 @@ ${projectRoot}
 # Automated Check Results (already completed)
 ${programmaticSummary}
 
-# Success Criteria to Verify
-${criteriaList}
+# Success Criteria
+Verify every criterion listed in the contract's successCriteria array in the handoff above.
 
 # Your Task
 Evaluate whether the sprint contract criteria have been met. Use your tools to:

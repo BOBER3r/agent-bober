@@ -25,6 +25,7 @@ function progressPath(projectRoot: string): string {
 export const PhaseSchema = z.enum([
   "init",
   "planning",
+  "curating",
   "generating",
   "evaluating",
   "rework",

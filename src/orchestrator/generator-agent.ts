@@ -60,12 +60,15 @@ export async function runGenerator(
   );
   const handoffJson = serializeHandoff(handoff);
 
+  // Check if a Sprint Briefing exists for this contract
+  const briefingPath = `.bober/briefings/${contractId}-briefing.md`;
+
   const userMessage = `# Context Handoff
 ${handoffJson}
 
 # Project Root
 ${projectRoot}
-
+${briefingPath ? `\n# Sprint Briefing\nA curated Sprint Briefing has been prepared at ${briefingPath} — read it FIRST before starting implementation. It contains the exact code patterns to follow, utilities to reuse, testing patterns, affected files, and step-by-step implementation sequence.\n` : ""}
 Implement the changes described in the sprint contract. Follow every success criterion.
 Use your tools to read the codebase, write code, run tests, and verify your work.
 ${handoff.issues.length > 0 ? `\n# Previous Issues to Fix\n${handoff.issues.join("\n\n")}` : ""}

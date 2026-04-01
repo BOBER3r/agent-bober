@@ -64,6 +64,11 @@ export {
 export { runEvaluatorAgent } from "./orchestrator/evaluator-agent.js";
 
 export {
+  runCurator,
+  type SprintBriefing,
+} from "./orchestrator/curator-agent.js";
+
+export {
   runPipeline,
   type PipelineResult,
 } from "./orchestrator/pipeline.js";
@@ -117,6 +122,9 @@ export {
   listSpecs,
   appendHistory,
   loadHistory,
+  saveBriefing,
+  readBriefing,
+  listBriefings,
 } from "./state/index.js";
 
 // ── Providers ──────────────────────────────────────────────────────

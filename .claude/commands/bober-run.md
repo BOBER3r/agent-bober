@@ -28,48 +28,33 @@ ORCHESTRATOR (you — this session)
   ├─ 1. Read bober.config.json, .bober/principles.md
   ├─ 2. Run check-prereqs.sh
   │
-  ├─ 3a. SPAWN researcher subagent (if pipeline.researchPhase is true)
-  │      └─ Researcher explores codebase, produces ResearchDoc
-  │      └─ Saves to .bober/research/
-  │      └─ Returns: research ID and findings summary
-  │
-  ├─ 3b. SPAWN architect subagent (if pipeline.architectPhase is true)
-  │      └─ Architect runs 5-checkpoint flow in autonomous mode
-  │      └─ Uses research doc (if available) as codebase context
-  │      └─ Saves architecture doc to .bober/architecture/
-  │      └─ Saves ADRs to .bober/architecture/
-  │      └─ Returns: architecture ID, componentCount, decisionCount
-  │      └─ Architecture doc is passed to planner ONLY (not to generator or evaluator)
-  │
-  ├─ 4. SPAWN planner subagent (Agent tool)
-  │     └─ Planner reads codebase, receives research + architecture context
-  │     └─ Generates PlanSpec + sprint contracts
+  ├─ 3. SPAWN planner subagent (Agent tool)
+  │     └─ Planner reads codebase, generates PlanSpec + sprint contracts
   │     └─ Saves to .bober/specs/ and .bober/contracts/
   │     └─ Returns: spec ID and contract list
   │
-  ├─ 5. For each sprint contract:
+  ├─ 4. For each sprint contract:
   │     │
-  │     ├─ 5a. Build context handoff (JSON in the prompt)
+  │     ├─ 4a. Build context handoff (JSON in the prompt)
   │     │       (spec, contract, previous feedback, principles)
-  │     │       NOTE: Architecture doc is NOT included in generator/evaluator handoffs
   │     │
-  │     ├─ 5b. SPAWN generator subagent (Agent tool)
+  │     ├─ 4b. SPAWN generator subagent (Agent tool)
   │     │       └─ Receives handoff as prompt
   │     │       └─ Implements the sprint, commits code
   │     │       └─ Returns: completion report JSON
   │     │
-  │     ├─ 5c. SPAWN evaluator subagent (Agent tool)
+  │     ├─ 4c. SPAWN evaluator subagent (Agent tool)
   │     │       └─ Receives handoff + generator report
   │     │       └─ Runs eval strategies (typecheck, lint, test, playwright)
   │     │       └─ Returns: eval result JSON with pass/fail
   │     │
-  │     ├─ 5d. If FAILED and retries < maxIterations:
+  │     ├─ 4d. If FAILED and retries < maxIterations:
   │     │       └─ Add evaluator feedback to handoff
-  │     │       └─ Go to 5b (spawn FRESH generator with feedback)
+  │     │       └─ Go to 4b (spawn FRESH generator with feedback)
   │     │
-  │     └─ 5e. If PASSED: update contract status, log, next sprint
+  │     └─ 4e. If PASSED: update contract status, log, next sprint
   │
-  └─ 6. Final summary
+  └─ 5. Final summary
 ```
 
 **Critical rules for you as orchestrator:**
@@ -119,62 +104,6 @@ Log event:
 
 ---
 
-## Step 1d: Architect Phase (Conditional)
-
-If `pipeline.architectPhase` is `true` in `bober.config.json`, run the architect phase between research and planning. Default is `false` — this is opt-in for complex projects.
-
-Use the **Agent tool** to spawn an architect subagent:
-
-```
-Agent tool call:
-  description: "Architect: <title from task description>"
-  subagent_type: bober-architect
-  mode: auto
-  prompt: <the full prompt below>
-```
-
-**Build the architect prompt:**
-
-```
-You are the Bober Architect subagent. You have been spawned to produce an architecture document.
-
-## Feature Description
-<paste the user's task description here>
-
-## Architecture ID
-<generate: arch-<YYYYMMDD>-<slug>>
-
-## Project Root
-<project root path>
-
-## Research Findings (if available)
-<paste research doc findings, truncated to 300 lines if needed, or omit section if no research>
-
-## Instructions
-Run all 5 checkpoints in autonomous mode. Self-discuss at each checkpoint with codebase evidence.
-Save architecture doc to .bober/architecture/<id>-architecture.md
-Save ADRs to .bober/architecture/<id>-adr-N.md
-
-## Your Response
-{ "architectureId": "...", "componentCount": N, "decisionCount": N, "summary": "..." }
-```
-
-**After the architect subagent returns:**
-
-1. Parse the response to extract `architectureId`, `componentCount`, `decisionCount`.
-2. Read `.bober/architecture/<architectureId>-architecture.md` to verify it was saved.
-3. Log events:
-   ```json
-   {"event":"architect-started","timestamp":"...","phase":"planning"}
-   {"event":"architect-checkpoint","timestamp":"...","phase":"planning","details":{"checkpointNumber":N}}
-   {"event":"architect-completed","timestamp":"...","phase":"planning","details":{"architectId":"...","componentCount":N,"decisionCount":N}}
-   ```
-4. Pass the architecture document content to the planner in Step 2 (under `## Architecture Document`).
-
-**Context distillation rule:** The architecture document is passed to the planner ONLY. Do NOT include it in generator or evaluator handoffs. The planner uses it to inform sprint decomposition; the generator and evaluator work from the spec and contracts.
-
----
-
 ## Step 2: Spawn the Planner Subagent
 
 Use the **Agent tool** to spawn a planner subagent.
@@ -205,15 +134,12 @@ You are the Bober Planner subagent. You have been spawned by the orchestrator to
 ## Project Principles (.bober/principles.md)
 <paste the full contents of .bober/principles.md here, or "No principles file found." if it does not exist>
 
-## Architecture Document (if architectPhase ran)
-<paste the full architecture document here, or omit section if architectPhase was false>
-
 ## Existing Specs
 <list any existing spec IDs from .bober/specs/, or "None" if no prior specs>
 
 ## Instructions
 1. Read the codebase to understand the project structure (use Glob and Grep to survey, Read to examine key files).
-2. Generate a PlanSpec with sprint decomposition, informed by the architecture document above if present.
+2. Generate a PlanSpec with sprint decomposition.
 3. Save the PlanSpec to .bober/specs/<specId>.json
 4. Save each SprintContract to .bober/contracts/<contractId>.json
 5. Update .bober/progress.md with the plan summary.
@@ -343,22 +269,30 @@ IMPORTANT: The generator MUST have full write access (`mode: auto` or `mode: byp
 
 **Build the generator prompt:**
 
+IMPORTANT: Do NOT paste the full handoff JSON inline. The handoff has already been saved to disk. Reference the file path instead — this keeps the orchestrator's context lean.
+
 ```
 You are the Bober Generator subagent. You have been spawned by the orchestrator to implement a sprint.
 
 ## Context Handoff
-<paste the FULL handoff JSON here — this is ALL the context you get>
+Read the full handoff from: .bober/handoffs/<handoffId>.json
+
+## Sprint Briefing
+Read the curated Sprint Briefing FIRST (if it exists): .bober/briefings/<contractId>-briefing.md
+The briefing contains pre-analyzed code patterns, utilities to reuse, affected files, testing patterns, and implementation sequence. Start here before exploring the codebase.
 
 ## Instructions
-1. Read the SprintContract at .bober/contracts/<contractId>.json
-2. Read the PlanSpec at .bober/specs/<specId>.json for broader context
-3. Read bober.config.json for commands configuration
-4. Read .bober/principles.md if it exists — adhere to all principles strictly
-5. Read the files listed in the contract's estimatedFiles
-6. Implement the sprint according to the contract's success criteria
-7. Self-verify: run build, typecheck, lint, and test commands
-8. Commit your changes with proper messages (format: "bober(<sprint-N>): <description>")
-9. Work on the feature branch, never on main/master
+1. Read the Sprint Briefing at .bober/briefings/<contractId>-briefing.md (if it exists)
+2. Read the handoff at .bober/handoffs/<handoffId>.json
+3. Read the SprintContract at .bober/contracts/<contractId>.json
+4. Read the PlanSpec at .bober/specs/<specId>.json for broader context
+5. Read bober.config.json for commands configuration
+6. Read .bober/principles.md if it exists — adhere to all principles strictly
+7. Read the files listed in the contract's estimatedFiles
+8. Implement the sprint according to the contract's success criteria
+9. Self-verify: run build, typecheck, lint, and test commands
+10. Commit your changes with proper messages (format: "bober(<sprint-N>): <description>")
+11. Work on the feature branch, never on main/master
 
 <IF iteration > 1>
 ## IMPORTANT — This is a RETRY (iteration <N>)
@@ -423,20 +357,16 @@ NOTE: The evaluator has read + bash access but NO write/edit tools (enforced by 
 
 **Build the evaluator prompt:**
 
+IMPORTANT: Do NOT paste the full handoff or contract JSON inline. Reference file paths instead — this keeps the orchestrator's context lean. Only include the generator's completion report and minimal context identifiers.
+
 ```
 You are the Bober Evaluator subagent. You have been spawned by the orchestrator to evaluate a sprint.
 
 ## Sprint Contract
-<paste the full SprintContract JSON>
+Read from: .bober/contracts/<contractId>.json
 
 ## Generator's Completion Report
-<paste the generator's completion report JSON>
-
-## Project Configuration
-<paste relevant sections of bober.config.json: commands, evaluator>
-
-## Project Principles
-<paste full text of .bober/principles.md or "No principles file found.">
+<paste the generator's completion report JSON — this is small and needed for context>
 
 ## Context
 - Contract ID: <contractId>
@@ -449,10 +379,10 @@ You are the Bober Evaluator subagent. You have been spawned by the orchestrator 
 ## Instructions
 1. Read the SprintContract at .bober/contracts/<contractId>.json
 2. Read bober.config.json for configured eval strategies and commands
-3. Run each configured evaluation strategy (typecheck, lint, build, unit-test, playwright, api-check) using the commands from config
-4. Verify EVERY success criterion in the contract one by one
-5. Check for regressions (pre-existing tests still passing, build stability)
-6. Check adherence to project principles
+3. Read .bober/principles.md if it exists — check adherence
+4. Run each configured evaluation strategy (typecheck, lint, build, unit-test, playwright, api-check) using the commands from config
+5. Verify EVERY success criterion in the contract one by one
+6. Check for regressions (pre-existing tests still passing, build stability)
 7. Produce a structured EvalResult
 
 IMPORTANT: You do NOT have Write or Edit tools. Output the EvalResult JSON in your response, and the orchestrator will save it to disk.
@@ -665,10 +595,6 @@ Last updated: <timestamp>
 - Spec: <specId>
 - Created: <date>
 - Status: in-progress
-- Research: complete | pending
-- Architecture: complete (.bober/architecture/<id>-architecture.md) | pending | N/A
-- Design: complete | pending
-- Outline: complete | pending
 
 ### Sprint Breakdown
 1. [completed] Sprint 1: <title> -- Passed on iteration 1
@@ -682,8 +608,6 @@ Last updated: <timestamp>
 - Sprints completed: 2 / 5
 - Subagents spawned: 6
 ```
-
-Include the Architecture line in all plans. Set to "complete (.bober/architecture/<id>-architecture.md)" after the architect phase runs, "pending" while in progress, or "N/A" if `pipeline.architectPhase` is `false`.
 
 And keep `.bober/history.jsonl` updated with events:
 - `pipeline-started`

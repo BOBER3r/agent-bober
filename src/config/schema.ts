@@ -119,6 +119,16 @@ export const SprintSectionSchema = z.object({
 });
 export type SprintSection = z.infer<typeof SprintSectionSchema>;
 
+export const CuratorSectionSchema = z.object({
+  model: ModelChoiceSchema.default("opus"),
+  maxTurns: z.number().int().min(1).default(25),
+  enabled: z.boolean().default(true),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+});
+export type CuratorSection = z.infer<typeof CuratorSectionSchema>;
+
 export const PipelineSectionSchema = z.object({
   maxIterations: z.number().int().min(1).default(20),
   requireApproval: z.boolean().default(false),
@@ -143,6 +153,7 @@ export type CommandsSection = z.infer<typeof CommandsSectionSchema>;
 export const BoberConfigSchema = z.object({
   project: ProjectSectionSchema,
   planner: PlannerSectionSchema,
+  curator: CuratorSectionSchema.optional(),
   generator: GeneratorSectionSchema,
   evaluator: EvaluatorSectionSchema,
   sprint: SprintSectionSchema,
@@ -187,6 +198,11 @@ export function createDefaultConfig(
     planner: {
       maxClarifications: 5,
       model: "opus",
+    },
+    curator: {
+      model: "opus",
+      maxTurns: 25,
+      enabled: true,
     },
     generator: {
       model: "sonnet",

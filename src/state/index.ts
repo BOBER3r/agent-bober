@@ -52,8 +52,14 @@ export {
   listArchitectures,
 } from "./architect-state.js";
 
+export {
+  saveBriefing,
+  readBriefing,
+  listBriefings,
+} from "./briefing-state.js";
+
 const BOBER_DIR = ".bober";
-const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture"] as const;
+const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings"] as const;
 
 /**
  * Ensure the `.bober/` directory and all required subdirectories exist,
