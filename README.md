@@ -116,16 +116,18 @@ Specialized workflows:
 
 ## Multi-Provider Support
 
-agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. Mix and match -- Opus for planning, GPT-4.1 for generation, local Ollama for evaluation.
+agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. Mix and match providers freely -- use one for planning, another for generation, a local model for evaluation.
 
 ### Supported Providers
 
-| Provider | Models | API Key |
-|----------|--------|---------|
+| Provider | Shorthands | API Key |
+|----------|-----------|---------|
 | **Anthropic** (default) | `opus`, `sonnet`, `haiku` | `ANTHROPIC_API_KEY` |
-| **OpenAI** | `gpt-4.1`, `gpt-4.1-mini`, `o3`, `o4-mini` | `OPENAI_API_KEY` |
+| **OpenAI** | Any OpenAI model ID | `OPENAI_API_KEY` |
 | **Google Gemini** | `gemini-pro`, `gemini-flash` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
 | **OpenAI-Compatible** | Any model (Ollama, LM Studio, Groq, DeepSeek, etc.) | Optional |
+
+Shorthands resolve to the latest model version automatically. You can also pass any full model ID directly -- it will be sent to the provider as-is.
 
 ### Configuration
 
@@ -139,21 +141,20 @@ Set providers per agent role in `bober.config.json`:
   },
   "generator": {
     "provider": "openai",
-    "model": "gpt-4.1"
+    "model": "your-preferred-model"
   },
   "evaluator": {
     "provider": "openai-compat",
-    "model": "llama3.1:70b",
+    "model": "any-local-model",
     "endpoint": "http://localhost:11434/v1"
   }
 }
 ```
 
-Model shorthands auto-resolve to the correct provider:
-- `"opus"` / `"sonnet"` / `"haiku"` -- Anthropic
-- `"gpt-4.1"` / `"o3"` / `"o4-mini"` -- OpenAI
-- `"gemini-pro"` / `"gemini-flash"` -- Google
-- `"ollama/llama3"` -- OpenAI-compatible at localhost:11434
+The `ollama/` prefix is a shortcut for local models:
+```jsonc
+{ "model": "ollama/llama3" }  // resolves to openai-compat at localhost:11434
+```
 
 Override provider for all roles from the CLI:
 ```bash
