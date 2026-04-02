@@ -236,40 +236,6 @@ Before any changes, record baselines that the evaluator will check against:
 
 The evaluator will compare post-sprint results against these baselines to detect regressions.
 
-## Step 3b: Architect Phase (Conditional, Strongly Recommended for Brownfield)
-
-If `pipeline.architectPhase` is `true` in `bober.config.json`, run the architect phase before planning. For brownfield projects, this phase is especially valuable: it produces an architecture document that captures the existing system design and how the new feature integrates, which informs safer sprint decomposition.
-
-To enable:
-```json
-{
-  "pipeline": {
-    "architectPhase": true
-  }
-}
-```
-
-**Brownfield-specific architect instructions:**
-
-The architect subagent in brownfield mode should:
-1. Read the existing codebase architecture (using Step 1b analysis as input)
-2. Focus Checkpoint 1 on what existing components are affected by the new feature
-3. Use Checkpoint 3 to define exact interface changes to existing components (not just new ones)
-4. Use Checkpoint 4 to map integration risks in terms of the existing system
-5. Document backward compatibility constraints as ADRs
-
-**Context distillation rule (same as standard pipeline):**
-- Architecture doc → planner only
-- Generator and evaluator do NOT receive the architecture doc
-- The planner uses it to decompose sprints with awareness of existing patterns and integration points
-
-After the architect phase:
-1. Read `.bober/architecture/<id>-architecture.md` to verify output
-2. Log `architect-started`, `architect-checkpoint`, `architect-completed` events to `.bober/history.jsonl`
-3. Pass the architecture doc to the planner under `## Architecture Document`
-
----
-
 ## Step 4: Plan with Brownfield Constraints
 
 Run the planning workflow with these additional constraints:

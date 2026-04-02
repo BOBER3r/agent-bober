@@ -198,18 +198,12 @@ Save all artifacts to the `.bober/` directory:
    - Created: <date>
    - Sprints: <count>
    - Status: planned
-   - Research: complete | pending
-   - Architecture: complete (.bober/architecture/<id>-architecture.md) | pending | N/A
-   - Design: complete | pending
-   - Outline: complete | pending
 
    ### Sprint Breakdown
    1. [proposed] <Sprint 1 title> -- <1-line description>
    2. [proposed] <Sprint 2 title> -- <1-line description>
    ...
    ```
-
-   Include the Architecture line only when `pipeline.architectPhase` is `true` in the config. Set the value to "N/A" if the phase was not used.
 
 4. **Append to `.bober/history.jsonl`:**
    ```json

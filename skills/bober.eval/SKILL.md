@@ -189,6 +189,18 @@ Respond with EXACTLY this JSON structure (no other text):
    {"event":"eval-completed","contractId":"...","evalId":"...","result":"pass|fail","timestamp":"..."}
    ```
 
+4. **If `overallResult` is `"pass"`:**
+   - Update the contract: set `status` to `"completed"`, `completedAt` to current ISO-8601 timestamp. Save to `.bober/contracts/<contractId>.json`.
+   - Update `.bober/progress.md` — change the sprint line to `[completed]`.
+   - **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
+     - Update the PlanSpec: set `status` to `"completed"` and `completedAt` to current ISO-8601 timestamp. Save to `.bober/specs/<specId>.json`. **The `status` field MUST remain in the first 10 lines of the JSON** so future runs can skip it with a partial read.
+     - Update `.bober/progress.md` — change the plan's status line to `completed (N/N sprints)`.
+     - Log event: `{"event":"plan-completed","specId":"...","sprintsCompleted":N,"timestamp":"..."}`
+
+5. **If `overallResult` is `"fail"`:**
+   - Update the contract: set `status` to `"needs-rework"`, `lastEvalId` to the eval ID. Save to `.bober/contracts/<contractId>.json`.
+   - Update `.bober/progress.md` — change the sprint line to `[needs-rework]`.
+
 If the subagent crashed or returned a malformed response, report the error clearly and suggest the user retry.
 
 ## Step 5: Output Report

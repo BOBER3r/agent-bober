@@ -30,13 +30,15 @@ Also read `.bober/principles.md` if it exists. You will include the principles t
 
 ## Step 1: Identify the Target Sprint
 
+**Find the active PlanSpec.** List all specs in `.bober/specs/`. For each spec, read only the **first 5 lines** — the `status` field is near the top. Skip any spec where `status` is `"completed"`. From the remaining specs, pick the most recent one (sort by `createdAt` descending).
+
+If all specs are `completed` and no sprint number was provided, tell the user all plans are complete.
+
 **If a sprint number was provided as an argument:**
-- Load the most recent PlanSpec from `.bober/specs/` (sort by `createdAt` descending)
 - Find the contract for that sprint number: `.bober/contracts/sprint-<specId>-<N>.json`
 - Verify it exists and its status is `proposed`, `in-progress`, or `needs-rework`
 
 **If no sprint number was provided:**
-- Load the most recent PlanSpec
 - Find the first sprint contract with status `proposed` or `needs-rework`
 - If all sprints are `completed`, tell the user all sprints are done
 - If a sprint is `in-progress`, resume it
@@ -362,7 +364,12 @@ Respond with EXACTLY this JSON structure (no other text):
    {"event":"sprint-completed","contractId":"...","specId":"...","iteration":N,"timestamp":"..."}
    ```
 
-4. **Report success to the user:**
+4. **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
+   - Update the PlanSpec: set `status` to `"completed"` and `completedAt` to current ISO-8601 timestamp. Save to `.bober/specs/<specId>.json`. **The `status` field MUST remain in the first 10 lines of the JSON** so future runs can skip it with a partial read.
+   - Update `.bober/progress.md` — change the plan's status line to `completed (N/N sprints)`.
+   - Log event: `{"event":"plan-completed","specId":"...","sprintsCompleted":N,"timestamp":"..."}`
+
+5. **Report success to the user:**
    ```
    === Sprint <N> PASSED on iteration <M> ===
 
@@ -374,6 +381,7 @@ Respond with EXACTLY this JSON structure (no other text):
 
    Next sprint: <next sprint title> (run /bober-sprint to continue)
    ```
+   If all sprints are done, report `=== PLAN COMPLETE (N/N sprints) ===` instead of "Next sprint".
 
 ### If the sprint FAILS and retries remain:
 
