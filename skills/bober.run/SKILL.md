@@ -251,7 +251,69 @@ For retry iterations (iteration > 1), populate `evaluatorFeedback` with the eval
 
 Save the handoff to `.bober/handoffs/<handoffId>.json`.
 
-### 3d. Spawn the Generator Subagent
+### 3d. Spawn the Curator Subagent (once per sprint, before the first generator attempt)
+
+Check if `curator.enabled` is `true` in `bober.config.json` (default: true). If enabled, and this is iteration 1 (not a retry), spawn a curator subagent to produce a Sprint Briefing.
+
+**Skip the curator if:**
+- `curator.enabled` is `false` in config
+- This is a retry iteration (iteration > 1) — the briefing already exists from the first attempt
+
+**Use the Agent tool to spawn the curator:**
+
+```
+Agent tool call:
+  description: "Curate sprint <N>: <sprint title>"
+  subagent_type: bober-curator
+  mode: auto
+  prompt: <the full prompt below>
+```
+
+**Build the curator prompt:**
+
+```
+You are the Bober Curator subagent. You have been spawned by the orchestrator to produce a Sprint Briefing.
+
+## Sprint Contract
+Read from: .bober/contracts/<contractId>.json
+
+## Project Overview
+Plan: <spec title>
+Description: <spec description>
+Tech Stack: <spec techStack>
+
+## Completed Sprints
+<list completed sprint titles and what they built, or "No prior sprints completed.">
+
+## Project Root
+<project root path>
+
+## Instructions
+1. Read the sprint contract at .bober/contracts/<contractId>.json
+2. For each file in estimatedFiles: read it, extract relevant sections, trace imports
+3. Find existing utilities the generator should reuse (search src/utils/, src/lib/, src/helpers/)
+4. Find test files similar to what this sprint needs — extract patterns
+5. Check .bober/principles.md, README.md, architecture docs
+6. Identify files/tests that may be affected by the changes (grep for imports)
+7. Determine implementation sequence based on dependencies
+8. Save the Sprint Briefing to .bober/briefings/<contractId>-briefing.md
+
+Your final response must contain ONLY a JSON object (no markdown fences):
+{
+  "contractId": "<contract ID>",
+  "briefingPath": ".bober/briefings/<contractId>-briefing.md",
+  "filesAnalyzed": ["<files you read>"],
+  "patternsFound": <number>,
+  "utilsIdentified": <number>,
+  "summary": "<2-3 sentence summary>"
+}
+```
+
+**After the curator subagent returns:**
+1. Verify the briefing was saved: check `.bober/briefings/<contractId>-briefing.md` exists
+2. Log the curator result but do NOT read the full briefing into orchestrator context — the generator will read it from disk
+
+### 3e. Spawn the Generator Subagent
 
 Use the **Agent tool** to spawn a generator subagent.
 
@@ -269,22 +331,30 @@ IMPORTANT: The generator MUST have full write access (`mode: auto` or `mode: byp
 
 **Build the generator prompt:**
 
+IMPORTANT: Do NOT paste the full handoff JSON inline. The handoff has already been saved to disk. Reference the file path instead — this keeps the orchestrator's context lean.
+
 ```
 You are the Bober Generator subagent. You have been spawned by the orchestrator to implement a sprint.
 
 ## Context Handoff
-<paste the FULL handoff JSON here — this is ALL the context you get>
+Read the full handoff from: .bober/handoffs/<handoffId>.json
+
+## Sprint Briefing
+Read the curated Sprint Briefing FIRST (if it exists): .bober/briefings/<contractId>-briefing.md
+The briefing contains pre-analyzed code patterns, utilities to reuse, affected files, testing patterns, and implementation sequence. Start here before exploring the codebase.
 
 ## Instructions
-1. Read the SprintContract at .bober/contracts/<contractId>.json
-2. Read the PlanSpec at .bober/specs/<specId>.json for broader context
-3. Read bober.config.json for commands configuration
-4. Read .bober/principles.md if it exists — adhere to all principles strictly
-5. Read the files listed in the contract's estimatedFiles
-6. Implement the sprint according to the contract's success criteria
-7. Self-verify: run build, typecheck, lint, and test commands
-8. Commit your changes with proper messages (format: "bober(<sprint-N>): <description>")
-9. Work on the feature branch, never on main/master
+1. Read the Sprint Briefing at .bober/briefings/<contractId>-briefing.md (if it exists)
+2. Read the handoff at .bober/handoffs/<handoffId>.json
+3. Read the SprintContract at .bober/contracts/<contractId>.json
+4. Read the PlanSpec at .bober/specs/<specId>.json for broader context
+5. Read bober.config.json for commands configuration
+6. Read .bober/principles.md if it exists — adhere to all principles strictly
+7. Read the files listed in the contract's estimatedFiles
+8. Implement the sprint according to the contract's success criteria
+9. Self-verify: run build, typecheck, lint, and test commands
+10. Commit your changes with proper messages (format: "bober(<sprint-N>): <description>")
+11. Work on the feature branch, never on main/master
 
 <IF iteration > 1>
 ## IMPORTANT — This is a RETRY (iteration <N>)
@@ -331,7 +401,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
    ```
 5. If the generator subagent crashed or returned an error, mark the sprint as `needs-rework` and log it.
 
-### 3e. Spawn the Evaluator Subagent
+### 3f. Spawn the Evaluator Subagent
 
 Use the **Agent tool** to spawn an evaluator subagent.
 
@@ -349,20 +419,16 @@ NOTE: The evaluator has read + bash access but NO write/edit tools (enforced by 
 
 **Build the evaluator prompt:**
 
+IMPORTANT: Do NOT paste the full handoff or contract JSON inline. Reference file paths instead — this keeps the orchestrator's context lean. Only include the generator's completion report and minimal context identifiers.
+
 ```
 You are the Bober Evaluator subagent. You have been spawned by the orchestrator to evaluate a sprint.
 
 ## Sprint Contract
-<paste the full SprintContract JSON>
+Read from: .bober/contracts/<contractId>.json
 
 ## Generator's Completion Report
-<paste the generator's completion report JSON>
-
-## Project Configuration
-<paste relevant sections of bober.config.json: commands, evaluator>
-
-## Project Principles
-<paste full text of .bober/principles.md or "No principles file found.">
+<paste the generator's completion report JSON — this is small and needed for context>
 
 ## Context
 - Contract ID: <contractId>
@@ -375,10 +441,10 @@ You are the Bober Evaluator subagent. You have been spawned by the orchestrator 
 ## Instructions
 1. Read the SprintContract at .bober/contracts/<contractId>.json
 2. Read bober.config.json for configured eval strategies and commands
-3. Run each configured evaluation strategy (typecheck, lint, build, unit-test, playwright, api-check) using the commands from config
-4. Verify EVERY success criterion in the contract one by one
-5. Check for regressions (pre-existing tests still passing, build stability)
-6. Check adherence to project principles
+3. Read .bober/principles.md if it exists — check adherence
+4. Run each configured evaluation strategy (typecheck, lint, build, unit-test, playwright, api-check) using the commands from config
+5. Verify EVERY success criterion in the contract one by one
+6. Check for regressions (pre-existing tests still passing, build stability)
 7. Produce a structured EvalResult
 
 IMPORTANT: You do NOT have Write or Edit tools. Output the EvalResult JSON in your response, and the orchestrator will save it to disk.
@@ -432,7 +498,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
 2. Save the EvalResult to `.bober/eval-results/eval-<contractId>-<iteration>.json` (the evaluator cannot write files).
 3. Determine pass/fail from the `overallResult` field.
 
-### 3f. Process the Evaluation Result
+### 3g. Process the Evaluation Result
 
 **On PASS:**
 1. Update contract status to `completed` and save to `.bober/contracts/`.
@@ -477,14 +543,14 @@ When done, respond with EXACTLY this JSON structure (no other text):
    - If the failure blocks subsequent sprints, stop the pipeline.
 4. Print failure report with full context.
 
-### 3g. Context Reset
+### 3h. Context Reset
 
 After each sprint completes (pass or fail), check `pipeline.contextReset` from config:
 - `always`: Fresh context for the next sprint. The next sprint's Generator receives only its handoff document. (This is the default with subagent architecture — each spawn IS a fresh context.)
 - `on-threshold`: Same as `always` with subagents, since each subagent is already isolated.
 - `never`: Carry summary forward in the handoff. Still a fresh subagent, but with richer handoff.
 
-### 3h. Iteration Budget
+### 3i. Iteration Budget
 
 Track total Generator-Evaluator iterations across all sprints:
 - Each Generator+Evaluator cycle counts as 1 iteration.

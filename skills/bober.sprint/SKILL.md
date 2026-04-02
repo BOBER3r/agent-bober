@@ -134,7 +134,68 @@ Save the handoff to `.bober/handoffs/<handoffId>.json`.
 }
 ```
 
-## Step 4: Spawn the Generator Subagent
+## Step 4: Spawn the Curator Subagent (once per sprint)
+
+Check if `curator.enabled` is `true` in `bober.config.json` (default: true). If enabled, spawn a curator subagent ONCE before the first generator attempt to produce a Sprint Briefing.
+
+**Skip the curator if:**
+- `curator.enabled` is `false` in config
+- A briefing already exists at `.bober/briefings/<contractId>-briefing.md` (from a previous run)
+
+**Use the Agent tool to spawn the curator:**
+
+```
+Agent tool call:
+  description: "Curate sprint <N>: <sprint title>"
+  subagent_type: bober-curator
+  mode: auto
+  prompt: <the prompt below>
+```
+
+**Curator prompt:**
+
+```
+You are the Bober Curator subagent. You have been spawned by the orchestrator to produce a Sprint Briefing.
+
+## Sprint Contract
+Read from: .bober/contracts/<contractId>.json
+
+## Project Overview
+Plan: <spec title>
+Description: <spec description>
+
+## Completed Sprints
+<list completed sprint titles and what they built, or "No prior sprints completed.">
+
+## Project Root
+<project root path>
+
+## Instructions
+1. Read the sprint contract at .bober/contracts/<contractId>.json
+2. For each file in estimatedFiles: read it, extract relevant sections, trace imports
+3. Find existing utilities the generator should reuse (search src/utils/, src/lib/, src/helpers/)
+4. Find test files similar to what this sprint needs — extract patterns
+5. Check .bober/principles.md, README.md, architecture docs
+6. Identify files/tests that may be affected by the changes (grep for imports)
+7. Determine implementation sequence based on dependencies
+8. Save the Sprint Briefing to .bober/briefings/<contractId>-briefing.md
+
+Your final response must contain ONLY a JSON object (no markdown fences):
+{
+  "contractId": "<contract ID>",
+  "briefingPath": ".bober/briefings/<contractId>-briefing.md",
+  "filesAnalyzed": ["<files you read>"],
+  "patternsFound": <number>,
+  "utilsIdentified": <number>,
+  "summary": "<2-3 sentence summary>"
+}
+```
+
+**After the curator subagent returns:**
+1. Verify the briefing was saved: check `.bober/briefings/<contractId>-briefing.md` exists
+2. Do NOT read the full briefing into orchestrator context — the generator reads it from disk
+
+## Step 5: Spawn the Generator Subagent
 
 **Before spawning:**
 1. Ensure the correct git branch exists and is checked out:
@@ -157,22 +218,30 @@ IMPORTANT: Use `mode: auto` or `mode: bypassPermissions` — the generator needs
 
 **Generator prompt:**
 
+IMPORTANT: Do NOT paste the full handoff JSON inline. The handoff has already been saved to disk. Reference the file path instead — this keeps the orchestrator's context lean.
+
 ```
 You are the Bober Generator subagent. You have been spawned by the orchestrator to implement a sprint.
 
 ## Context Handoff
-<paste the FULL handoff JSON>
+Read the full handoff from: .bober/handoffs/<handoffId>.json
+
+## Sprint Briefing
+Read the curated Sprint Briefing FIRST (if it exists): .bober/briefings/<contractId>-briefing.md
+The briefing contains pre-analyzed code patterns, utilities to reuse, affected files, testing patterns, and implementation sequence. Start here before exploring the codebase.
 
 ## Instructions
-1. Read the SprintContract at .bober/contracts/<contractId>.json
-2. Read the PlanSpec at .bober/specs/<specId>.json for broader context
-3. Read bober.config.json for commands configuration
-4. Read .bober/principles.md if it exists — adhere to all principles strictly
-5. Read the files listed in the contract's estimatedFiles
-6. Implement the sprint according to the contract's success criteria
-7. Self-verify: run build, typecheck, lint, and test commands
-8. Commit your changes (format: "bober(<sprint-N>): <description>")
-9. Work on the feature branch, never on main/master
+1. Read the Sprint Briefing at .bober/briefings/<contractId>-briefing.md (if it exists)
+2. Read the handoff at .bober/handoffs/<handoffId>.json
+3. Read the SprintContract at .bober/contracts/<contractId>.json
+4. Read the PlanSpec at .bober/specs/<specId>.json for broader context
+5. Read bober.config.json for commands configuration
+6. Read .bober/principles.md if it exists — adhere to all principles strictly
+7. Read the files listed in the contract's estimatedFiles
+8. Implement the sprint according to the contract's success criteria
+9. Self-verify: run build, typecheck, lint, and test commands
+10. Commit your changes (format: "bober(<sprint-N>): <description>")
+11. Work on the feature branch, never on main/master
 
 <IF iteration > 1>
 ## IMPORTANT — This is a RETRY (iteration <N>)
@@ -206,7 +275,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
 3. Save the generator report to `.bober/handoffs/gen-report-<contractId>-<iteration>.json`
 4. If the generator subagent crashed or returned an error, mark the sprint as `needs-rework` with note "Generator subagent failed".
 
-## Step 5: Spawn the Evaluator Subagent
+## Step 6: Spawn the Evaluator Subagent
 
 **Use the Agent tool to spawn the evaluator:**
 
@@ -222,20 +291,16 @@ NOTE: The evaluator needs `mode: auto` for bash access (running tests, builds). 
 
 **Evaluator prompt:**
 
+IMPORTANT: Do NOT paste the full contract or config JSON inline. Reference file paths instead — this keeps the orchestrator's context lean. Only include the generator's completion report and minimal context identifiers.
+
 ```
 You are the Bober Evaluator subagent. You have been spawned by the orchestrator to evaluate a sprint.
 
 ## Sprint Contract
-<paste the full SprintContract JSON>
+Read from: .bober/contracts/<contractId>.json
 
 ## Generator's Completion Report
-<paste the generator's completion report JSON>
-
-## Project Configuration
-<paste relevant sections: commands, evaluator config>
-
-## Project Principles
-<paste full text of .bober/principles.md or "No principles file found.">
+<paste the generator's completion report JSON — this is small and needed for context>
 
 ## Context
 - Contract ID: <contractId>
@@ -243,14 +308,15 @@ You are the Bober Evaluator subagent. You have been spawned by the orchestrator 
 - Sprint: <N> of <total>
 - Iteration: <N>
 - Branch: <current branch>
+- Changed files (per generator): <list of files>
 
 ## Instructions
 1. Read the SprintContract at .bober/contracts/<contractId>.json
 2. Read bober.config.json for configured eval strategies and commands
-3. Run each configured evaluation strategy using the commands from config
-4. Verify EVERY success criterion one by one
-5. Check for regressions
-6. Check adherence to project principles
+3. Read .bober/principles.md if it exists — check adherence
+4. Run each configured evaluation strategy using the commands from config
+5. Verify EVERY success criterion one by one
+6. Check for regressions
 7. Produce a structured EvalResult
 
 IMPORTANT: You do NOT have Write or Edit tools. Output the EvalResult JSON in your response.
@@ -278,7 +344,7 @@ Respond with EXACTLY this JSON structure (no other text):
 2. Save the EvalResult to `.bober/eval-results/eval-<contractId>-<iteration>.json` (the evaluator cannot write files).
 3. Determine pass/fail from the `overallResult` field.
 
-## Step 6: Process Evaluation Result
+## Step 7: Process Evaluation Result
 
 ### If the sprint PASSES:
 
@@ -365,7 +431,7 @@ Check `evaluator.maxIterations` from `bober.config.json` (default: 3). If the cu
    - Run /bober-plan to revise the plan
    ```
 
-## Step 7: Context Reset
+## Step 8: Context Reset
 
 After a sprint completes (pass or fail), manage context:
 
@@ -389,3 +455,260 @@ Read `pipeline.contextReset` from config:
 After completing this phase, suggest the following next steps to the user:
 - `/bober-eval` — Evaluate the current sprint output independently
 - `/bober-sprint` — Execute the next sprint in the plan
+
+
+---
+
+<!-- Reference: contract-schema.md -->
+
+# SprintContract JSON Schema
+
+This document defines the complete schema for SprintContract documents. Sprint contracts are the binding agreement between the Planner, Generator, and Evaluator for a single sprint.
+
+## Location
+
+SprintContract files are stored at: `.bober/contracts/<contractId>.json`
+
+## Naming Convention
+
+- `contractId` format: `sprint-<specId>-<sprint-number>`
+- Example: `sprint-spec-20260326-user-auth-1`
+- Sprint numbers are 1-indexed (first sprint is 1, not 0)
+
+## Full Schema
+
+```json
+{
+  "contractId": "string (required)",
+  "specId": "string (required, references parent PlanSpec)",
+  "sprintNumber": "number (required, 1-indexed)",
+  "title": "string (required, concise sprint title)",
+  "description": "string (required, what this sprint delivers)",
+  "status": "string (required, one of: proposed, in-progress, completed, needs-rework)",
+  "createdAt": "string (required, ISO-8601)",
+  "updatedAt": "string (required, ISO-8601)",
+  "completedAt": "string (optional, ISO-8601, set when status becomes completed)",
+
+  "dependsOn": [
+    "string — contractId references for sprints that must complete before this one"
+  ],
+
+  "features": [
+    "string — featureId references from the parent PlanSpec"
+  ],
+
+  "successCriteria": [
+    {
+      "criterionId": "string (required, format: sc-<sprint>-<index>)",
+      "description": "string (required, specific testable criterion)",
+      "verificationMethod": "string (required, one of: manual, typecheck, lint, unit-test, playwright, api-check, build, custom)",
+      "required": "boolean (required, true = must pass for sprint to pass)",
+      "customCommand": "string (optional, command to run for custom verification)"
+    }
+  ],
+
+  "generatorNotes": "string (required, guidance for the Generator agent)",
+  "evaluatorNotes": "string (required, guidance for the Evaluator agent)",
+
+  "estimatedFiles": [
+    "string — file paths expected to be created or modified"
+  ],
+
+  "estimatedDuration": "string (required, one of: small, medium, large)",
+
+  "iterationHistory": [
+    {
+      "iteration": "number",
+      "evalId": "string — reference to EvalResult",
+      "result": "string (pass | fail)",
+      "timestamp": "string (ISO-8601)"
+    }
+  ],
+
+  "lastEvalId": "string (optional, reference to most recent EvalResult)"
+}
+```
+
+## Field Descriptions
+
+### Core Fields
+
+| Field | Description |
+|-------|-------------|
+| `contractId` | Unique identifier. Generated by the Planner. Never changes. |
+| `specId` | Reference to the parent PlanSpec. Used to load broader context. |
+| `sprintNumber` | Position in the sprint sequence. 1-indexed. |
+| `title` | Concise description of what this sprint delivers. Should start with a verb: "Implement...", "Add...", "Create...". |
+| `description` | 2-4 sentences describing the sprint's deliverables and scope. |
+| `status` | Lifecycle state. See Status Transitions below. |
+
+### Status Transitions
+
+```
+proposed → in-progress → completed
+                ↓
+          needs-rework → in-progress → completed
+```
+
+- `proposed`: Created by the Planner. Not yet started or reviewed.
+- `in-progress`: Contract negotiated and Generator is working on it.
+- `completed`: All required success criteria passed evaluation.
+- `needs-rework`: Failed evaluation after maximum iterations. Requires human intervention or plan revision.
+
+### Dependencies
+
+| Field | Description |
+|-------|-------------|
+| `dependsOn` | Array of `contractId` values that must have status `completed` before this sprint can start. Empty array for the first sprint. |
+| `features` | Array of `featureId` values from the parent PlanSpec that this sprint implements (partially or fully). |
+
+### Success Criteria
+
+Each success criterion is a single testable statement that the Evaluator checks independently.
+
+| Field | Description |
+|-------|-------------|
+| `criterionId` | Unique within the contract. Format: `sc-<sprintNumber>-<index>` (1-indexed). |
+| `description` | Specific, testable criterion. Must describe observable behavior or measurable outcome. |
+| `verificationMethod` | How the Evaluator should verify this criterion. |
+| `required` | If `true`, this criterion MUST pass for the sprint to pass. If `false`, it is advisory. |
+| `customCommand` | Only for `verificationMethod: "custom"`. The command the Evaluator should run. |
+
+### Verification Methods
+
+| Method | What the Evaluator Does |
+|--------|------------------------|
+| `manual` | Reads source code and assesses whether the criterion is met based on code inspection and logic tracing. |
+| `typecheck` | Runs the configured typecheck command. Criterion passes if zero type errors. |
+| `lint` | Runs the configured lint command. Criterion passes if zero lint errors (warnings OK). |
+| `unit-test` | Runs the configured test command. Criterion passes if all tests pass. |
+| `playwright` | Runs Playwright E2E tests. Criterion passes if all relevant E2E tests pass. |
+| `api-check` | Tests specific API endpoints using curl or similar. Criterion passes if responses match expectations. |
+| `build` | Runs the configured build command. Criterion passes if build succeeds with exit code 0. |
+| `custom` | Runs `customCommand` and interprets the result. Exit code 0 = pass. |
+
+### Agent Notes
+
+| Field | Description |
+|-------|-------------|
+| `generatorNotes` | Free-form guidance for the Generator. Should include: key files to examine for patterns, known gotchas, suggested implementation order, references to similar existing code. |
+| `evaluatorNotes` | Free-form guidance for the Evaluator. Should include: specific things to test, edge cases to check, how to verify UI criteria, expected API response shapes. |
+
+### Estimates
+
+| Field | Description |
+|-------|-------------|
+| `estimatedFiles` | Array of file paths the Generator is expected to create or modify. This is advisory -- the Generator may touch additional files if needed. The Evaluator uses this to check for unexpected changes. |
+| `estimatedDuration` | Relative size estimate: `small` (30-60 min), `medium` (1-3 hours), `large` (3-5 hours). |
+
+### Iteration History
+
+| Field | Description |
+|-------|-------------|
+| `iterationHistory` | Array of past evaluation attempts. Appended after each evaluation. |
+| `lastEvalId` | Reference to the most recent EvalResult. Updated after each evaluation. |
+
+## Complete Example
+
+```json
+{
+  "contractId": "sprint-spec-20260326-user-auth-1",
+  "specId": "spec-20260326-user-auth",
+  "sprintNumber": 1,
+  "title": "Implement user registration with form and API",
+  "description": "Create the user registration flow end-to-end: a React registration form with email, password, and confirm-password fields; an Express API endpoint that validates input and creates a user record in PostgreSQL with a bcrypt-hashed password; and basic form validation on both client and server.",
+  "status": "proposed",
+  "createdAt": "2026-03-26T10:00:00Z",
+  "updatedAt": "2026-03-26T10:00:00Z",
+  "completedAt": null,
+
+  "dependsOn": [],
+
+  "features": ["feat-1"],
+
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds successfully with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A registration form component exists at the /register route with email, password, and confirm-password input fields, each with an associated label.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "POST /api/auth/register accepts { email, password } and returns 201 with { id, email } on success.",
+      "verificationMethod": "api-check",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "POST /api/auth/register returns 400 with an error message when email is already registered.",
+      "verificationMethod": "api-check",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "The password is stored as a bcrypt hash in the database, never in plain text.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "Client-side validation shows an error when password is shorter than 8 characters before form submission.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-8",
+      "description": "ESLint reports zero errors on all new and modified files.",
+      "verificationMethod": "lint",
+      "required": false
+    }
+  ],
+
+  "generatorNotes": "Look at existing route definitions in src/routes/ for the Express routing pattern. The project uses Prisma -- check prisma/schema.prisma for the existing schema and add a User model. Use bcrypt (already in package.json) for password hashing. For the React form, follow the pattern in src/components/ -- the project uses controlled components with useState. The registration form should be at src/pages/Register.tsx and the route added to src/App.tsx.",
+
+  "evaluatorNotes": "For sc-1-3: Read the Register component source and verify it renders three labeled input fields. For sc-1-4 and sc-1-5: Start the dev server and use curl to test the endpoint. For sc-1-6: Read the route handler code and verify bcrypt.hash is called before database insertion. For sc-1-7: Read the form component code and verify client-side validation logic exists for password length.",
+
+  "estimatedFiles": [
+    "prisma/schema.prisma",
+    "src/routes/auth.ts",
+    "src/pages/Register.tsx",
+    "src/App.tsx"
+  ],
+
+  "estimatedDuration": "medium",
+
+  "iterationHistory": [],
+  "lastEvalId": null
+}
+```
+
+## Writing Good Success Criteria
+
+### Do
+
+- Start with an observable action or state: "The form displays...", "The API returns...", "The database contains..."
+- Include specific values: "returns 201", "displays 'Invalid email'", "at least 8 characters"
+- Map each criterion to exactly one verification method
+- Include at least one `build` criterion and one functional criterion per sprint
+- Write criteria the Evaluator can verify without guessing
+
+### Do Not
+
+- Use subjective language: "looks good", "works well", "clean code"
+- Combine multiple checks in one criterion (split them)
+- Reference internal implementation details unless checking them IS the criterion
+- Write criteria that require human visual judgment (unless verification method is `manual` and the check is code-inspectable)
+- Assume the Evaluator has context beyond the contract and handoff documents
