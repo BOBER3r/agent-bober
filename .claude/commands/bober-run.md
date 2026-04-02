@@ -251,7 +251,69 @@ For retry iterations (iteration > 1), populate `evaluatorFeedback` with the eval
 
 Save the handoff to `.bober/handoffs/<handoffId>.json`.
 
-### 3d. Spawn the Generator Subagent
+### 3d. Spawn the Curator Subagent (once per sprint, before the first generator attempt)
+
+Check if `curator.enabled` is `true` in `bober.config.json` (default: true). If enabled, and this is iteration 1 (not a retry), spawn a curator subagent to produce a Sprint Briefing.
+
+**Skip the curator if:**
+- `curator.enabled` is `false` in config
+- This is a retry iteration (iteration > 1) — the briefing already exists from the first attempt
+
+**Use the Agent tool to spawn the curator:**
+
+```
+Agent tool call:
+  description: "Curate sprint <N>: <sprint title>"
+  subagent_type: bober-curator
+  mode: auto
+  prompt: <the full prompt below>
+```
+
+**Build the curator prompt:**
+
+```
+You are the Bober Curator subagent. You have been spawned by the orchestrator to produce a Sprint Briefing.
+
+## Sprint Contract
+Read from: .bober/contracts/<contractId>.json
+
+## Project Overview
+Plan: <spec title>
+Description: <spec description>
+Tech Stack: <spec techStack>
+
+## Completed Sprints
+<list completed sprint titles and what they built, or "No prior sprints completed.">
+
+## Project Root
+<project root path>
+
+## Instructions
+1. Read the sprint contract at .bober/contracts/<contractId>.json
+2. For each file in estimatedFiles: read it, extract relevant sections, trace imports
+3. Find existing utilities the generator should reuse (search src/utils/, src/lib/, src/helpers/)
+4. Find test files similar to what this sprint needs — extract patterns
+5. Check .bober/principles.md, README.md, architecture docs
+6. Identify files/tests that may be affected by the changes (grep for imports)
+7. Determine implementation sequence based on dependencies
+8. Save the Sprint Briefing to .bober/briefings/<contractId>-briefing.md
+
+Your final response must contain ONLY a JSON object (no markdown fences):
+{
+  "contractId": "<contract ID>",
+  "briefingPath": ".bober/briefings/<contractId>-briefing.md",
+  "filesAnalyzed": ["<files you read>"],
+  "patternsFound": <number>,
+  "utilsIdentified": <number>,
+  "summary": "<2-3 sentence summary>"
+}
+```
+
+**After the curator subagent returns:**
+1. Verify the briefing was saved: check `.bober/briefings/<contractId>-briefing.md` exists
+2. Log the curator result but do NOT read the full briefing into orchestrator context — the generator will read it from disk
+
+### 3e. Spawn the Generator Subagent
 
 Use the **Agent tool** to spawn a generator subagent.
 
@@ -339,7 +401,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
    ```
 5. If the generator subagent crashed or returned an error, mark the sprint as `needs-rework` and log it.
 
-### 3e. Spawn the Evaluator Subagent
+### 3f. Spawn the Evaluator Subagent
 
 Use the **Agent tool** to spawn an evaluator subagent.
 
@@ -436,7 +498,7 @@ When done, respond with EXACTLY this JSON structure (no other text):
 2. Save the EvalResult to `.bober/eval-results/eval-<contractId>-<iteration>.json` (the evaluator cannot write files).
 3. Determine pass/fail from the `overallResult` field.
 
-### 3f. Process the Evaluation Result
+### 3g. Process the Evaluation Result
 
 **On PASS:**
 1. Update contract status to `completed` and save to `.bober/contracts/`.
@@ -481,14 +543,14 @@ When done, respond with EXACTLY this JSON structure (no other text):
    - If the failure blocks subsequent sprints, stop the pipeline.
 4. Print failure report with full context.
 
-### 3g. Context Reset
+### 3h. Context Reset
 
 After each sprint completes (pass or fail), check `pipeline.contextReset` from config:
 - `always`: Fresh context for the next sprint. The next sprint's Generator receives only its handoff document. (This is the default with subagent architecture — each spawn IS a fresh context.)
 - `on-threshold`: Same as `always` with subagents, since each subagent is already isolated.
 - `never`: Carry summary forward in the handoff. Still a fresh subagent, but with richer handoff.
 
-### 3h. Iteration Budget
+### 3i. Iteration Budget
 
 Track total Generator-Evaluator iterations across all sprints:
 - Each Generator+Evaluator cycle counts as 1 iteration.
