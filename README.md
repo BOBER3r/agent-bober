@@ -3,11 +3,11 @@
 [![npm version](https://img.shields.io/npm/v/agent-bober.svg)](https://www.npmjs.com/package/agent-bober)
 [![license](https://img.shields.io/npm/l/agent-bober.svg)](https://github.com/BOBER3r/agent-bober/blob/main/LICENSE)
 
-**Generator-Evaluator multi-agent harness for building applications autonomously with any LLM.**
+**Multi-agent harness for building applications autonomously with any LLM.**
 
 [agentbober.com](https://agentbober.com) | [npm](https://www.npmjs.com/package/agent-bober) | [GitHub](https://github.com/BOBER3r/agent-bober)
 
-Inspired by Anthropic's engineering publication [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps), agent-bober implements the Generator-Evaluator multi-agent pattern as a reusable, installable workflow. It orchestrates AI agents in a structured loop: a **Planner** decomposes your idea into sprint contracts, a **Generator** writes the code, and an **Evaluator** independently verifies each sprint against its contract before moving on. The result is autonomous, high-quality software development with built-in guardrails, context resets, and brutally honest evaluation.
+Inspired by Anthropic's engineering publication [**"Harness design for long-running application development"**](https://www.anthropic.com/engineering/harness-design-long-running-apps), agent-bober implements a multi-agent pipeline as a reusable, installable workflow. It orchestrates AI agents in a structured loop: a **Researcher** analyzes your codebase, a **Planner** decomposes your idea into sprint contracts, a **Curator** pre-analyzes code patterns and utilities for each sprint, a **Generator** writes the code with curated context, and an **Evaluator** independently verifies each sprint against its contract before moving on. The result is autonomous, high-quality software development with built-in guardrails, context resets, and brutally honest evaluation.
 
 Works with **Claude, GPT, Gemini, Ollama**, and any OpenAI-compatible endpoint. Mix and match providers per agent role.
 
