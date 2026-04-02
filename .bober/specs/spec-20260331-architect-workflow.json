@@ -1,0 +1,147 @@
+{
+  "specId": "spec-20260331-architect-workflow",
+  "version": 1,
+  "createdAt": "2026-03-31T14:00:00Z",
+  "updatedAt": "2026-03-31T14:00:00Z",
+  "title": "Solution Architect Workflow",
+  "description": "A non-code-generating workflow for solution architecture. Runs a structured 5-checkpoint discussion (problem framing, approach selection, component design, integration strategy, final assembly) producing an architecture document with ADRs. Works standalone via /bober-architect or as an optional pipeline phase via runArchitect().",
+  "mode": "brownfield",
+  "status": "completed",
+  "completedAt": "2026-04-01T00:00:00Z",
+
+  "assumptions": [
+    "The architect workflow produces documents only, never code. Code generation remains the generator's job.",
+    "In interactive mode, each checkpoint requires explicit user approval before proceeding.",
+    "In autonomous/pipeline mode, the architect self-discusses using codebase evidence and proceeds without user input.",
+    "Architecture Decision Records follow a lightweight format: Decision, Context, Options, Rationale, Consequences, Risk.",
+    "The architect agent uses the same tool set as the planner (Read, Grep, Glob, Bash) — read-only codebase access plus Write for saving artifacts.",
+    "Architecture documents are saved to .bober/architecture/ as a new artifact directory."
+  ],
+
+  "outOfScope": [
+    "Visual diagram generation (Mermaid, PlantUML) — text descriptions only for now",
+    "Architecture fitness functions or automated architecture validation",
+    "Multi-project/monorepo architecture spanning multiple bober projects",
+    "Architecture versioning or diff tracking across revisions"
+  ],
+
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "5-Checkpoint Discussion Flow",
+      "description": "The core interactive workflow. Five explicit checkpoints: (1) Problem Framing — sharp questions about the problem space, constraints, success criteria. (2) Approach Selection — 2-3 architectural approaches with tradeoff matrices, user picks. (3) Component Design — component breakdown with TypeScript interfaces, responsibilities, dependencies. (4) Integration Strategy — data flow, API contracts, external dependencies, risk mapping. (5) Final Assembly — complete architecture document with ADRs from all decisions made during the flow.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: The agent definition defines exactly 5 checkpoints with explicit instructions for each. Each checkpoint has: purpose, questions to ask, output to produce, criteria for proceeding.",
+        "AC2: Checkpoint 1 (Problem Framing) produces a Problem Statement section. Questions are concise, direct, no filler — senior-grade.",
+        "AC3: Checkpoint 2 (Approach Selection) presents 2-3 approaches as a structured comparison (not paragraphs). Each approach has: 1-sentence description, pros, cons, best-for. User selects.",
+        "AC4: Checkpoint 3 (Component Design) produces component breakdown with TypeScript-style interfaces/signatures for key boundaries. Each component: responsibility (1 sentence), interface, dependencies.",
+        "AC5: Checkpoint 4 (Integration Strategy) maps data flow between components and identifies integration risks with severity.",
+        "AC6: Checkpoint 5 (Final Assembly) compiles all checkpoint outputs into a single architecture document with ADRs auto-generated from decisions made at each checkpoint.",
+        "AC7: In autonomous mode, the agent self-discusses at each checkpoint, making decisions with codebase evidence citations, and documents the reasoning."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Architecture Document Format",
+      "description": "The output artifact: a structured markdown document designed for senior engineers. No filler, every section earns its space. Includes ADRs for each major decision made during the discussion flow.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Document sections: Executive Summary (3-5 sentences max), Problem Statement, System Overview, Component Breakdown, Data Model, API Contracts, Integration Strategy, Architecture Decision Records, Risk Assessment, Open Questions.",
+        "AC2: ADR format per decision: Decision (1 sentence), Context (why needed), Options Considered (table: option | tradeoff), Rationale (why this option), Consequences (what changes), Risk (what could break).",
+        "AC3: Architecture document is capped at 500 lines. If content exceeds this, the agent distills.",
+        "AC4: Component interfaces use TypeScript-style type signatures, not prose descriptions.",
+        "AC5: Risk Assessment uses severity levels (critical/high/medium/low) with concrete mitigation strategies, not generic advice."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Interactive Skill + Standalone Usage",
+      "description": "The /bober-architect slash command. Orchestrates the 5-checkpoint flow interactively, spawning subagents as needed, saving artifacts to .bober/architecture/. Works as a standalone tool independent of the sprint pipeline.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: .claude/commands/bober-architect.md exists with frontmatter (name, description, argument-hint).",
+        "AC2: The skill orchestrates 5 checkpoints. At each checkpoint, it presents the output and waits for user review before proceeding.",
+        "AC3: User can challenge, refine, or reject decisions at any checkpoint. The agent revises based on feedback.",
+        "AC4: Final architecture document is saved to .bober/architecture/<specId>-architecture.md.",
+        "AC5: ADRs are saved as separate files: .bober/architecture/<specId>-adr-<N>.md for each decision.",
+        "AC6: skills/bober.architect/SKILL.md exists for npm distribution."
+      ],
+      "dependencies": ["feat-1", "feat-2"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Programmatic Module + Pipeline Integration",
+      "description": "src/orchestrator/architect-agent.ts with runArchitect() that can be called programmatically. Wired into the pipeline as an optional phase between research and planning. Config option pipeline.architectPhase controls activation.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: src/orchestrator/architect-agent.ts exports runArchitect(userPrompt, projectRoot, config, researchDoc?): Promise<ArchitectResult>.",
+        "AC2: ArchitectResult type contains: id, timestamp, document (markdown string), adrs (ADR[]), componentCount, decisionCount.",
+        "AC3: pipeline.ts calls runArchitect() between runResearch() and runPlanner() when pipeline.architectPhase is true.",
+        "AC4: Architecture document is passed to planner as context. It is NOT passed to generator or evaluator (context distillation).",
+        "AC5: PipelineSectionSchema includes architectPhase: z.boolean().default(false). Defaults to false for backward compatibility.",
+        "AC6: bober-run.md and bober-brownfield.md skills updated to include architect phase in orchestration flow.",
+        "AC7: Existing configs without architectPhase still parse successfully."
+      ],
+      "dependencies": ["feat-3"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "State Helpers + Distribution",
+      "description": "State management for architecture artifacts, init command integration, progress tracking, and history events.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: src/state/architect-state.ts exports saveArchitecture(), readArchitecture(), saveADR(), readADRs().",
+        "AC2: ensureBoberDir creates .bober/architecture/ subdirectory.",
+        "AC3: src/cli/commands/init.ts includes bober.architect in skillMap and bober-architect.md in agentFiles.",
+        "AC4: New history events: architect-started, architect-checkpoint, architect-completed.",
+        "AC5: Progress tracking shows architect phase status (complete/pending) alongside research/design/outline."
+      ],
+      "dependencies": ["feat-4"],
+      "estimatedComplexity": "low"
+    }
+  ],
+
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "Architecture documents must be useful 6 months later. No jargon without definition, no references to 'the current approach' without specifying what it is.",
+      "verificationMethod": "Review agent instructions for explicit prohibitions on vague references and temporal language."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Backward compatible. Existing bober.config.json files without architectPhase must parse and work without errors.",
+      "verificationMethod": "Verify the field defaults to false in the schema and parse the project's own config."
+    },
+    {
+      "category": "performance",
+      "requirement": "Architecture document capped at 500 lines. ADRs capped at 50 lines each. Prevents context bloat when passed to planner.",
+      "verificationMethod": "Verify size limits stated in agent definition."
+    }
+  ],
+
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "ArchitectResult { id, timestamp, document, adrs: ADR[], components: Component[], decisions: Decision[] }. ADR { id, title, decision, context, options, rationale, consequences, risk }.",
+    "securityConsiderations": [],
+    "existingPatterns": "Follow research-agent.ts pattern for the programmatic module. Follow bober-research.md pattern for the skill. Follow bober-researcher.md pattern for the agent definition. State helpers follow research-state.ts pattern."
+  },
+
+  "sprints": [
+    "sprint-spec-20260331-architect-workflow-1",
+    "sprint-spec-20260331-architect-workflow-2",
+    "sprint-spec-20260331-architect-workflow-3"
+  ],
+
+  "metadata": {
+    "estimatedTotalDuration": "4-6 hours",
+    "riskLevel": "medium",
+    "riskNotes": "The 5-checkpoint discussion flow is the novel piece. The agent definition quality determines whether this produces senior-grade output or generic filler. Heavy investment in prompt engineering for the agent definition is the primary risk factor."
+  }
+}

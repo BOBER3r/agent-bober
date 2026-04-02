@@ -1,0 +1,116 @@
+{
+  "specId": "spec-20260328-multi-provider-llm-adapter",
+  "status": "completed",
+  "completedAt": "2026-03-29T00:00:00Z",
+  "title": "Multi-Provider LLM Adapter Layer",
+  "description": "A provider-agnostic abstraction layer that decouples agent-bober from the Anthropic SDK, allowing any LLM provider (OpenAI, Google Gemini, Ollama, or any OpenAI-compatible endpoint) to power any agent role. Users can mix providers per role -- e.g., Opus for planning, GPT-4.1 for generation, local Ollama for evaluation.",
+  "projectType": "brownfield",
+  "techStack": ["typescript", "node", "anthropic-sdk", "zod", "commander", "esm"],
+  "features": [
+    {
+      "id": "feat-1",
+      "title": "Provider Interface and Anthropic Adapter",
+      "description": "Define the unified LLMClient interface and ToolDef types. Implement the Anthropic adapter wrapping the existing SDK integration. Make tool schemas provider-agnostic by removing Anthropic type dependencies.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: A ToolDef type exists in src/providers/types.ts that uses plain JSON Schema (no Anthropic imports) with name, description, and parameters fields.",
+        "AC2: An LLMClient interface exists with a chat(params: ChatParams): Promise<ChatResponse> method where ChatResponse normalizes text, toolCalls, stopReason, and usage.",
+        "AC3: An AnthropicAdapter class implements LLMClient and wraps @anthropic-ai/sdk, converting ToolDef[] to Anthropic.Messages.Tool[] and normalizing responses back to ChatResponse.",
+        "AC4: Tool schemas in src/orchestrator/tools/schemas.ts use the new ToolDef type instead of Anthropic.Messages.Tool.",
+        "AC5: buildToolSet() in src/orchestrator/tools/index.ts returns ToolDef[] in its schemas field instead of Anthropic.Messages.Tool[].",
+        "AC6: The project typechecks with tsc --noEmit and builds successfully."
+      ]
+    },
+    {
+      "id": "feat-2",
+      "title": "Agentic Loop and Agent File Refactor",
+      "description": "Refactor the agentic loop to accept LLMClient instead of Anthropic client directly. Update all three agent files (planner, generator, evaluator) to use the provider factory instead of constructing Anthropic clients directly.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: runAgenticLoop() accepts an LLMClient instance instead of an Anthropic client. Its internal message types use the provider-agnostic Message/ToolCall types.",
+        "AC2: runPlanner() creates its LLM client via a factory function (createClient) using config.planner fields, not via new Anthropic().",
+        "AC3: runGenerator() creates its LLM client via createClient using config.generator fields, not via new Anthropic().",
+        "AC4: runEvaluatorAgent() creates its LLM client via createClient using config.evaluator fields, not via new Anthropic().",
+        "AC5: No file in src/orchestrator/ imports Anthropic directly except through the provider adapter. The only file that imports @anthropic-ai/sdk is src/providers/anthropic.ts.",
+        "AC6: The existing pipeline behavior is identical -- running with the default config (all Anthropic) produces the same API calls as before.",
+        "AC7: The project typechecks and builds successfully."
+      ]
+    },
+    {
+      "id": "feat-3",
+      "title": "Config Schema and Model Resolver Update",
+      "description": "Widen the model field from a fixed enum to z.string() to accept arbitrary model names. Add provider, endpoint, and providerConfig fields to each agent section. Update the model resolver to map shorthand names to provider+model pairs. Ensure backward compatibility with existing configs.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: ModelChoiceSchema and GeneratorModelSchema accept any non-empty string, not just the sonnet/opus/haiku enum.",
+        "AC2: PlannerSectionSchema, GeneratorSectionSchema, and EvaluatorSectionSchema each have optional provider (string), endpoint (string|null), and providerConfig (Record<string,unknown>) fields.",
+        "AC3: An existing bober.config.json with no provider fields loads successfully and defaults all roles to the 'anthropic' provider.",
+        "AC4: resolveModel() returns a { provider, model } object (or the factory uses a separate resolution step) that maps: 'opus' -> anthropic/claude-opus-4-6, 'gpt-4.1' -> openai/gpt-4.1, 'gemini-pro' -> google/gemini-2.5-pro, 'ollama/llama3' -> openai-compat with localhost:11434.",
+        "AC5: The createClient factory uses the resolved provider to construct the correct LLMClient, passing endpoint and providerConfig.",
+        "AC6: The project typechecks and builds. Existing config files that only use sonnet/opus/haiku continue to work unchanged."
+      ]
+    },
+    {
+      "id": "feat-4",
+      "title": "OpenAI Provider Adapter",
+      "description": "Implement an OpenAI adapter that wraps the openai SDK, converting tool definitions to OpenAI function calling format and normalizing responses. Add openai as an optional peer dependency with dynamic import.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: An OpenAIAdapter class in src/providers/openai.ts implements LLMClient using the openai SDK.",
+        "AC2: ToolDef[] is correctly converted to OpenAI function calling format (tools array with type:'function', function:{name, description, parameters}).",
+        "AC3: OpenAI responses are normalized: tool_calls -> toolCalls[], stop/tool_calls stop reason -> 'end'/'tool_use', usage tokens mapped correctly.",
+        "AC4: The openai package is dynamically imported -- if not installed and the user configures OpenAI, a clear error message is shown: 'OpenAI provider requires the openai package. Run: npm install openai'.",
+        "AC5: Edge cases handled: empty tool_calls array, parallel tool calls, function_call responses from older API versions.",
+        "AC6: The provider factory creates an OpenAIAdapter when provider is 'openai'. The project typechecks and builds."
+      ]
+    },
+    {
+      "id": "feat-5",
+      "title": "Gemini Adapter and OpenAI-Compatible Adapter",
+      "description": "Implement the Google Gemini adapter and the OpenAI-compatible adapter (for Ollama, LM Studio, Groq, etc.). The OpenAI-compat adapter extends the OpenAI adapter with custom baseURL and apiKey configuration.",
+      "priority": "should",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: A GoogleAdapter class in src/providers/google.ts implements LLMClient using @google/generative-ai SDK with dynamic import.",
+        "AC2: ToolDef[] is converted to Gemini's functionDeclarations format. Gemini responses (functionCall parts) are normalized to ChatResponse.",
+        "AC3: If @google/generative-ai is not installed and user configures Google, a clear error is shown.",
+        "AC4: An OpenAICompatAdapter class in src/providers/openai-compat.ts extends or wraps OpenAIAdapter with a custom baseURL and optional apiKey.",
+        "AC5: Configuring model as 'ollama/llama3' auto-resolves to provider 'openai-compat' with endpoint 'http://localhost:11434/v1' and model 'llama3'.",
+        "AC6: The provider factory creates the correct adapter for 'google' and 'openai-compat' providers. The project typechecks and builds."
+      ]
+    },
+    {
+      "id": "feat-6",
+      "title": "CLI Init Provider Selection and API Key Validation",
+      "description": "Add provider selection prompts to the interactive init command. Implement startup validation that checks required API keys are present for configured providers. Add --provider CLI override flag. Bump version to 0.7.0.",
+      "priority": "should",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: The interactive init command asks 'Which AI provider?' with options: Anthropic (default), OpenAI, Google Gemini, OpenAI-Compatible/Ollama. The selected provider is written to bober.config.json for all three agent roles.",
+        "AC2: After provider selection, the model selection prompt shows models relevant to the chosen provider (e.g., opus/sonnet/haiku for Anthropic, gpt-4.1/o3/o4-mini for OpenAI).",
+        "AC3: When the pipeline starts, it validates that the required API key environment variable is set for each configured provider. Missing keys produce a clear error: 'Generator is configured to use OpenAI (gpt-4.1) but OPENAI_API_KEY is not set.'",
+        "AC4: A --provider CLI flag exists on the run/plan/sprint/eval commands that overrides the config provider for all roles.",
+        "AC5: package.json version is bumped to 0.7.0. openai and @google/generative-ai are listed as optional peerDependencies.",
+        "AC6: The project typechecks, builds, and lints successfully."
+      ]
+    }
+  ],
+  "nonFunctional": [
+    "Zero breaking changes to existing bober.config.json files -- configs without provider fields must work identically to before.",
+    "Provider SDKs (openai, @google/generative-ai) must be optional peer dependencies loaded via dynamic import, not hard dependencies.",
+    "The agentic loop core logic (turn counting, tool execution, message history, error handling) must NOT be duplicated per provider.",
+    "All provider adapters must handle their specific edge cases (empty tool arrays, different stop reasons, token counting differences) and normalize to the unified ChatResponse interface."
+  ],
+  "constraints": [
+    "TypeScript strict mode, no any, no ts-ignore.",
+    "ESM only (type: module).",
+    "Only @anthropic-ai/sdk remains a hard dependency. Other provider SDKs are optional.",
+    "Existing pipeline behavior with default (Anthropic) config must be byte-for-byte identical in API calls."
+  ],
+  "createdAt": "2026-03-28T12:00:00Z",
+  "updatedAt": "2026-03-28T12:00:00Z"
+}

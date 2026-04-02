@@ -1,0 +1,88 @@
+{
+  "specId": "spec-20260329-brownfield-auto-discovery",
+  "status": "completed",
+  "completedAt": "2026-03-30T00:00:00Z",
+  "title": "Brownfield Auto-Discovery System",
+  "description": "An intelligent codebase analysis system that runs during brownfield initialization. Programmatically scans the repo (files, git history, CI configs, scripts), then uses an LLM to synthesize findings into comprehensive project principles and auto-configured evaluator strategies. Replaces the shallow boolean detection with deep, meticulous analysis.",
+  "projectType": "brownfield",
+  "techStack": ["typescript", "node", "zod", "commander", "esm"],
+  "features": [
+    {
+      "id": "feat-1",
+      "title": "Deep Programmatic Scanner",
+      "description": "A comprehensive codebase scanner that collects raw data about conventions, patterns, tooling, CI/CD, and git history. Produces a structured DiscoveryReport JSON that the LLM synthesizer consumes.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: Scanner reads package.json scripts and maps each to the correct bober command (build, test, lint, typecheck, dev, install) with the actual command strings, not just types.",
+        "AC2: Scanner detects package manager from lockfiles (npm/yarn/pnpm/bun) and uses the correct run command (npm run, yarn, pnpm run, bunx).",
+        "AC3: Scanner reads CI configs (.github/workflows/*.yml, .gitlab-ci.yml) and extracts the check commands that run in CI (test, lint, build steps).",
+        "AC4: Scanner analyzes git log (last 50 commits) to detect commit message format (conventional commits, ticket prefixes, free-form) and branch naming patterns.",
+        "AC5: Scanner samples source files (up to 20 per category) to detect file naming patterns, import style (absolute/relative/aliases), export style (named/default), and TypeScript patterns (strict mode, any usage, enums vs unions).",
+        "AC6: Scanner reads documentation files (README.md, CONTRIBUTING.md, CLAUDE.md, .cursorrules, docs/*.md, ADRs) and includes their content in the report.",
+        "AC7: Scanner detects test conventions: framework, file naming pattern (*.test.ts, *.spec.ts, __tests__/), coverage config, mocking patterns.",
+        "AC8: The output is a structured DiscoveryReport type with sections for: packageScripts, ciChecks, gitConventions, codeConventions, testConventions, documentation, detectedStack."
+      ]
+    },
+    {
+      "id": "feat-2",
+      "title": "LLM-Powered Principles Synthesizer",
+      "description": "Takes the DiscoveryReport from the scanner and uses a single LLM call to synthesize it into a comprehensive, opinionated .bober/principles.md with specific, actionable conventions and file path examples.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: A synthesizePrinciples(report: DiscoveryReport, config: BoberConfig) function calls the configured planner LLM with the report data and returns a markdown string.",
+        "AC2: The generated principles.md has structured sections: Code Style, TypeScript Conventions, Testing Standards, Git Workflow, Error Handling, File Organization, Dependencies and Imports, and optionally API Conventions and CI/CD Standards.",
+        "AC3: Each convention includes at least one file path example from the actual codebase (e.g., 'Components use PascalCase (see src/components/UserProfile.tsx)').",
+        "AC4: Inconsistencies are noted explicitly (e.g., 'Most files use camelCase naming but src/utils/parse-config.ts uses kebab-case -- the majority pattern is camelCase').",
+        "AC5: The principles are specific and actionable, not vague. 'Follow best practices' is never used. Instead: 'Use named exports for utility functions (see src/utils/format.ts:export function formatDate)').",
+        "AC6: The function works with any configured LLM provider (Anthropic, OpenAI, Google, etc.) via the createClient factory."
+      ]
+    },
+    {
+      "id": "feat-3",
+      "title": "Auto-Configure Evaluator Strategies and Commands",
+      "description": "Use the DiscoveryReport to automatically populate bober.config.json with the correct evaluator strategies and command strings, including CI-derived custom strategies.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: The commands section is auto-filled from package.json scripts: if scripts.build exists -> commands.build = '<pm> run build', if scripts.test exists -> commands.test = '<pm> run test', etc. Uses the detected package manager.",
+        "AC2: Evaluator strategies are generated from actual scripts, not just detected booleans. Each strategy includes the real command string. E.g., if package.json has 'lint': 'eslint . --ext ts,tsx' -> strategy { type: 'lint', required: true, command: 'npm run lint' }.",
+        "AC3: CI-only checks that don't have a local script equivalent are added as inline command strategies. E.g., if CI runs 'cargo clippy' but there's no npm script for it -> strategy { type: 'cargo-clippy', command: 'cargo clippy', required: false, label: 'Cargo Clippy (from CI)' }.",
+        "AC4: Playwright is auto-detected from playwright.config.ts presence AND @playwright/test in deps. If both exist, playwright strategy is added as required.",
+        "AC5: The generated config is valid and loadable by the existing config loader with zero errors.",
+        "AC6: A generateEvalConfig(report: DiscoveryReport) function returns the complete evaluator section and commands section."
+      ]
+    },
+    {
+      "id": "feat-4",
+      "title": "Integration: Init Flow, Principles Skill, and MCP",
+      "description": "Wire the auto-discovery into the brownfield init flow (CLI + MCP), update /bober-principles to trigger auto-discovery when called with no args, and add a confirmation step before writing.",
+      "priority": "must",
+      "estimatedSprints": 1,
+      "acceptanceCriteria": [
+        "AC1: `bober init brownfield` runs the deep scanner, shows discovered conventions and generated config summary, asks 'Look good? [Y/n]' before writing. On confirm, writes bober.config.json with auto-configured strategies/commands AND generates .bober/principles.md.",
+        "AC2: The bober_init MCP tool with mode=brownfield runs the same auto-discovery and returns the generated principles and config as JSON.",
+        "AC3: /bober-principles (the skill definition) when called with no args in a brownfield project (detected by bober.config.json mode=brownfield) runs auto-discovery instead of the interview. Shows the generated principles and asks if the user wants to supplement.",
+        "AC4: /bober-principles with args still works as before -- expands user input into principles without running discovery.",
+        "AC5: The entire discovery + synthesis pipeline completes in under 60 seconds for a typical project (< 10,000 files).",
+        "AC6: The project typechecks, builds, lints, and all existing tests pass."
+      ]
+    }
+  ],
+  "nonFunctional": [
+    "The scanner must not read node_modules, .git objects, dist/, build/, or other generated directories.",
+    "File sampling must be deterministic (sorted alphabetically, take first N) so results are reproducible.",
+    "The LLM synthesizer prompt must be provider-agnostic -- it sends plain text and receives plain text.",
+    "The scanner must handle missing files/directories gracefully -- a repo without CI configs should not error."
+  ],
+  "constraints": [
+    "TypeScript strict mode, no any, no ts-ignore.",
+    "ESM only.",
+    "The scanner is pure programmatic code -- no LLM calls. Only the synthesizer uses the LLM.",
+    "Must work with the existing multi-provider system (createClient factory).",
+    "Must not break existing greenfield init flow."
+  ],
+  "createdAt": "2026-03-29T10:00:00Z",
+  "updatedAt": "2026-03-29T10:00:00Z"
+}

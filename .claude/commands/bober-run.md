@@ -91,11 +91,17 @@ If it fails, report the missing prerequisites and stop.
 
 ### 1c. Check for Existing Plans
 
-Read `.bober/specs/` and `.bober/progress.md`. If there is an existing plan with incomplete sprints:
+List all spec files in `.bober/specs/`. For each spec, read only the **first 5 lines** of the JSON file. The `status` field is near the top — if it says `"completed"`, skip that spec entirely (do not load its contracts or read further).
 
-- If the user provided a new task description that clearly differs from the existing plan: create a new plan (go to Step 2)
-- If the user provided no task or a task that matches the existing plan: resume from the next incomplete sprint (skip to Step 3)
-- Log your decision but do NOT ask the user — autonomous mode means you decide and move forward.
+Collect only the specs where `status` is NOT `"completed"` (i.e. `"planned"` or `"in-progress"`). These are the **actionable specs**.
+
+- **No actionable specs + user provided a new task:** Create a new plan (go to Step 2).
+- **No actionable specs + no task provided:** Tell the user all plans are complete. Stop.
+- **Exactly one actionable spec:** Resume from its next incomplete sprint (skip to Step 3).
+- **Multiple actionable specs + user provided a task:** Match it to the most relevant actionable spec, or create a new plan if none match.
+- **Multiple actionable specs + no task:** Pick the most recently created actionable spec.
+
+Log your decision but do NOT ask the user — autonomous mode means you decide and move forward.
 
 Log event:
 ```json
@@ -501,13 +507,17 @@ When done, respond with EXACTLY this JSON structure (no other text):
 ### 3g. Process the Evaluation Result
 
 **On PASS:**
-1. Update contract status to `completed` and save to `.bober/contracts/`.
-2. Update `.bober/progress.md`.
+1. Update contract status to `completed`, set `completedAt` to current ISO-8601 timestamp, and save to `.bober/contracts/`.
+2. Update `.bober/progress.md` — change the sprint line to `[completed]`.
 3. Log event:
    ```json
    {"event":"sprint-completed","contractId":"...","specId":"...","iteration":N,"timestamp":"..."}
    ```
-4. Print milestone:
+4. **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total sprint count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
+   - Update the PlanSpec: set `status` to `"completed"` and `completedAt` to current ISO-8601 timestamp. Save to `.bober/specs/<specId>.json`. **The `status` field MUST remain in the first 10 lines of the JSON** so future runs can skip it with a partial read.
+   - Update `.bober/progress.md` — change the plan's status line to `completed (N/N sprints)`.
+   - Log event: `{"event":"plan-completed","specId":"...","sprintsCompleted":N,"timestamp":"..."}`
+5. Print milestone:
    ```
    === Sprint <N>/<total> PASSED ===
    Title: <title>
@@ -515,7 +525,8 @@ When done, respond with EXACTLY this JSON structure (no other text):
    Progress: [=====>    ] <N>/<total> sprints complete
    Next: <next sprint title>
    ```
-5. Move to next sprint.
+   If all sprints are done, print `=== PLAN COMPLETE ===` instead of "Next:".
+6. Move to next sprint.
 
 **On FAIL with retries remaining:**
 1. Check if iteration < `evaluator.maxIterations` (default: 3).
