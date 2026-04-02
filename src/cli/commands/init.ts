@@ -1007,7 +1007,7 @@ async function installClaudeCommands(projectRoot: string): Promise<void> {
   const agentsDir = join(projectRoot, ".claude", "agents");
   await ensureDir(agentsDir);
 
-  const agentFiles = ["bober-planner.md", "bober-generator.md", "bober-evaluator.md", "bober-researcher.md", "bober-architect.md"];
+  const agentFiles = ["bober-planner.md", "bober-generator.md", "bober-evaluator.md", "bober-researcher.md", "bober-architect.md", "bober-curator.md"];
   const agentsSrc = join(packageRoot, "agents");
 
   for (const agentFile of agentFiles) {
