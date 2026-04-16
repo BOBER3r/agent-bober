@@ -978,7 +978,7 @@ const STACK_SPECIFIC_COMMANDS: Record<string, string[]> = {
  */
 async function installClaudeCommands(
   projectRoot: string,
-  mode: string,
+  mode: ProjectMode,
   preset?: string,
 ): Promise<void> {
   const __filename = fileURLToPath(import.meta.url);
