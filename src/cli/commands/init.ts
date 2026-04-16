@@ -944,13 +944,43 @@ function buildStrategyChoices(
 // ── Install Claude Code slash commands ───────────────────────────
 
 /**
+ * Skill keys that are always installed regardless of mode or preset.
+ */
+const UNIVERSAL_COMMANDS = new Set<string>([
+  "bober.plan",
+  "bober.sprint",
+  "bober.eval",
+  "bober.run",
+  "bober.principles",
+  "bober.research",
+  "bober.architect",
+]);
+
+/**
+ * Maps each stack-specific skill key to the preset names and/or modes
+ * that should include it. A command is included when the user's preset
+ * or mode appears in this list.
+ */
+const STACK_SPECIFIC_COMMANDS: Record<string, string[]> = {
+  "bober.react": ["nextjs", "react-vite"],
+  "bober.solidity": ["solidity"],
+  "bober.anchor": ["anchor"],
+  "bober.brownfield": ["brownfield"],
+  "bober.playwright": ["nextjs", "react-vite", "brownfield"],
+};
+
+/**
  * Copy SKILL.md files from the package's skills/ directory into
  * the project's .claude/commands/ directory so they appear as
  * /bober-plan, /bober-sprint, etc. in Claude Code.
  *
  * Also copies agent definitions into .claude/agents/.
  */
-async function installClaudeCommands(projectRoot: string): Promise<void> {
+async function installClaudeCommands(
+  projectRoot: string,
+  mode: string,
+  preset?: string,
+): Promise<void> {
   const __filename = fileURLToPath(import.meta.url);
   // From dist/cli/commands/init.js → go up to package root
   const packageRoot = join(dirname(__filename), "..", "..", "..");
@@ -974,10 +1004,27 @@ async function installClaudeCommands(projectRoot: string): Promise<void> {
     "bober.architect": "bober-architect.md",
   };
 
+  // Determine which skill keys to install based on mode and preset.
+  // Greenfield with no preset → install everything (user hasn't committed to a stack).
+  // Greenfield with preset → universal + commands matching that preset.
+  // Brownfield → universal + brownfield + playwright.
+  const shouldInstall = (skillKey: string): boolean => {
+    if (UNIVERSAL_COMMANDS.has(skillKey)) return true;
+    const stackTargets = STACK_SPECIFIC_COMMANDS[skillKey];
+    if (!stackTargets) return false;
+    if (mode === "greenfield") {
+      if (!preset) return true; // no preset chosen — install all
+      return stackTargets.includes(preset);
+    }
+    // brownfield
+    return stackTargets.includes("brownfield");
+  };
+
   const skillsRoot = join(packageRoot, "skills");
   let installed = 0;
 
   for (const [skillDir, cmdFile] of Object.entries(skillMap)) {
+    if (!shouldInstall(skillDir)) continue;
     const srcSkill = join(skillsRoot, skillDir, "SKILL.md");
     const destCmd = join(commandsDir, cmdFile);
     if (await fileExists(srcSkill)) {
@@ -1074,7 +1121,7 @@ async function writeConfig(
   }
 
   // Install Claude Code slash commands into .claude/commands/
-  await installClaudeCommands(projectRoot);
+  await installClaudeCommands(projectRoot, mode, preset);
 
   // Print summary
   console.log();
