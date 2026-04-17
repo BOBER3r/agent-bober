@@ -210,6 +210,47 @@ Save all artifacts to the `.bober/` directory:
    {"event":"plan-created","specId":"...","title":"...","sprintCount":N,"timestamp":"..."}
    ```
 
+## Step 7.5: Decide — Ready or Needs Clarification?
+
+After self-answering the clarifying questions in Step 4, score the remaining ambiguity 0-10 using this rubric:
+
+| Score | Meaning |
+|-------|---------|
+| 0-2   | Fully specified. Every behavior, edge case, error path is concrete. |
+| 3-4   | Mostly specified. Small judgment calls remain (library choice, exact wording). |
+| 5-6   | Some load-bearing decisions deferred to the generator, but codebase has clear patterns. |
+| 7-8   | Significant ambiguity. The generator would have to make architectural guesses. |
+| 9-10  | Fundamental specification gaps. Sprint cannot be reliably implemented. |
+
+**Decision:**
+
+- If score < 7 AND no questions are unresolved → set `status: "draft"` and proceed to Step 8 (sprint contracts get saved).
+- If score >= 7 OR any question remains unresolved → set `status: "needs-clarification"`, populate `clarificationQuestions`, populate `resolvedClarifications` for any you self-answered, and STOP. Do not write sprint contracts. Save the spec, surface the open questions to the user, and exit.
+
+**When clarification is needed, surface it like this:**
+
+```
+⚠ Plan needs clarification before sprints can run.
+Spec: <title>
+Ambiguity score: <N>/10
+
+Open questions:
+
+  Q1 [scope]: <question>
+    A) <option>
+    B) <option>
+    💡 Suggested: <recommendation if available>
+
+  Q2 [data-model]: <question>
+
+Resolve via either:
+  /bober-plan answer <specId> Q1 "<your answer>"     (one-shot per question)
+  npx agent-bober plan answer <specId>               (interactive walkthrough)
+  Or edit .bober/specs/<specId>.json directly and flip status to "ready".
+```
+
+The user resolves the questions via the `bober plan answer` CLI command (or by editing the spec file directly). Once all questions are answered, the runtime flips status to `ready` and the next `/bober-sprint` or `/bober-run` invocation can proceed.
+
 ## Step 8: Output Summary
 
 Present a clean, readable summary to the user:

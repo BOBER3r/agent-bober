@@ -1,0 +1,69 @@
+{
+  "specId": "spec-20260416-auto-filter-commands",
+  "version": 1,
+  "title": "Auto-Filter Slash Commands by Preset",
+  "description": "During project initialization, only install slash commands relevant to the project's mode and preset. An Angular project should not see /bober-solidity, and a Solana project should not see /bober-react. Core pipeline commands (plan, sprint, eval, run, etc.) are always installed; stack-specific workflow commands are conditionally installed based on the preset or mode.",
+  "status": "completed",
+  "mode": "brownfield",
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Preset-aware command filtering in installClaudeCommands",
+      "description": "Modify the installClaudeCommands function to accept mode and preset parameters, and use a mapping to determine which stack-specific commands to install.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When initializing with preset 'nextjs' or 'react-vite', the commands bober-react.md and bober-playwright.md are installed, but bober-solidity.md, bober-anchor.md, and bober-brownfield.md are NOT installed.",
+        "AC2: When initializing with preset 'solidity', the command bober-solidity.md is installed, but bober-react.md, bober-anchor.md, bober-brownfield.md, and bober-playwright.md are NOT installed.",
+        "AC3: When initializing with preset 'anchor', the command bober-anchor.md is installed, but bober-react.md, bober-solidity.md, bober-brownfield.md, and bober-playwright.md are NOT installed.",
+        "AC4: When initializing with preset 'api-node' or 'python-api', only universal commands are installed — no stack-specific workflow commands.",
+        "AC5: When initializing in brownfield mode (no preset), bober-brownfield.md and bober-playwright.md are installed, but bober-react.md, bober-solidity.md, and bober-anchor.md are NOT installed.",
+        "AC6: When initializing in greenfield mode with NO preset selected, ALL commands are installed (both universal and stack-specific) since the stack is undecided.",
+        "AC7: Universal commands (bober-plan, bober-sprint, bober-eval, bober-run, bober-principles, bober-research, bober-architect) are ALWAYS installed regardless of mode or preset."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "assumptions": [
+    "The 6 agent files (planner, generator, evaluator, researcher, architect, curator) are always needed regardless of stack — they ARE the core pipeline",
+    "Only slash commands in .claude/commands/ need filtering, not agent files in .claude/agents/",
+    "When no preset is selected (greenfield without preset), all commands should be installed since the planner hasn't decided the stack yet",
+    "Brownfield mode without a preset should install bober-brownfield but skip stack-specific workflow commands (react, solidity, anchor)",
+    "The playwright command is relevant to web-based presets and brownfield mode but not to pure smart contract projects"
+  ],
+  "outOfScope": [
+    "Interactive command selection UI during init",
+    "Post-init command management (add/remove commands later)",
+    "Filtering agent files — they are always needed",
+    "Changes to the skill/command content itself",
+    "CLI flag to override which commands get installed"
+  ],
+  "clarificationQuestions": [],
+  "resolvedClarifications": [],
+  "techStack": [],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "No data model changes. This only affects which .md files get copied during init.",
+    "securityConsiderations": [],
+    "existingPatterns": "The installClaudeCommands function at src/cli/commands/init.ts:953 uses a skillMap record to map skill directories to command filenames. The function is called from writeConfig() which already receives mode and preset parameters but doesn't pass them through."
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "The command-to-preset mapping must be a clearly defined data structure, not embedded in conditional logic, so adding new presets or commands in the future is trivial.",
+      "verificationMethod": "Code inspection: verify the mapping is a standalone constant or config object."
+    }
+  ],
+  "constraints": [],
+  "sprints": [
+    "sprint-spec-20260416-auto-filter-commands-1"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "30-60 minutes",
+    "riskLevel": "low",
+    "riskNotes": "Simple filtering logic with no external dependencies. The only risk is missing an edge case in the mapping, which is easily caught by testing."
+  },
+  "createdAt": "2026-04-16T12:00:00Z",
+  "updatedAt": "2026-04-17T17:01:09.433Z",
+  "completedAt": "2026-04-16T15:33:00Z"
+}

@@ -96,11 +96,28 @@ async function gatherProjectContext(
 // ── Main ───────────────────────────────────────────────────────────
 
 /**
+ * Discriminated result from `runPlanner`.
+ *
+ * - `ready` — the planner produced a complete spec; the pipeline may proceed.
+ * - `needs-clarification` — the planner refused to fully decompose the
+ *   request (ambiguityScore exceeded the threshold or open questions remain).
+ *   The spec was still saved to disk so the user can resume later, but the
+ *   pipeline must NOT run sprints from it until the questions are answered.
+ *
+ * Callers MUST narrow on `kind` before reading `spec.features`.
+ */
+export type PlannerResult =
+  | { kind: "ready"; spec: PlanSpec }
+  | { kind: "needs-clarification"; spec: PlanSpec };
+
+/**
  * Run the planner agent to produce a PlanSpec from a user prompt.
  *
  * Uses a multi-turn agentic loop with read-only tools so the planner
  * can explore the codebase. The system prompt is loaded from
  * `agents/bober-planner.md`.
+ *
+ * Returns a discriminated PlannerResult — see the type for the contract.
  */
 export async function runPlanner(
   userPrompt: string,
@@ -108,7 +125,7 @@ export async function runPlanner(
   config: BoberConfig,
   researchDoc?: ResearchDoc,
   architectDoc?: string,
-): Promise<PlanSpec> {
+): Promise<PlannerResult> {
   logger.phase("Planning Phase");
   logger.info("Gathering project context...");
 
@@ -177,11 +194,22 @@ Your final response must contain ONLY valid JSON matching the PlanSpec schema (n
 
   // Save to .bober/specs/
   await saveSpec(projectRoot, spec);
+
+  // Branch on planner-emitted status. The planner agent prompt instructs
+  // the model to set status === "needs-clarification" when ambiguityScore
+  // exceeds the threshold or any clarification questions remain unresolved.
+  if (spec.status === "needs-clarification") {
+    const open = spec.clarificationQuestions.length;
+    logger.warn(
+      `Plan saved with ${open} open clarification${open === 1 ? "" : "s"}: ${spec.title}`,
+    );
+    return { kind: "needs-clarification", spec };
+  }
+
   logger.success(
     `Plan saved: ${spec.title} (${spec.features.length} features)`,
   );
-
-  return spec;
+  return { kind: "ready", spec };
 }
 
 // ── JSON parser ────────────────────────────────────────────────────

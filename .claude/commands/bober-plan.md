@@ -210,6 +210,47 @@ Save all artifacts to the `.bober/` directory:
    {"event":"plan-created","specId":"...","title":"...","sprintCount":N,"timestamp":"..."}
    ```
 
+## Step 7.5: Decide — Ready or Needs Clarification?
+
+After self-answering the clarifying questions in Step 4, score the remaining ambiguity 0-10 using this rubric:
+
+| Score | Meaning |
+|-------|---------|
+| 0-2   | Fully specified. Every behavior, edge case, error path is concrete. |
+| 3-4   | Mostly specified. Small judgment calls remain (library choice, exact wording). |
+| 5-6   | Some load-bearing decisions deferred to the generator, but codebase has clear patterns. |
+| 7-8   | Significant ambiguity. The generator would have to make architectural guesses. |
+| 9-10  | Fundamental specification gaps. Sprint cannot be reliably implemented. |
+
+**Decision:**
+
+- If score < 7 AND no questions are unresolved → set `status: "draft"` and proceed to Step 8 (sprint contracts get saved).
+- If score >= 7 OR any question remains unresolved → set `status: "needs-clarification"`, populate `clarificationQuestions`, populate `resolvedClarifications` for any you self-answered, and STOP. Do not write sprint contracts. Save the spec, surface the open questions to the user, and exit.
+
+**When clarification is needed, surface it like this:**
+
+```
+⚠ Plan needs clarification before sprints can run.
+Spec: <title>
+Ambiguity score: <N>/10
+
+Open questions:
+
+  Q1 [scope]: <question>
+    A) <option>
+    B) <option>
+    💡 Suggested: <recommendation if available>
+
+  Q2 [data-model]: <question>
+
+Resolve via either:
+  /bober-plan answer <specId> Q1 "<your answer>"     (one-shot per question)
+  npx agent-bober plan answer <specId>               (interactive walkthrough)
+  Or edit .bober/specs/<specId>.json directly and flip status to "ready".
+```
+
+The user resolves the questions via the `bober plan answer` CLI command (or by editing the spec file directly). Once all questions are answered, the runtime flips status to `ready` and the next `/bober-sprint` or `/bober-run` invocation can proceed.
+
 ## Step 8: Output Summary
 
 Present a clean, readable summary to the user:
@@ -417,10 +458,34 @@ PlanSpec files are stored at: `.bober/specs/<specId>.json`
   "description": "string (required, 2-3 sentences)",
   "mode": "string (required, one of: greenfield, brownfield)",
   "preset": "string (optional, e.g.: nextjs, react-vite, solidity, anchor, api-node, python-api)",
-  "status": "string (required, one of: planned, in-progress, completed, archived)",
+  "status": "string (required, one of: draft, needs-clarification, ready, in-progress, completed, abandoned)",
+
+  "ambiguityScore": "number (optional, 0-10) — planner's self-rated ambiguity. >= 7 forces status='needs-clarification'.",
+
+  "clarificationQuestions": [
+    {
+      "questionId": "string (required, e.g. 'Q1')",
+      "category": "string (required, one of: scope | user-personas | data-model | tech-constraints | design-ux | integrations | non-functional | error-handling | integration-risk | pattern-conflict | regression-risk | other)",
+      "question": "string (required, ends in '?')",
+      "options": [
+        { "label": "string (e.g. 'A')", "description": "string" }
+      ],
+      "recommendation": "string (optional, planner's suggested answer based on codebase evidence)",
+      "ambiguityWeight": "number (optional, 0-10, how much this question contributes to overall ambiguity)"
+    }
+  ],
+
+  "resolvedClarifications": [
+    {
+      "questionId": "string (required, matches a clarificationQuestions entry)",
+      "answer": "string (required, free-form)",
+      "resolvedAt": "string (required, ISO-8601)",
+      "resolvedBy": "string (required, one of: user | planner)"
+    }
+  ],
 
   "assumptions": [
-    "string — each assumption the planner is making"
+    "string — each assumption the planner is making, ideally with codebase evidence"
   ],
 
   "outOfScope": [
@@ -483,7 +548,10 @@ PlanSpec files are stored at: `.bober/specs/<specId>.json`
 | `description` | 2-3 sentence summary of the feature and its user value. |
 | `mode` | Must match the `project.mode` in `bober.config.json` (`greenfield` or `brownfield`). |
 | `preset` | Must match the `project.preset` in `bober.config.json`, if set (e.g., `nextjs`, `solidity`, `anchor`). |
-| `status` | Lifecycle state: `planned` (not started), `in-progress` (sprints running), `completed` (all sprints done), `archived` (abandoned or superseded). |
+| `status` | Lifecycle state. `draft`: planner emitted a complete plan, no sprints run yet. `needs-clarification`: planner refused to fully decompose; user must answer the open `clarificationQuestions` before sprints can run. `ready`: clarifications resolved, pipeline may proceed. `in-progress`: at least one sprint has started. `completed`: all sprints done. `abandoned`: planner or user dropped this spec. |
+| `ambiguityScore` | Planner's self-rating 0-10. If `>= 7`, the planner MUST set `status: "needs-clarification"` and emit at least one `clarificationQuestions` entry — the pipeline will refuse to run sprints from such a spec. |
+| `clarificationQuestions` | Open questions awaiting user answers. Each unresolved entry blocks sprint execution. |
+| `resolvedClarifications` | Question/answer history (both autonomous self-answers and user inputs via `bober plan answer`). |
 
 ### Features Array
 
@@ -548,7 +616,7 @@ Bad criteria:
   "description": "A complete user authentication system supporting email/password registration and login, with session management and protected routes. This enables the application to identify users and restrict access to authorized content.",
   "mode": "greenfield",
   "preset": "react-vite",
-  "status": "planned",
+  "status": "draft",
   "assumptions": [
     "The application does not currently have any authentication system",
     "PostgreSQL is the database, as configured in the project",

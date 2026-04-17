@@ -170,16 +170,18 @@ export async function updateProgress(
 
     for (const contract of contracts) {
       const statusIcon = getStatusIcon(contract.status);
-      lines.push(`- ${statusIcon} **${contract.feature}** (${contract.id})`);
+      lines.push(
+        `- ${statusIcon} **${contract.title}** (${contract.contractId})`,
+      );
       lines.push(`  - Status: ${contract.status}`);
 
       const criteriaTotal = contract.successCriteria.length;
-      const criteriaPassed = contract.successCriteria.filter(
-        (c) => c.passed,
+      const requiredCount = contract.successCriteria.filter(
+        (c) => c.required,
       ).length;
       if (criteriaTotal > 0) {
         lines.push(
-          `  - Criteria: ${criteriaPassed}/${criteriaTotal} passed`,
+          `  - Criteria: ${criteriaTotal} (${requiredCount} required)`,
         );
       }
 

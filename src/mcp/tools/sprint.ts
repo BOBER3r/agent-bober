@@ -131,8 +131,8 @@ export function registerSprintTool(): void {
               status: "all-complete",
               message: "All sprints are already completed.",
               contracts: contracts.map((c) => ({
-                id: c.id,
-                feature: c.feature,
+                contractId: c.contractId,
+                title: c.title,
                 status: c.status,
               })),
             });
@@ -141,7 +141,7 @@ export function registerSprintTool(): void {
         }
 
         process.stderr.write(
-          `[bober_sprint] Starting sprint: ${nextSprint.feature} (${nextSprint.id})\n`,
+          `[bober_sprint] Starting sprint: ${nextSprint.title} (${nextSprint.contractId})\n`,
         );
 
         const completedContracts = contracts.filter((c) => c.status === "passed");
@@ -149,7 +149,9 @@ export function registerSprintTool(): void {
         let currentContract = updateContractStatus(nextSprint, "in-progress");
         await updateContract(projectRoot, currentContract);
 
-        const contractIndex = contracts.findIndex((c) => c.id === currentContract.id);
+        const contractIndex = contracts.findIndex(
+          (c) => c.contractId === currentContract.contractId,
+        );
         if (contractIndex !== -1) {
           contracts[contractIndex] = currentContract;
         }
@@ -160,7 +162,7 @@ export function registerSprintTool(): void {
 
         for (let iteration = 1; iteration <= maxIterations; iteration++) {
           process.stderr.write(
-            `[bober_sprint] Iteration ${iteration}/${maxIterations} for ${currentContract.id}\n`,
+            `[bober_sprint] Iteration ${iteration}/${maxIterations} for ${currentContract.contractId}\n`,
           );
 
           const handoff = createHandoff({
@@ -170,7 +172,7 @@ export function registerSprintTool(): void {
             spec,
             currentContract,
             sprintHistory: completedContracts,
-            instructions: `Implement sprint: ${currentContract.feature}\n\n${currentContract.description}`,
+            instructions: `Implement sprint: ${currentContract.title}\n\n${currentContract.description}`,
             issues: currentContract.evaluatorFeedback
               ? [currentContract.evaluatorFeedback]
               : [],
@@ -183,7 +185,7 @@ export function registerSprintTool(): void {
             timestamp: new Date().toISOString(),
             event: "generator-start",
             phase: "generating",
-            sprintId: currentContract.id,
+            sprintId: currentContract.contractId,
             details: { iteration },
           });
 
@@ -213,7 +215,7 @@ export function registerSprintTool(): void {
             try {
               const hash = await commitAll(
                 projectRoot,
-                `bober: ${currentContract.feature} (round ${iteration})`,
+                `bober: ${currentContract.title} (round ${iteration})`,
               );
               process.stderr.write(`[bober_sprint] Committed: ${hash}\n`);
             } catch (err) {
@@ -241,7 +243,7 @@ export function registerSprintTool(): void {
             spec,
             currentContract,
             sprintHistory: completedContracts,
-            instructions: `Evaluate sprint: ${currentContract.feature}`,
+            instructions: `Evaluate sprint: ${currentContract.title}`,
             changedFiles,
           });
 
@@ -279,8 +281,8 @@ export function registerSprintTool(): void {
         }
 
         results.push({
-          contractId: currentContract.id,
-          feature: currentContract.feature,
+          contractId: currentContract.contractId,
+          title: currentContract.title,
           status: currentContract.status,
           passed: sprintPassed,
           score: lastEvalScore,

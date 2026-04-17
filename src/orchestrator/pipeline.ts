@@ -1,5 +1,6 @@
 import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
+import { isPipelineReady } from "../contracts/spec.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 import {
   createContract,
@@ -38,6 +39,13 @@ export interface PipelineResult {
   failedSprints: SprintContract[];
   totalCost?: number;
   duration: number;
+  /**
+   * When the planner refuses to fully decompose the request (ambiguityScore
+   * over threshold or open clarification questions), the pipeline stops
+   * before sprint execution and sets this flag. Callers should surface
+   * `spec.clarificationQuestions` to the user in this case.
+   */
+  needsClarification?: boolean;
 }
 
 interface SprintCycleResult {
@@ -115,14 +123,14 @@ async function runSprintCycle(
   const curatorEnabled = config.curator?.enabled !== false;
 
   if (curatorEnabled) {
-    logger.phase(`Sprint ${currentContract.id} - Curate`);
+    logger.phase(`Sprint ${currentContract.contractId} - Curate`);
 
     await appendHistory(projectRoot, {
       timestamp: new Date().toISOString(),
       event: "curator-start",
       phase: "curating",
-      sprintId: currentContract.id,
-      details: { feature: currentContract.feature },
+      sprintId: currentContract.contractId,
+      details: { title: currentContract.title },
     });
 
     try {
@@ -142,7 +150,7 @@ async function runSprintCycle(
         timestamp: new Date().toISOString(),
         event: "curator-complete",
         phase: "curating",
-        sprintId: currentContract.id,
+        sprintId: currentContract.contractId,
         details: {
           filesAnalyzed: briefing.filesAnalyzed.length,
           patternsFound: briefing.patternsFound,
@@ -158,11 +166,11 @@ async function runSprintCycle(
 
   for (let iteration = 1; iteration <= maxIterations; iteration++) {
     if (interrupted) {
-      logger.warn(`Sprint ${currentContract.id} interrupted at iteration ${iteration}.`);
+      logger.warn(`Sprint ${currentContract.contractId} interrupted at iteration ${iteration}.`);
       break;
     }
 
-    logger.progress(iteration, maxIterations, `Sprint ${currentContract.id} iteration`);
+    logger.progress(iteration, maxIterations, `Sprint ${currentContract.contractId} iteration`);
 
     // Build evaluation feedback from prior round
     // Pass structured feedback (not just summary) so the generator
@@ -200,7 +208,7 @@ async function runSprintCycle(
       spec,
       currentContract,
       sprintHistory: completedContracts,
-      instructions: `Implement sprint: ${currentContract.feature}\n\n${currentContract.description}`,
+      instructions: `Implement sprint: ${currentContract.title}\n\n${currentContract.description}`,
       changedFiles: lastGeneratorResult?.filesChanged ?? [],
       issues: evalFeedbackParts.length > 0 ? evalFeedbackParts : [],
     });
@@ -209,13 +217,13 @@ async function runSprintCycle(
     const compactedHandoff = summarizeOlderSprints(completedSummaryHandoff, 3);
 
     // ── Generate ───────────────────────────────────────────────
-    logger.phase(`Sprint ${currentContract.id} - Generate (Round ${iteration})`);
+    logger.phase(`Sprint ${currentContract.contractId} - Generate (Round ${iteration})`);
 
     await appendHistory(projectRoot, {
       timestamp: new Date().toISOString(),
       event: "generator-start",
       phase: "generating",
-      sprintId: currentContract.id,
+      sprintId: currentContract.contractId,
       details: { iteration },
     });
 
@@ -259,7 +267,7 @@ async function runSprintCycle(
       try {
         const commitHash = await commitAll(
           projectRoot,
-          `bober: ${currentContract.feature} (sprint ${currentContract.id}, round ${iteration})`,
+          `bober: ${currentContract.title} (sprint ${currentContract.contractId}, round ${iteration})`,
         );
         logger.success(`Committed: ${commitHash}`);
         lastGeneratorResult = { ...generatorResult, commitHash };
@@ -271,7 +279,7 @@ async function runSprintCycle(
     }
 
     // ── Evaluate ──────────────────────────────────────────────
-    logger.phase(`Sprint ${currentContract.id} - Evaluate (Round ${iteration})`);
+    logger.phase(`Sprint ${currentContract.contractId} - Evaluate (Round ${iteration})`);
 
     currentContract = updateContractStatus(currentContract, "evaluating");
     await updateContract(projectRoot, currentContract);
@@ -280,7 +288,7 @@ async function runSprintCycle(
       timestamp: new Date().toISOString(),
       event: "evaluator-start",
       phase: "evaluating",
-      sprintId: currentContract.id,
+      sprintId: currentContract.contractId,
       details: { iteration },
     });
 
@@ -307,7 +315,7 @@ async function runSprintCycle(
     lastEvaluation = evaluation;
 
     if (evaluation.passed) {
-      logger.success(`Sprint ${currentContract.id} passed all evaluations!`);
+      logger.success(`Sprint ${currentContract.contractId} passed all evaluations!`);
 
       currentContract = updateContractStatus(currentContract, "passed");
       currentContract = {
@@ -320,7 +328,7 @@ async function runSprintCycle(
         timestamp: new Date().toISOString(),
         event: "sprint-passed",
         phase: "complete",
-        sprintId: currentContract.id,
+        sprintId: currentContract.contractId,
         details: { iteration, feedback: evaluation.summary },
       });
 
@@ -342,13 +350,13 @@ async function runSprintCycle(
       timestamp: new Date().toISOString(),
       event: "evaluation-failed",
       phase: "rework",
-      sprintId: currentContract.id,
+      sprintId: currentContract.contractId,
       details: { iteration, feedback: evaluation.summary },
     });
 
     if (iteration >= maxIterations) {
       logger.error(
-        `Sprint ${currentContract.id} exceeded max iterations (${maxIterations}).`,
+        `Sprint ${currentContract.contractId} exceeded max iterations (${maxIterations}).`,
       );
       currentContract = updateContractStatus(currentContract, "needs-rework");
       await updateContract(projectRoot, currentContract);
@@ -468,19 +476,63 @@ export async function runPipeline(
     }
 
     // ── Phase 1: Planning ────────────────────────────────────────
-    const spec = await runPlanner(userPrompt, projectRoot, config, researchDoc, architectDoc);
+    const plannerResult = await runPlanner(
+      userPrompt,
+      projectRoot,
+      config,
+      researchDoc,
+      architectDoc,
+    );
+    const spec = plannerResult.spec;
+
+    if (plannerResult.kind === "needs-clarification" || !isPipelineReady(spec)) {
+      // Planner refused to fully decompose the request — block here rather
+      // than enqueueing meaningless sprints. The user must answer the open
+      // clarification questions and re-run.
+      const open = spec.clarificationQuestions.length;
+      logger.warn(
+        `Plan "${spec.title}" needs clarification before sprints can run (${open} open ${open === 1 ? "question" : "questions"}).`,
+      );
+      logger.info(
+        `Resolve via: bober plan answer ${spec.specId} <questionId> "<answer>"`,
+      );
+      logger.info(
+        "Or edit the spec file directly and flip status to 'ready'.",
+      );
+
+      await appendHistory(projectRoot, {
+        timestamp: new Date().toISOString(),
+        event: "planning-needs-clarification",
+        phase: "planning",
+        details: {
+          specId: spec.specId,
+          openQuestions: open,
+          ambiguityScore: spec.ambiguityScore,
+        },
+      });
+
+      const duration = Date.now() - startTime;
+      return {
+        success: false,
+        spec,
+        completedSprints: [],
+        failedSprints: [],
+        duration,
+        needsClarification: true,
+      };
+    }
 
     logger.info(`Plan: "${spec.title}" with ${spec.features.length} features`);
 
     // Log design-created event if design doc was saved by the planner
     try {
-      const designContent = await readDesign(projectRoot, spec.id);
+      const designContent = await readDesign(projectRoot, spec.specId);
       const designLineCount = designContent.split("\n").length;
       await appendHistory(projectRoot, {
         timestamp: new Date().toISOString(),
         event: "design-created",
         phase: "planning",
-        details: { specId: spec.id, lineCount: designLineCount },
+        details: { specId: spec.specId, lineCount: designLineCount },
       });
     } catch {
       // Design doc is optional — planner may not have saved it
@@ -488,13 +540,13 @@ export async function runPipeline(
 
     // Log outline-created event if outline was saved by the planner
     try {
-      const outlineContent = await readOutline(projectRoot, spec.id);
+      const outlineContent = await readOutline(projectRoot, spec.specId);
       const outlineLineCount = outlineContent.split("\n").length;
       await appendHistory(projectRoot, {
         timestamp: new Date().toISOString(),
         event: "outline-created",
         phase: "planning",
-        details: { specId: spec.id, lineCount: outlineLineCount },
+        details: { specId: spec.specId, lineCount: outlineLineCount },
       });
     } catch {
       // Outline is optional — planner may not have saved it
@@ -505,7 +557,7 @@ export async function runPipeline(
       event: "planning-complete",
       phase: "planning",
       details: {
-        specId: spec.id,
+        specId: spec.specId,
         featureCount: spec.features.length,
       },
     });
@@ -513,17 +565,27 @@ export async function runPipeline(
     // ── Phase 2: Sprint loop ─────────────────────────────────────
     logger.phase("Sprint Execution");
 
-    // Create sprint contracts from features
+    // Create sprint contracts from features.
+    // These auto-generated contracts use placeholder precision fields;
+    // a planner-authored contract (saved directly by the bober-planner
+    // subagent) supersedes them with substantive nonGoals, stopConditions,
+    // and definitionOfDone.
     const contracts: SprintContract[] = [];
-    for (const feature of spec.features) {
+    for (let i = 0; i < spec.features.length; i++) {
+      const feature = spec.features[i];
       const contract = createContract(
         feature.title,
         feature.description,
         feature.acceptanceCriteria.map((ac, idx) => ({
-          id: `${feature.id}-criterion-${idx + 1}`,
+          criterionId: `${feature.featureId}-criterion-${idx + 1}`,
           description: ac,
           verificationMethod: "agent-evaluation",
         })),
+        {
+          specId: spec.specId,
+          sprintNumber: i + 1,
+          features: [feature.featureId],
+        },
       );
       contracts.push(contract);
       await saveContract(projectRoot, contract);
@@ -542,7 +604,7 @@ export async function runPipeline(
       }
 
       const contract = contracts[i];
-      logger.progress(i + 1, maxSprints, contract.feature);
+      logger.progress(i + 1, maxSprints, contract.title);
 
       const result = await runSprintCycle(
         contract,
@@ -564,7 +626,7 @@ export async function runPipeline(
           result.contract.status !== "needs-rework"
         ) {
           logger.error(
-            `Sprint ${result.contract.id} failed and contracts are required. Stopping pipeline.`,
+            `Sprint ${result.contract.contractId} failed and contracts are required. Stopping pipeline.`,
           );
           break;
         }

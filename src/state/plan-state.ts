@@ -33,7 +33,7 @@ export async function saveSpec(
     throw new Error(`Invalid spec:\n${issues}`);
   }
 
-  const filePath = specPath(projectRoot, spec.id);
+  const filePath = specPath(projectRoot, spec.specId);
   await writeFile(filePath, JSON.stringify(spec, null, 2), "utf-8");
 }
 

@@ -64,45 +64,78 @@ export function registerPlanTool(): void {
       await ensureBoberDir(projectRoot);
 
       try {
-        const spec = await runPlanner(task, projectRoot, config);
+        const plannerResult = await runPlanner(task, projectRoot, config);
+        const spec = plannerResult.spec;
 
-        // Generate sprint contracts from features (same as pipeline.ts)
+        // If the planner refused (high ambiguity), surface the open
+        // questions instead of running sprints. The MCP caller decides
+        // what to do — typically prompt the user for answers.
+        if (plannerResult.kind === "needs-clarification") {
+          return JSON.stringify(
+            {
+              specId: spec.specId,
+              status: spec.status,
+              title: spec.title,
+              description: spec.description,
+              ambiguityScore: spec.ambiguityScore,
+              clarificationQuestions: spec.clarificationQuestions,
+              savedTo: `.bober/specs/${spec.specId}.json`,
+              message:
+                "Planner needs clarification before sprint contracts can be generated. " +
+                `Resolve via 'bober plan answer ${spec.specId} <questionId> "<answer>"' or edit the spec file directly.`,
+            },
+            null,
+            2,
+          );
+        }
+
+        // Generate sprint contracts from features (same as pipeline.ts).
+        // These auto-generated contracts are placeholders; planner-authored
+        // contracts (saved by the bober-planner subagent) are richer.
         const contracts: SprintContract[] = [];
-        for (const feature of spec.features) {
+        for (let i = 0; i < spec.features.length; i++) {
+          const feature = spec.features[i];
           const contract = createContract(
             feature.title,
             feature.description,
             feature.acceptanceCriteria.map((ac, idx) => ({
-              id: `${feature.id}-criterion-${idx + 1}`,
+              criterionId: `${feature.featureId}-criterion-${idx + 1}`,
               description: ac,
               verificationMethod: "agent-evaluation",
             })),
+            {
+              specId: spec.specId,
+              sprintNumber: i + 1,
+              features: [feature.featureId],
+            },
           );
           contracts.push(contract);
           await saveContract(projectRoot, contract);
         }
 
         const summary = {
-          id: spec.id,
+          specId: spec.specId,
           title: spec.title,
           description: spec.description,
-          projectType: spec.projectType,
+          mode: spec.mode,
+          status: spec.status,
           techStack: spec.techStack,
           sprintCount: spec.features.length,
           sprints: spec.features.map((f, idx) => ({
-            id: f.id,
-            contractId: contracts[idx]?.id,
-            feature: f.title,
+            featureId: f.featureId,
+            contractId: contracts[idx]?.contractId,
+            title: f.title,
             description: f.description,
             priority: f.priority,
-            estimatedSprints: f.estimatedSprints,
+            estimatedComplexity: f.estimatedComplexity,
             criteriaCount: f.acceptanceCriteria.length,
             status: "proposed",
           })),
-          contractIds: contracts.map((c) => c.id),
-          nonFunctional: spec.nonFunctional,
+          contractIds: contracts.map((c) => c.contractId),
+          assumptions: spec.assumptions,
+          outOfScope: spec.outOfScope,
           constraints: spec.constraints,
-          savedTo: `.bober/specs/${spec.id}.json`,
+          savedTo: `.bober/specs/${spec.specId}.json`,
         };
 
         return JSON.stringify(summary, null, 2);

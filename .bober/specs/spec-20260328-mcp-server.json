@@ -1,32 +1,32 @@
 {
   "specId": "spec-20260328-mcp-server",
-  "status": "completed",
-  "completedAt": "2026-03-29T00:00:00Z",
+  "version": 1,
   "title": "MCP Server for Cross-IDE Integration",
   "description": "An MCP (Model Context Protocol) server that exposes agent-bober's orchestration capabilities as tools, enabling Cursor, Windsurf, Claude Code, and any MCP-compatible IDE to use bober workflows directly from the chat interface. Includes async execution for long-running pipelines with polling.",
-  "projectType": "brownfield",
-  "techStack": ["typescript", "node", "@modelcontextprotocol/sdk", "esm"],
+  "status": "completed",
+  "mode": "brownfield",
   "features": [
     {
-      "id": "feat-1",
+      "featureId": "feat-1",
       "title": "MCP Server Core and CLI Entry Point",
       "description": "Create the MCP server using @modelcontextprotocol/sdk with stdio transport. Register it as a new CLI subcommand: `agent-bober mcp`. The server advertises tool capabilities and handles the JSON-RPC 2.0 lifecycle.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: `npx agent-bober mcp` starts an MCP server that communicates over stdio using JSON-RPC 2.0.",
         "AC2: The server responds to the MCP `initialize` handshake with server name 'agent-bober', version from package.json, and capabilities listing tools.",
         "AC3: The server responds to `tools/list` with a list of registered tool definitions (names, descriptions, input schemas).",
         "AC4: @modelcontextprotocol/sdk is added as a dependency in package.json.",
         "AC5: The project typechecks and builds."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-2",
+      "featureId": "feat-2",
       "title": "Core Bober Tools (init, plan, sprint, eval)",
       "description": "Implement the synchronous MCP tools that map to CLI commands: bober_init, bober_plan, bober_sprint, bober_eval. Each tool wraps the existing command function, captures output, and returns structured results.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: bober_plan tool accepts a 'task' string parameter, calls the planner, and returns the PlanSpec summary with sprint breakdown.",
         "AC2: bober_sprint tool accepts optional 'continue' boolean, executes the next sprint, and returns the sprint result (pass/fail, evaluator feedback).",
@@ -34,14 +34,16 @@
         "AC4: bober_init tool accepts optional 'preset' and 'provider' parameters, initializes the project, and returns confirmation.",
         "AC5: All tools resolve the project root from cwd and load bober.config.json. Missing config produces a clear error instructing the user to run bober_init first.",
         "AC6: The project typechecks, builds, and lints."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-3",
+      "featureId": "feat-3",
       "title": "Async Pipeline Tool (bober_run) with Polling",
       "description": "Implement bober_run as an async tool that starts the full pipeline in the background and returns a run ID immediately. A bober_status tool polls for progress and completion. Uses MCP progress notifications to stream updates.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: bober_run tool accepts a 'task' string, starts the pipeline asynchronously, and immediately returns a JSON response with runId and status 'running'.",
         "AC2: bober_status tool accepts optional 'runId' parameter. When a run is active, it returns current progress (sprints completed/total, current phase, iteration count). When no run is active, it returns the contents of .bober/progress.md.",
@@ -49,14 +51,16 @@
         "AC4: If bober_run is called while a run is already active, it returns an error 'A pipeline is already running. Use bober_status to check progress.'",
         "AC5: The pipeline run state is tracked in memory (not on disk) since it's per-server-session.",
         "AC6: The project typechecks, builds, and lints."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-4",
+      "featureId": "feat-4",
       "title": "Read Tools and Configuration Tools",
       "description": "Implement read-only MCP tools for inspecting bober state: bober_contracts (list/read sprint contracts), bober_spec (read current plan), bober_principles (read/set project principles), bober_config (read/update bober.config.json).",
-      "priority": "should",
-      "estimatedSprints": 1,
+      "priority": "should-have",
       "acceptanceCriteria": [
         "AC1: bober_status returns .bober/progress.md content and pipeline run state when called with no arguments.",
         "AC2: bober_contracts tool lists all contracts when called with no arguments. When called with a contractId, returns the full contract JSON.",
@@ -64,14 +68,35 @@
         "AC4: bober_principles tool reads .bober/principles.md when called with no arguments. When called with a 'content' parameter, writes/updates .bober/principles.md.",
         "AC5: bober_config tool reads bober.config.json when called with no arguments. When called with key-value parameters, updates specific config fields.",
         "AC6: The project typechecks, builds, and lints."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     }
   ],
-  "nonFunctional": [
-    "The MCP server must start in under 2 seconds with no external network calls during initialization.",
-    "All tool responses must be valid JSON strings that MCP clients can parse and display.",
-    "Error responses must use MCP's error format with clear human-readable messages.",
-    "The server must handle SIGINT/SIGTERM gracefully, cleaning up any active pipeline runs."
+  "assumptions": [],
+  "outOfScope": [],
+  "clarificationQuestions": [],
+  "resolvedClarifications": [],
+  "techStack": [
+    "typescript",
+    "node",
+    "@modelcontextprotocol/sdk",
+    "esm"
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "requirement": "The MCP server must start in under 2 seconds with no external network calls during initialization."
+    },
+    {
+      "requirement": "All tool responses must be valid JSON strings that MCP clients can parse and display."
+    },
+    {
+      "requirement": "Error responses must use MCP's error format with clear human-readable messages."
+    },
+    {
+      "requirement": "The server must handle SIGINT/SIGTERM gracefully, cleaning up any active pipeline runs."
+    }
   ],
   "constraints": [
     "TypeScript strict mode, no any, no ts-ignore.",
@@ -81,5 +106,6 @@
     "The MCP server must work when installed globally (npx agent-bober mcp) and locally (node dist/cli/index.js mcp)."
   ],
   "createdAt": "2026-03-28T18:00:00Z",
-  "updatedAt": "2026-03-28T18:00:00Z"
+  "updatedAt": "2026-04-17T17:01:09.418Z",
+  "completedAt": "2026-03-29T00:00:00Z"
 }

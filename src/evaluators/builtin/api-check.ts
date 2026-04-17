@@ -30,7 +30,7 @@ function inferEndpointsFromContract(contract: SprintContract): EndpointSpec[] {
   const allText = [
     contract.description,
     ...contract.successCriteria.map((c) => c.description),
-    ...contract.expectedChanges.map((c) => c.description),
+    ...contract.estimatedFiles,
   ].join("\n");
 
   // Match patterns like "GET /api/users", "POST /api/items"

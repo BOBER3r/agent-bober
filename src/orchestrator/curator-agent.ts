@@ -56,8 +56,8 @@ export async function runCurator(
   projectRoot: string,
   config: BoberConfig,
 ): Promise<SprintBriefing> {
-  const contractId = contract.id;
-  logger.sprint(contractId, `Curating: ${contract.feature}`);
+  const contractId = contract.contractId;
+  logger.sprint(contractId, `Curating: ${contract.title}`);
 
   // Load agent definition (system prompt from .md file)
   const agentDef = await loadAgentDefinition("bober-curator", projectRoot);
@@ -82,7 +82,9 @@ export async function runCurator(
   // Build the completed sprints summary
   const completedSummary = completedSprints.length > 0
     ? completedSprints
-        .map((s) => `- Sprint "${s.feature}" (${s.id}): ${s.description}`)
+        .map(
+          (s) => `- Sprint "${s.title}" (${s.contractId}): ${s.description}`,
+        )
         .join("\n")
     : "No prior sprints completed.";
 
@@ -98,7 +100,7 @@ ${contractJson}
 **Plan:** ${spec.title}
 **Description:** ${spec.description}
 **Tech Stack:** ${spec.techStack.join(", ") || "Not specified"}
-**Project Type:** ${spec.projectType}
+**Project Type:** ${spec.mode}
 
 # Completed Sprints
 

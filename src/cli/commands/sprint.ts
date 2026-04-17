@@ -128,8 +128,11 @@ export async function runSprintCommand(
       break;
     }
 
-    logger.phase(`Sprint: ${nextSprint.feature}`);
-    logger.sprint(nextSprint.id, `Starting: ${nextSprint.description}`);
+    logger.phase(`Sprint: ${nextSprint.title}`);
+    logger.sprint(
+      nextSprint.contractId,
+      `Starting: ${nextSprint.description}`,
+    );
 
     // Get completed sprints
     const completedContracts = contracts.filter(
@@ -142,7 +145,7 @@ export async function runSprintCommand(
 
     // Update the contract in our local array
     const contractIndex = contracts.findIndex(
-      (c) => c.id === currentContract.id,
+      (c) => c.contractId === currentContract.contractId,
     );
     if (contractIndex !== -1) {
       contracts[contractIndex] = currentContract;
@@ -165,7 +168,7 @@ export async function runSprintCommand(
         spec,
         currentContract,
         sprintHistory: completedContracts,
-        instructions: `Implement sprint: ${currentContract.feature}\n\n${currentContract.description}`,
+        instructions: `Implement sprint: ${currentContract.title}\n\n${currentContract.description}`,
         issues: currentContract.evaluatorFeedback
           ? [currentContract.evaluatorFeedback]
           : [],
@@ -179,7 +182,7 @@ export async function runSprintCommand(
         timestamp: new Date().toISOString(),
         event: "generator-start",
         phase: "generating",
-        sprintId: currentContract.id,
+        sprintId: currentContract.contractId,
         details: { iteration },
       });
 
@@ -214,7 +217,7 @@ export async function runSprintCommand(
         try {
           const hash = await commitAll(
             projectRoot,
-            `bober: ${currentContract.feature} (round ${iteration})`,
+            `bober: ${currentContract.title} (round ${iteration})`,
           );
           logger.success(`Committed: ${hash}`);
         } catch (err) {
@@ -246,7 +249,7 @@ export async function runSprintCommand(
         spec,
         currentContract,
         sprintHistory: completedContracts,
-        instructions: `Evaluate sprint: ${currentContract.feature}`,
+        instructions: `Evaluate sprint: ${currentContract.title}`,
         changedFiles,
       });
 
@@ -299,7 +302,7 @@ export async function runSprintCommand(
       ? chalk.green("[PASS]")
       : chalk.red("[FAIL]");
     console.log(
-      `${statusIcon} ${chalk.bold(currentContract.feature)} (${currentContract.id})`,
+      `${statusIcon} ${chalk.bold(currentContract.title)} (${currentContract.contractId})`,
     );
 
     if (currentContract.generatorNotes) {

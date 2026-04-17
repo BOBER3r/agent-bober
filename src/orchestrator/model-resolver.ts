@@ -21,9 +21,9 @@ export interface ResolvedModel {
  */
 const SHORTHAND_MAP: Record<string, { provider: string; modelId: string }> = {
   // Anthropic
-  opus: { provider: "anthropic", modelId: "claude-opus-4-6" },
+  opus: { provider: "anthropic", modelId: "claude-opus-4-7" },
   sonnet: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
-  haiku: { provider: "anthropic", modelId: "claude-haiku-4-5-20251001" },
+  haiku: { provider: "anthropic", modelId: "claude-haiku-4-5" },
   // OpenAI
   "gpt-4.1": { provider: "openai", modelId: "gpt-4.1" },
   "gpt-4.1-mini": { provider: "openai", modelId: "gpt-4.1-mini" },

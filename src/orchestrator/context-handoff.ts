@@ -56,17 +56,21 @@ export type ContextHandoff = z.infer<typeof ContextHandoffSchema>;
 // ── Summarized Sprint (for compaction) ──────────────────────────────
 
 interface SprintSummary {
-  id: string;
-  feature: string;
-  status: string;
+  contractId: string;
+  specId: string;
+  sprintNumber: number;
+  title: string;
+  status: SprintContract["status"];
   startedAt?: string;
   completedAt?: string;
 }
 
 function summarizeSprint(contract: SprintContract): SprintSummary {
   return {
-    id: contract.id,
-    feature: contract.feature,
+    contractId: contract.contractId,
+    specId: contract.specId,
+    sprintNumber: contract.sprintNumber,
+    title: contract.title,
     status: contract.status,
     startedAt: contract.startedAt,
     completedAt: contract.completedAt,
@@ -160,19 +164,39 @@ export function summarizeOlderSprints(
   const olderSprints = history.slice(0, cutoff);
   const recentSprints = history.slice(cutoff);
 
-  // Build summary entries as minimal SprintContract objects
+  // Build summary entries as minimal SprintContract objects.
+  // Even summaries must satisfy the schema's precision-field minimums so
+  // that downstream code can rely on the shape unconditionally.
   const summarized: SprintContract[] = olderSprints.map((contract) => {
     const summary = summarizeSprint(contract);
+    const summarizedDescription = `[Summarized] ${contract.description}`;
     return {
-      id: summary.id,
-      feature: summary.feature,
-      description: `[Summarized] ${contract.description}`,
-      successCriteria: [],
-      expectedChanges: [],
-      dependsOn: [],
-      status: contract.status,
-      generatorNotes: undefined,
-      evaluatorFeedback: undefined,
+      contractId: summary.contractId,
+      specId: summary.specId,
+      sprintNumber: summary.sprintNumber,
+      title: summary.title,
+      description: summarizedDescription,
+      status: summary.status,
+      dependsOn: contract.dependsOn,
+      features: contract.features,
+      successCriteria: [
+        {
+          criterionId: "summary",
+          description:
+            "Sprint history summarized — original criteria omitted to save context.",
+          verificationMethod: "manual",
+          required: false,
+        },
+      ],
+      nonGoals: ["Re-evaluating this summarized sprint"],
+      stopConditions: ["Sprint already terminal at summary time"],
+      definitionOfDone:
+        "Summarized historical sprint — see source contract for original criteria.",
+      assumptions: [],
+      outOfScope: [],
+      estimatedFiles: [],
+      iterationHistory: [],
+      lastEvalId: contract.lastEvalId ?? null,
       startedAt: summary.startedAt,
       completedAt: summary.completedAt,
     };

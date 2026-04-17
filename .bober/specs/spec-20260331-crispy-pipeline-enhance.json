@@ -1,60 +1,64 @@
 {
   "specId": "spec-20260331-crispy-pipeline-enhance",
-  "status": "completed",
-  "completedAt": "2026-03-31T12:00:00Z",
+  "version": 1,
   "title": "CRISPY-Inspired Pipeline Enhancement",
   "description": "Enhance the bober pipeline with CRISPY-inspired alignment checkpoints: a dedicated research phase with opinion-free codebase analysis, mandatory clarification questions with self-answering, a design discussion artifact for human-agent alignment, a structure outline enforcing vertical slice decomposition, and a context distillation chain that keeps each phase's context window lean.",
-  "projectType": "brownfield",
-  "techStack": ["typescript", "node", "zod", "commander", "esm"],
+  "status": "completed",
+  "mode": "brownfield",
   "features": [
     {
-      "id": "feat-1",
+      "featureId": "feat-1",
       "title": "Research Phase",
       "description": "A new standalone phase that runs BEFORE planning. Uses two isolated context windows: one generates questions from the feature description, another (with NO knowledge of the feature) runs those questions against the codebase to produce a pure-fact research document. Available as both a /bober-research skill and programmatic runResearch() in the pipeline.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: agents/bober-researcher.md defines a two-phase process: Phase 1 generates exploration questions from a feature description, Phase 2 explores the codebase using ONLY those questions (no feature knowledge) and produces a fact-only research doc.",
         "AC2: .claude/commands/bober-research.md exists as a standalone skill accepting a feature description and producing .bober/research/<id>-research.md.",
         "AC3: src/orchestrator/research-agent.ts exports runResearch(prompt, projectRoot, config): Promise<ResearchDoc> that orchestrates the two-phase process using the configured planner model.",
         "AC4: The research output contains ONLY factual sections: Architecture Overview, Existing Patterns (with file path examples), Key Files, Integration Points, Test Coverage, Risk Areas. No implementation suggestions or opinions.",
         "AC5: The two-phase isolation is enforced: the exploration context receives ONLY the generated questions, never the original feature description or ticket."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-2",
+      "featureId": "feat-2",
       "title": "Mandatory Questions with Self-Answering",
       "description": "Remove the 'skip interview if input is detailed' escape hatch. The planner ALWAYS generates 3-5 clarification questions. In autonomous mode (subagent), questions are self-answered using codebase evidence and documented in the design artifact. New question categories added: integration risk, pattern conflicts, regression risk.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: The planner always generates 3-5 questions regardless of input detail level. The conditional skip path in Step 3/4 of bober-plan.md is removed.",
         "AC2: In autonomous mode, the planner self-answers each question citing specific files and code as evidence, and documents the full Q&A.",
         "AC3: In interactive mode (/bober-plan), questions are presented to the user for answering as before.",
         "AC4: Three new question categories exist in the clarification guide: Integration Risk Assessment (what existing systems could break), Existing Pattern Conflicts (where the new feature might clash with current patterns), Regression Risk Areas (what test coverage gaps exist around the change zone).",
         "AC5: Self-answered questions are included in the design discussion artifact for human auditability."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-3",
+      "featureId": "feat-3",
       "title": "Design Discussion Artifact",
       "description": "After clarification questions are resolved, the planner produces a ~200-line design discussion markdown document. Contains: current state, desired end state, patterns to follow (user can reject bad patterns), resolved design decisions, and open questions. The user reviews this lightweight doc before the full PlanSpec is generated. In autonomous mode, it's auto-generated and saved for audit.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: After questions are resolved, the planner produces a design doc saved to .bober/designs/<specId>-design.md before generating the PlanSpec.",
         "AC2: Design doc contains sections: Current State (how things work today), Desired End State (what we're building toward), Patterns to Follow (with file path examples the user can accept/reject), Resolved Design Decisions (from Q&A), Open Questions (remaining uncertainties).",
         "AC3: In interactive mode, the design doc is presented to the user for review and modification before proceeding.",
         "AC4: In autonomous mode, the design doc is auto-generated, saved to disk, and the planner proceeds without waiting.",
         "AC5: Design doc is capped at ~200 lines. If the planner generates more, it must distill to stay within the limit."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-4",
+      "featureId": "feat-4",
       "title": "Structure Outline with Vertical Slice Enforcement",
       "description": "After design approval but before contract generation, produce a lightweight structure outline (~100 lines). Shows phase titles, key types/signatures per phase, test checkpoints, and dependencies. Enforces vertical slice decomposition: each phase must be end-to-end testable, never a single horizontal layer. User approves the shape before detailed contracts are filled in.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: After design approval, the planner produces a structure outline saved to .bober/outlines/<specId>-outline.md.",
         "AC2: Outline contains per-phase: title, key types/signatures that change, files affected, test checkpoint (how to verify this phase works), and dependencies on prior phases.",
@@ -62,14 +66,16 @@
         "AC4: Each phase in the outline is a vertical slice touching all relevant layers. No phase is purely 'database schema' or 'API endpoints' or 'UI components' without touching other layers.",
         "AC5: The planner includes a self-validation step: if any phase is a horizontal layer, it restructures into vertical slices before presenting the outline.",
         "AC6: Sprint contracts generated from the outline follow the vertical structure faithfully."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     },
     {
-      "id": "feat-5",
+      "featureId": "feat-5",
       "title": "Context Management and Distillation Chain",
       "description": "Implement a context distillation chain across phases: research is distilled into design (raw research not passed further), design is passed to outline and plan but not generator, outline feeds plan only. Generator receives only contract + principles. Artifact size limits enforced. Integrated into both the programmatic pipeline and skill prompts.",
-      "priority": "must",
-      "estimatedSprints": 1,
+      "priority": "must-have",
       "acceptanceCriteria": [
         "AC1: In pipeline.ts, runResearch() is called before runPlanner() when pipeline.researchPhase is true (default: true).",
         "AC2: Research doc is passed to the design phase but NOT to outline, plan, generator, or evaluator phases.",
@@ -80,14 +86,36 @@
         "AC7: bober-run.md and bober-brownfield.md skill prompts are updated to include the research phase in the orchestration flow.",
         "AC8: State helpers exist for saving/reading research, design, and outline artifacts.",
         "AC9: Progress tracking (.bober/progress.md and history.jsonl) includes new event types: research-started, research-completed, design-created, outline-created."
-      ]
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low",
+      "estimatedSprints": 1
     }
   ],
-  "nonFunctional": [
-    "Context efficiency: no phase should receive more than 40% of the model's context window in handoff documents alone",
-    "Backward compatibility: existing bober.config.json files without new fields must still work via schema defaults",
-    "Artifact auditability: all intermediate artifacts (research, design, outline) are saved to disk for human review even in autonomous mode",
-    "Provider agnostic: research agent works with any configured LLM provider (Anthropic, OpenAI, Google) via the createClient factory"
+  "assumptions": [],
+  "outOfScope": [],
+  "clarificationQuestions": [],
+  "resolvedClarifications": [],
+  "techStack": [
+    "typescript",
+    "node",
+    "zod",
+    "commander",
+    "esm"
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "requirement": "Context efficiency: no phase should receive more than 40% of the model's context window in handoff documents alone"
+    },
+    {
+      "requirement": "Backward compatibility: existing bober.config.json files without new fields must still work via schema defaults"
+    },
+    {
+      "requirement": "Artifact auditability: all intermediate artifacts (research, design, outline) are saved to disk for human review even in autonomous mode"
+    },
+    {
+      "requirement": "Provider agnostic: research agent works with any configured LLM provider (Anthropic, OpenAI, Google) via the createClient factory"
+    }
   ],
   "constraints": [
     "Must not break existing generator/evaluator pipeline — all changes are upstream of contract generation",
@@ -95,5 +123,6 @@
     "Each new phase must work as both a subagent (spawned by pipeline) and interactively (spawned by user via skill)"
   ],
   "createdAt": "2026-03-31T12:00:00Z",
-  "updatedAt": "2026-03-31T12:00:00Z"
+  "updatedAt": "2026-04-17T17:01:09.428Z",
+  "completedAt": "2026-03-31T12:00:00Z"
 }

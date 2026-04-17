@@ -1,8 +1,11 @@
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
+import type { ZodError } from "zod";
+
 import {
   SprintContractSchema,
+  findPrecisionIssues,
   type SprintContract,
 } from "../contracts/sprint-contract.js";
 import { ensureDir } from "./helpers.js";
@@ -19,9 +22,18 @@ function contractPath(projectRoot: string, id: string): string {
   return join(contractsDir(projectRoot), `${safeId}.json`);
 }
 
+function formatZodIssues(error: ZodError): string {
+  return error.issues
+    .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
+    .join("\n");
+}
+
 /**
  * Save a sprint contract to disk.
- * Overwrites any existing contract with the same id.
+ * Overwrites any existing contract with the same contractId.
+ *
+ * Validates the contract against the schema and the precision quality gate.
+ * Throws on either failure — partial or vague contracts are not silently saved.
  */
 export async function saveContract(
   projectRoot: string,
@@ -31,13 +43,23 @@ export async function saveContract(
 
   const validation = SprintContractSchema.safeParse(contract);
   if (!validation.success) {
-    const issues = validation.error.issues
-      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
-    throw new Error(`Invalid contract:\n${issues}`);
+    throw new Error(
+      `Invalid contract:\n${formatZodIssues(validation.error)}`,
+    );
   }
 
-  const filePath = contractPath(projectRoot, contract.id);
+  // Quality gate: vague phrases the schema can't express via min-length alone.
+  const precisionIssues = findPrecisionIssues(validation.data);
+  if (precisionIssues.length > 0) {
+    const formatted = precisionIssues
+      .map((i) => `  - ${i.field}: ${i.message}`)
+      .join("\n");
+    throw new Error(
+      `Contract "${contract.contractId}" failed precision gate:\n${formatted}`,
+    );
+  }
+
+  const filePath = contractPath(projectRoot, contract.contractId);
   await writeFile(filePath, JSON.stringify(contract, null, 2), "utf-8");
 }
 
@@ -73,10 +95,9 @@ export async function loadContract(
 
   const result = SprintContractSchema.safeParse(parsed);
   if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
-      .join("\n");
-    throw new Error(`Contract "${id}" failed validation:\n${issues}`);
+    throw new Error(
+      `Contract "${id}" failed validation:\n${formatZodIssues(result.error)}`,
+    );
   }
 
   return result.data;
@@ -84,6 +105,10 @@ export async function loadContract(
 
 /**
  * List all saved contracts, sorted by filename.
+ *
+ * Files that fail validation are skipped silently — to surface validation
+ * errors, use `loadContract` directly. (Skipping is intentional here so that
+ * a single bad file doesn't break listing for the rest.)
  */
 export async function listContracts(
   projectRoot: string,
@@ -122,7 +147,7 @@ export async function listContracts(
 }
 
 /**
- * Update an existing contract (save with the same id).
+ * Update an existing contract (save with the same contractId).
  */
 export async function updateContract(
   projectRoot: string,

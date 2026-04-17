@@ -91,9 +91,18 @@ If it fails, report the missing prerequisites and stop.
 
 ### 1c. Check for Existing Plans
 
-List all spec files in `.bober/specs/`. For each spec, read only the **first 5 lines** of the JSON file. The `status` field is near the top — if it says `"completed"`, skip that spec entirely (do not load its contracts or read further).
+List all spec files in `.bober/specs/`. For each spec, read only the **first 10 lines** of the JSON file. The `status` field is near the top — apply the following triage:
 
-Collect only the specs where `status` is NOT `"completed"` (i.e. `"planned"` or `"in-progress"`). These are the **actionable specs**.
+- `"completed"` or `"abandoned"` → skip entirely (do not load its contracts).
+- `"needs-clarification"` → **BLOCK and surface to user.** Read the spec's `clarificationQuestions` array and print each one with its category, options, and recommendation. Tell the user to resolve via:
+  - `npx agent-bober plan answer <specId>` (interactive walkthrough), or
+  - `npx agent-bober plan answer <specId> <questionId> "<answer>"` (one-shot per question), or
+  - Edit `.bober/specs/<specId>.json` directly and flip `status` to `"ready"` after answering.
+
+  Do NOT include this spec in the actionable set. Do NOT proceed past the planning phase if this is the only spec — the user must answer first.
+- `"draft"`, `"ready"`, `"in-progress"` → this is an **actionable spec**, collect it.
+
+Collect only the actionable specs.
 
 - **No actionable specs + user provided a new task:** Create a new plan (go to Step 2).
 - **No actionable specs + no task provided:** Tell the user all plans are complete. Stop.
@@ -166,10 +175,34 @@ When done, respond with EXACTLY this JSON structure (no other text):
 
 **After the planner subagent returns:**
 
-1. Parse the planner's response to extract `specId` and `contractIds`.
-2. Read `.bober/specs/<specId>.json` to verify it was created.
-3. Read each contract file in `.bober/contracts/` to verify they exist.
-4. Print the plan summary:
+1. Parse the planner's response. Inspect the `status` field FIRST.
+
+2. **If `status` is `"needs-clarification"`:** The planner refused to fully decompose the request. STOP the pipeline. Read `.bober/specs/<specId>.json` and print the open `clarificationQuestions` to the user:
+
+   ```
+   === PLAN BLOCKED — NEEDS CLARIFICATION ===
+   Spec: <specId>
+   Title: <title>
+   Ambiguity score: <N>/10
+
+   Open questions:
+     Q1 [<category>]: <question>
+       A) <option> — <description>
+       B) <option> — <description>
+       💡 Suggested: <recommendation if any>
+     Q2 [<category>]: <question>
+     ...
+
+   Resolve via either:
+     npx agent-bober plan answer <specId>                            (interactive)
+     npx agent-bober plan answer <specId> Q1 "<your answer>"         (one-shot)
+     Or edit .bober/specs/<specId>.json directly and flip status to "ready".
+   ```
+
+   Do NOT proceed to Step 3. Do NOT spawn the generator subagent. The user must resolve the questions before the pipeline can continue. Exit cleanly.
+
+3. **If `status` is `"draft"` or `"ready"`:** Extract `specId` and `contractIds`. Read `.bober/specs/<specId>.json` to verify it was created. Read each contract file in `.bober/contracts/` to verify they exist. Print the plan summary:
+
    ```
    === PLAN CREATED ===
    Spec: <specId>
@@ -179,7 +212,8 @@ When done, respond with EXACTLY this JSON structure (no other text):
    2. <Sprint 2 title>
    ...
    ```
-5. If the planner subagent failed or returned an error, report it and stop the pipeline.
+
+4. If the planner subagent failed or returned an error, report it and stop the pipeline.
 
 ---
 

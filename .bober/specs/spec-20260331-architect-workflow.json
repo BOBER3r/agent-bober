@@ -1,30 +1,10 @@
 {
   "specId": "spec-20260331-architect-workflow",
   "version": 1,
-  "createdAt": "2026-03-31T14:00:00Z",
-  "updatedAt": "2026-03-31T14:00:00Z",
   "title": "Solution Architect Workflow",
   "description": "A non-code-generating workflow for solution architecture. Runs a structured 5-checkpoint discussion (problem framing, approach selection, component design, integration strategy, final assembly) producing an architecture document with ADRs. Works standalone via /bober-architect or as an optional pipeline phase via runArchitect().",
-  "mode": "brownfield",
   "status": "completed",
-  "completedAt": "2026-04-01T00:00:00Z",
-
-  "assumptions": [
-    "The architect workflow produces documents only, never code. Code generation remains the generator's job.",
-    "In interactive mode, each checkpoint requires explicit user approval before proceeding.",
-    "In autonomous/pipeline mode, the architect self-discusses using codebase evidence and proceeds without user input.",
-    "Architecture Decision Records follow a lightweight format: Decision, Context, Options, Rationale, Consequences, Risk.",
-    "The architect agent uses the same tool set as the planner (Read, Grep, Glob, Bash) — read-only codebase access plus Write for saving artifacts.",
-    "Architecture documents are saved to .bober/architecture/ as a new artifact directory."
-  ],
-
-  "outOfScope": [
-    "Visual diagram generation (Mermaid, PlantUML) — text descriptions only for now",
-    "Architecture fitness functions or automated architecture validation",
-    "Multi-project/monorepo architecture spanning multiple bober projects",
-    "Architecture versioning or diff tracking across revisions"
-  ],
-
+  "mode": "brownfield",
   "features": [
     {
       "featureId": "feat-1",
@@ -55,7 +35,9 @@
         "AC4: Component interfaces use TypeScript-style type signatures, not prose descriptions.",
         "AC5: Risk Assessment uses severity levels (critical/high/medium/low) with concrete mitigation strategies, not generic advice."
       ],
-      "dependencies": ["feat-1"],
+      "dependencies": [
+        "feat-1"
+      ],
       "estimatedComplexity": "medium"
     },
     {
@@ -71,7 +53,10 @@
         "AC5: ADRs are saved as separate files: .bober/architecture/<specId>-adr-<N>.md for each decision.",
         "AC6: skills/bober.architect/SKILL.md exists for npm distribution."
       ],
-      "dependencies": ["feat-1", "feat-2"],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
       "estimatedComplexity": "medium"
     },
     {
@@ -88,7 +73,9 @@
         "AC6: bober-run.md and bober-brownfield.md skills updated to include architect phase in orchestration flow.",
         "AC7: Existing configs without architectPhase still parse successfully."
       ],
-      "dependencies": ["feat-3"],
+      "dependencies": [
+        "feat-3"
+      ],
       "estimatedComplexity": "medium"
     },
     {
@@ -103,11 +90,35 @@
         "AC4: New history events: architect-started, architect-checkpoint, architect-completed.",
         "AC5: Progress tracking shows architect phase status (complete/pending) alongside research/design/outline."
       ],
-      "dependencies": ["feat-4"],
+      "dependencies": [
+        "feat-4"
+      ],
       "estimatedComplexity": "low"
     }
   ],
-
+  "assumptions": [
+    "The architect workflow produces documents only, never code. Code generation remains the generator's job.",
+    "In interactive mode, each checkpoint requires explicit user approval before proceeding.",
+    "In autonomous/pipeline mode, the architect self-discusses using codebase evidence and proceeds without user input.",
+    "Architecture Decision Records follow a lightweight format: Decision, Context, Options, Rationale, Consequences, Risk.",
+    "The architect agent uses the same tool set as the planner (Read, Grep, Glob, Bash) — read-only codebase access plus Write for saving artifacts.",
+    "Architecture documents are saved to .bober/architecture/ as a new artifact directory."
+  ],
+  "outOfScope": [
+    "Visual diagram generation (Mermaid, PlantUML) — text descriptions only for now",
+    "Architecture fitness functions or automated architecture validation",
+    "Multi-project/monorepo architecture spanning multiple bober projects",
+    "Architecture versioning or diff tracking across revisions"
+  ],
+  "clarificationQuestions": [],
+  "resolvedClarifications": [],
+  "techStack": [],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "ArchitectResult { id, timestamp, document, adrs: ADR[], components: Component[], decisions: Decision[] }. ADR { id, title, decision, context, options, rationale, consequences, risk }.",
+    "securityConsiderations": [],
+    "existingPatterns": "Follow research-agent.ts pattern for the programmatic module. Follow bober-research.md pattern for the skill. Follow bober-researcher.md pattern for the agent definition. State helpers follow research-state.ts pattern."
+  },
   "nonFunctionalRequirements": [
     {
       "category": "maintainability",
@@ -125,23 +136,18 @@
       "verificationMethod": "Verify size limits stated in agent definition."
     }
   ],
-
-  "techNotes": {
-    "integrationPoints": [],
-    "dataModel": "ArchitectResult { id, timestamp, document, adrs: ADR[], components: Component[], decisions: Decision[] }. ADR { id, title, decision, context, options, rationale, consequences, risk }.",
-    "securityConsiderations": [],
-    "existingPatterns": "Follow research-agent.ts pattern for the programmatic module. Follow bober-research.md pattern for the skill. Follow bober-researcher.md pattern for the agent definition. State helpers follow research-state.ts pattern."
-  },
-
+  "constraints": [],
   "sprints": [
     "sprint-spec-20260331-architect-workflow-1",
     "sprint-spec-20260331-architect-workflow-2",
     "sprint-spec-20260331-architect-workflow-3"
   ],
-
   "metadata": {
     "estimatedTotalDuration": "4-6 hours",
     "riskLevel": "medium",
     "riskNotes": "The 5-checkpoint discussion flow is the novel piece. The agent definition quality determines whether this produces senior-grade output or generic filler. Heavy investment in prompt engineering for the agent definition is the primary risk factor."
-  }
+  },
+  "createdAt": "2026-03-31T14:00:00Z",
+  "updatedAt": "2026-04-17T17:01:09.425Z",
+  "completedAt": "2026-04-01T00:00:00Z"
 }

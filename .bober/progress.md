@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-04-02T00:00:00Z
+Last updated: 2026-04-16T15:33:00Z
 
 ---
 
@@ -45,3 +45,12 @@ Last updated: 2026-04-02T00:00:00Z
 1. [completed] Architect Agent + Skill + State
 2. [completed] Programmatic Module + Pipeline Integration
 3. [completed] Distribution + Documentation + Progress Tracking
+
+## Plan: Auto-Filter Slash Commands by Preset
+- Spec: spec-20260416-auto-filter-commands
+- Created: 2026-04-16
+- Sprints: 1
+- Status: completed (1/1 sprints)
+
+### Sprint Breakdown
+1. [completed] Add preset-aware command filtering to installClaudeCommands -- Passed on iteration 2

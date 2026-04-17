@@ -141,7 +141,7 @@ export async function runRunCommand(
       console.log();
       console.log(chalk.bold("Completed sprints:"));
       for (const sprint of result.completedSprints) {
-        console.log(`  ${chalk.green("  ✓")} ${sprint.feature}`);
+        console.log(`  ${chalk.green("  ✓")} ${sprint.title}`);
       }
     }
 
@@ -150,7 +150,7 @@ export async function runRunCommand(
       console.log();
       console.log(chalk.bold("Failed sprints:"));
       for (const sprint of result.failedSprints) {
-        console.log(`  ${chalk.red("  x")} ${sprint.feature}`);
+        console.log(`  ${chalk.red("  x")} ${sprint.title}`);
         if (sprint.evaluatorFeedback) {
           console.log(
             chalk.gray(`      ${sprint.evaluatorFeedback.slice(0, 100)}`),

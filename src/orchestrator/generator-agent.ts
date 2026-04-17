@@ -39,10 +39,10 @@ export async function runGenerator(
   projectRoot: string,
   config: BoberConfig,
 ): Promise<GeneratorResult> {
-  const contractId = handoff.currentContract?.id ?? "unknown";
-  const feature = handoff.currentContract?.feature ?? "unknown";
+  const contractId = handoff.currentContract?.contractId ?? "unknown";
+  const title = handoff.currentContract?.title ?? "unknown";
 
-  logger.sprint(contractId, `Generating: ${feature}`);
+  logger.sprint(contractId, `Generating: ${title}`);
 
   // Load agent definition (system prompt from .md file)
   const agentDef = await loadAgentDefinition("bober-generator", projectRoot);

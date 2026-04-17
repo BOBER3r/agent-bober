@@ -30,9 +30,13 @@ Also read `.bober/principles.md` if it exists. You will include the principles t
 
 ## Step 1: Identify the Target Sprint
 
-**Find the active PlanSpec.** List all specs in `.bober/specs/`. For each spec, read only the **first 5 lines** — the `status` field is near the top. Skip any spec where `status` is `"completed"`. From the remaining specs, pick the most recent one (sort by `createdAt` descending).
+**Find the active PlanSpec.** List all specs in `.bober/specs/`. For each spec, read only the **first 10 lines** — the `status` field is near the top. Apply this triage:
 
-If all specs are `completed` and no sprint number was provided, tell the user all plans are complete.
+- `"completed"` or `"abandoned"` → skip entirely.
+- `"needs-clarification"` → BLOCK this spec from sprint execution. Print the open `clarificationQuestions` from the spec and tell the user to resolve via `npx agent-bober plan answer <specId>` (interactive) or `npx agent-bober plan answer <specId> <questionId> "<answer>"` (one-shot). Do NOT spawn the generator. Do NOT pick this spec as the active one. If it's the only spec, exit.
+- `"draft"`, `"ready"`, `"in-progress"` → eligible. From the eligible specs, pick the most recent one (sort by `createdAt` descending).
+
+If all specs are `completed`/`abandoned` and no sprint number was provided, tell the user all plans are complete. If the only remaining spec is `needs-clarification`, exit with the clarification message.
 
 **If a sprint number was provided as an argument:**
 - Find the contract for that sprint number: `.bober/contracts/sprint-<specId>-<N>.json`
