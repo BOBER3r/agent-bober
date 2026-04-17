@@ -3,10 +3,10 @@ import { resolveProviderModel, resolveModel } from "./model-resolver.js";
 
 describe("resolveProviderModel", () => {
   describe("Anthropic shorthands", () => {
-    it("resolves opus to anthropic/claude-opus-4-6", () => {
+    it("resolves opus to anthropic/claude-opus-4-7", () => {
       expect(resolveProviderModel("opus")).toEqual({
         provider: "anthropic",
-        modelId: "claude-opus-4-6",
+        modelId: "claude-opus-4-7",
       });
     });
 
@@ -17,10 +17,10 @@ describe("resolveProviderModel", () => {
       });
     });
 
-    it("resolves haiku to anthropic/claude-haiku-4-5-20251001", () => {
+    it("resolves haiku to anthropic/claude-haiku-4-5", () => {
       expect(resolveProviderModel("haiku")).toEqual({
         provider: "anthropic",
-        modelId: "claude-haiku-4-5-20251001",
+        modelId: "claude-haiku-4-5",
       });
     });
   });
@@ -114,9 +114,9 @@ describe("resolveProviderModel", () => {
     });
 
     it("defaults exact Anthropic model IDs to anthropic provider", () => {
-      expect(resolveProviderModel("claude-opus-4-6")).toEqual({
+      expect(resolveProviderModel("claude-opus-4-7")).toEqual({
         provider: "anthropic",
-        modelId: "claude-opus-4-6",
+        modelId: "claude-opus-4-7",
       });
     });
   });
@@ -124,7 +124,7 @@ describe("resolveProviderModel", () => {
 
 describe("resolveModel (backward compat)", () => {
   it("returns modelId for opus", () => {
-    expect(resolveModel("opus")).toBe("claude-opus-4-6");
+    expect(resolveModel("opus")).toBe("claude-opus-4-7");
   });
 
   it("returns modelId for sonnet", () => {
@@ -132,10 +132,10 @@ describe("resolveModel (backward compat)", () => {
   });
 
   it("returns modelId for haiku", () => {
-    expect(resolveModel("haiku")).toBe("claude-haiku-4-5-20251001");
+    expect(resolveModel("haiku")).toBe("claude-haiku-4-5");
   });
 
   it("passes through unknown model ID unchanged", () => {
-    expect(resolveModel("claude-opus-4-6")).toBe("claude-opus-4-6");
+    expect(resolveModel("claude-opus-4-7")).toBe("claude-opus-4-7");
   });
 });

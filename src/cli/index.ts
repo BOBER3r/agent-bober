@@ -9,7 +9,11 @@ import chalk from "chalk";
 import { findProjectRoot } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
 import { runInitCommand } from "./commands/init.js";
-import { runPlanCommand } from "./commands/plan.js";
+import {
+  runPlanCommand,
+  runPlanAnswerCommand,
+  runPlanAnswerInteractive,
+} from "./commands/plan.js";
 import { runSprintCommand } from "./commands/sprint.js";
 import { runEvalCommand } from "./commands/eval.js";
 import { runRunCommand } from "./commands/run.js";
@@ -83,7 +87,7 @@ async function main(): Promise<void> {
     });
 
   // ── plan ────────────────────────────────────────────────────────
-  program
+  const planCmd = program
     .command("plan [task]")
     .description("Create a plan for a task")
     .option(
@@ -102,6 +106,29 @@ async function main(): Promise<void> {
         verbose: opts.verbose,
         provider: cmdOpts?.provider,
       });
+    });
+
+  // `plan answer <specId> [questionId] [answer]` — resolve clarifications.
+  // - With all three args: record the answer non-interactively.
+  // - With only specId: walk every open question with prompts.
+  planCmd
+    .command("answer <specId> [questionId] [answer]")
+    .description(
+      "Resolve one or all open clarification questions on a spec. " +
+        "If questionId/answer are omitted, prompts interactively for each open question.",
+    )
+    .action(async (specId: string, questionId?: string, answer?: string) => {
+      const opts = program.opts<{ verbose?: boolean; config?: string }>();
+      const projectRoot = await resolveProjectRoot(opts.config);
+      if (questionId && answer) {
+        await runPlanAnswerCommand(specId, questionId, answer, projectRoot, {
+          verbose: opts.verbose,
+        });
+      } else {
+        await runPlanAnswerInteractive(specId, projectRoot, {
+          verbose: opts.verbose,
+        });
+      }
     });
 
   // ── sprint ──────────────────────────────────────────────────────

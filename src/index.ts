@@ -22,14 +22,36 @@ export {
   type SprintContract,
   type SuccessCriterion,
   type ContractStatus,
+  type VerificationMethod,
+  type EstimatedDuration,
+  type ContractPrecisionIssue,
+  MIN_CRITERION_DESCRIPTION_LENGTH,
+  MIN_DEFINITION_OF_DONE_LENGTH,
+  BANNED_VAGUE_PHRASES,
   createContract,
   updateContractStatus,
+  findPrecisionIssues,
+  isContractPrecise,
 } from "./contracts/sprint-contract.js";
 
 export {
   type PlanSpec,
   type FeatureSpec,
+  type Priority,
+  type EstimatedComplexity,
+  type PlanSpecStatus,
+  type PlanSpecMode,
+  type ClarificationCategory,
+  type ClarificationOption,
+  type ClarificationQuestion,
+  type ResolvedClarification,
+  type CreateSpecOptions,
+  AMBIGUITY_BLOCK_THRESHOLD,
   createSpec,
+  hasOpenClarifications,
+  getOpenClarifications,
+  isPipelineReady,
+  resolveClarification,
 } from "./contracts/spec.js";
 
 export {

@@ -68,8 +68,8 @@ export function registerContractsTool(): void {
       }
 
       const summary = contracts.map((c) => ({
-        id: c.id,
-        feature: c.feature,
+        contractId: c.contractId,
+        title: c.title,
         status: c.status,
         dependsOn: c.dependsOn,
       }));

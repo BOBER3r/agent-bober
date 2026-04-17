@@ -1,32 +1,60 @@
 export {
+  // Constants
+  MIN_CRITERION_DESCRIPTION_LENGTH,
+  MIN_DEFINITION_OF_DONE_LENGTH,
+  BANNED_VAGUE_PHRASES,
   // Zod schemas
   ContractStatusSchema,
-  FileActionSchema,
+  VerificationMethodSchema,
+  EstimatedDurationSchema,
   SuccessCriterionSchema,
-  FileChangeSchema,
   SprintContractSchema,
   // Types
   type ContractStatus,
-  type FileAction,
+  type VerificationMethod,
+  type EstimatedDuration,
   type SuccessCriterion,
-  type FileChange,
   type SprintContract,
+  type ContractPrecisionIssue,
   // Helpers
   createContract,
   updateContractStatus,
+  findPrecisionIssues,
+  isContractPrecise,
 } from "./sprint-contract.js";
 
 export {
+  // Constants
+  AMBIGUITY_BLOCK_THRESHOLD,
   // Zod schemas
   PrioritySchema,
+  EstimatedComplexitySchema,
+  PlanSpecStatusSchema,
+  PlanSpecModeSchema,
+  ClarificationCategorySchema,
+  ClarificationOptionSchema,
+  ClarificationQuestionSchema,
+  ResolvedClarificationSchema,
   FeatureSpecSchema,
   PlanSpecSchema,
   // Types
   type Priority,
+  type EstimatedComplexity,
+  type PlanSpecStatus,
+  type PlanSpecMode,
+  type ClarificationCategory,
+  type ClarificationOption,
+  type ClarificationQuestion,
+  type ResolvedClarification,
   type FeatureSpec,
   type PlanSpec,
+  type CreateSpecOptions,
   // Helpers
   createSpec,
+  hasOpenClarifications,
+  getOpenClarifications,
+  isPipelineReady,
+  resolveClarification,
 } from "./spec.js";
 
 export {

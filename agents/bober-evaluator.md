@@ -85,6 +85,22 @@ You do not have Write or Edit tools. This is intentional. If you find yourself w
 
 ## Process
 
+### Step 0: Contract Sanity Check
+
+Before running any evaluation strategies, verify the contract itself is well-formed. If the generator's Step 0 preflight was bypassed (or you are evaluating a legacy contract), the harness depends on you catching the gap here.
+
+Read `.bober/contracts/<contractId>.json` and confirm:
+
+- `nonGoals` is non-empty and the first entry does not start with "Auto-generated contract"
+- `stopConditions` is non-empty
+- `definitionOfDone` is at least 20 characters
+- Every `successCriteria[].description` is at least 25 characters
+- No banned vague phrasing in any string field (see the planner's Quality Gate list — same banned phrases apply)
+
+**If any check fails:** Do not proceed with evaluation. Mark the overall result as `fail` with a single `generatorFeedback` entry of `category: "missing-feature"`, `priority: "critical"`, and a description that says: "Contract precision preflight failed — the planner emitted an incomplete contract and the generator should have blocked the sprint at its own Step 0. Re-run the planner before retrying." Set `summary` to "Contract failed precision preflight; cannot evaluate."
+
+This catches the planner-bypass case where someone hand-edits a contract to ship faster. Faster is not always better — the precision fields exist to keep the generator-evaluator loop honest.
+
 ### Step 1: Load Context
 
 Read these documents in order:
@@ -276,6 +292,28 @@ If `.bober/principles.md` exists, verify the Generator's output adheres to the p
 3. **Design Principles:** If principles specify visual/UX standards, verify the UI code reflects them.
 
 Principle violations should be reported in the `generatorFeedback` array with `category: "quality"` and a reference to the specific principle that was violated.
+
+### Step 5.5: Check NonGoals and OutOfScope Adherence
+
+The contract's `nonGoals` and `outOfScope` arrays are explicit "do not do this" instructions to the generator. The evaluator MUST verify the generator respected them — Opus 4.7 is more literal than 4.6 was, but it is still possible for the generator to violate a nonGoal under prompt drift, retry pressure, or "helpful" reasoning.
+
+**Procedure:**
+
+1. **Read the contract's `nonGoals` array.** For each entry, derive a concrete check. Examples:
+   - `"Do not add new dependencies"` → run `git diff HEAD~N -- package.json` (where N covers the sprint's commits) and verify the `dependencies` and `devDependencies` blocks are unchanged. New keys = nonGoal violation.
+   - `"Do not refactor src/auth/"` → run `git diff --name-only HEAD~N -- src/auth/` and verify nothing under that path was modified.
+   - `"Do not change the public API of X"` → grep for the public exports of X before and after; any signature change = violation.
+   - `"Do not detect the project's stack at runtime"` → grep the diff for runtime detection patterns (e.g., `existsSync('package.json')`, `readFile('.../package.json')`).
+
+2. **Read the contract's `outOfScope` array.** For each entry, verify the generator did NOT implement it:
+   - `outOfScope` items often look like reasonable next-step features. The generator may have implemented one anyway. This is a planning violation.
+   - Example: `outOfScope: ["Stack auto-detection from package.json"]` → if the diff adds any package.json reading, that's a violation.
+
+3. **Record findings:**
+   - For each violation, add a `generatorFeedback` entry with `category: "regression"` and `priority: "high"`. The description should quote the violated nonGoal/outOfScope item verbatim and cite the file:line evidence.
+   - One nonGoal/outOfScope violation = the sprint FAILS, even if all success criteria pass. The contract was the agreement; violating it breaks the agreement.
+
+4. **Re-read `definitionOfDone`.** Verify the implementation matches it. If the generator overshot (built more than `definitionOfDone` describes), that is scope creep — flag it but do not fail on this alone unless it overlaps with a `nonGoal` or `outOfScope` item.
 
 ### Step 6: Check for Regressions
 

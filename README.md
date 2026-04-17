@@ -290,13 +290,19 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 ### CLI
 
 ```bash
-npx agent-bober init [preset]       # Initialize project (with provider selection)
-npx agent-bober plan "feature"      # Run the planner
-npx agent-bober sprint              # Execute next sprint
-npx agent-bober eval                # Evaluate current sprint
-npx agent-bober run "feature"       # Full autonomous loop
-npx agent-bober mcp                 # Start MCP server (Cursor/Windsurf)
+npx agent-bober init [preset]                            # Initialize project (with provider selection)
+npx agent-bober plan "feature"                           # Run the planner
+npx agent-bober plan answer <specId>                     # Resolve clarification questions interactively
+npx agent-bober plan answer <specId> <questionId> "..."  # Resolve a single clarification question
+npx agent-bober sprint                                   # Execute next sprint
+npx agent-bober eval                                     # Evaluate current sprint
+npx agent-bober run "feature"                            # Full autonomous loop
+npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
 ```
+
+#### Clarification gating
+
+When the planner can't fully decompose a feature without more information, it stops with `status: "needs-clarification"` instead of fabricating sprints. The CLI surfaces the open questions and you resolve them via `plan answer`. After the last question is answered the spec auto-promotes to `status: "ready"` and the next `sprint`/`run` proceeds. See the **Architecture** section for the full lifecycle.
 
 ### Fully Autonomous Mode (no human in the loop)
 

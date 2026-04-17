@@ -87,11 +87,11 @@ export function registerEvalTool(): void {
       // Resolve target contract
       let targetContract;
       if (sprintId) {
-        targetContract = contracts.find((c) => c.id === sprintId);
+        targetContract = contracts.find((c) => c.contractId === sprintId);
         if (!targetContract) {
           return JSON.stringify({
             error: `Sprint "${sprintId}" not found.`,
-            available: contracts.map((c) => c.id),
+            available: contracts.map((c) => c.contractId),
           });
         }
       } else {
@@ -109,7 +109,7 @@ export function registerEvalTool(): void {
       }
 
       process.stderr.write(
-        `[bober_eval] Evaluating: ${targetContract.feature} (${targetContract.id})\n`,
+        `[bober_eval] Evaluating: ${targetContract.title} (${targetContract.contractId})\n`,
       );
 
       // Build project context
@@ -145,7 +145,7 @@ export function registerEvalTool(): void {
         spec,
         currentContract: targetContract,
         sprintHistory: completedContracts,
-        instructions: `Evaluate sprint: ${targetContract.feature}`,
+        instructions: `Evaluate sprint: ${targetContract.title}`,
         changedFiles,
       });
 
@@ -154,8 +154,8 @@ export function registerEvalTool(): void {
 
         return JSON.stringify(
           {
-            contractId: targetContract.id,
-            feature: targetContract.feature,
+            contractId: targetContract.contractId,
+            title: targetContract.title,
             passed: evaluation.passed,
             score: evaluation.score,
             summary: evaluation.summary,
@@ -183,8 +183,8 @@ export function registerEvalTool(): void {
       } catch (err) {
         return JSON.stringify({
           error: `Evaluation failed: ${err instanceof Error ? err.message : String(err)}`,
-          contractId: targetContract.id,
-          feature: targetContract.feature,
+          contractId: targetContract.contractId,
+          title: targetContract.title,
         });
       }
     },

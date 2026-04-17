@@ -72,11 +72,11 @@ export async function runEvalCommand(
   // Find the target contract
   let targetContract;
   if (options.sprint) {
-    targetContract = contracts.find((c) => c.id === options.sprint);
+    targetContract = contracts.find((c) => c.contractId === options.sprint);
     if (!targetContract) {
       logger.error(`Sprint "${options.sprint}" not found.`);
       logger.info(
-        `Available sprints: ${contracts.map((c) => c.id).join(", ")}`,
+        `Available sprints: ${contracts.map((c) => c.contractId).join(", ")}`,
       );
       return;
     }
@@ -95,8 +95,8 @@ export async function runEvalCommand(
     }
   }
 
-  logger.phase(`Evaluating: ${targetContract.feature}`);
-  logger.sprint(targetContract.id, `Status: ${targetContract.status}`);
+  logger.phase(`Evaluating: ${targetContract.title}`);
+  logger.sprint(targetContract.contractId, `Status: ${targetContract.status}`);
 
   // Build project context
   let currentBranch: string;
@@ -134,7 +134,7 @@ export async function runEvalCommand(
     spec,
     currentContract: targetContract,
     sprintHistory: completedContracts,
-    instructions: `Re-evaluate sprint: ${targetContract.feature}`,
+    instructions: `Re-evaluate sprint: ${targetContract.title}`,
     changedFiles,
   });
 
@@ -151,7 +151,7 @@ export async function runEvalCommand(
     ? chalk.green("[PASS]")
     : chalk.red("[FAIL]");
   console.log(
-    `${statusIcon} ${chalk.bold(targetContract.feature)} - Score: ${evaluation.score}/100`,
+    `${statusIcon} ${chalk.bold(targetContract.title)} - Score: ${evaluation.score}/100`,
   );
   console.log();
 

@@ -45,9 +45,9 @@ export async function runEvaluatorAgent(
     throw new Error("No current contract in handoff for evaluation.");
   }
 
-  const sprintId = contract.id;
+  const sprintId = contract.contractId;
 
-  logger.sprint(sprintId, `Evaluating: ${contract.feature}`);
+  logger.sprint(sprintId, `Evaluating: ${contract.title}`);
 
   // 1. Programmatic evaluation — run registered evaluator plugins
   logger.info("Running programmatic evaluations...");
