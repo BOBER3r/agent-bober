@@ -1,9 +1,14 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
 import {
   resolveRoleTools,
   ROLE_TOOLS,
   type AgentRole,
 } from "../../src/orchestrator/tools/index.js";
+import { TokenUsageLog } from "../../src/graph/token-usage.js";
+import type { TokenUsageRecord } from "../../src/graph/token-usage.js";
 import type { GraphClient } from "../../src/graph/client.js";
 import type { GraphFallback } from "../../src/graph/fallback.js";
 
@@ -516,6 +521,109 @@ describe("token-usage baseline (s5-c7)", () => {
     );
     // The graphEnabled flag IS true — so it would be written to token-usage.jsonl
     expect(graphState.graphEnabled).toBe(true);
+  });
+});
+
+// ── Token-usage paired baseline integration (s5-c7) ────────────────────
+// Verifies that TokenUsageLog.append() writes paired JSONL entries with matching
+// runId but distinct graphEnabled values, satisfying the baseline requirement.
+
+describe("token-usage paired baseline (s5-c7)", () => {
+  const tmpDirs: string[] = [];
+
+  afterAll(async () => {
+    for (const dir of tmpDirs) {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes two paired entries (graphEnabled=false then true) and reads them back", async () => {
+    const tmpRoot = path.join(os.tmpdir(), `tokenUsageBaseline_${Date.now()}`);
+    tmpDirs.push(tmpRoot);
+
+    const log = new TokenUsageLog(tmpRoot);
+    const runId = `test-run-${Date.now()}`;
+
+    const baseline: TokenUsageRecord = {
+      agent: "researcher-phase2",
+      runId,
+      timestamp: new Date().toISOString(),
+      inputTokens: 1200,
+      outputTokens: 340,
+      graphEnabled: false,
+    };
+
+    const gated: TokenUsageRecord = {
+      agent: "researcher-phase2",
+      runId,
+      timestamp: new Date().toISOString(),
+      inputTokens: 820,
+      outputTokens: 290,
+      graphEnabled: true,
+    };
+
+    await log.append(baseline);
+    await log.append(gated);
+
+    const filePath = path.join(tmpRoot, ".bober/graph/token-usage.jsonl");
+    const raw = await fs.readFile(filePath, "utf-8");
+    const lines = raw.trim().split("\n").filter(Boolean);
+
+    // Exactly two lines
+    expect(lines).toHaveLength(2);
+
+    const parsed = lines.map((l) => JSON.parse(l) as TokenUsageRecord);
+
+    // Both share the same runId
+    expect(parsed[0].runId).toBe(runId);
+    expect(parsed[1].runId).toBe(runId);
+
+    // One is graphEnabled=false, the other graphEnabled=true
+    const graphEnabledValues = new Set(parsed.map((r) => r.graphEnabled));
+    expect(graphEnabledValues.has(false)).toBe(true);
+    expect(graphEnabledValues.has(true)).toBe(true);
+
+    // Agent name and token shape present on both
+    for (const record of parsed) {
+      expect(record.agent).toBe("researcher-phase2");
+      expect(typeof record.inputTokens).toBe("number");
+      expect(typeof record.outputTokens).toBe("number");
+      expect(typeof record.timestamp).toBe("string");
+    }
+  });
+
+  it("entries are individually JSON-parseable (no partial writes)", async () => {
+    const tmpRoot = path.join(os.tmpdir(), `tokenUsageBaseline_${Date.now()}`);
+    tmpDirs.push(tmpRoot);
+
+    const log = new TokenUsageLog(tmpRoot);
+    const runId = `test-run-parseable-${Date.now()}`;
+
+    await log.append({
+      agent: "curator",
+      runId,
+      timestamp: new Date().toISOString(),
+      inputTokens: 500,
+      outputTokens: 150,
+      graphEnabled: false,
+    });
+
+    await log.append({
+      agent: "curator",
+      runId,
+      timestamp: new Date().toISOString(),
+      inputTokens: 380,
+      outputTokens: 120,
+      graphEnabled: true,
+    });
+
+    const filePath = path.join(tmpRoot, ".bober/graph/token-usage.jsonl");
+    const raw = await fs.readFile(filePath, "utf-8");
+    const lines = raw.trim().split("\n").filter(Boolean);
+
+    // Both lines must parse without throwing
+    expect(() => lines.forEach((l) => JSON.parse(l))).not.toThrow();
+    expect(lines).toHaveLength(2);
   });
 });
 
