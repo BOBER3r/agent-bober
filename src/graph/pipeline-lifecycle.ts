@@ -24,6 +24,8 @@ import { TokensaveMcpClient, type EngineHealth } from "./mcp-client.js";
 import { IncidentLog } from "./incidents.js";
 import { GraphClient } from "./client.js";
 import { GraphFallback } from "./fallback.js";
+import { GraphHookHandler } from "./hook-handler.js";
+import { TokensaveCli } from "./cli.js";
 
 // ── PID file shape ─────────────────────────────────────────────────
 
@@ -42,6 +44,7 @@ class GraphPipelineLifecycleImpl {
   private mcpClient: TokensaveMcpClient | null = null;
   private store: GraphArtifactStore | null = null;
   private incidents: IncidentLog | null = null;
+  private hookHandler: GraphHookHandler | null = null;
   private projectRoot: string | null = null;
   private pidPath: string | null = null;
   private sigHandler: (() => void) | null = null;
@@ -98,6 +101,21 @@ class GraphPipelineLifecycleImpl {
 
     await this.mcpClient.start();
 
+    // Instantiate and start hook handler (debounce + queue + IPC poll).
+    const cli = new TokensaveCli(
+      projectRoot,
+      this.store,
+      cfg.tokensavePath ?? "tokensave",
+    );
+    this.hookHandler = new GraphHookHandler(
+      cli,
+      this.store,
+      this.incidents,
+      cfg,
+      projectRoot,
+    );
+    this.hookHandler.start();
+
     // Write PID file
     await this.writePidFile();
 
@@ -130,6 +148,15 @@ class GraphPipelineLifecycleImpl {
   async stop(): Promise<void> {
     if (this.stopping) return;
     this.stopping = true;
+
+    // Drain hook queue BEFORE killing the engine; otherwise cli.sync() will fail.
+    if (this.hookHandler) {
+      try {
+        await this.hookHandler.flush();
+      } catch {
+        // flush() errors must not propagate from signal handlers
+      }
+    }
 
     if (this.mcpClient) {
       const pid = this.mcpClient.childPid;
@@ -235,6 +262,7 @@ class GraphPipelineLifecycleImpl {
     this.mcpClient = null;
     this.store = null;
     this.incidents = null;
+    this.hookHandler = null;
     this.projectRoot = null;
     this.pidPath = null;
     this._graphClient = null;

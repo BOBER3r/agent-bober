@@ -11,7 +11,20 @@ export type IncidentEvent =
   | { ts: string; event: "stop"; pid: number; reason: "sigterm" | "sigkill" | "normal" }
   | { ts: string; event: "orphan-killed"; pid: number }
   | { ts: string; event: "sandbox-drop"; file: string; source: string }
-  | { ts: string; event: "preflight-failure"; role: string; detail: string };
+  | { ts: string; event: "preflight-failure"; role: string; detail: string }
+  | {
+      ts: string;
+      event: "debounce-overflow";
+      droppedCount: number;
+      queueSize: number;
+      currentPaths: string[];
+    }
+  | {
+      ts: string;
+      event: "hook-timeout";
+      paths: string[];
+      timeoutMs: number;
+    };
 
 // ── IncidentLog ────────────────────────────────────────────────────
 

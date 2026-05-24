@@ -3,7 +3,11 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "echo 'Files modified \u2014 run /bober:eval to verify'"
+        "command": "echo 'Files modified — run /bober:eval to verify'"
+      },
+      {
+        "matcher": "Edit|Write",
+        "command": "node scripts/graph-hook.mjs"
       }
     ]
   }

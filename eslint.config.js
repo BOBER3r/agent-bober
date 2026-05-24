@@ -17,6 +17,8 @@ export default [
         process: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
         URL: "readonly",
         Response: "readonly",
         fetch: "readonly",
