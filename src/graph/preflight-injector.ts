@@ -25,11 +25,13 @@ import type { GraphArtifactStore } from "./artifact-store.js";
 // ── Types ──────────────────────────────────────────────────────────
 
 export type BoberAgentRole =
+  | "planner"
+  | "researcher-phase1"
+  | "researcher-phase2"
   | "architect"
   | "curator"
   | "generator"
-  | "evaluator"
-  | "researcher-phase2";
+  | "evaluator";
 
 /** Derived input for QUERY_BATCHES — computed from contract defensively. */
 interface PreflightInput {
@@ -58,6 +60,9 @@ export interface InjectOverrides {
  * The PreflightInput for this role is built exclusively from overrides.questionKeywords.
  */
 export const QUERY_BATCHES: Record<BoberAgentRole, (c: PreflightInput) => PrefetchSpec[]> = {
+  // planner and researcher-phase1 do not use graph tools — no preflight queries.
+  planner: () => [],
+  "researcher-phase1": () => [],
   architect: (c) => {
     const specs: PrefetchSpec[] = [
       { key: "overview", op: "overview", args: {} },
@@ -562,8 +567,10 @@ export class PreflightContextInjector {
       ?.preflightBudgets;
 
     if (!budgets) {
-      // Fallback defaults
+      // Fallback defaults (planner and researcher-phase1 have budget 0 — not gated roles)
       const DEFAULTS: Record<BoberAgentRole, number> = {
+        planner: 0,
+        "researcher-phase1": 0,
         architect: 4000,
         curator: 2000,
         generator: 1000,
@@ -575,6 +582,8 @@ export class PreflightContextInjector {
 
     // Map camelCase config key to role string
     const camelKey: Record<BoberAgentRole, string> = {
+      planner: "planner",
+      "researcher-phase1": "researcherPhase1",
       architect: "architect",
       curator: "curator",
       generator: "generator",
@@ -587,6 +596,8 @@ export class PreflightContextInjector {
 
     // fallback defaults
     const DEFAULTS: Record<BoberAgentRole, number> = {
+      planner: 0,
+      "researcher-phase1": 0,
       architect: 4000,
       curator: 2000,
       generator: 1000,

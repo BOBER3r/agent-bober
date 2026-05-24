@@ -4,7 +4,7 @@ import { serializeHandoff } from "./context-handoff.js";
 import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
@@ -46,8 +46,6 @@ export async function runGenerator(
 
   logger.sprint(contractId, `Generating: ${title}`);
 
-  // Load agent definition (system prompt from .md file)
-  const agentDef = await loadAgentDefinition("bober-generator", projectRoot);
   const model = resolveModel(config.generator.model);
   const maxTurns = config.generator.maxTurnsPerSprint;
 
@@ -56,6 +54,8 @@ export async function runGenerator(
   const graphState = getGraphState(config);
   const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("generator", projectRoot, graphState, graphDeps ?? undefined);
+  // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
+  const systemPrompt = await assembleSystemPrompt("generator", "bober-generator", projectRoot, graphState);
 
   const client = createClient(
     config.generator.provider ?? null,
@@ -112,7 +112,7 @@ When you are done, your final response must contain ONLY a JSON object with this
   const result = await runAgenticLoop({
     client,
     model,
-    systemPrompt: agentDef.systemPrompt,
+    systemPrompt,
     userMessage: enhancedMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,

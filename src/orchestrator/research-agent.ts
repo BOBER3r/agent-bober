@@ -3,7 +3,7 @@ import { createClient } from "../providers/factory.js";
 import { saveResearch } from "../state/index.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
+import { loadAgentDefinition, assembleSystemPrompt } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector, extractKeywords } from "../graph/preflight-injector.js";
@@ -196,7 +196,7 @@ async function exploreCodebase(
   questions: string[],
   researchId: string,
   projectRoot: string,
-  agentSystemPrompt: string,
+  agentSystemPrompt: string, // assembled (decorated) system prompt for phase 2
   config: BoberConfig,
 ): Promise<{
   sections: ResearchSections;
@@ -481,9 +481,18 @@ export async function runResearch(
 
   // Load the researcher agent definition (system prompt)
   const agentDef = await loadAgentDefinition("bober-researcher", projectRoot);
+  // Compute graph state once and assemble the phase-2 system prompt with graph decoration (ADR-5).
+  const graphStateForAssembly = getGraphState(config);
+  const phase2SystemPrompt = await assembleSystemPrompt(
+    "researcher-phase2",
+    "bober-researcher",
+    projectRoot,
+    graphStateForAssembly,
+  );
 
   // ── Phase 1: Question Generation ─────────────────────────────────
   // userPrompt IS passed to Phase 1 — this is how questions are generated
+  // Phase 1 uses the base systemPrompt (researcher-phase1 mode = disabled → no decoration).
   const questions = await generateExplorationQuestions(
     userPrompt,
     projectRoot,
@@ -507,7 +516,7 @@ export async function runResearch(
     questions,
     researchId,
     projectRoot,
-    agentDef.systemPrompt,
+    phase2SystemPrompt,
     config,
   );
 

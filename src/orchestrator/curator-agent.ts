@@ -6,7 +6,7 @@ import type { PlanSpec } from "../contracts/spec.js";
 import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
@@ -64,9 +64,6 @@ export async function runCurator(
   const contractId = contract.contractId;
   logger.sprint(contractId, `Curating: ${contract.title}`);
 
-  // Load agent definition (system prompt from .md file)
-  const agentDef = await loadAgentDefinition("bober-curator", projectRoot);
-
   // Curator uses its own model config, falling back to planner model
   const curatorConfig = config.curator;
   const curatorModel = curatorConfig?.model ?? config.planner.model;
@@ -78,6 +75,8 @@ export async function runCurator(
   const graphState = getGraphState(config);
   const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
   const toolSet = resolveRoleTools("curator", projectRoot, graphState, graphDeps ?? undefined);
+  // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
+  const systemPrompt = await assembleSystemPrompt("curator", "bober-curator", projectRoot, graphState);
 
   const client = createClient(
     curatorConfig?.provider ?? config.planner.provider ?? null,
@@ -173,7 +172,7 @@ Your final response must contain ONLY a JSON object (no markdown fences):
   const result = await runAgenticLoop({
     client,
     model,
-    systemPrompt: agentDef.systemPrompt,
+    systemPrompt,
     userMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
