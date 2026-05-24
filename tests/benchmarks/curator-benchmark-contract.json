@@ -1,0 +1,41 @@
+{
+  "id": "kpi-benchmark-curator-1",
+  "contractId": "kpi-benchmark-curator-1",
+  "feature": "KPI Benchmark Fixture — small representative sprint for Curator + Architect + Researcher-Phase2 token measurement",
+  "title": "KPI Benchmark: curator-agent + agent-loader token measurement",
+  "description": "Synthetic but realistic sprint contract used solely by scripts/run-kpi-gate.mjs to measure token usage with and without graph enabled. Touches a small, stable set of files in src/orchestrator/ that are known to exist.",
+  "successCriteria": [
+    {
+      "id": "kpi-c1",
+      "description": "src/orchestrator/curator-agent.ts has a new helper function exported.",
+      "verificationMethod": "Read src/orchestrator/curator-agent.ts",
+      "passed": false
+    },
+    {
+      "id": "kpi-c2",
+      "description": "src/orchestrator/agent-loader.ts caches the new helper output.",
+      "verificationMethod": "Unit test the cache hit/miss path",
+      "passed": false
+    }
+  ],
+  "estimatedFiles": [
+    "src/orchestrator/curator-agent.ts",
+    "src/orchestrator/agent-loader.ts"
+  ],
+  "expectedChanges": [
+    {
+      "path": "src/orchestrator/curator-agent.ts",
+      "action": "modify",
+      "description": "Add helper"
+    },
+    {
+      "path": "src/orchestrator/agent-loader.ts",
+      "action": "modify",
+      "description": "Cache helper output"
+    }
+  ],
+  "dependsOn": [],
+  "status": "in-progress",
+  "generatorNotes": "Benchmark fixture only — not executed; only read by gate script.",
+  "evaluatorNotes": "Benchmark fixture only."
+}

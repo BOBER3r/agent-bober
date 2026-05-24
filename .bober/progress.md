@@ -54,3 +54,24 @@ Last updated: 2026-04-16T15:33:00Z
 
 ### Sprint Breakdown
 1. [completed] Add preset-aware command filtering to installClaudeCommands -- Passed on iteration 2
+
+## Plan: TokenSave Graph Integration
+- Spec: spec-20260524-tokensave-integration
+- Created: 2026-05-24
+- Sprints: 10 (planned)
+- Status: in-progress (7/10 sprints)
+
+### Sprint Breakdown
+1. [completed] Graph Foundations (types, prereq, artifact-store, config schema)
+2. [completed] TokenUsageLog + per-agent capture (.bober/graph/token-usage.jsonl)
+3. [completed] Graph client + MCP integration
+4. [completed] Pipeline lifecycle management
+5. [completed] GraphToolGate (resolveRoleTools, getGraphState, 5 agent files migrated)
+6. [completed] PreflightContextInjector + per-role QUERY_BATCHES + budgets + Researcher-Phase2 isolation invariant
+7. [completed] AgentGraphPrompts (ADR-5) + KPI MEASUREMENT GATE
+
+### KPI Gate (Sprint 7 deliverable)
+gatePass=true required before merging Sprints 8-10 in production.
+CI continues on failure for now per 0.13.0 cutover (see TODO(0.13.0) in .github/workflows/ci.yml).
+If gate fails locally: inspect .bober/graph/kpi-gate-report.json → recommendations array → iterate on
+PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.

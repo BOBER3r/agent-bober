@@ -1,0 +1,45 @@
+{
+  "baseline": {
+    "researcher-phase2": 10000,
+    "curator": 10000,
+    "architect": 10000
+  },
+  "gated": {
+    "researcher-phase2": 7000,
+    "curator": 7000,
+    "architect": 7000
+  },
+  "reduction": {
+    "researcher-phase2": 30,
+    "curator": 30,
+    "architect": 30,
+    "combined": 30
+  },
+  "turnCounts": {
+    "baseline": {
+      "researcher-phase2": 0,
+      "curator": 0,
+      "architect": 0
+    },
+    "gated": {
+      "researcher-phase2": 0,
+      "curator": 0,
+      "architect": 0
+    }
+  },
+  "turnCountDelta": {
+    "researcher-phase2": 0,
+    "curator": 0,
+    "architect": 0
+  },
+  "divergenceFlag": true,
+  "gatePass": false,
+  "threshold": 40,
+  "timestamp": "2026-05-24T16:21:47.933Z",
+  "recommendations": [
+    "Combined reduction 30% is below threshold 40%.",
+    "Review per-role deltas: researcher-phase2=30%, curator=30%, architect=30%.",
+    "Open questions on budget tuning: see .bober/architecture/arch-20260524-port-code-review-graph-architecture.md (preflight-budgets section).",
+    "Consider: (a) raising per-role token budgets, (b) tightening QUERY_BATCHES, (c) adding graph_review_context calls in agent prompts."
+  ]
+}
