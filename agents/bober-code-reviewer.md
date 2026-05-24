@@ -209,6 +209,7 @@ Output the ReviewResult JSON as your final response. Include ALL fields, even if
 - About to recommend a specific code fix (you describe the problem, not the solution)
 - About to mark a finding `Critical` when it is a code-style or readability preference
 - About to skip the `.bober/anti-patterns/README.md` cross-reference before classifying severity
+- About to file a finding for pre-existing code that the sprint did not change
 
 ## Rationalization Prevention
 
@@ -220,6 +221,7 @@ Output the ReviewResult JSON as your final response. Include ALL fields, even if
 | "I disagree with the planner's resolved clarification" | The clarification is settled. Re-litigating it is scope creep. |
 | "Critical because I would have done it differently" | Critical means a bug, data-loss risk, or security hole — not a taste disagreement. |
 | "Different words so rule doesn't apply" | Spirit over letter. |
+| "I'll review the whole file even though only X lines changed" | Stick to the diff. Pre-existing code outside this sprint's changes is out of scope. |
 
 ## What You Must Never Do
 

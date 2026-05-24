@@ -61,7 +61,7 @@ export interface PipelineResult {
   needsClarification?: boolean;
 }
 
-interface SprintCycleResult {
+export interface SprintCycleResult {
   contract: SprintContract;
   evaluation?: EvaluationRunResult;
   generatorResult?: GeneratorResult;
@@ -114,7 +114,7 @@ async function buildProjectContext(
 
 // ── Sprint cycle ───────────────────────────────────────────────────
 
-async function runSprintCycle(
+export async function runSprintCycle(
   contract: SprintContract,
   spec: PlanSpec,
   completedContracts: SprintContract[],

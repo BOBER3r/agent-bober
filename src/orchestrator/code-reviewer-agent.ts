@@ -178,8 +178,9 @@ Output ONLY a JSON object (no markdown fences):
 
 /**
  * Render a ReviewResult into the 6-section markdown format required by s5-c5.
+ * Exported for direct unit testing of the renderer.
  */
-function renderReviewMarkdown(review: ReviewResult): string {
+export function renderReviewMarkdown(review: ReviewResult): string {
   const lines: string[] = [];
 
   lines.push(`# Code Review: ${review.contractId}`);

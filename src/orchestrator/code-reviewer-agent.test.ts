@@ -2,24 +2,30 @@
  * Unit tests for the code-reviewer advisory integration (sprint-spec-20260524-bober-vision-5).
  *
  * Tests three contract assertions (s5-c6):
- * (a) runCodeReviewer is spawned with correct inputs when evaluator returns pass
- * (b) review file is written to .bober/reviews/<contractId>-review.md with all 6 sections
- * (c) on reviewer error, sprint still completes (advisory — does not block)
+ * (a) pipeline.ts spawns runCodeReviewer with the contract+evaluation that the pipeline
+ *     propagated — verified by calling runSprintCycle with a passing evaluator stub.
+ * (b) renderReviewMarkdown produces all 6 required H1/H2 sections in order — unit test
+ *     of the renderer directly.
+ * (c) when runCodeReviewer throws, runSprintCycle does NOT throw, the returned contract
+ *     status is still "passed", and logger.warn was called — real coverage of
+ *     pipeline.ts lines 370-382 (the advisory try/catch).
  *
  * Colocated with code-reviewer-agent.ts per the project convention:
  * src/orchestrator/agent-loader.test.ts and src/orchestrator/model-resolver.test.ts
  * both live next to the modules they test.
  */
 
-import { describe, it, expect, vi, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll, beforeEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { SprintContract } from "../contracts/sprint-contract.js";
-import type { EvaluationRunResult } from "../evaluators/registry.js";
+import type { PlanSpec } from "../contracts/spec.js";
+import type { ProjectContext } from "./context-handoff.js";
 
-// ── Mock dependencies ─────────────────────────────────────────────
+// ── Mock heavy dependencies that runSprintCycle pulls in ──────────────
 
+// graph / lifecycle — no real MCP subprocess
 vi.mock("../graph/pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
     engineHealth: vi.fn().mockReturnValue("disabled"),
@@ -28,22 +34,76 @@ vi.mock("../graph/pipeline-lifecycle.js", () => ({
   },
 }));
 
-// Mock runCodeReviewer — the primary unit under test in assertions (a) and (c)
-vi.mock("./code-reviewer-agent.js", () => ({
-  runCodeReviewer: vi.fn().mockResolvedValue({
-    reviewId: "review-test-contract-2026-01-01T00:00:00.000Z",
+// State layer — pure filesystem, redirect to no-ops so we don't need real dirs
+vi.mock("../state/index.js", () => ({
+  ensureBoberDir: vi.fn().mockResolvedValue(undefined),
+  saveContract: vi.fn().mockResolvedValue(undefined),
+  updateContract: vi.fn().mockResolvedValue(undefined),
+  appendHistory: vi.fn().mockResolvedValue(undefined),
+  readDesign: vi.fn().mockRejectedValue(new Error("no design")),
+  readOutline: vi.fn().mockRejectedValue(new Error("no outline")),
+}));
+
+// Git utils — avoid real git calls
+vi.mock("../utils/git.js", () => ({
+  commitAll: vi.fn().mockResolvedValue("abc1234"),
+  getCurrentBranch: vi.fn().mockResolvedValue("bober/test"),
+  getChangedFiles: vi.fn().mockResolvedValue(["src/orchestrator/code-reviewer-agent.ts"]),
+}));
+
+// Agents — stub out everything except the code-reviewer (tested separately below)
+vi.mock("./curator-agent.js", () => ({
+  runCurator: vi.fn().mockResolvedValue({
     contractId: "test-contract",
-    specId: "test-spec",
-    timestamp: "2026-01-01T00:00:00.000Z",
-    summary: "Implementation is clean. No major issues found.",
-    critical: [],
-    important: [],
-    minor: [],
-    approvedAreas: ["src/orchestrator/code-reviewer-agent.ts"],
+    timestamp: new Date().toISOString(),
+    briefing: "",
+    filesAnalyzed: [],
+    patternsFound: 0,
+    utilsIdentified: 0,
   }),
 }));
 
-// ── Fixtures ──────────────────────────────────────────────────────
+vi.mock("./generator-agent.js", () => ({
+  runGenerator: vi.fn().mockResolvedValue({
+    success: true,
+    notes: "Generated successfully.",
+    filesChanged: ["src/orchestrator/code-reviewer-agent.ts"],
+    turnsUsed: 3,
+    toolsCalled: [],
+  }),
+}));
+
+vi.mock("./evaluator-agent.js", () => ({
+  runEvaluatorAgent: vi.fn().mockResolvedValue({
+    passed: true,
+    score: 90,
+    results: [],
+    summary: "All criteria passed.",
+    timestamp: new Date().toISOString(),
+  }),
+}));
+
+// code-reviewer spy — controlled per test below
+vi.mock("./code-reviewer-agent.js", async (importOriginal) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const actual = await importOriginal<any>();
+  return {
+    ...actual,
+    runCodeReviewer: vi.fn().mockResolvedValue({
+      reviewId: "review-test-contract-ts",
+      contractId: "test-contract",
+      specId: "test-spec",
+      timestamp: new Date().toISOString(),
+      summary: "Looks clean.",
+      critical: [],
+      important: [],
+      minor: [],
+      approvedAreas: ["src/orchestrator/code-reviewer-agent.ts"],
+    }),
+  };
+});
+
+// ── Fixtures ──────────────────────────────────────────────────────────
 
 const testContract: SprintContract = {
   contractId: "test-contract",
@@ -51,7 +111,7 @@ const testContract: SprintContract = {
   sprintNumber: 5,
   title: "Code Reviewer Integration",
   description: "Test that code reviewer is spawned after evaluator pass.",
-  status: "passed",
+  status: "proposed",
   dependsOn: [],
   features: ["feat-5"],
   successCriteria: [
@@ -72,18 +132,35 @@ const testContract: SprintContract = {
   lastEvalId: null,
 };
 
-const passingEvaluation: EvaluationRunResult = {
-  passed: true,
-  score: 88,
-  results: [],
-  summary: "Evaluation complete: 3/3 evaluators passed. Score: 88/100.",
-  timestamp: "2026-01-01T00:00:00.000Z",
+const testSpec: PlanSpec = {
+  specId: "test-spec",
+  version: 1,
+  title: "Test Plan",
+  description: "A test plan spec for unit testing the pipeline.",
+  status: "ready",
+  mode: "brownfield",
+  features: [],
+  assumptions: [],
+  outOfScope: [],
+  clarificationQuestions: [],
+  resolvedClarifications: [],
+  techStack: [],
+  nonFunctionalRequirements: [],
+  constraints: [],
+};
+
+const testProjectContext: ProjectContext = {
+  name: "test-project",
+  type: "brownfield",
+  techStack: [],
+  entryPoints: [],
+  currentBranch: "bober/test",
 };
 
 const minimalConfig = {
   project: { name: "test-project", mode: "brownfield" as const },
   planner: { maxClarifications: 5, model: "opus" },
-  curator: { model: "opus", maxTurns: 25, enabled: true },
+  curator: { model: "opus", maxTurns: 25, enabled: false }, // disabled — skip curator
   generator: {
     model: "sonnet",
     maxTurnsPerSprint: 50,
@@ -93,11 +170,11 @@ const minimalConfig = {
   evaluator: {
     model: "sonnet",
     strategies: [{ type: "typecheck", required: true }],
-    maxIterations: 3,
+    maxIterations: 1,
   },
   sprint: { maxSprints: 10, requireContracts: true, sprintSize: "medium" as const },
   pipeline: {
-    maxIterations: 20,
+    maxIterations: 1,
     requireApproval: false,
     contextReset: "always" as const,
     researchPhase: false,
@@ -112,9 +189,9 @@ const minimalConfig = {
   },
 };
 
-// ── Tests ─────────────────────────────────────────────────────────
+// ── Tests ─────────────────────────────────────────────────────────────
 
-describe("code-reviewer advisory integration (s5-c6)", () => {
+describe("code-reviewer pipeline integration (s5-c6)", () => {
   const tmpDirs: string[] = [];
 
   afterAll(async () => {
@@ -123,125 +200,161 @@ describe("code-reviewer advisory integration (s5-c6)", () => {
     }
   });
 
-  // ── (a) Spawn with correct inputs ──────────────────────────────
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
 
-  it("(a) spawns runCodeReviewer with correct inputs when evaluator returns pass", async () => {
-    const { runCodeReviewer } = await import("./code-reviewer-agent.js");
-    const mockReviewer = vi.mocked(runCodeReviewer);
-    mockReviewer.mockClear();
+  // ── (a) Pipeline spawns runCodeReviewer with correct inputs ────────
 
-    const tmpRoot = path.join(os.tmpdir(), `codeReview_spawn_${Date.now()}`);
+  it("(a) runSprintCycle spawns runCodeReviewer with contract+evaluation from the pipeline", async () => {
+    const tmpRoot = path.join(os.tmpdir(), `codeReview_pipeline_a_${Date.now()}`);
     tmpDirs.push(tmpRoot);
     await fs.mkdir(path.join(tmpRoot, ".bober/reviews"), { recursive: true });
 
-    // Invoke runCodeReviewer directly with the contract + passing evaluation
-    await runCodeReviewer(testContract, passingEvaluation, tmpRoot, minimalConfig);
+    // Import the pipeline function and the code-reviewer spy
+    const { runSprintCycle } = await import("./pipeline.js");
+    const { runCodeReviewer } = await import("./code-reviewer-agent.js");
+    const reviewerSpy = vi.mocked(runCodeReviewer);
 
-    expect(mockReviewer).toHaveBeenCalledWith(
-      expect.objectContaining({ contractId: "test-contract" }),
-      expect.objectContaining({ passed: true }),
+    // Also get the evaluator mock so we can confirm what it returns
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    vi.mocked(runEvaluatorAgent).mockResolvedValue({
+      passed: true,
+      score: 91,
+      results: [],
+      summary: "All passed.",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    });
+
+    const result = await runSprintCycle(
+      testContract,
+      testSpec,
+      [],
+      tmpRoot,
+      minimalConfig,
+      testProjectContext,
+    );
+
+    // Pipeline returned a passed contract
+    expect(result.contract.status).toBe("passed");
+
+    // runCodeReviewer was called once — inside the if (evaluation.passed) branch
+    expect(reviewerSpy).toHaveBeenCalledTimes(1);
+
+    // Assert it was called with the contract the pipeline updated (status=passed)
+    // and with the EvaluationRunResult that runEvaluatorAgent returned (passed:true)
+    expect(reviewerSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ contractId: "test-contract", status: "passed" }),
+      expect.objectContaining({ passed: true, score: 91 }),
       tmpRoot,
       expect.objectContaining({ codeReview: expect.objectContaining({ enabled: true }) }),
     );
   });
 
-  // ── (b) Review file is written ─────────────────────────────────
+  // ── (b) renderReviewMarkdown produces all 6 sections in order ─────
 
-  it("(b) writes review file with all 6 required sections", async () => {
-    const tmpRoot = path.join(os.tmpdir(), `codeReview_file_${Date.now()}`);
-    tmpDirs.push(tmpRoot);
-    await fs.mkdir(path.join(tmpRoot, ".bober/reviews"), { recursive: true });
+  it("(b) renderReviewMarkdown produces all 6 required headings in order", async () => {
+    // Import the renderer directly — unit tests the renderer, not the full agent loop
+    const { renderReviewMarkdown } = await import("./code-reviewer-agent.js");
 
-    // Test the markdown rendering via the state layer directly.
-    const { saveReview } = await import("../state/review-state.js");
+    const fixture = {
+      reviewId: "review-test-render-2026",
+      contractId: "render-contract",
+      specId: "render-spec",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      summary: "Two critical findings. One approved area.",
+      critical: [
+        {
+          description: "Silent error swallow in catch block",
+          evidence: [{ path: "src/foo.ts", line: 42, snippet: "} catch {}" }],
+        },
+      ],
+      important: [],
+      minor: [
+        {
+          description: "Unused import",
+          evidence: [{ path: "src/bar.ts", line: 5, snippet: "import { unused } from './x'" }],
+        },
+      ],
+      approvedAreas: ["src/orchestrator/code-reviewer-agent.ts"],
+    };
 
-    const reviewMarkdown = [
-      "# Code Review: test-contract",
-      "",
-      "## Summary",
-      "",
-      "Implementation is clean. No major issues found.",
-      "",
-      "## Critical",
-      "",
-      "No critical findings.",
-      "",
-      "## Important",
-      "",
-      "No important findings.",
-      "",
-      "## Minor",
-      "",
-      "No minor findings.",
-      "",
-      "## Approved Areas",
-      "",
-      "- src/orchestrator/code-reviewer-agent.ts",
-      "",
-    ].join("\n");
+    const markdown = renderReviewMarkdown(fixture);
 
-    await saveReview(tmpRoot, "test-contract", reviewMarkdown);
-
-    const filePath = path.join(tmpRoot, ".bober/reviews/test-contract-review.md");
-    const content = await fs.readFile(filePath, "utf-8");
-
-    for (const heading of [
+    // Verify all 6 required headings are present
+    const requiredHeadings = [
       "# Code Review:",
       "## Summary",
       "## Critical",
       "## Important",
       "## Minor",
       "## Approved Areas",
-    ]) {
-      expect(content).toContain(heading);
+    ];
+    for (const heading of requiredHeadings) {
+      expect(markdown).toContain(heading);
     }
+
+    // Verify headings appear in the correct order
+    const positions = requiredHeadings.map((h) => markdown.indexOf(h));
+    for (let i = 1; i < positions.length; i++) {
+      expect(positions[i]).toBeGreaterThan(positions[i - 1]);
+    }
+
+    // Verify content is rendered
+    expect(markdown).toContain("render-contract");
+    expect(markdown).toContain("Two critical findings");
+    expect(markdown).toContain("src/foo.ts:42");
+    expect(markdown).toContain("No important findings.");
+    expect(markdown).toContain("src/orchestrator/code-reviewer-agent.ts");
   });
 
-  // ── (c) On reviewer error, sprint still completes ──────────────
+  // ── (c) Reviewer error does not block sprint completion ───────────
 
-  it("(c) on reviewer error sprint still completes — advisory does not block", async () => {
-    const { runCodeReviewer } = await import("./code-reviewer-agent.js");
-    const mockReviewer = vi.mocked(runCodeReviewer);
-    mockReviewer.mockClear();
-
-    // Make the reviewer throw
-    mockReviewer.mockRejectedValueOnce(new Error("boom — reviewer crashed"));
-
-    const tmpRoot = path.join(os.tmpdir(), `codeReview_error_${Date.now()}`);
+  it("(c) runSprintCycle does NOT throw when runCodeReviewer throws — advisory pipeline.ts L370-382", async () => {
+    const tmpRoot = path.join(os.tmpdir(), `codeReview_pipeline_c_${Date.now()}`);
     tmpDirs.push(tmpRoot);
     await fs.mkdir(path.join(tmpRoot, ".bober/reviews"), { recursive: true });
 
-    // Simulate the advisory wrapper from pipeline.ts
-    let warnCalled = false;
+    const { runSprintCycle } = await import("./pipeline.js");
+    const { runCodeReviewer } = await import("./code-reviewer-agent.js");
+    const reviewerSpy = vi.mocked(runCodeReviewer);
 
-    const fakeWarn = (msg: string): void => {
-      if (msg.includes("Code review skipped") || msg.includes("boom")) {
-        warnCalled = true;
-      }
-    };
+    // Make the reviewer throw — this exercises pipeline.ts L370-382
+    reviewerSpy.mockRejectedValueOnce(new Error("reviewer crashed — boom"));
 
-    // Replicate the pipeline.ts try/catch advisory pattern
-    try {
-      const reviewTimeoutMs = minimalConfig.codeReview.timeoutMs;
-      await Promise.race([
-        runCodeReviewer(testContract, passingEvaluation, tmpRoot, minimalConfig),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("code-review timeout")), reviewTimeoutMs),
-        ),
-      ]);
-    } catch (err) {
-      fakeWarn(`Code review skipped: ${err instanceof Error ? err.message : String(err)}`);
-      // Advisory only — sprint completion proceeds regardless.
-    }
+    // Spy on logger.warn to capture the advisory warning
+    const { logger } = await import("../utils/logger.js");
+    const warnSpy = vi.spyOn(logger, "warn");
 
-    // Sprint completes normally regardless of reviewer error — execution reaches here
-    expect(warnCalled).toBe(true);
-    // Contract status is NOT changed by the reviewer error — it remains "passed"
-    expect(testContract.status).toBe("passed");
+    // runSprintCycle must NOT throw — the catch swallows it
+    let result: Awaited<ReturnType<typeof runSprintCycle>>;
+    await expect(
+      (async () => {
+        result = await runSprintCycle(
+          testContract,
+          testSpec,
+          [],
+          tmpRoot,
+          minimalConfig,
+          testProjectContext,
+        );
+      })(),
+    ).resolves.toBeUndefined();
+
+    // (1) Sprint status is still "passed" — reviewer failure doesn't downgrade it
+    expect(result!.contract.status).toBe("passed");
+
+    // (2) logger.warn was called with the "Code review skipped:" message
+    const warnCalls = warnSpy.mock.calls.map((args) => args[0] as string);
+    const skippedWarn = warnCalls.find((msg) => msg.includes("Code review skipped"));
+    expect(skippedWarn).toBeDefined();
+    expect(skippedWarn).toContain("reviewer crashed — boom");
+
+    warnSpy.mockRestore();
   });
 });
 
-// ── saveReview idempotency ─────────────────────────────────────────
+// ── saveReview idempotency ─────────────────────────────────────────────
 
 describe("saveReview idempotency (mkdir -p semantics)", () => {
   const tmpDirs: string[] = [];
@@ -255,7 +368,7 @@ describe("saveReview idempotency (mkdir -p semantics)", () => {
   it("creates .bober/reviews/ directory if it does not exist", async () => {
     const tmpRoot = path.join(os.tmpdir(), `codeReview_mkdir_${Date.now()}`);
     tmpDirs.push(tmpRoot);
-    // Do NOT pre-create the reviews directory — test that saveReview creates it
+    // Do NOT pre-create the reviews directory — saveReview must handle that
     await fs.mkdir(tmpRoot, { recursive: true });
 
     const { saveReview } = await import("../state/review-state.js");
