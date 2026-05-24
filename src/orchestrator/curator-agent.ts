@@ -143,11 +143,12 @@ Your final response must contain ONLY a JSON object (no markdown fences):
 }`;
 
   // Pre-flight graph context injection (ADR-9 — special Curator case).
-  // Curator: write pre-flight content to a separate file (.bober/briefings/<contractId>-preflight.md)
-  // and reference it in the user message. This keeps the Curator's normal briefing output intact.
+  // Curator: write pre-flight content to .bober/briefings/<contractId>-briefing.md
+  // and reference it in the user message. The curator's own exploration output
+  // appends to the same file during the agentic loop.
   const graphClient = graphPipelineLifecycle.getGraphClient();
   const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
-  const preflightPath = `.bober/briefings/${contractId}-preflight.md`;
+  const preflightPath = `.bober/briefings/${contractId}-briefing.md`;
   // Pass "" as firstMessage — we only want the pre-flight content itself (not prepended to anything).
   const preflightContent = await preflightInjector.inject("curator", contract, "");
   let preflightNotice = "";

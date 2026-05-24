@@ -30,7 +30,15 @@ vi.mock("../../src/graph/pipeline-lifecycle.js", () => ({
   },
 }));
 
+// Mock execa so git rev-parse HEAD returns a deterministic synthetic SHA.
+// Stale banner unit test controls both SHAs: lastSyncedHeadSha via makeArtifactStore,
+// and currentSha via this mock (avoids real git subprocess in unit tests).
+vi.mock("execa", () => ({
+  execa: vi.fn().mockResolvedValue({ exitCode: 0, stdout: "def5678901234abcdef01234567890ab12345678" }),
+}));
+
 import { graphPipelineLifecycle } from "../../src/graph/pipeline-lifecycle.js";
+import { execa } from "execa";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -397,10 +405,17 @@ describe("PreflightContextInjector", () => {
 
   describe("stale banner", () => {
     it("prepends stale banner above ## Codebase Context when stale=true", async () => {
+      // Synthetic SHAs:
+      //   lastSyncedHeadSha = "abc1234def5678..." → sliced to short form "abc1234"
+      //   currentSha (mocked via execa) = "def5678901234..." → sliced to short form "def5678"
       const client = makeClient({
         overview: { ok: true, data: "overview", backend: "mcp", durationMs: 1 },
       });
-      const store = makeArtifactStore(true, "abc1234def5678");
+      const store = makeArtifactStore(true, "abc1234def5678901234567890abcdef01234567");
+      // Override execa mock for this test to return deterministic synthetic current SHA
+      vi.mocked(execa).mockResolvedValue(
+        { exitCode: 0, stdout: "def5678901234abcdef01234567890ab12345678" } as Awaited<ReturnType<typeof execa>>,
+      );
       const injector = new PreflightContextInjector(
         client,
         makeGraphConfig(),
@@ -414,6 +429,11 @@ describe("PreflightContextInjector", () => {
       const headerIdx = result.indexOf("## Codebase Context");
       expect(bannerIdx).toBeGreaterThanOrEqual(0);
       expect(bannerIdx).toBeLessThan(headerIdx);
+      // Both synthetic SHAs must appear in the banner (7-char short forms)
+      expect(result).toContain("abc1234");
+      expect(result).toContain("def5678");
+      // Format assertion: banner matches expected stale pattern with two SHAs
+      expect(result).toMatch(/_⚠ Graph indexed at SHA [a-f0-9]{7}; current HEAD is [a-f0-9]{7}/i);
     });
 
     it("no stale banner when stale=false", async () => {
