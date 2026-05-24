@@ -22,6 +22,8 @@ import { TokensavePrereqCheck } from "./prereq.js";
 import { GraphArtifactStore } from "./artifact-store.js";
 import { TokensaveMcpClient, type EngineHealth } from "./mcp-client.js";
 import { IncidentLog } from "./incidents.js";
+import { GraphClient } from "./client.js";
+import { GraphFallback } from "./fallback.js";
 
 // ── PID file shape ─────────────────────────────────────────────────
 
@@ -160,6 +162,59 @@ class GraphPipelineLifecycleImpl {
     return this.mcpClient.health();
   }
 
+  // ── getGraphClient ────────────────────────────────────────────────
+
+  /**
+   * Lazy accessor for the GraphClient instance.
+   * Returns null if the engine is not 'ready'.
+   * Caches the constructed client on first call.
+   */
+  private _graphClient: GraphClient | null = null;
+
+  getGraphClient(): GraphClient | null {
+    if (this.engineHealth() !== "ready") return null;
+    if (!this.mcpClient || !this.store || !this.incidents || !this.projectRoot) {
+      return null;
+    }
+    if (!this._graphClient) {
+      const fallback = new GraphFallback("dual");
+      this._graphClient = new GraphClient(
+        this.projectRoot,
+        this.mcpClient,
+        this.store,
+        fallback,
+        this.incidents,
+        // GraphClient constructor takes config as GraphSection — use minimal stub
+        // that satisfies the type (lifecycle already validated config at start())
+        {
+          enabled: true,
+          autoSync: true,
+          languageTier: "core",
+          manifestPath: ".bober/graph/manifest.json",
+          syncTimeoutMs: 2000,
+          queryTimeoutMs: 5000,
+          debounceMs: 750,
+          hookQueueMax: 50,
+          maxEngineRssMb: 512,
+          exposeOnExternalMcp: true,
+        },
+      );
+    }
+    return this._graphClient;
+  }
+
+  /**
+   * Returns {client, fallback} when engine is 'ready', null otherwise.
+   * Used by resolveRoleTools to construct gated tool sets.
+   */
+  getGraphDeps(): { client: GraphClient; fallback: GraphFallback } | null {
+    const client = this.getGraphClient();
+    if (!client) return null;
+    // Construct a matching fallback (dual mode — same as used in getGraphClient)
+    const fallback = new GraphFallback("dual");
+    return { client, fallback };
+  }
+
   // ── For testing only ──────────────────────────────────────────────
 
   /**
@@ -175,6 +230,7 @@ class GraphPipelineLifecycleImpl {
     this.incidents = null;
     this.projectRoot = null;
     this.pidPath = null;
+    this._graphClient = null;
     this.unregisterSignalHandlers();
     this.sigHandler = null;
   }

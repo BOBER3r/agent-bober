@@ -12,7 +12,7 @@ import { getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
@@ -139,8 +139,11 @@ async function runAgentEvaluation(
     const agentDef = await loadAgentDefinition("bober-evaluator", projectRoot);
     const model = resolveModel(config.evaluator.model);
 
-    // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit)
-    const toolSet = buildToolSet("evaluator", projectRoot);
+    // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit).
+    // UNION mode when gated: all original tools retained AND graph_* tools added.
+    const graphState = getGraphState(config);
+    const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+    const toolSet = resolveRoleTools("evaluator", projectRoot, graphState, graphDeps ?? undefined);
 
     const client = createClient(
       config.evaluator.provider ?? null,

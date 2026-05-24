@@ -4,7 +4,7 @@ import { saveArchitecture } from "../state/index.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -151,8 +151,12 @@ export async function runArchitect(
   // Load the architect agent definition (system prompt)
   const agentDef = await loadAgentDefinition("bober-architect", projectRoot);
 
-  // Architect gets read-only tools plus write for saving artifacts
-  const toolSet = buildToolSet("generator", projectRoot);
+  // Architect gets read + write tools for saving artifacts. When graph is enabled
+  // and ready, bash/grep/glob are removed and graph_* tools are added (ADR-8).
+  // write_file and edit_file are RETAINED in gated mode.
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools("architect", projectRoot, graphState, graphDeps ?? undefined);
 
   const client = createClient(
     config.planner.provider ?? null,

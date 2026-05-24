@@ -105,8 +105,13 @@ export {
 
 export {
   buildToolSet,
+  resolveRoleTools,
+  getGraphState,
+  getGraphDeps,
+  ROLE_TOOLS,
   type ToolSet,
   type AgentRole,
+  type GraphState,
 } from "./orchestrator/tools/index.js";
 
 export {

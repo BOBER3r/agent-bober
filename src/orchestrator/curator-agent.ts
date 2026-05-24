@@ -5,7 +5,7 @@ import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -68,8 +68,11 @@ export async function runCurator(
   const model = resolveModel(curatorModel);
   const curatorMaxTurns = curatorConfig?.maxTurns ?? CURATOR_MAX_TURNS;
 
-  // Curator gets read-only tools (same as planner)
-  const toolSet = buildToolSet("planner", projectRoot);
+  // Curator gets read-only tools. When graph is enabled and ready,
+  // bash/grep/glob are removed and graph_* tools are added (ADR-8).
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools("curator", projectRoot, graphState, graphDeps ?? undefined);
 
   const client = createClient(
     curatorConfig?.provider ?? config.planner.provider ?? null,

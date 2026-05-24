@@ -5,7 +5,7 @@ import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -49,8 +49,11 @@ export async function runGenerator(
   const model = resolveModel(config.generator.model);
   const maxTurns = config.generator.maxTurnsPerSprint;
 
-  // Build tool set (generator gets full access)
-  const toolSet = buildToolSet("generator", projectRoot);
+  // Build tool set (generator gets full access — UNION mode when gated:
+  // all original tools retained AND graph_* tools added).
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools("generator", projectRoot, graphState, graphDeps ?? undefined);
 
   const client = createClient(
     config.generator.provider ?? null,

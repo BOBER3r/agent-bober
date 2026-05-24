@@ -4,7 +4,7 @@ import { saveResearch } from "../state/index.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -72,8 +72,9 @@ async function generateExplorationQuestions(
 ): Promise<string[]> {
   logger.info("Phase 1: Generating exploration questions...");
 
-  // Phase 1 gets NO tools — it only needs to think, not explore
-  const toolSet = buildToolSet("planner", projectRoot);
+  // Phase 1 gets NO tools — it only needs to think, not explore.
+  // Phase 1 is NEVER gated (not in ADR-8 gated set).
+  const toolSet = resolveRoleTools("researcher-phase1", projectRoot);
 
   const client = createClient(
     config.planner.provider ?? null,
@@ -204,8 +205,16 @@ async function exploreCodebase(
     `Phase 2: Exploring codebase for ${questions.length} questions...`,
   );
 
-  // Phase 2 gets read-only tools to explore the codebase
-  const toolSet = buildToolSet("planner", projectRoot);
+  // Phase 2 gets read-only tools to explore the codebase.
+  // When graph is enabled and ready, bash/grep/glob are removed and graph_* tools are added.
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools(
+    "researcher-phase2",
+    projectRoot,
+    graphState,
+    graphDeps ?? undefined,
+  );
 
   const client = createClient(
     config.planner.provider ?? null,
