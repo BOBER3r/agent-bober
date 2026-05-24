@@ -6,6 +6,8 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -232,11 +234,18 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
 
   logger.info(`Calling architect model (${config.planner.model} → ${model})...`);
 
+  // Pre-flight graph context injection (ADR-9).
+  // Architect runs before sprint contracts exist; pass contract=null.
+  // On failure or timeout, autonomousMessage is returned unchanged.
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const enhancedMessage = await preflightInjector.inject("architect", null, autonomousMessage);
+
   const result = await runAgenticLoop({
     client,
     model,
     systemPrompt: agentDef.systemPrompt,
-    userMessage: autonomousMessage,
+    userMessage: enhancedMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
     maxTurns: ARCHITECT_MAX_TURNS,

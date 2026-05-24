@@ -14,6 +14,8 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
 
@@ -216,6 +218,17 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
   "timestamp": "${timestamp}"
 }`;
 
+    // Pre-flight graph context injection (ADR-9): prepend graph context to userMessage.
+    // On failure or timeout, userMessage is returned unchanged (spawn not blocked).
+    const graphClient = graphPipelineLifecycle.getGraphClient();
+    const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+    const enhancedMessage = await preflightInjector.inject(
+      "evaluator",
+      handoff.currentContract ?? null,
+      userMessage,
+      { baselineSha: "HEAD~1" },
+    );
+
     logger.info(
       `Calling evaluator model (${config.evaluator.model} → ${model})...`,
     );
@@ -224,7 +237,7 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
       client,
       model,
       systemPrompt: agentDef.systemPrompt,
-      userMessage,
+      userMessage: enhancedMessage,
       tools: toolSet.schemas,
       toolHandlers: toolSet.handlers,
       maxTurns: EVALUATOR_MAX_TURNS,

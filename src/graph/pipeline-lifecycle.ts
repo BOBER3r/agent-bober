@@ -197,6 +197,13 @@ class GraphPipelineLifecycleImpl {
           hookQueueMax: 50,
           maxEngineRssMb: 512,
           exposeOnExternalMcp: true,
+          preflightBudgets: {
+            architect: 4000,
+            curator: 2000,
+            generator: 1000,
+            evaluator: 1500,
+            researcherPhase2: 3000,
+          },
         },
       );
     }

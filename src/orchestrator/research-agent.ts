@@ -6,6 +6,8 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector, extractKeywords } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -279,11 +281,25 @@ Respond with a JSON object (no markdown fences, no explanation):
   "questionsAnswered": <number>
 }`;
 
+  // Pre-flight graph context injection (ADR-9 — Researcher-Phase2 isolation).
+  // CRITICAL: contract is null. questionKeywords are extracted from the Phase 1
+  // questions ONLY — never from the feature description (userPrompt is not here).
+  // This preserves the two-phase isolation invariant.
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const questionKeywords = extractKeywords(questions.join(" "));
+  const enhancedPhase2Message = await preflightInjector.inject(
+    "researcher-phase2",
+    null,   // No contract during research phase — isolation invariant
+    phase2Message,
+    { questionKeywords },
+  );
+
   const result = await runAgenticLoop({
     client,
     model,
     systemPrompt: agentSystemPrompt,
-    userMessage: phase2Message,
+    userMessage: enhancedPhase2Message,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
     maxTurns: RESEARCHER_PHASE2_MAX_TURNS,

@@ -7,6 +7,8 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -92,6 +94,16 @@ When you are done, your final response must contain ONLY a JSON object with this
   "notes": "<additional context for the evaluator>"
 }`;
 
+  // Pre-flight graph context injection (ADR-9): prepend graph context to userMessage.
+  // On failure or timeout, userMessage is returned unchanged (spawn not blocked).
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const enhancedMessage = await preflightInjector.inject(
+    "generator",
+    handoff.currentContract ?? null,
+    userMessage,
+  );
+
   logger.info(`Calling generator model (${config.generator.model} → ${model})...`);
 
   // Track which files were written/edited via tools
@@ -101,7 +113,7 @@ When you are done, your final response must contain ONLY a JSON object with this
     client,
     model,
     systemPrompt: agentDef.systemPrompt,
-    userMessage,
+    userMessage: enhancedMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
     maxTurns,

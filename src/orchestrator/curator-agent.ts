@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { BoberConfig } from "../config/schema.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 import type { PlanSpec } from "../contracts/spec.js";
@@ -7,6 +9,9 @@ import { resolveModel } from "./model-resolver.js";
 import { loadAgentDefinition } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
+import { ensureDir } from "../utils/fs.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -94,7 +99,7 @@ export async function runCurator(
   // Build the contract JSON for the curator's context
   const contractJson = JSON.stringify(contract, null, 2);
 
-  const userMessage = `# Sprint Contract
+  const baseUserMessage = `# Sprint Contract
 
 ${contractJson}
 
@@ -136,6 +141,29 @@ Your final response must contain ONLY a JSON object (no markdown fences):
   "utilsIdentified": <number>,
   "summary": "<2-3 sentence summary>"
 }`;
+
+  // Pre-flight graph context injection (ADR-9 — special Curator case).
+  // Curator: write pre-flight content to a separate file (.bober/briefings/<contractId>-preflight.md)
+  // and reference it in the user message. This keeps the Curator's normal briefing output intact.
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const preflightPath = `.bober/briefings/${contractId}-preflight.md`;
+  // Pass "" as firstMessage — we only want the pre-flight content itself (not prepended to anything).
+  const preflightContent = await preflightInjector.inject("curator", contract, "");
+  let preflightNotice = "";
+  if (preflightContent.trim().length > 0) {
+    try {
+      const absPath = resolve(projectRoot, preflightPath);
+      await ensureDir(resolve(absPath, ".."));
+      await writeFile(absPath, preflightContent, "utf-8");
+      preflightNotice = `\n\n# Graph Pre-Flight Context\n\nA graph pre-flight analysis has been prepared at ${preflightPath} — read it FIRST as part of your codebase exploration. It contains relevant graph queries (callers, tests, search results) to accelerate your analysis.\n`;
+      logger.debug(`[curator] Pre-flight graph context written to ${preflightPath}`);
+    } catch (err) {
+      logger.debug(`[curator] Pre-flight write failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const userMessage = `${baseUserMessage}${preflightNotice}`;
 
   logger.info(`Calling curator model (${curatorModel} → ${model})...`);
 
