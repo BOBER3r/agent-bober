@@ -11,8 +11,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { OnboardingComposer } from "../../src/graph/onboarding-composer.js";
-import type { OnboardingInputs } from "../../src/graph/types.js";
+import { OnboardingComposer } from "./onboarding-composer.js";
+import type { OnboardingInputs } from "./types.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -88,8 +88,8 @@ describe("OnboardingComposer — markdownlint compliance", () => {
       const configPath = join(new URL("../../.markdownlint.json", import.meta.url).pathname);
 
       let exitCode = 0;
-      let stdout = "";
-      let stderr = "";
+      let stdout: string;
+      let stderr: string;
 
       try {
         const result = await execFileAsync(
