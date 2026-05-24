@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T02:42:00Z
+Last updated: 2026-05-25T02:58:00Z
 
 ---
 
@@ -103,7 +103,9 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 ### Tier 1 — Quality discipline (sprints 4-6)
 4. [completed] Anti-pattern reference catalog — Passed iter 1 (7/7 criteria, 584 tests, commit c3d939e). Four MIT-attributed reference docs ported verbatim into .bober/anti-patterns/ + README index. agents/bober-evaluator.md gained Step 6.5 "Anti-Pattern Citations" with JSON example shape extending regressions by optional antiPattern/source/antiPatternEvidence; Sprint 3 Iron Law preserved. src/contracts/eval-result.ts untouched.
 5. [completed] bober-code-reviewer agent + bober.code-review skill + orchestrator wiring — Passed iter 2 (9/9 criteria, 589 tests, commits ac29dda + 2cd7b9d + b5568ba). Iter 1 introduced two issues: scanner.test.ts colocated regression (new test placed at tests/ tipped detectColocated's balance) caught by orchestrator pre-evaluator and fixed by moving to colocated convention; eval then failed on s5-c2 (table thresholds off by 1) and s5-c6 (hollow tests not exercising pipeline.ts). Iter 2 fixed both: 8 Red Flags + 7 Rationalization rows; tests rewritten to exercise runSprintCycle and renderReviewMarkdown directly. Advisory-only contract preserved (no critical→retry branch).
-6. [proposed] HARD-GATE in bober.plan + AGENTS.md at repo root — Brainstorming hard gate between PlanSpec and contracts; AGENTS.md anti-slop contract with verbatim voice; cross-link from README and bootstrap skill.
+6. [completed] HARD-GATE in bober.plan + AGENTS.md at repo root — Passed iter 1 (9/9 criteria, 589 tests, commit 8ddc8ba). HARD-GATE block inserted at skills/bober.plan/SKILL.md:155 between Step 5 (L137) and Step 6 (L165) with INTERACTIVE + AUTONOMOUS protocols documenting resolvedClarifications recording shape. AGENTS.md at repo root (148 lines, 5 sections in order) preserves 'slop'/'your human partner'/'EXTREMELY-IMPORTANT' voice; 94% stat replaced with bober framing; 7 bober-specific 'What We Will Not Accept' categories. Cross-links from README.md and skills/bober.using-bober/SKILL.md (Sprint 1 forward-reference now resolves).
+
+**Tier 1 COMPLETE** — 3/3 sprints passed (sprints 4-6), 4/20 iteration budget used (sprint 5 needed iter 2), 0 regressions. Branch: bober/bober-vision @ commit 8ddc8ba.
 
 ### Tier 2 — Careful-flow multi-mode (sprints 7-14)
 7. [proposed] Careful-flow plumbing — Checkpoint abstraction + 9 call sites in orchestrator + noop default mechanism (no behavior change yet).

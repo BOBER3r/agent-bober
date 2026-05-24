@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-6",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "8ddc8ba",
+  "criteriaResults": [
+    {"criterionId": "s6-c1", "met": true, "evidence": "<HARD-GATE> count=1 in bober.plan/SKILL.md at L155, between Step 5 (L137) and Step 6 (L165)"},
+    {"criterionId": "s6-c2", "met": true, "evidence": "Block names INTERACTIVE + AUTONOMOUS + forbidden action 'Do NOT write any .bober/contracts/*.json'"},
+    {"criterionId": "s6-c3", "met": true, "evidence": "INTERACTIVE: questionId='gate-design-approval' + user verbatim answer; AUTONOMOUS: answer='Autonomous self-approval', resolvedBy='planner', metadata.approvalEvidence array"},
+    {"criterionId": "s6-c4", "met": true, "evidence": "AGENTS.md at repo root, 148 lines (>=120). 5 sections in order at L3/25/37/67/110"},
+    {"criterionId": "s6-c5", "met": true, "evidence": "'If You Are an AI Agent' has 5 numbered checks (>=4); 'What We Will Not Accept' has 7 ### subsections (>=5)"},
+    {"criterionId": "s6-c6", "met": true, "evidence": "grep for 'slop|your human partner|EXTREMELY-IMPORTANT' = 12 hits including 'AI slop', 'your human partner' (5x), '<EXTREMELY-IMPORTANT>' tag. 94% replaced with bober framing."},
+    {"criterionId": "s6-c7", "met": true, "evidence": "README.md L781: '[AGENTS.md](./AGENTS.md) ... anti-slop pre-PR checklist' under ## Contributing"},
+    {"criterionId": "s6-c8", "met": true, "evidence": "bober.using-bober/SKILL.md:36 refined to [AGENTS.md](../../AGENTS.md); stale 'created in a later sprint' parenthetical removed; AGENTS.md target file exists"},
+    {"criterionId": "s6-c9", "met": true, "evidence": "typecheck/lint/build exit 0; npm test 589 pass 4 skip 0 fail"}
+  ],
+  "filesChanged": [
+    {"path": "skills/bober.plan/SKILL.md", "action": "modified", "description": "Insert HARD-GATE block between Step 5/6"},
+    {"path": "AGENTS.md", "action": "created", "description": "148-line verbatim-voice contributor contract"},
+    {"path": "README.md", "action": "modified", "description": "Contributing cross-link to AGENTS.md"},
+    {"path": "skills/bober.using-bober/SKILL.md", "action": "modified", "description": "Refined Sprint 1 forward-reference to resolved link"}
+  ],
+  "notes": "Docs-only, no src/. HARD-GATE is pure insertion (Step 5/6 prose untouched). Step 7.5 ambiguity-score at L213-252 unmodified. AGENTS.md 148 lines (<600). bober.using-bober refinement authorized by s6-c8 'preserved or refined here'."
+}

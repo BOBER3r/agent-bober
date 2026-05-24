@@ -1,0 +1,32 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-6-1",
+  "contractId": "sprint-spec-20260524-bober-vision-6",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T02:57:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 9, "criteriaPassed": 9, "criteriaFailed": 0, "criteriaSkipped": 0,
+    "requiredPassed": 9, "requiredFailed": 0, "requiredTotal": 9
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "no errors" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0", "details": "no errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "no errors" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "45 files / 589 passed / 4 skipped / 0 failed (2.52s)", "details": "no regression" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s6-c1", "required": true, "result": "pass", "evidence": "<HARD-GATE> count=1 L155; </HARD-GATE> count=1 L163; Step 5 L137; Step 6 L165; gate strictly between" },
+    { "criterionId": "s6-c2", "required": true, "result": "pass", "evidence": "L156 'Do NOT write any .bober/contracts/*.json'; L158 INTERACTIVE; L160 AUTONOMOUS" },
+    { "criterionId": "s6-c3", "required": true, "result": "pass", "evidence": "INTERACTIVE L158 documents questionId+answer; AUTONOMOUS L160 documents answer/resolvedBy/metadata.approvalEvidence" },
+    { "criterionId": "s6-c4", "required": true, "result": "pass", "evidence": "AGENTS.md at repo root, 148 lines (>=120 <=600); 5 sections at L3/25/37/67/110" },
+    { "criterionId": "s6-c5", "required": true, "result": "pass", "evidence": "'If You Are an AI Agent' 5 numbered items (>=4); 'What We Will Not Accept' 7 ### subsections (>=5) with prose" },
+    { "criterionId": "s6-c6", "required": true, "result": "pass", "evidence": "12 voice-marker hits (slop x2, 'your human partner' x5, EXTREMELY-IMPORTANT tag x2 + adjacent); 94% count=0; replacement framing at L7" },
+    { "criterionId": "s6-c7", "required": true, "result": "pass", "evidence": "README.md L781 [AGENTS.md](./AGENTS.md) under Contributing" },
+    { "criterionId": "s6-c8", "required": true, "result": "pass", "evidence": "bober.using-bober/SKILL.md:36 ../../AGENTS.md resolves to existing 148-line file" },
+    { "criterionId": "s6-c9", "required": true, "result": "pass", "evidence": "all 4 strategies exit 0; 589/4 no regression" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 6 PASSED iter 1 — 9/9. HARD-GATE positioned correctly with both protocols and recording shapes. AGENTS.md at repo root 148 lines, 5 sections in order, verbatim voice preserved, 94% replaced with bober framing. Cross-links resolve. No regressions. Step 7.5 ambiguity-score gate intact and non-overlapping."
+}

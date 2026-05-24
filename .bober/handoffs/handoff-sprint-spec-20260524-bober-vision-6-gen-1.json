@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-6",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T03:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 6 closes Tier 1 (quality discipline). Docs-only: HARD-GATE block insert in skills/bober.plan/SKILL.md (between Step 5 and Step 6); create AGENTS.md at repo root (verbatim-voice port from /tmp/superpowers/AGENTS.md, 106 lines source); cross-link from README.md and skills/bober.using-bober/SKILL.md (Sprint 1 placeholder now resolves).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-1", "title": "SessionStart bootstrap (skills/bober.using-bober/SKILL.md:36 placeholder AGENTS.md ref to resolve)" },
+      { "contractId": "sprint-spec-20260524-bober-vision-2", "title": "bober.verify + bober.debug + Iron Law" },
+      { "contractId": "sprint-spec-20260524-bober-vision-3", "title": "Voice pass — Iron Law + Red Flags + Rationalization" },
+      { "contractId": "sprint-spec-20260524-bober-vision-4", "title": "Anti-pattern catalog .bober/anti-patterns/" },
+      { "contractId": "sprint-spec-20260524-bober-vision-5", "title": "bober-code-reviewer agent + advisory orchestrator" }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "/tmp/superpowers/AGENTS.md",
+      "/tmp/superpowers/skills/brainstorming/SKILL.md",
+      "skills/bober.plan/SKILL.md",
+      "skills/bober.using-bober/SKILL.md",
+      "README.md",
+      ".bober/specs/spec-20260524-bober-vision.json"
+    ]
+  },
+  "principles": null,
+  "evaluatorFeedback": null,
+  "notes": "Briefing has full implementation plan including: line ranges for Step 5/6/7.5 in bober.plan/SKILL.md (Step 7.5 ambiguity-score gate lives at L213-252 — HARD-GATE must complement not duplicate; both record into resolvedClarifications via distinct questionIds), exact resolvedClarifications example shape from existing spec, README.md insertion point with surrounding 5-line context, Sprint 1 forward-reference at skills/bober.using-bober/SKILL.md:36 to resolve, 5-6 candidate 'What We Will Not Accept' categories tailored to bober. Voice constraint: preserve 'slop' / 'your human partner' / 'EXTREMELY-IMPORTANT' verbatim; replace the 94% stat with bober framing without fabricating. READ THE BRIEFING FIRST."
+}
