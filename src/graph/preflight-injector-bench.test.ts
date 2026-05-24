@@ -9,7 +9,8 @@
  * (Excludes cold engine spawn — this tests formatting overhead only.)
  */
 
-import { describe, it, expect, vi, beforeAll } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { performance } from "node:perf_hooks";
 import { PreflightContextInjector } from "./preflight-injector.js";
 import type { GraphClient } from "./client.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
