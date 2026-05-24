@@ -94,9 +94,11 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Config: bumped sprint.maxSprints 10 → 30
 
 ### Tier 0 — Foundation (sprints 1-3)
-1. [proposed] SessionStart bootstrap + bober.using-bober skill — Inject behavior-bootstrap into first-turn context; coexists with existing graph-stats payload.
-2. [proposed] Verbatim port of verify + debug skills — bober.verify + bober.debug ported from obra/superpowers with MIT attribution and original voice (Iron Law caps, <EXTREMELY-IMPORTANT> tags preserved); inline into bober-generator.
-3. [proposed] Voice pass across remaining agent prompts — Iron Law / Red Flags / Rationalization-Prevention table structure across planner, curator, architect, researcher, evaluator (verbatim style).
+1. [completed] SessionStart bootstrap + bober.using-bober skill — Passed iter 1 (6/6 criteria, 584 tests, commit 03cf904).
+2. [completed] Verbatim port of verify + debug skills — Passed iter 1 (7/7 criteria, 584 tests, commit e9ea377). Iron Laws source-verbatim ("FRESH VERIFICATION EVIDENCE", "ROOT CAUSE INVESTIGATION FIRST"). DISPUTE protocol + 5 Forbidden Responses inlined into bober-generator.
+3. [completed] Voice pass across remaining agent prompts — Passed iter 1 (9/9 criteria, 584 tests, commit e5233ed). All 5 agent prompts gained role-specific Iron Law + Red Flags (>=8 entries) + Rationalization-Prevention table (>=7 rows). Voice clean.
+
+**Tier 0 COMPLETE** — 3/3 sprints passed first try, 3/20 iteration budget used, 0 regressions, 584 tests pass. Branch: bober/bober-vision @ commit e5233ed.
 
 ### Tier 1 — Quality discipline (sprints 4-6)
 4. [proposed] Anti-pattern reference catalog — Port four MIT-attributed anti-pattern docs into .bober/anti-patterns/; wire evaluator to cite them in regressions.

@@ -48,12 +48,28 @@
     }
   ],
   "expectedChanges": [
-    { "path": "skills/bober.verify/SKILL.md", "action": "create", "description": "Verbatim port of verification-before-completion with MIT attribution" },
-    { "path": "skills/bober.debug/SKILL.md", "action": "create", "description": "Verbatim port of systematic-debugging with MIT attribution" },
-    { "path": "agents/bober-generator.md", "action": "modify", "description": "Inline Iron Law in self-verify, add Handling Evaluator Feedback section with Forbidden Responses + DISPUTE protocol, add verificationOutput to completion-report schema" }
+    {
+      "path": "skills/bober.verify/SKILL.md",
+      "action": "create",
+      "description": "Verbatim port of verification-before-completion with MIT attribution"
+    },
+    {
+      "path": "skills/bober.debug/SKILL.md",
+      "action": "create",
+      "description": "Verbatim port of systematic-debugging with MIT attribution"
+    },
+    {
+      "path": "agents/bober-generator.md",
+      "action": "modify",
+      "description": "Inline Iron Law in self-verify, add Handling Evaluator Feedback section with Forbidden Responses + DISPUTE protocol, add verificationOutput to completion-report schema"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-1"],
-  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-1"
+  ],
+  "status": "completed",
   "generatorNotes": "Source files: /tmp/superpowers/skills/verification-before-completion/SKILL.md (139 lines) and /tmp/superpowers/skills/systematic-debugging/SKILL.md (longer, has supplementary files in the source dir — port only SKILL.md for this sprint; supplementary files become .bober/anti-patterns/ in Sprint 4). Port VERBATIM. The attribution block is the ONLY required addition; everything else stays as-is per MIT permission and the user's verbatim-voice directive. Attribution template (top of each file, after frontmatter):\n\n```\n> Verbatim port from [obra/superpowers](https://github.com/obra/superpowers) — MIT License.\n> Original: skills/verification-before-completion/SKILL.md (or systematic-debugging).\n> Adaptations: skill name (bober.verify/bober.debug), tool name references where bober has equivalents.\n```\n\nLight adaptations permitted: (1) frontmatter name field becomes bober-verify / bober-debug, (2) skill cross-references inside the body that point to superpowers-specific files (e.g., 'use superpowers:writing-skills') get replaced with bober equivalents where they exist or stripped where they don't. DO NOT: rewrite Iron Law phrasing, soften STOP conditions, rephrase Rationalization-Prevention rows, remove <EXTREMELY-IMPORTANT> tags. These are empirically tuned per the source AGENTS.md.\n\nFor agents/bober-generator.md modifications: locate the existing self-verify section. Insert the Iron Law block AS A FENCED CODE BLOCK or HTML pre — visual emphasis matters. The completion-report schema is currently described in the prompt as a JSON shape; locate it and add verificationOutput as a required field with the documented type. The new 'Handling Evaluator Feedback' section sits between the self-verify section and the closing instructions. Include a worked example of a DISPUTE response so the model has a pattern to follow.\n\nVoice nuance: superpowers's 'your human partner' framing means a human collaborator at runtime. In bober's subagent context (generator running inside an orchestrator-spawned context), there is no human partner present — there is the orchestrator. Adapt only THERE. The skill files themselves are used as reference material; they keep the original phrasing because they ARE the empirically-tuned source content.",
-  "evaluatorNotes": "Verify verbatim — diff the new skill files against /tmp/superpowers source by structural element. Iron Law strings must match exactly. Phase titles must match exactly. Table column headers must match exactly. Acceptable diffs: attribution block at top, name field in frontmatter, skill cross-reference adaptations within body, anything explicitly noted in the generator-notes adaptations list. Anything else differing from source is a port-quality regression — flag it. Verify the DISPUTE protocol in bober-generator.md has the documented JSON shape with required fields. Verify verificationOutput field in completion-report is marked REQUIRED (optional defeats the Iron Law). Verify <EXTREMELY-IMPORTANT> tags are preserved where they appear in source — softening them defeats empirical tuning. Cross-check Sprint 1's bober.using-bober SKILL.md mentions bober.verify and bober.debug in its skill catalog (it should from Sprint 1; if not, flag it as a Sprint 1 regression to fix here or in Sprint 3)."
+  "evaluatorNotes": "Verify verbatim — diff the new skill files against /tmp/superpowers source by structural element. Iron Law strings must match exactly. Phase titles must match exactly. Table column headers must match exactly. Acceptable diffs: attribution block at top, name field in frontmatter, skill cross-reference adaptations within body, anything explicitly noted in the generator-notes adaptations list. Anything else differing from source is a port-quality regression — flag it. Verify the DISPUTE protocol in bober-generator.md has the documented JSON shape with required fields. Verify verificationOutput field in completion-report is marked REQUIRED (optional defeats the Iron Law). Verify <EXTREMELY-IMPORTANT> tags are preserved where they appear in source — softening them defeats empirical tuning. Cross-check Sprint 1's bober.using-bober SKILL.md mentions bober.verify and bober.debug in its skill catalog (it should from Sprint 1; if not, flag it as a Sprint 1 regression to fix here or in Sprint 3).",
+  "startedAt": "2026-05-24T18:36:00Z",
+  "completedAt": "2026-05-24T21:49:00Z"
 }

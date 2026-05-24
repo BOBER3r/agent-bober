@@ -60,14 +60,38 @@
     }
   ],
   "expectedChanges": [
-    { "path": "agents/bober-planner.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
-    { "path": "agents/bober-curator.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
-    { "path": "agents/bober-architect.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
-    { "path": "agents/bober-researcher.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
-    { "path": "agents/bober-evaluator.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" }
+    {
+      "path": "agents/bober-planner.md",
+      "action": "modify",
+      "description": "Add Iron Law + Red Flags + Rationalization-Prevention table"
+    },
+    {
+      "path": "agents/bober-curator.md",
+      "action": "modify",
+      "description": "Add Iron Law + Red Flags + Rationalization-Prevention table"
+    },
+    {
+      "path": "agents/bober-architect.md",
+      "action": "modify",
+      "description": "Add Iron Law + Red Flags + Rationalization-Prevention table"
+    },
+    {
+      "path": "agents/bober-researcher.md",
+      "action": "modify",
+      "description": "Add Iron Law + Red Flags + Rationalization-Prevention table"
+    },
+    {
+      "path": "agents/bober-evaluator.md",
+      "action": "modify",
+      "description": "Add Iron Law + Red Flags + Rationalization-Prevention table"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-2"],
-  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-2"
+  ],
+  "status": "completed",
   "generatorNotes": "Style pass, not content rewrite. Add three structural blocks per file: (1) one fenced Iron Law placed just after YAML frontmatter and the Subagent Context block, (2) a Red Flags list in the agent's pre-output section, (3) a Rationalization-Prevention markdown table near the end. Each Iron Law must be ROLE-SPECIFIC and LOAD-BEARING — generic phrasing is a fail. Suggested Red Flags per agent: planner — 'asking a question whose answer is in package.json', 'success criterion uses \"works correctly\" without a how-to-verify', 'sprint touches >15 files', 'sprint has no build verification', 'generator-notes is empty'; curator — 'briefing claim without file:line', 'pattern claim without grep evidence', 'recommended util does not exist', 'briefing exceeds 500 lines', 'briefing missing the existing test patterns'; architect — 'approach selected without listing 2+ alternatives', 'ADR without explicit pros AND cons', 'component design without TypeScript signature', 'integration map missing data flow', 'risk table missing severity'; researcher — 'finding without file:line citation', 'claim with hedging language (\"likely\", \"probably\")', 'recommendation appearing in research doc', 'fact contradicts another fact without note', 'gap labeled \"explored further\"'; evaluator — 'trusting generator success report', 'partial criterion check', 'claiming pass when a strategy command was not run', 'regression check skipped', 'criterion marked passed without verification command output'. Voice: VERBATIM superpowers — capitalized rules, all-caps STOP, <EXTREMELY-IMPORTANT> tags where they sharpen the rule. Voice constraint from the abandoned spec ('preserve bober's procedural voice') is EXPLICITLY REVERSED in this spec — the verbatim style is the goal.",
-  "evaluatorNotes": "Verify changes are ADDITIVE only — no existing instructions removed unless directly contradicted by new Iron Law. Verify Iron Laws are placed near the TOP of each file (just after frontmatter / Subagent Context block) — placement matters for empirical effectiveness. Verify each agent's Iron Law is DIFFERENT (no copy-paste from generator) and ROLE-SPECIFIC. Verify the Rationalization-Prevention block is in MARKDOWN TABLE format, not a bulleted list — superpowers tested this difference. Verify <EXTREMELY-IMPORTANT> tags appear where they sharpen rules — at least one per file is expected given the verbatim-voice directive. Cross-check: the existing structured-JSON response contracts in each agent (e.g., bober-evaluator's EvalResult schema, bober-curator's briefing summary) must remain intact — additions go around them, not on them. If any agent file exceeds 800 lines, flag NFR violation."
+  "evaluatorNotes": "Verify changes are ADDITIVE only — no existing instructions removed unless directly contradicted by new Iron Law. Verify Iron Laws are placed near the TOP of each file (just after frontmatter / Subagent Context block) — placement matters for empirical effectiveness. Verify each agent's Iron Law is DIFFERENT (no copy-paste from generator) and ROLE-SPECIFIC. Verify the Rationalization-Prevention block is in MARKDOWN TABLE format, not a bulleted list — superpowers tested this difference. Verify <EXTREMELY-IMPORTANT> tags appear where they sharpen rules — at least one per file is expected given the verbatim-voice directive. Cross-check: the existing structured-JSON response contracts in each agent (e.g., bober-evaluator's EvalResult schema, bober-curator's briefing summary) must remain intact — additions go around them, not on them. If any agent file exceeds 800 lines, flag NFR violation.",
+  "startedAt": "2026-05-24T21:50:00Z",
+  "completedAt": "2026-05-24T22:06:00Z"
 }
