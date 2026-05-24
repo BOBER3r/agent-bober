@@ -1,0 +1,252 @@
+{
+  "specId": "spec-20260524-bober-vision",
+  "version": 1,
+  "createdAt": "2026-05-24T17:30:00Z",
+  "updatedAt": "2026-05-24T17:30:00Z",
+  "title": "Bober Vision: Multi-mode software engineering teammate",
+  "description": "Transform agent-bober from a single-mode autopilot harness into a coherent multi-mode software engineering teammate. Four operating modes share one foundation: (1) Autopilot — current generator-evaluator loop, used for spikes and greenfield; (2) Careful-flow — checkpoint-gated execution where every research/plan/sprint/task boundary surfaces a diff and waits for approval via CLI prompt, disk marker, or GitHub PR; (3) Diagnose — incident-response agent shape with generic observability MCP plugin slots, structured incident timeline, change-management gates around destructive ops; (4) Postmortem — automated synthesis of incident timeline into a structured postmortem document. Foundation across all four modes: verbatim port of obra/superpowers behavior-shaping disciplines (Iron Laws, Red Flags, Rationalization-Prevention tables, SessionStart bootstrap, anti-pattern catalog, AGENTS.md contract). Supersedes spec-20260524-superpowers-port.",
+  "mode": "brownfield",
+  "preset": "custom",
+  "status": "draft",
+  "ambiguityScore": 5,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Prod context: Generic / BYO observability. Design careful-flow mode and diagnose-agent shape with observability access expressed as MCP plugin slots declared in bober.config.json. Do not hard-code Datadog/Sentry/Grafana integrations into core; ship reference adapter docs only. Lets agent-bober work across stacks without becoming a specific stack's tool.",
+      "resolvedAt": "2026-05-24T17:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Checkpoint mechanism: Multi-mode (config-pick). Support all three — (a) CLI blocking prompts for terminal sessions, (b) disk-marker approvals via `.bober/approvals/<id>.pending.json` + `bober approve` / `bober reject` CLI commands for async, (c) GitHub PR-native for native dev-workflow audit trail. User picks per project via bober.config.json `pipeline.checkpointMechanism`; per-run override via `--checkpoint=cli|disk|pr` CLI flag.",
+      "resolvedAt": "2026-05-24T17:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Sprint count ceiling: 25-30 sprints, full vision. Bump sprint.maxSprints in bober.config.json to 30. Each tier executed end-to-end including a real generic prod-incident workflow with postmortem generation, change-management gates, rollback awareness, and incident playbook library.",
+      "resolvedAt": "2026-05-24T17:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Voice port: Verbatim. Adopt /tmp/superpowers behavior-shaping content as-is — Iron Law capitalized blocks, <EXTREMELY-IMPORTANT> tags, Red Flags lists, Rationalization-Prevention tables, even 'your human partner' framing where it parses naturally. The empirical tuning was the point. Adapt ONLY where the bober task model genuinely differs (e.g., 'your human partner' → 'the orchestrator' inside subagent contexts where there is no human; otherwise keep the phrasing). This reverses the earlier (abandoned) bober-voice constraint.",
+      "resolvedAt": "2026-05-24T17:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "Supersession protocol: spec-20260524-superpowers-port marked status='abandoned' on disk; its 8 contracts kept for reference. Its goals are absorbed into Tiers 0-1 of this spec. tokensave-integration spec on the current branch is UNTOUCHED — that work continues independently. New branch for this vision spec to be created when first sprint starts: bober/bober-vision.",
+      "resolvedAt": "2026-05-24T17:30:00Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "obra/superpowers is MIT-licensed; verbatim prose port is permitted with inline attribution on every ported file",
+    "/tmp/superpowers clone preserved through execution of this spec; if cleared, first generator re-clones",
+    "agent-bober runs in multiple harnesses (Claude Code, MCP via Cursor/Windsurf, CLI direct) — bootstrap and checkpoint mechanisms must work across all three. Stack-detection in the bootstrap script follows superpowers's env-var pattern (CLAUDE_PLUGIN_ROOT vs CURSOR_PLUGIN_ROOT vs COPILOT_CLI)",
+    "Existing orchestrator (src/orchestrator/) has a finite set of decision points where checkpoints could fire — they're enumerable by reading the pipeline coordinator. The careful-flow plumbing sprint maps these explicitly before building mechanisms",
+    "MCP plugin slots are declared as additions to bober.config.json `observability.providers` array; the diagnoser agent's tool list is computed at spawn time by merging core tools with configured MCP servers",
+    "Existing eval-strategy contract (typecheck/lint/build/test) remains the source of truth for sprint pass/fail in autopilot and careful-flow modes. Incident/postmortem modes have their own success criteria (metric returned to baseline, postmortem doc completeness)",
+    "GitHub PR-native checkpoint mechanism requires `gh` CLI installed and authenticated; checked at config-validation time; falls back to disk-marker with a warning if unavailable",
+    "Rollback awareness in bober.deploy operates on a declared 'change log' of recorded actions per run; rollback inverts them in reverse order. Not a transaction; idempotent re-application is the goal, not strict consistency",
+    "Postmortem generator (bober-postmortemer) reads structured incident timeline (.bober/incidents/<id>/timeline.jsonl), hypotheses.md, actions.jsonl — does NOT need to access observability data live; postmortem is offline synthesis of recorded state",
+    "Playbook library is a directory of human-curated markdown playbooks shipping with agent-bober (.bober/playbooks/*.md). Diagnoser selects via name match or skill-based search; not learned, not auto-generated",
+    "Voice-port verbatim choice means the codebase will contain 'your human partner' and '<EXTREMELY-IMPORTANT>' tags in agent prompts. Code review of agent-bober itself must not strip these (linter exception documented in AGENTS.md)",
+    "Telemetry hooks (Sprint 28) emit anonymous local-only JSONL events to .bober/telemetry/; no network egress. User-opt-in flag in config; default opt-out"
+  ],
+  "outOfScope": [
+    "Specific observability MCP integrations (Datadog/Sentry/Grafana/etc.) shipped in core — these become user-installed plugins declared in config. Reference adapter docs ARE in scope (one example .md per major observability category)",
+    "Auto-incident detection from observability streams (proactive monitoring) — diagnoser is invoked reactively by user with `/bober-incident <symptom>` or by passing logs/errors",
+    "Multi-repo or cross-service incident workflow — single project root per incident",
+    "Networked or cloud-hosted state — all artifacts stay in .bober/ on local disk",
+    "Replacement of generator-evaluator loop with subagent-driven-development per-task review — keep the existing loop, code-reviewer is advisory addition",
+    "Auto-installing gh CLI for PR-native checkpoints — soft prereq, warning if missing",
+    "Adversarial-pressure testing methodology for new skills (writing-skills meta) — defer to follow-on spec; new skills in this spec inherit empirical tuning from their superpowers source",
+    "Slack/email/webhook-based checkpoint approvals beyond the three mechanisms chosen (CLI/disk/PR)",
+    "Replacing two-phase researcher isolation with brainstorming — researcher isolation is more rigorous; brainstorming HARD-GATE sits inside bober.plan instead",
+    "Project-management features (issue tracking, kanban, story points) — bober's contract/sprint/spec is the lightweight equivalent; not extending it",
+    "Multi-user concurrent execution — single-user assumed; file locking not implemented",
+    "Migrating existing .bober/ artifacts from prior runs — pure additions only; old artifacts continue to work"
+  ],
+  "features": [
+    {
+      "featureId": "feat-0",
+      "title": "Tier 0 — Foundation: behavior-shaping bootstrap + verbatim voice port",
+      "description": "SessionStart hook injecting the using-bober bootstrap into first-turn context. Verbatim port of behavior-shaping skills from /tmp/superpowers (verify, debug). Voice-pass across existing agent prompts adopting Iron Law / Red Flags / Rationalization-Prevention table structure with verbatim phrasing. This tier is load-bearing for Tiers 2-3 because checkpoint mechanisms and incident-response disciplines reference the established patterns.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a Claude Code session starts in an agent-bober project, the system reminder contains both the existing graph-stats line AND a new bober-using-bober bootstrap block.",
+        "AC2: skills/bober.verify/SKILL.md and skills/bober.debug/SKILL.md exist with Iron Law blocks, Red Flags lists, Rationalization-Prevention tables — content verbatim-ported (with attribution) from /tmp/superpowers/skills/verification-before-completion and /tmp/superpowers/skills/systematic-debugging.",
+        "AC3: Every agent prompt in agents/*.md contains exactly one fenced Iron Law block, a Red Flags list >=5 items, and a Rationalization-Prevention table >=5 rows. Voice is verbatim-style — capitalized rules, all-caps STOP conditions, 'your human partner' framing preserved where it parses naturally."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-1",
+      "title": "Tier 1 — Quality discipline: anti-patterns + advisory code review + HARD-GATE + AGENTS.md",
+      "description": "Anti-pattern reference catalog ported MIT-attributed from superpowers, with evaluator wiring to cite anti-pattern names in regressions. New bober-code-reviewer agent that runs after evaluator pass and produces advisory review markdown — does not block sprint completion in autopilot mode. HARD-GATE in bober.plan between PlanSpec generation and sprint contract emission. AGENTS.md at repo root.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: .bober/anti-patterns/ contains README.md and four ported docs (testing-anti-patterns, condition-based-waiting, root-cause-tracing, defense-in-depth) each with MIT attribution; agents/bober-evaluator.md instructs the evaluator to cite anti-pattern names in EvalResult.regressions when applicable.",
+        "AC2: agents/bober-code-reviewer.md exists as a read-only subagent; skills/bober.code-review/SKILL.md describes the review discipline; the orchestrator spawns it after evaluator pass and writes .bober/reviews/<contractId>-review.md. In autopilot, critical findings surface in the run-summary but do not block.",
+        "AC3: skills/bober.plan/SKILL.md contains exactly one <HARD-GATE> block between PlanSpec generation and Sprint decomposition steps; AGENTS.md exists at repo root with the five required sections; README.md links to AGENTS.md."
+      ],
+      "dependencies": ["feat-0"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Tier 2 — Careful-flow mode: multi-mechanism checkpoint gates across pipeline boundaries",
+      "description": "A second runtime mode (autopilot's sibling) where every research → plan → sprint → task boundary surfaces a diff and waits for approval. Three approval mechanisms — CLI blocking prompts, disk-marker + bober-approve CLI, GitHub PR-native — selectable via bober.config.json or per-run CLI flag. Feedback at each checkpoint propagates back to the responsible agent (planner re-plans, generator re-implements) with iteration capping and an escape hatch. Approval audit trail to .bober/audits/<runId>.jsonl.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When bober.config.json sets pipeline.mode='careful', the orchestrator pauses at each defined checkpoint, surfaces a diff/artifact, and waits for approval before proceeding. The same mode runs to completion in autopilot if pipeline.mode='autopilot'.",
+        "AC2: All three checkpoint mechanisms — CLI prompts, disk markers, PR-native — are implemented and selectable via pipeline.checkpointMechanism config or --checkpoint CLI flag. Per-checkpoint mechanism overrides are supported via pipeline.checkpointOverrides.",
+        "AC3: Every checkpoint outcome (approved/rejected/edited) is logged to .bober/audits/<runId>.jsonl with timestamp, mechanism, approver identifier, and edit delta (when applicable). Feedback on rejection propagates to the responsible agent for one or more iteration cycles up to pipeline.maxCheckpointIterations (default 3); after exhaustion the run aborts gracefully."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Tier 3 — Prod-incident agent shape: diagnose → runbook → deploy → rollback with generic observability slots",
+      "description": "A new agent family (bober-diagnoser, bober-deployer, bober-postmortemer) and skill family (bober.diagnose, bober.runbook, bober.deploy, bober.postmortem) supporting the diagnose → act → verify → postmortem loop for production incidents. Observability access is via user-declared MCP plugin slots — no hard-coded Datadog/Sentry/Grafana integrations in core. Structured incident timeline at .bober/incidents/<id>/; change-management gates around destructive operations (integrate with Tier 2 careful-flow); rollback awareness via recorded change log; SLO/metric verification before claiming resolved. Top-level entry via /bober-incident slash command or `bober incident` CLI subcommand. Reusable incident playbook library shipping in .bober/playbooks/.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a user invokes /bober-incident <symptom> or `bober incident start <symptom>`, the orchestrator creates .bober/incidents/<id>/ with timeline.jsonl + hypotheses.md + actions.jsonl scaffolding, spawns bober-diagnoser, and routes to runbook/deploy phases as the diagnoser hypothesizes.",
+        "AC2: Observability access is via MCP plugin slots declared in bober.config.json `observability.providers`. The diagnoser's tool list is computed at spawn by merging core read-only tools with the configured MCP server tool sets. Core ships zero hard-coded observability integrations but ships at least one reference adapter doc per major category (logs, metrics, traces, errors).",
+        "AC3: Change-management gates: bober.deploy classifies every action as 'safe' (rollback, feature flag flip) vs 'risky' (migration, schema change, env var update) and gates risky actions via the Tier 2 careful-flow checkpoint mechanism regardless of pipeline.mode. Every executed action is recorded with its inverse to .bober/incidents/<id>/changelog.jsonl; `bober rollback <incidentId>` invokes inverses in reverse order.",
+        "AC4: When the diagnoser claims an incident resolved, an SLO check is run via the configured observability MCP and the resolution is marked verified only when the named metric returned to baseline within the named window. bober-postmortemer reads the incident's structured artifacts and emits .bober/incidents/<id>/postmortem.md with 5-Whys, contributing factors, timeline, action items.",
+        "AC5: .bober/playbooks/ contains a starter library of human-curated markdown playbooks (build-failure, migration-timeout, error-spike, latency-regression); diagnoser invokes a matching playbook via skill-based search and follows its sequenced diagnose-then-act pattern."
+      ],
+      "dependencies": ["feat-0", "feat-2"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Tier 4 — Integration & polish: VISION.md, end-to-end validation, config migration, telemetry",
+      "description": "Single VISION.md at repo root explaining the four operating modes and when to use each, plus README.md mental-model update. End-to-end integration test exercising all four modes on a fixture project (greenfield → careful-flow build → introduce bug → diagnose → rollback → postmortem). bober.config.json schema migration with graceful upgrade path for existing configs (defaults preserve current behavior). Telemetry hooks emitting local-only JSONL events for tracking checkpoint approval rates, incident resolution times, agent retry counts — opt-in via config, default off.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: VISION.md exists at repo root, documents all four modes (autopilot, careful, diagnose, postmortem) with concrete usage examples; README.md references VISION.md in its mental-model section.",
+        "AC2: tests/e2e/four-modes.test.ts (or equivalent) exercises a complete greenfield-to-postmortem flow on a fixture project; passes in CI.",
+        "AC3: bober.config.json existing files (pre-this-spec) parse successfully with the extended schema after defaults are applied; new fields (pipeline.mode, pipeline.checkpointMechanism, observability.providers, telemetry.enabled) all have sensible defaults preserving current behavior.",
+        "AC4: Telemetry hooks emit events to .bober/telemetry/<date>.jsonl when telemetry.enabled=true (default false); no network egress; documented as local-only in VISION.md."
+      ],
+      "dependencies": ["feat-0", "feat-1", "feat-2", "feat-3"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "All changes are additive at the data layer — no existing .bober/ artifact, contract, spec, or eval result is mutated retroactively; the only allowed structural delete is the old superpowers-port spec status flip to 'abandoned' (which is a status change, not a delete).",
+      "verificationMethod": "Run `git diff main -- .bober/` after each sprint; verify no deletions of existing artifacts (modifications limited to status flips on documented supersession targets)."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Every prose port from superpowers retains an inline MIT attribution block citing obra/superpowers and the source file path.",
+      "verificationMethod": "Grep each new file in .bober/anti-patterns/ and skills/bober.{verify,debug,using-bober,code-review,diagnose,runbook,deploy,postmortem}/ for 'obra/superpowers' and 'MIT' — both required."
+    },
+    {
+      "category": "performance",
+      "requirement": "SessionStart hook completes in under 500ms on warm cache. CLI checkpoint prompt overhead under 200ms per checkpoint. Disk-marker write under 100ms. PR-native checkpoint excluded from this budget (network-bound).",
+      "verificationMethod": "time-bound microbenchmarks in tests/perf/checkpoint.bench.ts and tests/perf/session-start.bench.ts."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Existing eval-strategy contract (typecheck, lint, build, test) continues to pass on the agent-bober repo after every sprint.",
+      "verificationMethod": "Run `npm run typecheck && npm run lint && npm run build && npm run test` after each sprint; assert exit 0."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Agent prompt files in agents/*.md remain under 800 lines each after the verbatim voice port (bumped from 600 in the abandoned spec because verbatim port adds material).",
+      "verificationMethod": "wc -l agents/*.md; assert each <=800."
+    },
+    {
+      "category": "security",
+      "requirement": "Telemetry hooks emit zero network traffic; observability MCP slots run user-configured commands only — no credential storage in agent-bober artifacts; .bober/incidents/ may contain incident-context data which the user must classify before sharing.",
+      "verificationMethod": "Code review of telemetry implementation confirms file-only writes; MCP plugin slot loader confirms config-only credential resolution; AGENTS.md documents the incident-data classification guidance."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Checkpoint mechanism failure (e.g., gh CLI missing for PR-native, stdin closed for CLI prompts) degrades to a clearly-labeled fallback rather than crashing the run.",
+      "verificationMethod": "Unit tests with mocked missing-tool failures exercise each mechanism's fallback path."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "hooks/hooks.json — SessionStart matcher added; PostToolUse preserved",
+      "agents/ — 3 new agents (bober-code-reviewer, bober-diagnoser, bober-deployer, bober-postmortemer; 4 actually), 6 existing modified for voice pass",
+      "skills/ — 8 new skills (bober.using-bober, bober.verify, bober.debug, bober.code-review, bober.diagnose, bober.runbook, bober.deploy, bober.postmortem); 1 modified (bober.plan for HARD-GATE)",
+      ".bober/anti-patterns/ — new directory, MIT-attributed reference docs",
+      ".bober/incidents/ — new directory, per-incident artifacts (timeline.jsonl, hypotheses.md, actions.jsonl, changelog.jsonl, postmortem.md)",
+      ".bober/playbooks/ — new directory, starter playbook library",
+      ".bober/approvals/ — new directory, disk-marker checkpoint pending files",
+      ".bober/audits/ — new directory, per-run checkpoint outcome logs",
+      ".bober/reviews/ — new directory, advisory code-reviewer output",
+      ".bober/telemetry/ — new directory, opt-in local-only JSONL events",
+      "src/orchestrator/ — checkpoint plumbing additions (Sprint 7), three checkpoint mechanism implementations (Sprints 8-10), feedback propagation (Sprint 12), audit hooks (Sprint 13), code-reviewer spawn (Tier 1 Sprint 5), incident pipeline (Tier 3)",
+      "src/config/schema.ts — extend BoberConfigSchema for pipeline.mode, pipeline.checkpointMechanism, pipeline.checkpointOverrides, pipeline.maxCheckpointIterations, observability.providers, telemetry.enabled (Sprint 14 + Sprint 28 migration)",
+      "src/cli/ — new subcommands: `bober approve`, `bober reject`, `bober rollback`, `bober incident start/end/status`",
+      "src/mcp/ — observability MCP server slot loader; existing 17 MCP tools unchanged",
+      "AGENTS.md, VISION.md, README.md — new/modified at repo root"
+    ],
+    "dataModel": "Three new persistent data shapes: (1) ApprovalRecord (per-checkpoint, persisted to .bober/audits/) with {runId, checkpointId, mechanism, outcome, approverId, editDelta, timestamp}; (2) IncidentRecord rooted at .bober/incidents/<id>/ with structured sub-artifacts; (3) ChangeAction with {id, type, inverse, executedAt, status} stored to changelog.jsonl. ReviewResult JSON for code-reviewer output, ReviewMarkdown for human-readable. PlaybookEntry: markdown frontmatter + body, indexed by .bober/playbooks/index.json.",
+    "securityConsiderations": [
+      "MCP plugin slot loader resolves credentials from user environment, NEVER from agent-bober artifacts",
+      "Observability MCP responses may contain prod secrets; bober.diagnose skill instructs the diagnoser to redact obvious credential patterns before writing to .bober/incidents/",
+      "bober rollback CLI is destructive; gated by Tier 2 checkpoint mechanism regardless of pipeline.mode",
+      "Telemetry is local-only by design; no opt-in to network egress in this spec",
+      "AGENTS.md documents the .bober/incidents/ data classification guidance — users responsible for not committing prod data"
+    ],
+    "existingPatterns": "Follow agents/bober-evaluator.md pattern for new read-only subagents (Subagent Context block, structured JSON response contract, restricted tools list). Follow src/orchestrator/ existing subagent-spawn pattern for new agent integrations (do not invent a new mechanism). Follow src/config/schema.ts zod-based validation pattern for new config fields. Follow tests/ existing vitest/jest pattern (whichever is in package.json) for new test files. Hook scripts follow /tmp/superpowers/hooks/session-start as structural reference."
+  },
+  "sprints": [
+    "sprint-spec-20260524-bober-vision-1",
+    "sprint-spec-20260524-bober-vision-2",
+    "sprint-spec-20260524-bober-vision-3",
+    "sprint-spec-20260524-bober-vision-4",
+    "sprint-spec-20260524-bober-vision-5",
+    "sprint-spec-20260524-bober-vision-6",
+    "sprint-spec-20260524-bober-vision-7",
+    "sprint-spec-20260524-bober-vision-8",
+    "sprint-spec-20260524-bober-vision-9",
+    "sprint-spec-20260524-bober-vision-10",
+    "sprint-spec-20260524-bober-vision-11",
+    "sprint-spec-20260524-bober-vision-12",
+    "sprint-spec-20260524-bober-vision-13",
+    "sprint-spec-20260524-bober-vision-14",
+    "sprint-spec-20260524-bober-vision-15",
+    "sprint-spec-20260524-bober-vision-16",
+    "sprint-spec-20260524-bober-vision-17",
+    "sprint-spec-20260524-bober-vision-18",
+    "sprint-spec-20260524-bober-vision-19",
+    "sprint-spec-20260524-bober-vision-20",
+    "sprint-spec-20260524-bober-vision-21",
+    "sprint-spec-20260524-bober-vision-22",
+    "sprint-spec-20260524-bober-vision-23",
+    "sprint-spec-20260524-bober-vision-24",
+    "sprint-spec-20260524-bober-vision-25",
+    "sprint-spec-20260524-bober-vision-26",
+    "sprint-spec-20260524-bober-vision-27",
+    "sprint-spec-20260524-bober-vision-28"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "80-120 hours of agent runtime across 28 sprints; calendar ~5 weeks with daily oversight",
+    "riskLevel": "high",
+    "riskNotes": "Scope is the highest in agent-bober's history. Risk concentrates in Tier 2 (orchestrator mode-switching, checkpoint mechanisms in three distinct surfaces) and Tier 3 (new agent family + MCP plugin slot architecture). Mitigations: each tier ends with a stable shippable state (Tier 0 = bootstrap + voice; Tier 1 = quality discipline live; Tier 2 = careful-flow available; Tier 3 = incident workflow available; Tier 4 = polish). Pipeline can pause between tiers without leaving the harness broken. Each sprint maintains the additive contract (NFR1) so partial completion does not regress earlier sprints. Re-running bober.plan against later sprints is expected as upstream sprint outputs reshape downstream needs.",
+    "tierBreakdown": {
+      "tier0_foundation": ["sprint-1", "sprint-2", "sprint-3"],
+      "tier1_quality": ["sprint-4", "sprint-5", "sprint-6"],
+      "tier2_careful_flow": ["sprint-7", "sprint-8", "sprint-9", "sprint-10", "sprint-11", "sprint-12", "sprint-13", "sprint-14"],
+      "tier3_prod_incident": ["sprint-15", "sprint-16", "sprint-17", "sprint-18", "sprint-19", "sprint-20", "sprint-21", "sprint-22", "sprint-23", "sprint-24", "sprint-25"],
+      "tier4_integration": ["sprint-26", "sprint-27", "sprint-28"]
+    },
+    "supersedes": "spec-20260524-superpowers-port",
+    "researchBasis": ".bober/research/research-20260524-superpowers-vs-agent-bober.md"
+  }
+}

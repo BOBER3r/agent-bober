@@ -1,0 +1,53 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-7",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Careful-flow plumbing: orchestrator hook points and Checkpoint abstraction",
+  "description": "Plumbing-only sprint. Map the existing orchestrator's decision points where checkpoint gates COULD fire and introduce a Checkpoint abstraction with a Mechanism interface. NO checkpoint logic yet — the mechanisms come in Sprints 8-10. This sprint establishes the call-site layout, the Checkpoint type definitions, and the no-op default mechanism so the rest of the pipeline keeps working.",
+  "successCriteria": [
+    {
+      "id": "s7-c1",
+      "description": "src/orchestrator/checkpoints/types.ts (or equivalent) defines: type CheckpointId, type CheckpointArtifact, interface CheckpointMechanism { request(checkpoint, artifact): Promise<CheckpointOutcome> }, type CheckpointOutcome = {approved: true, editDelta?: unknown} | {approved: false, feedback: string} | {edit: true, editDelta: unknown}.",
+      "verificationMethod": "Read src/orchestrator/checkpoints/types.ts. Verify each named type/interface exists with the documented shape.",
+      "passed": false
+    },
+    {
+      "id": "s7-c2",
+      "description": "src/orchestrator/checkpoints/registry.ts (or equivalent) defines: function registerCheckpointMechanism(name, impl), function getCheckpointMechanism(name), and a 'noop' mechanism implementation that auto-approves every checkpoint (used in autopilot mode and as fallback).",
+      "verificationMethod": "Read registry file. Verify the three exports. Verify 'noop' is the only mechanism registered at this sprint (Sprints 8-10 register the real ones).",
+      "passed": false
+    },
+    {
+      "id": "s7-c3",
+      "description": "Documented enumeration of checkpoint call sites in src/orchestrator/checkpoints/sites.ts (or a markdown doc): post-research, post-plan, post-sprint-contract, pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, post-sprint, end-of-pipeline. Each call site documented with which artifact it surfaces.",
+      "verificationMethod": "Read file. Verify all 9 named call sites with artifact descriptions.",
+      "passed": false
+    },
+    {
+      "id": "s7-c4",
+      "description": "Orchestrator pipeline coordinator imports the Checkpoint abstraction and INVOKES the noop mechanism at the 9 documented call sites. Pipeline behavior unchanged because noop auto-approves.",
+      "verificationMethod": "Grep src/orchestrator/ for the Checkpoint type imports and the call sites. Verify pipeline run on a test fixture produces identical output to pre-sprint behavior.",
+      "passed": false
+    },
+    {
+      "id": "s7-c5",
+      "description": "Unit tests exercise: (a) noop mechanism approves every checkpoint, (b) registry resolves mechanism by name, (c) unknown mechanism name throws clear error.",
+      "verificationMethod": "Locate new tests/orchestrator/checkpoints.test.ts (or equivalent). Run npm run test.",
+      "passed": false
+    },
+    {
+      "id": "s7-c6",
+      "description": "All existing eval strategies pass; existing pipeline behavior unchanged.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0. Manual: run an existing sprint via /bober-sprint and confirm no behavioral difference.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/orchestrator/checkpoints/", "action": "create", "description": "New module: types.ts, registry.ts, sites.ts, noop.ts" },
+    { "path": "src/orchestrator/pipeline-coordinator.ts (or main orchestrator file)", "action": "modify", "description": "Import Checkpoint abstraction; invoke noop at 9 documented call sites" },
+    { "path": "tests/orchestrator/checkpoints.test.ts", "action": "create", "description": "Unit tests for plumbing" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-6"],
+  "status": "proposed",
+  "generatorNotes": "This sprint is foundational — it must NOT change runtime behavior. Goal: install the call points and the type infrastructure so Sprints 8-10 can plug in real mechanisms without re-wiring the pipeline.\n\nMap call sites by reading src/orchestrator/ (start with the pipeline coordinator — likely src/orchestrator/index.ts or src/orchestrator/pipeline.ts; grep for 'evaluator.spawn' or 'generator.spawn' to find the orchestration loop). Document each call site with: when it fires (e.g., 'after researcher produces .bober/research/*-research.md, before planner starts'), what artifact it surfaces (e.g., 'the research document path + summary'), what feedback shape makes sense (e.g., 'free-form text → planner re-runs with augmented context').\n\nCheckpoint type: simple discriminated union for outcomes. The 'edit' outcome covers the case where the user (or PR commenter) modifies the artifact and re-submits — the orchestrator needs to consume the edit before proceeding.\n\nNoop mechanism: registers under the name 'noop'. Implementation: every request() returns {approved: true} immediately. This is the autopilot mode mechanism — careful-flow mode (Sprint 14) routes to a real mechanism.\n\nIMPORTANT: do not refactor the pipeline coordinator. Just add the call sites with minimal disruption. Each call site becomes one new line: `await checkpoint.request('post-research', researchArtifact);`. Surrounding logic untouched.\n\nReference patterns: src/orchestrator/ existing subagent-spawn pattern (used for generator/evaluator spawning). The Checkpoint abstraction should fit alongside, not replace, that pattern.",
+  "evaluatorNotes": "Verify the 9 call sites are enumerated explicitly. Verify the noop mechanism is the ONLY registered mechanism at this sprint — registering CLI/disk/PR mechanisms here would mean Sprints 8-10 can't build cleanly. Verify pipeline behavior UNCHANGED: run a real sprint or a test-fixture sprint through the existing pipeline and confirm identical output (same .bober/eval-results/, same commits, same artifacts). If output differs, the plumbing changed runtime behavior — that's a regression.\n\nVerify the Checkpoint types are exhaustive enough to support all three mechanisms (CLI/disk/PR) without re-shaping in Sprints 8-10. Specifically the CheckpointOutcome discriminated union must support {approved: false, feedback: string} (rejection with reason — needed by all three mechanisms for feedback propagation in Sprint 12).\n\nCheck import surface: src/orchestrator/checkpoints/ exports a clean API; the pipeline coordinator imports it through one entry point, not via individual files. Reject if the module exports its internal noop implementation outside the registry (mechanisms should be opaque to the coordinator).\n\nVerify the existing typecheck/lint/build/test commands all still pass. The orchestrator code is load-bearing; regressions here cascade."
+}

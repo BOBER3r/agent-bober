@@ -1,0 +1,66 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-26",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "VISION.md at repo root + README mental-model update",
+  "description": "Create VISION.md at repo root that documents the four operating modes (autopilot, careful, diagnose, postmortem) with concrete usage examples for each. Update README.md to reference VISION.md in its mental-model section and to surface the new commands (incident, approve, rollback, audit, playbook, postmortem).",
+  "successCriteria": [
+    {
+      "id": "s26-c1",
+      "description": "VISION.md exists at /Users/bober4ik/agent-bober/VISION.md, >=200 lines. Sections in order: 'Why agent-bober Exists', 'The Four Modes', 'Mode 1: Autopilot', 'Mode 2: Careful-Flow', 'Mode 3: Diagnose (Incident Response)', 'Mode 4: Postmortem', 'Choosing a Mode', 'Configuration Reference', 'The Foundation: Behavior-Shaping Discipline'.",
+      "verificationMethod": "test -f VISION.md && wc -l (>=200); grep each section heading.",
+      "passed": false
+    },
+    {
+      "id": "s26-c2",
+      "description": "Each mode section documents: (a) when to use, (b) command/skill entry point, (c) what gets created on disk, (d) a concrete worked example with 5-10 line shell session. Examples must be REAL — copy-pasteable to a clean agent-bober checkout.",
+      "verificationMethod": "Read each section. Verify all four sub-sections per mode. Spot-check example commands match Sprint 14/24 CLI surface.",
+      "passed": false
+    },
+    {
+      "id": "s26-c3",
+      "description": "'Choosing a Mode' section has a decision tree or table guiding the user: 'building a feature in a spike? → autopilot'; 'changing production behavior? → careful-flow'; 'production system is broken? → diagnose'; 'post-incident retrospective? → postmortem'.",
+      "verificationMethod": "Read section. Verify decision tree/table exists.",
+      "passed": false
+    },
+    {
+      "id": "s26-c4",
+      "description": "'Configuration Reference' section documents every new config field added across this spec (pipeline.mode, pipeline.checkpointMechanism, pipeline.checkpointOverrides, pipeline.maxCheckpointIterations, pipeline.approvalTimeoutMs, pipeline.prPollMs, pipeline.allowAutopilotRiskyActions, observability.providers, incident.autoPostmortem, incident.playbookAutoInvokeThreshold, telemetry.enabled — Sprint 28 adds the last one).",
+      "verificationMethod": "Grep VISION.md for each config field name. Verify each has documentation.",
+      "passed": false
+    },
+    {
+      "id": "s26-c5",
+      "description": "'The Foundation' section explains the behavior-shaping discipline (Iron Laws, Red Flags, Rationalization-Prevention, anti-pattern catalog, HARD-GATEs) and credits obra/superpowers as source.",
+      "verificationMethod": "Read section. Verify attribution.",
+      "passed": false
+    },
+    {
+      "id": "s26-c6",
+      "description": "README.md updated: existing content preserved, new 'Operating Modes' section near the top links to VISION.md, new 'Commands' subsection (or table addition) lists the new CLI surface (incident start/status/end/list/abort, approve, reject, list-approvals, rollback, audit show, playbook list/show/search, postmortem generate/show).",
+      "verificationMethod": "Read README.md diff. Verify the new section exists and lists each new command.",
+      "passed": false
+    },
+    {
+      "id": "s26-c7",
+      "description": "Internal cross-links: AGENTS.md (Sprint 6) gains a link to VISION.md. COMMANDS.md (existing) gains entries for all new commands.",
+      "verificationMethod": "Grep AGENTS.md and COMMANDS.md for VISION.md and each new command name.",
+      "passed": false
+    },
+    {
+      "id": "s26-c8",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "VISION.md", "action": "create", "description": "Top-level vision document explaining the four modes" },
+    { "path": "README.md", "action": "modify", "description": "Add Operating Modes section + Commands subsection" },
+    { "path": "AGENTS.md", "action": "modify", "description": "Cross-link to VISION.md" },
+    { "path": "COMMANDS.md", "action": "modify", "description": "Add entries for new CLI subcommands" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-25"],
+  "status": "proposed",
+  "generatorNotes": "VISION.md is the artifact someone reads to understand 'what is this?' in <10 minutes. Optimize for that.\n\nOpening hook (the 'Why agent-bober Exists' section):\n```\nagent-bober is a software engineering teammate. It operates in four modes — autopilot for spikes, careful-flow for production changes, diagnose for incidents, postmortem for retrospectives. The foundation across all four modes is behavior-shaping discipline ported verbatim from obra/superpowers: Iron Laws, Red Flags, Rationalization-Prevention tables. The harness coordinates many agents; the disciplines keep each one rigorous.\n```\n\nWorked example for each mode (concrete shell):\n\nMode 1 (Autopilot):\n```bash\n$ bober plan 'Add CSV export to the users table page'\n$ bober run\n# 4 sprints execute, each evaluated, committed; ~30 minutes\n```\n\nMode 2 (Careful-flow):\n```bash\n$ bober config set pipeline.mode careful\n$ bober plan 'Migrate from JWT to session cookies'\n$ bober run --checkpoint=disk\n# At each checkpoint, .bober/approvals/<id>.pending.json appears\n$ bober list-approvals\n$ bober approve post-research-spec-20260524-jwt-1\n# After reviewing the spec\n$ bober approve post-plan-spec-20260524-jwt --edit ./my-edits.md\n# Pipeline resumes with edits applied\n```\n\nMode 3 (Diagnose):\n```bash\n$ bober incident start '500 errors on checkout endpoint' --severity S2\n# Incident inc-20260524-500-errors-on created\n# bober-diagnoser starts investigating\n$ bober incident status inc-20260524-500-errors-on\n# Phase: investigating\n# Latest diagnosis (confidence: high): connection pool exhausted...\n# Risky action proposed: kubectl scale ...\n$ bober approve risky-action-act-1  # the gate fired\n# Deployer executes; postcondition passes\n# Resolution criteria: api.checkout.error_rate < 0.001 for 10m\n# Verifying... resolved.\n# Postmortem auto-generated at .bober/incidents/.../postmortem.md\n```\n\nMode 4 (Postmortem):\n```bash\n$ bober postmortem show inc-20260524-500-errors-on\n# Renders the synthesized postmortem\n$ bober postmortem generate inc-20260524-500-errors-on  # regenerate after artifact additions\n```\n\nDecision table (Choosing a Mode):\n| Situation | Mode |\n|-----------|------|\n| Building a feature in a spike, no prod impact | Autopilot |\n| Changing production behavior, want diff approval | Careful-Flow |\n| Production is broken right now | Diagnose |\n| After resolving an incident, want a retrospective | Postmortem |\n| Refactoring code with high test coverage | Autopilot |\n| Refactoring code that touches user-facing behavior | Careful-Flow |\n\nConfiguration reference table: alphabetical by field name with default, since-sprint, description.\n\nThe Foundation section: brief (~20 lines) explanation of what Iron Laws/Red Flags/Rationalization-Prevention DO at runtime, with one concrete example from agent-bober's actual prompts. Credit obra/superpowers with MIT attribution.",
+  "evaluatorNotes": "Verify every worked example is REAL — try to execute the command syntax (dry-run if needed) against the post-Tier-3 agent-bober and confirm the commands exist. An example referencing `bober approve` is wrong if the actual CLI subcommand is `bober approvals approve` (or whatever Sprint 9 actually wired).\n\nVerify the Configuration Reference covers EVERY new field. Cross-check by listing all schema fields added across Sprints 9, 10, 12, 14, 16, 20, 23, 28. Missing fields in the reference is a documentation regression.\n\nVerify the 'Choosing a Mode' decision table covers the obvious cases AND the gray-area cases. A user with 'refactoring code with high test coverage' should map clearly to a mode, even if it's the same as another row.\n\nVerify cross-links are bidirectional where it makes sense: VISION.md → AGENTS.md, AGENTS.md → VISION.md, README.md → both. COMMANDS.md → VISION.md is one-way; VISION.md mentions commands inline.\n\nReadability check: open VISION.md fresh, time how long it takes to understand the four modes. Target: <10 minutes. If reading the doc and still confused, structure isn't working.\n\nVerify no fabrication: VISION.md must not claim features the spec didn't deliver. If Sprint 22 deferred percent-of-baseline metric comparison, VISION.md must not claim it works."
+}

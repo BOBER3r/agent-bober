@@ -1,0 +1,70 @@
+{
+  "project": {
+    "name": "agent-bober",
+    "mode": "brownfield"
+  },
+  "planner": {
+    "maxClarifications": 5,
+    "model": "opus",
+    "provider": "anthropic"
+  },
+  "curator": {
+    "model": "opus",
+    "maxTurns": 25,
+    "enabled": true
+  },
+  "generator": {
+    "model": "sonnet",
+    "maxTurnsPerSprint": 50,
+    "autoCommit": true,
+    "branchPattern": "bober/{feature-name}",
+    "provider": "anthropic"
+  },
+  "evaluator": {
+    "model": "sonnet",
+    "strategies": [
+      {
+        "type": "typecheck",
+        "required": true,
+        "command": "npm run typecheck"
+      },
+      {
+        "type": "lint",
+        "required": true,
+        "command": "npm run lint"
+      },
+      {
+        "type": "build",
+        "required": true,
+        "command": "npm run build"
+      },
+      {
+        "type": "unit-test",
+        "required": true,
+        "command": "npm run test"
+      }
+    ],
+    "maxIterations": 3,
+    "provider": "anthropic"
+  },
+  "sprint": {
+    "maxSprints": 30,
+    "requireContracts": true,
+    "sprintSize": "medium"
+  },
+  "pipeline": {
+    "maxIterations": 20,
+    "requireApproval": false,
+    "contextReset": "always",
+    "researchPhase": true,
+    "architectPhase": false
+  },
+  "commands": {
+    "install": "npm install",
+    "build": "npm run build",
+    "test": "npm run test",
+    "lint": "npm run lint",
+    "typecheck": "npm run typecheck",
+    "dev": "npm run dev"
+  }
+}

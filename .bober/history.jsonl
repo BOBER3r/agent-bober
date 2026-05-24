@@ -1,0 +1,51 @@
+{"event":"project-initialized","projectName":"agent-bober","mode":"brownfield","preset":"custom","timestamp":"2026-03-28T12:00:00Z"}
+{"event":"plan-created","specId":"spec-20260328-multi-provider-llm-adapter","title":"Multi-Provider LLM Adapter Layer","sprintCount":6,"timestamp":"2026-03-28T12:00:00Z"}
+{"event":"plan-created","specId":"spec-20260328-mcp-server","title":"MCP Server for Cross-IDE Integration","sprintCount":4,"timestamp":"2026-03-28T18:00:00Z"}
+{"event":"plan-created","specId":"spec-20260329-brownfield-auto-discovery","title":"Brownfield Auto-Discovery System","sprintCount":4,"timestamp":"2026-03-29T10:00:00Z"}
+{"event":"plan-created","specId":"spec-20260331-crispy-pipeline-enhance","title":"CRISPY-Inspired Pipeline Enhancement","sprintCount":5,"timestamp":"2026-03-31T12:00:00Z"}
+{"event":"pipeline-started","specId":"spec-20260331-crispy-pipeline-enhance","timestamp":"2026-03-31T12:30:00Z","task":"Execute CRISPY-Inspired Pipeline Enhancement — 5 sprints"}
+{"event":"eval-completed","contractId":"sprint-spec-20260331-crispy-pipeline-enhance-1","evalId":"eval-sprint-spec-20260331-crispy-pipeline-enhance-1-1","result":"pass","timestamp":"2026-03-31T07:04:30.000Z"}
+{"event":"plan-created","specId":"spec-20260331-architect-workflow","title":"Solution Architect Workflow","sprintCount":3,"timestamp":"2026-03-31T14:00:00Z"}
+{"event":"pipeline-started","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T14:30:00Z","task":"Execute Solution Architect Workflow — 3 sprints"}
+{"event":"sprint-started","contractId":"sprint-spec-20260331-architect-workflow-1","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T14:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260331-architect-workflow-1","specId":"spec-20260331-architect-workflow","iteration":1,"timestamp":"2026-03-31T15:56:45Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260331-architect-workflow-2","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T16:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260331-architect-workflow-2","specId":"spec-20260331-architect-workflow","iteration":1,"timestamp":"2026-03-31T17:35:10Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260331-architect-workflow-3","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T17:40:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260331-architect-workflow-3","specId":"spec-20260331-architect-workflow","iteration":1,"timestamp":"2026-03-31T17:45:30Z"}
+{"event":"pipeline-completed","specId":"spec-20260331-architect-workflow","sprintsCompleted":3,"sprintsTotal":3,"totalIterations":6,"timestamp":"2026-03-31T17:45:30Z"}
+{"event":"architecture-completed","architectureId":"arch-20260524-port-code-review-graph","feature":"tokensave integration into agent-bober (harness-orchestrated graph layer)","componentCount":17,"decisionCount":10,"timestamp":"2026-05-24T00:00:00Z"}
+{"event":"plan-created","specId":"spec-20260524-tokensave-integration","title":"Tokensave Harness Integration (Phase 1)","sprintCount":10,"architectureId":"arch-20260524-port-code-review-graph","ambiguityScore":3,"status":"draft","timestamp":"2026-05-24T16:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-05-24T17:00:00Z","specId":"spec-20260524-tokensave-integration","task":"Tokensave Harness Integration (Phase 1)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-1","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T17:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-tokensave-integration-1","iteration":1,"result":"pass","timestamp":"2026-05-24T17:35:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-1","specId":"spec-20260524-tokensave-integration","iteration":1,"timestamp":"2026-05-24T17:35:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-2","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T17:36:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-tokensave-integration-2","iteration":1,"result":"pass","timestamp":"2026-05-24T18:05:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-2","specId":"spec-20260524-tokensave-integration","iteration":1,"timestamp":"2026-05-24T18:05:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-3","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T18:05:30Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-tokensave-integration-3","iteration":1,"result":"pass","timestamp":"2026-05-24T18:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-3","specId":"spec-20260524-tokensave-integration","iteration":1,"timestamp":"2026-05-24T18:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-4","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T18:25:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-4","iteration":1,"timestamp":"2026-05-24T18:50:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-5","timestamp":"2026-05-24T18:50:30Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-tokensave-integration-5","iteration":1,"failedCriteria":["s5-c7"],"timestamp":"2026-05-24T19:15:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-5","iteration":2,"timestamp":"2026-05-24T19:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-6","timestamp":"2026-05-24T19:25:30Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-tokensave-integration-6","iteration":1,"failedCriteria":["s6-c6","s6-c7","s6-c9"],"timestamp":"2026-05-24T19:55:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-6","iteration":2,"timestamp":"2026-05-24T20:10:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-7","timestamp":"2026-05-24T20:10:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-7","iteration":1,"timestamp":"2026-05-24T20:30:00Z"}
+{"event":"kpi-gate-recorded","specId":"spec-20260524-tokensave-integration","gatePass":"synthetic","note":"KPI gate infrastructure in place; real measurement deferred to manual run","timestamp":"2026-05-24T20:30:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-8","timestamp":"2026-05-24T20:30:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-8","iteration":1,"timestamp":"2026-05-24T20:55:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-9","timestamp":"2026-05-24T20:55:30Z"}
+{"event":"research-completed","researchId":"research-20260524-superpowers-vs-agent-bober","feature":"Research obra/superpowers — what to port into agent-bober","questionsGenerated":7,"filesExplored":18,"timestamp":"2026-05-24T17:00:19Z","note":"comparative research, two-phase isolation deliberately bypassed for external-repo comparison"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-9","iteration":2,"timestamp":"2026-05-24T21:15:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-10","timestamp":"2026-05-24T21:15:30Z"}
+{"event":"plan-created","specId":"spec-20260524-superpowers-port","title":"Port highest-priority superpowers concepts into agent-bober","sprintCount":8,"ambiguityScore":4,"status":"draft","researchBasis":"research-20260524-superpowers-vs-agent-bober","timestamp":"2026-05-24T17:10:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-10","iteration":1,"timestamp":"2026-05-24T21:30:00Z"}
+{"event":"plan-completed","specId":"spec-20260524-tokensave-integration","sprintsCompleted":10,"timestamp":"2026-05-24T21:30:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T21:30:00Z"}
+{"event":"plan-superseded","oldSpecId":"spec-20260524-superpowers-port","newSpecId":"spec-20260524-bober-vision","reason":"scope expanded to verbatim voice + multi-mode careful-flow + prod-incident agent shape","timestamp":"2026-05-24T17:55:00Z"}
+{"event":"plan-created","specId":"spec-20260524-bober-vision","title":"Bober Vision: Multi-mode software engineering teammate","sprintCount":28,"tierCount":4,"ambiguityScore":5,"status":"draft","supersedes":"spec-20260524-superpowers-port","researchBasis":"research-20260524-superpowers-vs-agent-bober","configChange":"sprint.maxSprints 10->30","timestamp":"2026-05-24T17:55:00Z"}

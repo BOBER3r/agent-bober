@@ -1,0 +1,71 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-6",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "HARD-GATE in bober.plan + AGENTS.md at repo root + README cross-link",
+  "description": "Add an explicit <HARD-GATE> block to skills/bober.plan/SKILL.md between PlanSpec generation (Step 5) and Sprint decomposition (Step 6). Create AGENTS.md at the repo root adapting the structural pattern from /tmp/superpowers/AGENTS.md with verbatim voice (do NOT replace 'your human partner' if it parses; do NOT soften 'EXTREMELY-IMPORTANT' or 'slop' framing — these are empirically tuned). Cross-link from README.md and skills/bober.using-bober/SKILL.md.",
+  "successCriteria": [
+    {
+      "id": "s6-c1",
+      "description": "skills/bober.plan/SKILL.md contains exactly one <HARD-GATE>...</HARD-GATE> block placed structurally between Step 5 (PlanSpec generation) and Step 6 (Sprint decomposition).",
+      "verificationMethod": "Read file. Grep for '<HARD-GATE>'. Verify exactly one occurrence and position between Step 5 and Step 6 headings.",
+      "passed": false
+    },
+    {
+      "id": "s6-c2",
+      "description": "HARD-GATE block defines INTERACTIVE protocol (user reviews assumptions and outOfScope, explicitly approves) and AUTONOMOUS protocol (planner self-approves only if every assumption is backed by cited evidence — minimum file path, preferred file:line). Forbidden action statement: writing .bober/contracts/*.json before approval is recorded.",
+      "verificationMethod": "Read the gate block. Verify both protocols named. Verify forbidden-action statement references .bober/contracts/*.json.",
+      "passed": false
+    },
+    {
+      "id": "s6-c3",
+      "description": "Approval recording: INTERACTIVE → resolvedClarifications entry with questionId='gate-design-approval' and user's verbatim answer. AUTONOMOUS → resolvedClarifications entry with answer='Autonomous self-approval', resolvedBy='planner', and metadata.approvalEvidence array listing cited file paths.",
+      "verificationMethod": "Read gate block. Verify both recording mechanisms documented.",
+      "passed": false
+    },
+    {
+      "id": "s6-c4",
+      "description": "AGENTS.md exists at repo root (/Users/bober4ik/agent-bober/AGENTS.md), >=120 lines. Contains all five required sections in order: '## If You Are an AI Agent', '## Pull Request Requirements', '## What We Will Not Accept', '## Evidence Requirements', '## Skill Changes Require Verification'.",
+      "verificationMethod": "test -f AGENTS.md; wc -l (>=120); grep each section heading exactly; verify order.",
+      "passed": false
+    },
+    {
+      "id": "s6-c5",
+      "description": "AGENTS.md 'If You Are an AI Agent' section lists at least 4 numbered pre-PR checks. 'What We Will Not Accept' lists at least 5 categories with brief explanations.",
+      "verificationMethod": "Locate sections. Count numbered/list items.",
+      "passed": false
+    },
+    {
+      "id": "s6-c6",
+      "description": "Voice: VERBATIM port from /tmp/superpowers/AGENTS.md adapted to agent-bober context. The phrases 'slop', 'your human partner', 'EXTREMELY-IMPORTANT', and the 94%-rejection framing are PRESERVED where they parse naturally per the verbatim-voice directive. Adaptations are factual only (project name, repo URL, specific examples — not framing).",
+      "verificationMethod": "Diff structural elements against /tmp/superpowers/AGENTS.md. Verify 'slop' or 'your human partner' or 'EXTREMELY-IMPORTANT' appears (at least one of these — the source uses all three). The 94% statistic SHOULD be replaced with bober-specific framing if it cannot be substantiated for agent-bober.",
+      "passed": false
+    },
+    {
+      "id": "s6-c7",
+      "description": "README.md gains a Contributing section (or addition to existing) linking to ./AGENTS.md.",
+      "verificationMethod": "Grep README.md for 'AGENTS.md'.",
+      "passed": false
+    },
+    {
+      "id": "s6-c8",
+      "description": "skills/bober.using-bober/SKILL.md (created in Sprint 1) AGENTS.md reference now resolves to an actual file. The Sprint 1 placeholder reference is preserved or refined here.",
+      "verificationMethod": "Grep skills/bober.using-bober/SKILL.md for 'AGENTS.md'. Verify the resolved path AGENTS.md exists.",
+      "passed": false
+    },
+    {
+      "id": "s6-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "skills/bober.plan/SKILL.md", "action": "modify", "description": "Insert <HARD-GATE> block between Step 5 and Step 6" },
+    { "path": "AGENTS.md", "action": "create", "description": "Repo-root contributor contract for agent-authored changes, verbatim voice" },
+    { "path": "README.md", "action": "modify", "description": "Add Contributing cross-link to AGENTS.md" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-5"],
+  "status": "proposed",
+  "generatorNotes": "HARD-GATE block reference: /tmp/superpowers/skills/brainstorming/SKILL.md:10-14 for the tag pattern. Insert in skills/bober.plan/SKILL.md between '## Step 5: Generate the PlanSpec' and '## Step 6: Decompose into Sprint Contracts'. Surrounding text unchanged. Suggested content:\n\n```\n<HARD-GATE>\nDo NOT write any .bober/contracts/*.json file until one of the following has happened:\n\n1. INTERACTIVE protocol — the user has explicitly approved the assumptions and outOfScope sections above. Record approval as a resolvedClarifications entry with questionId='gate-design-approval' and the user's verbatim approval in the answer field.\n\n2. AUTONOMOUS protocol — every assumption in the spec is backed by cited evidence (minimum: a file path; preferred: file:line). Record self-approval as resolvedClarifications entry with questionId='gate-design-approval', answer='Autonomous self-approval', resolvedBy='planner', and metadata.approvalEvidence field listing the cited file paths.\n\nViolating this gate produces orphan contracts that diverge from the spec. Discovered violations result in contracts being deleted and spec status reverted to 'needs-clarification'.\n</HARD-GATE>\n```\n\nAGENTS.md reference: /tmp/superpowers/AGENTS.md (~3000 words, on disk). Port VERBATIM-style; the voice constraint in this spec is fully reversed from the abandoned one — 'slop', 'your human partner', 'EXTREMELY-IMPORTANT' are preserved. Replace ONLY: (a) specific project name (superpowers → agent-bober), (b) repo URL, (c) statistics that can't be substantiated (94% rejection — replace with bober-context framing like 'this project rejects agent-authored PRs that lack human review evidence' without fabricating a rate), (d) examples that reference superpowers-specific files. Section headings stay verbatim from source. 'What We Will Not Accept' should adapt categories to agent-bober concerns: invented file paths in contracts, success criteria contradicting contracts, sprint output touching files outside expectedChanges, evaluator pass-claims without strategy output, code-reviewer findings without file:line, ported anti-patterns without MIT attribution.\n\nREADME.md: locate existing section near bottom (License, Support). Add Contributing section with one line: 'See [AGENTS.md](./AGENTS.md) for contributor discipline including the anti-slop pre-PR checklist.'",
+  "evaluatorNotes": "Verify <HARD-GATE> tag uses exact syntax (capitalized, hyphenated). Empirical tuning is around the exact tag. Verify INSERT not REPLACE — surrounding Step 5/Step 6 content intact. textual diff against prior file confirms only insertion. Verify gate names BOTH protocols with documented recording mechanisms. Confirm gate does NOT contradict existing Step 7.5 (ambiguity-score logic) — gate is design approval; 7.5 is clarification questions; both coexist.\n\nFor AGENTS.md: verify file is at REPO ROOT (not docs/). Verify VERBATIM voice from source — grep for 'slop' or 'your human partner' or 'EXTREMELY-IMPORTANT' (at least one expected; abandoned spec's voice-softening directive is reversed). Verify Contributing categories in 'What We Will Not Accept' are RELEVANT to agent-bober (not copy-pasted superpowers-specific items like 'compliance with Anthropic skills docs' which doesn't apply here). Verify Skill Changes section references this spec's verbatim-voice directive and the Iron Law structure introduced in Sprint 3. Reject if AGENTS.md exceeds 600 lines (source is ~400 lines of body content).\n\nCross-check Sprint 1: bober.using-bober reference to AGENTS.md must now resolve. Validate the link target exists."
+}

@@ -1,0 +1,53 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-1",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "SessionStart bootstrap + bober.using-bober skill",
+  "description": "Add a SessionStart hook script that injects the bober.using-bober skill content into the model's first-turn context. Coexist with the existing graph-stats SessionStart output by registering both as separate hook entries under the SessionStart matcher. Create skills/bober.using-bober/SKILL.md as the bootstrap content with verbatim voice (capitalized rules, EXTREMELY-IMPORTANT tags where they parse, the empirical phrasing).",
+  "successCriteria": [
+    {
+      "id": "s1-c1",
+      "description": "hooks/session-start exists as an executable bash script (chmod +x), starts with '#!/usr/bin/env bash' + 'set -euo pipefail', includes the escape_for_json bash-parameter-substitution function from /tmp/superpowers/hooks/session-start, and emits valid JSON to stdout per harness env (additional_context for Cursor, hookSpecificOutput.additionalContext for Claude Code, additionalContext top-level otherwise).",
+      "verificationMethod": "Read hooks/session-start. Verify shebang, set -euo pipefail, escape_for_json function. Verify executable: test -x hooks/session-start. Pipe stdout through jq . and confirm valid JSON.",
+      "passed": false
+    },
+    {
+      "id": "s1-c2",
+      "description": "hooks/hooks.json contains a SessionStart matcher registering hooks/session-start, alongside the existing PostToolUse Edit|Write matchers (echo + graph-hook). The JSON parses with jq.",
+      "verificationMethod": "Run jq . hooks/hooks.json. Verify shape: {hooks: {SessionStart: [...], PostToolUse: [...]}}. Verify the existing PostToolUse Edit|Write entries are unchanged.",
+      "passed": false
+    },
+    {
+      "id": "s1-c3",
+      "description": "skills/bober.using-bober/SKILL.md exists with valid YAML frontmatter (name: bober-using-bober, description starts with 'Use when starting any conversation'). Frontmatter byte count under 1024. Body uses verbatim voice: includes a <EXTREMELY-IMPORTANT> tagged block, names the full bober.* skill catalog, declares the Iron Law convention, lists the AGENTS.md reference (placeholder OK — Sprint 6 creates the file).",
+      "verificationMethod": "Read skills/bober.using-bober/SKILL.md. Validate YAML frontmatter. Byte-count frontmatter (under 1024). Grep for: <EXTREMELY-IMPORTANT>, each bober.* skill name (bober.principles, bober.plan, bober.research, bober.architect, bober.sprint, bober.run, bober.eval, bober.verify, bober.debug, bober.code-review, bober.diagnose, bober.runbook, bober.deploy, bober.postmortem), 'Iron Law', 'AGENTS.md'.",
+      "passed": false
+    },
+    {
+      "id": "s1-c4",
+      "description": "Hook completes in under 500ms on warm cache (NFR performance).",
+      "verificationMethod": "Run `time bash hooks/session-start >/dev/null` twice; assert second run real time <0.5s.",
+      "passed": false
+    },
+    {
+      "id": "s1-c5",
+      "description": "skills/bober.using-bober/SKILL.md contains an MIT attribution block citing obra/superpowers (structural pattern source for the bootstrap mechanism).",
+      "verificationMethod": "Grep skills/bober.using-bober/SKILL.md for 'obra/superpowers' and 'MIT'.",
+      "passed": false
+    },
+    {
+      "id": "s1-c6",
+      "description": "All existing eval strategies (typecheck, lint, build, test) pass.",
+      "verificationMethod": "Run npm run typecheck && npm run lint && npm run build && npm run test — assert exit 0 each.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "hooks/session-start", "action": "create", "description": "Executable bash hook emitting bootstrap-injected SessionStart JSON per harness env" },
+    { "path": "hooks/hooks.json", "action": "modify", "description": "Add SessionStart matcher alongside existing PostToolUse matchers" },
+    { "path": "skills/bober.using-bober/SKILL.md", "action": "create", "description": "Bootstrap skill loaded at every SessionStart, verbatim voice" }
+  ],
+  "dependsOn": [],
+  "status": "proposed",
+  "generatorNotes": "Reference: /tmp/superpowers/hooks/session-start (the cloned source). Copy its overall shape — set -euo pipefail, escape_for_json function using bash parameter substitution (NOT character-by-character loops, NOT jq dep), env-var branching for CURSOR_PLUGIN_ROOT vs CLAUDE_PLUGIN_ROOT vs COPILOT_CLI, printf-based JSON emission (NOT heredoc — bash 5.3+ heredoc hang per github.com/obra/superpowers/issues/571). Project root resolution: PROJECT_ROOT=\"$(cd \"$(dirname \"$0\")/..\" && pwd)\". Read skills/bober.using-bober/SKILL.md from PROJECT_ROOT/skills/bober.using-bober/SKILL.md. Add MIT attribution comment at top of hooks/session-start citing obra/superpowers. For hooks.json — keep existing PostToolUse entries verbatim; add a SessionStart sibling. Use matcher 'startup|clear|compact' like superpowers does so the bootstrap reloads on /clear and /compact. The skill body: verbatim voice — port the content style from /tmp/superpowers/skills/using-superpowers/SKILL.md but adapt skill names to bober.* catalog. Keep <EXTREMELY-IMPORTANT> tags. Keep 'If you think there is even a 1% chance a skill might apply' style framing — that's the empirical part. Adapt 'You have superpowers' → 'You are agent-bober'. Replace skill name list with the bober catalog. AGENTS.md reference: 'See AGENTS.md at the repo root for the contributor discipline' — file may not exist yet (Sprint 6 creates it); placeholder is fine. Include the existing graph-stats coexistence note: this hook runs alongside the graph-stats SessionStart payload — both fire.",
+  "evaluatorNotes": "Verify the hook actually loads at session start in practice if possible. Manual test: open a new Claude Code session in this repo, confirm system reminder contains both the existing 'SessionStart:startup hook success: Nodes: ...' line AND a new payload citing bober.using-bober or its bootstrap. If CI cannot trigger this: pipe `bash hooks/session-start` output through jq and confirm the additional_context / hookSpecificOutput.additionalContext / additionalContext field contains the SKILL.md body. Verify NO change to PostToolUse hooks (Edit|Write graph-update is load-bearing for the knowledge graph). Verify <EXTREMELY-IMPORTANT> is preserved literally in the SKILL.md body — softening it defeats the empirical tuning. Check frontmatter byte count <1024 (skill spec compliance). Reject if the script uses /bin/bash hardcoded path (use /usr/bin/env bash). Reject if it uses jq (introduces dependency)."
+}

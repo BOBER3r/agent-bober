@@ -1,0 +1,64 @@
+{
+  "id": "sprint-spec-20260524-superpowers-port-7",
+  "specId": "spec-20260524-superpowers-port",
+  "feature": "AGENTS.md contributor contract at repo root",
+  "description": "Create AGENTS.md at the repo root: an anti-slop discipline contract for agent-authored contributions to agent-bober. Adapts the structural pattern from /tmp/superpowers/AGENTS.md (pre-PR checks, do-not-accept list, evidence requirements) but uses agent-bober's voice. Cross-link from README.md and from skills/bober.using-bober/SKILL.md so the contract surfaces at session start.",
+  "successCriteria": [
+    {
+      "id": "s7-c1",
+      "description": "AGENTS.md exists at the repo root (/Users/bober4ik/agent-bober/AGENTS.md). File is at least 100 lines.",
+      "verificationMethod": "test -f AGENTS.md && wc -l AGENTS.md — assert exists and >=100 lines.",
+      "passed": false
+    },
+    {
+      "id": "s7-c2",
+      "description": "AGENTS.md contains all five required sections in this order: '## If You Are an AI Agent', '## Pull Request Requirements', '## What We Will Not Accept', '## Evidence Requirements', '## Skill Changes Require Verification'.",
+      "verificationMethod": "Grep for each section heading exactly. Verify ordering.",
+      "passed": false
+    },
+    {
+      "id": "s7-c3",
+      "description": "The 'If You Are an AI Agent' section lists at least 4 numbered pre-PR checks (e.g., read template, search for existing PRs, verify this is a real problem, show diff to human partner — though phrasing should NOT use 'human partner').",
+      "verificationMethod": "Locate the section. Count numbered list items (>=4).",
+      "passed": false
+    },
+    {
+      "id": "s7-c4",
+      "description": "The 'What We Will Not Accept' section lists at least 5 categories with brief explanations (e.g., third-party dependencies, project-specific configuration, speculative fixes, bundled unrelated changes, fabricated content).",
+      "verificationMethod": "Locate the section. Count categories listed (>=5).",
+      "passed": false
+    },
+    {
+      "id": "s7-c5",
+      "description": "AGENTS.md does NOT contain the strings '94% rejection', 'your human partner', or 'EXTREMELY-IMPORTANT' (voice consistency).",
+      "verificationMethod": "Grep AGENTS.md for each forbidden string — assert zero matches.",
+      "passed": false
+    },
+    {
+      "id": "s7-c6",
+      "description": "README.md gains a single 'Contributing' section (or a one-line addition to an existing section) that links to ./AGENTS.md.",
+      "verificationMethod": "Grep README.md for 'AGENTS.md'.",
+      "passed": false
+    },
+    {
+      "id": "s7-c7",
+      "description": "skills/bober.using-bober/SKILL.md (created in Sprint 1) references AGENTS.md — the Sprint 1 placeholder reference is now valid because the file exists.",
+      "verificationMethod": "Grep skills/bober.using-bober/SKILL.md for 'AGENTS.md'. Verify the linked file actually exists at the resolved path.",
+      "passed": false
+    },
+    {
+      "id": "s7-c8",
+      "description": "Existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "AGENTS.md", "action": "create", "description": "Repo-root contributor contract for agent-authored changes" },
+    { "path": "README.md", "action": "modify", "description": "Add one-line Contributing cross-link to AGENTS.md" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-superpowers-port-6"],
+  "status": "proposed",
+  "generatorNotes": "Reference: /tmp/superpowers/AGENTS.md (cloned during research, ~3000 words). Treat it as a structural template, not a verbatim source. The structural pattern: open with a numbered 'before you submit a PR' checklist (4-5 items); follow with 'Pull Request Requirements' (mandate complete template, search prior PRs); 'What We Will Not Accept' (categorized list); 'Evidence Requirements' (every fix names a specific session/error/UX failure); 'Skill Changes Require Verification' (modifications to behavior-shaping content need before/after evidence). Adaptations to agent-bober voice:\n\n- Replace 'your human partner' with 'the user' or 'the maintainer'.\n- Replace 'slop' framing with 'unverified', 'speculative', 'hallucinated' — same content, less dramatic.\n- Remove '94% rejection rate' framing entirely. agent-bober is a different project with different culture; importing that statistic is inaccurate and out of voice.\n- Tailor 'What We Will Not Accept' to agent-bober concerns: invented file paths, success criteria that contradict the contract, sprint contracts touching files outside the contract's expectedChanges, evaluator pass-claims without strategy output, etc.\n\nThe 'Skill Changes Require Verification' section should reference the bober.using-bober skill and the convention that agent prompts (agents/*.md) are behavior-shaping content tuned per the discipline introduced in Sprint 5. Modifications need: explanation of the agent failure being addressed, the prompt change, and at least one before-after manual test or test fixture.\n\nFor README.md: locate an existing section near the bottom ('Contributing', 'Support', 'License') and either add a new Contributing section or insert a one-line link. If README doesn't have an obvious section, add a 'Contributing' section just before License.\n\nFor skills/bober.using-bober/SKILL.md: Sprint 1 added a placeholder reference. Confirm the path is correct (relative to repo root: just 'AGENTS.md'). If the path is wrong, fix it in this sprint.",
+  "evaluatorNotes": "Verify voice constraints: grep for forbidden strings is hard requirement. Verify the file is at REPO ROOT, not in docs/ — agents auto-load AGENTS.md from repo root in many harnesses; subdirectory placement defeats the purpose. Cross-check: README.md's link to AGENTS.md must be a relative link (./AGENTS.md or AGENTS.md), not an absolute path. Verify the 'What We Will Not Accept' categories are RELEVANT to agent-bober (sprint contracts, success criteria, evaluator behavior, etc.) — if the categories look copy-pasted from superpowers's context (third-party dependencies into a 'zero-dependency plugin', skill compliance with Anthropic's docs), that's a port-without-translation regression. Verify the 'Skill Changes Require Verification' section references the prompt-tuning discipline from Sprint 5 (Iron Law / Red Flags / Rationalization-Prevention) — the discipline introduced in this spec should be self-referential. If AGENTS.md exceeds 600 lines, flag as excessive — the source is ~3000 words, the port should be similar."
+}

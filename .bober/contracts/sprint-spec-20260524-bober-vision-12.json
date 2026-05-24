@@ -1,0 +1,67 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-12",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Checkpoint feedback propagation back to responsible agents",
+  "description": "When a checkpoint returns {approved: false, feedback} or {edit: true, editDelta}, the feedback/edit must propagate back to the agent responsible for the artifact (planner re-plans, generator re-implements, evaluator re-evaluates, etc.) with the feedback included in the agent's context. Iteration counter caps retries via pipeline.maxCheckpointIterations (default 3); after exhaustion the run aborts gracefully with a structured RunAbortedReason.",
+  "successCriteria": [
+    {
+      "id": "s12-c1",
+      "description": "src/orchestrator/checkpoints/feedback-router.ts (or equivalent) maps checkpointId → responsible agent and re-invokes that agent with the original prompt + a feedback section appended. Feedback section format: '## Checkpoint feedback (iteration N of M):\\n<feedback text>\\n\\n## Edit delta (if any):\\n<editDelta as code block>'.",
+      "verificationMethod": "Read feedback-router. Verify mapping and prompt-augmentation logic.",
+      "passed": false
+    },
+    {
+      "id": "s12-c2",
+      "description": "Iteration cap: pipeline.maxCheckpointIterations (default 3, configurable via bober.config.json). On reaching cap with still-rejecting checkpoint, orchestrator emits RunAbortedReason {reason: 'CHECKPOINT_ITERATION_EXHAUSTED', checkpointId, lastFeedback} and writes to .bober/runs/<runId>.aborted.json before exiting cleanly.",
+      "verificationMethod": "Read iteration logic. Test: mock checkpoint rejecting 3 times, verify run aborts with structured reason.",
+      "passed": false
+    },
+    {
+      "id": "s12-c3",
+      "description": "Edit delta consumption: when checkpoint returns {edit: true, editDelta}, the orchestrator applies the edit to the in-memory artifact AND writes back to its source path (e.g., for an edited plan spec, the spec JSON file gets updated). Then proceeds without re-invoking the agent. Edit deltas are recorded in audit (Sprint 13).",
+      "verificationMethod": "Read edit-application logic. Test: provide an edit delta for a sprint contract, verify the contract file on disk is updated and the pipeline proceeds without re-invoking planner.",
+      "passed": false
+    },
+    {
+      "id": "s12-c4",
+      "description": "Escape hatch: a special feedback prefix '!!abort' (or env var BOBER_CHECKPOINT_ABORT_TOKEN=<value>) immediately aborts the run regardless of iteration count. Useful for canceling long-running async work.",
+      "verificationMethod": "Test: feedback starting with '!!abort' triggers immediate abort. Verify env-var override.",
+      "passed": false
+    },
+    {
+      "id": "s12-c5",
+      "description": "Iteration metadata is surfaced in checkpoint prompts: the artifact summary at iteration 2+ includes a 'Previous feedback' section listing prior rejections. Helps approvers see what was already asked.",
+      "verificationMethod": "Test: run a checkpoint to iteration 2, verify the rendered prompt includes the iteration count and prior feedback.",
+      "passed": false
+    },
+    {
+      "id": "s12-c6",
+      "description": "Per-agent feedback adaptation: planner gets feedback prepended to plan-clarification context; generator gets feedback prepended to sprint-contract prompt; evaluator gets feedback as 'specific concern to investigate' — not the same 'append text' for every agent. Documented in the feedback-router code.",
+      "verificationMethod": "Read feedback-router. Verify per-agent adaptation logic exists (not just a single append-style for all agents).",
+      "passed": false
+    },
+    {
+      "id": "s12-c7",
+      "description": "Unit tests cover: (a) reject → re-invoke with feedback → approve in iteration 2, (b) reject 3x → abort, (c) edit delta applied → file updated → pipeline proceeds, (d) !!abort early exit, (e) per-agent feedback adaptation (at least planner + generator).",
+      "verificationMethod": "Locate tests. Run npm run test. Verify all branches.",
+      "passed": false
+    },
+    {
+      "id": "s12-c8",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/orchestrator/checkpoints/feedback-router.ts", "action": "create", "description": "Maps checkpoint → agent and propagates feedback/edit" },
+    { "path": "src/orchestrator/pipeline-coordinator.ts (or main)", "action": "modify", "description": "Consult feedback-router on rejection; apply edits on edit-outcome; track iteration count" },
+    { "path": "src/config/schema.ts", "action": "modify", "description": "Add pipeline.maxCheckpointIterations (default 3) to schema" },
+    { "path": "tests/orchestrator/checkpoints/feedback-router.test.ts", "action": "create", "description": "Unit tests" },
+    { "path": ".bober/runs/", "action": "create", "description": "Directory for abort/completion markers per run" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-11"],
+  "status": "proposed",
+  "generatorNotes": "Mapping checkpointId → responsible agent (this is the core of the router):\n```\npost-research        → researcher\npost-plan            → planner\npost-sprint-contract → planner (sprint contracts are planner output)\npre-curator          → orchestrator no-op (just user gate, no agent re-invoke)\npre-generator        → orchestrator no-op (gate before generator runs)\npre-evaluator        → orchestrator no-op (gate before evaluator runs)\npre-code-reviewer    → orchestrator no-op\npost-sprint          → generator (re-implement the sprint with feedback)\nend-of-pipeline      → orchestrator no-op\n```\n\nThe 'no-op' checkpoints are gates, not iteration points — rejection of a gate means abort the run. The agent-responsible checkpoints (post-research, post-plan, post-sprint-contract, post-sprint) iterate up to maxCheckpointIterations.\n\nIteration counter is per-checkpoint, not per-run. A run with 8 sprints might have post-sprint checkpoint at each — each can iterate up to 3 times independently. Total iteration ceiling is therefore 8*3 + other gates = high; that's fine, ceiling is per-checkpoint to allow legitimate back-and-forth on a tricky sprint while moving forward on others.\n\nEdit delta application: deltas can be (a) replacement text for the whole artifact, (b) JSON patch for structured artifacts, (c) plain markdown for prose artifacts. Detect by examining the artifact path/type. For markdown: full replacement is simplest, JSON patch is overkill. For JSON specs/contracts: apply JSON patch with json-patch lib if delta is a patch; otherwise replace.\n\nPer-agent feedback adaptation:\n- planner: 'CHECKPOINT_FEEDBACK_PRIOR_ITERATION' env var set in subagent prompt; planner asked to update the spec to address feedback.\n- generator: feedback inlined into the sprint contract's generatorNotes for the retry; generator sees it as 'additional context from human reviewer'.\n- researcher: feedback inlined into the research questions for re-exploration (Phase 2 only — Phase 1 already produced questions).\n- evaluator: feedback re-frames the evaluator's prompt to 'specifically check this concern'.\n\nAbort markers: .bober/runs/<runId>.aborted.json shape: {runId, abortedAt, reason, checkpointId?, lastFeedback?, iterationsCompleted}. Mirror with .bober/runs/<runId>.completed.json on successful runs.",
+  "evaluatorNotes": "Verify per-agent adaptation actually differs between agents — if every agent gets identical 'append feedback' treatment, the differentiation is fake. Cross-check by reading the router code: there should be a switch/match on responsible-agent name with different prompt-augmentation strategies.\n\nVerify iteration cap counts CORRECTLY: a reject-approve cycle in 2 iterations should NOT increment counter beyond 2. A test must explicitly verify the counter resets per checkpoint (post-sprint-1 reaching iteration 2 should not affect post-sprint-2's counter).\n\nVerify edit delta application is REVERSIBLE: if the user provides an edit and then immediately rejects with !!abort, the original artifact should still be recoverable (either via git history or via in-memory backup). Implementation choice: write the original to .bober/runs/<runId>/edits/<checkpointId>.original.txt before applying edit. Sprint 13's audit log records the chain.\n\nVerify the gate (no-op) checkpoints don't infinite-loop: rejection of a gate must abort, not retry. Test: reject pre-generator checkpoint, verify pipeline aborts with structured reason.\n\nVerify !!abort prefix is checked CASE-INSENSITIVE or at least documented as case-sensitive. Consistency between docs and code matters.\n\nVerify the abort file (.bober/runs/<runId>.aborted.json) is written ATOMICALLY (write to .tmp, rename). Half-written abort files would confuse subsequent resumption attempts (resumption is out of scope for this spec but the artifact integrity invariant should hold)."
+}

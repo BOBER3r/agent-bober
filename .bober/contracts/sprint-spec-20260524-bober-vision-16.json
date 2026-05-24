@@ -1,0 +1,74 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-16",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Observability MCP plugin slot architecture",
+  "description": "Add observability.providers config schema where users declare MCP servers (datadog, sentry, grafana, custom). At subagent spawn time, the orchestrator merges declared MCP server tool lists into the diagnoser's tool set. Reference adapter docs for major categories (logs, metrics, traces, errors) ship in docs/observability-mcps/ — NO hard-coded provider integrations in core.",
+  "successCriteria": [
+    {
+      "id": "s16-c1",
+      "description": "src/config/schema.ts extends BoberConfigSchema with observability.providers: Array<{name: string, kind: 'logs'|'metrics'|'traces'|'errors'|'custom', mcpCommand: string, mcpArgs?: string[], mcpEnv?: Record<string,string>, enabled?: boolean (default true)}>.",
+      "verificationMethod": "Read schema. Verify shape.",
+      "passed": false
+    },
+    {
+      "id": "s16-c2",
+      "description": "Subagent spawn extension: when spawning bober-diagnoser, the orchestrator reads observability.providers, starts each declared MCP server (using existing src/mcp/ infrastructure if applicable, else execa + stdio), enumerates the tools each server provides, and merges them into the diagnoser's tool list with a namespace prefix (e.g., 'obs__datadog__query_logs').",
+      "verificationMethod": "Grep src/orchestrator/ for the spawn-time merge logic. Test: mock a fake MCP server, verify its tools appear in the diagnoser's tool list.",
+      "passed": false
+    },
+    {
+      "id": "s16-c3",
+      "description": "MCP server lifecycle: started at diagnoser spawn, stopped when diagnoser exits. SIGTERM with 5s grace then SIGKILL on hung server. Multiple servers run in parallel without blocking.",
+      "verificationMethod": "Read lifecycle code. Test: spawn diagnoser with 3 mocked MCPs, verify all 3 stop on exit, hung server is killed.",
+      "passed": false
+    },
+    {
+      "id": "s16-c4",
+      "description": "Provider error isolation: if one declared provider fails to start, the diagnoser still spawns with the other providers' tools. Warning logged to stderr. Tests cover both single-failure and all-failure cases.",
+      "verificationMethod": "Test isolation. all-failure → diagnoser spawns with only core tools and a clear warning.",
+      "passed": false
+    },
+    {
+      "id": "s16-c5",
+      "description": "docs/observability-mcps/ contains reference adapter docs: README.md (index), logs.md, metrics.md, traces.md, errors.md. Each names ONE reference implementation per category WITHOUT shipping integration code (e.g., logs.md describes the contract a logs MCP server must implement; mentions example servers like 'mcp-grafana-loki' but does not ship one).",
+      "verificationMethod": "ls docs/observability-mcps/. Read each file. Verify reference-only, not implementation.",
+      "passed": false
+    },
+    {
+      "id": "s16-c6",
+      "description": "Tool namespace prefix prevents collisions: an obs__datadog__query_logs tool and an obs__sentry__query_events tool can coexist. Documented convention.",
+      "verificationMethod": "Test: register two MCPs that both define a 'query' tool — verify both appear with distinct namespaces.",
+      "passed": false
+    },
+    {
+      "id": "s16-c7",
+      "description": "Diagnoser prompt (agents/bober-diagnoser.md) updated to instruct: 'Your available observability tools are configured at .bober/config observability.providers. Use them as the primary data source. Prefix obs__<provider>__<tool> identifies provider-specific tools.'",
+      "verificationMethod": "Grep agents/bober-diagnoser.md for the observability guidance.",
+      "passed": false
+    },
+    {
+      "id": "s16-c8",
+      "description": "Existing bober.config.json without observability.providers parses fine — empty providers array is the default; diagnoser spawns with core tools only.",
+      "verificationMethod": "Test current bober.config.json (no observability section). Verify parse succeeds. Verify diagnoser spawn with no MCPs.",
+      "passed": false
+    },
+    {
+      "id": "s16-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/config/schema.ts", "action": "modify", "description": "Add observability.providers" },
+    { "path": "src/orchestrator/subagent-spawn.ts (or main spawn file)", "action": "modify", "description": "MCP merge logic at diagnoser spawn time" },
+    { "path": "src/mcp/external-client.ts", "action": "create", "description": "MCP server lifecycle manager for external observability servers" },
+    { "path": "agents/bober-diagnoser.md", "action": "modify", "description": "Add observability guidance section referencing MCP plugin slots" },
+    { "path": "docs/observability-mcps/", "action": "create", "description": "Reference adapter docs — 5 files, contract-only no code" },
+    { "path": "tests/orchestrator/observability-mcp.test.ts", "action": "create", "description": "Unit + integration tests with mocked MCP servers" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-15"],
+  "status": "proposed",
+  "generatorNotes": "MCP servers communicate over JSON-RPC stdio per the Model Context Protocol spec. agent-bober already has src/mcp/ for its own MCP server (existing); the new src/mcp/external-client.ts is the inverse — agent-bober as an MCP CLIENT consuming external servers.\n\nLifecycle:\n```typescript\nclass ExternalMcpServer {\n  async start(): Promise<void> {\n    this.child = execa(this.config.mcpCommand, this.config.mcpArgs ?? [], { env: { ...process.env, ...this.config.mcpEnv }, stdio: ['pipe', 'pipe', 'pipe'] });\n    await this.handshake();\n  }\n  async listTools(): Promise<ToolDescriptor[]> { ... }\n  async callTool(name: string, args: unknown): Promise<unknown> { ... }\n  async stop(): Promise<void> { /* SIGTERM, wait 5s, SIGKILL */ }\n}\n```\n\nTool merge at subagent spawn:\n```typescript\nconst coreTools = [Read, Bash, Grep, Glob];\nconst obsTools = await Promise.allSettled(\n  config.observability.providers.map(p => startProvider(p).then(s => s.listTools()))\n);\nconst mergedTools = [...coreTools, ...obsTools.flatMap((r, i) => r.status === 'fulfilled' ? r.value.map(t => ({ ...t, name: `obs__${config.observability.providers[i].name}__${t.name}` })) : (console.warn(`Provider ${config.observability.providers[i].name} failed: ${r.reason}`), []))];\n```\n\nReference adapter docs: each file ~50-100 lines.\n- logs.md: contract for a logs MCP. Required tools: query_logs(query, timeRange), get_log_context(logId). Example servers: Grafana Loki via mcp-grafana, Datadog via mcp-datadog (community).\n- metrics.md: query_metric(name, timeRange, aggregation), list_metrics, get_metric_metadata.\n- traces.md: query_traces(service, timeRange), get_trace(traceId).\n- errors.md: query_errors(timeRange, severity), get_error_detail(errorId), get_error_breadcrumbs(errorId).\n- README.md: how to add a new provider, namespace convention, security considerations.\n\nDocs ship contract-only because shipping integrations creates maintenance burden agent-bober doesn't want and forces specific vendor choices on users.",
+  "evaluatorNotes": "Verify the docs are CONTRACT-ONLY — no actual server code. If the generator shipped a 'reference implementation' file with working Datadog client code, that's scope creep; the user explicitly chose 'Generic / BYO observability'. Reference docs may mention example community MCPs by name but must not vendor them.\n\nVerify the namespace convention 'obs__<provider>__<tool>' actually prevents collisions. Test: two providers each declaring tool 'query' should produce tools 'obs__providerA__query' and 'obs__providerB__query' both callable.\n\nVerify the error isolation: a failing provider must NOT crash the diagnoser spawn. The test that exercises this should mock one provider raising during startup and verify the diagnoser still receives the working providers' tools.\n\nVerify lifecycle cleanup: a test that starts and stops a mock MCP must verify the child process is reaped (no zombie). On macOS / Linux process leaks accumulate quickly during testing.\n\nVerify the diagnoser prompt update mentions the obs__ namespace prefix so the model knows how to identify provider tools at runtime. Without this hint the model would treat the prefixed tools as ordinary tools and miss the namespacing pattern.\n\nSecurity: MCP env config may contain API tokens. Verify the spawn code masks tokens in any error/log output and does NOT include them in audit trail entries (Sprint 13's audit code) or telemetry events (Sprint 28)."
+}

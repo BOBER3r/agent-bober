@@ -1,0 +1,73 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-9",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Disk-marker checkpoint mechanism + bober approve / bober reject CLI commands",
+  "description": "Implement the disk-marker checkpoint mechanism: writes .bober/approvals/<checkpointId>.pending.json with the artifact and prompt; polls the file until it's resolved (renamed to .approved.json or .rejected.json with feedback); supports timeout. Add `bober approve <checkpointId> [--edit <file>]` and `bober reject <checkpointId> --feedback <text>` CLI subcommands that operate on the pending files. Registers under name 'disk'.",
+  "successCriteria": [
+    {
+      "id": "s9-c1",
+      "description": "src/orchestrator/checkpoints/mechanisms/disk.ts implements CheckpointMechanism. request() writes .bober/approvals/<checkpointId>.pending.json with {checkpointId, artifact, prompt, requestedAt, runId} and polls the directory at a configurable interval (default 2 seconds).",
+      "verificationMethod": "Read file. Verify pending file shape and polling logic.",
+      "passed": false
+    },
+    {
+      "id": "s9-c2",
+      "description": "Resolution detection: when .bober/approvals/<checkpointId>.approved.json appears, return {approved: true, editDelta?: from file}. When .bober/approvals/<checkpointId>.rejected.json appears, return {approved: false, feedback: from file}. Pending file deleted on resolution.",
+      "verificationMethod": "Read file. Verify both resolution branches and cleanup.",
+      "passed": false
+    },
+    {
+      "id": "s9-c3",
+      "description": "Configurable timeout (default 24 hours per checkpoint via pipeline.approvalTimeoutMs; capped at 7 days). On timeout: writes timeout marker file, returns {approved: false, feedback: 'TIMEOUT'} so feedback propagation (Sprint 12) can either retry or abort gracefully.",
+      "verificationMethod": "Read timeout logic. Verify configurable + capped. Verify graceful return.",
+      "passed": false
+    },
+    {
+      "id": "s9-c4",
+      "description": "src/cli/ gains new subcommands: `bober approve <checkpointId>` (optionally `--edit <path>` to include an edit delta) and `bober reject <checkpointId> --feedback <text>`. Commands operate by reading .bober/approvals/<checkpointId>.pending.json, writing the corresponding .approved.json or .rejected.json. Both commands print clear success/error messages.",
+      "verificationMethod": "Read src/cli/. Verify both subcommands. Test: write a pending file, run `bober approve <id>`, verify .approved.json appears and .pending.json is gone.",
+      "passed": false
+    },
+    {
+      "id": "s9-c5",
+      "description": "`bober list-approvals` (or `bober approvals list`) lists all pending checkpoints with their summary. Useful for users coming back to async work.",
+      "verificationMethod": "Verify the command exists and prints pending checkpoints with id, age, prompt summary.",
+      "passed": false
+    },
+    {
+      "id": "s9-c6",
+      "description": "Disk-marker write under 100ms (NFR performance).",
+      "verificationMethod": "Microbenchmark request() up to the point where polling starts; assert <100ms write phase.",
+      "passed": false
+    },
+    {
+      "id": "s9-c7",
+      "description": "Unit tests cover: (a) full approve flow, (b) full reject flow with feedback, (c) edit flow with editDelta, (d) timeout, (e) approve CLI command, (f) reject CLI command, (g) list-approvals.",
+      "verificationMethod": "Locate new test file. Run npm run test. Verify all branches.",
+      "passed": false
+    },
+    {
+      "id": "s9-c8",
+      "description": "Mechanism registered under name 'disk' at module load.",
+      "verificationMethod": "Grep registry.ts.",
+      "passed": false
+    },
+    {
+      "id": "s9-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/orchestrator/checkpoints/mechanisms/disk.ts", "action": "create", "description": "Disk-marker mechanism with polling" },
+    { "path": "src/orchestrator/checkpoints/registry.ts", "action": "modify", "description": "Register 'disk' mechanism" },
+    { "path": "src/cli/", "action": "modify", "description": "Add approve / reject / list-approvals subcommands" },
+    { "path": "tests/orchestrator/checkpoints/disk.test.ts", "action": "create", "description": "Unit tests" },
+    { "path": ".bober/approvals/", "action": "create", "description": "Directory for pending/approved/rejected markers (created at first use)" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-8"],
+  "status": "proposed",
+  "generatorNotes": "Polling cadence: 2-second default is a reasonable balance for async use; configurable via pipeline.approvalPollMs. Use chokidar or Node's fs.watch if available, falling back to setInterval polling. Watch the .bober/approvals/ directory for events matching <checkpointId>.{approved,rejected}.json.\n\nPending file shape:\n```json\n{\n  \"checkpointId\": \"post-research-spec-20260524-foo-1\",\n  \"runId\": \"run-20260524-153000\",\n  \"artifact\": { \"type\": \"research-doc\", \"path\": \".bober/research/...\", \"summary\": \"...\" },\n  \"prompt\": \"Research artifact ready for review.\",\n  \"requestedAt\": \"2026-05-24T15:30:00Z\",\n  \"timeoutAt\": \"2026-05-25T15:30:00Z\"\n}\n```\n\nApproved file: {approvedAt, approverId (resolved from $USER or git config), editDelta?: text|json}. Rejected file: {rejectedAt, rejecterId, feedback: required string}.\n\nCLI commands integrate with existing src/cli/ pattern (check existing commands for the framework — likely commander or yargs). Each new command is a thin wrapper around a file write. `bober approve <id>` writes the .approved.json; orchestrator's poll picks it up; mechanism returns; pipeline proceeds. The CLI commands are stateless — they don't talk to the orchestrator, they communicate via the filesystem.\n\nFor list-approvals: enumerate .bober/approvals/*.pending.json, parse, render as a table:\n```\nCheckpoint ID                                   Age      Prompt\npost-research-spec-20260524-foo-1               2h 15m   Research artifact ready for review.\npost-plan-spec-20260524-foo                     5m       Plan ready, 8 sprints proposed.\n```\n\nTimeout cap: ?soft cap at 7 days (configurable), prevents pending files from living forever. On timeout, the mechanism writes a timeout-marker file and returns {approved: false, feedback: 'TIMEOUT'}. Sprint 12 (feedback propagation) decides whether to retry or abort.\n\nNote: this mechanism is the most production-friendly. CLI prompts require terminal session. PR-native requires GitHub. Disk-marker works in CI, on shared filesystems, with team review via PR-on-the-approvals-files, etc. Default for prod use cases.",
+  "evaluatorNotes": "Verify file-system race conditions are handled: what if approve and reject CLI commands race? Spec: last-write-wins is acceptable; the mechanism polls and consumes the first resolution it sees. Verify the pending file is DELETED after resolution (otherwise on next pipeline run with same checkpoint id, the orchestrator would re-resolve incorrectly).\n\nVerify polling does not leak — when request() returns, the poll loop (or fs.watch handle) is cleaned up. Run a unit test that creates 10 checkpoints in parallel and verifies all 10 resolve and 0 watchers remain.\n\nCLI commands: verify they work from any cwd inside the project (resolve project root via existing utility, NOT just cwd). Verify `bober approve <id>` with nonexistent checkpoint id prints a clear error and exits non-zero (don't write a dangling .approved.json).\n\nVerify list-approvals output is parseable (human-readable table or --json flag) — async workflows may want to script around this.\n\nPerformance: 100ms write budget is strict. If using JSON.stringify on a large artifact, that alone could blow budget. Mechanism should write a summary, not the full artifact — full artifact stays on disk wherever the pipeline put it (e.g., .bober/research/*.md), pending file references it by path."
+}

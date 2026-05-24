@@ -1,0 +1,52 @@
+{
+  "id": "sprint-spec-20260524-superpowers-port-2",
+  "specId": "spec-20260524-superpowers-port",
+  "feature": "bober.verify skill + verification Iron Law in bober-generator",
+  "description": "Adopt the verification-before-completion discipline from /tmp/superpowers/skills/verification-before-completion/SKILL.md as a bober skill, and inline its Iron Law into agents/bober-generator.md's self-verify section. The rule: the generator may not claim a sprint is complete without including in its completion report the fresh stdout of every eval-strategy command (typecheck/lint/build/test) and their exit codes.",
+  "successCriteria": [
+    {
+      "id": "s2-c1",
+      "description": "skills/bober.verify/SKILL.md exists with valid YAML frontmatter (name: bober-verify, description starts with 'Use when about to claim work is complete') and a body containing: (a) a fenced Iron Law block 'NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION COMMAND OUTPUT', (b) a Red Flags list of at least 6 STOP conditions, (c) a Rationalization-Prevention table mapping at least 8 excuses to refutations.",
+      "verificationMethod": "Read skills/bober.verify/SKILL.md. Verify frontmatter parses. Grep for the literal Iron Law string. Count rows in the Red Flags list (>=6) and the Rationalization-Prevention table (>=8). Verify MIT attribution to obra/superpowers in a comment or footer.",
+      "passed": false
+    },
+    {
+      "id": "s2-c2",
+      "description": "agents/bober-generator.md contains a single fenced Iron Law block in its self-verify section: 'NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION COMMAND OUTPUT' (or equivalent wording with the same Iron Law structure). The block sits in the section that describes how the generator should self-check before returning to the orchestrator.",
+      "verificationMethod": "Read agents/bober-generator.md. Grep for 'Iron Law' or 'NO COMPLETION CLAIMS'. Verify the block appears once, in the self-verify section (NOT scattered).",
+      "passed": false
+    },
+    {
+      "id": "s2-c3",
+      "description": "agents/bober-generator.md cross-references skills/bober.verify (e.g., 'invoke the bober.verify skill before claiming completion').",
+      "verificationMethod": "Read agents/bober-generator.md. Grep for the literal string 'bober.verify' (or 'bober-verify').",
+      "passed": false
+    },
+    {
+      "id": "s2-c4",
+      "description": "The generator's completion-report schema (in agents/bober-generator.md) now includes a verificationOutput field. The field shape is documented as: array of {command: string, exitCode: number, stdoutTail: string} with one entry per eval strategy run.",
+      "verificationMethod": "Read agents/bober-generator.md. Find the completion-report JSON schema block. Verify the verificationOutput field is documented with the named shape. Verify it's marked required (not optional).",
+      "passed": false
+    },
+    {
+      "id": "s2-c5",
+      "description": "Existing eval strategies (typecheck, lint, build, test) all pass — agent-bober still builds.",
+      "verificationMethod": "Run `npm run typecheck && npm run lint && npm run build && npm run test` — assert exit 0.",
+      "passed": false
+    },
+    {
+      "id": "s2-c6",
+      "description": "agents/bober-generator.md remains under 600 lines after the additions (NFR: maintainability).",
+      "verificationMethod": "Run `wc -l agents/bober-generator.md`; assert <=600.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "skills/bober.verify/SKILL.md", "action": "create", "description": "Verification-before-completion discipline as a bober skill" },
+    { "path": "agents/bober-generator.md", "action": "modify", "description": "Add Iron Law block to self-verify section + cross-reference bober.verify + add verificationOutput field to completion-report schema" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-superpowers-port-1"],
+  "status": "proposed",
+  "generatorNotes": "Reference: /tmp/superpowers/skills/verification-before-completion/SKILL.md (139 lines total). Port the structural patterns — Iron Law, Common Failures table, Red Flags list, Rationalization-Prevention table — but use bober's voice. Where superpowers says 'your human partner said \"I don\\'t believe you\" - trust broken', bober says something like 'the orchestrator re-runs eval strategies; mismatch surfaces as a regression in the next iteration'. Keep the same EMPHASIS structure (fenced Iron Law, all-caps STOP conditions in Red Flags) — that's the empirically tuned part. The Rationalization-Prevention table should include at minimum: 'Should work now', 'I'm confident', 'Just this once', 'Linter passed', 'Tests probably pass', 'Build went green earlier', 'Partial check is enough', 'I'm tired'. For the generator changes, find the existing self-verify section (it currently says something procedural like 'before reporting completion, ensure typecheck/lint/build/test pass'). Replace its wording with a fenced Iron Law block and add a tightly-scoped completionReport schema patch — the existing JSON shape is in the prompt already; locate it and add verificationOutput between the existing fields without restructuring. Attribution: top-of-file comment in bober.verify/SKILL.md crediting obra/superpowers (MIT).",
+  "evaluatorNotes": "Verify the Iron Law block is FENCED (markdown code fence or HTML pre/blockquote — anything that visually isolates it). A bare line of text is not enough; the empirical tuning relies on visual emphasis. Verify the Rationalization-Prevention table is in markdown table format (not a bullet list) — superpowers found this format more effective. Verify the verificationOutput field is documented as REQUIRED in the completion-report schema, not optional — making it optional defeats the purpose. Check the generator prompt for any conflicting older text that would let the generator skip verification (e.g., a previously-permissible phrase like 'self-verify if convenient'); if found, flag as a regression risk for the Iron Law to enforce. Cite at least one anti-pattern reference if the prompt contradicts itself."
+}
