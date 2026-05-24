@@ -250,6 +250,23 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
     `Architect completed in ${result.turnsUsed} turns (tools: ${result.toolsCalled.length})`,
   );
 
+  // Token-usage capture (graph integration sprint 2, s2-c8).
+  // Mirrors the cumulative-usage pattern from src/orchestrator/agentic-loop.ts:117-118.
+  // Failure to write must NOT break architecture — swallow errors.
+  try {
+    const { TokenUsageLog } = await import("../graph/token-usage.js");
+    await new TokenUsageLog(projectRoot).append({
+      agent: "architect",
+      runId: architectId,
+      timestamp: new Date().toISOString(),
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      graphEnabled: config.graph?.enabled === true,
+    });
+  } catch (err) {
+    logger.debug(`Token usage capture failed (architect): ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   const raw = parseArchitectResponse(result.finalText);
 
   // Read back the saved architecture document

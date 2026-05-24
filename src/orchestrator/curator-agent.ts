@@ -162,6 +162,23 @@ Your final response must contain ONLY a JSON object (no markdown fences):
     `Curator completed in ${result.turnsUsed} turns (${result.toolsCalled.length} tool calls)`,
   );
 
+  // Token-usage capture (graph integration sprint 2, s2-c8).
+  // Mirrors the cumulative-usage pattern from src/orchestrator/agentic-loop.ts:117-118.
+  // Failure to write must NOT break curation — swallow errors.
+  try {
+    const { TokenUsageLog } = await import("../graph/token-usage.js");
+    await new TokenUsageLog(projectRoot).append({
+      agent: "curator",
+      runId: contractId,
+      timestamp: new Date().toISOString(),
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      graphEnabled: config.graph?.enabled === true,
+    });
+  } catch (err) {
+    logger.debug(`Token usage capture failed (curator): ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   return parseCuratorResult(result.finalText, contractId, filesRead);
 }
 
