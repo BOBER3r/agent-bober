@@ -1,3 +1,15 @@
+/**
+ * Pre-flight context injection (Sprint 6, ADR-9):
+ * PreflightContextInjector.inject() is called inside each agent's
+ * runner before runAgenticLoop:
+ *  - src/orchestrator/research-agent.ts (researcher-phase2)
+ *  - src/orchestrator/architect-agent.ts
+ *  - src/orchestrator/curator-agent.ts (writes to .bober/briefings/<contractId>-briefing.md)
+ *  - src/orchestrator/generator-agent.ts
+ *  - src/orchestrator/evaluator-agent.ts
+ * Failure isolation: 5s timeout via Promise.race; preflight-failure
+ * incident logged; original firstMessage returned on error.
+ */
 import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { isPipelineReady } from "../contracts/spec.js";

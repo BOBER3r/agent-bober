@@ -3,9 +3,11 @@ import { createClient } from "../providers/factory.js";
 import { saveArchitecture } from "../state/index.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -148,11 +150,14 @@ export async function runArchitect(
   const architectId = generateArchitectId(userPrompt);
   logger.info(`Architecture ID: ${architectId}`);
 
-  // Load the architect agent definition (system prompt)
-  const agentDef = await loadAgentDefinition("bober-architect", projectRoot);
-
-  // Architect gets read-only tools plus write for saving artifacts
-  const toolSet = buildToolSet("generator", projectRoot);
+  // Architect gets read + write tools for saving artifacts. When graph is enabled
+  // and ready, bash/grep/glob are removed and graph_* tools are added (ADR-8).
+  // write_file and edit_file are RETAINED in gated mode.
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools("architect", projectRoot, graphState, graphDeps ?? undefined);
+  // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
+  const systemPrompt = await assembleSystemPrompt("architect", "bober-architect", projectRoot, graphState);
 
   const client = createClient(
     config.planner.provider ?? null,
@@ -228,11 +233,18 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
 
   logger.info(`Calling architect model (${config.planner.model} → ${model})...`);
 
+  // Pre-flight graph context injection (ADR-9).
+  // Architect runs before sprint contracts exist; pass contract=null.
+  // On failure or timeout, autonomousMessage is returned unchanged.
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const enhancedMessage = await preflightInjector.inject("architect", null, autonomousMessage);
+
   const result = await runAgenticLoop({
     client,
     model,
-    systemPrompt: agentDef.systemPrompt,
-    userMessage: autonomousMessage,
+    systemPrompt,
+    userMessage: enhancedMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
     maxTurns: ARCHITECT_MAX_TURNS,
@@ -249,6 +261,23 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
   logger.debug(
     `Architect completed in ${result.turnsUsed} turns (tools: ${result.toolsCalled.length})`,
   );
+
+  // Token-usage capture (graph integration sprint 2, s2-c8).
+  // Mirrors the cumulative-usage pattern from src/orchestrator/agentic-loop.ts:117-118.
+  // Failure to write must NOT break architecture — swallow errors.
+  try {
+    const { TokenUsageLog } = await import("../graph/token-usage.js");
+    await new TokenUsageLog(projectRoot).append({
+      agent: "architect",
+      runId: architectId,
+      timestamp: new Date().toISOString(),
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      graphEnabled: config.graph?.enabled === true,
+    });
+  } catch (err) {
+    logger.debug(`Token usage capture failed (architect): ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   const raw = parseArchitectResponse(result.finalText);
 

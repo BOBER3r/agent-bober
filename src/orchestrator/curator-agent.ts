@@ -1,12 +1,17 @@
+import { writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { BoberConfig } from "../config/schema.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
+import { ensureDir } from "../utils/fs.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -59,17 +64,19 @@ export async function runCurator(
   const contractId = contract.contractId;
   logger.sprint(contractId, `Curating: ${contract.title}`);
 
-  // Load agent definition (system prompt from .md file)
-  const agentDef = await loadAgentDefinition("bober-curator", projectRoot);
-
   // Curator uses its own model config, falling back to planner model
   const curatorConfig = config.curator;
   const curatorModel = curatorConfig?.model ?? config.planner.model;
   const model = resolveModel(curatorModel);
   const curatorMaxTurns = curatorConfig?.maxTurns ?? CURATOR_MAX_TURNS;
 
-  // Curator gets read-only tools (same as planner)
-  const toolSet = buildToolSet("planner", projectRoot);
+  // Curator gets read-only tools. When graph is enabled and ready,
+  // bash/grep/glob are removed and graph_* tools are added (ADR-8).
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools("curator", projectRoot, graphState, graphDeps ?? undefined);
+  // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
+  const systemPrompt = await assembleSystemPrompt("curator", "bober-curator", projectRoot, graphState);
 
   const client = createClient(
     curatorConfig?.provider ?? config.planner.provider ?? null,
@@ -91,7 +98,7 @@ export async function runCurator(
   // Build the contract JSON for the curator's context
   const contractJson = JSON.stringify(contract, null, 2);
 
-  const userMessage = `# Sprint Contract
+  const baseUserMessage = `# Sprint Contract
 
 ${contractJson}
 
@@ -134,6 +141,30 @@ Your final response must contain ONLY a JSON object (no markdown fences):
   "summary": "<2-3 sentence summary>"
 }`;
 
+  // Pre-flight graph context injection (ADR-9 — special Curator case).
+  // Curator: write pre-flight content to .bober/briefings/<contractId>-briefing.md
+  // and reference it in the user message. The curator's own exploration output
+  // appends to the same file during the agentic loop.
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const preflightPath = `.bober/briefings/${contractId}-briefing.md`;
+  // Pass "" as firstMessage — we only want the pre-flight content itself (not prepended to anything).
+  const preflightContent = await preflightInjector.inject("curator", contract, "");
+  let preflightNotice = "";
+  if (preflightContent.trim().length > 0) {
+    try {
+      const absPath = resolve(projectRoot, preflightPath);
+      await ensureDir(resolve(absPath, ".."));
+      await writeFile(absPath, preflightContent, "utf-8");
+      preflightNotice = `\n\n# Graph Pre-Flight Context\n\nA graph pre-flight analysis has been prepared at ${preflightPath} — read it FIRST as part of your codebase exploration. It contains relevant graph queries (callers, tests, search results) to accelerate your analysis.\n`;
+      logger.debug(`[curator] Pre-flight graph context written to ${preflightPath}`);
+    } catch (err) {
+      logger.debug(`[curator] Pre-flight write failed (non-blocking): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  const userMessage = `${baseUserMessage}${preflightNotice}`;
+
   logger.info(`Calling curator model (${curatorModel} → ${model})...`);
 
   const filesRead = new Set<string>();
@@ -141,7 +172,7 @@ Your final response must contain ONLY a JSON object (no markdown fences):
   const result = await runAgenticLoop({
     client,
     model,
-    systemPrompt: agentDef.systemPrompt,
+    systemPrompt,
     userMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
@@ -161,6 +192,23 @@ Your final response must contain ONLY a JSON object (no markdown fences):
   logger.debug(
     `Curator completed in ${result.turnsUsed} turns (${result.toolsCalled.length} tool calls)`,
   );
+
+  // Token-usage capture (graph integration sprint 2, s2-c8).
+  // Mirrors the cumulative-usage pattern from src/orchestrator/agentic-loop.ts:117-118.
+  // Failure to write must NOT break curation — swallow errors.
+  try {
+    const { TokenUsageLog } = await import("../graph/token-usage.js");
+    await new TokenUsageLog(projectRoot).append({
+      agent: "curator",
+      runId: contractId,
+      timestamp: new Date().toISOString(),
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      graphEnabled: config.graph?.enabled === true,
+    });
+  } catch (err) {
+    logger.debug(`Token usage capture failed (curator): ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   return parseCuratorResult(result.finalText, contractId, filesRead);
 }

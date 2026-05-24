@@ -10,7 +10,10 @@
 // Usage:  node scripts/sync-skills.mjs <skill-key>:<command-file> ...
 //   e.g.: node scripts/sync-skills.mjs bober.plan:bober-plan.md \
 //                                     bober.run:bober-run.md \
-//                                     bober.sprint:bober-sprint.md
+//                                     bober.sprint:bober-sprint.md \
+//                                     bober.graph:bober-graph.md \
+//                                     bober.onboard:bober-onboard.md \
+//                                     bober.impact:bober-impact.md
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";

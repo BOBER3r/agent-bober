@@ -1,6 +1,6 @@
 {
   "name": "agent-bober",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "Multi-agent harness for building applications autonomously with any LLM. Researcher, Planner, Curator, Generator, Evaluator pipeline. Supports Claude, GPT, Gemini, Ollama. MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",
@@ -65,6 +65,7 @@
     "glob": "^11.0.1",
     "ora": "^8.1.1",
     "prompts": "^2.4.2",
+    "semver": "^7.8.1",
     "zod": "^3.24.2"
   },
   "peerDependencies": {
@@ -83,9 +84,11 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^22.13.0",
     "@types/prompts": "^2.4.9",
+    "@types/semver": "^7.7.1",
     "@typescript-eslint/eslint-plugin": "^8.22.0",
     "@typescript-eslint/parser": "^8.22.0",
     "eslint": "^9.19.0",
+    "markdownlint-cli": "^0.48.0",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   }

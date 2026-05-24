@@ -3,9 +3,11 @@ import { createClient } from "../providers/factory.js";
 import { saveResearch } from "../state/index.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { loadAgentDefinition, assembleSystemPrompt } from "./agent-loader.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector, extractKeywords } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -72,8 +74,9 @@ async function generateExplorationQuestions(
 ): Promise<string[]> {
   logger.info("Phase 1: Generating exploration questions...");
 
-  // Phase 1 gets NO tools — it only needs to think, not explore
-  const toolSet = buildToolSet("planner", projectRoot);
+  // Phase 1 gets NO tools — it only needs to think, not explore.
+  // Phase 1 is NEVER gated (not in ADR-8 gated set).
+  const toolSet = resolveRoleTools("researcher-phase1", projectRoot);
 
   const client = createClient(
     config.planner.provider ?? null,
@@ -193,7 +196,7 @@ async function exploreCodebase(
   questions: string[],
   researchId: string,
   projectRoot: string,
-  agentSystemPrompt: string,
+  agentSystemPrompt: string, // assembled (decorated) system prompt for phase 2
   config: BoberConfig,
 ): Promise<{
   sections: ResearchSections;
@@ -204,8 +207,16 @@ async function exploreCodebase(
     `Phase 2: Exploring codebase for ${questions.length} questions...`,
   );
 
-  // Phase 2 gets read-only tools to explore the codebase
-  const toolSet = buildToolSet("planner", projectRoot);
+  // Phase 2 gets read-only tools to explore the codebase.
+  // When graph is enabled and ready, bash/grep/glob are removed and graph_* tools are added.
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools(
+    "researcher-phase2",
+    projectRoot,
+    graphState,
+    graphDeps ?? undefined,
+  );
 
   const client = createClient(
     config.planner.provider ?? null,
@@ -270,11 +281,25 @@ Respond with a JSON object (no markdown fences, no explanation):
   "questionsAnswered": <number>
 }`;
 
+  // Pre-flight graph context injection (ADR-9 — Researcher-Phase2 isolation).
+  // CRITICAL: contract is null. questionKeywords are extracted from the Phase 1
+  // questions ONLY — never from the feature description (userPrompt is not here).
+  // This preserves the two-phase isolation invariant.
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const questionKeywords = extractKeywords(questions.join(" "));
+  const enhancedPhase2Message = await preflightInjector.inject(
+    "researcher-phase2",
+    null,   // No contract during research phase — isolation invariant
+    phase2Message,
+    { questionKeywords },
+  );
+
   const result = await runAgenticLoop({
     client,
     model,
     systemPrompt: agentSystemPrompt,
-    userMessage: phase2Message,
+    userMessage: enhancedPhase2Message,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
     maxTurns: RESEARCHER_PHASE2_MAX_TURNS,
@@ -291,6 +316,23 @@ Respond with a JSON object (no markdown fences, no explanation):
   logger.debug(
     `Phase 2 completed in ${result.turnsUsed} turns (tools: ${result.toolsCalled.length})`,
   );
+
+  // Token-usage capture (graph integration sprint 2, s2-c8).
+  // Mirrors the cumulative-usage pattern from src/orchestrator/agentic-loop.ts:117-118.
+  // Failure to write must NOT break research — swallow errors.
+  try {
+    const { TokenUsageLog } = await import("../graph/token-usage.js");
+    await new TokenUsageLog(projectRoot).append({
+      agent: "researcher-phase2",
+      runId: researchId,
+      timestamp: new Date().toISOString(),
+      inputTokens: result.usage.inputTokens,
+      outputTokens: result.usage.outputTokens,
+      graphEnabled: config.graph?.enabled === true,
+    });
+  } catch (err) {
+    logger.debug(`Token usage capture failed (researcher-phase2): ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   return parsePhase2Result(result.finalText);
 }
@@ -439,9 +481,18 @@ export async function runResearch(
 
   // Load the researcher agent definition (system prompt)
   const agentDef = await loadAgentDefinition("bober-researcher", projectRoot);
+  // Compute graph state once and assemble the phase-2 system prompt with graph decoration (ADR-5).
+  const graphStateForAssembly = getGraphState(config);
+  const phase2SystemPrompt = await assembleSystemPrompt(
+    "researcher-phase2",
+    "bober-researcher",
+    projectRoot,
+    graphStateForAssembly,
+  );
 
   // ── Phase 1: Question Generation ─────────────────────────────────
   // userPrompt IS passed to Phase 1 — this is how questions are generated
+  // Phase 1 uses the base systemPrompt (researcher-phase1 mode = disabled → no decoration).
   const questions = await generateExplorationQuestions(
     userPrompt,
     projectRoot,
@@ -465,7 +516,7 @@ export async function runResearch(
     questions,
     researchId,
     projectRoot,
-    agentDef.systemPrompt,
+    phase2SystemPrompt,
     config,
   );
 

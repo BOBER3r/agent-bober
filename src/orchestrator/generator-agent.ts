@@ -4,9 +4,11 @@ import { serializeHandoff } from "./context-handoff.js";
 import { createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -44,13 +46,16 @@ export async function runGenerator(
 
   logger.sprint(contractId, `Generating: ${title}`);
 
-  // Load agent definition (system prompt from .md file)
-  const agentDef = await loadAgentDefinition("bober-generator", projectRoot);
   const model = resolveModel(config.generator.model);
   const maxTurns = config.generator.maxTurnsPerSprint;
 
-  // Build tool set (generator gets full access)
-  const toolSet = buildToolSet("generator", projectRoot);
+  // Build tool set (generator gets full access — UNION mode when gated:
+  // all original tools retained AND graph_* tools added).
+  const graphState = getGraphState(config);
+  const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+  const toolSet = resolveRoleTools("generator", projectRoot, graphState, graphDeps ?? undefined);
+  // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
+  const systemPrompt = await assembleSystemPrompt("generator", "bober-generator", projectRoot, graphState);
 
   const client = createClient(
     config.generator.provider ?? null,
@@ -89,6 +94,16 @@ When you are done, your final response must contain ONLY a JSON object with this
   "notes": "<additional context for the evaluator>"
 }`;
 
+  // Pre-flight graph context injection (ADR-9): prepend graph context to userMessage.
+  // On failure or timeout, userMessage is returned unchanged (spawn not blocked).
+  const graphClient = graphPipelineLifecycle.getGraphClient();
+  const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+  const enhancedMessage = await preflightInjector.inject(
+    "generator",
+    handoff.currentContract ?? null,
+    userMessage,
+  );
+
   logger.info(`Calling generator model (${config.generator.model} → ${model})...`);
 
   // Track which files were written/edited via tools
@@ -97,8 +112,8 @@ When you are done, your final response must contain ONLY a JSON object with this
   const result = await runAgenticLoop({
     client,
     model,
-    systemPrompt: agentDef.systemPrompt,
-    userMessage,
+    systemPrompt,
+    userMessage: enhancedMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,
     maxTurns,

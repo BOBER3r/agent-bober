@@ -20,6 +20,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { registerAllTools, getAllTools, getTool } from "./tools/index.js";
+import { configExists, loadConfig } from "../config/loader.js";
 
 // ── Package version loader ──────────────────────────────────────────
 
@@ -58,6 +59,50 @@ export async function createBoberMCPServer(
 
   // ── Register all tools before creating the server ────────────────
   registerAllTools();
+
+  // ── Conditionally register graph_* tools ─────────────────────────
+  // Per sprint 4 spec: only when bober.config.json has
+  // graph.enabled === true AND graph.exposeOnExternalMcp === true.
+  // Failures here MUST NOT prevent server boot.
+  try {
+    if (await configExists(projectRoot)) {
+      const config = await loadConfig(projectRoot);
+      if (config.graph?.enabled && config.graph?.exposeOnExternalMcp !== false) {
+        const { GraphFallback } = await import("../graph/fallback.js");
+        const { GraphArtifactStore } = await import("../graph/artifact-store.js");
+        const { IncidentLog } = await import("../graph/incidents.js");
+        const { TokensaveMcpClient } = await import("../graph/mcp-client.js");
+        const { GraphClient } = await import("../graph/client.js");
+        const { registerGraphTools } = await import("./tools/graph.js");
+
+        const cfg = config.graph;
+        const store = new GraphArtifactStore(projectRoot);
+        const incidents = new IncidentLog(projectRoot);
+        const mcpClient = new TokensaveMcpClient(
+          projectRoot,
+          cfg,
+          incidents,
+          cfg.tokensavePath ?? "tokensave",
+        );
+        const graphFallback = new GraphFallback("dual");
+        const client = new GraphClient(
+          projectRoot,
+          mcpClient,
+          store,
+          graphFallback,
+          incidents,
+          cfg,
+        );
+        registerGraphTools({ client, fallback: graphFallback });
+      }
+    }
+  } catch (err) {
+    process.stderr.write(
+      `[agent-bober mcp] graph tool registration skipped: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+  }
 
   // ── Create the server ────────────────────────────────────────────
   const server = new Server(

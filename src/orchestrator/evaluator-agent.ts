@@ -11,9 +11,11 @@ import { createClient } from "../providers/factory.js";
 import { getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
-import { buildToolSet } from "./tools/index.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
+import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { PreflightContextInjector } from "../graph/preflight-injector.js";
+import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
 
@@ -135,12 +137,15 @@ async function runAgentEvaluation(
   const timestamp = new Date().toISOString();
 
   try {
-    // Load agent definition (system prompt from .md file)
-    const agentDef = await loadAgentDefinition("bober-evaluator", projectRoot);
     const model = resolveModel(config.evaluator.model);
 
-    // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit)
-    const toolSet = buildToolSet("evaluator", projectRoot);
+    // Build tool set (evaluator: bash, read_file, glob, grep — NO write/edit).
+    // UNION mode when gated: all original tools retained AND graph_* tools added.
+    const graphState = getGraphState(config);
+    const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
+    const toolSet = resolveRoleTools("evaluator", projectRoot, graphState, graphDeps ?? undefined);
+    // Assemble system prompt with graph-prompt decoration (ADR-5, Sprint 7).
+    const systemPrompt = await assembleSystemPrompt("evaluator", "bober-evaluator", projectRoot, graphState);
 
     const client = createClient(
       config.evaluator.provider ?? null,
@@ -213,6 +218,17 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
   "timestamp": "${timestamp}"
 }`;
 
+    // Pre-flight graph context injection (ADR-9): prepend graph context to userMessage.
+    // On failure or timeout, userMessage is returned unchanged (spawn not blocked).
+    const graphClient = graphPipelineLifecycle.getGraphClient();
+    const preflightInjector = new PreflightContextInjector(graphClient, config.graph);
+    const enhancedMessage = await preflightInjector.inject(
+      "evaluator",
+      handoff.currentContract ?? null,
+      userMessage,
+      { baselineSha: "HEAD~1" },
+    );
+
     logger.info(
       `Calling evaluator model (${config.evaluator.model} → ${model})...`,
     );
@@ -220,8 +236,8 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
     const result = await runAgenticLoop({
       client,
       model,
-      systemPrompt: agentDef.systemPrompt,
-      userMessage,
+      systemPrompt,
+      userMessage: enhancedMessage,
       tools: toolSet.schemas,
       toolHandlers: toolSet.handlers,
       maxTurns: EVALUATOR_MAX_TURNS,

@@ -954,6 +954,9 @@ const UNIVERSAL_COMMANDS = new Set<string>([
   "bober.principles",
   "bober.research",
   "bober.architect",
+  "bober.graph",
+  "bober.onboard",
+  "bober.impact",
 ]);
 
 /**
@@ -1002,6 +1005,9 @@ async function installClaudeCommands(
     "bober.playwright": "bober-playwright.md",
     "bober.research": "bober-research.md",
     "bober.architect": "bober-architect.md",
+    "bober.graph": "bober-graph.md",
+    "bober.onboard": "bober-onboard.md",
+    "bober.impact": "bober-impact.md",
   };
 
   // Determine which skill keys to install based on mode and preset.

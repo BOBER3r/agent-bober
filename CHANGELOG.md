@@ -5,6 +5,38 @@ All notable changes to `agent-bober` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] — 2026-05-24
+
+Graph (tokensave) integration — user-facing CLI commands and slash-command skills for code-graph workflows.
+
+### Added
+
+- **`agent-bober graph [init|sync|status]`** — manage the code graph index.
+  - `init`: runs `tokensave init`, writes `.bober/graph/manifest.json`. Exits 2 with platform-aware install hint when tokensave is missing.
+  - `sync [--force]`: re-indexes changed files (full re-index with `--force`). Updates manifest.
+  - `status [--json]`: prints `{ready, indexedFileCount, tokensaveVersion, lastSyncedHeadSha, stale}`. Human-readable or JSON.
+- **`agent-bober onboard`** — generate 5 onboarding markdown files in `.bober/onboarding/` using the code graph (architecture overview, hotspots, knowledge gaps, communities, README). Prints a summary table on completion.
+- **`agent-bober impact <symbol|file>`** — analyse the impact radius of a symbol or file. Writes `.bober/graph/impact/<slug>.md` with sections `# Impact: <target>`, `## Affected symbols`, `## Tests covering this symbol`.
+- **3 new universal skills** (installed in all presets and brownfield):
+  - `skills/bober.graph/SKILL.md` (`/bober-graph`) — code graph management
+  - `skills/bober.onboard/SKILL.md` (`/bober-onboard`) — onboarding doc generation
+  - `skills/bober.impact/SKILL.md` (`/bober-impact`) — impact analysis (with `argument-hint: <symbol|file>`)
+- **`scripts/e2e-graph-smoke.sh`** — end-to-end smoke test script (gates on tokensave binary availability).
+- Architecture document: [`.bober/architecture/arch-20260524-port-code-review-graph-architecture.md`](.bober/architecture/arch-20260524-port-code-review-graph-architecture.md)
+
+### Changed
+
+- All 3 graph commands respect `graph.enabled=false` — exit 1 with message: *"Graph integration is disabled. Enable via `graph.enabled: true` in bober.config.json."*
+- `src/cli/commands/init.ts` skill map: `bober.graph`, `bober.onboard`, `bober.impact` added to `UNIVERSAL_COMMANDS` — included in every preset and brownfield init.
+
+### KPI gate result
+
+60% combined reduction (synthetic-fixture baseline; real-pipeline measurement via `node scripts/run-kpi-gate.mjs`).
+
+### Tests
+
+549 → **563 tests passing** (added 14 tests: slug derivation, command success paths, disabled-graph paths, skill bundle frontmatter, init.ts skill inclusion).
+
 ## [0.12.0] — 2026-04-17
 
 Tuned for Claude Opus 4.7 — the model now follows instructions literally and

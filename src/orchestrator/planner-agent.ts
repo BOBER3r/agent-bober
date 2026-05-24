@@ -9,7 +9,7 @@ import { saveSpec } from "../state/index.js";
 import { fileExists } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
-import { loadAgentDefinition } from "./agent-loader.js";
+import { assembleSystemPrompt } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
 import type { ResearchDoc } from "./research-agent.js";
@@ -131,8 +131,14 @@ export async function runPlanner(
 
   const context = await gatherProjectContext(projectRoot, config);
 
-  // Load agent definition (system prompt from .md file)
-  const agentDef = await loadAgentDefinition("bober-planner", projectRoot);
+  // Load agent definition (system prompt from .md file).
+  // Planner mode is 'disabled' — decoration is always a no-op regardless of ctx.
+  const systemPrompt = await assembleSystemPrompt(
+    "planner",
+    "bober-planner",
+    projectRoot,
+    { graphEnabled: false, engineHealth: "disabled" },
+  );
   const model = resolveModel(config.planner.model);
 
   // Build tool set (planner gets read-only tools)
@@ -170,7 +176,7 @@ Your final response must contain ONLY valid JSON matching the PlanSpec schema (n
   const result = await runAgenticLoop({
     client,
     model,
-    systemPrompt: agentDef.systemPrompt,
+    systemPrompt,
     userMessage,
     tools: toolSet.schemas,
     toolHandlers: toolSet.handlers,

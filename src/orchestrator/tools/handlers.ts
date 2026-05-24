@@ -5,7 +5,7 @@ import { execa } from "execa";
 // ── Constants ──────────────────────────────────────────────────────
 
 /** Max characters per tool result to prevent context blow-up. */
-const MAX_OUTPUT_CHARS = 100_000;
+export const MAX_OUTPUT_CHARS = 100_000;
 
 /** Default bash command timeout in ms. */
 const DEFAULT_BASH_TIMEOUT = 120_000;

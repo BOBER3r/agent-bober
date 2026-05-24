@@ -3,6 +3,8 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { fileExists } from "../utils/fs.js";
+import type { BoberAgentRole } from "../graph/preflight-injector.js";
+import { AgentGraphPrompts } from "../graph/prompts.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -173,4 +175,25 @@ export async function loadAgentDefinition(
  */
 export function clearAgentCache(): void {
   cache.clear();
+}
+
+/**
+ * Load an agent definition AND apply graph-prompt decoration.
+ *
+ * This is the preferred entry point for all orchestrator runners
+ * (research-agent, architect-agent, curator-agent, generator-agent,
+ * evaluator-agent, planner-agent). It chains `loadAgentDefinition` with
+ * `AgentGraphPrompts.decorate` using the provided graph-state context.
+ *
+ * When `ctx.graphEnabled === false` OR `ctx.engineHealth !== 'ready'` OR
+ * the role has no fragment, returns `definition.systemPrompt` unchanged.
+ */
+export async function assembleSystemPrompt(
+  role: BoberAgentRole,
+  agentName: string,
+  projectRoot: string,
+  ctx: { graphEnabled: boolean; engineHealth: string },
+): Promise<string> {
+  const definition = await loadAgentDefinition(agentName, projectRoot);
+  return AgentGraphPrompts.decorate(role, definition.systemPrompt, ctx);
 }

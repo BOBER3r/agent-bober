@@ -148,6 +148,52 @@ export const CommandsSectionSchema = z.object({
 });
 export type CommandsSection = z.infer<typeof CommandsSectionSchema>;
 
+// ── Graph Section (tokensave integration) ───────────────────────────
+
+export const GraphLanguageTierSchema = z.enum(["core", "extended", "all"]);
+export type GraphLanguageTier = z.infer<typeof GraphLanguageTierSchema>;
+
+/**
+ * Per-role token budgets for pre-flight graph context injection (ADR-9).
+ * Budgets are enforced on the FORMATTED markdown output (not raw graph results).
+ * Token counting uses Math.ceil(text.length / 4) as a conservative estimate.
+ */
+export const GraphPreflightBudgetsSchema = z.object({
+  architect: z.number().int().positive().default(4000),
+  curator: z.number().int().positive().default(2000),
+  generator: z.number().int().positive().default(1000),
+  evaluator: z.number().int().positive().default(1500),
+  /** camelCase alias for the 'researcher-phase2' role. */
+  researcherPhase2: z.number().int().positive().default(3000),
+});
+export type GraphPreflightBudgets = z.infer<typeof GraphPreflightBudgetsSchema>;
+
+export const GraphSectionSchema = z.object({
+  enabled: z.boolean().default(false),
+  tokensavePath: z.string().optional(),
+  autoSync: z.boolean().default(true),
+  languageTier: GraphLanguageTierSchema.default("core"),
+  manifestPath: z.string().default(".bober/graph/manifest.json"),
+  syncTimeoutMs: z.number().int().positive().default(2000),
+  queryTimeoutMs: z.number().int().positive().default(5000),
+  debounceMs: z.number().int().nonnegative().default(750),
+  hookQueueMax: z.number().int().positive().default(50),
+  maxEngineRssMb: z.number().int().positive().default(512),
+  /** When true (default) and graph.enabled=true, graph_* tools are
+   *  exposed on the external MCP server (Cursor/Windsurf). When false,
+   *  graph tools remain available to the internal orchestrator only. */
+  exposeOnExternalMcp: z.boolean().default(true),
+  /** Per-role token budgets for pre-flight graph context injection (ADR-9). */
+  preflightBudgets: GraphPreflightBudgetsSchema.default({
+    architect: 4000,
+    curator: 2000,
+    generator: 1000,
+    evaluator: 1500,
+    researcherPhase2: 3000,
+  }),
+});
+export type GraphSection = z.infer<typeof GraphSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -159,6 +205,7 @@ export const BoberConfigSchema = z.object({
   sprint: SprintSectionSchema,
   pipeline: PipelineSectionSchema,
   commands: CommandsSectionSchema,
+  graph: GraphSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
