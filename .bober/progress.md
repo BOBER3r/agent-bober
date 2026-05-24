@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-04-16T15:33:00Z
+Last updated: 2026-05-25T02:00:00Z
 
 ---
 
@@ -101,7 +101,7 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 **Tier 0 COMPLETE** — 3/3 sprints passed first try, 3/20 iteration budget used, 0 regressions, 584 tests pass. Branch: bober/bober-vision @ commit e5233ed.
 
 ### Tier 1 — Quality discipline (sprints 4-6)
-4. [proposed] Anti-pattern reference catalog — Port four MIT-attributed anti-pattern docs into .bober/anti-patterns/; wire evaluator to cite them in regressions.
+4. [completed] Anti-pattern reference catalog — Passed iter 1 (7/7 criteria, 584 tests, commit c3d939e). Four MIT-attributed reference docs ported verbatim into .bober/anti-patterns/ + README index. agents/bober-evaluator.md gained Step 6.5 "Anti-Pattern Citations" with JSON example shape extending regressions by optional antiPattern/source/antiPatternEvidence; Sprint 3 Iron Law preserved. src/contracts/eval-result.ts untouched.
 5. [proposed] bober-code-reviewer agent + bober.code-review skill + orchestrator wiring — Fresh-context advisory review after evaluator pass.
 6. [proposed] HARD-GATE in bober.plan + AGENTS.md at repo root — Brainstorming hard gate between PlanSpec and contracts; AGENTS.md anti-slop contract with verbatim voice; cross-link from README and bootstrap skill.
 

@@ -57,3 +57,7 @@
 {"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-3","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T21:50:00Z"}
 {"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-3","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T22:06:00Z"}
 {"event":"tier-completed","tier":0,"specId":"spec-20260524-bober-vision","sprintsCompleted":3,"sprintsTotal":28,"iterationsUsed":3,"timestamp":"2026-05-24T22:06:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-4","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-4","iteration":1,"timestamp":"2026-05-25T00:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-4","iteration":1,"result":"pass","timestamp":"2026-05-25T02:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-4","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T02:00:00Z"}

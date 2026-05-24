@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-4",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "c3d939e",
+  "criteriaResults": [
+    {"criterionId": "s4-c1", "met": true, "evidence": ".bober/anti-patterns/README.md, 27 lines, attribution + 8-row table covering all four files"},
+    {"criterionId": "s4-c2", "met": true, "evidence": "testing-anti-patterns.md 303 lines, attribution present, named anti-patterns + Iron Laws preserved"},
+    {"criterionId": "s4-c3", "met": true, "evidence": "condition-based-waiting.md 119 lines, attribution + waitFor + Quick Patterns present"},
+    {"criterionId": "s4-c4", "met": true, "evidence": "root-cause-tracing.md 173 lines, attribution + 'NEVER fix just where the error appears' + defense-in-depth ref"},
+    {"criterionId": "s4-c5", "met": true, "evidence": "defense-in-depth.md 126 lines, attribution + Layer 1-4 + Entry Point Validation present"},
+    {"criterionId": "s4-c6", "met": true, "evidence": "agents/bober-evaluator.md gained Step 6.5 Anti-Pattern Citations + extended example shape; Iron Law + Sprint 3 sections intact; eval-result.ts unchanged"},
+    {"criterionId": "s4-c7", "met": true, "evidence": "typecheck/lint/build exit 0, 584 tests pass 4 skipped"}
+  ],
+  "filesChanged": [
+    {"path": ".bober/anti-patterns/README.md", "action": "created"},
+    {"path": ".bober/anti-patterns/testing-anti-patterns.md", "action": "created"},
+    {"path": ".bober/anti-patterns/condition-based-waiting.md", "action": "created"},
+    {"path": ".bober/anti-patterns/root-cause-tracing.md", "action": "created"},
+    {"path": ".bober/anti-patterns/defense-in-depth.md", "action": "created"},
+    {"path": "agents/bober-evaluator.md", "action": "modified"}
+  ],
+  "notes": "All four sources contained no superpowers-only skill cross-refs needing adaptation. Schema extension uses optional antiPattern/source/antiPatternEvidence fields documented in the prompt rather than mutating src/contracts/eval-result.ts (out of expectedChanges)."
+}
