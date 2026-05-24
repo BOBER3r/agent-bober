@@ -164,6 +164,10 @@ export const GraphSectionSchema = z.object({
   debounceMs: z.number().int().nonnegative().default(750),
   hookQueueMax: z.number().int().positive().default(50),
   maxEngineRssMb: z.number().int().positive().default(512),
+  /** When true (default) and graph.enabled=true, graph_* tools are
+   *  exposed on the external MCP server (Cursor/Windsurf). When false,
+   *  graph tools remain available to the internal orchestrator only. */
+  exposeOnExternalMcp: z.boolean().default(true),
 });
 export type GraphSection = z.infer<typeof GraphSectionSchema>;
 

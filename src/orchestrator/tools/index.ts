@@ -3,6 +3,10 @@ import type { ToolDef } from "../../providers/types.js";
 import { TOOL_SCHEMAS } from "./schemas.js";
 import { createToolHandlers } from "./handlers.js";
 import type { ToolHandler } from "./handlers.js";
+import type { GraphClient } from "../../graph/client.js";
+import type { GraphFallback } from "../../graph/fallback.js";
+import { createGraphTools } from "../../mcp/tools/graph.js";
+import type { BoberToolDefinition } from "../../mcp/tools/registry.js";
 
 export type { ToolHandler } from "./handlers.js";
 
@@ -56,4 +60,18 @@ export function buildToolSet(
   }
 
   return { schemas, handlers };
+}
+
+// ── Graph tool helper (used by sprint 5's GraphToolGate) ──────────
+
+/**
+ * Returns the 6 graph_* tool definitions for use by the internal
+ * orchestrator. DRY: consumes the same factory as the external MCP server.
+ * NOT yet wired into ROLE_TOOLS — that happens in sprint 5 (GraphToolGate).
+ */
+export function getGraphInternalTools(
+  client: GraphClient,
+  fallback: GraphFallback,
+): BoberToolDefinition[] {
+  return createGraphTools({ client, fallback });
 }
