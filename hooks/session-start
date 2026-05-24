@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# session-start — SessionStart hook for agent-bober
+# Injects the bober.using-bober bootstrap skill into the model's first-turn context.
+#
+# Structural pattern from obra/superpowers (MIT). https://github.com/obra/superpowers
+
+set -euo pipefail
+
+# Determine project root directory
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Read bober.using-bober skill content
+using_bober_content=$(cat "${PROJECT_ROOT}/skills/bober.using-bober/SKILL.md" 2>&1 || echo "Error reading bober.using-bober skill")
+
+# Escape string for JSON embedding using bash parameter substitution.
+# Each ${s//old/new} is a single C-level pass - orders of magnitude
+# faster than the character-by-character loop this replaces.
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+using_bober_escaped=$(escape_for_json "$using_bober_content")
+session_context="<EXTREMELY_IMPORTANT>\nYou are agent-bober.\n\n**Below is the full content of your 'bober-using-bober' skill - your introduction to using bober skills. For all other skills, use the 'Skill' tool:**\n\n${using_bober_escaped}\n\n</EXTREMELY_IMPORTANT>"
+
+# Output context injection as JSON.
+# Uses printf instead of heredoc to work around bash 5.3+ heredoc hang.
+# See: https://github.com/obra/superpowers/issues/571
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ] && [ -z "${COPILOT_CLI:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  printf '{\n  "additionalContext": "%s"\n}\n' "$session_context"
+fi
+
+exit 0
