@@ -9,7 +9,8 @@ export type IncidentEvent =
   | { ts: string; event: "restart"; pid: number | null; exitCode: number | null; signal: string | null }
   | { ts: string; event: "start"; pid: number }
   | { ts: string; event: "stop"; pid: number; reason: "sigterm" | "sigkill" | "normal" }
-  | { ts: string; event: "orphan-killed"; pid: number };
+  | { ts: string; event: "orphan-killed"; pid: number }
+  | { ts: string; event: "sandbox-drop"; file: string; source: string };
 
 // ── IncidentLog ────────────────────────────────────────────────────
 
