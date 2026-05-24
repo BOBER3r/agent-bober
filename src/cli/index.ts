@@ -19,6 +19,8 @@ import { runEvalCommand } from "./commands/eval.js";
 import { runRunCommand } from "./commands/run.js";
 import { createBoberMCPServer } from "../mcp/server.js";
 import { registerGraphCommand } from "./commands/graph.js";
+import { registerOnboardCommand } from "./commands/onboard.js";
+import { registerImpactCommand } from "./commands/impact.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -206,6 +208,12 @@ async function main(): Promise<void> {
 
   // ── graph ──────────────────────────────────────────────────────
   registerGraphCommand(program);
+
+  // ── onboard ────────────────────────────────────────────────────
+  registerOnboardCommand(program);
+
+  // ── impact ─────────────────────────────────────────────────────
+  registerImpactCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

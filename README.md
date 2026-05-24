@@ -114,6 +114,37 @@ Specialized workflows:
 
 ---
 
+## Graph (Tokensave) Integration
+
+agent-bober integrates with [tokensave](https://github.com/aovestdipaperino/tokensave) to build a structural code graph that powers semantic search, impact analysis, and automated onboarding documentation.
+
+Enable by adding a `graph` section to `bober.config.json`:
+
+```json
+{
+  "graph": {
+    "enabled": true,
+    "languageTier": "core"
+  }
+}
+```
+
+Once enabled, three new CLI commands and slash commands become available:
+
+```bash
+agent-bober graph init         # Initialise the graph index
+agent-bober graph sync         # Re-index changed files (--force for full re-index)
+agent-bober graph status       # Check graph status (--json for machine-readable)
+agent-bober onboard            # Generate .bober/onboarding/ documentation
+agent-bober impact <symbol>    # Analyse impact radius and test coverage
+```
+
+In Claude Code, the same workflows are available as slash commands: `/bober-graph`, `/bober-onboard`, `/bober-impact`.
+
+For architecture details see: [`.bober/architecture/arch-20260524-port-code-review-graph-architecture.md`](.bober/architecture/arch-20260524-port-code-review-graph-architecture.md)
+
+---
+
 ## Multi-Provider Support
 
 agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. Mix and match providers freely -- use one for planning, another for generation, a local model for evaluation.
