@@ -124,7 +124,7 @@ function renderReadme(inputs: OnboardingInputs): string {
   lines.push("- [Communities](./communities.md) — module groupings");
   lines.push("- [README](./README.md) — this file");
 
-  return lines.join("\n");
+  return lines.join("\n") + "\n";
 }
 
 // ── architecture-overview.md renderer ────────────────────────────
@@ -141,7 +141,7 @@ function renderArchitectureOverview(inputs: OnboardingInputs): string {
 
   if (sorted.length === 0) {
     lines.push("_No modules found._");
-    return lines.join("\n");
+    return lines.join("\n") + "\n";
   }
 
   for (const mod of sorted) {
@@ -157,7 +157,7 @@ function renderArchitectureOverview(inputs: OnboardingInputs): string {
     lines.push("");
   }
 
-  return lines.join("\n").trimEnd();
+  return lines.join("\n").trimEnd() + "\n";
 }
 
 // ── hotspots.md renderer ──────────────────────────────────────────
@@ -169,7 +169,7 @@ function renderHotspots(inputs: OnboardingInputs): string {
 
   if (inputs.hotspots.length === 0) {
     lines.push("No hotspots detected in this codebase.");
-    return lines.join("\n");
+    return lines.join("\n") + "\n";
   }
 
   // Separate valid scores from NaN scores; sort valid desc, NaN last
@@ -192,7 +192,7 @@ function renderHotspots(inputs: OnboardingInputs): string {
     lines.push(`| ${symbol} | ${fileLine} | ${score} | ${reason} |`);
   }
 
-  return lines.join("\n");
+  return lines.join("\n") + "\n";
 }
 
 // ── knowledge-gaps.md renderer ────────────────────────────────────
@@ -234,7 +234,7 @@ function renderKnowledgeGaps(inputs: OnboardingInputs): string {
     }
   }
 
-  return lines.join("\n");
+  return lines.join("\n") + "\n";
 }
 
 // ── communities.md renderer ───────────────────────────────────────
@@ -258,7 +258,7 @@ function renderCommunities(inputs: OnboardingInputs): string {
 
   if (communityMap.size === 0) {
     lines.push("_No communities found._");
-    return lines.join("\n");
+    return lines.join("\n") + "\n";
   }
 
   // Sort communities alphabetically
@@ -280,7 +280,7 @@ function renderCommunities(inputs: OnboardingInputs): string {
     lines.push("");
   }
 
-  return lines.join("\n").trimEnd();
+  return lines.join("\n").trimEnd() + "\n";
 }
 
 // ── Helpers ───────────────────────────────────────────────────────

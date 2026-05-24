@@ -88,6 +88,7 @@
     "@typescript-eslint/eslint-plugin": "^8.22.0",
     "@typescript-eslint/parser": "^8.22.0",
     "eslint": "^9.19.0",
+    "markdownlint-cli": "^0.48.0",
     "typescript": "^5.7.3",
     "vitest": "^3.0.5"
   }
