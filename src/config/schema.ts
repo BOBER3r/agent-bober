@@ -129,6 +129,17 @@ export const CuratorSectionSchema = z.object({
 });
 export type CuratorSection = z.infer<typeof CuratorSectionSchema>;
 
+export const CodeReviewSectionSchema = z.object({
+  timeoutMs: z.number().int().positive().default(300_000),
+  enabled: z.boolean().default(true),
+  model: ModelChoiceSchema.default("sonnet"),
+  maxTurns: z.number().int().min(1).default(15),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+});
+export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
+
 export const PipelineSectionSchema = z.object({
   maxIterations: z.number().int().min(1).default(20),
   requireApproval: z.boolean().default(false),
@@ -206,6 +217,7 @@ export const BoberConfigSchema = z.object({
   pipeline: PipelineSectionSchema,
   commands: CommandsSectionSchema,
   graph: GraphSectionSchema.optional(),
+  codeReview: CodeReviewSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

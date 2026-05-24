@@ -31,6 +31,7 @@ import { runCurator } from "./curator-agent.js";
 import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
+import { runCodeReviewer } from "./code-reviewer-agent.js";
 import {
   ensureBoberDir,
   saveContract,
@@ -343,6 +344,43 @@ async function runSprintCycle(
         sprintId: currentContract.contractId,
         details: { iteration, feedback: evaluation.summary },
       });
+
+      // Sprint 5 — advisory code review (config-gated, time-boxed, never blocks)
+      const reviewEnabled = config.codeReview?.enabled !== false;
+      if (reviewEnabled) {
+        const reviewTimeoutMs = config.codeReview?.timeoutMs ?? 300_000;
+        try {
+          const review = await Promise.race([
+            runCodeReviewer(currentContract, evaluation, projectRoot, config),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("code-review timeout")), reviewTimeoutMs),
+            ),
+          ]);
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "code-review-complete",
+            phase: "complete",
+            sprintId: currentContract.contractId,
+            details: {
+              critical: review.critical.length,
+              important: review.important.length,
+              minor: review.minor.length,
+            },
+          });
+        } catch (err) {
+          logger.warn(
+            `Code review skipped: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "code-review-failed",
+            phase: "complete",
+            sprintId: currentContract.contractId,
+            details: { error: err instanceof Error ? err.message : String(err) },
+          });
+          // Advisory only — sprint completion proceeds regardless.
+        }
+      }
 
       return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
     }

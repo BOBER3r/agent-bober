@@ -58,8 +58,14 @@ export {
   listBriefings,
 } from "./briefing-state.js";
 
+export {
+  saveReview,
+  readReview,
+  listReviews,
+} from "./review-state.js";
+
 const BOBER_DIR = ".bober";
-const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings"] as const;
+const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews"] as const;
 
 /**
  * Ensure the `.bober/` directory and all required subdirectories exist,
