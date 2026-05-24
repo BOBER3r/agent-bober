@@ -99,6 +99,30 @@ export type PrefetchSpec = {
   args: unknown;
 };
 
+// ── Onboarding composer types ──────────────────────────────────────
+
+export interface OnboardingInputs {
+  status: { tokensaveVersion: string; indexedFileCount: number };
+  hotspots: Array<{ symbol: string; file: string; line: number; score: number; reason?: string }>;
+  deadCode: Array<{ symbol: string; file: string; line: number }>;
+  circular: Array<{ cycle: string[] }>;
+  largest: Array<{ symbol: string; file: string; line: number; loc: number }>;
+  moduleApis: Array<{
+    module: string;
+    community?: string;
+    symbols: Array<{ name: string; file: string; line: number; hasInternalCallers: boolean }>;
+  }>;
+  files: Array<{ path: string; symbols: number }>;
+}
+
+export interface OnboardingArtifacts {
+  readme: string;
+  architectureOverview: string;
+  hotspots: string;
+  knowledgeGaps: string;
+  communities: string;
+}
+
 // ── Exhaustiveness helper ──────────────────────────────────────────
 
 /**
