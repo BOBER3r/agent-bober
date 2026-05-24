@@ -148,6 +148,25 @@ export const CommandsSectionSchema = z.object({
 });
 export type CommandsSection = z.infer<typeof CommandsSectionSchema>;
 
+// ── Graph Section (tokensave integration) ───────────────────────────
+
+export const GraphLanguageTierSchema = z.enum(["core", "extended", "all"]);
+export type GraphLanguageTier = z.infer<typeof GraphLanguageTierSchema>;
+
+export const GraphSectionSchema = z.object({
+  enabled: z.boolean().default(false),
+  tokensavePath: z.string().optional(),
+  autoSync: z.boolean().default(true),
+  languageTier: GraphLanguageTierSchema.default("core"),
+  manifestPath: z.string().default(".bober/graph/manifest.json"),
+  syncTimeoutMs: z.number().int().positive().default(2000),
+  queryTimeoutMs: z.number().int().positive().default(5000),
+  debounceMs: z.number().int().nonnegative().default(750),
+  hookQueueMax: z.number().int().positive().default(50),
+  maxEngineRssMb: z.number().int().positive().default(512),
+});
+export type GraphSection = z.infer<typeof GraphSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -159,6 +178,7 @@ export const BoberConfigSchema = z.object({
   sprint: SprintSectionSchema,
   pipeline: PipelineSectionSchema,
   commands: CommandsSectionSchema,
+  graph: GraphSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

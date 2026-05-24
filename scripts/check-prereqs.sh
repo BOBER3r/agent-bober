@@ -54,6 +54,18 @@ else
   add_check "{\"name\":\"bober_dir\",\"status\":\"missing\",\"path\":\".bober/\",\"message\":\"No .bober/ directory. Run /bober-plan first.\"}"
 fi
 
+# ── Optional check: tokensave (only if installed) ─────────────────
+if command -v agent-bober &>/dev/null; then
+  ts_json=$(agent-bober graph check-prereq 2>/dev/null || echo '{"ok":false,"reason":"MISSING","hint":"agent-bober graph check-prereq failed"}')
+  # Normalize to the {name,status} shape used by other checks
+  if echo "$ts_json" | grep -q '"ok":true'; then
+    add_check "{\"name\":\"tokensave\",\"status\":\"ok\",\"detail\":$ts_json}"
+  else
+    # Tokensave missing is NOT a hard blocker for any current command — emit info-only
+    CHECKS+=("{\"name\":\"tokensave\",\"status\":\"optional\",\"detail\":$ts_json}")
+  fi
+fi
+
 # ── Command-specific checks ───────────────────────────────────────
 
 case "$COMMAND" in

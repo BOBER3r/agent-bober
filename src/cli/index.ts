@@ -18,6 +18,7 @@ import { runSprintCommand } from "./commands/sprint.js";
 import { runEvalCommand } from "./commands/eval.js";
 import { runRunCommand } from "./commands/run.js";
 import { createBoberMCPServer } from "../mcp/server.js";
+import { registerGraphCommand } from "./commands/graph.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -202,6 +203,9 @@ async function main(): Promise<void> {
       await createBoberMCPServer(projectRoot);
       // Keep the process alive; the server holds an open stdin reader
     });
+
+  // ── graph ──────────────────────────────────────────────────────
+  registerGraphCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
