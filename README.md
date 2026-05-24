@@ -778,6 +778,8 @@ bash scripts/run-eval.sh /path/to/project
 
 ## Contributing
 
+See [AGENTS.md](./AGENTS.md) for contributor discipline including the anti-slop pre-PR checklist.
+
 Contributions are welcome. To set up the development environment:
 
 ```bash

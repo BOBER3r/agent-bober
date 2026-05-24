@@ -33,7 +33,7 @@ Bober skills override default system prompt behavior, but **user instructions al
 
 If CLAUDE.md or AGENTS.md says "don't use TDD" and a skill says "always use TDD," follow the user's instructions. The user is in control.
 
-See AGENTS.md at the repo root for the contributor discipline — this file defines non-negotiable project conventions (it is created in a later sprint; treat its absence as a forward reference).
+See [AGENTS.md](../../AGENTS.md) at the repo root for the contributor discipline — this file defines non-negotiable project conventions.
 
 ## How to Access Skills
 
