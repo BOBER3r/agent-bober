@@ -10,12 +10,12 @@
  */
 
 import { describe, it, expect, vi, beforeAll } from "vitest";
-import { PreflightContextInjector } from "../../src/graph/preflight-injector.js";
-import type { GraphClient } from "../../src/graph/client.js";
-import type { SprintContract } from "../../src/contracts/sprint-contract.js";
+import { PreflightContextInjector } from "./preflight-injector.js";
+import type { GraphClient } from "./client.js";
+import type { SprintContract } from "../contracts/sprint-contract.js";
 
 // Mock graphPipelineLifecycle to return "ready"
-vi.mock("../../src/graph/pipeline-lifecycle.js", () => ({
+vi.mock("./pipeline-lifecycle.js", () => ({
   graphPipelineLifecycle: {
     engineHealth: vi.fn().mockReturnValue("ready"),
     getGraphClient: vi.fn().mockReturnValue(null),
