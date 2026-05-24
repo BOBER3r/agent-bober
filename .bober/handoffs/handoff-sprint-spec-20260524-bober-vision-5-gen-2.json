@@ -1,0 +1,38 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-5-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-5",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T02:30:00Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Sprint 5 iter 1 passed 7/9. Two narrow gaps to close in iter 2.",
+    "currentBranch": "bober/bober-vision",
+    "iter1Commits": ["ac29dda (initial)", "2cd7b9d (scanner fix)"]
+  },
+  "evaluatorFeedback": {
+    "overallResult": "fail",
+    "failedCriteria": ["s5-c2", "s5-c6"],
+    "passedCriteria": ["s5-c1", "s5-c3", "s5-c4", "s5-c5", "s5-c7", "s5-c8", "s5-c9"],
+    "items": [
+      {
+        "criterionId": "s5-c2",
+        "file": "agents/bober-code-reviewer.md",
+        "problem": "Red Flags table has 7 'About to' bullets; contract requires >=8. Rationalization Prevention table has 6 data rows; contract requires >=7. Sprint 3 reference (bober-evaluator.md): 10 Red Flags, 9 Rationalization rows.",
+        "fix": "Append AT LEAST 1 more Red Flag and 1 more Rationalization row. Make them code-review-specific (not bober-evaluator copies). Suggested entries: 'About to file a finding for pre-existing code that the sprint didn't change' (Red Flag); a Rationalization row like 'just this once / I'll review the whole file even though only X changed' → 'Stick to the diff. Pre-existing code is out of scope.'"
+      },
+      {
+        "criterionId": "s5-c6",
+        "file": "src/orchestrator/code-reviewer-agent.test.ts",
+        "problem": "All 3 contract assertions are structurally hollow — tests pass but never exercise pipeline.ts. (a) mocks runCodeReviewer and calls the mock directly + asserts mock was called (tautological); (b) hand-builds markdown bypassing renderReviewMarkdown then calls saveReview directly; (c) replicates pipeline.ts try/catch inline rather than calling runSprintCycle. Pipeline.ts L370-382 (the actual advisory error handling) is untested.",
+        "fix": "Rewrite as follows: (a) vi.mock the code-reviewer-agent module so runCodeReviewer is a spy; call runSprintCycle (or the smallest pipeline slice that contains the if (evaluation.passed) branch) with an evaluator stub returning {passed:true, ...}; assert the spy was called with the contract+evaluation values that the pipeline propagated. (b) Either: import renderReviewMarkdown directly with a ReviewResult fixture and assert the returned string contains all 6 H1/H2 headings in order — that's a unit test of the renderer. OR: with the full runCodeReviewer mocked to return a ReviewResult shape, run pipeline and read the written file to assert it contains the 6 headings. (c) Make the runCodeReviewer spy throw; call runSprintCycle; assert (1) pipeline did NOT throw, (2) the returned sprint state has status='passed' (or whatever the success status is — check pipeline.ts), (3) logger.warn was called. This is the ACTUAL coverage of pipeline.ts L370-382."
+      }
+    ],
+    "auxiliaryFindings": [
+      "All other 7 criteria pass independently. Do NOT touch what works.",
+      "Existing 589/4 test state must not regress. New iteration must end with 589/4 (or +N pass / 4 skipped if tests grow).",
+      "src/orchestrator/pipeline.ts LOCALIZATION still holds — only ADD test coverage. Do not restructure production code."
+    ]
+  },
+  "notes": "Read the eval result at .bober/eval-results/eval-sprint-spec-20260524-bober-vision-5-1.json for the full evidence and reproduction commands. Read the original briefing at .bober/briefings/sprint-spec-20260524-bober-vision-5-briefing.md (still relevant). New commit message: 'bober(sprint-5 iter 2): code-review table thresholds + real pipeline.ts integration test coverage'."
+}

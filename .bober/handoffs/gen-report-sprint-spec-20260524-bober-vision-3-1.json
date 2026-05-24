@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-3",
+  "iteration": 1,
+  "status": "complete",
+  "filesChanged": [
+    {"path": "agents/bober-planner.md", "action": "modified", "description": "Iron Law 'NO SPRINT CONTRACTS WITHOUT TESTABLE SUCCESS CRITERIA' + Red Flags (9) + Rationalization-Prevention table (8 rows). 676 lines."},
+    {"path": "agents/bober-curator.md", "action": "modified", "description": "Iron Law 'NO BRIEFING CLAIM WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE' + Red Flags (8) + Rationalization-Prevention table (7 rows). 382 lines."},
+    {"path": "agents/bober-architect.md", "action": "modified", "description": "Iron Law 'NO ADR WITHOUT STRUCTURED TRADEOFF EVIDENCE' + Red Flags (9) + Rationalization-Prevention table (7 rows). 533 lines."},
+    {"path": "agents/bober-researcher.md", "action": "modified", "description": "Iron Law 'NO FINDING WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE' + Red Flags (9) + Rationalization-Prevention table (7 rows). 202 lines."},
+    {"path": "agents/bober-evaluator.md", "action": "modified", "description": "Iron Law 'NO PASS WITHOUT INDEPENDENT VERIFICATION OF EVERY SUCCESS CRITERION' placed above existing One Rule (both preserved) + Red Flags (10) + Rationalization-Prevention table (9 rows). 698 lines."}
+  ],
+  "commits": ["e5233ed - bober(sprint-3): voice pass — Iron Law/Red Flags/Rationalization across 5 remaining agent prompts"],
+  "blockers": [],
+  "notes": "Generator's criterion labels were off-by-one (skipped explicit s3-c8 voice-consistency check). All actual work done correctly per the report. Evaluator should independently verify forbidden-string absence ('your human partner', '94% rejection', all-caps 'EXTREMELY-IMPORTANT' as prose). EXTREMELY-IMPORTANT TAG (with angle brackets) is permitted and used 2x per file as Iron Law wrapper.",
+  "verificationOutput": [
+    {"command": "wc -l agents/bober-{planner,curator,architect,researcher,evaluator}.md", "exitCode": 0, "stdoutTail": "676, 382, 533, 202, 698 — all <=800"},
+    {"command": "npm run typecheck", "exitCode": 0, "stdoutTail": "clean"},
+    {"command": "npm run lint", "exitCode": 0, "stdoutTail": "clean"},
+    {"command": "npm run build", "exitCode": 0, "stdoutTail": "clean"},
+    {"command": "npm run test", "exitCode": 0, "stdoutTail": "44 files, 584 passed, 4 skipped"}
+  ]
+}

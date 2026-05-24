@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T02:00:00Z
+Last updated: 2026-05-25T02:42:00Z
 
 ---
 
@@ -102,7 +102,7 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 
 ### Tier 1 — Quality discipline (sprints 4-6)
 4. [completed] Anti-pattern reference catalog — Passed iter 1 (7/7 criteria, 584 tests, commit c3d939e). Four MIT-attributed reference docs ported verbatim into .bober/anti-patterns/ + README index. agents/bober-evaluator.md gained Step 6.5 "Anti-Pattern Citations" with JSON example shape extending regressions by optional antiPattern/source/antiPatternEvidence; Sprint 3 Iron Law preserved. src/contracts/eval-result.ts untouched.
-5. [proposed] bober-code-reviewer agent + bober.code-review skill + orchestrator wiring — Fresh-context advisory review after evaluator pass.
+5. [completed] bober-code-reviewer agent + bober.code-review skill + orchestrator wiring — Passed iter 2 (9/9 criteria, 589 tests, commits ac29dda + 2cd7b9d + b5568ba). Iter 1 introduced two issues: scanner.test.ts colocated regression (new test placed at tests/ tipped detectColocated's balance) caught by orchestrator pre-evaluator and fixed by moving to colocated convention; eval then failed on s5-c2 (table thresholds off by 1) and s5-c6 (hollow tests not exercising pipeline.ts). Iter 2 fixed both: 8 Red Flags + 7 Rationalization rows; tests rewritten to exercise runSprintCycle and renderReviewMarkdown directly. Advisory-only contract preserved (no critical→retry branch).
 6. [proposed] HARD-GATE in bober.plan + AGENTS.md at repo root — Brainstorming hard gate between PlanSpec and contracts; AGENTS.md anti-slop contract with verbatim voice; cross-link from README and bootstrap skill.
 
 ### Tier 2 — Careful-flow multi-mode (sprints 7-14)

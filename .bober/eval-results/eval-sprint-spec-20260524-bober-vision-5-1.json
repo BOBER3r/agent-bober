@@ -1,0 +1,42 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-5-1",
+  "contractId": "sprint-spec-20260524-bober-vision-5",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T02:28:00.000Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 7,
+    "criteriaFailed": 2,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 2,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit (no errors)", "details": "exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ (no errors)", "details": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc (no errors)", "details": "exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "45 files / 589 passed / 4 skipped / 0 failed (2.60s)", "details": "scanner.test.ts colocated regression fixed by commit 2cd7b9d" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s5-c1", "required": true, "result": "pass", "evidence": "tools=[Read, Bash, Grep, Glob] only; no Write/Edit/MultiEdit in frontmatter" },
+    { "criterionId": "s5-c2", "required": true, "result": "fail", "evidence": "Red Flags has 7 'About to' bullets (need >=8); Rationalization Prevention has 6 data rows (need >=7). Sprint 3 reference: bober-evaluator.md has 10 RF + 9 RP rows.", "feedback": "Add >=1 Red Flag and >=1 Rationalization row reflecting code-review-specific failure modes" },
+    { "criterionId": "s5-c3", "required": true, "result": "pass", "evidence": "SKILL.md description prefix correct; .bober/anti-patterns/ cited 12x including specific files; obra/superpowers attribution at line 7; What NOT to flag includes style/naming/theoretical risks/pre-existing code" },
+    { "criterionId": "s5-c4", "required": true, "result": "pass", "evidence": "code-reviewer-agent.ts uses createClient (L74) + runAgenticLoop (L144); pipeline.ts spawn at L330 inside if (evaluation.passed); try/catch L370-L382 logger.warn + proceeds; review-state.saveReview writes to .bober/reviews/<contractId>-review.md with mkdir -p" },
+    { "criterionId": "s5-c5", "required": true, "result": "pass", "evidence": "renderReviewMarkdown emits 6 sections in contract order at L185/187/191/209/224/239 with empty-section fallbacks ('No critical findings.' etc.)" },
+    { "criterionId": "s5-c6", "required": true, "result": "fail", "evidence": "All 3 contract assertions structurally hollow: (a) mocks runCodeReviewer then calls mock directly + asserts mock was called — tautological, never exercises pipeline.ts spawn path; (b) hand-builds markdown bypassing renderReviewMarkdown then calls saveReview directly; (c) replicates pipeline.ts try/catch inline instead of calling runSprintCycle — pipeline.ts L370-L382 untested. Generator was warned in evaluatorNotes about this exact anti-pattern.", "feedback": "Rewrite tests to actually exercise pipeline.ts: (a) mock runAgenticLoop or runCodeReviewer at module boundary, call runSprintCycle, assert mock invoked with pipeline-passed args; (b) call renderReviewMarkdown with fixture + verify 6 headings, OR run full path with mocked agent return; (c) mock runCodeReviewer to throw, call runSprintCycle, assert sprint completes with status='passed'" },
+    { "criterionId": "s5-c7", "required": true, "result": "pass", "evidence": "Grep of pipeline.ts reviewer block (L348-385) for iteration/updateContract/needs-rework/retry shows zero matches; critical findings count is used only in appendHistory details" },
+    { "criterionId": "s5-c8", "required": true, "result": "pass", "evidence": "All 4 strategies exit 0; 589 tests pass; scanner.test.ts confirmed restored" },
+    { "criterionId": "s5-c9", "required": true, "result": "pass", "evidence": "pipeline.ts +38/-0; code-reviewer-agent.ts +373 new; code-reviewer-agent.test.ts +283 new; evaluator-agent.ts zero diff; total sprint diff 8 files / 1198 ins / 1 del — additive only" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "high", "category": "quality", "file": "agents/bober-code-reviewer.md", "line": 204, "description": "Red Flags=7 (<8); Rationalization Prevention=6 (<7)", "expected": "Add >=1 RF + >=1 RP row, code-review-specific", "reproduction": "awk '/^## Red Flags/,/^## Rationalization/' agents/bober-code-reviewer.md | grep -c '^- About to' → 7"},
+    {"priority": "high", "category": "quality", "file": "src/orchestrator/code-reviewer-agent.test.ts", "line": 128, "description": "Test (a) tautological — mocks runCodeReviewer, calls mock directly, asserts mock was called. Never exercises pipeline.ts spawn path.", "expected": "Call runSprintCycle with mocked evaluator returning passed=true; assert mocked runCodeReviewer invoked with pipeline-passed args", "reproduction": "src/orchestrator/code-reviewer-agent.test.ts L128-146 calls mock directly"},
+    {"priority": "medium", "category": "quality", "file": "src/orchestrator/code-reviewer-agent.test.ts", "line": 150, "description": "Test (b) constructs markdown by hand, bypassing renderReviewMarkdown", "expected": "Call renderReviewMarkdown with ReviewResult fixture + assert 6 headings present", "reproduction": "L150-198 hardcodes reviewMarkdown string literal; renderReviewMarkdown never called"},
+    {"priority": "medium", "category": "quality", "file": "src/orchestrator/code-reviewer-agent.test.ts", "line": 202, "description": "Test (c) replicates pipeline.ts try/catch inline; pipeline.ts L370-382 untested", "expected": "Mock runCodeReviewer to throw, call runSprintCycle, assert sprint.status stays 'passed' and pipeline does not throw", "reproduction": "L202-241 has hand-rolled try/catch in test body, not in production code path"}
+  ],
+  "summary": "Sprint 5 fails 2/9 criteria. s5-c2: Red Flags 7<8 + Rationalization 6<7 (off by 1 each). s5-c6: all 3 tests are structurally hollow — pipeline.ts integration path completely untested despite evaluatorNotes warning. Other 7 criteria pass independently; all 4 strategies green at 589/4."
+}

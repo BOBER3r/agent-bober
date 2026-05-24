@@ -1,0 +1,38 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-5",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T02:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: brownfield TypeScript/Node multi-mode software engineering teammate. Pipeline (src/orchestrator/pipeline.ts) runs planner → curator → generator → evaluator. Sprint 5 inserts an ADVISORY code-reviewer AFTER evaluator pass. Highest regression-risk sprint of Tier 1: touches src/orchestrator/. Must be LOCALIZED additive change at ONE decision point.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-1", "title": "SessionStart bootstrap" },
+      { "contractId": "sprint-spec-20260524-bober-vision-2", "title": "bober.verify + bober.debug + generator Iron Law" },
+      { "contractId": "sprint-spec-20260524-bober-vision-3", "title": "Voice pass across 5 agent prompts" },
+      { "contractId": "sprint-spec-20260524-bober-vision-4", "title": "Anti-pattern catalog .bober/anti-patterns/ + evaluator Step 6.5", "summary": "Skill body MUST cite these by path: .bober/anti-patterns/{testing-anti-patterns,condition-based-waiting,root-cause-tracing,defense-in-depth}.md" }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "/tmp/superpowers/skills/requesting-code-review/code-reviewer.md",
+      "/tmp/superpowers/skills/requesting-code-review/SKILL.md",
+      "agents/bober-evaluator.md",
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/curator-agent.ts",
+      "src/orchestrator/evaluator-agent.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agent-loader.ts",
+      "src/config/schema.ts",
+      "src/utils/fs.ts",
+      "src/utils/logger.ts",
+      "src/state/briefing-state.ts",
+      "tests/orchestrator/curator-turn-count.test.ts",
+      "tests/orchestrator/gating.test.ts",
+      "package.json"
+    ]
+  },
+  "principles": null,
+  "evaluatorFeedback": null,
+  "notes": "The Sprint Briefing at .bober/briefings/sprint-spec-20260524-bober-vision-5-briefing.md contains the FULL implementation plan: the exact decision-point line numbers (pipeline.ts:329-348), the exact subagent-spawn pattern to clone (curator-agent.ts:57-87), the exact file-write pattern (briefing-state.ts:5-29), the exact config-schema location to add codeReview.timeoutMs (schema.ts:130 after CuratorSectionSchema), and the EvalResult flow (NOT on disk — must pass via prompt). READ THE BRIEFING FIRST — don't re-explore."
+}

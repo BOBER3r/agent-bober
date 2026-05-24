@@ -1,0 +1,36 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-1-1",
+  "contractId": "sprint-spec-20260524-bober-vision-1",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-24T18:35:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Zero TypeScript errors."},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0", "details": "Zero ESLint errors or warnings."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Build succeeded."},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "Test Files 44 passed (44). Tests 584 passed | 4 skipped (588). Duration 2.51s.", "details": "All test files passed. 0 regressions vs commit 1cbe6ae."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "s1-c1", "result": "pass", "evidence": "Executable, shebang #!/usr/bin/env bash, set -euo pipefail, escape_for_json bash-parameter-substitution function present. All 3 env branches (CURSOR_PLUGIN_ROOT, CLAUDE_PLUGIN_ROOT, default) emit valid JSON confirmed by jq. No /bin/bash hardcode, no jq dep, uses printf not heredoc.", "feedback": "Minor: outer wrapper tag uses EXTREMELY_IMPORTANT (underscore) while SKILL.md body uses EXTREMELY-IMPORTANT (hyphen). Not a criterion failure."},
+    {"criterionId": "s1-c2", "result": "pass", "evidence": "jq . hooks/hooks.json exits 0. Shape: {hooks: {SessionStart: [...], PostToolUse: [...]}}. PostToolUse entries verified byte-identical to pre-sprint via git diff."},
+    {"criterionId": "s1-c3", "result": "pass", "evidence": "Frontmatter 207 bytes (under 1024). All 14 catalog skills named. <EXTREMELY-IMPORTANT> hyphen present (2x). Iron Law present (3x). AGENTS.md forward reference present (3x)."},
+    {"criterionId": "s1-c4", "result": "pass", "evidence": "Three timed runs: 0.451s, 0.447s, 0.447s — all under 500ms NFR. ~50ms margin."},
+    {"criterionId": "s1-c5", "result": "pass", "evidence": "MIT attribution to obra/superpowers present in SKILL.md (line 133) and as comment in hooks/session-start header."},
+    {"criterionId": "s1-c6", "result": "pass", "evidence": "All 4 eval strategies exit 0. 584 tests pass, 0 regressions."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "low", "category": "quality", "file": "hooks/session-start", "line": "29", "description": "Outer wrapper uses <EXTREMELY_IMPORTANT> (underscore) while SKILL.md body uses <EXTREMELY-IMPORTANT> (hyphen). Inconsistency worth harmonizing but not a criterion failure."}
+  ],
+  "summary": "All 6 required success criteria pass. Bootstrap mechanism functional end-to-end with all three harness env-var branches. Performance under NFR. Attribution present. Zero test regressions. One low-priority style inconsistency noted for future cleanup."
+}

@@ -1,0 +1,28 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-5",
+  "iteration": 2,
+  "status": "complete",
+  "commits": [
+    "ac29dda - bober(sprint-5): bober-code-reviewer agent + advisory orchestrator wiring",
+    "2cd7b9d - bober(sprint-5): colocate code-reviewer test to preserve scanner colocated convention",
+    "b5568ba - bober(sprint-5 iter 2): code-review table thresholds + real pipeline.ts integration test coverage"
+  ],
+  "criteriaResults": [
+    {"criterionId": "s5-c1", "met": true, "evidence": "(unchanged from iter 1) tools=[Read, Bash, Grep, Glob] only"},
+    {"criterionId": "s5-c2", "met": true, "evidence": "Red Flags=8 (>=8 required); Rationalization rows=7 (>=7 required). New entries are code-review-specific (pre-existing code finding; reviewing whole file)."},
+    {"criterionId": "s5-c3", "met": true, "evidence": "(unchanged) skill body cites .bober/anti-patterns/ 12x; attribution present"},
+    {"criterionId": "s5-c4", "met": true, "evidence": "(unchanged) pipeline.ts +38/-0 inside if (evaluation.passed) branch"},
+    {"criterionId": "s5-c5", "met": true, "evidence": "(unchanged) renderReviewMarkdown emits 6 sections in order"},
+    {"criterionId": "s5-c6", "met": true, "evidence": "Tests rewritten to exercise pipeline.ts: (a) runSprintCycle with evaluator stub passing → asserts runCodeReviewer spy called with pipeline-propagated args; (b) calls renderReviewMarkdown directly with ReviewResult fixture → asserts 6 headings in order; (c) spy throws → runSprintCycle does NOT throw + result.contract.status='passed' + logger.warn called with 'Code review skipped: reviewer crashed — boom' (pipeline.ts L370-382 actually exercised)"},
+    {"criterionId": "s5-c7", "met": true, "evidence": "(unchanged) no critical→retry branch"},
+    {"criterionId": "s5-c8", "met": true, "evidence": "typecheck/lint/build exit 0; npm run test 589 passed 4 skipped 0 failed across 45 test files"},
+    {"criterionId": "s5-c9", "met": true, "evidence": "iter 2 added only `export` keywords (runSprintCycle function + SprintCycleResult interface) — additive, no logic changes. Cumulative pipeline.ts diff still concentrated at one decision point + 2 export keywords for testability."}
+  ],
+  "filesChanged": [
+    {"path": "agents/bober-code-reviewer.md", "action": "modified", "description": "+1 Red Flag bullet, +1 Rationalization row, code-review-specific"},
+    {"path": "src/orchestrator/code-reviewer-agent.ts", "action": "modified", "description": "Added export to renderReviewMarkdown for direct unit testing"},
+    {"path": "src/orchestrator/code-reviewer-agent.test.ts", "action": "modified", "description": "Rewrote 3 contract tests to exercise real production code paths via runSprintCycle + renderReviewMarkdown direct call"},
+    {"path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "Added export keyword to runSprintCycle + SprintCycleResult interface — testability-only, no logic change"}
+  ],
+  "notes": "Iter 2 closes s5-c2 (table off-by-one) and s5-c6 (hollow tests). All 7 previously-passing criteria remain green. Diff localization preserved (s5-c9 still passes — only export keywords added)."
+}

@@ -1,0 +1,38 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-3-1",
+  "contractId": "sprint-spec-20260524-bober-vision-3",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-24T22:06:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 9,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 9,
+    "requiredFailed": 0,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0"},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0"},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "44 files, 584 passed, 4 skipped (pre-existing)"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "s3-c1", "result": "pass", "evidence": "bober-planner.md L59-63: Iron Law 'NO SPRINT CONTRACTS WITHOUT TESTABLE SUCCESS CRITERIA' fenced. Exactly 1 occurrence. After Subagent Context block."},
+    {"criterionId": "s3-c2", "result": "pass", "evidence": "bober-curator.md L36-40: Iron Law 'NO BRIEFING CLAIM WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE' fenced. Exactly 1 occurrence."},
+    {"criterionId": "s3-c3", "result": "pass", "evidence": "bober-architect.md L40-44: Iron Law 'NO ADR WITHOUT STRUCTURED TRADEOFF EVIDENCE' fenced. Exactly 1 occurrence."},
+    {"criterionId": "s3-c4", "result": "pass", "evidence": "bober-researcher.md L25-29: Iron Law 'NO FINDING WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE' fenced. Exactly 1 occurrence."},
+    {"criterionId": "s3-c5", "result": "pass", "evidence": "bober-evaluator.md L70-74: Iron Law 'NO PASS WITHOUT INDEPENDENT VERIFICATION OF EVERY SUCCESS CRITERION' fenced. Placed above the existing One Rule (both preserved)."},
+    {"criterionId": "s3-c6", "result": "pass", "evidence": "Red Flags entry counts: planner=9, curator=8, architect=9, researcher=9, evaluator=10. All >=5, role-specific."},
+    {"criterionId": "s3-c7", "result": "pass", "evidence": "Rationalization-Prevention markdown tables (| Excuse | Reality |): planner=8, curator=7, architect=7, researcher=7, evaluator=9 rows. Table format, not bullets."},
+    {"criterionId": "s3-c8 (voice consistency)", "result": "pass", "evidence": "Zero matches across all 5 files for 'your human partner', '94% rejection', or prose all-caps EXTREMELY-IMPORTANT outside angle-bracket tags."},
+    {"criterionId": "s3-c9 (line counts)", "result": "pass", "evidence": "wc -l: planner=676, curator=382, architect=533, researcher=202, evaluator=698. All <=800. Largest has 102-line margin."},
+    {"criterionId": "s3-c10 (eval strategies)", "result": "pass", "evidence": "typecheck/lint/build/test all exit 0. 584 tests pass."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All criteria pass. 5 agent prompts gained role-specific Iron Law + Red Flags + Rationalization-Prevention triple-block structure consistent with Sprint 2's style template from bober-generator.md:171-177. Voice consistency clean. 191 additive insertions, zero deletions, no out-of-scope file changes. Tier 0 foundation is complete."
+}
