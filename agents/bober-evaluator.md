@@ -335,6 +335,50 @@ Beyond the contract's criteria, check for regressions:
 2. **Does the build still work?** Even if the contract is about backend code, verify the full build.
 3. **Were any existing files modified in unexpected ways?** Use `git diff` to review all changes. Flag any changes to files NOT mentioned in the contract's `estimatedFiles`.
 
+### Step 6.5: Anti-Pattern Citations
+
+When a regression you found matches a documented anti-pattern in `.bober/anti-patterns/`,
+you MUST cite the anti-pattern by name in the regression entry. The catalog index is at
+`.bober/anti-patterns/README.md`. Currently catalogued:
+
+- Testing Mock Behavior, Test-Only Methods in Production, Mocking Without Understanding,
+  Incomplete Mocks, Tests as Afterthought → `.bober/anti-patterns/testing-anti-patterns.md`
+- Arbitrary-delay waiting (`setTimeout` / `sleep` instead of condition polling) →
+  `.bober/anti-patterns/condition-based-waiting.md`
+- Symptom-fix instead of root-cause → `.bober/anti-patterns/root-cause-tracing.md`
+- Single-layer validation (missing defense-in-depth) →
+  `.bober/anti-patterns/defense-in-depth.md`
+
+**Extended regression entry shape for anti-pattern citations:**
+
+The base `Regression` schema (`src/contracts/eval-result.ts`) requires `description`,
+`evidence`, `severity`. When citing an anti-pattern, ADD these optional fields:
+
+```json
+{
+  "description": "Test asserts on mock element rather than real component behavior",
+  "evidence": "src/components/Page.test.tsx:42 — expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()",
+  "severity": "major",
+  "antiPattern": "Testing Mock Behavior",
+  "source": ".bober/anti-patterns/testing-anti-patterns.md",
+  "antiPatternEvidence": [
+    { "path": "src/components/Page.test.tsx", "line": 42, "snippet": "expect(screen.getByTestId('sidebar-mock')).toBeInTheDocument()" }
+  ]
+}
+```
+
+- `antiPattern` (string): exact name as it appears in the catalog file's heading
+  (e.g., `"Testing Mock Behavior"`, not `"mock testing"`).
+- `source` (string): repo-relative path to the catalog file.
+- `antiPatternEvidence` (array): one entry per location demonstrating the anti-pattern,
+  each `{ path, line, snippet }`. Use repo-relative paths.
+
+These fields extend, but do not replace, the base schema. Always populate
+`description`, `evidence`, and `severity` as well — they remain required.
+
+If a regression does NOT match any catalogued anti-pattern, omit these fields and
+use only the base shape. Do not invent anti-pattern names.
+
 ### Step 7: Produce Structured EvalResult
 
 Generate the following JSON structure:
@@ -379,7 +423,12 @@ Generate the following JSON structure:
     {
       "description": "<What regressed>",
       "evidence": "<How you detected it>",
-      "severity": "critical | major | minor"
+      "severity": "critical | major | minor",
+      "antiPattern": "<optional: name from .bober/anti-patterns/ catalog if applicable>",
+      "source": "<optional: path to the matched catalog file>",
+      "antiPatternEvidence": [
+        { "path": "<file>", "line": "<n>", "snippet": "<code excerpt>" }
+      ]
     }
   ],
   "generatorFeedback": [
