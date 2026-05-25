@@ -415,6 +415,7 @@ describe("setIncidentStatus", () => {
         evidencePath: `.bober/incidents/${incidentId}/resolution-evidence/test.json`,
         reason: "OK",
       },
+      autoPostmortem: false, // Sprint 23: suppress fire-and-forget to avoid test-cleanup race
     });
     const after = Date.now();
 
@@ -438,6 +439,7 @@ describe("setIncidentStatus", () => {
         evidencePath: `.bober/incidents/${incidentId}/resolution-evidence/test.json`,
         reason: "OK",
       },
+      autoPostmortem: false, // Sprint 23: suppress fire-and-forget to avoid test-cleanup race
     });
 
     const metaPath = join(tmpDir, ".bober", "incidents", incidentId, "incident.json");

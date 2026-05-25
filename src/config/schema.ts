@@ -265,6 +265,18 @@ export const ObservabilitySectionSchema = z.object({
 });
 export type ObservabilitySection = z.infer<typeof ObservabilitySectionSchema>;
 
+// ── Incident Section (Sprint 23 — postmortem automation) ─────────────
+
+export const IncidentSectionSchema = z.object({
+  /** When true (default), an incident transition to status='resolved' triggers
+   *  asynchronous postmortem generation. The status transition itself returns
+   *  immediately — postmortem synthesis runs fire-and-forget and updates
+   *  incident.json.postmortemPath when complete. Set false to disable auto-gen
+   *  (e.g., for CI environments or read-only audits). Sprint 23. */
+  autoPostmortem: z.boolean().default(true),
+});
+export type IncidentSection = z.infer<typeof IncidentSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -280,6 +292,8 @@ export const BoberConfigSchema = z.object({
   codeReview: CodeReviewSectionSchema.optional(),
   // ── Sprint 16: observability MCP plugin slots ──
   observability: ObservabilitySectionSchema.optional(),
+  // ── Sprint 23: incident postmortem automation ──
+  incident: IncidentSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

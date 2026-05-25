@@ -164,3 +164,20 @@ export interface IncidentSummary {
   status: IncidentStatus;
   resolvedAt?: string;
 }
+
+// ── PostmortemResult (Sprint 23) ───────────────────────────────────────────────
+// Return type of generatePostmortem() in src/incident/postmortem.ts.
+
+export const PostmortemResultSchema = z.object({
+  /** Absolute path to the written postmortem.md */
+  path: z.string(),
+  /** The full markdown content (caller can stream to stdout for CLI show) */
+  content: z.string(),
+  /** Number of secret-like strings redacted from artifacts during synthesis */
+  redactionCount: z.number().int().min(0),
+  /** True if 5-Whys synthesis produced fewer than 3 deterministic levels */
+  shallowWarning: z.boolean(),
+  /** Number of inline citations in the generated markdown */
+  citationCount: z.number().int().min(0),
+});
+export type PostmortemResult = z.infer<typeof PostmortemResultSchema>;

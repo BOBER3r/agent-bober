@@ -249,6 +249,7 @@ describe("setIncidentStatus 'resolved' gate (s22-c3, s22-c4)", () => {
         evidencePath: ".bober/incidents/x/resolution-evidence/y.json",
         reason: "OK",
       },
+      autoPostmortem: false, // Sprint 23: suppress fire-and-forget to avoid test-cleanup race
     });
     const raw = await readFile(join(tmpDir, ".bober", "incidents", incidentId, "incident.json"), "utf-8");
     const meta = JSON.parse(raw);
@@ -261,6 +262,7 @@ describe("setIncidentStatus 'resolved' gate (s22-c3, s22-c4)", () => {
     const incidentId = await createIncident("override ok", tmpDir);
     await setIncidentStatus(tmpDir, incidentId, "resolved", undefined, {
       overrideToken: "SKIP_METRIC_VERIFY: datadog ingestion paused — confirmed via support ticket #1234",
+      autoPostmortem: false, // Sprint 23: suppress fire-and-forget to avoid test-cleanup race
     });
     const tlRaw = await readFile(
       join(tmpDir, ".bober", "incidents", incidentId, "timeline.jsonl"),
@@ -295,6 +297,7 @@ describe("setIncidentStatus 'resolved' gate (s22-c3, s22-c4)", () => {
     const reason = "metrics pipeline degraded — ops confirmed recovery via dashboard";
     await setIncidentStatus(tmpDir, incidentId, "resolved", undefined, {
       overrideToken: `SKIP_METRIC_VERIFY: ${reason}`,
+      autoPostmortem: false, // Sprint 23: suppress fire-and-forget to avoid test-cleanup race
     });
     const raw = await readFile(
       join(tmpDir, ".bober", "incidents", incidentId, "incident.json"),

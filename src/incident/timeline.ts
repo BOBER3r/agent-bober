@@ -373,12 +373,20 @@ export async function appendRunbookExecution(
 /** Override token regex: prefix 'SKIP_METRIC_VERIFY:' with at least one non-whitespace char after optional spaces. */
 const OVERRIDE_TOKEN_RE = /^SKIP_METRIC_VERIFY:\s*(.+)$/;
 
-/** Options for the resolution gate (Sprint 22). */
+/** Options for the resolution gate (Sprint 22) + postmortem trigger (Sprint 23). */
 export interface SetStatusOpts {
   /** REQUIRED when status='resolved' (unless overrideToken given). Must have verified=true. */
   verifyResult?: VerifyResult;
   /** REQUIRED when status='resolved' AND no verifyResult. Format: 'SKIP_METRIC_VERIFY: <reason>'. Empty reason rejects. */
   overrideToken?: string;
+  /** When true (and status === 'resolved'), trigger async postmortem generation after the
+   *  status write. Only the explicit literal false disables auto-gen. Default: true.
+   *  Sprint 23. */
+  autoPostmortem?: boolean;
+  /** Test seam: if provided, the function calls back with the Promise that resolves when
+   *  postmortem synthesis completes. Production callers leave this undefined and rely on
+   *  fire-and-forget behavior. Sprint 23. */
+  onPostmortemPromise?: (p: Promise<void>) => void;
 }
 
 /**
@@ -471,6 +479,35 @@ export async function setIncidentStatus(
 
   if (timelineEvent !== undefined) {
     await appendTimeline(projectRoot, incidentId, timelineEvent);
+  }
+
+  // ── Sprint 23: async postmortem trigger (fire-and-forget) ─────────────────
+  // Default ON when status='resolved' — explicit autoPostmortem=false disables.
+  // Do NOT await: status transition returns immediately. Postmortem completion
+  // updates incident.json.postmortemPath in a follow-up atomic write.
+  if (status === "resolved" && opts?.autoPostmortem !== false) {
+    // Dynamic import avoids a static load-order coupling between timeline.ts
+    // and postmortem.ts — postmortem.ts is a leaf module with no deps on
+    // timeline.ts, but the dynamic import keeps the boundary clean.
+    const p = (async () => {
+      try {
+        const { generatePostmortem } = await import("./postmortem.js");
+        const result = await generatePostmortem(projectRoot, incidentId);
+        // After synthesis: update incident.json.postmortemPath in a NEW
+        // atomic write. Re-read fresh to avoid stomping concurrent changes.
+        const freshRaw = await readFile(metaPath, "utf-8");
+        const fresh = IncidentMetadataSchema.parse(JSON.parse(freshRaw));
+        await atomicWriteJson(metaPath, { ...fresh, postmortemPath: result.path });
+      } catch (err) {
+        logger.warn(
+          `[setIncidentStatus] Auto-postmortem failed for ${incidentId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    })();
+    if (opts?.onPostmortemPromise) opts.onPostmortemPromise(p);
+    void p;
   }
 }
 
