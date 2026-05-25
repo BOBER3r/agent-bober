@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-12-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-12",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T06:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 12 of 28. Tier 2 (careful-flow). Adds the feedback-router that maps a rejected checkpoint → the responsible agent and re-invokes with feedback. Iteration cap, edit-delta application, !!abort escape hatch.",
+    "currentBranch": "bober/bober-vision",
+    "completedSprintsInTier2": [
+      "Sprint 7: Checkpoint plumbing (types, registry, sites, noop)",
+      "Sprint 8: CLI mechanism",
+      "Sprint 9: Disk mechanism + bober approve/reject CLI",
+      "Sprint 10: PR mechanism (GhClient seam, checkpointStates Map, prReady)",
+      "Sprint 11: Renderer registry + 9 per-type renderers wired into cli/disk/pr"
+    ],
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/types.ts (CheckpointId union; CheckpointOutcome discriminated union: approved|rejected|edit)",
+      "src/orchestrator/checkpoints/sites.ts (where checkpoints are invoked in the pipeline)",
+      "src/orchestrator/checkpoints/registry.ts (getCheckpointMechanismFor — Sprint 10 override resolver)",
+      "src/orchestrator/pipeline.ts or pipeline-coordinator.ts (where rejection is currently HANDLED — almost certainly noop today)",
+      "src/config/schema.ts (Zod schema for bober.config.json; add maxCheckpointIterations)",
+      "src/contracts/* (artifact JSON shapes)",
+      ".bober/contracts/sprint-spec-20260524-bober-vision-12.json"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-12.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "config": { "commands": { "typecheck": "npm run typecheck", "lint": "npm run lint", "build": "npm run build", "test": "npm run test" } },
+  "principles": null,
+  "evaluatorFeedback": null
+}

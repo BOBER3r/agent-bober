@@ -1,0 +1,30 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-12-1",
+  "contractId": "sprint-spec-20260524-bober-vision-12",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T06:32:30Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 7, "criteriaFailed": 1, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 1, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "820 passed, 4 skipped, 0 failed" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s12-c1", "result": "pass", "evidence": "feedback-router.ts CHECKPOINT_TO_AGENT maps all 9 IDs. buildPlannerRetryPrompt uses exact format from contract." },
+    { "criterionId": "s12-c2", "result": "pass", "evidence": "Schema maxCheckpointIterations min:1 max:10 default:3. writeAbortMarker uses tmp+rename. CHECKPOINT_ITERATION_EXHAUSTED reason verified by test." },
+    { "criterionId": "s12-c3", "result": "pass", "evidence": "applyEditDelta backs up to <runsDir>/<runId>/edits/<id>.original.<ext> before atomic tmp+rename overwrite. Edit path skips reinvokeAgent." },
+    { "criterionId": "s12-c4", "result": "fail", "evidence": "'!!abort' prefix works. BUT: env var BOBER_CHECKPOINT_ABORT_TOKEN is never read from process.env. shouldAbort takes envAbortToken parameter, but no call site reads process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] and passes it. grep confirms zero occurrences of the env var name in src/.", "feedback": "Fix: in runCheckpointWithFeedback (or shouldAbort), default envAbortToken to process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] when not explicitly passed. Add unit test that sets process.env['BOBER_CHECKPOINT_ABORT_TOKEN']='MYTOKEN', invokes the function without explicit envAbortToken, and verifies feedback containing 'MYTOKEN' triggers USER_ABORT. Use try/finally to restore env." },
+    { "criterionId": "s12-c5", "result": "pass", "evidence": "renderSprintContract adds 'Previous feedback' section at iteration > 1. 5 tests verify." },
+    { "criterionId": "s12-c6", "result": "pass", "evidence": "4 distinct buildXxxRetryPrompt fns with different headings and placement (prepend vs append). Evaluator branch present but dead-code (no CheckpointId currently maps); generator notes acknowledge." },
+    { "criterionId": "s12-c7", "result": "pass", "evidence": "50 tests at src/orchestrator/checkpoints/feedback-router.test.ts (colocated). All required branches covered. Tests pass." },
+    { "criterionId": "s12-c8", "result": "pass", "evidence": "All 4 strategies exit 0. No regressions." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "high", "criterion": "s12-c4", "file": "src/orchestrator/checkpoints/feedback-router.ts", "description": "BOBER_CHECKPOINT_ABORT_TOKEN env var unwired. Default envAbortToken from process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] when caller doesn't supply, and add a test using process.env to validate." }
+  ],
+  "summary": "Sprint 12 iter 1 fails s12-c4 only: env var BOBER_CHECKPOINT_ABORT_TOKEN not read from process.env. All other 7 criteria pass; all 4 strategies exit 0; 820 tests pass."
+}
