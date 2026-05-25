@@ -91,3 +91,24 @@ export async function listRunStateFiles(projectRoot: string): Promise<RunState[]
   }
   return out;
 }
+
+/**
+ * Cross-project read-only RunState enumeration for the cockpit
+ * discovery tools (get-project-state, list-projects).
+ *
+ * UNLIKE the RunManager-backed APIs, this helper does NOT use the
+ * in-memory singleton — it always walks .bober/runs/<runId>/state.json
+ * on the supplied projectRoot. The discovery tools call it with
+ * arbitrary projectPath values; we cannot assume RunManager has been
+ * load()'d for that root.
+ *
+ * Implementation: delegates to listRunStateFiles. Provided as a named
+ * alias because:
+ *   1. It documents the cockpit intent (cross-project, read-only).
+ *   2. Future call sites can filter without touching listRunStateFiles.
+ */
+export async function readRunStatesFromDisk(
+  projectRoot: string,
+): Promise<RunState[]> {
+  return listRunStateFiles(projectRoot);
+}

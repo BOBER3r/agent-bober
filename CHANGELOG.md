@@ -9,6 +9,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`bober_list_pending_approvals`**: List all pending careful-flow checkpoints awaiting human
+  approval. Accepts optional `{ projectPath?: string }` (must be absolute when supplied; defaults
+  to cwd). Returns `[{ checkpointId, ageMs, prompt }]` — identical shape to `bober list-approvals
+  --json`. Backed by the new shared `listPendingApprovals(projectRoot)` helper in
+  `src/state/approval-state.ts`.
+- **`bober_approve_checkpoint`**: Approve a pending checkpoint over MCP by writing
+  `.bober/approvals/<id>.approved.json` with the same payload shape as `bober approve`
+  (`{ approvedAt, approverId, editDelta? }`). Accepts `{ checkpointId, projectPath?, editDelta? }`.
+  Guards with `pendingExists` before writing. Returns `{ approvedAt, checkpointId }`.
+- **`bober_reject_checkpoint`**: Reject a pending checkpoint over MCP by writing
+  `.bober/approvals/<id>.rejected.json` with the same payload shape as `bober reject`
+  (`{ rejectedAt, rejecterId, feedback }`). Accepts `{ checkpointId, projectPath?, feedback }`
+  (feedback required and non-empty). Guards with `pendingExists` before writing.
+  Returns `{ rejectedAt, checkpointId }`.
+- **`bober_list_projects`**: Enumerate bober projects under one or more search roots.
+  Accepts `{ searchRoots: string[] }`. Walks each root one level deep; returns
+  `[{ projectPath, name, mode?, hasActiveRuns, lastRunAt? }]` for every directory
+  containing `bober.config.json`. Unreadable roots are skipped with a stderr warning.
+  READ-ONLY — does not instantiate RunManager; reads `.bober/runs/*/state.json` directly.
+- **`bober_list_specs`**: List PlanSpecs in a project. Accepts `{ projectPath }`.
+  Reads `.bober/specs/*.json` with loose parsing (invalid files silently skipped).
+  Returns `[{ specId, title, status, sprintCount, completedAt? }]`.
+- **`bober_get_project_state`**: Aggregate per-project state counts for the cockpit sidebar.
+  Accepts `{ projectPath }`. Returns `{ configExists, activeRunCount, lastRunAt?,
+  openIncidentCount, pendingApprovalCount, specCount, mode? }`. READ-ONLY — does not
+  instantiate RunManager.
+- All six new tools accept an optional `projectPath` (required for discovery tools; optional
+  for approval tools). When supplied, `projectPath` must be absolute — a relative path returns
+  a soft-error JSON `{ error: "projectPath must be absolute" }` rather than throwing.
+- **`listPendingApprovals(projectRoot)`** helper extracted from
+  `src/cli/commands/list-approvals.ts` into `src/state/approval-state.ts`. Both the CLI and
+  the MCP tool `bober_list_pending_approvals` share this helper. Exported from
+  `src/state/index.ts` as `listPendingApprovals` / `PendingApprovalRow`.
+- **`readRunStatesFromDisk(projectRoot)`** helper added to `src/state/run-state.ts` as a
+  named alias for `listRunStateFiles`. Exported from `src/state/index.ts`. Cockpit discovery
+  tools use it to enumerate run states for arbitrary project roots without touching the
+  RunManager singleton.
+- MCP tool count: **23 → 29**.
+
 - **`bober_run_in_worktree`**: Start a pipeline inside an isolated git worktree on a new branch.
   Input: `{ task: string, allowDirty?: boolean, keepOnSuccess?: boolean }`. Returns
   `{ runId, branch, worktreePath, status: 'running' }` immediately (fire-and-forget like `bober_run`).

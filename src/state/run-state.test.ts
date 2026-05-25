@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { writeRunState, readRunState, listRunStateFiles } from "./run-state.js";
+import { writeRunState, readRunState, listRunStateFiles, readRunStatesFromDisk } from "./run-state.js";
 import type { RunState } from "../mcp/run-manager.js";
 
 // ── Fixture ───────────────────────────────────────────────────────────
@@ -159,5 +159,39 @@ describe("listRunStateFiles", () => {
     expect(result).toHaveLength(3);
     const ids = result.map((r) => r.runId).sort();
     expect(ids).toEqual(["run-a", "run-b", "run-c"]);
+  });
+});
+
+describe("readRunStatesFromDisk", () => {
+  it("returns [] when the runs/ directory does not exist", async () => {
+    const result = await readRunStatesFromDisk(tmpDir);
+    expect(result).toEqual([]);
+  });
+
+  it("returns the same results as listRunStateFiles", async () => {
+    const states = [
+      makeState({ runId: "disk-run-a", task: "task A" }),
+      makeState({ runId: "disk-run-b", task: "task B" }),
+    ];
+    for (const s of states) {
+      await writeRunState(tmpDir, s);
+    }
+
+    const fromDisk = await readRunStatesFromDisk(tmpDir);
+    const fromList = await listRunStateFiles(tmpDir);
+    expect(fromDisk).toHaveLength(fromList.length);
+    const diskIds = fromDisk.map((r) => r.runId).sort();
+    const listIds = fromList.map((r) => r.runId).sort();
+    expect(diskIds).toEqual(listIds);
+  });
+
+  it("does not require RunManager to be loaded — reads arbitrary projectRoot", async () => {
+    // Write to tmpDir directly (not the process cwd / default project root)
+    const state = makeState({ runId: "arb-root-run", projectRoot: tmpDir });
+    await writeRunState(tmpDir, state);
+
+    const result = await readRunStatesFromDisk(tmpDir);
+    expect(result).toHaveLength(1);
+    expect(result[0].runId).toBe("arb-root-run");
   });
 });
