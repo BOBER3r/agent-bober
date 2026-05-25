@@ -1,5 +1,9 @@
 # agent-bober — Contributor Guidelines
 
+> **See also:** [VISION.md](./VISION.md) — Operating modes, configuration reference, and the
+> behavior-shaping discipline (Iron Laws, Red Flags, Rationalization-Prevention) that governs
+> all agent behavior in this project. [COMMANDS.md](./COMMANDS.md) — Full CLI reference.
+
 ## If You Are an AI Agent
 
 Stop. Read this section before doing anything.
