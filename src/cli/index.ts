@@ -186,13 +186,35 @@ async function main(): Promise<void> {
       "--provider <name>",
       "Override AI provider for all roles (anthropic, openai, google, openai-compat)",
     )
-    .action(async (task?: string, cmdOpts?: { provider?: string }) => {
+    .option(
+      "--mode <mode>",
+      "Pipeline mode: 'autopilot' (default, auto-approves all checkpoints) or 'careful' (requires explicit approval via disk/cli/pr mechanism)",
+    )
+    .option(
+      "--checkpoint <mechanism>",
+      "Override the default checkpoint mechanism for this run: noop|cli|disk|pr. " +
+      "Per-checkpoint config overrides still apply unless --checkpoint-all is also passed.",
+    )
+    .option(
+      "--checkpoint-all",
+      "Apply --checkpoint to ALL checkpoints, overriding per-checkpoint config overrides. " +
+      "Requires --checkpoint to also be set. Without this flag, per-checkpoint overrides in config still win.",
+    )
+    .action(async (task?: string, cmdOpts?: {
+      provider?: string;
+      mode?: "autopilot" | "careful";
+      checkpoint?: string;
+      checkpointAll?: boolean;
+    }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
       const projectRoot = await resolveProjectRoot(opts.config);
       await runRunCommand(task, projectRoot, {
         verbose: opts.verbose,
         provider: cmdOpts?.provider,
+        mode: cmdOpts?.mode,
+        checkpoint: cmdOpts?.checkpoint,
+        checkpointAll: cmdOpts?.checkpointAll,
       });
     });
 

@@ -14,6 +14,15 @@ export interface RunCommandOptions {
   verbose?: boolean;
   /** Override AI provider for all roles. Overrides config.planner/generator/evaluator.provider. */
   provider?: string;
+  /** Override pipeline execution mode for this run. 'autopilot' or 'careful'. */
+  mode?: "autopilot" | "careful";
+  /** Override the default checkpoint mechanism for this run (noop|cli|disk|pr).
+   *  Per-checkpoint config overrides still apply unless --checkpoint-all is set. */
+  checkpoint?: string;
+  /** When set with --checkpoint, overrides ALL per-checkpoint config overrides too.
+   *  Without this flag, --checkpoint only overrides the global default; per-checkpoint
+   *  overrides in config still win. With this flag, --checkpoint wins everywhere. */
+  checkpointAll?: boolean;
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────
@@ -86,6 +95,36 @@ export async function runRunCommand(
       evaluator: { ...config.evaluator, provider: options.provider },
     };
     logger.info(`Provider override: ${options.provider}`);
+  }
+
+  // Apply --mode override
+  if (options.mode) {
+    config = { ...config, pipeline: { ...config.pipeline, mode: options.mode } };
+    logger.info(`Mode override: ${options.mode}`);
+  }
+
+  // Apply --checkpoint / --checkpoint-all overrides
+  if (options.checkpoint && options.checkpointAll) {
+    // --checkpoint-all: override global default AND clear all per-checkpoint overrides
+    config = {
+      ...config,
+      pipeline: {
+        ...config.pipeline,
+        checkpointMechanism: options.checkpoint as "noop" | "cli" | "disk" | "pr",
+        checkpointOverrides: {},
+      },
+    };
+    logger.info(`Checkpoint override (all): ${options.checkpoint}`);
+  } else if (options.checkpoint) {
+    // --checkpoint alone: override global default only; per-checkpoint overrides still apply
+    config = {
+      ...config,
+      pipeline: {
+        ...config.pipeline,
+        checkpointMechanism: options.checkpoint as "noop" | "cli" | "disk" | "pr",
+      },
+    };
+    logger.info(`Checkpoint override: ${options.checkpoint}`);
   }
 
   // Ensure .bober directory
