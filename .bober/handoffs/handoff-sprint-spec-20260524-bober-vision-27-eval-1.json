@@ -1,0 +1,13 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-27-eval-1",
+  "type": "to-evaluator",
+  "contractId": "sprint-spec-20260524-bober-vision-27",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T10:01:45Z",
+  "iteration": 1,
+  "context": {
+    "note": "Generator session ended before saving a structured completion report. Reconstructing the report from the commit (733a863) below. Evaluator should verify by reading files on disk.",
+    "currentBranch": "bober/bober-vision",
+    "previousSprintsCompleted": 26
+  }
+}

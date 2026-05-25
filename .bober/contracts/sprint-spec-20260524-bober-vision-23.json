@@ -1,75 +1,106 @@
 {
   "id": "sprint-spec-20260524-bober-vision-23",
   "specId": "spec-20260524-bober-vision",
-  "feature": "bober-postmortemer agent + bober.postmortem skill — automated postmortem synthesis",
-  "description": "New read-only subagent that reads .bober/incidents/<id>/ artifacts (timeline, observations, hypotheses, actions, changelog, runbook-execution, diagnoses) and produces a structured postmortem document at .bober/incidents/<id>/postmortem.md. Contains 5-Whys analysis, timeline summary, contributing factors, action items. Pure offline synthesis — no live observability access.",
+  "feature": "bober-postmortemer agent + bober.postmortem skill \u2014 automated postmortem synthesis",
+  "description": "New read-only subagent that reads .bober/incidents/<id>/ artifacts (timeline, observations, hypotheses, actions, changelog, runbook-execution, diagnoses) and produces a structured postmortem document at .bober/incidents/<id>/postmortem.md. Contains 5-Whys analysis, timeline summary, contributing factors, action items. Pure offline synthesis \u2014 no live observability access.",
   "successCriteria": [
     {
       "id": "s23-c1",
-      "description": "agents/bober-postmortemer.md exists with YAML frontmatter, read-only tools (Read, Bash, Grep, Glob — no observability MCPs since postmortem is offline), Iron Law / Red Flags / Rationalization-Prevention table per Sprint 3 style.",
+      "description": "agents/bober-postmortemer.md exists with YAML frontmatter, read-only tools (Read, Bash, Grep, Glob \u2014 no observability MCPs since postmortem is offline), Iron Law / Red Flags / Rationalization-Prevention table per Sprint 3 style.",
       "verificationMethod": "Read file. Verify YAML, tool restriction, structural blocks.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c2",
-      "description": "Iron Law: 'NO POSTMORTEM SECTION WITHOUT EVIDENCE FROM INCIDENT ARTIFACTS' (or equivalent — every claim in the postmortem traces back to a specific incident artifact path).",
+      "description": "Iron Law: 'NO POSTMORTEM SECTION WITHOUT EVIDENCE FROM INCIDENT ARTIFACTS' (or equivalent \u2014 every claim in the postmortem traces back to a specific incident artifact path).",
       "verificationMethod": "Grep file.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c3",
       "description": "skills/bober.postmortem/SKILL.md teaches the synthesis discipline: timeline reconstruction from chronological events, 5-Whys from hypotheses + changelog, contributing factors from observations, action items from gaps in process. Includes a template postmortem.md structure.",
       "verificationMethod": "Read file. Verify each named section in the discipline.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c4",
-      "description": "Postmortem template (in skill body): markdown with required sections — Title, Status, Severity, TL;DR, Timeline (table), Impact, Root Cause (with 5-Whys), Contributing Factors, What Went Well, What Went Wrong, Action Items (with owner placeholder + due-date placeholder). Each section's expected content documented.",
+      "description": "Postmortem template (in skill body): markdown with required sections \u2014 Title, Status, Severity, TL;DR, Timeline (table), Impact, Root Cause (with 5-Whys), Contributing Factors, What Went Well, What Went Wrong, Action Items (with owner placeholder + due-date placeholder). Each section's expected content documented.",
       "verificationMethod": "Read template section. Verify all sections present.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c5",
       "description": "Implementation: src/incident/postmortem.ts exports generatePostmortem(incidentId): Promise<{path, content}>. Spawns bober-postmortemer with the incident artifacts. Validates the output is parseable markdown matching the template.",
       "verificationMethod": "Read file. Test: with a fixture incident, generatePostmortem produces a valid postmortem.md.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c6",
       "description": "Status linkage: when an incident transitions to status='resolved' (Sprint 22 gates this), the orchestrator OFFERS to generate a postmortem (interactive) or auto-generates (configurable via incident.autoPostmortem default true). incident.json gains postmortemPath field on success.",
-      "verificationMethod": "Read status-transition wiring. Test: resolved incident → postmortem generated → incident.json updated.",
-      "passed": false
+      "verificationMethod": "Read status-transition wiring. Test: resolved incident \u2192 postmortem generated \u2192 incident.json updated.",
+      "passed": true
     },
     {
       "id": "s23-c7",
       "description": "Evidence traceability: every claim in the postmortem cites a source via inline reference like '(see timeline.jsonl#L42)' or '(observations.jsonl event-id obs-3)'. Skill body documents the citation format.",
       "verificationMethod": "Test: generated postmortem grep for citation markers; count >0.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c8",
       "description": "CLI command: `bober postmortem generate <incidentId>` (re-generate even after auto-gen), `bober postmortem show <incidentId>` (cat the postmortem).",
       "verificationMethod": "Verify subcommands.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s23-c9",
       "description": "All existing eval strategies pass.",
-      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
     }
   ],
   "expectedChanges": [
-    { "path": "agents/bober-postmortemer.md", "action": "create", "description": "Read-only postmortem synthesizer subagent" },
-    { "path": "skills/bober.postmortem/SKILL.md", "action": "create", "description": "Postmortem synthesis discipline" },
-    { "path": "src/incident/postmortem.ts", "action": "create", "description": "generatePostmortem orchestration" },
-    { "path": "src/incident/timeline.ts", "action": "modify", "description": "Wire auto-postmortem on status='resolved' transition" },
-    { "path": "src/cli/", "action": "modify", "description": "Add `bober postmortem generate/show` subcommands" },
-    { "path": "src/config/schema.ts", "action": "modify", "description": "Add incident.autoPostmortem (default true)" },
-    { "path": "tests/incident/postmortem.test.ts", "action": "create", "description": "Tests with fixture incident data" }
+    {
+      "path": "agents/bober-postmortemer.md",
+      "action": "create",
+      "description": "Read-only postmortem synthesizer subagent"
+    },
+    {
+      "path": "skills/bober.postmortem/SKILL.md",
+      "action": "create",
+      "description": "Postmortem synthesis discipline"
+    },
+    {
+      "path": "src/incident/postmortem.ts",
+      "action": "create",
+      "description": "generatePostmortem orchestration"
+    },
+    {
+      "path": "src/incident/timeline.ts",
+      "action": "modify",
+      "description": "Wire auto-postmortem on status='resolved' transition"
+    },
+    {
+      "path": "src/cli/",
+      "action": "modify",
+      "description": "Add `bober postmortem generate/show` subcommands"
+    },
+    {
+      "path": "src/config/schema.ts",
+      "action": "modify",
+      "description": "Add incident.autoPostmortem (default true)"
+    },
+    {
+      "path": "tests/incident/postmortem.test.ts",
+      "action": "create",
+      "description": "Tests with fixture incident data"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-22"],
-  "status": "proposed",
-  "generatorNotes": "Postmortems are most valuable when they're EVIDENCE-BASED. The Iron Law about citation backs this — no claim without traceability. Without it, postmortems become opinion documents.\n\nTemplate (in skill body, ~60-80 lines):\n```markdown\n# Postmortem: <symptom>\n\n**Incident ID:** <id>  \n**Status:** Resolved  \n**Severity:** <S1|S2|S3|S4>  \n**Date:** <createdAt> → <resolvedAt>  \n**Duration:** <hh:mm>\n\n## TL;DR\n<2-3 sentence summary — symptom, root cause, fix>\n\n## Impact\n- <quantitative impact: requests affected, customers affected, revenue impact, SLO breach>\n- <each line cites observations.jsonl or resolution-evidence/>\n\n## Timeline\n| Time | Event | Source |\n|------|-------|--------|\n| 14:00 UTC | Error rate spiked to 5% | obs__datadog (timeline.jsonl#L1) |\n| 14:05 UTC | On-call paged | alert system (timeline.jsonl#L2) |\n| 14:12 UTC | Hypothesis: db slow query | bober-diagnoser (diagnoses/<id>.json) |\n| 14:25 UTC | Action: scaled db replicas 3→6 | bober-deployer (changelog.jsonl#L1) |\n| 14:38 UTC | Error rate < 0.1% sustained | resolution verify (resolution-evidence/) |\n\n## Root Cause (5-Whys)\n1. Why did the error rate spike? — Database queries timing out.\n2. Why were queries timing out? — Connection pool exhausted.\n3. Why was the pool exhausted? — New checkout flow opens 2x connections per request.\n4. Why does it open 2x? — Migration 042 added redundant connection in transaction wrapper.\n5. Why did the redundancy ship? — Code review missed the wrapper-inside-wrapper pattern.\n(Each Why cites supporting evidence path.)\n\n## Contributing Factors\n- <each factor with evidence path>\n\n## What Went Well\n- <bullets, each evidence-backed>\n\n## What Went Wrong\n- <bullets, each evidence-backed>\n\n## Action Items\n| Item | Owner | Due | Source |\n|------|-------|-----|--------|\n| Add wrapper-pattern check to code-reviewer | TBD | TBD | (5-whys-5) |\n| Add SLO alert for connection pool saturation | TBD | TBD | (root-cause) |\n```\n\nbober-postmortemer reads artifacts in this order:\n1. incident.json for metadata\n2. timeline.jsonl for chronological skeleton\n3. observations.jsonl for verified facts\n4. diagnoses/*.json for hypotheses (selects highest-confidence as root cause candidate)\n5. changelog.jsonl for actions taken\n6. runbook-execution.jsonl for runbook flow if any\n7. resolution-evidence/ for resolution proof\n\nThe 5-Whys section is the hardest to synthesize from artifacts — the diagnoser's top hypothesis is usually Why #2 or Why #3, not Why #1. The synthesizer needs to work backwards (symptom → root) and forwards (root → symptom) to fill all five steps. Document this in the skill body.\n\nAuto-postmortem on resolve: hook into Sprint 19's setIncidentStatus. When status transitions to 'resolved' AND incident.autoPostmortem !== false, spawn the synthesizer asynchronously, update incident.json.postmortemPath when done. Don't block the status transition on postmortem generation — postmortems can be slow (model latency).",
-  "evaluatorNotes": "Verify evidence citation enforcement: a test that runs generatePostmortem on a fixture incident must produce a postmortem.md where EVERY non-template claim has an inline citation. Grep for citation markers like '(timeline.jsonl' or '(diagnoses/' or '(observations.jsonl'; the count should be >5 for a typical fixture.\n\nVerify the synthesizer is OFFLINE (no observability MCP access). If the agent prompt grants observability tools, that contradicts the design — postmortems should be reproducible from disk artifacts alone for audit purposes. Read agents/bober-postmortemer.md tools field; assert no MCP tools.\n\nVerify auto-postmortem doesn't block status transition: a test that sets status='resolved' should return immediately even if postmortem generation is slow. The postmortemPath field updates asynchronously when synthesis completes.\n\nVerify the template structure is present in generated postmortems: parse the output, assert all section headings exist. A postmortem missing 'Action Items' is incomplete.\n\nVerify 5-Whys section: a generated 5-Whys with fewer than 3 levels signals shallow synthesis — surface a warning. A 5-Whys with 5 levels each citing evidence is the bar.\n\nCheck for sensitive data exposure: postmortem.md may end up shared with broader audiences. The synthesizer should NOT include raw secrets/tokens/PII from artifacts. Skill body should explicitly call out redaction discipline. Test with a fixture artifact containing a fake API key — verify the synthesizer redacts it in the output."
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-22"
+  ],
+  "status": "completed",
+  "generatorNotes": "Postmortems are most valuable when they're EVIDENCE-BASED. The Iron Law about citation backs this \u2014 no claim without traceability. Without it, postmortems become opinion documents.\n\nTemplate (in skill body, ~60-80 lines):\n```markdown\n# Postmortem: <symptom>\n\n**Incident ID:** <id>  \n**Status:** Resolved  \n**Severity:** <S1|S2|S3|S4>  \n**Date:** <createdAt> \u2192 <resolvedAt>  \n**Duration:** <hh:mm>\n\n## TL;DR\n<2-3 sentence summary \u2014 symptom, root cause, fix>\n\n## Impact\n- <quantitative impact: requests affected, customers affected, revenue impact, SLO breach>\n- <each line cites observations.jsonl or resolution-evidence/>\n\n## Timeline\n| Time | Event | Source |\n|------|-------|--------|\n| 14:00 UTC | Error rate spiked to 5% | obs__datadog (timeline.jsonl#L1) |\n| 14:05 UTC | On-call paged | alert system (timeline.jsonl#L2) |\n| 14:12 UTC | Hypothesis: db slow query | bober-diagnoser (diagnoses/<id>.json) |\n| 14:25 UTC | Action: scaled db replicas 3\u21926 | bober-deployer (changelog.jsonl#L1) |\n| 14:38 UTC | Error rate < 0.1% sustained | resolution verify (resolution-evidence/) |\n\n## Root Cause (5-Whys)\n1. Why did the error rate spike? \u2014 Database queries timing out.\n2. Why were queries timing out? \u2014 Connection pool exhausted.\n3. Why was the pool exhausted? \u2014 New checkout flow opens 2x connections per request.\n4. Why does it open 2x? \u2014 Migration 042 added redundant connection in transaction wrapper.\n5. Why did the redundancy ship? \u2014 Code review missed the wrapper-inside-wrapper pattern.\n(Each Why cites supporting evidence path.)\n\n## Contributing Factors\n- <each factor with evidence path>\n\n## What Went Well\n- <bullets, each evidence-backed>\n\n## What Went Wrong\n- <bullets, each evidence-backed>\n\n## Action Items\n| Item | Owner | Due | Source |\n|------|-------|-----|--------|\n| Add wrapper-pattern check to code-reviewer | TBD | TBD | (5-whys-5) |\n| Add SLO alert for connection pool saturation | TBD | TBD | (root-cause) |\n```\n\nbober-postmortemer reads artifacts in this order:\n1. incident.json for metadata\n2. timeline.jsonl for chronological skeleton\n3. observations.jsonl for verified facts\n4. diagnoses/*.json for hypotheses (selects highest-confidence as root cause candidate)\n5. changelog.jsonl for actions taken\n6. runbook-execution.jsonl for runbook flow if any\n7. resolution-evidence/ for resolution proof\n\nThe 5-Whys section is the hardest to synthesize from artifacts \u2014 the diagnoser's top hypothesis is usually Why #2 or Why #3, not Why #1. The synthesizer needs to work backwards (symptom \u2192 root) and forwards (root \u2192 symptom) to fill all five steps. Document this in the skill body.\n\nAuto-postmortem on resolve: hook into Sprint 19's setIncidentStatus. When status transitions to 'resolved' AND incident.autoPostmortem !== false, spawn the synthesizer asynchronously, update incident.json.postmortemPath when done. Don't block the status transition on postmortem generation \u2014 postmortems can be slow (model latency).",
+  "evaluatorNotes": "Verify evidence citation enforcement: a test that runs generatePostmortem on a fixture incident must produce a postmortem.md where EVERY non-template claim has an inline citation. Grep for citation markers like '(timeline.jsonl' or '(diagnoses/' or '(observations.jsonl'; the count should be >5 for a typical fixture.\n\nVerify the synthesizer is OFFLINE (no observability MCP access). If the agent prompt grants observability tools, that contradicts the design \u2014 postmortems should be reproducible from disk artifacts alone for audit purposes. Read agents/bober-postmortemer.md tools field; assert no MCP tools.\n\nVerify auto-postmortem doesn't block status transition: a test that sets status='resolved' should return immediately even if postmortem generation is slow. The postmortemPath field updates asynchronously when synthesis completes.\n\nVerify the template structure is present in generated postmortems: parse the output, assert all section headings exist. A postmortem missing 'Action Items' is incomplete.\n\nVerify 5-Whys section: a generated 5-Whys with fewer than 3 levels signals shallow synthesis \u2014 surface a warning. A 5-Whys with 5 levels each citing evidence is the bar.\n\nCheck for sensitive data exposure: postmortem.md may end up shared with broader audiences. The synthesizer should NOT include raw secrets/tokens/PII from artifacts. Skill body should explicitly call out redaction discipline. Test with a fixture artifact containing a fake API key \u2014 verify the synthesizer redacts it in the output.",
+  "completedAt": "2026-05-25T11:37:30Z"
 }

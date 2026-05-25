@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-16-1",
+  "contractId": "sprint-spec-20260524-bober-vision-16",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T08:38:45Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0","details":"tsc --noEmit"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0","details":"eslint src/"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0","details":"tsc"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"920 passed, 4 skipped (70 files)","details":"+41 new tests, baseline 879 preserved"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s16-c1","result":"pass","evidence":"schema.ts:227-258 ObservabilityProviderSchema with name/kind(5 enum vals)/mcpCommand/mcpArgs?/mcpEnv? Record<string,string>/enabled default true. ObservabilitySectionSchema providers default []. BoberConfigSchema.observability optional @274."},
+    {"criterionId":"s16-c2","result":"pass","evidence":"merge.ts mergeObsTools() Promise.allSettled, namespaceToolName() = obs__<provider>__<tool>. Integration test real subprocess spawn via fake-obs-mcp.mjs verifies tools appear."},
+    {"criterionId":"s16-c3","result":"pass","evidence":"external-client.ts stop() lines 105-139: client.close() + 5000ms SIGKILL fallback. FAKE_MCP_IGNORE_SIGTERM test verifies elapsed <6000ms and ESRCH. 3-server parallel startup test passes."},
+    {"criterionId":"s16-c4","result":"pass","evidence":"Promise.allSettled (NOT Promise.all). single-failure + all-failure integration tests both pass; stderr warning on failure."},
+    {"criterionId":"s16-c5","result":"pass","evidence":"5 docs exist; no .ts/.js/.mjs/imports; each names community refs but explicitly states 'agent-bober does NOT vendor these'."},
+    {"criterionId":"s16-c6","result":"pass","evidence":"Integration test 'namespace prevents collisions' — two providers both with 'query' tool → obs__provA__query + obs__provB__query both appear. README documents convention."},
+    {"criterionId":"s16-c7","result":"pass","evidence":"agents/bober-diagnoser.md:202-212 '## Observability MCP Tools' section: 'configured at bober.config.json under observability.providers', 'Use these tools as the primary data source', obs__<providerName>__<upstreamToolName> format. 256 lines (≤800)."},
+    {"criterionId":"s16-c8","result":"pass","evidence":"4 backward-compat tests in graph-schema.test.ts Sprint 16 block: bober.config.json without observability parses OK, observability=undefined, providers defaults to []."},
+    {"criterionId":"s16-c9","result":"pass","evidence":"All 4 strategies exit 0. 920 tests pass (+41 new, baseline 879 preserved)."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 criteria pass on iter 1. Schema/lifecycle/merge/docs/diagnoser-update/backward-compat all clean. mcpEnv token leakage protected via KEY=VALUE redaction regex with dedicated test. Promise.allSettled + obs__<provider>__<tool> namespace correctly implemented."
+}

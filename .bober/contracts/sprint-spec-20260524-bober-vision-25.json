@@ -8,61 +8,61 @@
       "id": "s25-c1",
       "description": ".bober/playbooks/README.md exists as an index: lists each playbook with name, classification, applicableSymptoms summary, file link. Documents how to add a new playbook + the bober.runbook (Sprint 18) parse format.",
       "verificationMethod": "Read README. Verify index + format docs.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c2",
       "description": ".bober/playbooks/build-failure.md exists. Frontmatter: name='build-failure', classification='standard', applicableSymptoms=['ci build fails', 'build red', 'compilation error', 'tests fail in ci']. Steps: identify failing job, fetch logs via observability MCP or CI API, classify (transient vs real), retry or fix.",
       "verificationMethod": "Read file. Validate frontmatter shape (Sprint 18 format). Verify >=5 numbered steps.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c3",
       "description": ".bober/playbooks/migration-timeout.md exists with applicableSymptoms about db migrations timing out or hanging. Steps: identify hung migration, check for blocking locks, classify (abort safe or unsafe), decide kill-or-wait, rollback path if killed mid-write.",
       "verificationMethod": "Read file. Verify frontmatter + steps.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c4",
       "description": ".bober/playbooks/error-spike.md exists with applicableSymptoms about error rate spikes. Steps: gather metric across boundaries, correlate with recent deploys, identify scope, classify (rollback vs scale vs flag-flip), execute via deployer.",
       "verificationMethod": "Read file. Verify.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c5",
       "description": ".bober/playbooks/latency-regression.md exists with applicableSymptoms about p95/p99 latency increase. Steps: identify affected service, check resource saturation, check downstream dependencies, classify cause, decide remediation.",
       "verificationMethod": "Read file. Verify.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c6",
       "description": "src/incident/playbook-search.ts exports searchPlaybooks(symptom: string): Promise<PlaybookMatch[]> \u2014 tokenizes symptom, scores each playbook's applicableSymptoms by token overlap, returns matches sorted by score (highest first), each with confidence in [0, 1].",
       "verificationMethod": "Read file. Test: 'database migration is timing out' \u2192 matches migration-timeout with high confidence.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c7",
       "description": "Diagnoser integration: agents/bober-diagnoser.md (modify) instructs the agent to invoke searchPlaybooks at Phase 1 with the incident symptom; if a high-confidence match exists, follow the playbook steps via bober.runbook discipline (Sprint 18). Low-confidence matches surface as 'consider playbook X' suggestions rather than executions.",
       "verificationMethod": "Grep agents/bober-diagnoser.md for the searchPlaybooks reference. Verify the high/low-confidence branching.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c8",
       "description": "CLI: `bober playbook list` shows all playbooks; `bober playbook show <name>` displays one; `bober playbook search <symptom>` runs searchPlaybooks and prints ranked matches.",
       "verificationMethod": "Verify subcommands and outputs.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c9",
       "description": "Tier 3 COMPLETION GATE: with this sprint complete, the full incident workflow is end-to-end: user invokes /bober-incident \u2192 playbook matched (or freeform diagnosis) \u2192 diagnoser investigates \u2192 deployer remediates with gates \u2192 resolution verified \u2192 postmortem generated. Verified by running the Sprint 24 integration test plus a playbook-matched test path.",
       "verificationMethod": "Integration test: incident with symptom 'build is failing in ci' \u2192 playbook matched \u2192 workflow runs through to completion.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s25-c10",
       "description": "All existing eval strategies pass.",
       "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
-      "passed": false
+      "passed": true
     }
   ],
   "expectedChanges": [
@@ -115,7 +115,8 @@
   "dependsOn": [
     "sprint-spec-20260524-bober-vision-24"
   ],
-  "status": "in-progress",
+  "status": "completed",
   "generatorNotes": "Playbooks are CURATED \u2014 human-authored, version-controlled. The starter set models the format; users add their own. The format must follow Sprint 18's bober.runbook parse spec exactly.\n\nExample playbook (build-failure.md):\n```markdown\n---\nname: build-failure\nclassification: standard\napplicableSymptoms:\n  - ci build fails\n  - build red\n  - compilation error\n  - tests fail in ci\n  - github actions failing\nprerequisites:\n  - read access to CI logs (via obs__github__get_workflow_run or similar)\n  - read access to repo\n---\n\n## Step 1: Identify the failing job\nblastRadius: safe\n\nprecondition-check:\n  - obs__github__list_workflow_runs returns the latest failed run\n\nexecute:\n  - obs__github__get_workflow_run(runId) \u2014 get the failed step name\n\npostcondition-check:\n  - Failed step name recorded in observations.jsonl\n\n## Step 2: Fetch the failure logs\nblastRadius: safe\n\nprecondition-check:\n  - Failed step name available from Step 1\n\nexecute:\n  - obs__github__get_workflow_logs(runId, stepName)\n\npostcondition-check:\n  - Log content recorded\n\n## Step 3: Classify failure\nblastRadius: safe\n\nprecondition-check:\n  - Logs from Step 2 available\n\nexecute:\n  - Match log content against patterns: 'flaky test' (retry), 'compilation error' (fix), 'dependency error' (resolve), 'timeout' (infra), 'unknown' (escalate)\n\npostcondition-check:\n  - Classification recorded in observations.jsonl\n\n## Step 4: Branch on classification\n[continued \u2014 see file for full content]\n```\n\nsearchPlaybooks scoring (simple TF-IDF or just token overlap is fine for the starter implementation):\n```typescript\nfunction score(symptom: string, applicableSymptoms: string[]): number {\n  const symptomTokens = tokenize(symptom);\n  return Math.max(\n    ...applicableSymptoms.map(p => overlap(tokenize(p), symptomTokens) / tokenize(p).length)\n  );\n}\n```\n\nConfidence threshold for auto-invoke: 0.6. Below that, surface as suggestion. Configurable via incident.playbookAutoInvokeThreshold.\n\nDocs in README.md: how to add a new playbook (frontmatter + steps), how to test it (`bober playbook search <symptom>`), how it integrates with diagnoser/runbook/deployer.",
-  "evaluatorNotes": "Verify each starter playbook actually parses via Sprint 18's runbook parse format. Run the parse on each file and assert no errors. A playbook the runbook skill can't read is dead weight.\n\nVerify steps in each playbook have ALL the required fields (blastRadius, precondition-check, execute, postcondition-check). Optional fields (rollback) may be omitted but documented.\n\nVerify searchPlaybooks doesn't false-positive on unrelated symptoms. Test: search for 'user reports button is grey' \u2014 should return zero high-confidence matches (no playbook covers UI bugs in the starter set). Returning low-confidence matches for the diagnoser to consider is fine; returning a high-confidence match would mislead.\n\nVerify the diagnoser uses the threshold correctly: a test where searchPlaybooks returns a 0.4-confidence match should result in 'consider playbook X' suggestion, NOT an execution. A 0.7-confidence match should trigger playbook execution.\n\nVerify the Tier 3 completion-gate integration test runs to green. This is the second integration test (Sprint 24 was the first); both must pass. If either is failing, Tier 3 isn't done.\n\nVerify the playbooks DO NOT contain stack-specific assumptions in their applicableSymptoms (e.g., 'kubernetes' as a required token). The starter set should be generic enough that 'error spike' works whether the user runs k8s or bare metal. Stack-specific symptoms belong in user-added playbooks."
+  "evaluatorNotes": "Verify each starter playbook actually parses via Sprint 18's runbook parse format. Run the parse on each file and assert no errors. A playbook the runbook skill can't read is dead weight.\n\nVerify steps in each playbook have ALL the required fields (blastRadius, precondition-check, execute, postcondition-check). Optional fields (rollback) may be omitted but documented.\n\nVerify searchPlaybooks doesn't false-positive on unrelated symptoms. Test: search for 'user reports button is grey' \u2014 should return zero high-confidence matches (no playbook covers UI bugs in the starter set). Returning low-confidence matches for the diagnoser to consider is fine; returning a high-confidence match would mislead.\n\nVerify the diagnoser uses the threshold correctly: a test where searchPlaybooks returns a 0.4-confidence match should result in 'consider playbook X' suggestion, NOT an execution. A 0.7-confidence match should trigger playbook execution.\n\nVerify the Tier 3 completion-gate integration test runs to green. This is the second integration test (Sprint 24 was the first); both must pass. If either is failing, Tier 3 isn't done.\n\nVerify the playbooks DO NOT contain stack-specific assumptions in their applicableSymptoms (e.g., 'kubernetes' as a required token). The starter set should be generic enough that 'error spike' works whether the user runs k8s or bare metal. Stack-specific symptoms belong in user-added playbooks.",
+  "completedAt": "2026-05-25T12:19:30Z"
 }

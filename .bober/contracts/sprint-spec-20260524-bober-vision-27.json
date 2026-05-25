@@ -8,71 +8,90 @@
       "id": "s27-c1",
       "description": "tests/e2e/four-modes.test.ts exists. Uses a tmpdir for the fixture project, scaffolds it from a tests/fixtures/four-modes-baseline/ directory. Cleans up after each test.",
       "verificationMethod": "Read test file. Verify tmpdir setup + teardown.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c2",
       "description": "Autopilot phase: invokes `bober plan` + `bober run` on a small feature in the fixture. Verifies sprints execute, commits land, eval strategies pass, no orchestrator errors.",
       "verificationMethod": "Test passes. Verify git log of fixture shows expected sprint commits.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c3",
       "description": "Careful-flow phase: switches mode='careful' and mechanism='disk', invokes `bober run` on a second feature. Test scaffolding polls .bober/approvals/*.pending.json and writes .approved.json files programmatically. Verifies audit log contains approval records.",
       "verificationMethod": "Test passes. Verify .bober/audits/<runId>.jsonl entries.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c4",
       "description": "Bug introduction: test deterministically introduces a synthetic bug into the fixture (e.g., a code change that causes a mocked-metric value to exceed threshold). The bug is committed so the diagnose phase has something to investigate.",
       "verificationMethod": "Read test. Verify bug-introduction step.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c5",
       "description": "Diagnose phase: invokes `bober incident start` with the symptom corresponding to the synthetic bug. Mocked observability MCP returns deterministic metric values. Test scaffolding auto-approves risky-action gates via disk mechanism. Diagnoser arrives at the correct root cause. Deployer executes the fix.",
       "verificationMethod": "Test passes. Verify .bober/incidents/<id>/ structure.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c6",
       "description": "Resolution verification: mocked observability MCP returns post-fix metric values within threshold for the configured window. verifyResolution returns verified=true. Status transitions to 'resolved'. Postmortem auto-generates.",
       "verificationMethod": "Verify status transition path.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c7",
       "description": "Postmortem validation: parse generated postmortem.md, assert all required sections present, every claim has an inline citation marker, the timeline reflects executed actions, action items are populated.",
       "verificationMethod": "Read test postmortem-validation assertions.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c8",
       "description": "Rollback path: a follow-up sub-test invokes `bober rollback <incidentId>` on the resolved incident's changes. Verifies each rollback step goes through the gate, ChangeEntry statuses update to 'rolled-back'.",
       "verificationMethod": "Test exercises rollback path.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c9",
       "description": "Test runs in CI (.github/workflows/ — extend existing CI workflow to include this test if it's not in the default suite). Total test runtime under 5 minutes.",
       "verificationMethod": "CI config includes the test. Test runtime measured <5min.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s27-c10",
       "description": "All existing eval strategies pass.",
       "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "passed": true
     }
   ],
   "expectedChanges": [
-    { "path": "tests/e2e/four-modes.test.ts", "action": "create", "description": "End-to-end multi-mode test" },
-    { "path": "tests/fixtures/four-modes-baseline/", "action": "create", "description": "Fixture project skeleton" },
-    { "path": "tests/fixtures/mock-observability-server.ts", "action": "create", "description": "Stdio MCP server returning deterministic metric/log responses" },
-    { "path": ".github/workflows/ci.yml", "action": "modify", "description": "Include e2e tests in CI" }
+    {
+      "path": "tests/e2e/four-modes.test.ts",
+      "action": "create",
+      "description": "End-to-end multi-mode test"
+    },
+    {
+      "path": "tests/fixtures/four-modes-baseline/",
+      "action": "create",
+      "description": "Fixture project skeleton"
+    },
+    {
+      "path": "tests/fixtures/mock-observability-server.ts",
+      "action": "create",
+      "description": "Stdio MCP server returning deterministic metric/log responses"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "action": "modify",
+      "description": "Include e2e tests in CI"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-26"],
-  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-26"
+  ],
+  "status": "completed",
   "generatorNotes": "This is the SPEC's correctness gate. Pass = the vision works. Fail = the vision is theoretical.\n\nFixture project (tests/fixtures/four-modes-baseline/): minimal Node.js project with package.json (typecheck/lint/build/test scripts that exit 0 on the baseline), one source file, one test file. Just enough that the orchestrator has something real to chew on.\n\nMock observability MCP server (tests/fixtures/mock-observability-server.ts): implements the MCP spec over stdio, returns deterministic metric/log responses based on the request. The test scaffolding writes a control file (e.g., .mock-server-state.json) that the server reads to decide what to return — letting the test inject 'error rate is 5%' for the diagnose phase and 'error rate is 0.0001' for the resolution-verify phase.\n\nTest structure (vitest or jest — match the repo's existing testing framework):\n```typescript\ndescribe('four-modes end-to-end', () => {\n  let tmpdir: string;\n  let mockMcpProcess: ChildProcess;\n\n  beforeEach(async () => {\n    tmpdir = await mkdtemp(...);\n    await scaffoldFixture(tmpdir);\n    mockMcpProcess = startMockObservability();\n  });\n\n  afterEach(async () => {\n    mockMcpProcess.kill();\n    await rm(tmpdir, { recursive: true });\n  });\n\n  it('runs autopilot greenfield build', async () => { ... });\n  it('runs careful-flow refactor with disk approvals', async () => { ... });\n  it('diagnoses bug via mocked MCP and deploys fix', async () => { ... });\n  it('generates valid postmortem after resolution', async () => { ... });\n  it('executes rollback on resolved incident', async () => { ... });\n});\n```\n\nAuto-approval helper for careful-flow / risky-action gates:\n```typescript\nasync function approveAllPendingApprovals(tmpdir: string) {\n  const pendingFiles = await glob(`${tmpdir}/.bober/approvals/*.pending.json`);\n  for (const file of pendingFiles) {\n    const approvedFile = file.replace('.pending.json', '.approved.json');\n    await writeFile(approvedFile, JSON.stringify({ approvedAt: new Date().toISOString(), approverId: 'test' }));\n  }\n}\n// Poll this every 2s during pipeline run.\n```\n\nThe synthetic bug: simplest possible — change a constant in the fixture that the mocked metric server is configured to report based on. E.g., the fixture has `const THRESHOLD = 100;` and the mocked server returns 'metric > THRESHOLD' as 'unhealthy'. Test edits the fixture to set THRESHOLD = 0, commits, then runs the diagnose mode. The diagnoser's investigation discovers the bug via the mocked metric.\n\nRuntime budget: 5 minutes is aggressive but achievable since the orchestrator does most of the work and the mocked MCP returns instant responses. If runtime balloons, reduce the number of sprints in the autopilot/careful-flow phases.",
-  "evaluatorNotes": "This is the integration test — verify it ACTUALLY EXERCISES the components, not just mocks them away.\n\nVerify the mock observability MCP is REAL (a separate process speaking MCP protocol over stdio). If the test mocks at the JavaScript-function level instead of via an actual subprocess, it's not testing the Sprint 16 MCP plugin slot architecture. The integration value is testing the protocol boundary.\n\nVerify the test uses the actual disk-approval mechanism (Sprint 9) — not a mocked mechanism. The polling, the file writes, the cleanup all need to happen for real.\n\nVerify the test asserts on artifact existence AND content. Just checking 'file exists' is weak — assert the postmortem has at least 3 evidence citations, the audit log has entries for every gate, the changelog has matching inverses for every action.\n\nVerify the rollback sub-test is INDEPENDENT enough that running it in isolation works (e.g., not depending on test-global state from the diagnose phase). Test ordering matters; document.\n\nVerify CI runtime stays under 5 minutes. If the first run takes 8 minutes, identify the slow path (likely model latency if subagents are spawned with real LLM calls). Consider mocking the LLM at the spawn-mechanism level for this test specifically — the test is about orchestrator behavior, not about specific model outputs. A test-mode flag like 'BOBER_TEST_DETERMINISTIC=true' that returns canned responses would be appropriate; document if added.\n\nFinal check: the test must FAIL CLEARLY when any sprint output is broken. Run a sanity sabotage: remove `bober approve` CLI command from src/cli/, run the test, verify it fails with a meaningful error (not a cryptic timeout). Good integration tests fail loudly."
+  "evaluatorNotes": "This is the integration test — verify it ACTUALLY EXERCISES the components, not just mocks them away.\n\nVerify the mock observability MCP is REAL (a separate process speaking MCP protocol over stdio). If the test mocks at the JavaScript-function level instead of via an actual subprocess, it's not testing the Sprint 16 MCP plugin slot architecture. The integration value is testing the protocol boundary.\n\nVerify the test uses the actual disk-approval mechanism (Sprint 9) — not a mocked mechanism. The polling, the file writes, the cleanup all need to happen for real.\n\nVerify the test asserts on artifact existence AND content. Just checking 'file exists' is weak — assert the postmortem has at least 3 evidence citations, the audit log has entries for every gate, the changelog has matching inverses for every action.\n\nVerify the rollback sub-test is INDEPENDENT enough that running it in isolation works (e.g., not depending on test-global state from the diagnose phase). Test ordering matters; document.\n\nVerify CI runtime stays under 5 minutes. If the first run takes 8 minutes, identify the slow path (likely model latency if subagents are spawned with real LLM calls). Consider mocking the LLM at the spawn-mechanism level for this test specifically — the test is about orchestrator behavior, not about specific model outputs. A test-mode flag like 'BOBER_TEST_DETERMINISTIC=true' that returns canned responses would be appropriate; document if added.\n\nFinal check: the test must FAIL CLEARLY when any sprint output is broken. Run a sanity sabotage: remove `bober approve` CLI command from src/cli/, run the test, verify it fails with a meaningful error (not a cryptic timeout). Good integration tests fail loudly.",
+  "completedAt": "2026-05-25T10:10:00Z"
 }

@@ -1,0 +1,37 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-28-1",
+  "contractId": "sprint-spec-20260524-bober-vision-28",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T13:40:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 9,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 9,
+    "requiredFailed": 0,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit (exit 0)", "details": "Zero TypeScript errors."},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ (exit 0)", "details": "Clean. Egress guard rule independently fired on test import of node:http."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc (exit 0)", "details": "dist/ tree includes dist/telemetry/, dist/cli/commands/config.js, dist/cli/commands/telemetry.js."},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "Test Files 82 passed; Tests 1115 passed | 4 skipped (1119); Duration 4.79s", "details": "All 82 test files passed. New tests: emit.test.ts (8), config.test.ts (4), telemetry.test.ts (5), graph-schema.test.ts +4 backcompat. Four-modes regression: 11/11 pass in 672ms."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "s28-c1", "description": "Schema back-compat (existing config parses)", "required": true, "result": "pass", "evidence": "src/config/schema.ts:282-309. Runtime: loadConfig() on current bober.config.json returned telemetry=undefined with zero errors. tests/config/graph-schema.test.ts 15/15.", "feedback": ""},
+    {"criterionId": "s28-c2", "description": "bober config migrate subcommand", "required": true, "result": "pass", "evidence": "src/cli/commands/config.ts + registered in src/cli/index.ts. `node dist/cli/index.js config migrate --help` works. config.test.ts 4/4.", "feedback": ""},
+    {"criterionId": "s28-c3", "description": "telemetry.enabled + JSONL emit + 9 event types", "required": true, "result": "pass", "evidence": "src/telemetry/emit.ts: 9 EventTypes (lines 30-39). Per-filepath mutex (57-105). Mode-0600. Default-off gate at line 75. emit.test.ts 8/8.", "feedback": ""},
+    {"criterionId": "s28-c4", "description": "Network egress guard", "required": true, "result": "pass", "evidence": "eslint.config.js:43-69 blocks node:http/https/net/tls/dgram + undici/got/axios/node-fetch + global fetch in src/telemetry/**/*.ts. Active catch verified: injected import 'node:http' triggered 'Sprint 28 local-only guarantee' error.", "feedback": ""},
+    {"criterionId": "s28-c5", "description": "Privacy invariant (no user content in telemetry)", "required": true, "result": "pass", "evidence": "All 8 emit call sites audited: pipeline.ts:396 (sprint-pass), pipeline.ts:479 (sprint-fail-retry), evaluator/curator/generator-agent.ts (agent-spawn), timeline.ts:499 (incident-resolved), orchestrator.ts:405 (incident-aborted). All payloads contain only IDs/durations/enums. TelemetryEventData interface (emit.ts:42-55) has no free-form string fields.", "feedback": ""},
+    {"criterionId": "s28-c6", "description": "bober telemetry status|purge|export", "required": true, "result": "pass", "evidence": "src/cli/commands/telemetry.ts. All three --help verified via runtime CLI invocation. telemetry.test.ts 5/5.", "feedback": ""},
+    {"criterionId": "s28-c7", "description": "VISION.md + AGENTS.md updated", "required": true, "result": "pass", "evidence": "VISION.md:347-351 telemetry config reference. AGENTS.md:136-165 'Telemetry Guarantee' section with opt-in/local-only invariants and CLI commands.", "feedback": ""},
+    {"criterionId": "s28-c8", "description": "Spec completion ritual", "required": true, "result": "pass", "evidence": "spec-20260524-bober-vision.json line 10: status='completed', line 11: completedAt='2026-05-25T13:30:00Z'. history.jsonl has spec-completed event with sprintsCompleted=28. progress.md has Tier 4 COMPLETE + Spec Completion Summary.", "feedback": ""},
+    {"criterionId": "s28-c9", "description": "All eval strategies + four-modes regression", "required": true, "result": "pass", "evidence": "typecheck 0, lint 0, build 0, test 0 (82 files, 1115 pass, 4 skip). four-modes.test.ts isolated run: 11/11 in 672ms.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 28 passes all 9 criteria and all 4 strategies. Telemetry is correctly opt-in/local-only with a functioning ESLint network-egress guard (independently verified). Privacy invariant audited at every emit call site — only IDs/durations/enums passed. Spec completion ritual performed correctly: status='completed', history event appended, progress.md updated. Four-modes regression test passes; zero regressions across 1115-test suite."
+}

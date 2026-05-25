@@ -6,62 +6,85 @@
   "successCriteria": [
     {
       "id": "s20-c1",
-      "description": "agents/bober-deployer.md exists with valid YAML (name: bober-deployer, restricted tools: Read, Bash, Grep, Glob, plus MCP-declared deploy tools at spawn time — Sprint 16 pattern). NOT read-only — this agent CAN execute via Bash but every action is gated.",
+      "description": "agents/bober-deployer.md exists with valid YAML (name: bober-deployer, restricted tools: Read, Bash, Grep, Glob, plus MCP-declared deploy tools at spawn time \u2014 Sprint 16 pattern). NOT read-only \u2014 this agent CAN execute via Bash but every action is gated.",
       "verificationMethod": "Read file. Verify YAML and tool list.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s20-c2",
-      "description": "Iron Law: 'NO RISKY ACTION WITHOUT CHECKPOINT APPROVAL; NO ACTION WITHOUT RECORDED INVERSE' (or equivalent — must require both approval and inverse for destructive ops). Red Flags >=6. Rationalization-Prevention table >=6.",
+      "description": "Iron Law: 'NO RISKY ACTION WITHOUT CHECKPOINT APPROVAL; NO ACTION WITHOUT RECORDED INVERSE' (or equivalent \u2014 must require both approval and inverse for destructive ops). Red Flags >=6. Rationalization-Prevention table >=6.",
       "verificationMethod": "Grep file.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s20-c3",
       "description": "Action classification documented: safe = read-only, reversible-by-redo, feature flag flip back to default; risky = stateful, destructive, externally-observable (deploy, migration, restart, scale, secret rotation). Classification rule: 'when in doubt, classify risky.'",
       "verificationMethod": "Read classification docs. Verify the conservative default.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s20-c4",
-      "description": "skills/bober.deploy/SKILL.md exists with: classification rules (matches agent prompt), execution discipline (precondition check → checkpoint if risky → execute → record ChangeEntry with inverse → postcondition check), abort discipline (postcondition fail → execute inverse → escalate).",
+      "description": "skills/bober.deploy/SKILL.md exists with: classification rules (matches agent prompt), execution discipline (precondition check \u2192 checkpoint if risky \u2192 execute \u2192 record ChangeEntry with inverse \u2192 postcondition check), abort discipline (postcondition fail \u2192 execute inverse \u2192 escalate).",
       "verificationMethod": "Read file. Verify all sections.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s20-c5",
       "description": "Orchestrator wiring: when bober-deployer is invoked (from Sprint 24's /bober-incident flow), it spawns with the appropriate observability MCPs and a callback to invoke the Tier 2 checkpoint mechanism for each risky action. The checkpoint receives the action description, classification reasoning, and the proposed inverse.",
       "verificationMethod": "Grep src/orchestrator/ for bober-deployer integration. Verify checkpoint callback wiring.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s20-c6",
       "description": "Unconditional gate: even with pipeline.mode='autopilot' and pipeline.checkpointMechanism='noop', risky actions STILL invoke the configured non-noop mechanism (default 'disk' fallback). Configurable via pipeline.allowAutopilotRiskyActions=false (default false). When true, risky actions in autopilot are auto-approved with a stern warning logged.",
-      "verificationMethod": "Read gate logic. Test: autopilot mode, noop mechanism → risky action still gates via disk. Test: allowAutopilotRiskyActions=true → auto-approves with warning.",
-      "passed": false
+      "verificationMethod": "Read gate logic. Test: autopilot mode, noop mechanism \u2192 risky action still gates via disk. Test: allowAutopilotRiskyActions=true \u2192 auto-approves with warning.",
+      "passed": true
     },
     {
       "id": "s20-c7",
-      "description": "ChangeEntry write happens AT execution time, not after. If the action crashes mid-execution, the ChangeEntry is still on disk with status='executed' (best effort — completeness of inverse depends on the agent providing it before execution).",
+      "description": "ChangeEntry write happens AT execution time, not after. If the action crashes mid-execution, the ChangeEntry is still on disk with status='executed' (best effort \u2014 completeness of inverse depends on the agent providing it before execution).",
       "verificationMethod": "Test: simulate action crash, verify ChangeEntry exists with documented status.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s20-c8",
       "description": "All existing eval strategies pass.",
-      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
     }
   ],
   "expectedChanges": [
-    { "path": "agents/bober-deployer.md", "action": "create", "description": "Remediation-action executor subagent" },
-    { "path": "skills/bober.deploy/SKILL.md", "action": "create", "description": "Classification + execution discipline" },
-    { "path": "src/orchestrator/", "action": "modify", "description": "Wire bober-deployer spawn + risky-action checkpoint callback" },
-    { "path": "src/config/schema.ts", "action": "modify", "description": "Add pipeline.allowAutopilotRiskyActions (default false)" },
-    { "path": "tests/orchestrator/deployer.test.ts", "action": "create", "description": "Unit tests for gate + ChangeEntry recording" }
+    {
+      "path": "agents/bober-deployer.md",
+      "action": "create",
+      "description": "Remediation-action executor subagent"
+    },
+    {
+      "path": "skills/bober.deploy/SKILL.md",
+      "action": "create",
+      "description": "Classification + execution discipline"
+    },
+    {
+      "path": "src/orchestrator/",
+      "action": "modify",
+      "description": "Wire bober-deployer spawn + risky-action checkpoint callback"
+    },
+    {
+      "path": "src/config/schema.ts",
+      "action": "modify",
+      "description": "Add pipeline.allowAutopilotRiskyActions (default false)"
+    },
+    {
+      "path": "tests/orchestrator/deployer.test.ts",
+      "action": "create",
+      "description": "Unit tests for gate + ChangeEntry recording"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-19"],
-  "status": "proposed",
-  "generatorNotes": "The deployer is the only agent in Tier 3 that EXECUTES (not just diagnoses). This is the highest-risk subagent in the entire spec — its Iron Law must be airtight.\n\nAction classification (concrete examples in the prompt):\n```\nSAFE:\n  - read-only queries (curl GET, kubectl get/describe, observability MCP queries)\n  - feature flag flip back to default state\n  - log-level adjustment (if observable revertible)\n  - non-destructive diagnostic execution (e.g., 'tcpdump' for analysis)\n\nRISKY (require approval):\n  - kubectl scale, kubectl rollout restart, kubectl delete\n  - database migration (forward or rollback)\n  - secret rotation\n  - DNS change\n  - load balancer config\n  - autoscaling group resize\n  - terraform apply\n  - environment variable update on running service\n  - feature flag flip away from default state\n\nWHEN IN DOUBT: classify risky.\n```\n\nExecution loop pseudocode (in the skill):\n```\nFOR each proposed action:\n  CLASSIFY (safe or risky)\n  COMPOSE ChangeEntry with required inverse field\n  RUN precondition-check\n  IF precondition fails: abort, do not execute\n  IF risky:\n    REQUEST checkpoint approval (sends action description + inverse + classification reasoning)\n    IF rejected: abort, do not execute\n  EXECUTE\n  APPEND ChangeEntry to .bober/incidents/<id>/changelog.jsonl with status='executed'\n  RUN postcondition-check\n  IF postcondition fails:\n    EXECUTE inverse (rollback)\n    APPEND rollback to changelog.jsonl\n    ESCALATE via checkpoint, STOP\n```\n\nOrchestrator integration: the deployer spawn needs a callback for the risky-action gate. The callback uses Sprint 7's Checkpoint abstraction with checkpointId='risky-action-<actionId>'. The mechanism resolution honors pipeline.checkpointMechanism BUT with a forced floor — when the action is risky, even 'noop' is overridden to 'disk' unless allowAutopilotRiskyActions=true.\n\npipeline.allowAutopilotRiskyActions: the escape hatch for fully-automated environments (CI, batch jobs) where no human is available. Default false because the SAFE default is to gate. Documented as a footgun in AGENTS.md.",
-  "evaluatorNotes": "Verify the unconditional gate works in practice: a unit test with mode='autopilot', mechanism='noop' must still invoke a non-noop mechanism for risky actions. If the test passes by skipping the risky action entirely, it's not testing the gate.\n\nVerify ChangeEntry inverse field is REQUIRED before execution: a test that calls execute() without inverse on the ChangeEntry must abort the action and log a clear error.\n\nVerify the deployer cannot bypass the gate via clever Bash command construction. Test: deployer attempts to execute `kubectl scale` as part of a multi-command Bash invocation (e.g., `echo 'safe' && kubectl scale ...`). The gate must catch this — classification happens on the COMMAND content, not the agent's self-declared classification.\n\nVerify ChangeEntry is written BEFORE execution starts (so if execution crashes, the entry exists with status='pending') and updated to status='executed' AFTER. Test: simulate a crash between write and execute — verify ChangeEntry exists with status='pending', and operational tooling can clean up.\n\nVerify allowAutopilotRiskyActions=true STILL writes the ChangeEntry and logs a clear warning. It's not 'skip all safety' — it's 'skip the interactive approval but preserve audit trail'.\n\nThis is the highest-risk sprint of Tier 3. Run the full eval suite multiple times. Verify no regressions in earlier sprints' tests."
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-19"
+  ],
+  "status": "completed",
+  "generatorNotes": "The deployer is the only agent in Tier 3 that EXECUTES (not just diagnoses). This is the highest-risk subagent in the entire spec \u2014 its Iron Law must be airtight.\n\nAction classification (concrete examples in the prompt):\n```\nSAFE:\n  - read-only queries (curl GET, kubectl get/describe, observability MCP queries)\n  - feature flag flip back to default state\n  - log-level adjustment (if observable revertible)\n  - non-destructive diagnostic execution (e.g., 'tcpdump' for analysis)\n\nRISKY (require approval):\n  - kubectl scale, kubectl rollout restart, kubectl delete\n  - database migration (forward or rollback)\n  - secret rotation\n  - DNS change\n  - load balancer config\n  - autoscaling group resize\n  - terraform apply\n  - environment variable update on running service\n  - feature flag flip away from default state\n\nWHEN IN DOUBT: classify risky.\n```\n\nExecution loop pseudocode (in the skill):\n```\nFOR each proposed action:\n  CLASSIFY (safe or risky)\n  COMPOSE ChangeEntry with required inverse field\n  RUN precondition-check\n  IF precondition fails: abort, do not execute\n  IF risky:\n    REQUEST checkpoint approval (sends action description + inverse + classification reasoning)\n    IF rejected: abort, do not execute\n  EXECUTE\n  APPEND ChangeEntry to .bober/incidents/<id>/changelog.jsonl with status='executed'\n  RUN postcondition-check\n  IF postcondition fails:\n    EXECUTE inverse (rollback)\n    APPEND rollback to changelog.jsonl\n    ESCALATE via checkpoint, STOP\n```\n\nOrchestrator integration: the deployer spawn needs a callback for the risky-action gate. The callback uses Sprint 7's Checkpoint abstraction with checkpointId='risky-action-<actionId>'. The mechanism resolution honors pipeline.checkpointMechanism BUT with a forced floor \u2014 when the action is risky, even 'noop' is overridden to 'disk' unless allowAutopilotRiskyActions=true.\n\npipeline.allowAutopilotRiskyActions: the escape hatch for fully-automated environments (CI, batch jobs) where no human is available. Default false because the SAFE default is to gate. Documented as a footgun in AGENTS.md.",
+  "evaluatorNotes": "Verify the unconditional gate works in practice: a unit test with mode='autopilot', mechanism='noop' must still invoke a non-noop mechanism for risky actions. If the test passes by skipping the risky action entirely, it's not testing the gate.\n\nVerify ChangeEntry inverse field is REQUIRED before execution: a test that calls execute() without inverse on the ChangeEntry must abort the action and log a clear error.\n\nVerify the deployer cannot bypass the gate via clever Bash command construction. Test: deployer attempts to execute `kubectl scale` as part of a multi-command Bash invocation (e.g., `echo 'safe' && kubectl scale ...`). The gate must catch this \u2014 classification happens on the COMMAND content, not the agent's self-declared classification.\n\nVerify ChangeEntry is written BEFORE execution starts (so if execution crashes, the entry exists with status='pending') and updated to status='executed' AFTER. Test: simulate a crash between write and execute \u2014 verify ChangeEntry exists with status='pending', and operational tooling can clean up.\n\nVerify allowAutopilotRiskyActions=true STILL writes the ChangeEntry and logs a clear warning. It's not 'skip all safety' \u2014 it's 'skip the interactive approval but preserve audit trail'.\n\nThis is the highest-risk sprint of Tier 3. Run the full eval suite multiple times. Verify no regressions in earlier sprints' tests.",
+  "completedAt": "2026-05-25T10:25:30Z"
 }

@@ -1,69 +1,76 @@
 {
   "id": "sprint-spec-20260524-bober-vision-18",
   "specId": "spec-20260524-bober-vision",
-  "feature": "bober.runbook skill — runbook-execution discipline",
+  "feature": "bober.runbook skill \u2014 runbook-execution discipline",
   "description": "skills/bober.runbook/SKILL.md teaches how to execute a runbook safely: parse, verify each step's prerequisite before running, execute, verify each step's postcondition before proceeding. Hard gates around destructive operations. Cross-references bober.diagnose and bober.deploy.",
   "successCriteria": [
     {
       "id": "s18-c1",
       "description": "skills/bober.runbook/SKILL.md exists with YAML frontmatter (name: bober-runbook, description starts with 'Use when executing a runbook or step-by-step recovery procedure'). MIT attribution where applicable.",
       "verificationMethod": "Read file. Verify YAML and attribution.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c2",
-      "description": "Iron Law: 'NO STEP EXECUTION WITHOUT VERIFIED PRECONDITION; NO ADVANCE WITHOUT VERIFIED POSTCONDITION' (or equivalent — must require pre+post verification for every step). Red Flags list >=5. Rationalization-Prevention table >=5.",
+      "description": "Iron Law: 'NO STEP EXECUTION WITHOUT VERIFIED PRECONDITION; NO ADVANCE WITHOUT VERIFIED POSTCONDITION' (or equivalent \u2014 must require pre+post verification for every step). Red Flags list >=5. Rationalization-Prevention table >=5.",
       "verificationMethod": "Grep file for Iron Law and structural blocks.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c3",
       "description": "Documented runbook parse format: markdown frontmatter (name, classification: 'standard'|'emergency', prerequisites: array) + numbered steps. Each step has: description, command (optional), precondition-check, postcondition-check, blastRadius (safe|risky), rollback (optional).",
       "verificationMethod": "Read parse format docs. Verify the structured fields.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c4",
       "description": "Execution discipline: BEFORE each step, run precondition-check; if fails, STOP and report. EXECUTE step (if command, run it; if descriptive, await human action via checkpoint). AFTER each step, run postcondition-check; if fails, STOP and trigger rollback step (if defined) or abort.",
-      "verificationMethod": "Read execution discipline. Verify the precondition→execute→postcondition→advance sequence with explicit STOP conditions.",
-      "passed": false
+      "verificationMethod": "Read execution discipline. Verify the precondition\u2192execute\u2192postcondition\u2192advance sequence with explicit STOP conditions.",
+      "passed": true
     },
     {
       "id": "s18-c5",
       "description": "Hard gate around destructive ops (steps with blastRadius='risky'): MUST invoke Tier 2 checkpoint mechanism for approval regardless of pipeline.mode. Cannot be bypassed via autopilot.",
       "verificationMethod": "Read the destructive-ops section. Verify the hard gate is documented as override-proof.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c6",
       "description": "Rollback: each runbook step CAN declare a rollback step (e.g., 'restart service' has rollback 'stop service if started'). If postcondition fails, the rollback runs. If rollback also fails, escalate via checkpoint.",
       "verificationMethod": "Read rollback discipline. Verify the cascade behavior.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c7",
       "description": "Observation log: every step execution writes to .bober/incidents/<id>/runbook-execution.jsonl with {timestamp, runbookName, stepNumber, status, preconditionResult, postconditionResult, rollbackTriggered?}.",
       "verificationMethod": "Read observation log section.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c8",
       "description": "Cross-references: bober.diagnose (when to invoke a runbook), bober.deploy (Sprint 20, executes risky steps), .bober/playbooks/ (Sprint 25, library of runbooks).",
       "verificationMethod": "Grep for cross-references.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s18-c9",
       "description": "All existing eval strategies pass.",
-      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
     }
   ],
   "expectedChanges": [
-    { "path": "skills/bober.runbook/SKILL.md", "action": "create", "description": "Runbook-execution discipline skill" }
+    {
+      "path": "skills/bober.runbook/SKILL.md",
+      "action": "create",
+      "description": "Runbook-execution discipline skill"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-17"],
-  "status": "proposed",
-  "generatorNotes": "Runbook execution is risky by nature — a runbook that's run wrong makes the incident worse. The Iron Law requires VERIFIED preconditions and postconditions for every step. This is heavier discipline than even bober.diagnose because runbooks include destructive operations.\n\nRunbook parse format (worked example in the skill body):\n```markdown\n---\nname: high-error-rate-recovery\nclassification: emergency\nprerequisites:\n  - logged in as production-on-call\n  - error rate observable in obs__datadog\n---\n\n## Step 1: Confirm error rate exceeded threshold\nblastRadius: safe\n\nprecondition-check:\n  - Read obs__datadog metric `api.error_rate`; current value > 1% for >= 5 minutes\n\nexecute:\n  - (description only) Open the runbook approver in the team channel\n\npostcondition-check:\n  - Acknowledgement received in channel from at least one approver\n\n## Step 2: Scale up replicas\nblastRadius: risky  # destructive — requires checkpoint approval\n\nprecondition-check:\n  - kubectl get deployment api-service -o json | jq .spec.replicas — value is 3\n\nexecute:\n  - kubectl scale deployment api-service --replicas=6\n\npostcondition-check:\n  - kubectl get pods -l app=api-service — 6 pods in Ready state\n\nrollback:\n  - kubectl scale deployment api-service --replicas=3\n```\n\nExecution loop pseudocode (in the skill body):\n```\nFOR each step IN runbook:\n  RUN precondition-check\n  IF precondition fails: STOP, report 'precondition_failed', do not advance\n  IF step.blastRadius == 'risky':\n    INVOKE checkpoint(pre-deploy) — even in autopilot mode\n    IF checkpoint rejected: STOP, abort runbook\n  EXECUTE step (command or human action)\n  RUN postcondition-check\n  IF postcondition fails:\n    IF step.rollback defined: EXECUTE rollback\n    IF rollback fails OR no rollback: ESCALATE via checkpoint, STOP\n  ADVANCE\nMARK runbook complete; write summary to .bober/incidents/<id>/runbook-execution.jsonl\n```\n\nVerbatim voice (per directive): capitalized rules, all-caps STOP at gate conditions, fenced Iron Law block.\n\nSprint 20 (bober.deploy) is where the execution actually invokes kubectl/terraform/etc. THIS sprint is the discipline / mental model; Sprint 20 wires the execution.",
-  "evaluatorNotes": "Verify hard gate around risky steps is UNCONDITIONAL — the skill must explicitly say 'autopilot mode does NOT bypass risky-step approval'. Without this the production safety guarantee collapses.\n\nVerify the precondition/postcondition discipline applies to EVERY step, not just risky ones. Even safe steps need postcondition verification (a 'safe' step that fails silently is worse than a risky step that fails loudly).\n\nVerify rollback discipline includes the cascade: postcondition fails → rollback executes → if rollback fails, escalate. Three-tier failure handling. If the skill stops at 'rollback executes' the rollback-failure case is undefined.\n\nVerify the worked example uses concrete commands (kubectl, jq) — abstract examples are less effective at communicating the discipline. The example shows real syntax; the principle scales to any runbook.\n\nCross-check Sprint 17: bober.diagnose mentions invoking bober.runbook when the diagnoser's next-action is 'follow runbook X'. The link must be navigable.\n\nVerify observation log shape (.bober/incidents/<id>/runbook-execution.jsonl) is documented with the same field names that Sprint 19 will write. Schema drift between sprints would break the incident timeline."
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-17"
+  ],
+  "status": "completed",
+  "generatorNotes": "Runbook execution is risky by nature \u2014 a runbook that's run wrong makes the incident worse. The Iron Law requires VERIFIED preconditions and postconditions for every step. This is heavier discipline than even bober.diagnose because runbooks include destructive operations.\n\nRunbook parse format (worked example in the skill body):\n```markdown\n---\nname: high-error-rate-recovery\nclassification: emergency\nprerequisites:\n  - logged in as production-on-call\n  - error rate observable in obs__datadog\n---\n\n## Step 1: Confirm error rate exceeded threshold\nblastRadius: safe\n\nprecondition-check:\n  - Read obs__datadog metric `api.error_rate`; current value > 1% for >= 5 minutes\n\nexecute:\n  - (description only) Open the runbook approver in the team channel\n\npostcondition-check:\n  - Acknowledgement received in channel from at least one approver\n\n## Step 2: Scale up replicas\nblastRadius: risky  # destructive \u2014 requires checkpoint approval\n\nprecondition-check:\n  - kubectl get deployment api-service -o json | jq .spec.replicas \u2014 value is 3\n\nexecute:\n  - kubectl scale deployment api-service --replicas=6\n\npostcondition-check:\n  - kubectl get pods -l app=api-service \u2014 6 pods in Ready state\n\nrollback:\n  - kubectl scale deployment api-service --replicas=3\n```\n\nExecution loop pseudocode (in the skill body):\n```\nFOR each step IN runbook:\n  RUN precondition-check\n  IF precondition fails: STOP, report 'precondition_failed', do not advance\n  IF step.blastRadius == 'risky':\n    INVOKE checkpoint(pre-deploy) \u2014 even in autopilot mode\n    IF checkpoint rejected: STOP, abort runbook\n  EXECUTE step (command or human action)\n  RUN postcondition-check\n  IF postcondition fails:\n    IF step.rollback defined: EXECUTE rollback\n    IF rollback fails OR no rollback: ESCALATE via checkpoint, STOP\n  ADVANCE\nMARK runbook complete; write summary to .bober/incidents/<id>/runbook-execution.jsonl\n```\n\nVerbatim voice (per directive): capitalized rules, all-caps STOP at gate conditions, fenced Iron Law block.\n\nSprint 20 (bober.deploy) is where the execution actually invokes kubectl/terraform/etc. THIS sprint is the discipline / mental model; Sprint 20 wires the execution.",
+  "evaluatorNotes": "Verify hard gate around risky steps is UNCONDITIONAL \u2014 the skill must explicitly say 'autopilot mode does NOT bypass risky-step approval'. Without this the production safety guarantee collapses.\n\nVerify the precondition/postcondition discipline applies to EVERY step, not just risky ones. Even safe steps need postcondition verification (a 'safe' step that fails silently is worse than a risky step that fails loudly).\n\nVerify rollback discipline includes the cascade: postcondition fails \u2192 rollback executes \u2192 if rollback fails, escalate. Three-tier failure handling. If the skill stops at 'rollback executes' the rollback-failure case is undefined.\n\nVerify the worked example uses concrete commands (kubectl, jq) \u2014 abstract examples are less effective at communicating the discipline. The example shows real syntax; the principle scales to any runbook.\n\nCross-check Sprint 17: bober.diagnose mentions invoking bober.runbook when the diagnoser's next-action is 'follow runbook X'. The link must be navigable.\n\nVerify observation log shape (.bober/incidents/<id>/runbook-execution.jsonl) is documented with the same field names that Sprint 19 will write. Schema drift between sprints would break the incident timeline.",
+  "completedAt": "2026-05-25T09:20:45Z"
 }

@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-18-1",
+  "contractId": "sprint-spec-20260524-bober-vision-18",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T09:20:45Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0","details":"tsc --noEmit"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0","details":"eslint src/"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0","details":"tsc"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"920 passed, 4 skipped","details":"70 files; matches baseline"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s18-c1","result":"pass","evidence":"name:bober-runbook @2, desc starts 'Use when executing...' @3, MIT+obra/superpowers @6."},
+    {"criterionId":"s18-c2","result":"pass","evidence":"Iron Law fenced @22-24 verbatim. 11 Red Flags @283-298. 8 Rationalization rows @300-311."},
+    {"criterionId":"s18-c3","result":"pass","evidence":"Parse format: frontmatter (name/classification:'standard'|'emergency'/prerequisites array) @55-63. All 6 step fields @67-72 (description/command optional/precondition-check/postcondition-check/blastRadius safe|risky/rollback optional)."},
+    {"criterionId":"s18-c4","result":"pass","evidence":"Execution loop @122-136 precondition→execute→postcondition→advance. Named STOP @138-145: precondition_failed/checkpoint_rejected/execution_failed/rollback_failed."},
+    {"criterionId":"s18-c5","result":"pass","evidence":"UNCONDITIONAL @149. autopilot/checkpointMechanism='noop'/multi-cmd-wrap explicitly NOT bypasses. Verbatim 'Autopilot mode does NOT bypass risky-step approval' @158."},
+    {"criterionId":"s18-c6","result":"pass","evidence":"3-tier cascade @165-177: T1 run rollback @167; T2 if rollback fails OR none, escalate via checkpoint @170; T3 write indeterminate STOP @173. Counter-example @275-281."},
+    {"criterionId":"s18-c7","result":"pass","evidence":"runbook-execution.jsonl @182-195 with 7 fields camelCase + Sprint 19 schema lock @208."},
+    {"criterionId":"s18-c8","result":"pass","evidence":"bober.diagnose @214,324; bober.deploy @161,325; .bober/playbooks/ @33,326. All 3 present."},
+    {"criterionId":"s18-c9","result":"pass","evidence":"All 4 strategies exit 0. 920 tests pass preserved."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 criteria pass on iter 1. bober.runbook (335 lines) matches contract: verbatim Iron Law, complete parse format, named-STOP execution loop, UNCONDITIONAL risky-step gate with autopilot-bypass-denial phrase, 3-tier rollback cascade, 7-field runbook-execution.jsonl schema lock for Sprint 19 compatibility. Concrete kubectl/jq commands throughout. 920 test baseline preserved."
+}

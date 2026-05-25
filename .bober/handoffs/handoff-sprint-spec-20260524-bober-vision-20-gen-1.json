@@ -1,0 +1,35 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-20-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-20",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T06:43:04Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 20 — highest-risk Tier 3 sprint. Adds bober-deployer subagent (executes; not read-only) + bober.deploy skill + change-management gates + pipeline.allowAutopilotRiskyActions + ChangeEntry-at-execution recording. Unconditional gate: risky actions ALWAYS invoke a non-noop mechanism unless allowAutopilotRiskyActions=true.",
+    "completedSprints": [
+      {"contractId": "sprint-7", "title": "Careful-flow plumbing", "summary": "Checkpoint module at src/orchestrator/checkpoints/ with mechanism registry. Has getCheckpointMechanismFor(checkpointId, config, fallback) for per-checkpoint resolution."},
+      {"contractId": "sprint-10", "title": "PR mechanism + getCheckpointMechanismFor", "summary": "Per-checkpoint override resolver."},
+      {"contractId": "sprint-13", "title": "Audit trail", "summary": "Append-only JSONL audit pattern used by sprint 19."},
+      {"contractId": "sprint-14", "title": "Mode + mechanism config", "summary": "pipeline.mode, pipeline.checkpointMechanism, checkpointOverrides — Sprint 20 adds pipeline.allowAutopilotRiskyActions to this section."},
+      {"contractId": "sprint-15", "title": "bober-diagnoser", "summary": "Pattern for read-only subagent (deployer is the NOT-read-only complement)."},
+      {"contractId": "sprint-16", "title": "Observability MCP slots", "summary": "obs__<provider>__<tool> namespace + mergeObsTools. Deployer spawn pattern can mirror this."},
+      {"contractId": "sprint-18", "title": "bober.runbook skill", "summary": "Templates the hard-gate + rollback-cascade language. Deployer skill mirrors."},
+      {"contractId": "sprint-19", "title": "Incident timeline", "summary": "src/incident/types.ts ChangeEntrySchema (inverse REQUIRED). src/incident/timeline.ts appendChange (writes both changelog.jsonl AND timeline.jsonl in mutex). Sprint 20 uses these."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/",
+      "src/orchestrator/checkpoints/registry.ts",
+      "src/incident/timeline.ts",
+      "src/incident/types.ts",
+      "src/config/schema.ts",
+      "agents/bober-diagnoser.md",
+      "skills/bober.runbook/SKILL.md"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-20.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-24-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-24",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T08:40:46Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 24 — Tier 3 integration capstone. Top-level /bober-incident slash command + bober incident start/status/end/list/abort CLI + state machine in src/incident/orchestrator.ts that routes between diagnoser/deployer/postmortemer based on phase. End-to-end integration test with mocked externals.",
+    "completedSprints": [
+      {"contractId":"sprint-15","title":"bober-diagnoser","summary":"Read-only investigator (writes diagnoses/<id>.json with hypotheses)."},
+      {"contractId":"sprint-16","title":"Observability MCP","summary":"mergeObsTools + spawnDeployer pattern."},
+      {"contractId":"sprint-17","title":"bober.diagnose skill","summary":"4-phase incident root-cause discipline."},
+      {"contractId":"sprint-19","title":"Incident timeline","summary":"createIncident, append helpers, setIncidentStatus, listIncidents — all here."},
+      {"contractId":"sprint-20","title":"Deployer + gates","summary":"executeAction with risky-action gate, classifyCommand, resolveRiskyActionMechanism."},
+      {"contractId":"sprint-21","title":"Rollback CLI","summary":"planRollback, executeRollback per-step gate, --dry-run, halt-on-failure."},
+      {"contractId":"sprint-22","title":"verifyResolution","summary":"setIncidentStatus opts {verifyResult, overrideToken} gate for resolved transition."},
+      {"contractId":"sprint-23","title":"Postmortemer","summary":"generatePostmortem, auto-trigger on resolved, CLI generate/show."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/incident/timeline.ts",
+      "src/incident/types.ts",
+      "src/incident/rollback.ts",
+      "src/incident/postmortem.ts",
+      "src/incident/resolution-verify.ts",
+      "src/orchestrator/deploy/execute.ts",
+      "src/cli/commands/rollback.ts",
+      "src/cli/commands/postmortem.ts",
+      "src/cli/index.ts"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-24.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

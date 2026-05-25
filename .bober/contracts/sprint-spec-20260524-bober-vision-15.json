@@ -2,68 +2,75 @@
   "id": "sprint-spec-20260524-bober-vision-15",
   "specId": "spec-20260524-bober-vision",
   "feature": "bober-diagnoser agent (read-only investigator)",
-  "description": "New read-only subagent for incident investigation. Tools: Read, Bash, Grep, Glob plus observability MCP slots (declared via config, not built-in). Mirrors the bober-evaluator pattern. Produces structured DiagnosisResult JSON listing hypotheses with evidence. Cannot write code, cannot deploy — purely diagnostic. Integration with the orchestrator's incident pipeline comes in Sprint 24.",
+  "description": "New read-only subagent for incident investigation. Tools: Read, Bash, Grep, Glob plus observability MCP slots (declared via config, not built-in). Mirrors the bober-evaluator pattern. Produces structured DiagnosisResult JSON listing hypotheses with evidence. Cannot write code, cannot deploy \u2014 purely diagnostic. Integration with the orchestrator's incident pipeline comes in Sprint 24.",
   "successCriteria": [
     {
       "id": "s15-c1",
       "description": "agents/bober-diagnoser.md exists with valid YAML frontmatter (name: bober-diagnoser, description, tools, model). Tools list: Read, Bash, Grep, Glob ONLY at core; MCP-declared observability tools merged at spawn time (Sprint 16 wires this).",
       "verificationMethod": "Read file. Verify YAML. Verify core tools list.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c2",
       "description": "Contains Subagent Context block (mirrors bober-evaluator), verbatim-style Iron Law ('NO HYPOTHESIS WITHOUT EVIDENCE FROM TWO INDEPENDENT SOURCES' or equivalent), Red Flags list >=5, Rationalization-Prevention table >=5 rows. Voice matches Sprint 3 style.",
       "verificationMethod": "Grep file for each named element.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c3",
       "description": "Documented DiagnosisResult JSON schema: { diagnosisId, incidentId, timestamp, summary, hypotheses: Array<{id, statement, supportingEvidence: Array<{source, path, snippet, timestamp?}>, contradictingEvidence: Array<same>, confidence: 'low'|'medium'|'high'}>, nextActions: Array<{action, justification, blastRadius: 'safe'|'risky', requiresApproval: boolean}> }.",
       "verificationMethod": "Read file. Locate schema. Verify each field with documented type.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c4",
       "description": "Documented investigation discipline: read the incident artifacts (.bober/incidents/<id>/), gather data via observability MCPs and direct file reads, formulate hypotheses, gather supporting AND contradicting evidence for each, rank by confidence. Hypotheses with no evidence are rejected, not promoted.",
       "verificationMethod": "Read the discipline section. Verify the explicit requirements (2 sources, contradicting-evidence requirement).",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c5",
       "description": "Skill cross-references: agent prompt instructs invoking bober.diagnose skill (Sprint 17) and bober.debug skill (already exists from Sprint 2). Anti-pattern catalog (.bober/anti-patterns/) referenced for pattern matching.",
       "verificationMethod": "Grep file for 'bober.diagnose', 'bober.debug', '.bober/anti-patterns/'.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c6",
       "description": "Read-only enforcement: agent has no Write/Edit/MultiEdit/NotebookEdit in tools list. Documented constraint: 'You are a diagnostician, not a fixer. You do not modify code. You do not execute deploys. You output hypotheses and recommended next actions; the deployer agent or human partner executes them.'",
       "verificationMethod": "Grep file for the read-only constraint statement. Verify tools list has no write-capable tools.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c7",
       "description": "Bash tool used for read-only commands only: enumerated allowlist in the prompt (e.g., grep, find, git log, git diff, curl with GET only, kubectl get/describe). Documented forbidden command list (e.g., rm, git reset, kubectl delete, terraform apply).",
       "verificationMethod": "Read the Bash discipline section. Verify allowlist and forbidden-list both documented.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c8",
       "description": "agents/bober-diagnoser.md remains under 800 lines (NFR).",
       "verificationMethod": "wc -l; assert <=800.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s15-c9",
       "description": "All existing eval strategies pass.",
-      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
     }
   ],
   "expectedChanges": [
-    { "path": "agents/bober-diagnoser.md", "action": "create", "description": "New read-only diagnostic subagent" }
+    {
+      "path": "agents/bober-diagnoser.md",
+      "action": "create",
+      "description": "New read-only diagnostic subagent"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-14"],
-  "status": "proposed",
-  "generatorNotes": "Model agents/bober-diagnoser.md after agents/bober-evaluator.md (closest existing pattern — read-only subagent). Frontmatter tools list mirrors evaluator's minus the Playwright/browser tools (diagnoser doesn't need browser automation; Playwright belongs in the eval flow for UI tests).\n\nIron Law: 'NO HYPOTHESIS WITHOUT EVIDENCE FROM TWO INDEPENDENT SOURCES' is a strong default but discuss it in the agent's reasoning section — single-source evidence is acceptable for hypotheses ranked 'low' confidence; high/medium confidence requires multi-source. The Iron Law is about the BAR for promoting hypotheses to actionable next-steps, not about every hypothesis ever considered.\n\nDocumented investigation discipline (paraphrase /tmp/superpowers/skills/systematic-debugging/SKILL.md but adapt to incident context — system-level not code-level):\n1. READ the incident artifacts: .bober/incidents/<id>/timeline.jsonl, hypotheses.md (prior diagnoses), actions.jsonl (what was tried), changelog.jsonl (deploy history).\n2. GATHER evidence at component boundaries — what does each layer report? Logs from app, traces from API gateway, metrics from infra, error rates from monitoring.\n3. CORRELATE timestamps — what changed in the window when the incident started?\n4. FORMULATE hypotheses ranked by evidence weight.\n5. SEEK CONTRADICTING evidence — actively try to disprove the top hypothesis before promoting it.\n6. NEXT ACTIONS — small, reversible, observable.\n\nDiagnoser writes to .bober/incidents/<id>/diagnoses/<diagnosisId>.json. Sprint 19 (incident timeline) wires the timeline.jsonl append automatically; THIS sprint just writes the diagnosis JSON.\n\nblastRadius classification of next actions: 'safe' = read-only / reversible (e.g., 'check the cache miss rate'), 'risky' = stateful / irreversible (e.g., 'restart the service'). Risky actions REQUIRE checkpoint approval gate (Sprint 20 wires this).\n\nObservability MCP tools: Sprint 16 wires the merge logic. THIS sprint just declares that MCP-provided tools are expected to appear in the agent's tool list at spawn time, and the agent should use them as the primary data source for system metrics/logs/traces.",
-  "evaluatorNotes": "Verify read-only enforcement is BOTH in tools list (no write tools) AND in prose (explicit constraint statement). Belt-and-suspenders matters — a future code change could add write tools; the prose preserves intent.\n\nVerify Bash allowlist is enumerated, not just principle-stated. 'use Bash for read-only ops' without examples is too soft; the model needs the concrete list to compare commands against.\n\nVerify the DiagnosisResult schema contradicting-evidence field is REQUIRED (not optional). The Iron Law about multi-source evidence depends on the schema actively asking for contradictions.\n\nVerify hypothesis confidence enum is exactly 'low'|'medium'|'high' (matches Sprint 17 skill expectations).\n\nCross-check Sprint 3 style consistency: Iron Law fenced near top, Red Flags table format, Rationalization-Prevention table format. Should look stylistically identical to bober-evaluator.md after Sprint 3."
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-14"
+  ],
+  "status": "completed",
+  "generatorNotes": "Model agents/bober-diagnoser.md after agents/bober-evaluator.md (closest existing pattern \u2014 read-only subagent). Frontmatter tools list mirrors evaluator's minus the Playwright/browser tools (diagnoser doesn't need browser automation; Playwright belongs in the eval flow for UI tests).\n\nIron Law: 'NO HYPOTHESIS WITHOUT EVIDENCE FROM TWO INDEPENDENT SOURCES' is a strong default but discuss it in the agent's reasoning section \u2014 single-source evidence is acceptable for hypotheses ranked 'low' confidence; high/medium confidence requires multi-source. The Iron Law is about the BAR for promoting hypotheses to actionable next-steps, not about every hypothesis ever considered.\n\nDocumented investigation discipline (paraphrase /tmp/superpowers/skills/systematic-debugging/SKILL.md but adapt to incident context \u2014 system-level not code-level):\n1. READ the incident artifacts: .bober/incidents/<id>/timeline.jsonl, hypotheses.md (prior diagnoses), actions.jsonl (what was tried), changelog.jsonl (deploy history).\n2. GATHER evidence at component boundaries \u2014 what does each layer report? Logs from app, traces from API gateway, metrics from infra, error rates from monitoring.\n3. CORRELATE timestamps \u2014 what changed in the window when the incident started?\n4. FORMULATE hypotheses ranked by evidence weight.\n5. SEEK CONTRADICTING evidence \u2014 actively try to disprove the top hypothesis before promoting it.\n6. NEXT ACTIONS \u2014 small, reversible, observable.\n\nDiagnoser writes to .bober/incidents/<id>/diagnoses/<diagnosisId>.json. Sprint 19 (incident timeline) wires the timeline.jsonl append automatically; THIS sprint just writes the diagnosis JSON.\n\nblastRadius classification of next actions: 'safe' = read-only / reversible (e.g., 'check the cache miss rate'), 'risky' = stateful / irreversible (e.g., 'restart the service'). Risky actions REQUIRE checkpoint approval gate (Sprint 20 wires this).\n\nObservability MCP tools: Sprint 16 wires the merge logic. THIS sprint just declares that MCP-provided tools are expected to appear in the agent's tool list at spawn time, and the agent should use them as the primary data source for system metrics/logs/traces.",
+  "evaluatorNotes": "Verify read-only enforcement is BOTH in tools list (no write tools) AND in prose (explicit constraint statement). Belt-and-suspenders matters \u2014 a future code change could add write tools; the prose preserves intent.\n\nVerify Bash allowlist is enumerated, not just principle-stated. 'use Bash for read-only ops' without examples is too soft; the model needs the concrete list to compare commands against.\n\nVerify the DiagnosisResult schema contradicting-evidence field is REQUIRED (not optional). The Iron Law about multi-source evidence depends on the schema actively asking for contradictions.\n\nVerify hypothesis confidence enum is exactly 'low'|'medium'|'high' (matches Sprint 17 skill expectations).\n\nCross-check Sprint 3 style consistency: Iron Law fenced near top, Red Flags table format, Rationalization-Prevention table format. Should look stylistically identical to bober-evaluator.md after Sprint 3.",
+  "completedAt": "2026-05-25T08:10:00Z"
 }

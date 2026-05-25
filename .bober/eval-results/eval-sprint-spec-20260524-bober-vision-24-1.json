@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-24-1",
+  "contractId": "sprint-spec-20260524-bober-vision-24",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T12:05:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"1040 passed, 4 skipped (76 files)","details":"+10 integration tests, baseline 1030 preserved"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s24-c1","result":"pass","evidence":"SKILL.md YAML name:bober-incident; Iron Law verbatim @26 'NO INCIDENT WITHOUT TIMELINE; NO RESOLUTION WITHOUT VERIFICATION'; 7 Red Flags; 6 Rationalization rows; ASCII state machine @158-192; Slash flow @112-153; cross-refs to bober.diagnose/.deploy/.runbook/.postmortem."},
+    {"criterionId":"s24-c2","result":"pass","evidence":"src/cli/commands/incident.ts: 5 subcommands (start/status/end/list/abort). end requires --verified|--override. abort --reason requiredOption. Registered in cli/index.ts:30,266."},
+    {"criterionId":"s24-c3","result":"pass","evidence":"STATUS_TRANSITIONS @types.ts:136-142. transitionPhase @165-199 validates BEFORE setIncidentStatus, throws InvalidTransitionError. applyDiagnosisOutcome routes risky→'remediating' @221. applyDeploymentOutcome routes success+verified→'monitoring' @278-280. resolved→investigating requires reopenReason @182-185."},
+    {"criterionId":"s24-c4","result":"pass","evidence":"Integration test 'checkpoint gate fires for EVERY risky action' @448: 3 risky → 3 'auto-approved risky action' warnings (expect(.length).toBe(3) @498). DiskCheckpointMechanism re-registered to tmpdir. Per-action loop, no batching."},
+    {"criterionId":"s24-c5","result":"pass","evidence":"renderStatus @59-198: phase/severity/duration/latest diagnosis from diagnoses (@72-103)/action counts from changelog (@107-132)/resolution criteria + evidence (@136-175)/abort path (@178-184)/next-hint (@188-197). ENOENT-tolerant for missing artifacts."},
+    {"criterionId":"s24-c6","result":"pass","evidence":"SKILL.md Slash Command Flow @112-153: prompt for symptom if missing, refuses vague symptom, runs 'bober incident start', announces phase transitions with incidentId. Markdown formatting documented."},
+    {"criterionId":"s24-c7","result":"pass","evidence":"abort() @orchestrator.ts: writes aborted.txt @330-337 + abort-report.md @377-392 → 'aborted' transition @397. Rollback ONLY when opts.confirmRollback===true @351. Test verifies callCount()==0 without confirm; ==2 with confirm."},
+    {"criterionId":"s24-c8","result":"pass","evidence":"tests/integration/incident-lifecycle.test.ts: NO vi.mock — REAL timeline/rollback/resolution-verify/postmortem/orchestrator. Only ExecutorSeam + MetricQueryClient are in-memory test seams. 10 tests: full lifecycle (30s timeout), 2 invalid transitions, valid reopen, abort with/without rollback, double-abort error, status across phases, 3-gate test. All pass in 490ms. Postmortem.md verified on disk. Timeline chronological ordering verified."},
+    {"criterionId":"s24-c9","result":"pass","evidence":"All 4 strategies exit 0. 1040 tests, +10 from 1030 baseline. No regressions."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 criteria pass on iter 1. Tier 3 INTEGRATION CAPSTONE complete. State machine guarded transitions; abort footgun-prevention enforced; integration test is genuinely integration (no module mocking, real orchestrator+timeline+rollback+postmortem code exercised); per-action gate fires for all 3 risky actions; test count 1030→1040."
+}

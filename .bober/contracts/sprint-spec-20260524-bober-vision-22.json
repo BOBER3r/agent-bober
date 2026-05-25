@@ -1,73 +1,96 @@
 {
   "id": "sprint-spec-20260524-bober-vision-22",
   "specId": "spec-20260524-bober-vision",
-  "feature": "SLO/metric verification — resolution gate before marking incident resolved",
+  "feature": "SLO/metric verification \u2014 resolution gate before marking incident resolved",
   "description": "Implement `verifyResolution(incidentId, criteria)` that queries the configured observability MCP for the named metric, asserts it sustained within threshold for the named window, and only then permits status='resolved'. Sprint 17 (bober.diagnose Phase 4) declared the criteria shape; this sprint enforces it at the status-transition point.",
   "successCriteria": [
     {
       "id": "s22-c1",
       "description": "src/incident/resolution-verify.ts exports verifyResolution(incidentId, criteria: ResolutionCriteria): Promise<VerifyResult> where ResolutionCriteria = {metricName, threshold, comparison: 'lt'|'gt'|'lte'|'gte', windowMinutes, provider, baselineComparison?: 'absolute' | 'percent-of-baseline'}; VerifyResult = {verified: boolean, observedValue, sampledAt, evidencePath}.",
       "verificationMethod": "Read file. Verify shapes.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s22-c2",
-      "description": "Implementation queries the named observability MCP provider (obs__<provider>__query_metric or equivalent — Sprint 16 defined the naming) for the metric over the window. Returns verified=true only when EVERY sample in the window meets the threshold. One outlier = not verified.",
-      "verificationMethod": "Test with mocked MCP: 10 samples all under threshold → verified=true; 9 under and 1 over → verified=false.",
-      "passed": false
+      "description": "Implementation queries the named observability MCP provider (obs__<provider>__query_metric or equivalent \u2014 Sprint 16 defined the naming) for the metric over the window. Returns verified=true only when EVERY sample in the window meets the threshold. One outlier = not verified.",
+      "verificationMethod": "Test with mocked MCP: 10 samples all under threshold \u2192 verified=true; 9 under and 1 over \u2192 verified=false.",
+      "passed": true
     },
     {
       "id": "s22-c3",
       "description": "Sprint 19's setIncidentStatus(incidentId, 'resolved') now REQUIRES a VerifyResult with verified=true OR an explicit override token. The status transition writes the VerifyResult to incident.json's resolutionEvidence field.",
       "verificationMethod": "Test: setIncidentStatus to 'resolved' without VerifyResult throws. With verified=false throws. With verified=true succeeds and writes evidence.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s22-c4",
       "description": "Override token: setIncidentStatus(id, 'resolved', { overrideToken: 'SKIP_METRIC_VERIFY: <reason>' }) allows skipping the verify gate WITH the reason logged to timeline.jsonl and to AGENTS.md-documented audit trail. The reason field is required; empty string rejects.",
       "verificationMethod": "Test: override with reason succeeds and logs; override with empty reason rejects.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s22-c5",
       "description": "No observability provider configured for the metric: verifyResolution returns verified=false with reason='NO_PROVIDER' and a hint pointing to docs/observability-mcps/. Resolution requires either configuring a provider OR using the override token.",
-      "verificationMethod": "Test: empty observability.providers → verifyResolution returns NO_PROVIDER.",
-      "passed": false
+      "verificationMethod": "Test: empty observability.providers \u2192 verifyResolution returns NO_PROVIDER.",
+      "passed": true
     },
     {
       "id": "s22-c6",
       "description": "Evidence persistence: verifyResolution writes raw metric data to .bober/incidents/<id>/resolution-evidence/<timestamp>.json (timestamps + values). Allows audit reconstruction.",
       "verificationMethod": "Test: successful verify produces .json file with documented shape.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s22-c7",
       "description": "Diagnoser/Deployer prompt integration: agents/bober-diagnoser.md (modify) and agents/bober-deployer.md (modify) instruct the agents to call verifyResolution before declaring resolution. Skill cross-references bober.diagnose's Phase 4.",
       "verificationMethod": "Grep both agent prompts for verifyResolution and ResolutionCriteria.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s22-c8",
       "description": "Unit + integration tests with mocked MCP for: verified happy-path, verified=false with one outlier, NO_PROVIDER, override token with reason, override without reason rejects.",
       "verificationMethod": "Run npm run test.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s22-c9",
       "description": "All existing eval strategies pass.",
-      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
     }
   ],
   "expectedChanges": [
-    { "path": "src/incident/resolution-verify.ts", "action": "create", "description": "verifyResolution + ResolutionCriteria + VerifyResult" },
-    { "path": "src/incident/timeline.ts", "action": "modify", "description": "setIncidentStatus enforces verifyResolution for 'resolved' transition" },
-    { "path": "agents/bober-diagnoser.md", "action": "modify", "description": "Reference verifyResolution discipline before declaring resolution" },
-    { "path": "agents/bober-deployer.md", "action": "modify", "description": "Reference verifyResolution discipline before marking action successful" },
-    { "path": "tests/incident/resolution-verify.test.ts", "action": "create", "description": "Tests with mocked MCP responses" }
+    {
+      "path": "src/incident/resolution-verify.ts",
+      "action": "create",
+      "description": "verifyResolution + ResolutionCriteria + VerifyResult"
+    },
+    {
+      "path": "src/incident/timeline.ts",
+      "action": "modify",
+      "description": "setIncidentStatus enforces verifyResolution for 'resolved' transition"
+    },
+    {
+      "path": "agents/bober-diagnoser.md",
+      "action": "modify",
+      "description": "Reference verifyResolution discipline before declaring resolution"
+    },
+    {
+      "path": "agents/bober-deployer.md",
+      "action": "modify",
+      "description": "Reference verifyResolution discipline before marking action successful"
+    },
+    {
+      "path": "tests/incident/resolution-verify.test.ts",
+      "action": "create",
+      "description": "Tests with mocked MCP responses"
+    }
   ],
-  "dependsOn": ["sprint-spec-20260524-bober-vision-21"],
-  "status": "proposed",
-  "generatorNotes": "ResolutionCriteria is the most important shape in this sprint — it's the contract the diagnoser commits to in Phase 4 and the deployer/orchestrator verifies. Concrete worked example for docs:\n\n```typescript\nconst criteria: ResolutionCriteria = {\n  metricName: 'api.checkout.error_rate',\n  threshold: 0.001,           // 0.1%\n  comparison: 'lt',\n  windowMinutes: 10,\n  provider: 'datadog',         // from observability.providers\n  baselineComparison: 'absolute',  // or 'percent-of-baseline' to compare against last week\n};\n```\n\nThe 'every sample under threshold' rule is intentionally strict — averaging across a window hides spikes. A 10-minute window where 9 minutes are clean but 1 minute spikes to 5% is NOT resolved. The diagnoser may need to widen the threshold or extend the window, but those are explicit choices that get logged.\n\nMCP query: the obs__<provider>__query_metric tool returns a time series. Implementation reads it, applies the comparison per-sample, all-or-nothing.\n\nEvidence file shape:\n```json\n{\n  \"incidentId\": \"inc-20260524-...\",\n  \"verifiedAt\": \"2026-05-24T15:30:00Z\",\n  \"criteria\": { ... },\n  \"samples\": [\n    { \"timestamp\": \"2026-05-24T15:20:00Z\", \"value\": 0.0008 },\n    { \"timestamp\": \"2026-05-24T15:21:00Z\", \"value\": 0.0007 },\n    ...\n  ],\n  \"allSamplesPassed\": true\n}\n```\n\nOverride token format: 'SKIP_METRIC_VERIFY: <reason>'. The prefix is recognizable; the reason after the colon is mandatory free-form text. Why this design: in real incidents, sometimes metrics are unreliable (the metric pipeline itself broke), and the operator KNOWS the system is recovered via other signals. The override preserves audit trail without blocking action.\n\nInstrumentation pattern in agent prompts: 'BEFORE calling setIncidentStatus with \"resolved\", call verifyResolution. If verifyResolution returns verified=false, do NOT call setIncidentStatus(\"resolved\") — instead, return to bober.diagnose Phase 4 or call setIncidentStatus(\"monitoring\") to indicate ongoing observation.'",
-  "evaluatorNotes": "Verify the 'every sample under threshold' rule: a test with 10 samples where 9 are under and 1 is at exactly threshold must return verified=true (boundary is inclusive based on comparison: 'lt' is exclusive, 'lte' is inclusive). Test BOTH comparison operators for boundary behavior.\n\nVerify NO_PROVIDER case is reachable but rare in production — most users will configure at least one MCP. The hint message should be actionable: 'No observability provider configured for metric X. Add to bober.config.json observability.providers, or use --override-verify with a reason'.\n\nVerify override token enforcement: a test that calls setIncidentStatus with overrideToken='SKIP_METRIC_VERIFY:' (empty reason after colon) must reject. The reason field is the audit trail — empty defeats it.\n\nVerify evidence file is written even on verified=false (for audit / postmortem use). The presence of evidence file does not imply resolution; the verifyResolution return value does.\n\nVerify the diagnoser/deployer prompts use exact function names that match the implementation — drift between prompt and code is silent breakage.\n\nVerify baseline-comparison logic (if 'percent-of-baseline' is selected): implementation needs a baseline source (e.g., 7-day rolling average). This sprint can defer the baseline implementation if the contract is documented and 'percent-of-baseline' returns NOT_IMPLEMENTED for now — that's an honest scope choice. If shipping it: test thoroughly with mocked baseline data."
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-21"
+  ],
+  "status": "completed",
+  "generatorNotes": "ResolutionCriteria is the most important shape in this sprint \u2014 it's the contract the diagnoser commits to in Phase 4 and the deployer/orchestrator verifies. Concrete worked example for docs:\n\n```typescript\nconst criteria: ResolutionCriteria = {\n  metricName: 'api.checkout.error_rate',\n  threshold: 0.001,           // 0.1%\n  comparison: 'lt',\n  windowMinutes: 10,\n  provider: 'datadog',         // from observability.providers\n  baselineComparison: 'absolute',  // or 'percent-of-baseline' to compare against last week\n};\n```\n\nThe 'every sample under threshold' rule is intentionally strict \u2014 averaging across a window hides spikes. A 10-minute window where 9 minutes are clean but 1 minute spikes to 5% is NOT resolved. The diagnoser may need to widen the threshold or extend the window, but those are explicit choices that get logged.\n\nMCP query: the obs__<provider>__query_metric tool returns a time series. Implementation reads it, applies the comparison per-sample, all-or-nothing.\n\nEvidence file shape:\n```json\n{\n  \"incidentId\": \"inc-20260524-...\",\n  \"verifiedAt\": \"2026-05-24T15:30:00Z\",\n  \"criteria\": { ... },\n  \"samples\": [\n    { \"timestamp\": \"2026-05-24T15:20:00Z\", \"value\": 0.0008 },\n    { \"timestamp\": \"2026-05-24T15:21:00Z\", \"value\": 0.0007 },\n    ...\n  ],\n  \"allSamplesPassed\": true\n}\n```\n\nOverride token format: 'SKIP_METRIC_VERIFY: <reason>'. The prefix is recognizable; the reason after the colon is mandatory free-form text. Why this design: in real incidents, sometimes metrics are unreliable (the metric pipeline itself broke), and the operator KNOWS the system is recovered via other signals. The override preserves audit trail without blocking action.\n\nInstrumentation pattern in agent prompts: 'BEFORE calling setIncidentStatus with \"resolved\", call verifyResolution. If verifyResolution returns verified=false, do NOT call setIncidentStatus(\"resolved\") \u2014 instead, return to bober.diagnose Phase 4 or call setIncidentStatus(\"monitoring\") to indicate ongoing observation.'",
+  "evaluatorNotes": "Verify the 'every sample under threshold' rule: a test with 10 samples where 9 are under and 1 is at exactly threshold must return verified=true (boundary is inclusive based on comparison: 'lt' is exclusive, 'lte' is inclusive). Test BOTH comparison operators for boundary behavior.\n\nVerify NO_PROVIDER case is reachable but rare in production \u2014 most users will configure at least one MCP. The hint message should be actionable: 'No observability provider configured for metric X. Add to bober.config.json observability.providers, or use --override-verify with a reason'.\n\nVerify override token enforcement: a test that calls setIncidentStatus with overrideToken='SKIP_METRIC_VERIFY:' (empty reason after colon) must reject. The reason field is the audit trail \u2014 empty defeats it.\n\nVerify evidence file is written even on verified=false (for audit / postmortem use). The presence of evidence file does not imply resolution; the verifyResolution return value does.\n\nVerify the diagnoser/deployer prompts use exact function names that match the implementation \u2014 drift between prompt and code is silent breakage.\n\nVerify baseline-comparison logic (if 'percent-of-baseline' is selected): implementation needs a baseline source (e.g., 7-day rolling average). This sprint can defer the baseline implementation if the contract is documented and 'percent-of-baseline' returns NOT_IMPLEMENTED for now \u2014 that's an honest scope choice. If shipping it: test thoroughly with mocked baseline data.",
+  "completedAt": "2026-05-25T11:01:00Z"
 }

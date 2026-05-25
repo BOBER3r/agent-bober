@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-26-1",
+  "contractId": "sprint-spec-20260524-bober-vision-26",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T12:32:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":8,"criteriaPassed":8,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":8,"requiredFailed":0,"requiredTotal":8},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"1083 passed, 4 skipped (78 files)","details":"unchanged — docs-only sprint"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s26-c1","result":"pass","evidence":"VISION.md 438 lines. All 9 sections in order at lines 3,19,33,83,157,229,268,290,354."},
+    {"criterionId":"s26-c2","result":"pass","evidence":"All 4 modes with (when/entry/disk/example). Real CLI verified: bober plan/run --mode, list-approvals, approve --edit, incident start --severity, status/end/abort, rollback --dry-run, postmortem show/generate. 'bober config set' replaced with config-edit instruction."},
+    {"criterionId":"s26-c3","result":"pass","evidence":"Decision table @272-282: 9 rows covering 4 basics + 5 gray-area (high-coverage refactor / user-facing refactor / db migration / greenfield / CI batch). Irreversibility heuristic @284."},
+    {"criterionId":"s26-c4","result":"pass","evidence":"All required fields documented. Pipeline section cross-checked against schema.ts:147-173. observability/incident sections present. playbookAutoInvokeThreshold honestly documented as constant (HIGH_CONFIDENCE_THRESHOLD=0.6) in playbook-search.ts. telemetry.enabled honestly framed as 'will be added in Sprint 28. It is not present in the current schema.'"},
+    {"criterionId":"s26-c5","result":"pass","evidence":"Foundation @354-428: Iron Laws @360-373 with concrete example from evaluator.md, Red Flags @375-386 (4 patterns), Rationalization-Prevention @388-398 (3-row table), Anti-Pattern Catalog @399-405, HARD-GATEs @406-423 (3 named gates), obra/superpowers MIT credit @426-428."},
+    {"criterionId":"s26-c6","result":"pass","evidence":"README.md additive only: Operating Modes section @48+ (4-row mode table + VISION.md link), New Commands (Sprints 9-25) subsection @345+ listing all new CLI surface. Existing content preserved (verified via git diff)."},
+    {"criterionId":"s26-c7","result":"pass","evidence":"AGENTS.md:3 block quote with VISION.md+COMMANDS.md links. COMMANDS.md created fresh (was absent) with full entries for list-approvals/approve --edit/reject/audit show/incident */rollback/postmortem */playbook *. 4 VISION.md back-references."},
+    {"criterionId":"s26-c8","result":"pass","evidence":"All 4 strategies exit 0. 1083 tests preserved."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 criteria pass on iter 1. VISION.md 438 lines, 9 sections in order. All worked examples verified real CLI. Honest framing for non-config constants (playbookAutoInvokeThreshold) and future fields (telemetry.enabled). README additive, AGENTS+COMMANDS cross-linked. Test count unchanged (docs-only sprint)."
+}

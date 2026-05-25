@@ -1,0 +1,50 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-28",
+  "status": "complete",
+  "iteration": 1,
+  "timestamp": "2026-05-25T10:30:00Z",
+  "commit": "c1f1fe4",
+  "commitMessage": "bober(sprint-28): config migration + opt-in local-only telemetry + spec completion",
+  "criteriaResults": [
+    {"criterionId": "s28-c1", "met": true, "evidence": "Schema back-compat: TelemetrySectionSchema added to BoberConfigSchema (src/config/schema.ts:282-310) as optional. 4 new backcompat tests in tests/config/graph-schema.test.ts (15/15 pass). Existing bober.config.json parses with telemetry=undefined."},
+    {"criterionId": "s28-c2", "met": true, "evidence": "src/cli/commands/config.ts: registerConfigCommand with 'bober config migrate' + --dry-run. Creates .bak backup. Registered in src/cli/index.ts. 4 tests in config.test.ts."},
+    {"criterionId": "s28-c3", "met": true, "evidence": "src/telemetry/emit.ts: emit() with per-filepath Promise-chain mutex, mode-0600 JSONL append. All 9 EventTypes. 8 tests in tests/telemetry/emit.test.ts including no-op-when-disabled (100 calls, zero bytes) and 50 concurrent emits."},
+    {"criterionId": "s28-c4", "met": true, "evidence": "eslint.config.js: no-restricted-imports rule for src/telemetry/** blocking node:http/https/net/tls/dgram/undici/got/axios/node-fetch + no-restricted-globals fetch. Validated by writing a test file that imports 'http' → ESLint errors as expected."},
+    {"criterionId": "s28-c5", "met": true, "evidence": "Every emit call site uses only TelemetryEventData fields (IDs/counts/enums). sprint-pass: {runId, sprintId, iteration, outcome}; sprint-fail-retry: {runId, sprintId, iteration, retryCount}; agent-spawn: {agentName, contractId}; incident-resolved: {incidentId, durationMs}; incident-aborted: {incidentId}. Privacy test in emit.test.ts asserts no user-content strings reach the JSONL."},
+    {"criterionId": "s28-c6", "met": true, "evidence": "src/cli/commands/telemetry.ts: status|purge|export. 5 tests in telemetry.test.ts."},
+    {"criterionId": "s28-c7", "met": true, "evidence": "VISION.md lines 347-351: telemetry config reference table. AGENTS.md line 136: 'Telemetry Guarantee' H2 section documenting opt-in/local-only invariants."},
+    {"criterionId": "s28-c8", "met": true, "evidence": ".bober/specs/spec-20260524-bober-vision.json: status='completed' (line 10), completedAt='2026-05-25T13:30:00Z'. history.jsonl: spec-completed event appended. progress.md: Sprint 28 [completed], Tier 4 COMPLETE block + Spec Completion Summary added."},
+    {"criterionId": "s28-c9", "met": true, "evidence": "Full sweep: typecheck (0), lint (0), build (0), test (82 files, 1115 passed, 4 skipped). Sprint 27 regression: tests/e2e/four-modes.test.ts 11/11 pass in 726ms."}
+  ],
+  "filesChanged": [
+    {"path": "src/config/schema.ts", "action": "modified", "description": "Added TelemetrySectionSchema (enabled: bool default false) + telemetry on BoberConfigSchema"},
+    {"path": "src/config/index.ts", "action": "modified", "description": "Re-exported TelemetrySectionSchema and type"},
+    {"path": "src/telemetry/emit.ts", "action": "created", "description": "emit() with mutex + mode-0600 JSONL append, no-op when disabled, 9 EventTypes"},
+    {"path": "src/cli/commands/config.ts", "action": "created", "description": "bober config migrate subcommand"},
+    {"path": "src/cli/commands/telemetry.ts", "action": "created", "description": "bober telemetry status|purge|export"},
+    {"path": "src/cli/index.ts", "action": "modified", "description": "Registered config + telemetry commands"},
+    {"path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "Emit sprint-pass + sprint-fail-retry"},
+    {"path": "src/orchestrator/curator-agent.ts", "action": "modified", "description": "Emit agent-spawn"},
+    {"path": "src/orchestrator/generator-agent.ts", "action": "modified", "description": "Emit agent-spawn"},
+    {"path": "src/orchestrator/evaluator-agent.ts", "action": "modified", "description": "Emit agent-spawn"},
+    {"path": "src/incident/timeline.ts", "action": "modified", "description": "Emit incident-resolved"},
+    {"path": "src/incident/orchestrator.ts", "action": "modified", "description": "Emit incident-aborted"},
+    {"path": "eslint.config.js", "action": "modified", "description": "no-restricted-imports for src/telemetry/**"},
+    {"path": "VISION.md", "action": "modified", "description": "Telemetry config reference table"},
+    {"path": "AGENTS.md", "action": "modified", "description": "Telemetry Guarantee section"},
+    {"path": "tests/config/graph-schema.test.ts", "action": "modified", "description": "+4 backcompat tests"},
+    {"path": "tests/telemetry/emit.test.ts", "action": "created", "description": "8 unit tests"},
+    {"path": "src/cli/commands/config.test.ts", "action": "created", "description": "4 CLI tests"},
+    {"path": "src/cli/commands/telemetry.test.ts", "action": "created", "description": "5 CLI tests"},
+    {"path": ".bober/specs/spec-20260524-bober-vision.json", "action": "modified", "description": "status=completed, completedAt set"},
+    {"path": ".bober/history.jsonl", "action": "modified", "description": "spec-completed event appended"},
+    {"path": ".bober/progress.md", "action": "modified", "description": "Sprint 28 + Tier 4 COMPLETE + Spec Completion Summary"}
+  ],
+  "testsAdded": [
+    "tests/telemetry/emit.test.ts",
+    "src/cli/commands/config.test.ts",
+    "src/cli/commands/telemetry.test.ts"
+  ],
+  "blockers": [],
+  "notes": "Privacy invariant verified by code review of every emit() call site — only IDs/counts/enums passed. Back-compat verified by tests/config/graph-schema.test.ts:231 (existing bober.config.json parses cleanly with new schema). Egress guard verified by ESLint test on src/telemetry/_egress-check.ts (deleted after verification). Four-modes e2e regression test passes after all changes. Spec status flipped to 'completed' on first 10 lines of spec JSON. The generator also performed the spec-completion ritual as instructed."
+}
