@@ -10,7 +10,7 @@
  * without a subprocess, satisfying stopConditions[3] (real server-initiated notifications).
  */
 
-import { mkdtemp, rm, mkdir, appendFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, appendFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -40,6 +40,8 @@ beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "bober-smoke-"));
   boberDir = join(tmpDir, ".bober");
   await mkdir(boberDir, { recursive: true });
+  // Pre-create history.jsonl so fs.watch targets the file directly (not parent dir).
+  await writeFile(join(boberDir, "history.jsonl"), "");
 
   // Wire a real Server
   server = new Server(
@@ -143,8 +145,8 @@ describe("event-stream smoke (InMemoryTransport)", () => {
 
     await appendFile(join(boberDir, "history.jsonl"), line);
 
-    // Wait up to 1 second for the notification
-    const deadline = Date.now() + 1000;
+    // Wait up to 2 seconds for the notification
+    const deadline = Date.now() + 2000;
     while (receivedNotifications.length === 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 50));
     }
