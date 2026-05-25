@@ -31,11 +31,11 @@ describe("external MCP server tool registration", () => {
     vi.resetModules();
   });
 
-  it("with graph.enabled=false: registerAllTools registers exactly 29 tools", async () => {
+  it("with graph.enabled=false: registerAllTools registers exactly 37 tools", async () => {
     const { registerAllTools, getAllTools } = await import("../../src/mcp/tools/index.js");
     registerAllTools();
     const tools = getAllTools();
-    expect(tools.length).toBe(29);
+    expect(tools.length).toBe(37);
   });
 
   it("with graph.enabled=true: 29 + 6 graph tools appended (35 total)", async () => {
@@ -45,7 +45,7 @@ describe("external MCP server tool registration", () => {
 
     registerAllTools();
     const baseline = getAllTools().length;
-    expect(baseline).toBe(29);
+    expect(baseline).toBe(37);
 
     const deps = { client: mockClient(), fallback: new GraphFallback("dual") };
     const graphTools = createGraphTools(deps);
@@ -56,7 +56,7 @@ describe("external MCP server tool registration", () => {
 
     const after = getAllTools();
     expect(after.length).toBe(baseline + 6);
-    expect(after.length).toBe(35);
+    expect(after.length).toBe(43);
 
     const names = after.map((t) => t.name);
     expect(names).toContain("graph_search");
@@ -90,9 +90,9 @@ describe("external MCP server tool registration", () => {
       "graph_search",
     ]);
 
-    // All original 29 bober_* tools should still be present
+    // All original 37 bober_* tools should still be present
     const boberTools = names.filter((n) => n.startsWith("bober_"));
-    expect(boberTools.length).toBe(29);
+    expect(boberTools.length).toBe(37);
   });
 
   it("exposeOnExternalMcp=false: graph tools not in external registry but createGraphTools still returns 6", async () => {
@@ -103,11 +103,11 @@ describe("external MCP server tool registration", () => {
     const tools = createGraphTools({ client: mockClient(), fallback: new GraphFallback("dual") });
     expect(tools).toHaveLength(6);
 
-    // If we don't register them (simulating exposeOnExternalMcp=false), registry stays at 29
+    // If we don't register them (simulating exposeOnExternalMcp=false), registry stays at 37
     const { registerAllTools, getAllTools } = await import("../../src/mcp/tools/index.js");
     registerAllTools();
     // We do NOT call registerTool for graph tools here
-    expect(getAllTools().length).toBe(29);
+    expect(getAllTools().length).toBe(37);
   });
 
   it("createGraphTools is defined exactly once (DRY enforcement)", async () => {

@@ -32,12 +32,16 @@ import { registerRejectCheckpointTool } from "./reject-checkpoint.js";
 import { registerListProjectsTool } from "./list-projects.js";
 import { registerListSpecsTool } from "./list-specs.js";
 import { registerGetProjectStateTool } from "./get-project-state.js";
+import { registerIncidentTools } from "./incident.js";
+import { registerRollbackTool } from "./rollback.js";
+import { registerPostmortemTool } from "./postmortem.js";
+import { registerPlaybookTools } from "./playbook.js";
 
 /**
  * Registers all built-in agent-bober MCP tools into the global registry.
  * Call this once before starting the MCP server.
  *
- * Registered tools (29 total):
+ * Registered tools (37 total):
  *   1. bober_init                   – Initialise a project
  *   2. bober_plan                   – Generate a sprint plan
  *   3. bober_sprint                 – Execute the next sprint cycle
@@ -67,6 +71,14 @@ import { registerGetProjectStateTool } from "./get-project-state.js";
  *  27. bober_list_projects          – Enumerate projects under one or more search roots
  *  28. bober_list_specs             – List PlanSpecs in a project
  *  29. bober_get_project_state      – Aggregate per-project counts for the cockpit sidebar
+ *  30. bober_incident_start         – Create a new incident from a symptom
+ *  31. bober_incident_status        – Read the current status of an incident
+ *  32. bober_incident_list          – List all incidents sorted by createdAt descending
+ *  33. bober_incident_abort         – Abort an incident at any phase (terminal)
+ *  34. bober_rollback_start         – Plan and execute rollback for an incident
+ *  35. bober_postmortem_get         – Read incident postmortem.md and return parsed content
+ *  36. bober_playbook_list          – List all playbooks from .bober/playbooks/
+ *  37. bober_playbook_search        – Search playbooks matching a symptom
  */
 export function registerAllTools(): void {
   // ── Core workflow tools ─────────────────────────────────────────
@@ -105,6 +117,12 @@ export function registerAllTools(): void {
   registerListProjectsTool();
   registerListSpecsTool();
   registerGetProjectStateTool();
+
+  // ── Vision-era incident/rollback/postmortem/playbook (cockpit-integration sprint 6) ──
+  registerIncidentTools();
+  registerRollbackTool();
+  registerPostmortemTool();
+  registerPlaybookTools();
 
   // ── Read / configuration tools ──────────────────────────────────
   registerContractsTool();
