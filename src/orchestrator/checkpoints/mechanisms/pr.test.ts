@@ -45,6 +45,8 @@ function buildGhStub(overrides: Partial<GhClient> = {}): GhClient {
     repoView: vi.fn(async () => ({ url: "https://github.com/owner/repo", owner: "owner", name: "repo" })),
     prList: vi.fn(async () => []),
     prCreate: vi.fn(async () => ({ number: 42, url: "https://github.com/owner/repo/pull/42" })),
+    prEdit: vi.fn(async () => undefined),
+    prReady: vi.fn(async () => undefined),
     prComment: vi.fn(async () => undefined),
     prView: vi.fn(async () => ({
       state: "OPEN",
@@ -517,7 +519,7 @@ describe("PrCheckpointMechanism — rate-limit backoff (s10-c3)", () => {
     await pr.request("post-research", {});
 
     const allStderr = stderrSpy.mock.calls.flat().join("");
-    expect(allStderr).toMatch(/below.*minimum|clamping/i);
+    expect(allStderr).toMatch(/below.*minimum|clamping|may hit/i);
   });
 });
 
@@ -641,5 +643,165 @@ describe("PrCheckpointMechanism — PR title and body format (s10-c6)", () => {
     expect(createCall.body).toContain("approve");
     expect(createCall.body).toContain("reject");
     expect(createCall.body).toContain("edit");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Checkbox body and draft→ready transition (s10-c6 new tests)
+// ---------------------------------------------------------------------------
+
+describe("PrCheckpointMechanism — per-checkpoint checkbox list (s10-c6)", () => {
+  it("after request(), prEdit is called with body containing '- [ ] post-research'", async () => {
+    const gh = buildGhStub({
+      prView: vi.fn(async () => ({
+        state: "OPEN",
+        merged: false,
+        labels: [],
+        comments: [{ id: 1, body: "approve post-research", createdAt: "" }],
+      })),
+    });
+
+    const pr = new PrCheckpointMechanism(gh, buildFallbackSpy(), {
+      pollMs: 10,
+      headRef: "test-branch",
+      runId: "run-001",
+      featureName: "test feature",
+    });
+
+    await pr.request("post-research", {});
+
+    // prEdit should have been called at least once. The first call (before poll)
+    // should have the pending checkbox.
+    const prEditCalls = (gh.prEdit as ReturnType<typeof vi.fn>).mock.calls;
+    expect(prEditCalls.length).toBeGreaterThanOrEqual(1);
+
+    // The first prEdit call body should contain the pending checkbox.
+    const firstEditBody = prEditCalls[0][1] as string;
+    expect(firstEditBody).toContain("- [ ] post-research");
+  });
+
+  it("after approval, prEdit is called with body containing '- [x] post-research'", async () => {
+    const gh = buildGhStub({
+      prView: vi.fn(async () => ({
+        state: "OPEN",
+        merged: false,
+        labels: [],
+        comments: [{ id: 1, body: "approve post-research", createdAt: "" }],
+      })),
+    });
+
+    const pr = new PrCheckpointMechanism(gh, buildFallbackSpy(), {
+      pollMs: 10,
+      headRef: "test-branch",
+      runId: "run-002",
+      featureName: "test feature",
+    });
+
+    await pr.request("post-research", {});
+
+    // After resolution, the last prEdit call should show [x].
+    const prEditCalls = (gh.prEdit as ReturnType<typeof vi.fn>).mock.calls;
+    expect(prEditCalls.length).toBeGreaterThanOrEqual(2);
+
+    const lastEditBody = prEditCalls[prEditCalls.length - 1][1] as string;
+    expect(lastEditBody).toContain("- [x] post-research");
+  });
+
+  it("two checkpoints both approved → prReady called once with runPrNumber", async () => {
+    let viewCallCount = 0;
+    const gh = buildGhStub({
+      prView: vi.fn(async () => {
+        viewCallCount++;
+        // Alternate between approving post-research and post-plan.
+        return {
+          state: "OPEN",
+          merged: false,
+          labels: [],
+          comments: [
+            {
+              id: viewCallCount,
+              body: viewCallCount <= 2 ? "approve post-research" : "approve post-plan",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        };
+      }),
+    });
+
+    const pr = new PrCheckpointMechanism(gh, buildFallbackSpy(), {
+      pollMs: 10,
+      headRef: "test-branch",
+      runId: "run-003",
+    });
+
+    await pr.request("post-research", {});
+    await pr.request("post-plan", {});
+
+    // Flush the deferred prReady timer (setTimeout 0 macrotask fires after requests complete).
+    await new Promise<void>((r) => setTimeout(r, 10));
+
+    // After both approved, prReady should be called once with PR number 42.
+    expect(gh.prReady).toHaveBeenCalledOnce();
+    expect(gh.prReady).toHaveBeenCalledWith(42);
+  });
+
+  it("one approved + one rejected → prReady NOT called", async () => {
+    let viewCallCount = 0;
+    const gh = buildGhStub({
+      prView: vi.fn(async () => {
+        viewCallCount++;
+        return {
+          state: "OPEN",
+          merged: false,
+          labels: [],
+          comments: [
+            {
+              id: viewCallCount,
+              body: viewCallCount <= 2
+                ? "approve post-research"
+                : "reject post-plan needs more work",
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        };
+      }),
+    });
+
+    const pr = new PrCheckpointMechanism(gh, buildFallbackSpy(), {
+      pollMs: 10,
+      headRef: "test-branch",
+      runId: "run-004",
+    });
+
+    await pr.request("post-research", {});
+    await pr.request("post-plan", {});
+
+    // One rejected → prReady must NOT be called.
+    expect(gh.prReady).not.toHaveBeenCalled();
+  });
+
+  it("single checkpoint approved → prReady called", async () => {
+    const gh = buildGhStub({
+      prView: vi.fn(async () => ({
+        state: "OPEN",
+        merged: false,
+        labels: [],
+        comments: [{ id: 1, body: "approve post-sprint", createdAt: "" }],
+      })),
+    });
+
+    const pr = new PrCheckpointMechanism(gh, buildFallbackSpy(), {
+      pollMs: 10,
+      headRef: "test-branch",
+      runId: "run-005",
+    });
+
+    await pr.request("post-sprint", {});
+
+    // Flush the deferred prReady timer (setTimeout 0 macrotask fires after request completes).
+    await new Promise<void>((r) => setTimeout(r, 10));
+
+    expect(gh.prReady).toHaveBeenCalledOnce();
+    expect(gh.prReady).toHaveBeenCalledWith(42);
   });
 });

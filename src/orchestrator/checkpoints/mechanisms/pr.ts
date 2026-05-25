@@ -32,6 +32,8 @@ export interface GhClient {
   repoView(): Promise<{ url: string; owner: string; name: string } | null>;
   prList(headRef: string): Promise<Array<{ number: number; state: string }>>;
   prCreate(opts: { title: string; body: string; draft: boolean }): Promise<{ number: number; url: string }>;
+  prEdit(prNumber: number, body: string): Promise<void>;
+  prReady(prNumber: number): Promise<void>;
   prComment(prNumber: number, body: string): Promise<void>;
   prView(prNumber: number): Promise<{
     state: string;
@@ -90,6 +92,22 @@ export function createGhClient(cwd: string): GhClient {
       const match = url.match(/\/pull\/(\d+)/);
       const number = match ? parseInt(match[1], 10) : 0;
       return { number, url };
+    },
+    async prEdit(prNumber, body) {
+      const r = await execa(
+        "gh",
+        ["pr", "edit", String(prNumber), "--body", body],
+        { cwd, reject: false, timeout: 10000 },
+      );
+      if (r.exitCode !== 0) throw new Error(`gh pr edit failed: ${r.stderr}`);
+    },
+    async prReady(prNumber) {
+      const r = await execa(
+        "gh",
+        ["pr", "ready", String(prNumber)],
+        { cwd, reject: false, timeout: 10000 },
+      );
+      if (r.exitCode !== 0) throw new Error(`gh pr ready failed: ${r.stderr}`);
     },
     async prComment(prNumber, body) {
       const r = await execa(
@@ -155,6 +173,15 @@ export class PrCheckpointMechanism implements CheckpointMechanism {
   /** Cached PR number for this run — set on first request(), reused thereafter. */
   private runPrNumber: number | null = null;
 
+  /** Per-checkpoint states — updated as checkpoints are added and resolved. */
+  private checkpointStates = new Map<CheckpointId, "pending" | "approved" | "rejected">();
+
+  /** Number of in-flight request() calls. Used to defer prReady until all requests finish. */
+  private inFlightCount = 0;
+
+  /** Pending prReady timer handle — cancelled if a new request() starts before it fires. */
+  private prReadyTimer: ReturnType<typeof setTimeout> | null = null;
+
   /**
    * @param gh        - Mockable GhClient. Tests pass a fake; prod uses createGhClient(cwd).
    * @param fallback  - Mechanism used when gh is unavailable. Defaults to DiskCheckpointMechanism
@@ -183,15 +210,68 @@ export class PrCheckpointMechanism implements CheckpointMechanism {
       return this.fallback.request(checkpoint, artifact);
     }
 
-    // 2) Find or create the run-tracking PR.
+    // 2) Add this checkpoint to the state map as pending and track in-flight count.
+    //    Cancel any deferred prReady that may have been scheduled by a prior request.
+    this.checkpointStates.set(checkpoint, "pending");
+    this.inFlightCount++;
+    if (this.prReadyTimer !== null) {
+      clearTimeout(this.prReadyTimer);
+      this.prReadyTimer = null;
+    }
+
+    // 3) Find or create the run-tracking PR.
     const prNumber = await this.ensureRunPr(avail.headRef);
 
-    // 3) Append the checkpoint comment.
+    // 4) Update the PR body to include per-checkpoint checkbox list.
+    const runId = this.options.runId ?? `run-${Date.now()}`;
+    const featureName = this.options.featureName ?? "bober run";
+    await this.gh.prEdit(prNumber, this.renderPrBody(runId, featureName));
+
+    // 5) Append the checkpoint comment.
     await this.gh.prComment(prNumber, this.renderCheckpointComment(checkpoint, artifact));
 
-    // 4) Poll for resolution (merge / approve / reject / edit) with exponential
+    // 6) Poll for resolution (merge / approve / reject / edit) with exponential
     //    back-off on rate-limit errors (cap at 5 minutes per evaluatorNotes).
-    return this.pollPrUntilResolved(prNumber, checkpoint, artifact);
+    const outcome = await this.pollPrUntilResolved(prNumber, checkpoint, artifact);
+
+    // 7) Update checkpoint state and PR body after resolution.
+    if ("edit" in outcome && outcome.edit) {
+      // For edit outcomes, leave as pending until next request resolves it.
+    } else if ("approved" in outcome && outcome.approved) {
+      this.checkpointStates.set(checkpoint, "approved");
+    } else {
+      this.checkpointStates.set(checkpoint, "rejected");
+    }
+
+    // Decrement in-flight counter after resolution.
+    this.inFlightCount--;
+
+    // Re-render PR body with updated checkbox states.
+    await this.gh.prEdit(prNumber, this.renderPrBody(runId, featureName));
+
+    // 8) If ALL checkpoints are approved (none pending, none rejected), schedule
+    //    prReady via a deferred macrotask (setTimeout 0). This allows the next
+    //    sequential request() call to cancel it if another checkpoint is coming.
+    const hasNoRejection = [...this.checkpointStates.values()].every((s) => s !== "rejected");
+    const hasNoPending = [...this.checkpointStates.values()].every((s) => s !== "pending");
+    if (hasNoRejection && hasNoPending && this.checkpointStates.size > 0) {
+      const capturedPrNumber = prNumber;
+      const capturedGh = this.gh;
+      this.prReadyTimer = setTimeout(() => {
+        this.prReadyTimer = null;
+        // Double-check: no new pending checkpoints added while timer was pending.
+        const stillAllApproved =
+          this.checkpointStates.size > 0 &&
+          [...this.checkpointStates.values()].every((s) => s === "approved");
+        if (stillAllApproved) {
+          capturedGh.prReady(capturedPrNumber).catch((err: unknown) => {
+            process.stderr.write(`warn: gh pr ready failed: ${String(err)}\n`);
+          });
+        }
+      }, 0);
+    }
+
+    return outcome;
   }
 
   /** Check if gh is available and the repo has a GitHub remote. */
@@ -259,8 +339,24 @@ export class PrCheckpointMechanism implements CheckpointMechanism {
     return this.runPrNumber;
   }
 
-  /** Render the initial PR body with a checkpoint checklist placeholder. */
+  /** Render the PR body with a per-checkpoint checkbox list. */
   private renderPrBody(runId: string, featureName: string): string {
+    const checkboxLines: string[] = [];
+    for (const [id, state] of this.checkpointStates) {
+      if (state === "approved") {
+        checkboxLines.push(`- [x] ${id}`);
+      } else if (state === "rejected") {
+        checkboxLines.push(`- [x] ${id} (rejected)`);
+      } else {
+        checkboxLines.push(`- [ ] ${id}`);
+      }
+    }
+
+    const checkpointsSection =
+      checkboxLines.length > 0
+        ? checkboxLines.join("\n")
+        : "Checkpoint comments will be appended below as the run progresses.";
+
     return [
       `# bober run: ${featureName}`,
       ``,
@@ -268,7 +364,7 @@ export class PrCheckpointMechanism implements CheckpointMechanism {
       ``,
       `## Checkpoints`,
       ``,
-      `Checkpoint comments will be appended below as the run progresses.`,
+      checkpointsSection,
       ``,
       `## How to respond`,
       ``,
@@ -320,12 +416,9 @@ export class PrCheckpointMechanism implements CheckpointMechanism {
     const rawPollMs = this.options.pollMs ?? DEFAULT_POLL_MS;
     if (rawPollMs < MIN_POLL_MS) {
       process.stderr.write(
-        `warn: prPollMs (${rawPollMs}ms) is below the minimum (${MIN_POLL_MS}ms); clamping to ${MIN_POLL_MS}ms to respect GitHub rate limits.\n`,
+        `warn: prPollMs (${rawPollMs}ms) is below the minimum (${MIN_POLL_MS}ms); using configured value but may hit GitHub rate limits.\n`,
       );
     }
-    // NOTE: We warn about sub-minimum intervals but do NOT hard-clamp so that
-    // tests can inject fast poll intervals. In production, the default (30s) is
-    // above the floor. Users who explicitly set a value below 10s get the warning.
     const pollMs = rawPollMs;
     const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
