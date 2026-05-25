@@ -1,0 +1,84 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-1",
+  "specId": "spec-20260525-cockpit-integration",
+  "sprintNumber": 1,
+  "title": "Multi-run RunManager with disk persistence and crash recovery",
+  "description": "Refactor src/mcp/run-manager.ts from a singleton-with-single-activeRun to a keyed Map<runId, RunState> backed by per-run state files at .bober/runs/<runId>/state.json. Add load(projectRoot) to enumerate existing run files on startup and reconcile orphaned 'running' entries to 'failed'. Preserve backward compatibility: the existing module-scoped singleton `runManager`, `isRunning()`, and `getStatus()` exports continue to satisfy bober_run and bober_status callers. New methods added: startRun (extended signature), getRun(runId), listActiveRuns(), abortRun(runId, reason). All run state mutations write through to disk via atomic temp-file + rename.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "src/mcp/run-manager.ts exports a `RunManager` class with new methods getRun(runId), listActiveRuns(), abortRun(runId, reason), load(projectRoot), in addition to the preserved isRunning() and getStatus() shims.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "startRun() writes .bober/runs/<runId>/state.json synchronously before returning; state.json contains { runId, task, status, startedAt, progress, projectRoot } at minimum.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "Every status/progress/result/error transition in the pipeline-promise callbacks atomically rewrites state.json via temp-file + rename (mirrors src/incident/timeline.ts:86-92 atomicWriteJson pattern).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "load(projectRoot) reads every .bober/runs/*/state.json on startup, populates the in-memory map, and reconciles any entry with status='running' to status='failed' with error='orchestrator crashed before completion'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "Backward-compat shims: isRunning() returns true when ANY run has status='running'; getStatus() returns the most-recently-started run; both preserve the existing bober_run/bober_status behavior with no schema changes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass; the existing 1116 tests remain green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change the input/output schema of bober_run or bober_status.",
+    "Do not add resume-where-it-crashed semantics — crash recovery flips orphans to 'failed' only.",
+    "Do not introduce a new disk-locking dependency; atomic temp-file + rename is sufficient for single-orchestrator-per-project assumptions.",
+    "Do not touch src/orchestrator/pipeline.ts beyond what's strictly required to thread runId into the pipeline callbacks.",
+    "Do not introduce new npm dependencies."
+  ],
+  "stopConditions": [
+    "All required success criteria pass evaluation.",
+    "`npm run test` passes with the new unit tests for run-manager.ts included.",
+    "Manual sanity check: invoke `bober_run` via stdio, then read `.bober/runs/<runId>/state.json` and verify it matches the in-memory state."
+  ],
+  "definitionOfDone": "RunManager supports an arbitrary number of concurrent runs keyed by runId, persists each run's state to .bober/runs/<runId>/state.json with atomic writes, and loads + reconciles those files on startup so a restarted bober process can enumerate prior runs. The cockpit can drive multiple runs in parallel through a single MCP server instance without the singleton 'already running' rejection. Every change is observable: starting a run creates the state.json; aborting flips it; restarting bober preserves the run list. Existing bober_run + bober_status continue to function unchanged for non-cockpit MCP clients.",
+  "assumptions": [
+    "Single orchestrator-per-project assumption holds — two bober MCP servers on the same project root is undefined behavior and not in scope.",
+    "Atomic temp-file + rename is sufficient for the single-orchestrator model (mirrors src/incident/timeline.ts atomicWriteJson and src/orchestrator/checkpoints/audit.ts conventions).",
+    "Run state schema can grow over time; consumers must tolerate unknown fields. Use zod with `.passthrough()` or a loose object schema."
+  ],
+  "outOfScope": [
+    "Multi-orchestrator-on-same-project synchronization.",
+    "Resume-from-crash with replay of pipeline state.",
+    "Streaming sub-pipeline events into run state.json (those go into history.jsonl and are streamed via feat-3).",
+    "Worktree/branch fields on RunState — added in feat-4 (sprint 4)."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "PATTERN TO FOLLOW: src/incident/timeline.ts:97-99 for the .bober/<entity>/<id>/ layout; src/incident/timeline.ts:86-92 for atomicWriteJson via temp-file + rename. The singleton export at src/mcp/run-manager.ts:132 stays for back-compat — internally it now holds a Map<runId, RunState>. The existing singleton ALSO needs a load() call at MCP server startup — wire it in src/mcp/server.ts:55-58 after registerAllTools(). Failure to load runs (e.g. corrupt state.json) must log to stderr and continue, not abort the server. Run state writes: do NOT serialize the pipelineFn promise; only serialize the observable state fields. RunState shape: extend the existing src/mcp/run-manager.ts:28-37 interface with `projectRoot: string` and optional `specId?: string`. Place the disk-persistence helpers in a new src/state/run-state.ts module (mirrors src/state/approval-state.ts) so the persistence logic is testable in isolation.",
+  "evaluatorNotes": "Verify the singleton runManager export still exists and existing tests pass unchanged. Verify load() correctly reconciles orphans by creating a fixture state.json with status='running' and confirming load() flips it to status='failed'. Verify atomic write correctness via a unit test that writes 100 concurrent updates and asserts no partial JSON on disk. Verify the back-compat semantics: a single startRun followed by getStatus() returns the same data as before. Verify the existing tests/mcp/* suite (if present) still passes — these exercise bober_run and bober_status. Negative test: starting two runs concurrently no longer throws (vs. previous singleton behavior).",
+  "estimatedFiles": [
+    "src/mcp/run-manager.ts",
+    "src/state/run-state.ts",
+    "src/state/run-state.test.ts",
+    "src/state/index.ts",
+    "src/mcp/server.ts",
+    "src/mcp/run-manager.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

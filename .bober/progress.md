@@ -150,3 +150,27 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Ambiguity score: 5 (start) → 5 (final, unchanged)
 - Deferred decisions: none — all clarifications resolved in spec planning
 - Key capabilities shipped: four operating modes (autopilot, careful-flow, diagnose, postmortem), behavior-shaping skill catalog (Iron Laws / Red Flags / Rationalization-Prevention), incident lifecycle with SLO verification, playbook library, 28-sprint regression suite with e2e four-mode coverage, opt-in local-only telemetry (zero network egress, ESLint-enforced)
+
+---
+
+## Plan: Cockpit Integration
+- Spec: spec-20260525-cockpit-integration
+- Created: 2026-05-25
+- Sprints: 6
+- Status: planned
+- Mode: brownfield
+- Ambiguity score: 4/10
+
+### Sprint Breakdown
+1. [proposed] Multi-run RunManager with disk persistence and crash recovery — refactors src/mcp/run-manager.ts from singleton to keyed map; persists each run to .bober/runs/<runId>/state.json with atomic writes; load() reconciles orphaned runs after restart. Preserves bober_run/bober_status back-compat.
+2. [proposed] Multi-run MCP tools: list, get, and abort by runId — adds bober_list_active_runs, bober_get_run_status(runId), bober_abort_run(runId, reason). Replaces singleton-status assumption with explicit runId addressing.
+3. [proposed] Event stream MCP tool with server-initiated notifications and backpressure — bober_subscribe_events tails history.jsonl + telemetry filtered by runId; emits MCP `bober/events` notifications with bounded per-subscription queues (drops oldest, sends `bober/events.dropped` on overflow).
+4. [proposed] Worktree adapter: bober worktree run + runInWorktree helper + MCP variant — creates git worktrees at .bober/worktrees/<runId>; cleanup-on-success configurable, retain-on-failure for debugging; refuses dirty trees by default.
+5. [proposed] Careful-flow MCP wrappers + project/spec discovery MCP — bober_list_pending_approvals / approve_checkpoint / reject_checkpoint thin wrappers; bober_list_projects / list_specs / get_project_state for cockpit sidebar.
+6. [proposed] Vision-era MCP wrappers + end-to-end fake-cockpit-client integration test — eight new MCP tools (incident_*, rollback_start, postmortem_get, playbook_*) plus tests/e2e/cockpit-integration.test.ts spawning a real MCP server subprocess and exercising every new tool. Correctness gate for the spec.
+
+### Out of Scope
+- Cockpit UI/backend itself (separate repo, separate team)
+- Credential storage and deployment provider skills (separate parallel spec)
+- Discussion-agent / chat memory layer (cockpit's responsibility)
+- Auth / multi-user / billing (cockpit's responsibility)

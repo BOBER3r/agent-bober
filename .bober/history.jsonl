@@ -136,3 +136,4 @@
 {"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-28","iteration":1,"timestamp":"2026-05-25T10:30:00Z","commit":"c1f1fe4"}
 {"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-28","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T13:40:00Z"}
 {"event":"pipeline-completed","specId":"spec-20260524-bober-vision","sprintsCompleted":28,"sprintsTotal":28,"timestamp":"2026-05-25T13:40:00Z"}
+{"event":"plan-created","specId":"spec-20260525-cockpit-integration","timestamp":"2026-05-25T13:24:16Z","phase":"planning","sprintCount":6,"details":{"title":"Cockpit Integration: multi-tenant engine surface for the cockpit UI","mode":"brownfield","ambiguityScore":4}}
