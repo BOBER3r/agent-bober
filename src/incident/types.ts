@@ -123,6 +123,25 @@ export const IncidentStatusSchema = z.enum([
 ]);
 export type IncidentStatus = z.infer<typeof IncidentStatusSchema>;
 
+/**
+ * Snapshot of the VerifyResult that authorized the 'resolved' transition.
+ * Either verified=true OR an overrideToken with a non-empty reason. Sprint 22.
+ */
+export const IncidentResolutionEvidenceSchema = z.object({
+  verified: z.boolean(),
+  observedValue: z.number().optional(),
+  sampledAt: z.string().optional(),
+  evidencePath: z.string().optional(),
+  reason: z.string().optional(),
+  hint: z.string().optional(),
+  /** Set when transition was authorized via overrideToken. */
+  override: z.object({
+    reason: z.string().min(1, "override reason is required"),
+    at: z.string(),
+  }).optional(),
+});
+export type IncidentResolutionEvidence = z.infer<typeof IncidentResolutionEvidenceSchema>;
+
 export const IncidentMetadataSchema = z.object({
   incidentId: z.string(),
   symptom: z.string(),
@@ -130,6 +149,7 @@ export const IncidentMetadataSchema = z.object({
   status: IncidentStatusSchema,
   resolvedAt: z.string().optional(),
   resolutionCriteria: z.string().optional(),
+  resolutionEvidence: IncidentResolutionEvidenceSchema.optional(), // ← Sprint 22
   postmortemPath: z.string().optional(),
 });
 export type IncidentMetadata = z.infer<typeof IncidentMetadataSchema>;

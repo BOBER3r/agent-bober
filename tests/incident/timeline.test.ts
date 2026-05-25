@@ -407,7 +407,15 @@ describe("setIncidentStatus", () => {
     const metaPath = join(tmpDir, ".bober", "incidents", incidentId, "incident.json");
 
     const before = Date.now();
-    await setIncidentStatus(tmpDir, incidentId, "resolved");
+    await setIncidentStatus(tmpDir, incidentId, "resolved", undefined, {
+      verifyResult: {
+        verified: true,
+        observedValue: 0,
+        sampledAt: new Date().toISOString(),
+        evidencePath: `.bober/incidents/${incidentId}/resolution-evidence/test.json`,
+        reason: "OK",
+      },
+    });
     const after = Date.now();
 
     const raw = await readFile(metaPath, "utf-8");
@@ -422,7 +430,15 @@ describe("setIncidentStatus", () => {
 
   it("does not overwrite existing resolvedAt on a second status change", async () => {
     const incidentId = await createIncident("re-resolve test", tmpDir);
-    await setIncidentStatus(tmpDir, incidentId, "resolved");
+    await setIncidentStatus(tmpDir, incidentId, "resolved", undefined, {
+      verifyResult: {
+        verified: true,
+        observedValue: 0,
+        sampledAt: new Date().toISOString(),
+        evidencePath: `.bober/incidents/${incidentId}/resolution-evidence/test.json`,
+        reason: "OK",
+      },
+    });
 
     const metaPath = join(tmpDir, ".bober", "incidents", incidentId, "incident.json");
     const firstRaw = await readFile(metaPath, "utf-8");

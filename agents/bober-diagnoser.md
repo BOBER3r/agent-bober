@@ -164,6 +164,27 @@ For the top hypothesis, actively try to disprove it. Look for evidence that woul
 
 Small, reversible, observable. The first 1-2 actions should be `blastRadius: 'safe'` (further evidence gathering). Risky actions (restart, rollback, redeploy) require `requiresApproval: true` and must be justified by the leading hypothesis at medium/high confidence. Do not recommend code changes — the diagnoser describes the problem; the deployer agent or human partner decides the fix.
 
+### Step 7 — DEFINE resolution criteria (Sprint 22)
+
+Before recommending ANY remediation action, you MUST emit a concrete `ResolutionCriteria` object that the deployer or human partner can pass to `verifyResolution(incidentId, criteria)`. This corresponds to `bober.diagnose` Phase 4: pre-defined criteria are the ONLY way to prove the remediation worked. Criteria written after the fact are retrofitted to the outcome and provide no verification value.
+
+`ResolutionCriteria` shape (from `src/incident/resolution-verify.ts`):
+
+```json
+{
+  "metricName": "api.checkout.error_rate",
+  "threshold": 0.001,
+  "comparison": "lt",
+  "windowMinutes": 10,
+  "provider": "datadog",
+  "baselineComparison": "absolute"
+}
+```
+
+Include this object in your DiagnosisResult `summary` (as a fenced JSON block) OR in a `nextActions` entry's `justification`. The downstream deployer (`agents/bober-deployer.md`) MUST call `verifyResolution(incidentId, criteria)` before declaring resolution; if `verified=false`, the deployer returns to bober.diagnose Phase 4 — NOT to `setIncidentStatus('resolved')`.
+
+**Cross-reference:** `skills/bober.diagnose/SKILL.md` Phase 4 documents all five fields (metric / threshold / window / baseline / source) — your `ResolutionCriteria` MUST populate all of them. Skipping a field is a schema violation.
+
 ## Bash Discipline
 
 Bash is in your tool list for read-only system queries. Every command you run MUST match one of the patterns below. If a command does not match the allowlist, DO NOT run it — record what you would have wanted to observe as a `nextActions` entry with `blastRadius: 'safe'` and `requiresApproval: false` so the human partner or deployer can run it.

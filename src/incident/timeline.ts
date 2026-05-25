@@ -35,6 +35,7 @@ import {
   RunbookExecutionEntrySchema,
   type IncidentId,
   type IncidentMetadata,
+  type IncidentResolutionEvidence,
   type IncidentStatus,
   type IncidentSummary,
   type TimelineEvent,
@@ -43,6 +44,7 @@ import {
   type ChangeEntry,
   type RunbookExecutionEntry,
 } from "./types.js";
+import type { VerifyResult } from "./resolution-verify.js";
 import { logger } from "../utils/logger.js";
 
 // ── Per-incidentId mutex (Promise-chain pattern) ──────────────────────────────
@@ -368,11 +370,29 @@ export async function appendRunbookExecution(
 
 // ── setIncidentStatus ──────────────────────────────────────────────────────────
 
+/** Override token regex: prefix 'SKIP_METRIC_VERIFY:' with at least one non-whitespace char after optional spaces. */
+const OVERRIDE_TOKEN_RE = /^SKIP_METRIC_VERIFY:\s*(.+)$/;
+
+/** Options for the resolution gate (Sprint 22). */
+export interface SetStatusOpts {
+  /** REQUIRED when status='resolved' (unless overrideToken given). Must have verified=true. */
+  verifyResult?: VerifyResult;
+  /** REQUIRED when status='resolved' AND no verifyResult. Format: 'SKIP_METRIC_VERIFY: <reason>'. Empty reason rejects. */
+  overrideToken?: string;
+}
+
 /**
  * Update the status field in incident.json atomically.
  *
  * If status is 'resolved', sets resolvedAt to now (ISO-8601) automatically.
  * Any additional fields in `extras` are merged in.
+ *
+ * Sprint 22 resolution gate: when transitioning to 'resolved', one of the
+ * following MUST be provided via opts:
+ *   1. opts.verifyResult with verified=true — metric verification passed.
+ *   2. opts.overrideToken matching 'SKIP_METRIC_VERIFY: <reason>' with a
+ *      non-empty, non-whitespace reason — operator override with audit trail.
+ * Any other call to setIncidentStatus(id, 'resolved') will THROW.
  *
  * Uses temp-file + POSIX rename for crash safety.
  */
@@ -381,6 +401,7 @@ export async function setIncidentStatus(
   incidentId: IncidentId,
   status: IncidentStatus,
   extras?: Partial<Omit<IncidentMetadata, "incidentId" | "symptom" | "createdAt" | "status">>,
+  opts?: SetStatusOpts,
 ): Promise<void> {
   const dir = incidentDir(projectRoot, incidentId);
   const metaPath = join(dir, "incident.json");
@@ -388,16 +409,69 @@ export async function setIncidentStatus(
   const raw = await readFile(metaPath, "utf-8");
   const existing = IncidentMetadataSchema.parse(JSON.parse(raw));
 
+  // ── Resolution gate (s22-c3, s22-c4) ──────────────────────────────────────
+  let resolutionEvidence: IncidentResolutionEvidence | undefined;
+  let timelineEvent: TimelineEvent | undefined;
+  const now = new Date().toISOString();
+
+  if (status === "resolved") {
+    const verified = opts?.verifyResult?.verified === true;
+    const overrideMatch = opts?.overrideToken
+      ? OVERRIDE_TOKEN_RE.exec(opts.overrideToken)
+      : null;
+    // Trim the override reason and require non-empty after trim.
+    const overrideReason = overrideMatch?.[1]?.trim();
+
+    if (verified && opts?.verifyResult) {
+      resolutionEvidence = {
+        verified: true,
+        observedValue: opts.verifyResult.observedValue,
+        sampledAt: opts.verifyResult.sampledAt,
+        evidencePath: opts.verifyResult.evidencePath,
+        reason: opts.verifyResult.reason,
+        hint: opts.verifyResult.hint,
+      };
+      timelineEvent = {
+        timestamp: now,
+        eventKind: "incident_resolved",
+        source: "system",
+        summary: `Resolved: metric verified (observedValue=${opts.verifyResult.observedValue ?? "n/a"})`,
+        refPath: opts.verifyResult.evidencePath,
+      };
+    } else if (overrideReason && overrideReason.length > 0) {
+      resolutionEvidence = {
+        verified: false,
+        override: { reason: overrideReason, at: now },
+      };
+      timelineEvent = {
+        timestamp: now,
+        eventKind: "incident_resolved_override",
+        source: "human",
+        summary: `Resolved via override: ${overrideReason}`,
+      };
+    } else {
+      throw new Error(
+        `setIncidentStatus to 'resolved' requires opts.verifyResult.verified=true ` +
+        `OR opts.overrideToken='SKIP_METRIC_VERIFY: <reason>' with a non-empty reason. ` +
+        `Got: verifyResult.verified=${opts?.verifyResult?.verified ?? "<missing>"}, ` +
+        `overrideToken=${opts?.overrideToken !== undefined ? `'${opts.overrideToken}'` : "<missing>"}.`,
+      );
+    }
+  }
+
   const updated: IncidentMetadata = {
     ...existing,
     ...extras,
     status,
-    ...(status === "resolved" && !existing.resolvedAt
-      ? { resolvedAt: new Date().toISOString() }
-      : {}),
+    ...(status === "resolved" && !existing.resolvedAt ? { resolvedAt: now } : {}),
+    ...(resolutionEvidence !== undefined ? { resolutionEvidence } : {}),
   };
 
   await atomicWriteJson(metaPath, updated);
+
+  if (timelineEvent !== undefined) {
+    await appendTimeline(projectRoot, incidentId, timelineEvent);
+  }
 }
 
 // ── listIncidents ──────────────────────────────────────────────────────────────

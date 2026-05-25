@@ -159,6 +159,32 @@ FOR each ProposedAction:
 
 Return DeployResult JSON summarizing all executed and aborted actions.
 
+### Step 5 — VERIFY resolution before declaring 'resolved' (Sprint 22)
+
+BEFORE you write any DeployResult that implies the incident is resolved, AND before any code path that would call `setIncidentStatus(incidentId, 'resolved')`, you MUST call:
+
+```typescript
+import { verifyResolution } from '../src/incident/resolution-verify.js';
+const result = await verifyResolution(incidentId, criteria, deps);
+```
+
+where `criteria` is the `ResolutionCriteria` from the diagnoser's DiagnosisResult. If `result.verified === false`:
+
+1. Do NOT call `setIncidentStatus(incidentId, 'resolved', ...)`. The status transition will THROW unless `verifyResult.verified=true` OR an explicit `overrideToken` is provided.
+2. Append the `VerifyResult` to `actions.jsonl` for audit.
+3. Either:
+   - Re-route to bober-diagnoser to refine the hypothesis (the symptom returned or never resolved), or
+   - Call `setIncidentStatus(incidentId, 'monitoring')` to indicate ongoing observation.
+4. Only when an operator KNOWS via independent signals that the system has recovered AND the metric pipeline itself is degraded (NO_PROVIDER, MCP_ERROR) is the override path acceptable:
+   ```typescript
+   setIncidentStatus(incidentId, 'resolved', undefined, {
+     overrideToken: 'SKIP_METRIC_VERIFY: <REQUIRED non-empty audit reason>',
+   });
+   ```
+   An empty reason after the colon REJECTS — the reason IS the audit trail.
+
+**Cross-reference:** `skills/bober.diagnose/SKILL.md` Phase 4 declares the criteria; this step enforces them. `src/incident/resolution-verify.ts` is the only sanctioned implementation — do NOT reimplement the gate yourself.
+
 ## Bash Discipline
 
 Every Bash command routes through the executor seam. The seam calls `classifyCommand()` on the command content before execution.
