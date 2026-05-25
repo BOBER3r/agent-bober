@@ -78,7 +78,7 @@ export {
 } from "./approval-state.js";
 
 const BOBER_DIR = ".bober";
-const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews", "approvals"] as const;
+const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews", "approvals", "runs"] as const;
 
 /**
  * Ensure the `.bober/` directory and all required subdirectories exist,

@@ -142,6 +142,8 @@ export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
 
 export const PipelineSectionSchema = z.object({
   maxIterations: z.number().int().min(1).default(20),
+  /** Maximum times the router re-invokes a responsible agent after rejection. Default 3, min 1, max 10. */
+  maxCheckpointIterations: z.number().int().min(1).max(10).default(3),
   requireApproval: z.boolean().default(false),
   contextReset: ContextResetSchema.default("always"),
   researchPhase: z.boolean().default(true),
@@ -281,6 +283,7 @@ export function createDefaultConfig(
     },
     pipeline: {
       maxIterations: 20,
+      maxCheckpointIterations: 3,
       requireApproval: false,
       contextReset: "always",
       researchPhase: true,

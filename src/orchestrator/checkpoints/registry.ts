@@ -36,6 +36,9 @@ export function getCheckpointMechanism(name: string): CheckpointMechanism {
  * Sprint 14 will wire the full BoberConfig pipeline schema; this sprint
  * only provides the resolution hook. The structural subset ensures that
  * passing a real BoberConfig or PartialBoberConfig will work without a cast.
+ *
+ * Sprint 12: added index signature to pipeline so that BoberConfig (which
+ * now has maxCheckpointIterations and other fields) is structurally compatible.
  */
 export interface CheckpointOverrideConfig {
   pipeline?: {
@@ -43,6 +46,8 @@ export interface CheckpointOverrideConfig {
     checkpointMechanism?: string;
     /** Per-checkpoint overrides: { "<checkpointId>": "<mechanismName>" } */
     checkpointOverrides?: Record<string, string>;
+    /** Allow any additional pipeline fields (e.g., maxCheckpointIterations) from BoberConfig. */
+    [key: string]: unknown;
   };
 }
 

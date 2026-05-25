@@ -213,6 +213,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
       },
       pipeline: defaults.pipeline ?? {
         maxIterations: 20,
+        maxCheckpointIterations: 3,
         requireApproval: false,
         contextReset: "always" as const,
         researchPhase: true,

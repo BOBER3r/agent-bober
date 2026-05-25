@@ -96,6 +96,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
     },
     pipeline: {
       maxIterations: 20,
+      maxCheckpointIterations: 3,
       requireApproval: false,
       contextReset: "always",
       researchPhase: true,
@@ -186,6 +187,7 @@ const greenfieldBase: Partial<BoberConfig> = {
   },
   pipeline: {
     maxIterations: 20,
+    maxCheckpointIterations: 3,
     requireApproval: false,
     contextReset: "always",
     researchPhase: true,
@@ -217,6 +219,7 @@ const brownfieldBase: Partial<BoberConfig> = {
   },
   pipeline: {
     maxIterations: 20,
+    maxCheckpointIterations: 3,
     requireApproval: true,
     contextReset: "always",
     researchPhase: true,
