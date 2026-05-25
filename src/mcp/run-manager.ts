@@ -35,9 +35,11 @@ export interface RunResult {
 export interface RunState {
   runId: string;
   task: string;
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "aborted";
   startedAt: string;
   completedAt?: string;
+  abortedAt?: string;
+  abortReason?: string;
   progress: RunProgress;
   result?: RunResult;
   error?: string;
@@ -93,15 +95,15 @@ export class RunManager {
   }
 
   /**
-   * Abort a run by setting its status to 'failed' with the given reason.
+   * Abort a run by setting its status to 'aborted' with the given reason.
    * Persists the new state to disk (best-effort; logs on failure).
    */
   abortRun(runId: string, reason: string): void {
     const state = this.runs.get(runId);
     if (!state) return;
-    state.status = "failed";
-    state.completedAt = new Date().toISOString();
-    state.error = reason;
+    state.status = "aborted";
+    state.abortedAt = new Date().toISOString();
+    state.abortReason = reason;
     writeRunState(state.projectRoot, state).catch((err: unknown) => {
       logger.warn(
         `[RunManager.abortRun] Failed to persist aborted state for ${runId}: ${
@@ -109,6 +111,14 @@ export class RunManager {
         }`,
       );
     });
+  }
+
+  /**
+   * Return ALL known runs regardless of status.
+   * Used by bober_list_active_runs for status-filtered listing.
+   */
+  listAllRuns(): RunState[] {
+    return Array.from(this.runs.values());
   }
 
   /**

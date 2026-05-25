@@ -399,7 +399,7 @@ describe("RunManager", () => {
       expect(active[0].task).toBe("active task");
     });
 
-    it("abortRun sets status to 'failed' with the given reason", async () => {
+    it("abortRun sets status to 'aborted' with the given reason", async () => {
       const manager = new RunManager();
       const neverResolves = new Promise<PipelineResult>(() => {/* intentionally hangs */});
       const mockPipeline = vi.fn().mockReturnValue(neverResolves);
@@ -409,15 +409,37 @@ describe("RunManager", () => {
       manager.abortRun(runId, "user requested abort");
 
       const state = manager.getRun(runId);
-      expect(state!.status).toBe("failed");
-      expect(state!.error).toBe("user requested abort");
-      expect(state!.completedAt).toBeTruthy();
+      expect(state!.status).toBe("aborted");
+      expect(state!.abortReason).toBe("user requested abort");
+      expect(state!.abortedAt).toBeTruthy();
     });
 
     it("abortRun is a no-op for unknown runIds", () => {
       const manager = new RunManager();
       // Should not throw
       expect(() => manager.abortRun("non-existent", "reason")).not.toThrow();
+    });
+
+    it("listAllRuns returns all runs regardless of status", async () => {
+      const manager = new RunManager();
+      const neverResolves = new Promise<PipelineResult>(() => {/* intentionally hangs */});
+      const mockPipeline = vi.fn().mockReturnValue(neverResolves);
+      const resolvesPipeline = vi.fn().mockResolvedValue(makeFakePipelineResult());
+
+      // Start two runs: one stays running, one completes
+      const runId1 = await manager.startRun("active task", tmpDir, makeFakeConfig(), mockPipeline);
+      await manager.startRun("completed task", tmpDir, makeFakeConfig(), resolvesPipeline);
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Abort the first run
+      manager.abortRun(runId1, "test abort");
+
+      const all = manager.listAllRuns();
+      expect(all).toHaveLength(2);
+      const statuses = all.map((s) => s.status);
+      expect(statuses).toContain("aborted");
+      expect(statuses).toContain("completed");
     });
   });
 

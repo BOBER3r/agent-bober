@@ -5,6 +5,15 @@ All notable changes to `agent-bober` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`bober_list_active_runs`**: Lists all runs tracked by the RunManager. Accepts optional `{ status?: 'running'|'completed'|'failed'|'aborted' }` filter. Returns a JSON array of RunState objects. Omit the filter to get all runs regardless of status.
+- **`bober_get_run_status`**: Fetches the full RunState for a specific run by `runId`. Input: `{ runId: string }` (required). Returns the complete RunState JSON or `{ error: 'Run not found: <runId>' }` when the runId is unknown.
+- **`bober_abort_run`**: Aborts a currently running pipeline run. Input: `{ runId: string, reason?: string }`. Flips `status` to `'aborted'`, persists `abortedAt` and `abortReason` to `state.json`, and returns `{ runId, status: 'aborted', abortedAt }`. Returns `{ error: 'Run not found: <runId>' }` for unknown runs, `{ error: 'Run is not active' }` for non-running runs. Note: this sprint flips state only; forceful in-flight subprocess termination (SIGTERM propagation) is deferred to a future hardening sprint.
+- **`RunState.status`** type union widened to include `'aborted'`; new optional fields `abortedAt?: string` and `abortReason?: string` added.
+
 ## [0.14.0] — 2026-05-25
 
 Bober Vision — agent-bober becomes a four-mode software engineering teammate

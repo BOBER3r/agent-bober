@@ -20,29 +20,35 @@ import { registerReactTool } from "./react.js";
 import { registerSolidityTool } from "./solidity.js";
 import { registerAnchorTool } from "./anchor.js";
 import { registerPlaywrightTool } from "./playwright.js";
+import { registerListActiveRunsTool } from "./list-active-runs.js";
+import { registerGetRunStatusTool } from "./get-run-status.js";
+import { registerAbortRunTool } from "./abort-run.js";
 
 /**
  * Registers all built-in agent-bober MCP tools into the global registry.
  * Call this once before starting the MCP server.
  *
- * Registered tools (17 total):
- *   1. bober_init        – Initialise a project
- *   2. bober_plan        – Generate a sprint plan
- *   3. bober_sprint      – Execute the next sprint cycle
- *   4. bober_eval        – Evaluate a sprint
- *   5. bober_run         – Start the full pipeline asynchronously
- *   6. bober_status      – Poll pipeline status
- *   7. bober_contracts   – List/read sprint contracts
- *   8. bober_spec        – Read the latest plan spec
- *   9. bober_principles  – Read/write .bober/principles.md
- *  10. bober_config      – Read/update bober.config.json
- *  11. bober_architect   – Solution architecture (5-checkpoint flow + ADRs)
- *  12. bober_research    – Two-phase codebase research (fact-only)
- *  13. bober_brownfield  – Brownfield pipeline (existing codebase)
- *  14. bober_react       – React web application pipeline
- *  15. bober_solidity    – EVM smart contract pipeline
- *  16. bober_anchor      – Solana program pipeline (Anchor)
- *  17. bober_playwright  – Playwright E2E setup and runner
+ * Registered tools (20 total):
+ *   1. bober_init              – Initialise a project
+ *   2. bober_plan              – Generate a sprint plan
+ *   3. bober_sprint            – Execute the next sprint cycle
+ *   4. bober_eval              – Evaluate a sprint
+ *   5. bober_run               – Start the full pipeline asynchronously
+ *   6. bober_status            – Poll pipeline status
+ *   7. bober_contracts         – List/read sprint contracts
+ *   8. bober_spec              – Read the latest plan spec
+ *   9. bober_principles        – Read/write .bober/principles.md
+ *  10. bober_config            – Read/update bober.config.json
+ *  11. bober_architect         – Solution architecture (5-checkpoint flow + ADRs)
+ *  12. bober_research          – Two-phase codebase research (fact-only)
+ *  13. bober_brownfield        – Brownfield pipeline (existing codebase)
+ *  14. bober_react             – React web application pipeline
+ *  15. bober_solidity          – EVM smart contract pipeline
+ *  16. bober_anchor            – Solana program pipeline (Anchor)
+ *  17. bober_playwright        – Playwright E2E setup and runner
+ *  18. bober_list_active_runs  – List all runs by status
+ *  19. bober_get_run_status    – Get one run by runId
+ *  20. bober_abort_run         – Abort a run by runId
  */
 export function registerAllTools(): void {
   // ── Core workflow tools ─────────────────────────────────────────
@@ -63,6 +69,11 @@ export function registerAllTools(): void {
 
   // ── Utility tools ──────────────────────────────────────────────
   registerPlaywrightTool();
+
+  // ── Multi-run management tools ─────────────────────────────────
+  registerListActiveRunsTool();
+  registerGetRunStatusTool();
+  registerAbortRunTool();
 
   // ── Read / configuration tools ──────────────────────────────────
   registerContractsTool();
