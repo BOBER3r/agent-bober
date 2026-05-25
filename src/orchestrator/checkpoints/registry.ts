@@ -3,6 +3,7 @@ import type { CheckpointMechanism } from "./types.js";
 import { NoopCheckpointMechanism } from "./noop.js";
 import { CliCheckpointMechanism } from "./mechanisms/cli.js";
 import { DiskCheckpointMechanism } from "./mechanisms/disk.js";
+import { PrCheckpointMechanism, createGhClient } from "./mechanisms/pr.js";
 
 /**
  * Module-level registry mapping mechanism names to CheckpointMechanism implementations.
@@ -30,6 +31,43 @@ export function getCheckpointMechanism(name: string): CheckpointMechanism {
   return impl;
 }
 
+/**
+ * Minimal config shape for per-checkpoint override resolution.
+ * Sprint 14 will wire the full BoberConfig pipeline schema; this sprint
+ * only provides the resolution hook. The structural subset ensures that
+ * passing a real BoberConfig or PartialBoberConfig will work without a cast.
+ */
+export interface CheckpointOverrideConfig {
+  pipeline?: {
+    /** Global default checkpoint mechanism name (e.g., "noop", "cli", "disk", "pr"). */
+    checkpointMechanism?: string;
+    /** Per-checkpoint overrides: { "<checkpointId>": "<mechanismName>" } */
+    checkpointOverrides?: Record<string, string>;
+  };
+}
+
+/**
+ * Resolve the mechanism for a specific checkpoint. Resolution order:
+ *   1. config.pipeline.checkpointOverrides[checkpointId] (most specific)
+ *   2. config.pipeline.checkpointMechanism (global default)
+ *   3. fallback param (caller's default; e.g., "noop")
+ *
+ * Sprint 14 will wire the BoberConfig pipeline schema; this sprint just
+ * provides the resolution hook so a future PR can plumb config end-to-end.
+ *
+ * Preserves back-compat with getCheckpointMechanism(name) — all pipeline.ts
+ * call-sites continue to use the simpler form; this is a SIBLING function.
+ */
+export function getCheckpointMechanismFor(
+  checkpointId: string,
+  config: CheckpointOverrideConfig | undefined,
+  fallback = "noop",
+): CheckpointMechanism {
+  const override = config?.pipeline?.checkpointOverrides?.[checkpointId];
+  const global = config?.pipeline?.checkpointMechanism;
+  return getCheckpointMechanism(override ?? global ?? fallback);
+}
+
 // Self-register the noop mechanism at module init.
 // This mirrors how src/evaluators/registry.ts:41-50 populates built-ins.
 registerCheckpointMechanism("noop", new NoopCheckpointMechanism());
@@ -40,4 +78,13 @@ registerCheckpointMechanism("cli", new CliCheckpointMechanism());
 registerCheckpointMechanism(
   "disk",
   new DiskCheckpointMechanism(join(process.cwd(), ".bober", "approvals")),
+);
+
+// PR mechanism — one instance per process, with disk as fallback.
+// The disk fallback is rooted at the same .bober/approvals directory.
+const cwd = process.cwd();
+const diskForPrFallback = new DiskCheckpointMechanism(join(cwd, ".bober", "approvals"));
+registerCheckpointMechanism(
+  "pr",
+  new PrCheckpointMechanism(createGhClient(cwd), diskForPrFallback),
 );

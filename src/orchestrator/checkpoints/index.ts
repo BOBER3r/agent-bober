@@ -10,7 +10,12 @@
 export type { CheckpointId, CheckpointArtifact, CheckpointMechanism, CheckpointOutcome } from "./types.js";
 
 // Registry API — re-exported from ./registry.js
-export { registerCheckpointMechanism, getCheckpointMechanism } from "./registry.js";
+export {
+  registerCheckpointMechanism,
+  getCheckpointMechanism,
+  getCheckpointMechanismFor,
+  type CheckpointOverrideConfig,
+} from "./registry.js";
 
 // Site enumeration — re-exported from ./sites.js
 export { CHECKPOINT_SITES, type CheckpointSite } from "./sites.js";
