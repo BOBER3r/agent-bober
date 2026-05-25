@@ -145,10 +145,9 @@ export async function runSprintCycle(
   const sprintRunId = pipelineRunId ?? `sprint-${currentContract.contractId}`;
 
   // Resolve the configured mechanism name for audit records.
-  // Cast to access the optional checkpointMechanism field from CheckpointOverrideConfig.
-  const overrideConfig = config as unknown as { pipeline?: { checkpointMechanism?: string } };
+  // Sprint 14: checkpointMechanism is now a real typed field in PipelineSection.
   const configuredMechanismName: MechanismName =
-    (overrideConfig.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
+    (config.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
 
   let lastEvaluation: EvaluationRunResult | undefined;
   let lastGeneratorResult: GeneratorResult | undefined;
@@ -510,11 +509,9 @@ export async function runPipeline(
   const pipelineRunId = `run-${Date.now()}`;
 
   // Resolve mechanism name from config for audit records.
-  // The BoberConfig pipeline section doesn't expose checkpointMechanism directly;
-  // use the CheckpointOverrideConfig's optional field (cast is safe — registry accepts it).
-  const pipelineOverrideConfig = config as unknown as { pipeline?: { checkpointMechanism?: string } };
+  // Sprint 14: checkpointMechanism is now a real typed field in PipelineSection.
   const pipelineMechanismName: MechanismName =
-    (pipelineOverrideConfig.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
+    (config.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
 
   try {
     // Ensure .bober/ directory structure exists

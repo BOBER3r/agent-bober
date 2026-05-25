@@ -33,12 +33,9 @@ export function getCheckpointMechanism(name: string): CheckpointMechanism {
 
 /**
  * Minimal config shape for per-checkpoint override resolution.
- * Sprint 14 will wire the full BoberConfig pipeline schema; this sprint
- * only provides the resolution hook. The structural subset ensures that
- * passing a real BoberConfig or PartialBoberConfig will work without a cast.
+ * Structural subset of BoberConfig — passing a real BoberConfig works without a cast.
  *
- * Sprint 12: added index signature to pipeline so that BoberConfig (which
- * now has maxCheckpointIterations and other fields) is structurally compatible.
+ * Sprint 14: added mode field and extended checkpointOverrides type.
  */
 export interface CheckpointOverrideConfig {
   pipeline?: {
@@ -46,31 +43,80 @@ export interface CheckpointOverrideConfig {
     checkpointMechanism?: string;
     /** Per-checkpoint overrides: { "<checkpointId>": "<mechanismName>" } */
     checkpointOverrides?: Record<string, string>;
+    /** Pipeline execution mode — determines mechanism default when checkpointMechanism is unset. */
+    mode?: "autopilot" | "careful";
     /** Allow any additional pipeline fields (e.g., maxCheckpointIterations) from BoberConfig. */
     [key: string]: unknown;
   };
 }
 
 /**
+ * Pure resolution function — returns the mechanism name string without doing a registry lookup.
+ * Sprint 14: implements 6-tier resolution order:
+ *   1. cliOverrideAll && cliOverride → cliOverride (force-all CLI flag)
+ *   2. config.pipeline.checkpointOverrides[checkpointId] (most specific per-checkpoint config)
+ *   3. cliOverride (per-run CLI flag, deferred to after per-checkpoint config override)
+ *   4. config.pipeline.checkpointMechanism (global config default, if set)
+ *   5. mode default: mode='careful' → 'disk', mode='autopilot' or unset → 'noop'
+ *   6. fallback param (back-compat hatch for callers that supply one)
+ *
+ * Exported so that pipeline.ts can snapshot the resolved name once per run for audit logging.
+ */
+export function resolveCheckpointMechanismName(
+  checkpointId: string,
+  config: CheckpointOverrideConfig | undefined,
+  cliOverride?: string,
+  cliOverrideAll?: boolean,
+  fallback = "noop",
+): string {
+  // Tier 1: CLI force-all overrides everything
+  if (cliOverrideAll && cliOverride) return cliOverride;
+
+  // Tier 2: per-checkpoint config override
+  const perCheckpoint = config?.pipeline?.checkpointOverrides?.[checkpointId];
+  if (perCheckpoint) return perCheckpoint;
+
+  // Tier 3: per-run CLI flag (deferred — per-checkpoint config wins)
+  if (cliOverride) return cliOverride;
+
+  // Tier 4: global config default
+  const global = config?.pipeline?.checkpointMechanism;
+  if (global) return global;
+
+  // Tier 5: mode-based default
+  if (config?.pipeline?.mode === "careful") return "disk";
+
+  // Tier 6: caller-supplied fallback (back-compat)
+  return fallback;
+}
+
+/**
  * Resolve the mechanism for a specific checkpoint. Resolution order:
- *   1. config.pipeline.checkpointOverrides[checkpointId] (most specific)
- *   2. config.pipeline.checkpointMechanism (global default)
- *   3. fallback param (caller's default; e.g., "noop")
+ *   1. (cliOverrideAll && cliOverride) → cliOverride (force-all CLI flag)
+ *   2. config.pipeline.checkpointOverrides[checkpointId] (per-checkpoint config)
+ *   3. cliOverride (per-run CLI flag, after per-checkpoint config)
+ *   4. config.pipeline.checkpointMechanism (global config default)
+ *   5. mode default: 'careful' → 'disk', 'autopilot'/unset → 'noop'
+ *   6. fallback param (back-compat; e.g., "noop")
  *
- * Sprint 14 will wire the BoberConfig pipeline schema; this sprint just
- * provides the resolution hook so a future PR can plumb config end-to-end.
- *
- * Preserves back-compat with getCheckpointMechanism(name) — all pipeline.ts
- * call-sites continue to use the simpler form; this is a SIBLING function.
+ * Sprint 14: extended with optional cliOverride + cliOverrideAll trailing params.
+ * All existing 3-arg and 2-arg call-sites continue to work unchanged.
  */
 export function getCheckpointMechanismFor(
   checkpointId: string,
   config: CheckpointOverrideConfig | undefined,
-  fallback = "noop",
+  fallback?: string,
+  cliOverride?: string,
+  cliOverrideAll?: boolean,
 ): CheckpointMechanism {
-  const override = config?.pipeline?.checkpointOverrides?.[checkpointId];
-  const global = config?.pipeline?.checkpointMechanism;
-  return getCheckpointMechanism(override ?? global ?? fallback);
+  const name = resolveCheckpointMechanismName(
+    checkpointId,
+    config,
+    cliOverride,
+    cliOverrideAll,
+    fallback ?? "noop",
+  );
+  return getCheckpointMechanism(name);
 }
 
 // Self-register the noop mechanism at module init.

@@ -14,6 +14,7 @@ export {
   registerCheckpointMechanism,
   getCheckpointMechanism,
   getCheckpointMechanismFor,
+  resolveCheckpointMechanismName,
   type CheckpointOverrideConfig,
 } from "./registry.js";
 
