@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T02:58:00Z
+Last updated: 2026-05-25T03:46:00Z
 
 ---
 
@@ -108,7 +108,7 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 **Tier 1 COMPLETE** — 3/3 sprints passed (sprints 4-6), 4/20 iteration budget used (sprint 5 needed iter 2), 0 regressions. Branch: bober/bober-vision @ commit 8ddc8ba.
 
 ### Tier 2 — Careful-flow multi-mode (sprints 7-14)
-7. [proposed] Careful-flow plumbing — Checkpoint abstraction + 9 call sites in orchestrator + noop default mechanism (no behavior change yet).
+7. [completed] Careful-flow plumbing — Passed iter 1 (6/6 criteria, 593 tests +4, commit e00d064). src/orchestrator/checkpoints/ module (types/registry/sites/noop/index) wired into pipeline.ts at 9 documented call sites (+10/-0 additive diff). CheckpointOutcome 3-variant discriminated union supports all 3 future mechanisms (CLI/disk/PR). noop is sole registered mechanism; behavior unchanged (canary code-reviewer-agent.test.ts 5/5 + scanner.test.ts 52/52 still green). Test colocated per Sprint 5 regression precedent.
 8. [proposed] CLI blocking checkpoint mechanism — Blocking stdin prompts with approve/reject/edit; TTY fallback to noop.
 9. [proposed] Disk-marker mechanism + bober approve CLI — .bober/approvals/<id>.pending.json + bober approve/reject/list-approvals subcommands; production-friendly async approval.
 10. [proposed] GitHub PR-native mechanism — Draft PR per run, comment per checkpoint, label/comment-driven approval; gh CLI integration with disk-mechanism fallback.
