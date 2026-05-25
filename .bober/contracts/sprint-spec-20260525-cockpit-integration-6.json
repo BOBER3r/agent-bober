@@ -3,8 +3,8 @@
   "specId": "spec-20260525-cockpit-integration",
   "sprintNumber": 6,
   "title": "Vision-era MCP wrappers + end-to-end fake-cockpit-client integration test",
-  "description": "Two halves. (a) Eight new MCP tools wrapping the vision-era incident/rollback/postmortem/playbook surface that today is CLI-only: bober_incident_start, bober_incident_status, bober_incident_list, bober_incident_abort, bober_rollback_start, bober_postmortem_get, bober_playbook_list, bober_playbook_search. Each is a thin adapter over the corresponding helper in src/incident/{timeline,orchestrator,rollback,postmortem,playbook-search}.ts. (b) The integration capstone: tests/e2e/cockpit-integration.test.ts spawns `node dist/cli.js mcp` as a real child subprocess, speaks JSON-RPC over stdio, and exercises EVERY new MCP tool from Sprints 1-6 against a real fixture project. This is the correctness gate for the entire spec — if it passes, the cockpit-integration surface holds.",
-  "status": "proposed",
+  "description": "Two halves. (a) Eight new MCP tools wrapping the vision-era incident/rollback/postmortem/playbook surface that today is CLI-only: bober_incident_start, bober_incident_status, bober_incident_list, bober_incident_abort, bober_rollback_start, bober_postmortem_get, bober_playbook_list, bober_playbook_search. Each is a thin adapter over the corresponding helper in src/incident/{timeline,orchestrator,rollback,postmortem,playbook-search}.ts. (b) The integration capstone: tests/e2e/cockpit-integration.test.ts spawns `node dist/cli.js mcp` as a real child subprocess, speaks JSON-RPC over stdio, and exercises EVERY new MCP tool from Sprints 1-6 against a real fixture project. This is the correctness gate for the entire spec \u2014 if it passes, the cockpit-integration surface holds.",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260525-cockpit-integration-1",
     "sprint-spec-20260525-cockpit-integration-2",
@@ -12,11 +12,14 @@
     "sprint-spec-20260525-cockpit-integration-4",
     "sprint-spec-20260525-cockpit-integration-5"
   ],
-  "features": ["feat-7", "feat-8"],
+  "features": [
+    "feat-7",
+    "feat-8"
+  ],
   "successCriteria": [
     {
       "criterionId": "sc-6-1",
-      "description": "src/mcp/tools/incident.ts registers four tools: bober_incident_start({ symptom, severity?, projectPath? }), bober_incident_status({ incidentId, projectPath? }), bober_incident_list({ projectPath? }), bober_incident_abort({ incidentId, reason, confirmRollback?, projectPath? }) — delegating to src/incident/timeline.ts createIncident/listIncidents and src/incident/orchestrator.ts abort/readIncidentMetadata.",
+      "description": "src/mcp/tools/incident.ts registers four tools: bober_incident_start({ symptom, severity?, projectPath? }), bober_incident_status({ incidentId, projectPath? }), bober_incident_list({ projectPath? }), bober_incident_abort({ incidentId, reason, confirmRollback?, projectPath? }) \u2014 delegating to src/incident/timeline.ts createIncident/listIncidents and src/incident/orchestrator.ts abort/readIncidentMetadata.",
       "verificationMethod": "unit-test",
       "required": true
     },
@@ -88,17 +91,17 @@
     }
   ],
   "nonGoals": [
-    "Do not introduce parallel orchestration policy in the e2e test — it exercises tools sequentially. Race conditions across parallel runs are tested by Sprint 4's unit tests.",
-    "Do not test real LLM invocations in the e2e test — mock at the spawn-mechanism level via BOBER_TEST_DETERMINISTIC.",
-    "Do not move incident/rollback/postmortem business logic into the MCP layer — the tools are THIN adapters over src/incident/*; any business-logic refactor is out of scope.",
-    "Do not test the cockpit backend itself — it does not exist in this repo. The fake-cockpit-client in the e2e test is a minimal JSON-RPC client written in the test file.",
+    "Do not introduce parallel orchestration policy in the e2e test \u2014 it exercises tools sequentially. Race conditions across parallel runs are tested by Sprint 4's unit tests.",
+    "Do not test real LLM invocations in the e2e test \u2014 mock at the spawn-mechanism level via BOBER_TEST_DETERMINISTIC.",
+    "Do not move incident/rollback/postmortem business logic into the MCP layer \u2014 the tools are THIN adapters over src/incident/*; any business-logic refactor is out of scope.",
+    "Do not test the cockpit backend itself \u2014 it does not exist in this repo. The fake-cockpit-client in the e2e test is a minimal JSON-RPC client written in the test file.",
     "Do not add new npm dependencies (the MCP SDK already provides the client utilities needed for the test, or raw JSON-RPC over child_process stdio is acceptable)."
   ],
   "stopConditions": [
     "All required success criteria pass evaluation.",
     "The e2e test runs locally with `npm run test` in under 90 seconds.",
     "The e2e test passes 3 consecutive runs without flakes (deterministic-mock requirement).",
-    "Sanity sabotage: temporarily remove bober_abort_run registration, re-run the e2e test, verify it fails with a clear error message (not a cryptic timeout) — proves the test actually exercises the surface."
+    "Sanity sabotage: temporarily remove bober_abort_run registration, re-run the e2e test, verify it fails with a clear error message (not a cryptic timeout) \u2014 proves the test actually exercises the surface."
   ],
   "definitionOfDone": "Every MCP tool added by Sprints 1-6 is exercised end-to-end against a real bober MCP server subprocess by a fake-cockpit-client test. The eight vision-era MCP wrappers expose the incident/rollback/postmortem/playbook surface over MCP with the same data shapes the CLI subcommands emit. The e2e test acts as the spec's correctness gate: passing it proves the cockpit-integration contract holds. The test is fast (<90s), deterministic, and fails loudly when any new tool's contract is broken.",
   "assumptions": [
@@ -114,8 +117,8 @@
     "Backward-compat testing of pre-cockpit MCP clients (covered implicitly by existing tests staying green)."
   ],
   "ambiguityScore": 4,
-  "generatorNotes": "STRUCTURE: src/mcp/tools/incident.ts can register all four incident_* tools in one file (one registerIncidentTools function) to keep things clean, or split into four files mirroring the run.ts/status.ts pattern — generator's choice. PATTERN: src/cli/commands/incident.ts:200-432 shows the exact business-logic mapping. The MCP tools must NOT duplicate the logic; they call createIncident / listIncidents / setIncidentStatus / abort / readIncidentMetadata directly. Same for rollback (src/cli/commands/rollback.ts + src/incident/rollback.ts) and playbook (src/cli/commands/playbook.ts + src/incident/playbook-search.ts). For postmortem-get, read the .md file and pass through src/incident/postmortem.ts validators if they exist (otherwise return raw content + a minimal parsed shape). E2E TEST STRUCTURE: study tests/e2e/four-modes.test.ts:1-50 for the tmpdir + subprocess scaffold. The fake-cockpit-client is implemented as a small helper module inside the test file or under tests/helpers/fake-cockpit-client.ts. It uses child_process.spawn and manages stdio framing — JSON-RPC over stdio has a simple header (Content-Length per message) per the MCP protocol; the @modelcontextprotocol/sdk's StdioClientTransport class can be reused if importable for tests (preferred). For the assertion shape: prefer strong assertions (full equality on response shapes via toMatchObject) over weak `expect(x).toBeDefined()`. Sanity-sabotage instructions can be folded into a `.skip`'d test demonstrating the failure mode (or just documented in evaluatorNotes for manual verification). Update src/mcp/tools/index.ts JSDoc to bump the tool count from 17 to the final total (17 + new tools from Sprints 1-6).",
-  "evaluatorNotes": "TWO LAYERS to verify. Layer 1 — unit tests for the eight vision-era MCP tools: each tool MUST be a thin adapter over the corresponding src/incident/* helper (verify by code inspection — if the MCP file contains business logic that doesn't appear in the underlying module, that's a contract violation). Layer 2 — the e2e test: verify it spawns a REAL MCP server subprocess (not a mocked one), performs an actual MCP initialize handshake, and exercises every new tool by name. Negative test: a sanity-sabotage by deleting one tool registration must cause the e2e test to fail with a clear 'tool not found in tools/list' error, not a cryptic timeout. Verify the runtime budget by timing the test on CI; if it exceeds 90s, identify the slow path (likely the worktree creation or a still-real LLM invocation). Final correctness gate: the e2e test must FAIL LOUDLY when any single new tool's contract is broken. Run a sabotage scenario: change the return shape of bober_get_run_status, verify the e2e test fails with a meaningful diff. If it doesn't fail, the assertions are too weak — strengthen them.",
+  "generatorNotes": "STRUCTURE: src/mcp/tools/incident.ts can register all four incident_* tools in one file (one registerIncidentTools function) to keep things clean, or split into four files mirroring the run.ts/status.ts pattern \u2014 generator's choice. PATTERN: src/cli/commands/incident.ts:200-432 shows the exact business-logic mapping. The MCP tools must NOT duplicate the logic; they call createIncident / listIncidents / setIncidentStatus / abort / readIncidentMetadata directly. Same for rollback (src/cli/commands/rollback.ts + src/incident/rollback.ts) and playbook (src/cli/commands/playbook.ts + src/incident/playbook-search.ts). For postmortem-get, read the .md file and pass through src/incident/postmortem.ts validators if they exist (otherwise return raw content + a minimal parsed shape). E2E TEST STRUCTURE: study tests/e2e/four-modes.test.ts:1-50 for the tmpdir + subprocess scaffold. The fake-cockpit-client is implemented as a small helper module inside the test file or under tests/helpers/fake-cockpit-client.ts. It uses child_process.spawn and manages stdio framing \u2014 JSON-RPC over stdio has a simple header (Content-Length per message) per the MCP protocol; the @modelcontextprotocol/sdk's StdioClientTransport class can be reused if importable for tests (preferred). For the assertion shape: prefer strong assertions (full equality on response shapes via toMatchObject) over weak `expect(x).toBeDefined()`. Sanity-sabotage instructions can be folded into a `.skip`'d test demonstrating the failure mode (or just documented in evaluatorNotes for manual verification). Update src/mcp/tools/index.ts JSDoc to bump the tool count from 17 to the final total (17 + new tools from Sprints 1-6).",
+  "evaluatorNotes": "TWO LAYERS to verify. Layer 1 \u2014 unit tests for the eight vision-era MCP tools: each tool MUST be a thin adapter over the corresponding src/incident/* helper (verify by code inspection \u2014 if the MCP file contains business logic that doesn't appear in the underlying module, that's a contract violation). Layer 2 \u2014 the e2e test: verify it spawns a REAL MCP server subprocess (not a mocked one), performs an actual MCP initialize handshake, and exercises every new tool by name. Negative test: a sanity-sabotage by deleting one tool registration must cause the e2e test to fail with a clear 'tool not found in tools/list' error, not a cryptic timeout. Verify the runtime budget by timing the test on CI; if it exceeds 90s, identify the slow path (likely the worktree creation or a still-real LLM invocation). Final correctness gate: the e2e test must FAIL LOUDLY when any single new tool's contract is broken. Run a sabotage scenario: change the return shape of bober_get_run_status, verify the e2e test fails with a meaningful diff. If it doesn't fail, the assertions are too weak \u2014 strengthen them.",
   "estimatedFiles": [
     "src/mcp/tools/incident.ts",
     "src/mcp/tools/incident.test.ts",
@@ -131,5 +134,7 @@
     "tests/helpers/fake-cockpit-client.ts",
     "CHANGELOG.md"
   ],
-  "estimatedDuration": "large"
+  "estimatedDuration": "large",
+  "startedAt": "2026-05-25T18:04:39Z",
+  "completedAt": "2026-05-25T18:33:19Z"
 }

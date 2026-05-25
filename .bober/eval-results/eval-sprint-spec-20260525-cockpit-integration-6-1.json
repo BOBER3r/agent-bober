@@ -1,0 +1,53 @@
+{
+  "evalId": "eval-sprint-spec-20260525-cockpit-integration-6-1",
+  "contractId": "sprint-spec-20260525-cockpit-integration-6",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T18:33:19Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 12,
+    "criteriaPassed": 12,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 12,
+    "requiredFailed": 0,
+    "requiredTotal": 12
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "details": "0 errors"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "details": "0 errors"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "details": "dist/cli/index.js built"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "details": "1330 pass / 4 skipped / 0 fail across 105 files; e2e cockpit-integration test passes 3 consecutive runs in ~4s (90s budget)"
+    }
+  ],
+  "summary": "Sprint 6 passes all 12 criteria. 8 vision-era MCP tools added (incident_*, rollback_start, postmortem_get, playbook_list/search) \u2014 thin adapters with no business-logic duplication. E2E test spawns real MCP server subprocess via StdioClientTransport, exercises all Sprint 1-6 tools sequentially with toMatchObject strong assertions, runs deterministically in ~4s via BOBER_TEST_DETERMINISTIC guard in src/providers/factory.ts. Tool count 29 \u2192 37. No new npm deps.",
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "tests/mcp/external-server-graph.test.ts",
+      "description": "Stale description strings (functional assertions correct \u2014 cosmetic only)."
+    }
+  ]
+}

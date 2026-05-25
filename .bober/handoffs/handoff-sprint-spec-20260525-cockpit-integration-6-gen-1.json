@@ -1,0 +1,56 @@
+{
+  "handoffId": "handoff-sprint-spec-20260525-cockpit-integration-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260525-cockpit-integration-6",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T18:13:18Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober \u2014 final sprint of cockpit-integration. Eight vision-era MCP wrappers + e2e correctness gate.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-1",
+        "summary": "RunManager multi-run + disk persistence"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-2",
+        "summary": "list_active_runs, get_run_status, abort_run MCP tools"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-3",
+        "summary": "subscribe_events MCP with bounded queues + unsubscribe_events"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-4",
+        "summary": "Worktree adapter \u2014 runInWorktree + bober worktree run CLI + bober_run_in_worktree MCP"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-5",
+        "summary": "careful-flow (list_pending_approvals, approve_checkpoint, reject_checkpoint) + discovery (list_projects, list_specs, get_project_state). Tool count now 29."
+      }
+    ],
+    "currentBranch": "bober/cockpit-integration",
+    "curatorWarnings": [
+      "CONTRACT TYPO: contract sc-6-5 says \"node dist/cli.js mcp\" but the actual entry per package.json bin is \"node dist/cli/index.js mcp\". Use the correct path.",
+      "BOBER_TEST_DETERMINISTIC env var is NOT yet implemented anywhere in the repo despite contract assumption. Generator must either: (a) implement guards at the LLM-spawn points before triggering them, OR (b) design scenario A so it does NOT trigger a real LLM spawn (e.g., use a no-op task or a fake projectPath that avoids the planner phase entirely).",
+      "tests/e2e/four-modes.test.ts exists \u2014 study it for the tmpdir + subprocess + StdioClientTransport pattern.",
+      "tests/fixtures/four-modes-baseline/ exists \u2014 model tests/fixtures/cockpit-baseline/ after it.",
+      "After Sprint 6, total tool count becomes 29 + 8 = 37. Update tools.test.ts and external-server-graph.test.ts counts accordingly."
+    ],
+    "relevantFiles": [
+      "src/cli/commands/incident.ts",
+      "src/cli/commands/rollback.ts",
+      "src/cli/commands/playbook.ts",
+      "src/cli/commands/postmortem.ts",
+      "src/incident/timeline.ts",
+      "src/incident/orchestrator.ts",
+      "src/incident/rollback.ts",
+      "src/incident/postmortem.ts",
+      "src/incident/playbook-search.ts",
+      "src/mcp/server.ts",
+      "src/mcp/tools/index.ts",
+      "tests/e2e/four-modes.test.ts"
+    ]
+  },
+  "evaluatorFeedback": null
+}

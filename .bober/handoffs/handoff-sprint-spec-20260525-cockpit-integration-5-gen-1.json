@@ -1,0 +1,46 @@
+{
+  "handoffId": "handoff-sprint-spec-20260525-cockpit-integration-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260525-cockpit-integration-5",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T17:48:14Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober \u2014 autonomous SWE pipeline harness. Sprint 5 of the Cockpit Integration spec adds six MCP tools for the cockpit sidebar: three careful-flow approval wrappers and three read-only discovery tools (projects/specs/project-state).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-1",
+        "title": "RunManager multi-run + disk persistence",
+        "summary": "keyed-map RunManager, atomic-write state.json, crash recovery"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-2",
+        "title": "Run-management MCP tools",
+        "summary": "list_active_runs, get_run_status, abort_run"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-3",
+        "title": "Event-stream MCP tool",
+        "summary": "subscribe_events with bounded queues"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-4",
+        "title": "Worktree adapter",
+        "summary": "runInWorktree + bober worktree run CLI + bober_run_in_worktree MCP. Tools now total 23."
+      }
+    ],
+    "currentBranch": "bober/cockpit-integration",
+    "relevantFiles": [
+      "src/state/approval-state.ts",
+      "src/state/run-state.ts",
+      "src/cli/commands/approve.ts",
+      "src/cli/commands/reject.ts",
+      "src/cli/commands/list-approvals.ts",
+      "src/mcp/tools/run.ts",
+      "src/mcp/tools/get-run-status.ts",
+      "src/incident/timeline.ts",
+      "src/mcp/tools/index.ts"
+    ]
+  },
+  "evaluatorFeedback": null
+}

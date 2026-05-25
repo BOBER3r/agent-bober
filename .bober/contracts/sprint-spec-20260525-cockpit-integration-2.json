@@ -4,45 +4,55 @@
   "sprintNumber": 2,
   "title": "Multi-run MCP tools: list, get, and abort by runId",
   "description": "Add three new MCP tools that address runs explicitly by runId, complementing the singleton-style bober_status. bober_list_active_runs returns all known runs (filterable by status). bober_get_run_status(runId) returns one run's full state. bober_abort_run(runId, reason) flips a running run to status='aborted' and persists the reason. All three are thin wrappers around the Sprint 1 RunManager methods.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260525-cockpit-integration-1"],
-  "features": ["feat-2"],
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260525-cockpit-integration-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
   "successCriteria": [
     {
       "criterionId": "sc-2-1",
       "description": "src/mcp/tools/list-active-runs.ts exports registerListActiveRunsTool(); registered tool name is bober_list_active_runs and accepts optional `{ status?: 'running'|'completed'|'failed'|'aborted' }` filter.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-2-2",
       "description": "src/mcp/tools/get-run-status.ts exports registerGetRunStatusTool(); registered tool name is bober_get_run_status; returns full RunState JSON for known runIds, returns `{ error: 'Run not found: <runId>' }` JSON for unknown runIds.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-2-3",
       "description": "src/mcp/tools/abort-run.ts exports registerAbortRunTool(); registered tool name is bober_abort_run; flips state to status='aborted', persists `{ reason, abortedAt }` into state.json, returns `{ runId, status: 'aborted', abortedAt }`. Returns `{ error: 'Run is not active' }` if the run is not currently running.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-2-4",
       "description": "All three tools registered via src/mcp/tools/index.ts; they appear in the tools/list MCP response when the server is queried.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-2-5",
       "description": "Documented in CHANGELOG.md under an Unreleased section: tool name, inputSchema summary, return shape.",
       "verificationMethod": "manual",
-      "required": false
+      "required": false,
+      "passed": true
     },
     {
       "criterionId": "sc-2-6",
       "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass; the existing test suite plus new tests pass.",
       "verificationMethod": "build",
-      "required": true
+      "required": true,
+      "passed": true
     }
   ],
   "nonGoals": [
@@ -79,5 +89,6 @@
     "src/mcp/tools/index.ts",
     "CHANGELOG.md"
   ],
-  "estimatedDuration": "medium"
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-25T17:00:00Z"
 }

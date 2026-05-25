@@ -4,45 +4,53 @@
   "sprintNumber": 1,
   "title": "Multi-run RunManager with disk persistence and crash recovery",
   "description": "Refactor src/mcp/run-manager.ts from a singleton-with-single-activeRun to a keyed Map<runId, RunState> backed by per-run state files at .bober/runs/<runId>/state.json. Add load(projectRoot) to enumerate existing run files on startup and reconcile orphaned 'running' entries to 'failed'. Preserve backward compatibility: the existing module-scoped singleton `runManager`, `isRunning()`, and `getStatus()` exports continue to satisfy bober_run and bober_status callers. New methods added: startRun (extended signature), getRun(runId), listActiveRuns(), abortRun(runId, reason). All run state mutations write through to disk via atomic temp-file + rename.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
-  "features": ["feat-1"],
+  "features": [
+    "feat-1"
+  ],
   "successCriteria": [
     {
       "criterionId": "sc-1-1",
       "description": "src/mcp/run-manager.ts exports a `RunManager` class with new methods getRun(runId), listActiveRuns(), abortRun(runId, reason), load(projectRoot), in addition to the preserved isRunning() and getStatus() shims.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-1-2",
       "description": "startRun() writes .bober/runs/<runId>/state.json synchronously before returning; state.json contains { runId, task, status, startedAt, progress, projectRoot } at minimum.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-1-3",
       "description": "Every status/progress/result/error transition in the pipeline-promise callbacks atomically rewrites state.json via temp-file + rename (mirrors src/incident/timeline.ts:86-92 atomicWriteJson pattern).",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-1-4",
       "description": "load(projectRoot) reads every .bober/runs/*/state.json on startup, populates the in-memory map, and reconciles any entry with status='running' to status='failed' with error='orchestrator crashed before completion'.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-1-5",
       "description": "Backward-compat shims: isRunning() returns true when ANY run has status='running'; getStatus() returns the most-recently-started run; both preserve the existing bober_run/bober_status behavior with no schema changes.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-1-6",
       "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass; the existing 1116 tests remain green.",
       "verificationMethod": "build",
-      "required": true
+      "required": true,
+      "passed": true
     }
   ],
   "nonGoals": [
@@ -80,5 +88,6 @@
     "src/mcp/server.ts",
     "src/mcp/run-manager.test.ts"
   ],
-  "estimatedDuration": "medium"
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-25T16:41:00Z"
 }

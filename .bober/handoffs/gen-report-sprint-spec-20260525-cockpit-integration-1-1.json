@@ -1,0 +1,31 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-1",
+  "status": "complete",
+  "iteration": 1,
+  "timestamp": "2026-05-25T15:45:00Z",
+  "commits": ["8fb8f79 - bober(sprint-1): multi-run RunManager with disk persistence and crash recovery"],
+  "criteriaResults": [
+    {"criterionId": "sc-1-1", "met": true, "evidence": "RunManager class has getRun, listActiveRuns, abortRun, load + preserved isRunning/getStatus shims"},
+    {"criterionId": "sc-1-2", "met": true, "evidence": "startRun async, awaits writeRunState; state.json exists immediately on return; fields verified"},
+    {"criterionId": "sc-1-3", "met": true, "evidence": "writeRunState uses temp+rename (mirrors src/incident/timeline.ts:86-92). Random hex suffix prevents same-ms collisions. 100-concurrent stress test passes."},
+    {"criterionId": "sc-1-4", "met": true, "evidence": "load(projectRoot) flips orphaned 'running' to 'failed' with reason 'orchestrator crashed before completion'. 5 tests cover the path."},
+    {"criterionId": "sc-1-5", "met": true, "evidence": "isRunning walks Map; getStatus returns max-startedAt. Concurrent startRun no longer throws. Tool schemas unchanged."},
+    {"criterionId": "sc-1-6", "met": true, "evidence": "typecheck/lint/build/test all exit 0. 83 files, 1142 tests pass (was 1116, +26 new). No regressions."}
+  ],
+  "filesChanged": [
+    {"path": "src/state/run-state.ts", "action": "created", "description": "writeRunState (temp+rename), readRunState, listRunStateFiles"},
+    {"path": "src/state/run-state.test.ts", "action": "created", "description": "10 unit tests for disk-persistence helpers"},
+    {"path": "src/state/index.ts", "action": "modified", "description": "Export run-state helpers"},
+    {"path": "src/mcp/run-manager.ts", "action": "modified", "description": "Singleton activeRun → Map<runId,RunState>; new methods + back-compat shims"},
+    {"path": "src/mcp/run-manager.test.ts", "action": "modified", "description": "33 tests including sc-1-1..sc-1-5; mkdtemp fixtures"},
+    {"path": "src/mcp/server.ts", "action": "modified", "description": "Call runManager.load(projectRoot) on startup"},
+    {"path": "src/mcp/tools/run.ts", "action": "modified", "description": "await startRun (now async)"},
+    {"path": "src/mcp/tools/anchor.ts", "action": "modified", "description": "await startRun"},
+    {"path": "src/mcp/tools/brownfield.ts", "action": "modified", "description": "await startRun"},
+    {"path": "src/mcp/tools/solidity.ts", "action": "modified", "description": "await startRun"},
+    {"path": "src/mcp/tools/react.ts", "action": "modified", "description": "await startRun"}
+  ],
+  "testsAdded": ["src/state/run-state.test.ts", "src/mcp/run-manager.test.ts (33 total)"],
+  "blockers": [],
+  "notes": "Atomicity: temp file with pid+timestamp+4-byte hex suffix, POSIX rename. Back-compat shims walk the Map; getStatus picks lexicographically-largest ISO startedAt. 5 tool callers (run/anchor/brownfield/solidity/react) needed `await` added since startRun became async. Tool input/output schemas unchanged."
+}

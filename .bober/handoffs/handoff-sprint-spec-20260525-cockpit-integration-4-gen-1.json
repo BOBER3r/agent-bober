@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260525-cockpit-integration-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260525-cockpit-integration-4",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T17:25:12Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober \u2014 autonomous SWE pipeline harness. Sprint 4 of the Cockpit Integration spec adds the worktree-aware execution path so the cockpit can launch N parallel runs on the same project without conflicts.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-1",
+        "title": "Multi-run RunManager with disk persistence and crash recovery",
+        "summary": "RunManager keyed-map, runs persisted to .bober/runs/<runId>/state.json with atomic writes, crash recovery via load()"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-2",
+        "title": "Run-management MCP tools",
+        "summary": "bober_list_active_runs, bober_get_run_status(runId), bober_abort_run(runId, reason)"
+      },
+      {
+        "contractId": "sprint-spec-20260525-cockpit-integration-3",
+        "title": "Event-stream MCP tool",
+        "summary": "bober_subscribe_events with server-initiated notifications and bounded queues"
+      }
+    ],
+    "currentBranch": "bober/cockpit-integration",
+    "relevantFiles": [
+      "src/utils/git.ts",
+      "src/mcp/run-manager.ts",
+      "src/mcp/tools/run.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/config/schema.ts",
+      "src/cli/commands/incident.ts",
+      "src/state/run-state.ts"
+    ]
+  },
+  "evaluatorFeedback": null
+}

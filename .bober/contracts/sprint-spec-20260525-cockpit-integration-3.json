@@ -4,51 +4,62 @@
   "sprintNumber": 3,
   "title": "Event stream MCP tool with server-initiated notifications and backpressure",
   "description": "Add bober_subscribe_events({ runId, since? }) and bober_unsubscribe_events({ subscriptionId }) MCP tools. Subscriptions tail .bober/history.jsonl and .bober/telemetry/<date>.jsonl; new lines whose runId matches the subscription are emitted as MCP server-initiated `bober/events` notifications. Per-subscription bounded queue (default 1000) drops oldest and emits a single `bober/events.dropped` notification when the bound is exceeded. Subscriptions are in-process; on bober restart the cockpit re-subscribes.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260525-cockpit-integration-1"],
-  "features": ["feat-3"],
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260525-cockpit-integration-1"
+  ],
+  "features": [
+    "feat-3"
+  ],
   "successCriteria": [
     {
       "criterionId": "sc-3-1",
       "description": "src/mcp/event-stream.ts exports an EventStreamManager class with subscribe(server, runId, since?) returning subscriptionId, and unsubscribe(subscriptionId).",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-3-2",
       "description": "EventStreamManager uses fs.watch (or chokidar if already a dependency) to detect appends to .bober/history.jsonl and .bober/telemetry/<date>.jsonl. New lines are parsed; lines whose runId field matches the subscription's runId trigger a server.notification({ method: 'bober/events', params: { subscriptionId, event } }).",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-3-3",
       "description": "Per-subscription bounded queue (default 1000, configurable via pipeline.eventQueueBound) drops oldest on overflow and emits exactly one `bober/events.dropped` notification with `{ subscriptionId, dropped: N }` per overflow window.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-3-4",
       "description": "src/mcp/tools/subscribe-events.ts and src/mcp/tools/unsubscribe-events.ts register bober_subscribe_events and bober_unsubscribe_events; both follow the standard registerTool pattern; tools appear in tools/list.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-3-5",
       "description": "When a subscription is unsubscribed, the file-watch handles are released (no leaked watchers); verified by a test that subscribes then unsubscribes 50 times and asserts no resource leak.",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-3-6",
       "description": "Lines in history.jsonl/telemetry without a runId field are silently skipped (no broadcast — runId-targeted only).",
       "verificationMethod": "unit-test",
-      "required": true
+      "required": true,
+      "passed": true
     },
     {
       "criterionId": "sc-3-7",
       "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass.",
       "verificationMethod": "build",
-      "required": true
+      "required": true,
+      "passed": true
     }
   ],
   "nonGoals": [
@@ -91,5 +102,6 @@
     "src/config/schema.ts",
     "CHANGELOG.md"
   ],
-  "estimatedDuration": "large"
+  "estimatedDuration": "large",
+  "completedAt": "2026-05-25T17:35:00Z"
 }

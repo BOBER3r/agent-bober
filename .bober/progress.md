@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T04:25:00Z
+Last updated: 2026-05-25T18:33:19Z
 
 ---
 
@@ -157,17 +157,24 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Spec: spec-20260525-cockpit-integration
 - Created: 2026-05-25
 - Sprints: 6
-- Status: planned
+- Status: completed (6/6 sprints, completedAt 2026-05-25T18:33:19Z)
 - Mode: brownfield
 - Ambiguity score: 4/10
+- Branch: bober/cockpit-integration
+- Test count: 1116 → 1330 (+214); tool count: 17 → 37 (+20)
 
 ### Sprint Breakdown
-1. [proposed] Multi-run RunManager with disk persistence and crash recovery — refactors src/mcp/run-manager.ts from singleton to keyed map; persists each run to .bober/runs/<runId>/state.json with atomic writes; load() reconciles orphaned runs after restart. Preserves bober_run/bober_status back-compat.
-2. [proposed] Multi-run MCP tools: list, get, and abort by runId — adds bober_list_active_runs, bober_get_run_status(runId), bober_abort_run(runId, reason). Replaces singleton-status assumption with explicit runId addressing.
-3. [proposed] Event stream MCP tool with server-initiated notifications and backpressure — bober_subscribe_events tails history.jsonl + telemetry filtered by runId; emits MCP `bober/events` notifications with bounded per-subscription queues (drops oldest, sends `bober/events.dropped` on overflow).
-4. [proposed] Worktree adapter: bober worktree run + runInWorktree helper + MCP variant — creates git worktrees at .bober/worktrees/<runId>; cleanup-on-success configurable, retain-on-failure for debugging; refuses dirty trees by default.
-5. [proposed] Careful-flow MCP wrappers + project/spec discovery MCP — bober_list_pending_approvals / approve_checkpoint / reject_checkpoint thin wrappers; bober_list_projects / list_specs / get_project_state for cockpit sidebar.
-6. [proposed] Vision-era MCP wrappers + end-to-end fake-cockpit-client integration test — eight new MCP tools (incident_*, rollback_start, postmortem_get, playbook_*) plus tests/e2e/cockpit-integration.test.ts spawning a real MCP server subprocess and exercising every new tool. Correctness gate for the spec.
+1. [completed] Multi-run RunManager — keyed map + .bober/runs/<runId>/state.json with atomic writes + crash recovery via load(). Commit 8fb8f79.
+2. [completed] Run-management MCP tools — bober_list_active_runs, bober_get_run_status, bober_abort_run. Commit caf6c76.
+3. [completed] Event-stream MCP tool — bober_subscribe_events with bounded queues + bober/events.dropped on overflow. Commits b573e22, 014cc06.
+4. [completed] Worktree adapter — runInWorktree + bober worktree run CLI + bober_run_in_worktree MCP. Git CLI shell-out (no new lib), RunState +worktreePath/branch. Commit 48c2953. Passed iter 1 (8/8).
+5. [completed] Careful-flow + discovery MCP — list_pending_approvals, approve_checkpoint, reject_checkpoint, list_projects, list_specs, get_project_state. Shared listPendingApprovals + readRunStatesFromDisk helpers. Commit f3463a2. Passed iter 1 (8/8).
+6. [completed] Vision-era MCP wrappers + e2e capstone — eight new tools (incident_start/status/list/abort, rollback_start, postmortem_get, playbook_list/search) as thin adapters over src/incident/*. tests/e2e/cockpit-integration.test.ts spawns real MCP subprocess via StdioClientTransport, exercises every Sprint 1-6 tool with toMatchObject strong assertions, deterministic ~4s via BOBER_TEST_DETERMINISTIC guard in src/providers/factory.ts. Commits 57f3f4f, 714d47f. Passed iter 1 (12/12).
+
+### Pipeline Statistics
+- Total iterations used: 3 / 40 (sprints 4-6 each passed iter 1)
+- Subagents spawned this run: 9 (3 curator + 3 generator + 3 evaluator)
+- Sprints completed this run: 3 (sprints 4-6); spec total 6/6
 
 ### Out of Scope
 - Cockpit UI/backend itself (separate repo, separate team)

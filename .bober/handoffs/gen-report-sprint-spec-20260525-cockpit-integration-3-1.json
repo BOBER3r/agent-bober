@@ -1,0 +1,48 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-3",
+  "status": "complete",
+  "iteration": 1,
+  "timestamp": "2026-05-25T17:30:00Z",
+  "commits": [
+    "b573e22 - bober(sprint-3): event-stream MCP tool with server-initiated notifications and backpressure",
+    "014cc06 - bober(sprint-3): fix smoke test timing — pre-create history.jsonl and extend notification wait"
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "met": true, "evidence": "src/mcp/event-stream.ts: EventStreamManager.subscribe → {subscriptionId,status,startedAt}; unsubscribe → {ok}. 8 unit tests in event-stream.test.ts pass."},
+    {"criterionId": "sc-3-2", "met": true, "evidence": "fs.watch on history.jsonl + telemetry/<date>.jsonl. Notification via server.notification({method:'bober/events',params:{subscriptionId,event}}) — Protocol base class. Integration smoke test (InMemoryTransport linked pair) verifies notification arrives within 2s."},
+    {"criterionId": "sc-3-3", "met": true, "evidence": "Per-subscription bounded queue (default 1000 via pipeline.eventQueueBound). deliver() drops OLDEST via queue.splice(0, overflow); flush deferred to microtask. Scenario 2: 2000 events → exactly 1000 delivered + 1 bober/events.dropped with dropped=1000."},
+    {"criterionId": "sc-3-4", "met": true, "evidence": "subscribe-events.ts + unsubscribe-events.ts registered via index.ts; tools.test.ts asserts 22; external-server-graph.test.ts 22/28."},
+    {"criterionId": "sc-3-5", "met": true, "evidence": "FileWatch refcounting + releaseWatch closes watcher at refCount=0. Scenario 6: 50 subscribe/unsubscribe cycles → fileWatches.size === 0."},
+    {"criterionId": "sc-3-6", "met": true, "evidence": "extractRunId checks rec.runId and rec.details.runId; lines lacking both are skipped. Scenarios 3+4 verify."},
+    {"criterionId": "sc-3-7", "met": true, "evidence": "typecheck 0, lint 0, build 0, test: 90 files, 1189 passed, 4 skipped."}
+  ],
+  "filesChanged": [
+    {"path": "src/mcp/event-stream.ts", "action": "created", "description": "EventStreamManager + initEventStream/getEventStream late-bound singleton; fs.watch with refcount; drop-oldest bounded queue; date-rollover poller"},
+    {"path": "src/mcp/event-stream.test.ts", "action": "created", "description": "8 unit scenarios"},
+    {"path": "src/mcp/tools/subscribe-events.ts", "action": "created", "description": "bober_subscribe_events tool"},
+    {"path": "src/mcp/tools/subscribe-events.test.ts", "action": "created", "description": "5 tests"},
+    {"path": "src/mcp/tools/unsubscribe-events.ts", "action": "created", "description": "bober_unsubscribe_events tool"},
+    {"path": "src/mcp/tools/unsubscribe-events.test.ts", "action": "created", "description": "5 tests"},
+    {"path": "tests/mcp/event-stream-smoke.test.ts", "action": "created", "description": "InMemoryTransport integration smoke"},
+    {"path": "src/config/schema.ts", "action": "modified", "description": "pipeline.eventQueueBound (z.int.min(1).default(1000))"},
+    {"path": "src/config/defaults.ts", "action": "modified", "description": "eventQueueBound:1000 in 3 PipelineSection literals"},
+    {"path": "src/config/loader.ts", "action": "modified", "description": "eventQueueBound:1000 fallback"},
+    {"path": "src/mcp/server.ts", "action": "modified", "description": "initEventStream after server.connect + shutdown hook"},
+    {"path": "src/mcp/tools/index.ts", "action": "modified", "description": "Register 2 new tools, docblock 20→22"},
+    {"path": "src/mcp/tools/tools.test.ts", "action": "modified", "description": "Count 20→22"},
+    {"path": "tests/mcp/external-server-graph.test.ts", "action": "modified", "description": "20→22, 26→28"},
+    {"path": "src/mcp/tools/list-active-runs.test.ts", "action": "modified", "description": "eventQueueBound:1000 fixture"},
+    {"path": "src/mcp/tools/abort-run.test.ts", "action": "modified", "description": "eventQueueBound:1000 fixture"},
+    {"path": "src/mcp/tools/get-run-status.test.ts", "action": "modified", "description": "eventQueueBound:1000 fixture"},
+    {"path": "src/discovery/synthesizer.test.ts", "action": "modified", "description": "eventQueueBound:1000 fixture"},
+    {"path": "CHANGELOG.md", "action": "modified", "description": "[Unreleased]: subscribe/unsubscribe events + EventStreamManager + pipeline.eventQueueBound"}
+  ],
+  "testsAdded": [
+    "src/mcp/event-stream.test.ts",
+    "src/mcp/tools/subscribe-events.test.ts",
+    "src/mcp/tools/unsubscribe-events.test.ts",
+    "tests/mcp/event-stream-smoke.test.ts"
+  ],
+  "blockers": [],
+  "notes": "Notification method 'bober/events' + overflow notification 'bober/events.dropped' via server.notification (Protocol base). Backpressure proof: microtask-deferred flush so synchronous deliver() batch completes before flush starts — without defer, scenario 2 would yield 1001/999, with defer it yields exactly 1000/1000. Type-only runId extraction (no writer changes); existing legacy events without runId are skipped. Singleton ordering: initEventStream AFTER server.connect; getEventStream lazy in handlers. Pre-creating history.jsonl in tests avoids parent-dir watch race window."
+}

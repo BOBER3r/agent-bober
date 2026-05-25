@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260525-cockpit-integration-2-1",
+  "contractId": "sprint-spec-20260525-cockpit-integration-2",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T17:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit (exit 0)", "details": "Zero TS errors."},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ (exit 0)", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc (exit 0)", "details": "Clean."},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "86 files, 1169 passed | 4 skipped", "details": "+27 vs 1142 baseline. list-active-runs 9, get-run-status 7, abort-run 10."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "description": "bober_list_active_runs with optional status filter", "required": true, "result": "pass", "evidence": "list-active-runs.ts:12-28, enum ['running','completed','failed','aborted'], additionalProperties:false. 9 tests.", "feedback": ""},
+    {"criterionId": "sc-2-2", "description": "bober_get_run_status with soft-error for not-found", "required": true, "result": "pass", "evidence": "get-run-status.ts:14-46. McpError for missing/empty (35); soft {error:'Run not found'} for unknown (43). 7 tests.", "feedback": ""},
+    {"criterionId": "sc-2-3", "description": "bober_abort_run with idempotent soft-error", "required": true, "result": "pass", "evidence": "abort-run.ts:21-72. Soft {error:'Run is not active'} for terminal (59-61). abortRun persists status='aborted'+abortedAt+abortReason (run-manager.ts:104-113). Idempotency test 181-200.", "feedback": ""},
+    {"criterionId": "sc-2-4", "description": "All 3 tools registered via index.ts", "required": true, "result": "pass", "evidence": "index.ts:23-25 imports, 74-76 register calls, docblock 31-52 lists 20. tools.test.ts:8 asserts 20; external-server-graph.test.ts:34,38 confirms.", "feedback": ""},
+    {"criterionId": "sc-2-5", "description": "CHANGELOG [Unreleased]", "required": false, "result": "pass", "evidence": "CHANGELOG.md:8-15 [Unreleased] under ### Added — all 3 tools + RunState widening + deferred-SIGTERM caveat.", "feedback": ""},
+    {"criterionId": "sc-2-6", "description": "All strategies pass", "required": true, "result": "pass", "evidence": "typecheck/lint/build/test all 0. 1169 pass, 4 skipped.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 criteria pass (5 required, 1 optional). Three new MCP tools implemented per pattern (zod inputSchema + JSON-stringify + soft-error for not-found, McpError for malformed input). RunState type widened correctly with 'aborted' status + abortedAt/abortReason. 1169 tests pass, +27 from baseline, zero regressions."
+}

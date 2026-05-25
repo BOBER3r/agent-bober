@@ -3,10 +3,14 @@
   "specId": "spec-20260525-cockpit-integration",
   "sprintNumber": 4,
   "title": "Worktree adapter: bober worktree run + runInWorktree helper + MCP variant",
-  "description": "Add the worktree-aware execution path that lets the cockpit launch multiple parallel runs on the same project without conflicts. Ships three pieces: (a) src/orchestrator/worktree.ts with runInWorktree(task, projectRoot, config, opts) — creates a git worktree, runs the pipeline inside it, cleans up per policy; (b) src/cli/commands/worktree.ts adding `bober worktree run <task> [--allow-dirty] [--keep-on-success]` CLI subcommand; (c) src/mcp/tools/run-in-worktree.ts registering bober_run_in_worktree({ task, allowDirty?, keepOnSuccess? }) MCP tool. RunState (Sprint 1) gains worktreePath and branch fields so bober_get_run_status surfaces them.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260525-cockpit-integration-1"],
-  "features": ["feat-4"],
+  "description": "Add the worktree-aware execution path that lets the cockpit launch multiple parallel runs on the same project without conflicts. Ships three pieces: (a) src/orchestrator/worktree.ts with runInWorktree(task, projectRoot, config, opts) \u2014 creates a git worktree, runs the pipeline inside it, cleans up per policy; (b) src/cli/commands/worktree.ts adding `bober worktree run <task> [--allow-dirty] [--keep-on-success]` CLI subcommand; (c) src/mcp/tools/run-in-worktree.ts registering bober_run_in_worktree({ task, allowDirty?, keepOnSuccess? }) MCP tool. RunState (Sprint 1) gains worktreePath and branch fields so bober_get_run_status surfaces them.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260525-cockpit-integration-1"
+  ],
+  "features": [
+    "feat-4"
+  ],
   "successCriteria": [
     {
       "criterionId": "sc-4-1",
@@ -58,10 +62,10 @@
     }
   ],
   "nonGoals": [
-    "Do not introduce a new git library (e.g. isomorphic-git, simple-git) — shell out via the existing src/utils/git.ts helpers; extend git.ts only as needed.",
-    "Do not auto-merge the worktree branch back into the base branch on success — leave that decision to the cockpit / user.",
-    "Do not implement worktree pruning or garbage collection of orphaned worktrees in this sprint — document it as a follow-up.",
-    "Do not change the existing bober_run tool to run in a worktree by default — bober_run_in_worktree is a new opt-in tool.",
+    "Do not introduce a new git library (e.g. isomorphic-git, simple-git) \u2014 shell out via the existing src/utils/git.ts helpers; extend git.ts only as needed.",
+    "Do not auto-merge the worktree branch back into the base branch on success \u2014 leave that decision to the cockpit / user.",
+    "Do not implement worktree pruning or garbage collection of orphaned worktrees in this sprint \u2014 document it as a follow-up.",
+    "Do not change the existing bober_run tool to run in a worktree by default \u2014 bober_run_in_worktree is a new opt-in tool.",
     "Do not introduce new npm dependencies."
   ],
   "stopConditions": [
@@ -74,7 +78,7 @@
     "git CLI is available on the host; this is a soft prereq of agent-bober already (existing src/utils/git.ts assumes it). No new prereq introduced.",
     "Worktree slug derivation: take the first 60 chars of the task description, lowercase, replace non-alphanumeric with '-', strip leading/trailing dashes; matches the existing generator.branchPattern '{feature-name}' substitution at src/orchestrator/pipeline.ts (review existing branch-name derivation and reuse).",
     "Detached-HEAD baseline: if the current HEAD is detached, fall back to 'main' (or 'master' if main is absent). Document the fallback in stderr.",
-    "Worktrees nested inside .bober/worktrees/ inside the project root are git-safe because git ignores .bober/ by default (verify via existing .gitignore). If the project does NOT gitignore .bober/, the worktree creation still works but may surprise users — document in stderr."
+    "Worktrees nested inside .bober/worktrees/ inside the project root are git-safe because git ignores .bober/ by default (verify via existing .gitignore). If the project does NOT gitignore .bober/, the worktree creation still works but may surprise users \u2014 document in stderr."
   ],
   "outOfScope": [
     "Garbage collection of orphaned worktrees from prior failed runs (documented follow-up).",
@@ -83,8 +87,8 @@
     "Worktree creation on remote/SSH targets."
   ],
   "ambiguityScore": 4,
-  "generatorNotes": "PATTERN TO FOLLOW: src/orchestrator/pipeline.ts:107-122 buildProjectContext shows the existing src/utils/git.ts import surface (getCurrentBranch). Extend src/utils/git.ts with addWorktree(path, branch, baseBranch?), removeWorktree(path, force?), isClean() helpers — each shells out via child_process.exec to git CLI. Use Promise<{ stdout, stderr }> conventions. PATTERN: src/cli/commands/incident.ts and src/cli/commands/playbook.ts show the commander subcommand registration pattern (registerIncidentCommand etc.). For bober_run_in_worktree MCP tool: copy src/mcp/tools/run.ts (registerRunTool) as the template — same fire-and-forget pattern, same McpError vs JSON-soft-error convention. The runId for the worktree path must be generated BEFORE the worktree is created so the path is deterministic; pass that runId into RunManager.startRun via a new opts parameter (extend startRun's signature to accept opts: { runId?, worktreePath?, branch? }; preserve back-compat by treating those as optional). On pipeline completion callback in RunManager, run the cleanup logic (rm worktree if success && cleanup enabled). For schema: add pipeline.worktreeRoot and pipeline.cleanupWorktreeOnSuccess to src/config/schema.ts as optional fields (default '.bober/worktrees' and true respectively). For the dirty-tree check: `git status --porcelain` and assert empty output; if non-empty, list the dirty files in the error message.",
-  "evaluatorNotes": "Verify runInWorktree actually shells out to git CLI (not a stub). Verify the worktree is created at the expected path, the branch is created with the expected name, and pipeline.runPipeline is invoked with the worktree path as projectRoot (not the original projectRoot — the pipeline must operate inside the worktree). Verify cleanup-on-success uses `git worktree remove` (not rm -rf, which would leave dangling git metadata). Verify dirty-tree rejection works by writing a dirty file in a test fixture repo. Verify the worktreePath and branch fields appear in bober_get_run_status output. Verify pipeline.runPipeline running INSIDE the worktree means commits land on the worktree's branch, not the parent's branch (this is a critical correctness check — exercise it with a small fixture repo). Negative test: starting two worktree runs concurrently both succeed without conflict (each gets its own subdirectory).",
+  "generatorNotes": "PATTERN TO FOLLOW: src/orchestrator/pipeline.ts:107-122 buildProjectContext shows the existing src/utils/git.ts import surface (getCurrentBranch). Extend src/utils/git.ts with addWorktree(path, branch, baseBranch?), removeWorktree(path, force?), isClean() helpers \u2014 each shells out via child_process.exec to git CLI. Use Promise<{ stdout, stderr }> conventions. PATTERN: src/cli/commands/incident.ts and src/cli/commands/playbook.ts show the commander subcommand registration pattern (registerIncidentCommand etc.). For bober_run_in_worktree MCP tool: copy src/mcp/tools/run.ts (registerRunTool) as the template \u2014 same fire-and-forget pattern, same McpError vs JSON-soft-error convention. The runId for the worktree path must be generated BEFORE the worktree is created so the path is deterministic; pass that runId into RunManager.startRun via a new opts parameter (extend startRun's signature to accept opts: { runId?, worktreePath?, branch? }; preserve back-compat by treating those as optional). On pipeline completion callback in RunManager, run the cleanup logic (rm worktree if success && cleanup enabled). For schema: add pipeline.worktreeRoot and pipeline.cleanupWorktreeOnSuccess to src/config/schema.ts as optional fields (default '.bober/worktrees' and true respectively). For the dirty-tree check: `git status --porcelain` and assert empty output; if non-empty, list the dirty files in the error message.",
+  "evaluatorNotes": "Verify runInWorktree actually shells out to git CLI (not a stub). Verify the worktree is created at the expected path, the branch is created with the expected name, and pipeline.runPipeline is invoked with the worktree path as projectRoot (not the original projectRoot \u2014 the pipeline must operate inside the worktree). Verify cleanup-on-success uses `git worktree remove` (not rm -rf, which would leave dangling git metadata). Verify dirty-tree rejection works by writing a dirty file in a test fixture repo. Verify the worktreePath and branch fields appear in bober_get_run_status output. Verify pipeline.runPipeline running INSIDE the worktree means commits land on the worktree's branch, not the parent's branch (this is a critical correctness check \u2014 exercise it with a small fixture repo). Negative test: starting two worktree runs concurrently both succeed without conflict (each gets its own subdirectory).",
   "estimatedFiles": [
     "src/orchestrator/worktree.ts",
     "src/orchestrator/worktree.test.ts",
@@ -99,5 +103,7 @@
     "src/mcp/run-manager.ts",
     "CHANGELOG.md"
   ],
-  "estimatedDuration": "large"
+  "estimatedDuration": "large",
+  "startedAt": "2026-05-25T17:16:48Z",
+  "completedAt": "2026-05-25T17:39:44Z"
 }
