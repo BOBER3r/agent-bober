@@ -24,6 +24,7 @@ import { registerImpactCommand } from "./commands/impact.js";
 import { registerApproveCommand } from "./commands/approve.js";
 import { registerRejectCommand } from "./commands/reject.js";
 import { registerListApprovalsCommand } from "./commands/list-approvals.js";
+import { registerAuditCommand } from "./commands/audit-show.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -226,6 +227,9 @@ async function main(): Promise<void> {
 
   // ── list-approvals ─────────────────────────────────────────────
   registerListApprovalsCommand(program);
+
+  // ── audit ───────────────────────────────────────────────────────
+  registerAuditCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
