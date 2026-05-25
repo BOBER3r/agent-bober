@@ -105,6 +105,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       checkpointOverrides: {},
       approvalTimeoutMs: 86_400_000,
       prPollMs: 30_000,
+      allowAutopilotRiskyActions: false,
     },
     commands: {
       install: "npm install",
@@ -200,6 +201,7 @@ const greenfieldBase: Partial<BoberConfig> = {
     checkpointOverrides: {},
     approvalTimeoutMs: 86_400_000,
     prPollMs: 30_000,
+    allowAutopilotRiskyActions: false,
   },
   commands: {},
 };
@@ -236,6 +238,7 @@ const brownfieldBase: Partial<BoberConfig> = {
     checkpointOverrides: {},
     approvalTimeoutMs: 86_400_000,
     prPollMs: 30_000,
+    allowAutopilotRiskyActions: false,
   },
   commands: {},
 };

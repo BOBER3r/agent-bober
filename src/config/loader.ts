@@ -222,6 +222,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         checkpointOverrides: {},
         approvalTimeoutMs: 86_400_000,
         prPollMs: 30_000,
+        allowAutopilotRiskyActions: false,
       },
       commands: defaults.commands ?? {},
     },

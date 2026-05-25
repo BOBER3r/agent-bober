@@ -162,6 +162,14 @@ export const PipelineSectionSchema = z.object({
   approvalTimeoutMs: z.number().int().min(1000).default(86_400_000),
   /** How often (ms) the PR mechanism polls for PR merge/close events. Default: 30000 (30 seconds). */
   prPollMs: z.number().int().min(10_000).default(30_000),
+  /** Sprint 20: escape hatch for fully-automated environments (CI, batch jobs)
+   *  where no human is available. When false (default), risky actions trigger
+   *  a non-noop mechanism floor (default 'disk') even in mode='autopilot' +
+   *  checkpointMechanism='noop'. When true, risky actions are auto-approved
+   *  with a STERN warning logged and the ChangeEntry STILL recorded with the
+   *  required inverse. This is "skip the interactive approval" — NOT "skip
+   *  the audit trail." Documented as a footgun in skills/bober.deploy/SKILL.md. */
+  allowAutopilotRiskyActions: z.boolean().default(false),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -344,6 +352,7 @@ export function createDefaultConfig(
       checkpointOverrides: {},
       approvalTimeoutMs: 86_400_000,
       prPollMs: 30_000,
+      allowAutopilotRiskyActions: false,
     },
     commands: {},
   };
