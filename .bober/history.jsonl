@@ -80,3 +80,7 @@
 {"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-8","iteration":1,"timestamp":"2026-05-25T04:00:00Z"}
 {"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-8","iteration":1,"result":"pass","timestamp":"2026-05-25T04:03:00Z"}
 {"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-8","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T04:03:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-9","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T04:15:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-9","iteration":1,"timestamp":"2026-05-25T04:15:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-9","iteration":1,"result":"pass","timestamp":"2026-05-25T04:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-9","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T04:25:00Z"}

@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T04:03:00Z
+Last updated: 2026-05-25T04:25:00Z
 
 ---
 
@@ -110,7 +110,7 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 ### Tier 2 — Careful-flow multi-mode (sprints 7-14)
 7. [completed] Careful-flow plumbing — Passed iter 1 (6/6 criteria, 593 tests +4, commit e00d064). src/orchestrator/checkpoints/ module (types/registry/sites/noop/index) wired into pipeline.ts at 9 documented call sites (+10/-0 additive diff). CheckpointOutcome 3-variant discriminated union supports all 3 future mechanisms (CLI/disk/PR). noop is sole registered mechanism; behavior unchanged (canary code-reviewer-agent.test.ts 5/5 + scanner.test.ts 52/52 still green). Test colocated per Sprint 5 regression precedent.
 8. [completed] CLI blocking checkpoint mechanism — Passed iter 1 (7/7 criteria, 600 tests +7, commit 9d82c04). src/orchestrator/checkpoints/mechanisms/cli.ts with stderr-only prompts, readline stdin, $EDITOR (nano fallback) + try/finally temp cleanup. Non-TTY → noop fallback via constructor-injected mechanism (test spy-verifies PATH not just outcome equality). Registered as 'cli' at module load. Test COLOCATED at src/orchestrator/checkpoints/mechanisms/cli.test.ts (contract expectedChanges path was wrong; overridden per Sprint 5 scanner precedent). pipeline.ts unchanged — noop stays default until Sprint 14.
-9. [proposed] Disk-marker mechanism + bober approve CLI — .bober/approvals/<id>.pending.json + bober approve/reject/list-approvals subcommands; production-friendly async approval.
+9. [completed] Disk-marker mechanism + bober approve CLI — Passed iter 1 (9/9 criteria, 633 tests +33, commit 03f1a0c). src/orchestrator/checkpoints/mechanisms/disk.ts with constructor-injected pollMs/timeoutMs/clock; pending file holds artifact SUMMARY (not raw, meets 100ms budget for 5MB artifact); timer cleared in finally (no leak across 10 parallel checkpoints); 24h default timeout capped at 7d; stale-marker cleanup at request() start. CLI commands approve/reject/list-approvals colocated under src/cli/commands/, use findProjectRoot for cwd-independence, pendingExists guard with stderr+exitCode=1, --json flag on list. src/state/approval-state.ts mirrors review-state.ts. pipeline.ts unchanged.
 10. [proposed] GitHub PR-native mechanism — Draft PR per run, comment per checkpoint, label/comment-driven approval; gh CLI integration with disk-mechanism fallback.
 11. [proposed] Per-artifact-type renderers — Structured summaries per artifact type (research/plan/contract/diff/eval/review/sprint/pipeline).
 12. [proposed] Feedback propagation back to agents — Reject/edit feedback routed to responsible agent (planner re-plans, generator re-implements); iteration cap with abort.

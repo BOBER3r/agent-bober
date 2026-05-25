@@ -1,0 +1,32 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-9",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "03f1a0c",
+  "criteriaResults": [
+    {"criterionId": "s9-c1", "met": true, "evidence": "disk.ts writes .bober/approvals/<id>.pending.json (artifact summary only), polls via recursive setTimeout (default 2000ms, configurable)"},
+    {"criterionId": "s9-c2", "met": true, "evidence": "tick() reads marker → unlinks both pending + resolved files → returns; tests 'deletes pending after approval/rejection' pass"},
+    {"criterionId": "s9-c3", "met": true, "evidence": "Math.min(timeoutMs ?? 24h, 7d cap); timeout writes .timeout.json + returns {approved:false,feedback:'TIMEOUT'}; tests pass"},
+    {"criterionId": "s9-c4", "met": true, "evidence": "approve.ts + reject.ts use findProjectRoot; pendingExists guards nonexistent id → stderr + exit code 1; --edit option present"},
+    {"criterionId": "s9-c5", "met": true, "evidence": "list-approvals.ts table output (id padEnd 48 / age padEnd 10 / prompt) + --json flag for scripting"},
+    {"criterionId": "s9-c6", "met": true, "evidence": "5MB artifact perf test passes in <100ms; summarizeArtifact picks only {type,path,summary,lines} — drops fullContent"},
+    {"criterionId": "s9-c7", "met": true, "evidence": "33 new tests total: disk.test.ts (12: approve/reject/edit/timeout x3/leak/perf/race), approve.test.ts (6), reject.test.ts (5), list-approvals.test.ts (10)"},
+    {"criterionId": "s9-c8", "met": true, "evidence": "registry.ts L41 registerCheckpointMechanism('disk', new DiskCheckpointMechanism(...)) at module load"},
+    {"criterionId": "s9-c9", "met": true, "evidence": "typecheck/lint/build exit 0; 51 files / 633 pass / 4 skip / 0 fail (+33 vs Sprint 8 baseline 600); colocation 29:22; pipeline.ts zero diff"}
+  ],
+  "filesChanged": [
+    {"path": "src/state/approval-state.ts", "action": "created"},
+    {"path": "src/state/index.ts", "action": "modified", "description": "+approvals SUBDIR + exports"},
+    {"path": "src/orchestrator/checkpoints/mechanisms/disk.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/mechanisms/disk.test.ts", "action": "created", "description": "COLOCATED"},
+    {"path": "src/orchestrator/checkpoints/registry.ts", "action": "modified", "description": "+disk registration"},
+    {"path": "src/cli/commands/approve.ts", "action": "created"},
+    {"path": "src/cli/commands/approve.test.ts", "action": "created", "description": "COLOCATED"},
+    {"path": "src/cli/commands/reject.ts", "action": "created"},
+    {"path": "src/cli/commands/reject.test.ts", "action": "created", "description": "COLOCATED"},
+    {"path": "src/cli/commands/list-approvals.ts", "action": "created"},
+    {"path": "src/cli/commands/list-approvals.test.ts", "action": "created", "description": "COLOCATED"},
+    {"path": "src/cli/index.ts", "action": "modified", "description": "Wire 3 new commands"}
+  ],
+  "notes": "All 4 test files colocated (find tests/ empty). Pipeline.ts unchanged. Stale-marker cleanup at request() start prevents stale re-resolution. process.cwd() used at module-load time for registry registration (consistent with cli pattern)."
+}

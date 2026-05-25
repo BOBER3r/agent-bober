@@ -1,0 +1,31 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-9-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-9",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T04:15:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 9 ships the disk-marker checkpoint mechanism (production-friendly async approval via .bober/approvals/) + bober approve/reject/list-approvals CLI subcommands. Clones Sprint 8 patterns. Must NOT change pipeline default behavior (noop stays default until Sprint 14).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-7", "title": "Checkpoint abstraction" },
+      { "contractId": "sprint-spec-20260524-bober-vision-8", "title": "CLI blocking mechanism — pattern to clone" }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/types.ts",
+      "src/orchestrator/checkpoints/registry.ts",
+      "src/orchestrator/checkpoints/mechanisms/cli.ts",
+      "src/orchestrator/checkpoints/mechanisms/cli.test.ts",
+      "src/cli/index.ts",
+      "src/cli/commands/impact.ts",
+      "src/cli/commands/impact.test.ts",
+      "src/state/index.ts",
+      "src/state/review-state.ts",
+      "src/state/briefing-state.ts"
+    ]
+  },
+  "principles": null,
+  "evaluatorFeedback": null,
+  "notes": "COLOCATION HARD CONSTRAINT — contract says tests/orchestrator/checkpoints/disk.test.ts but Sprints 5/7/8 set the precedent: tests COLOCATED. Disk mechanism test → src/orchestrator/checkpoints/mechanisms/disk.test.ts. CLI command tests → src/cli/commands/<command>.test.ts. Briefing has the full plan including state file design, polling cleanup pattern, race handling, 100ms write budget enforcement (artifact summary, not full content)."
+}
