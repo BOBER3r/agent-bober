@@ -8,67 +8,67 @@
       "id": "s11-c1",
       "description": "src/orchestrator/checkpoints/renderers/ contains one renderer per artifact type (research.ts, plan.ts, sprint-contract.ts, curator-briefing.ts, generator-diff.ts, eval-result.ts, code-review.ts, sprint-summary.ts, pipeline-summary.ts). Each exports a render(artifact): string function.",
       "verificationMethod": "ls src/orchestrator/checkpoints/renderers/. Verify all 9 files exist. Read each to verify render() export.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c2",
       "description": "Renderer registry maps artifactType → renderer; CheckpointMechanism implementations resolve the right renderer for each artifact. Falls back to generic text dump for unknown types with warning.",
       "verificationMethod": "Read registry. Verify mapping. Test: passing unknown type → generic fallback + warning.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c3",
       "description": "Research doc renderer shows: title (from H1), assumptions count, files explored count, key findings count, first 3 lines of executive summary. Total output <500 lines (truncated with marker if source is larger).",
       "verificationMethod": "Read renderer. Render a sample research doc. Verify field extraction and line cap.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c4",
       "description": "Plan spec renderer shows: title, ambiguity score, features count, sprints count, assumptions list, out-of-scope list. Total output <300 lines.",
       "verificationMethod": "Render a sample plan spec. Verify fields and cap.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c5",
       "description": "Sprint contract renderer shows: contractId, feature, expectedChanges paths, successCriteria count + first 5, dependencies. Total output <200 lines.",
       "verificationMethod": "Render a sample contract. Verify fields and cap.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c6",
       "description": "Generator-diff renderer shows: git diff --stat of the sprint's commits, list of files changed (created/modified/deleted), commit count. Truncates per-file diff at 50 lines per file with marker.",
       "verificationMethod": "Render a fixture diff. Verify stat-only + truncation.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c7",
       "description": "Eval-result renderer shows: overallResult, score (passed/failed/total), failing criteria with verification methods, strategy outputs (exit codes only, no full stdout). Total output <300 lines.",
       "verificationMethod": "Render a sample eval result. Verify fields and cap.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c8",
       "description": "Code-review renderer shows: summary, critical count + first 5 with evidence, important count, minor count, approved areas. Total output <300 lines.",
       "verificationMethod": "Render a sample review. Verify fields and cap.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c9",
       "description": "Sprint 8 (CLI) and Sprint 9 (disk) and Sprint 10 (PR) mechanisms now use these renderers instead of the generic first-40-lines logic. Existing tests for those mechanisms updated to assert the new render output.",
       "verificationMethod": "Grep src/orchestrator/checkpoints/mechanisms/ for renderer usage. Verify removal of generic-truncate logic.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c10",
       "description": "Unit tests cover each renderer with at least one happy-path sample. Run npm run test — assert exit 0.",
       "verificationMethod": "Locate tests/orchestrator/checkpoints/renderers/. Verify one test file per renderer minimum.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s11-c11",
       "description": "All existing eval strategies pass.",
       "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "passed": true
     }
   ],
   "expectedChanges": [
@@ -79,7 +79,9 @@
     { "path": "tests/orchestrator/checkpoints/renderers/", "action": "create", "description": "Unit tests per renderer" }
   ],
   "dependsOn": ["sprint-spec-20260524-bober-vision-10"],
-  "status": "proposed",
+  "status": "completed",
+  "completedAt": "2026-05-25T05:58:00Z",
+  "passedOnIteration": 1,
   "generatorNotes": "Renderers are pure functions: artifact in, string (markdown) out. No side effects, no file IO, no network — just parsing and formatting. This makes them trivial to test and reuse across mechanisms.\n\nArtifact types are stable JSON shapes already in use elsewhere in agent-bober. Parse them from disk by reading the path in artifact.path, or accept inline artifact data when provided. Each renderer must handle both modes.\n\nFor the generator-diff renderer: shell out to `git diff --stat <base>..<head>` for the stat view; for per-file content, use `git diff --unified=3 <path>` truncated at 50 lines. Don't render binary file diffs (skip with marker).\n\nTruncation marker convention (consistent across all renderers):\n```\n... <N more lines truncated, see <path>:<startLine> for full content>\n```\n\nMechanism updates: each mechanism currently uses something like `prepareSummary(artifact)`. Replace with `import { render } from '../renderers/registry'; const summary = render(artifact);`. The registry routes to the right renderer by `artifact.type`. CLI prints to stderr; disk writes to pending JSON; PR includes in comment body.\n\nFor PR mechanism specifically: the rendered summary embedded as a fenced markdown code block in the PR comment. GitHub renders the markdown nicely, but very long content can hit GitHub's comment-size cap (65KB) — the 200-500 line per-renderer caps prevent this.",
   "evaluatorNotes": "Verify all 9 renderers exist and each is exercised by a unit test. Verify the truncation marker is CONSISTENT across renderers (the format above). Verify each renderer's output is markdown (not plain text or JSON) — checkpoint mechanisms display markdown.\n\nVerify generator-diff renderer SKIPS binary files (rendering binary as text breaks PR comments and CLI terminals). Test: include a binary file in the fixture, verify it's listed but not rendered inline.\n\nCheck for code duplication across renderers: if every renderer reimplements 'read frontmatter from markdown', factor to a shared util. But don't over-abstract — three renderers sharing a utility is fine; one renderer using its own logic is fine.\n\nVerify Sprint 8/9/10 mechanism tests still pass after the renderer integration. If the old generic-truncate tests still exist and now assert on different output, they need updating (not deletion — update to match new format).\n\nLine caps in success criteria are MAXIMUMS not targets. A 50-line render for a small artifact is correct. A 500-line render for a small artifact is over-rendering."
 }

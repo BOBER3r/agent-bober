@@ -1,0 +1,31 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-11-1",
+  "contractId": "sprint-spec-20260524-bober-vision-11",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:58:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 11, "criteriaPassed": 11, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 11, "requiredFailed": 0, "requiredTotal": 11 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "62 files, 765 passed, 4 skipped, 0 failed" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s11-c1", "result": "pass", "evidence": "9 renderer files + render export each." },
+    { "criterionId": "s11-c2", "result": "pass", "evidence": "registry.ts Map dispatch + stderr warning fallback. registry.test.ts:98 + :114." },
+    { "criterionId": "s11-c3", "result": "pass", "evidence": "research.ts: H1, sectionItems, parseInlineCount, firstNNonBlankAfter. 500-line cap." },
+    { "criterionId": "s11-c4", "result": "pass", "evidence": "plan.ts: title/specId/status/ambiguity/features/sprints/assumptions/outOfScope. 300-line cap." },
+    { "criterionId": "s11-c5", "result": "pass", "evidence": "sprint-contract.ts: contractId/feature/expectedChanges/first-5-criteria/dependsOn. 200-line cap verified." },
+    { "criterionId": "s11-c6", "result": "pass", "evidence": "generator-diff.ts: binary detection via numstat -/-; binary files listed but not inline. 50-line/file cap." },
+    { "criterionId": "s11-c7", "result": "pass", "evidence": "eval-result.ts: overallResult/score/failing-criteria/strategies (no stdout). 300-line cap." },
+    { "criterionId": "s11-c8", "result": "pass", "evidence": "code-review.ts: summary/counts/first-5-critical with file:line/approved-areas. 300-line cap verified." },
+    { "criterionId": "s11-c9", "result": "pass", "evidence": "cli.ts:116, disk.ts:94, pr.ts:386 all use render() from ../renderers/registry. Old functions removed." },
+    { "criterionId": "s11-c10", "result": "pass", "evidence": "10 colocated test files (9 renderers + registry) using toContain — no hollow assertions." },
+    { "criterionId": "s11-c11", "result": "pass", "evidence": "All strategies exit 0; no regressions in cli/disk/pr tests." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 11 required criteria pass on iteration 1. Renderer registry dispatches by type; 9 pure renderers with consistent truncation marker; cli/disk/pr mechanisms wired through. 765 tests pass."
+}
