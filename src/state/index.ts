@@ -77,6 +77,12 @@ export {
   type RejectedMarker,
 } from "./approval-state.js";
 
+export {
+  writeRunState,
+  readRunState,
+  listRunStateFiles,
+} from "./run-state.js";
+
 const BOBER_DIR = ".bober";
 const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews", "approvals", "runs", "audits"] as const;
 

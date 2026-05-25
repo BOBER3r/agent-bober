@@ -73,7 +73,7 @@ export function registerReactTool(): void {
       config.project.mode = "greenfield";
       config.project.preset = framework;
 
-      const runId = runManager.startRun(task, projectRoot, config);
+      const runId = await runManager.startRun(task, projectRoot, config);
 
       return JSON.stringify(
         {

@@ -21,6 +21,7 @@ import {
 
 import { registerAllTools, getAllTools, getTool } from "./tools/index.js";
 import { configExists, loadConfig } from "../config/loader.js";
+import { runManager } from "./run-manager.js";
 
 // ── Package version loader ──────────────────────────────────────────
 
@@ -59,6 +60,17 @@ export async function createBoberMCPServer(
 
   // ── Register all tools before creating the server ────────────────
   registerAllTools();
+
+  // ── Reconcile prior run state from disk (cockpit-integration sprint 1) ───
+  try {
+    await runManager.load(projectRoot);
+  } catch (err) {
+    process.stderr.write(
+      `[agent-bober mcp] runManager.load failed (continuing): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+  }
 
   // ── Conditionally register graph_* tools ─────────────────────────
   // Per sprint 4 spec: only when bober.config.json has
