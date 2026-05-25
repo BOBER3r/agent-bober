@@ -5,11 +5,11 @@
 import { describe, it, expect } from "vitest";
 
 describe("registerAllTools()", () => {
-  it("registers exactly 20 tools", async () => {
+  it("registers exactly 22 tools", async () => {
     const { registerAllTools, getAllTools } = await import("./index.js");
     registerAllTools();
     const tools = getAllTools();
-    expect(tools.length).toBe(20);
+    expect(tools.length).toBe(22);
   });
 
   it("includes all expected tool names", async () => {
@@ -36,6 +36,8 @@ describe("registerAllTools()", () => {
       "bober_list_active_runs",
       "bober_get_run_status",
       "bober_abort_run",
+      "bober_subscribe_events",
+      "bober_unsubscribe_events",
     ];
     for (const name of expected) {
       expect(names).toContain(name);

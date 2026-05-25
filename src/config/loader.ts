@@ -223,6 +223,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         approvalTimeoutMs: 86_400_000,
         prPollMs: 30_000,
         allowAutopilotRiskyActions: false,
+        eventQueueBound: 1000,
       },
       commands: defaults.commands ?? {},
     },

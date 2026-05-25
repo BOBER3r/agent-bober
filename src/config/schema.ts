@@ -170,6 +170,12 @@ export const PipelineSectionSchema = z.object({
    *  required inverse. This is "skip the interactive approval" — NOT "skip
    *  the audit trail." Documented as a footgun in skills/bober.deploy/SKILL.md. */
   allowAutopilotRiskyActions: z.boolean().default(false),
+  /** Sprint 3 (cockpit-integration): per-subscription bounded queue for the
+   *  event-stream notification fan-out. Default 1000. When the queue overflows,
+   *  the oldest events are dropped and a single `bober/events.dropped`
+   *  notification with `{ subscriptionId, dropped: N }` is emitted per
+   *  overflow window. */
+  eventQueueBound: z.number().int().min(1).default(1000),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -380,6 +386,7 @@ export function createDefaultConfig(
       approvalTimeoutMs: 86_400_000,
       prPollMs: 30_000,
       allowAutopilotRiskyActions: false,
+      eventQueueBound: 1000,
     },
     commands: {},
   };

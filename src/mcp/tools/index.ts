@@ -23,12 +23,14 @@ import { registerPlaywrightTool } from "./playwright.js";
 import { registerListActiveRunsTool } from "./list-active-runs.js";
 import { registerGetRunStatusTool } from "./get-run-status.js";
 import { registerAbortRunTool } from "./abort-run.js";
+import { registerSubscribeEventsTool } from "./subscribe-events.js";
+import { registerUnsubscribeEventsTool } from "./unsubscribe-events.js";
 
 /**
  * Registers all built-in agent-bober MCP tools into the global registry.
  * Call this once before starting the MCP server.
  *
- * Registered tools (20 total):
+ * Registered tools (22 total):
  *   1. bober_init              – Initialise a project
  *   2. bober_plan              – Generate a sprint plan
  *   3. bober_sprint            – Execute the next sprint cycle
@@ -49,6 +51,8 @@ import { registerAbortRunTool } from "./abort-run.js";
  *  18. bober_list_active_runs  – List all runs by status
  *  19. bober_get_run_status    – Get one run by runId
  *  20. bober_abort_run         – Abort a run by runId
+ *  21. bober_subscribe_events  – Subscribe to runId-scoped event notifications
+ *  22. bober_unsubscribe_events– Unsubscribe from a runId-scoped event stream
  */
 export function registerAllTools(): void {
   // ── Core workflow tools ─────────────────────────────────────────
@@ -74,6 +78,10 @@ export function registerAllTools(): void {
   registerListActiveRunsTool();
   registerGetRunStatusTool();
   registerAbortRunTool();
+
+  // ── Event stream tools (cockpit-integration sprint 3) ──────────
+  registerSubscribeEventsTool();
+  registerUnsubscribeEventsTool();
 
   // ── Read / configuration tools ──────────────────────────────────
   registerContractsTool();

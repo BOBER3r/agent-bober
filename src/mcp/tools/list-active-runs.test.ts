@@ -39,6 +39,7 @@ function makeFakeConfig(): BoberConfig {
       maxIterations: 20,
       requireApproval: false,
       contextReset: "always" as const,
+      eventQueueBound: 1000,
     },
     commands: {},
   };
