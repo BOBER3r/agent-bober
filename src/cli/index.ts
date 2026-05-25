@@ -21,6 +21,9 @@ import { createBoberMCPServer } from "../mcp/server.js";
 import { registerGraphCommand } from "./commands/graph.js";
 import { registerOnboardCommand } from "./commands/onboard.js";
 import { registerImpactCommand } from "./commands/impact.js";
+import { registerApproveCommand } from "./commands/approve.js";
+import { registerRejectCommand } from "./commands/reject.js";
+import { registerListApprovalsCommand } from "./commands/list-approvals.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -214,6 +217,15 @@ async function main(): Promise<void> {
 
   // ── impact ─────────────────────────────────────────────────────
   registerImpactCommand(program);
+
+  // ── approve ────────────────────────────────────────────────────
+  registerApproveCommand(program);
+
+  // ── reject ─────────────────────────────────────────────────────
+  registerRejectCommand(program);
+
+  // ── list-approvals ─────────────────────────────────────────────
+  registerListApprovalsCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

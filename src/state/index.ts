@@ -64,8 +64,21 @@ export {
   listReviews,
 } from "./review-state.js";
 
+export {
+  savePending,
+  readPending,
+  listPending,
+  saveApproved,
+  saveRejected,
+  deletePending,
+  pendingExists,
+  type PendingMarker,
+  type ApprovedMarker,
+  type RejectedMarker,
+} from "./approval-state.js";
+
 const BOBER_DIR = ".bober";
-const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews"] as const;
+const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews", "approvals"] as const;
 
 /**
  * Ensure the `.bober/` directory and all required subdirectories exist,

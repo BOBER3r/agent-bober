@@ -1,6 +1,8 @@
+import { join } from "node:path";
 import type { CheckpointMechanism } from "./types.js";
 import { NoopCheckpointMechanism } from "./noop.js";
 import { CliCheckpointMechanism } from "./mechanisms/cli.js";
+import { DiskCheckpointMechanism } from "./mechanisms/disk.js";
 
 /**
  * Module-level registry mapping mechanism names to CheckpointMechanism implementations.
@@ -32,3 +34,10 @@ export function getCheckpointMechanism(name: string): CheckpointMechanism {
 // This mirrors how src/evaluators/registry.ts:41-50 populates built-ins.
 registerCheckpointMechanism("noop", new NoopCheckpointMechanism());
 registerCheckpointMechanism("cli", new CliCheckpointMechanism());
+// Disk mechanism uses process.cwd() at module-load time. If the orchestrator
+// ever runs from a different cwd, this path may be wrong; a factory pattern
+// (Sprint 14+) can address this. For now this matches the cli registration parity.
+registerCheckpointMechanism(
+  "disk",
+  new DiskCheckpointMechanism(join(process.cwd(), ".bober", "approvals")),
+);
