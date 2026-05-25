@@ -32,7 +32,15 @@ import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
 import { runCodeReviewer } from "./code-reviewer-agent.js";
-import { getCheckpointMechanism } from "./checkpoints/index.js";
+import { getCheckpointMechanismFor } from "./checkpoints/index.js";
+// NOTE (Sprint 12): The feedback-router (src/orchestrator/checkpoints/feedback-router.ts)
+// provides runCheckpointWithFeedback() for full iteration + abort semantics.
+// Full wiring of the iterating checkpoints (post-research, post-plan, post-sprint-contract,
+// post-sprint) into a retry loop is deferred — the plumbing is available via the router
+// module and is exercised in its unit tests. This sprint replaces the plain
+// getCheckpointMechanism("noop") calls with getCheckpointMechanismFor so that
+// config overrides are honoured, which is the minimum-viable pipeline wiring.
+import { writeCompletionMarker } from "./checkpoints/feedback-router.js";
 import {
   ensureBoberDir,
   saveContract,
@@ -137,7 +145,7 @@ export async function runSprintCycle(
   const curatorEnabled = config.curator?.enabled !== false;
 
   if (curatorEnabled) {
-    await getCheckpointMechanism("noop").request("pre-curator", { contract: currentContract, spec, completedContracts });
+    await getCheckpointMechanismFor("pre-curator", config, "noop").request("pre-curator", { contract: currentContract, spec, completedContracts });
     logger.phase(`Sprint ${currentContract.contractId} - Curate`);
 
     await appendHistory(projectRoot, {
@@ -232,7 +240,7 @@ export async function runSprintCycle(
     const compactedHandoff = summarizeOlderSprints(completedSummaryHandoff, 3);
 
     // ── Generate ───────────────────────────────────────────────
-    await getCheckpointMechanism("noop").request("pre-generator", { contract: currentContract, iteration, handoff: compactedHandoff });
+    await getCheckpointMechanismFor("pre-generator", config, "noop").request("pre-generator", { contract: currentContract, iteration, handoff: compactedHandoff });
     logger.phase(`Sprint ${currentContract.contractId} - Generate (Round ${iteration})`);
 
     await appendHistory(projectRoot, {
@@ -295,7 +303,7 @@ export async function runSprintCycle(
     }
 
     // ── Evaluate ──────────────────────────────────────────────
-    await getCheckpointMechanism("noop").request("pre-evaluator", { contract: currentContract, iteration, generatorResult });
+    await getCheckpointMechanismFor("pre-evaluator", config, "noop").request("pre-evaluator", { contract: currentContract, iteration, generatorResult });
     logger.phase(`Sprint ${currentContract.contractId} - Evaluate (Round ${iteration})`);
 
     currentContract = updateContractStatus(currentContract, "evaluating");
@@ -352,7 +360,7 @@ export async function runSprintCycle(
       // Sprint 5 — advisory code review (config-gated, time-boxed, never blocks)
       const reviewEnabled = config.codeReview?.enabled !== false;
       if (reviewEnabled) {
-        await getCheckpointMechanism("noop").request("pre-code-reviewer", { contract: currentContract, evaluation });
+        await getCheckpointMechanismFor("pre-code-reviewer", config, "noop").request("pre-code-reviewer", { contract: currentContract, evaluation });
         const reviewTimeoutMs = config.codeReview?.timeoutMs ?? 300_000;
         try {
           const review = await Promise.race([
@@ -387,7 +395,7 @@ export async function runSprintCycle(
         }
       }
 
-      await getCheckpointMechanism("noop").request("post-sprint", { contract: currentContract, evaluation, generatorResult: lastGeneratorResult });
+      await getCheckpointMechanismFor("post-sprint", config, "noop").request("post-sprint", { contract: currentContract, evaluation, generatorResult: lastGeneratorResult });
       return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
     }
 
@@ -482,7 +490,7 @@ export async function runPipeline(
           questionsAnswered: researchDoc.questionsAnswered,
         },
       });
-      await getCheckpointMechanism("noop").request("post-research", researchDoc);
+      await getCheckpointMechanismFor("post-research", config, "noop").request("post-research", researchDoc);
     }
 
     // ── Phase 0b: Architecture (optional) ───────────────────────
@@ -618,7 +626,7 @@ export async function runPipeline(
         featureCount: spec.features.length,
       },
     });
-    await getCheckpointMechanism("noop").request("post-plan", spec);
+    await getCheckpointMechanismFor("post-plan", config, "noop").request("post-plan", spec);
 
     // ── Phase 2: Sprint loop ─────────────────────────────────────
     logger.phase("Sprint Execution");
@@ -648,7 +656,7 @@ export async function runPipeline(
       contracts.push(contract);
       await saveContract(projectRoot, contract);
     }
-    await getCheckpointMechanism("noop").request("post-sprint-contract", contracts);
+    await getCheckpointMechanismFor("post-sprint-contract", config, "noop").request("post-sprint-contract", contracts);
 
     const completedSprints: SprintContract[] = [];
     const failedSprints: SprintContract[] = [];
@@ -710,7 +718,15 @@ export async function runPipeline(
       },
     });
 
-    await getCheckpointMechanism("noop").request("end-of-pipeline", { success, completedSprints, failedSprints, duration, spec });
+    await getCheckpointMechanismFor("end-of-pipeline", config, "noop").request("end-of-pipeline", { success, completedSprints, failedSprints, duration, spec });
+    // Write completion marker for successful runs (Sprint 12 — s12-c2).
+    const runId = `${spec.specId ?? "run"}-${Date.now()}`;
+    await writeCompletionMarker(projectRoot, runId, {
+      success,
+      completedSprints: completedSprints.length,
+      failedSprints: failedSprints.length,
+      duration,
+    });
     return {
       success,
       spec,
