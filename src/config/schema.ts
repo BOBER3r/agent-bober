@@ -140,6 +140,10 @@ export const CodeReviewSectionSchema = z.object({
 });
 export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
 
+/** Well-known checkpoint mechanism names. */
+export const CheckpointMechanismSchema = z.enum(["noop", "cli", "disk", "pr"]);
+export type CheckpointMechanismName = z.infer<typeof CheckpointMechanismSchema>;
+
 export const PipelineSectionSchema = z.object({
   maxIterations: z.number().int().min(1).default(20),
   /** Maximum times the router re-invokes a responsible agent after rejection. Default 3, min 1, max 10. */
@@ -148,6 +152,16 @@ export const PipelineSectionSchema = z.object({
   contextReset: ContextResetSchema.default("always"),
   researchPhase: z.boolean().default(true),
   architectPhase: z.boolean().default(false),
+  /** Pipeline execution mode. 'autopilot' auto-approves all checkpoints; 'careful' defaults to disk mechanism. Default: 'autopilot'. */
+  mode: z.enum(["autopilot", "careful"]).default("autopilot"),
+  /** Global default checkpoint mechanism name. When unset, resolved at runtime from pipeline.mode. Optional — leave unset to use mode-based default. */
+  checkpointMechanism: CheckpointMechanismSchema.optional(),
+  /** Per-checkpoint mechanism overrides. Keys are checkpoint IDs (e.g., 'post-research'); values are mechanism names. Default: {}. */
+  checkpointOverrides: z.record(z.string(), CheckpointMechanismSchema).default({}),
+  /** How long (ms) the disk and CLI mechanisms wait for approval before timing out. Default: 86400000 (24 hours). */
+  approvalTimeoutMs: z.number().int().min(1000).default(86_400_000),
+  /** How often (ms) the PR mechanism polls for PR merge/close events. Default: 30000 (30 seconds). */
+  prPollMs: z.number().int().min(10_000).default(30_000),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -288,6 +302,10 @@ export function createDefaultConfig(
       contextReset: "always",
       researchPhase: true,
       architectPhase: false,
+      mode: "autopilot",
+      checkpointOverrides: {},
+      approvalTimeoutMs: 86_400_000,
+      prPollMs: 30_000,
     },
     commands: {},
   };

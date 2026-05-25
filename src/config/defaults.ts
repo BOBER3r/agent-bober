@@ -101,6 +101,10 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       contextReset: "always",
       researchPhase: true,
       architectPhase: false,
+      mode: "autopilot",
+      checkpointOverrides: {},
+      approvalTimeoutMs: 86_400_000,
+      prPollMs: 30_000,
     },
     commands: {
       install: "npm install",
@@ -192,6 +196,10 @@ const greenfieldBase: Partial<BoberConfig> = {
     contextReset: "always",
     researchPhase: true,
     architectPhase: false,
+    mode: "autopilot",
+    checkpointOverrides: {},
+    approvalTimeoutMs: 86_400_000,
+    prPollMs: 30_000,
   },
   commands: {},
 };
@@ -224,6 +232,10 @@ const brownfieldBase: Partial<BoberConfig> = {
     contextReset: "always",
     researchPhase: true,
     architectPhase: false,
+    mode: "autopilot",
+    checkpointOverrides: {},
+    approvalTimeoutMs: 86_400_000,
+    prPollMs: 30_000,
   },
   commands: {},
 };
