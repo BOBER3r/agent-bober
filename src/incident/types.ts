@@ -124,6 +124,27 @@ export const IncidentStatusSchema = z.enum([
 export type IncidentStatus = z.infer<typeof IncidentStatusSchema>;
 
 /**
+ * Allowed phase transitions for the incident state machine (Sprint 24).
+ * Keys are the FROM phase; values are the array of allowed TO phases.
+ *
+ * The re-open path (resolved → investigating) requires an explicit `reason`
+ * — see transitionPhase() in src/incident/orchestrator.ts.
+ *
+ * `aborted` is terminal: it appears as a value in many keys (any phase may
+ * abort) but never as a key — there are no transitions out of aborted.
+ */
+export const STATUS_TRANSITIONS: Readonly<Record<IncidentStatus, readonly IncidentStatus[]>> = {
+  investigating: ["remediating", "resolved", "aborted"],
+  remediating:   ["monitoring", "investigating", "aborted"], // self-loop or back to invest. on rollback
+  monitoring:    ["resolved", "investigating", "aborted"],   // verifyResolution fail → back to invest.
+  resolved:      ["investigating"],                          // re-open path; reason REQUIRED
+  aborted:       [],                                         // terminal
+} as const;
+
+/** Convenience alias — orchestrator.ts uses 'phase' nomenclature; storage uses 'status'. */
+export type IncidentPhase = IncidentStatus;
+
+/**
  * Snapshot of the VerifyResult that authorized the 'resolved' transition.
  * Either verified=true OR an overrideToken with a non-empty reason. Sprint 22.
  */
@@ -147,6 +168,7 @@ export const IncidentMetadataSchema = z.object({
   symptom: z.string(),
   createdAt: z.string(),
   status: IncidentStatusSchema,
+  severity: z.enum(["S1", "S2", "S3", "S4"]).optional(), // ← Sprint 24
   resolvedAt: z.string().optional(),
   resolutionCriteria: z.string().optional(),
   resolutionEvidence: IncidentResolutionEvidenceSchema.optional(), // ← Sprint 22

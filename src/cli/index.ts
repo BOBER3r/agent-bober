@@ -27,6 +27,7 @@ import { registerListApprovalsCommand } from "./commands/list-approvals.js";
 import { registerAuditCommand } from "./commands/audit-show.js";
 import { registerRollbackCommand } from "./commands/rollback.js";
 import { registerPostmortemCommand } from "./commands/postmortem.js";
+import { registerIncidentCommand } from "./commands/incident.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -260,6 +261,9 @@ async function main(): Promise<void> {
 
   // ── postmortem ───────────────────────────────────────────────────
   registerPostmortemCommand(program);
+
+  // ── incident ─────────────────────────────────────────────────────
+  registerIncidentCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
