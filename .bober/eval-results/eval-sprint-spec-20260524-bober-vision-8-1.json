@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-8-1",
+  "contractId": "sprint-spec-20260524-bober-vision-8",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T04:02:55.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "no errors" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0", "details": "no errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "no errors" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "47 files / 600 pass / 4 skip / 0 fail (2.67s)", "details": "+7 vs Sprint 7 baseline; scanner colocated invariant 25:22 holds" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s8-c1", "required": true, "result": "pass", "evidence": "cli.ts L132 implements CheckpointMechanism; L166 readline.createInterface; L163-164 stderr-only prompts ('Approve (a), Reject (r), Edit (e)?')" },
+    { "criterionId": "s8-c2", "required": true, "result": "pass", "evidence": "L192-225: a→{approved:true}; r→stderr feedback prompt+{approved:false,feedback}; e→editor(L205: this.editor ?? env.EDITOR ?? 'nano') +{edit:true,editDelta}" },
+    { "criterionId": "s8-c3", "required": true, "result": "pass", "evidence": "L154 !isTTY guard; L155-157 stderr 'not a TTY' warn; L158 this.fallback.request(...). Test L165-196 spy-verifies noopSpy.request called once — PATH not just outcome" },
+    { "criterionId": "s8-c4", "required": true, "result": "pass", "evidence": "registry.ts L34: registerCheckpointMechanism('cli', new CliCheckpointMechanism()) at module top-level after noop registration" },
+    { "criterionId": "s8-c5", "required": true, "result": "pass", "evidence": "cli.test.ts COLOCATED at src/orchestrator/checkpoints/mechanisms/; 7 tests pass; find tests/orchestrator/checkpoints/ empty; covers a/r/e/non-TTY+spy/perf branches" },
+    { "criterionId": "s8-c6", "required": true, "result": "pass", "evidence": "Perf test L201-221: Readable.from(['a\\n']) pre-stuffed + performance.now() + assertion <200ms; elapsed ~0ms" },
+    { "criterionId": "s8-c7", "required": true, "result": "pass", "evidence": "all 4 strategies exit 0; pipeline.ts unchanged (git diff empty); 3 files in scope diff" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 8 PASSES iter 1 — 7/7. CLI mechanism with stderr prompts, try/finally temp cleanup, spy-verifiable noop fallback, perf <200ms. pipeline.ts unchanged; noop stays default."
+}
