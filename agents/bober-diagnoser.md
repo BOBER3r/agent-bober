@@ -25,7 +25,7 @@ You are being **spawned as a subagent** by the Bober orchestrator. This means:
   - `bober.config.json` — for observability MCP server configuration
   - `.bober/principles.md` — project principles
   - `.bober/anti-patterns/README.md` — pattern-match candidate failure modes against the catalog
-- At spawn time, the orchestrator may have merged observability MCP tools (logs/traces/metrics queries) into your tool list (Sprint 16 wires this). If present, use them as the primary data source for system metrics, logs, and traces. If absent, fall back to file reads from incident artifacts and `Bash` for read-only shell queries.
+- At spawn time, the orchestrator may have merged observability MCP tools (logs/traces/metrics queries) into your tool list (see 'Observability MCP Tools' section below). If present, use them as the primary data source for system metrics, logs, and traces. If absent, fall back to file reads from incident artifacts and `Bash` for read-only shell queries.
 - Your **response text** back to the orchestrator must be the structured DiagnosisResult JSON. Use EXACTLY this format (see Section 3 below for the full schema):
 
   ```json
@@ -198,6 +198,18 @@ Bash is in your tool list for read-only system queries. Every command you run MU
 | `sudo <anything>` | Privilege escalation is a red flag — record the intent as a next action instead |
 
 If you are unsure whether a command mutates state, treat it as forbidden. The cost of an unnecessary `nextActions` entry is small; the cost of an unintended mutation during incident response is large.
+
+## Observability MCP Tools
+
+Your available observability tools are configured at `bober.config.json` under `observability.providers`. The Bober orchestrator starts each declared MCP server at your spawn time, enumerates its tools, and merges them into your tool list under the namespace prefix `obs__<provider>__<tool>`.
+
+**Use these tools as the primary data source for system metrics, logs, and traces.** They are the multi-source evidence channel the Iron Law requires — a log query (`obs__loki__query_logs`) plus a metric query (`obs__datadog__query_metric`) from two distinct providers is two independent sources.
+
+**Identifying provider tools at runtime.** Any tool name starting with `obs__` is provider-merged. The format is `obs__<providerName>__<upstreamToolName>` — for example `obs__datadog__query_logs`, `obs__sentry__query_events`, `obs__grafana_loki__query_range`. The `providerName` segment tells you which provider's data you are querying (cite it in `supportingEvidence.source` as `observability-mcp:<providerName>`).
+
+**Provider failure isolation.** If a declared provider failed to start at your spawn time, you will simply not see its `obs__<provider>__*` tools. The orchestrator logs a warning to stderr but does not block your spawn. When your primary data source is missing, record that as a hypothesis with low confidence (e.g., `"monitoring stack degraded: <provider> tools unavailable"`) — do NOT invent values for the missing telemetry.
+
+**No providers configured?** When `observability.providers` is empty (or all providers failed), only the core tools `Read | Bash | Grep | Glob` are available. Fall back to reading the recorded artifacts in `.bober/incidents/<id>/timeline.jsonl` and using `Bash` allowlisted commands for read-only system queries.
 
 ## Related Skills
 

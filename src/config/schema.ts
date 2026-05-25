@@ -221,6 +221,42 @@ export const GraphSectionSchema = z.object({
 });
 export type GraphSection = z.infer<typeof GraphSectionSchema>;
 
+// ── Observability Section (Sprint 16 — MCP plugin slots) ────────────
+
+/** Categories of observability data a provider can serve. */
+export const ObservabilityProviderKindSchema = z.enum([
+  "logs",
+  "metrics",
+  "traces",
+  "errors",
+  "custom",
+]);
+export type ObservabilityProviderKind = z.infer<typeof ObservabilityProviderKindSchema>;
+
+/**
+ * One declared external MCP server providing observability tools.
+ * At diagnoser spawn time the orchestrator spawns mcpCommand with
+ * mcpArgs and mcpEnv, lists its tools, and merges them into the
+ * diagnoser's tool set under the prefix `obs__<name>__<tool>`.
+ */
+export const ObservabilityProviderSchema = z.object({
+  /** Unique name used in the obs__<name>__<tool> namespace prefix. */
+  name: z.string().min(1).regex(/^[a-z0-9_]+$/i, "name must be alphanumeric/underscore"),
+  kind: ObservabilityProviderKindSchema,
+  /** Executable to spawn (e.g., "node", "/usr/local/bin/mcp-grafana"). */
+  mcpCommand: z.string().min(1),
+  mcpArgs: z.array(z.string()).optional(),
+  /** Env vars passed to the child — may contain SECRETS (treat as opaque). */
+  mcpEnv: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().default(true),
+});
+export type ObservabilityProvider = z.infer<typeof ObservabilityProviderSchema>;
+
+export const ObservabilitySectionSchema = z.object({
+  providers: z.array(ObservabilityProviderSchema).default([]),
+});
+export type ObservabilitySection = z.infer<typeof ObservabilitySectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -234,6 +270,8 @@ export const BoberConfigSchema = z.object({
   commands: CommandsSectionSchema,
   graph: GraphSectionSchema.optional(),
   codeReview: CodeReviewSectionSchema.optional(),
+  // ── Sprint 16: observability MCP plugin slots ──
+  observability: ObservabilitySectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

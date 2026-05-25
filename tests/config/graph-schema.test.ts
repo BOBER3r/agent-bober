@@ -108,6 +108,56 @@ describe("template configs validate against extended BoberConfigSchema", () => {
   });
 });
 
+// ── Sprint 16 backward-compat invariant (s16-c8) ─────────────────────────
+
+describe("Sprint 16 — backward-compat: existing bober.config.json parses without observability (s16-c8)", () => {
+  it("repo's bober.config.json (no observability section) parses successfully via BoberConfigSchema", async () => {
+    const raw = await readFile(resolve(repoRoot, "bober.config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    const result = BoberConfigSchema.safeParse(parsed);
+    expect(result.success, `bober.config.json parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      expect(result.data.observability).toBeUndefined();
+    }
+  });
+
+  it("loadConfig returns config with observability undefined when no section present", async () => {
+    const config = await loadConfig(repoRoot);
+    expect(config.observability).toBeUndefined();
+  });
+
+  it("BoberConfigSchema accepts observability section with providers array", () => {
+    const minimalWithObs = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {}, generator: {}, evaluator: { strategies: [] },
+      sprint: {}, pipeline: {}, commands: {},
+      observability: {
+        providers: [
+          { name: "loki", kind: "logs", mcpCommand: "npx", mcpArgs: ["mcp-grafana-loki"] },
+        ],
+      },
+    };
+    const result = BoberConfigSchema.safeParse(minimalWithObs);
+    expect(result.success, `parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      expect(result.data.observability?.providers).toHaveLength(1);
+      expect(result.data.observability?.providers[0].enabled).toBe(true); // default
+    }
+  });
+
+  it("observability.providers defaults to [] when section is present but providers omitted", () => {
+    const minimalEmpty = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {}, generator: {}, evaluator: { strategies: [] },
+      sprint: {}, pipeline: {}, commands: {},
+      observability: {},
+    };
+    const result = BoberConfigSchema.safeParse(minimalEmpty);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.observability?.providers).toEqual([]);
+  });
+});
+
 // ── Sprint 14 backward-compat invariant (s14-c7) ─────────────────────────
 
 describe("Sprint 14 — backward-compat: existing bober.config.json parses with new pipeline defaults (s14-c7)", () => {
