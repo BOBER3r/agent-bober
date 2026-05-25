@@ -1,0 +1,73 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-10",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "GitHub PR-native checkpoint mechanism",
+  "description": "Implement the GitHub PR-native checkpoint mechanism: at each checkpoint, opens a draft PR (or appends a comment to an existing PR) with the artifact, waits for either merge of the PR or an 'approved' / 'rejected' / 'edit' labeled comment. Uses `gh` CLI; checks for gh-availability and gh-authentication at config-validation time; falls back to disk mechanism with clear warning if unavailable. Registers under name 'pr'.",
+  "successCriteria": [
+    {
+      "id": "s10-c1",
+      "description": "src/orchestrator/checkpoints/mechanisms/pr.ts implements CheckpointMechanism. On request(): determines current branch and remote; opens (or reuses) a draft PR for this run via `gh pr create --draft` or appends a checkpoint comment to an existing run-tracking PR.",
+      "verificationMethod": "Read file. Verify gh CLI invocations and PR-or-comment branching logic.",
+      "passed": true
+    },
+    {
+      "id": "s10-c2",
+      "description": "Approval signals (configurable, default behaviors): (a) PR merge → all pending checkpoints on this PR auto-approve; (b) issue comment with content 'approve <checkpointId>' or label 'bober/approved' → that specific checkpoint approves; (c) comment 'reject <checkpointId> <feedback>' → rejects with feedback; (d) comment 'edit <checkpointId>' followed by edit-block parsing → returns editDelta.",
+      "verificationMethod": "Read file. Verify all four signals parsed correctly. Unit test each.",
+      "passed": true
+    },
+    {
+      "id": "s10-c3",
+      "description": "Polling: uses `gh api` or `gh pr view --json` to check the PR state and comments at a configurable interval (default 30 seconds — PR mechanism is inherently coarse-grained). Configurable via pipeline.prPollMs.",
+      "verificationMethod": "Read poll loop. Verify configurable interval.",
+      "passed": true
+    },
+    {
+      "id": "s10-c4",
+      "description": "Availability check: when the 'pr' mechanism is requested at config validation, check (a) `gh --version` exits 0, (b) `gh auth status` exits 0, (c) the repo has a github remote. If any check fails, log a clear warning and fall back to the 'disk' mechanism. Document this in the warning message.",
+      "verificationMethod": "Read availability check logic. Test: mock gh unavailable, verify fallback to disk with warning.",
+      "passed": true
+    },
+    {
+      "id": "s10-c5",
+      "description": "PR-native mechanism is bypassable per checkpoint: a config knob `pipeline.checkpointOverrides.<checkpointId>` can override to 'cli' or 'disk' for individual checkpoints (e.g., pre-generator can use disk for fast async approve while post-sprint uses PR for audit trail).",
+      "verificationMethod": "Verify override logic in src/orchestrator/checkpoints/registry.ts or coordinator. Sprint 14 will wire the config; this sprint just provides the override hook.",
+      "passed": true
+    },
+    {
+      "id": "s10-c6",
+      "description": "PR title format: 'bober: <runId> — <feature-name>' or similar; PR body lists each checkpoint as a checkbox item; new comment per checkpoint. Mergeable from draft to ready when ALL checkpoints approved.",
+      "verificationMethod": "Read PR creation logic. Verify title format and body template.",
+      "passed": true
+    },
+    {
+      "id": "s10-c7",
+      "description": "Mechanism registered under name 'pr' at module load.",
+      "verificationMethod": "Grep registry.ts.",
+      "passed": true
+    },
+    {
+      "id": "s10-c8",
+      "description": "Unit tests cover: (a) PR creation, (b) comment-driven approve, (c) comment-driven reject, (d) PR merge auto-approves all pending, (e) gh-unavailable fallback to disk. All gh CLI calls mocked.",
+      "verificationMethod": "Locate test file. Run npm run test. Verify all branches.",
+      "passed": true
+    },
+    {
+      "id": "s10-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/orchestrator/checkpoints/mechanisms/pr.ts", "action": "create", "description": "PR-native mechanism with gh CLI integration" },
+    { "path": "src/orchestrator/checkpoints/registry.ts", "action": "modify", "description": "Register 'pr' mechanism + per-checkpoint override hook" },
+    { "path": "tests/orchestrator/checkpoints/pr.test.ts", "action": "create", "description": "Unit tests with mocked gh CLI" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-9"],
+  "status": "completed",
+  "completedAt": "2026-05-25T05:27:00Z",
+  "passedOnIteration": 2,
+  "generatorNotes": "gh CLI is the cleanest integration — no GitHub API token handling in agent-bober, gh handles auth. Use execa or child_process with stdio capture. Command surface needed:\n- `gh --version` (availability)\n- `gh auth status` (auth)\n- `gh repo view --json url,owner,name` (remote detection)\n- `gh pr list --json number,headRefName,state` (find existing run PR)\n- `gh pr create --draft --title '...' --body '...'` (create)\n- `gh pr comment <number> --body '...'` (add checkpoint comment)\n- `gh pr view <number> --json comments,state,merged` (poll for resolution)\n- `gh pr edit <number> --add-label bober/approved` (label workflow)\n\nRun-tracking PR: one PR per `bober run` invocation. Title: 'bober(run-<runId>): <featureName>'. The orchestrator creates it once at run start (the first checkpoint) and reuses for all subsequent checkpoints within the run by appending comments. Body has a checkbox list updated as checkpoints resolve.\n\nComment parsing: simple format. The signals are:\n- 'approve <checkpointId>' (case-insensitive)\n- 'reject <checkpointId> <feedback>'\n- 'edit <checkpointId>' followed by a fenced code block with the edit content\n\nAlternatively support label-based: 'bober/approved-<checkpointId>' label on the PR triggers approval. Label-based works better for org-wide approver review workflows.\n\nAvailability fallback: when gh unavailable, log a warning and explicitly call into the 'disk' mechanism. This is the user's safety net — they configured 'pr' but the environment can't support it; gracefully degrade rather than crash.\n\nPoll interval: 30s is high because PRs are async-by-design. Configurable but don't set lower than 10s (GitHub rate limits).\n\nOverride hook: registry's getCheckpointMechanism(checkpointId, config) consults config.pipeline.checkpointOverrides[checkpointId] before the default config.pipeline.checkpointMechanism. This Sprint provides the override RESOLUTION code; Sprint 14 provides the config wiring.",
+  "evaluatorNotes": "Verify gh CLI calls are all going through a single helper function (e.g., gh.ts wrapping execa) — easier to mock and audit. Verify NO GitHub tokens stored in agent-bober artifacts at any point.\n\nVerify the run-tracking PR strategy is sensible: one PR per `bober run`, not one PR per checkpoint. If the generator creates a PR per checkpoint, that's noise that buries the work.\n\nVerify fallback chain: pr unavailable → disk. Disk is more reliable; CLI is interactive-only. The fallback should NOT be to cli.\n\nVerify rate-limit handling: gh CLI handles most of this but the polling logic should still respect GitHub's secondary rate limits. If the poll hits a 429 or similar, back off exponentially (cap at 5 minutes).\n\nVerify comment parsing is strict (rejects 'approveeee', 'aproove'). Strict parsing prevents accidental approvals from off-topic chat.\n\nVerify the override hook works: a unit test should config-pin checkpoint X to mechanism Y while leaving the default as Z, and verify checkpoint X uses Y while checkpoint W uses Z.\n\nIMPORTANT: this PR creates Git history — the unit test must NOT actually call gh. Mock at the execa level. A test that creates a real PR is a failure (rollback required)."
+}

@@ -1,0 +1,75 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-2",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Verbatim port of verification-before-completion and systematic-debugging skills",
+  "description": "Create skills/bober.verify/SKILL.md and skills/bober.debug/SKILL.md as verbatim ports of /tmp/superpowers/skills/verification-before-completion/SKILL.md and /tmp/superpowers/skills/systematic-debugging/SKILL.md respectively, with MIT attribution. Inline the bober.verify Iron Law into agents/bober-generator.md's self-verify section. Inline a 'Handling Evaluator Feedback' section into agents/bober-generator.md that invokes bober.debug discipline. Keep the empirical voice — capitalized rules, all-caps STOP conditions, 'your human partner' framing where it parses naturally (and adapted to 'the orchestrator' inside subagent contexts where no human is present at runtime).",
+  "successCriteria": [
+    {
+      "id": "s2-c1",
+      "description": "skills/bober.verify/SKILL.md exists; opens with MIT attribution to obra/superpowers; contains the Iron Law block 'NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION COMMAND OUTPUT'; contains the Gate Function pseudo-code block; contains the Common Failures table; contains the Red Flags list; contains the Rationalization-Prevention table. All structural elements verbatim or near-verbatim from /tmp/superpowers/skills/verification-before-completion/SKILL.md.",
+      "verificationMethod": "Read the file. Grep for each named element. Diff approximate length against source (target: within ±20% of source file's 139 lines).",
+      "passed": false
+    },
+    {
+      "id": "s2-c2",
+      "description": "skills/bober.debug/SKILL.md exists; opens with MIT attribution to obra/superpowers; contains the Iron Law 'NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST'; contains the four phases labeled in order (Root Cause Investigation, Pattern Analysis, Fix Hypothesis, Fix Verification); contains the 'Read Error Messages Carefully' subsection; contains the 'Gather Evidence in Multi-Component Systems' subsection; contains the Red Flags list.",
+      "verificationMethod": "Read the file. Grep for each named element including all four phase titles in order.",
+      "passed": false
+    },
+    {
+      "id": "s2-c3",
+      "description": "agents/bober-generator.md contains the bober.verify Iron Law inline in its self-verify section, with cross-reference to the bober.verify skill. The completion-report JSON schema documented in the file gains a required verificationOutput field shape: Array<{command: string, exitCode: number, stdoutTail: string}>.",
+      "verificationMethod": "Read agents/bober-generator.md. Grep for the Iron Law string and 'bober.verify'. Locate the completion-report schema block; verify verificationOutput is documented as required.",
+      "passed": false
+    },
+    {
+      "id": "s2-c4",
+      "description": "agents/bober-generator.md contains a new section titled 'Handling Evaluator Feedback' (or equivalent) that requires invoking bober.debug discipline before any code change; includes a Forbidden Responses block listing at least 4 anti-sycophancy phrases ('You\\'re absolutely right!', 'Great catch!', 'Let me fix that now' before verification, 'I see what you mean' as acknowledgment of unverified claim); includes a structured DISPUTE response protocol with {dispute: true, criterionId, reason, evidence: Array<{path, line, snippet}>} shape.",
+      "verificationMethod": "Read agents/bober-generator.md. Locate the section. Verify Forbidden Responses count >=4. Verify the DISPUTE protocol shape is documented.",
+      "passed": false
+    },
+    {
+      "id": "s2-c5",
+      "description": "Voice port verbatim: skills/bober.verify/SKILL.md and skills/bober.debug/SKILL.md preserve 'your human partner' phrasing where it appears in the source files (the source uses this phrase deliberately per /tmp/superpowers/AGENTS.md). Inside agents/*.md where there is no human partner at runtime, the phrase adapts to 'the orchestrator' but in the skill bodies themselves the original phrasing remains.",
+      "verificationMethod": "Grep skills/bober.verify/SKILL.md and skills/bober.debug/SKILL.md for 'your human partner' — should be present in both (matching source files). Grep agents/bober-generator.md for 'your human partner' — should be absent or contextualized.",
+      "passed": false
+    },
+    {
+      "id": "s2-c6",
+      "description": "agents/bober-generator.md stays under 800 lines (NFR maintainability).",
+      "verificationMethod": "wc -l agents/bober-generator.md; assert <=800.",
+      "passed": false
+    },
+    {
+      "id": "s2-c7",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    {
+      "path": "skills/bober.verify/SKILL.md",
+      "action": "create",
+      "description": "Verbatim port of verification-before-completion with MIT attribution"
+    },
+    {
+      "path": "skills/bober.debug/SKILL.md",
+      "action": "create",
+      "description": "Verbatim port of systematic-debugging with MIT attribution"
+    },
+    {
+      "path": "agents/bober-generator.md",
+      "action": "modify",
+      "description": "Inline Iron Law in self-verify, add Handling Evaluator Feedback section with Forbidden Responses + DISPUTE protocol, add verificationOutput to completion-report schema"
+    }
+  ],
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-1"
+  ],
+  "status": "completed",
+  "generatorNotes": "Source files: /tmp/superpowers/skills/verification-before-completion/SKILL.md (139 lines) and /tmp/superpowers/skills/systematic-debugging/SKILL.md (longer, has supplementary files in the source dir — port only SKILL.md for this sprint; supplementary files become .bober/anti-patterns/ in Sprint 4). Port VERBATIM. The attribution block is the ONLY required addition; everything else stays as-is per MIT permission and the user's verbatim-voice directive. Attribution template (top of each file, after frontmatter):\n\n```\n> Verbatim port from [obra/superpowers](https://github.com/obra/superpowers) — MIT License.\n> Original: skills/verification-before-completion/SKILL.md (or systematic-debugging).\n> Adaptations: skill name (bober.verify/bober.debug), tool name references where bober has equivalents.\n```\n\nLight adaptations permitted: (1) frontmatter name field becomes bober-verify / bober-debug, (2) skill cross-references inside the body that point to superpowers-specific files (e.g., 'use superpowers:writing-skills') get replaced with bober equivalents where they exist or stripped where they don't. DO NOT: rewrite Iron Law phrasing, soften STOP conditions, rephrase Rationalization-Prevention rows, remove <EXTREMELY-IMPORTANT> tags. These are empirically tuned per the source AGENTS.md.\n\nFor agents/bober-generator.md modifications: locate the existing self-verify section. Insert the Iron Law block AS A FENCED CODE BLOCK or HTML pre — visual emphasis matters. The completion-report schema is currently described in the prompt as a JSON shape; locate it and add verificationOutput as a required field with the documented type. The new 'Handling Evaluator Feedback' section sits between the self-verify section and the closing instructions. Include a worked example of a DISPUTE response so the model has a pattern to follow.\n\nVoice nuance: superpowers's 'your human partner' framing means a human collaborator at runtime. In bober's subagent context (generator running inside an orchestrator-spawned context), there is no human partner present — there is the orchestrator. Adapt only THERE. The skill files themselves are used as reference material; they keep the original phrasing because they ARE the empirically-tuned source content.",
+  "evaluatorNotes": "Verify verbatim — diff the new skill files against /tmp/superpowers source by structural element. Iron Law strings must match exactly. Phase titles must match exactly. Table column headers must match exactly. Acceptable diffs: attribution block at top, name field in frontmatter, skill cross-reference adaptations within body, anything explicitly noted in the generator-notes adaptations list. Anything else differing from source is a port-quality regression — flag it. Verify the DISPUTE protocol in bober-generator.md has the documented JSON shape with required fields. Verify verificationOutput field in completion-report is marked REQUIRED (optional defeats the Iron Law). Verify <EXTREMELY-IMPORTANT> tags are preserved where they appear in source — softening them defeats empirical tuning. Cross-check Sprint 1's bober.using-bober SKILL.md mentions bober.verify and bober.debug in its skill catalog (it should from Sprint 1; if not, flag it as a Sprint 1 regression to fix here or in Sprint 3).",
+  "startedAt": "2026-05-24T18:36:00Z",
+  "completedAt": "2026-05-24T21:49:00Z"
+}

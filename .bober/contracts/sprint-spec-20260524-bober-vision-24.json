@@ -1,0 +1,91 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-24",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "/bober-incident skill + CLI entry \u2014 top-level incident-workflow entry point",
+  "description": "Top-level entry that ties the incident pipeline together. /bober-incident slash command (Claude Code skill) + `bober incident start|status|end|list` CLI subcommands. Routes between bober-diagnoser, bober-deployer, bober-postmortemer based on incident phase. Integrates with Tier 2 careful-flow checkpoints for every destructive action regardless of pipeline.mode.",
+  "successCriteria": [
+    {
+      "id": "s24-c1",
+      "description": "skills/bober.incident/SKILL.md (the /bober-incident slash command) exists with YAML frontmatter, Iron Law / Red Flags / Rationalization-Prevention. Body documents the workflow: start incident \u2192 invoke diagnoser \u2192 propose actions \u2192 invoke deployer (with gates) \u2192 verify resolution \u2192 invoke postmortemer.",
+      "verificationMethod": "Read file. Verify all sections.",
+      "passed": true
+    },
+    {
+      "id": "s24-c2",
+      "description": "CLI: `bober incident start <symptom> [--severity S1|S2|S3|S4]` creates the incident via createIncident (Sprint 19), spawns diagnoser, returns incidentId. `bober incident status <id>` reads incident.json + timeline.jsonl + diagnoses/*.json and prints current state. `bober incident end <id>` triggers postmortem generation + sets status='resolved' if not already. `bober incident list` calls listIncidents (Sprint 19).",
+      "verificationMethod": "Verify each subcommand. Test end-to-end with fixture.",
+      "passed": true
+    },
+    {
+      "id": "s24-c3",
+      "description": "Phase routing: src/incident/orchestrator.ts implements an incident state machine. Phases: investigating \u2192 remediating \u2192 monitoring \u2192 resolved. Transitions are deterministic based on agent outputs (e.g., diagnoser proposes next-actions with risky steps \u2192 enter 'remediating'; deployer completes + verifyResolution \u2192 enter 'monitoring'; SLO holds for criteria.windowMinutes \u2192 enter 'resolved').",
+      "verificationMethod": "Read state machine. Test each transition with mocked agent outputs.",
+      "passed": true
+    },
+    {
+      "id": "s24-c4",
+      "description": "Checkpoint integration: every destructive action proposed by the diagnoser, executed by the deployer, or surfaced as a runbook step's risky operation passes through the Sprint 20 gate, which uses the Sprint 14 mechanism resolution. Verified by end-to-end test with mode='autopilot' \u2014 risky actions still gate via disk mechanism.",
+      "verificationMethod": "Integration test: run an incident workflow in autopilot mode with a risky proposed action; verify the gate fires.",
+      "passed": true
+    },
+    {
+      "id": "s24-c5",
+      "description": "`bober incident status` output includes: phase, severity, duration, latest diagnosis with confidence, pending action proposals, executed actions count (with rolled-back count), unresolved hypotheses, resolution criteria if set.",
+      "verificationMethod": "Test: status output for various incident states.",
+      "passed": true
+    },
+    {
+      "id": "s24-c6",
+      "description": "Slash command (/bober-incident) when invoked from Claude Code: prompts for symptom if not provided, kicks off the workflow, surfaces phase transitions to the user. Output uses markdown rendering for readability.",
+      "verificationMethod": "Read the skill. Verify the slash-command flow.",
+      "passed": true
+    },
+    {
+      "id": "s24-c7",
+      "description": "Escape hatch: at any phase, the user can invoke `bober incident abort <id> --reason <text>`. Writes abort marker, runs rollback (Sprint 21) for executed-not-rolled-back changes IF confirmed, generates a brief abort report (not full postmortem).",
+      "verificationMethod": "Test abort flow with and without rollback confirmation.",
+      "passed": true
+    },
+    {
+      "id": "s24-c8",
+      "description": "Integration test: complete incident lifecycle on a fixture project. start \u2192 diagnose \u2192 propose risky action \u2192 gate approves \u2192 deploy \u2192 verify \u2192 resolve \u2192 postmortem. All artifacts on disk in correct order.",
+      "verificationMethod": "tests/integration/incident-lifecycle.test.ts runs successfully.",
+      "passed": true
+    },
+    {
+      "id": "s24-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    {
+      "path": "skills/bober.incident/SKILL.md",
+      "action": "create",
+      "description": "Top-level incident workflow skill"
+    },
+    {
+      "path": "src/incident/orchestrator.ts",
+      "action": "create",
+      "description": "Incident state machine + phase routing"
+    },
+    {
+      "path": "src/cli/",
+      "action": "modify",
+      "description": "Add `bober incident start/status/end/list/abort` subcommands"
+    },
+    {
+      "path": "tests/integration/incident-lifecycle.test.ts",
+      "action": "create",
+      "description": "End-to-end incident lifecycle test"
+    }
+  ],
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-23"
+  ],
+  "status": "completed",
+  "generatorNotes": "This sprint is the integration capstone for Tier 3 \u2014 every prior sprint flows through this entry point. The complexity is in the state machine, not new logic.\n\nState machine (incident phases):\n```\ninvestigating\n  \u2192 (diagnoser produces next-actions with at least one 'risky') \u2192 remediating\n  \u2192 (diagnoser produces no further actions, all hypotheses ruled out) \u2192 resolved (without remediation)\n  \u2192 (user aborts) \u2192 aborted\n\nremediating\n  \u2192 (all proposed actions executed, postcondition passed) \u2192 monitoring\n  \u2192 (deployer rollback triggered, escalation hit) \u2192 escalated (sub-state of remediating, waiting on human)\n  \u2192 (user aborts) \u2192 aborted\n\nmonitoring\n  \u2192 (verifyResolution passes for criteria.windowMinutes) \u2192 resolved\n  \u2192 (verifyResolution fails) \u2192 investigating (back to diagnosis)\n  \u2192 (user aborts) \u2192 aborted\n\nresolved\n  \u2192 (auto-postmortem completes) \u2192 resolved (final state, postmortemPath set)\n  \u2192 (user re-opens) \u2192 investigating\n\naborted\n  \u2192 (terminal)\n```\n\nPhase routing is deterministic \u2014 given the current phase and the latest agent output, the next phase is determined. No human-in-loop required for happy-path autopilot (subject to Tier 2 risky-action gates). Document this in src/incident/orchestrator.ts comments.\n\n`bober incident status` output (worked example):\n```\nIncident: inc-20260524-500-errors-on (symptom: \"500 errors on checkout endpoint\")\nPhase: monitoring\nSeverity: S2\nDuration: 38m 12s\n\nLatest diagnosis (confidence: high):\n  Connection pool exhausted after migration 042 deployed double-wrapped transactions\n  (diagnoses/diag-1748016000.json)\n\nActions executed: 2 (0 rolled back)\n  1. Scaled deployment api 3\u21926 replicas (changelog.jsonl#L1) \u2014 postcondition passed\n  2. Disabled new_checkout_flow flag (changelog.jsonl#L2) \u2014 postcondition passed\n\nResolution criteria:\n  api.checkout.error_rate < 0.001 for 10m via obs__datadog\n  Current: 0.0008 (sampled 2m ago) \u2014 meets threshold; 8m remaining in window\n\nNext: auto-transition to 'resolved' when criteria sustained.\n```\n\nIntegration test: this is the most complex test in the spec. Use a fixture with mocked observability MCP, mocked deployer (so it doesn't actually call kubectl), and a deterministic diagnoser response. Verify:\n1. createIncident produces artifacts.\n2. Diagnoser invoked, diagnosis written.\n3. Risky action proposed \u2192 checkpoint fires (mocked to auto-approve in test).\n4. Deployer executes, changelog updated.\n5. verifyResolution called with mocked passing metric \u2192 status='monitoring'.\n6. After windowMinutes simulated \u2192 status='resolved'.\n7. Postmortem auto-generated.\n8. All artifacts on disk in correct order.\n9. Audit log shows all checkpoint outcomes.",
+  "evaluatorNotes": "Verify state machine transitions are GUARDED \u2014 invalid transitions (e.g., resolved \u2192 remediating without an explicit re-open) reject with a clear error. Test: try setIncidentStatus from 'resolved' to 'investigating' without using the documented re-open path; should reject.\n\nVerify the integration test is REAL integration \u2014 not a chain of mocks. The orchestrator's state machine, the timeline append helpers, the rollback logic, the verifyResolution call \u2014 all must be real code in the test. Only the external systems (kubectl, observability MCPs) get mocked.\n\nVerify checkpoint gate fires for EVERY risky action: a test where the deployer proposes 3 risky actions must see 3 gate invocations. Skipping the gate for batched actions defeats the safety design.\n\nVerify `bober incident abort` rollback flow: test that abort with --confirm-rollback runs the inverses; abort without it just marks the incident aborted (does NOT execute rollbacks silently). Silent rollback is a footgun.\n\nVerify the status command works on incidents in every phase including 'aborted'. Should not crash if some artifacts are missing (e.g., aborted incident has no resolution-evidence directory).\n\nCheck the slash command flow: when invoked without arguments, prompt is helpful, not silent. When invoked with a symptom, the flow kicks off immediately. Document the user-visible output format so Sprint 26 (VISION.md) can show examples.",
+  "completedAt": "2026-05-25T12:05:00Z"
+}

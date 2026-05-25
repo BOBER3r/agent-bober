@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-15-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-15",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T04:57:16Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Bober Vision: transforming agent-bober into a multi-mode software engineering teammate. Four modes: autopilot, careful-flow, diagnose, postmortem. Tier 3 (sprints 15-25) introduces the prod-incident agent shape: read-only diagnoser, observability MCP slots, change-management gates, rollback, postmortem.",
+    "completedSprints": [
+      {"contractId": "sprint-1", "title": "SessionStart bootstrap + .bober/principles.md", "summary": "Foundation: principles file + SessionStart hooks."},
+      {"contractId": "sprint-2", "title": "Iron Law / Red Flags / Rationalization-Prevention voice + bober.debug skill", "summary": "Behavioral discipline patterns ported from obra/superpowers."},
+      {"contractId": "sprint-3", "title": "Voice pass across agent prompts", "summary": "5 agent prompts gained role-specific Iron Law + Red Flags + Rationalization-Prevention tables. Voice style now uniform."},
+      {"contractId": "sprint-4", "title": "Anti-pattern reference catalog", "summary": "4 MIT-attributed reference docs at .bober/anti-patterns/ + evaluator Step 6.5 citations."},
+      {"contractId": "sprint-5", "title": "bober-code-reviewer agent", "summary": "Code-review subagent + skill + advisory-only orchestrator wiring."},
+      {"contractId": "sprint-6", "title": "HARD-GATE + AGENTS.md", "summary": "Planner HARD-GATE checkpoint + repo-root AGENTS.md contract."},
+      {"contractId": "sprint-7", "title": "Careful-flow plumbing", "summary": "src/orchestrator/checkpoints/ module wired into pipeline.ts at 9 sites with noop default."},
+      {"contractId": "sprint-8", "title": "CLI checkpoint mechanism", "summary": "Blocking CLI prompts with stderr + readline + $EDITOR + non-TTY noop fallback."},
+      {"contractId": "sprint-9", "title": "Disk-marker mechanism + approve CLI", "summary": "File-based approval queue; bober approve/reject/list-approvals CLI commands."},
+      {"contractId": "sprint-10", "title": "GitHub PR-native mechanism", "summary": "Run-tracking PR with checkbox state; GhClient seam; disk fallback. getCheckpointMechanismFor resolver."},
+      {"contractId": "sprint-11", "title": "Per-artifact-type renderers", "summary": "9 renderers (research/plan/sprint-contract/generator-diff/eval-result/etc.) with registry dispatch."},
+      {"contractId": "sprint-12", "title": "Feedback propagation to agents", "summary": "feedback-router: reject→reinvoke up to maxIterations then abort marker; edit→applyEditDelta with backup; !!abort token."},
+      {"contractId": "sprint-13", "title": "Approval audit trail", "summary": "Append-only JSONL audit at .bober/audits/<runId>.jsonl with race-safe writes; bober audit show CLI."},
+      {"contractId": "sprint-14", "title": "Mode + mechanism config", "summary": "pipeline.mode (autopilot|careful), pipeline.checkpointMechanism, checkpointOverrides, approvalTimeoutMs, prPollMs. CLI --mode/--checkpoint/--checkpoint-all flags. Mode-derived default mechanism resolver."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "agents/bober-evaluator.md",
+      "agents/bober-generator.md",
+      "agents/bober-planner.md",
+      "agents/bober-code-reviewer.md",
+      "skills/bober.debug/SKILL.md",
+      ".bober/anti-patterns/README.md",
+      ".bober/specs/spec-20260524-bober-vision.json"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-15.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

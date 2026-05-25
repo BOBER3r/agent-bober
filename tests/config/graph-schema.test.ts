@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import { glob } from "glob";
 import { BoberConfigSchema, PartialBoberConfigSchema } from "../../src/config/schema.js";
+import { loadConfig } from "../../src/config/loader.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "..", "..");
@@ -104,5 +105,177 @@ describe("template configs validate against extended BoberConfigSchema", () => {
     if (result.success) {
       expect(result.data.graph).toBeUndefined();
     }
+  });
+});
+
+// ── Sprint 16 backward-compat invariant (s16-c8) ─────────────────────────
+
+describe("Sprint 16 — backward-compat: existing bober.config.json parses without observability (s16-c8)", () => {
+  it("repo's bober.config.json (no observability section) parses successfully via BoberConfigSchema", async () => {
+    const raw = await readFile(resolve(repoRoot, "bober.config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    const result = BoberConfigSchema.safeParse(parsed);
+    expect(result.success, `bober.config.json parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      expect(result.data.observability).toBeUndefined();
+    }
+  });
+
+  it("loadConfig returns config with observability undefined when no section present", async () => {
+    const config = await loadConfig(repoRoot);
+    expect(config.observability).toBeUndefined();
+  });
+
+  it("BoberConfigSchema accepts observability section with providers array", () => {
+    const minimalWithObs = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {}, generator: {}, evaluator: { strategies: [] },
+      sprint: {}, pipeline: {}, commands: {},
+      observability: {
+        providers: [
+          { name: "loki", kind: "logs", mcpCommand: "npx", mcpArgs: ["mcp-grafana-loki"] },
+        ],
+      },
+    };
+    const result = BoberConfigSchema.safeParse(minimalWithObs);
+    expect(result.success, `parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      expect(result.data.observability?.providers).toHaveLength(1);
+      expect(result.data.observability?.providers[0].enabled).toBe(true); // default
+    }
+  });
+
+  it("observability.providers defaults to [] when section is present but providers omitted", () => {
+    const minimalEmpty = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {}, generator: {}, evaluator: { strategies: [] },
+      sprint: {}, pipeline: {}, commands: {},
+      observability: {},
+    };
+    const result = BoberConfigSchema.safeParse(minimalEmpty);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.observability?.providers).toEqual([]);
+  });
+});
+
+// ── Sprint 14 backward-compat invariant (s14-c7) ─────────────────────────
+
+describe("Sprint 14 — backward-compat: existing bober.config.json parses with new pipeline defaults (s14-c7)", () => {
+  it("repo's bober.config.json (no pipeline.mode etc.) parses successfully via BoberConfigSchema", async () => {
+    // Read the actual on-disk bober.config.json from the repo root.
+    // This file has pipeline.maxIterations, requireApproval, contextReset, researchPhase, architectPhase
+    // but NO mode/checkpointMechanism/checkpointOverrides/approvalTimeoutMs/prPollMs.
+    const raw = await readFile(resolve(repoRoot, "bober.config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+
+    // Must parse successfully — all new fields have defaults.
+    const result = BoberConfigSchema.safeParse(parsed);
+    expect(
+      result.success,
+      `bober.config.json parse failed: ${JSON.stringify(result.error?.issues)}`,
+    ).toBe(true);
+
+    if (result.success) {
+      // New fields should have defaults applied.
+      expect(result.data.pipeline.mode).toBe("autopilot");
+      expect(result.data.pipeline.checkpointMechanism).toBeUndefined();
+      expect(result.data.pipeline.checkpointOverrides).toEqual({});
+      expect(result.data.pipeline.approvalTimeoutMs).toBe(86_400_000);
+      expect(result.data.pipeline.prPollMs).toBe(30_000);
+      // Existing fields should be preserved.
+      expect(result.data.pipeline.maxIterations).toBe(40);
+      expect(result.data.pipeline.requireApproval).toBe(false);
+    }
+  });
+
+  it("loadConfig on repo's bober.config.json returns autopilot mode with noop defaults", async () => {
+    // Full load path: partial parse → deep-merge defaults → full schema validation.
+    const config = await loadConfig(repoRoot);
+
+    // Backward-compat: existing pipeline fields are preserved.
+    expect(config.pipeline.maxIterations).toBe(40);
+    expect(config.pipeline.requireApproval).toBe(false);
+    expect(config.pipeline.contextReset).toBe("always");
+
+    // Sprint 14 defaults: mode=autopilot, checkpointMechanism=undefined → noop at runtime.
+    expect(config.pipeline.mode).toBe("autopilot");
+    expect(config.pipeline.checkpointMechanism).toBeUndefined();
+    expect(config.pipeline.checkpointOverrides).toEqual({});
+    expect(config.pipeline.approvalTimeoutMs).toBe(86_400_000);
+    expect(config.pipeline.prPollMs).toBe(30_000);
+    // maxCheckpointIterations should be present (Sprint 12 default = 3).
+    expect(config.pipeline.maxCheckpointIterations).toBe(3);
+  });
+
+  it("BoberConfigSchema accepts pipeline:{} with all Sprint 14 fields defaulted", () => {
+    // Minimal pipeline:{}  — same shape as the graph-schema backcompat test above.
+    const minimalPipeline = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+    };
+    const result = BoberConfigSchema.safeParse(minimalPipeline);
+    expect(result.success, `pipeline:{} parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      // All Sprint 14 fields should be defaulted.
+      expect(result.data.pipeline.mode).toBe("autopilot");
+      expect(result.data.pipeline.checkpointMechanism).toBeUndefined();
+      expect(result.data.pipeline.checkpointOverrides).toEqual({});
+      expect(result.data.pipeline.approvalTimeoutMs).toBe(86_400_000);
+      expect(result.data.pipeline.prPollMs).toBe(30_000);
+    }
+  });
+});
+
+describe("Sprint 28 — backward-compat: existing bober.config.json parses without telemetry section", () => {
+  it("repo's bober.config.json (no telemetry section) parses successfully via BoberConfigSchema", async () => {
+    const raw = await readFile(resolve(repoRoot, "bober.config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    const result = BoberConfigSchema.safeParse(parsed);
+    expect(result.success, `parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      expect(result.data.telemetry).toBeUndefined();
+    }
+  });
+
+  it("loadConfig returns config with telemetry undefined when section absent", async () => {
+    const config = await loadConfig(repoRoot);
+    expect(config.telemetry).toBeUndefined();
+  });
+
+  it("BoberConfigSchema accepts telemetry section with enabled=true", () => {
+    const minimal = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      telemetry: { enabled: true },
+    };
+    const result = BoberConfigSchema.safeParse(minimal);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.telemetry?.enabled).toBe(true);
+  });
+
+  it("telemetry.enabled defaults to false when section is {}", () => {
+    const minimal = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      telemetry: {},
+    };
+    const result = BoberConfigSchema.safeParse(minimal);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.telemetry?.enabled).toBe(false);
   });
 });

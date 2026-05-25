@@ -1,0 +1,45 @@
+{
+  "id": "sprint-spec-20260524-superpowers-port-6",
+  "specId": "spec-20260524-superpowers-port",
+  "feature": "Brainstorming HARD-GATE in bober.plan",
+  "description": "Add an explicit <HARD-GATE> block to skills/bober.plan/SKILL.md between PlanSpec generation (Step 5) and Sprint decomposition (Step 6). The gate forbids writing .bober/contracts/*.json files until either the user explicitly approves the assumptions/outOfScope (interactive mode) or the planner has cited file:line evidence for each assumption (autonomous mode).",
+  "successCriteria": [
+    {
+      "id": "s6-c1",
+      "description": "skills/bober.plan/SKILL.md contains a single block tagged <HARD-GATE>...</HARD-GATE> placed structurally between the section that generates the PlanSpec (currently Step 5) and the section that decomposes into sprints (currently Step 6).",
+      "verificationMethod": "Read skills/bober.plan/SKILL.md. Grep for '<HARD-GATE>'. Verify exactly one occurrence. Verify its position is between Step 5 and Step 6 headings.",
+      "passed": false
+    },
+    {
+      "id": "s6-c2",
+      "description": "The HARD-GATE block defines two protocols by name: INTERACTIVE protocol (user reviews assumptions and outOfScope, explicitly approves before sprint files are written) and AUTONOMOUS protocol (planner self-approves only if every assumption is backed by cited evidence — minimum file path, ideally file:line).",
+      "verificationMethod": "Read the HARD-GATE block. Verify both protocols are named and described. Verify the evidence requirement for autonomous mode names file path at minimum.",
+      "passed": false
+    },
+    {
+      "id": "s6-c3",
+      "description": "The HARD-GATE block contains an explicit forbidden-action statement: writing .bober/contracts/*.json files before approval is recorded is forbidden. The forbidden action references the specific file pattern.",
+      "verificationMethod": "Grep the gate block for '.bober/contracts' and 'forbidden' or 'MUST NOT' or equivalent.",
+      "passed": false
+    },
+    {
+      "id": "s6-c4",
+      "description": "The HARD-GATE block specifies how approval is RECORDED: in INTERACTIVE mode, the user's response becomes a resolvedClarifications entry on the spec; in AUTONOMOUS mode, the planner emits an explicit approval note in the spec's metadata or assumptions list with evidence cited.",
+      "verificationMethod": "Read the gate block. Verify both recording mechanisms are documented.",
+      "passed": false
+    },
+    {
+      "id": "s6-c5",
+      "description": "Existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "skills/bober.plan/SKILL.md", "action": "modify", "description": "Insert <HARD-GATE> block between Step 5 and Step 6; surrounding text unchanged" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-superpowers-port-5"],
+  "status": "proposed",
+  "generatorNotes": "Reference: /tmp/superpowers/skills/brainstorming/SKILL.md:10-14 for the <HARD-GATE> tag pattern. Suggested block content (adapt voice but preserve structure):\n\n```\n<HARD-GATE>\nDo NOT write any .bober/contracts/*.json file until one of the following has happened:\n\n1. INTERACTIVE protocol — the user has explicitly approved the assumptions and outOfScope sections above. Record the approval as a resolvedClarifications entry with questionId='gate-design-approval' and the user's verbatim approval in the answer field.\n\n2. AUTONOMOUS protocol — every assumption in the spec is backed by cited evidence (minimum: a file path; preferred: file:line). The planner records its own self-approval by adding an entry to resolvedClarifications with questionId='gate-design-approval', answer='Autonomous self-approval', resolvedBy='planner', and a metadata.approvalEvidence field listing the cited file paths.\n\nViolating this gate produces orphan contracts that diverge from the spec. Discovered violations result in the contracts being deleted and the spec status being reverted to 'needs-clarification'.\n</HARD-GATE>\n```\n\nThis is a single insertion. Locate the existing Step 5 / Step 6 boundary in skills/bober.plan/SKILL.md (it currently lists them as '## Step 5: Generate the PlanSpec' and '## Step 6: Decompose into Sprint Contracts'). Insert the gate block between them. Surrounding text stays untouched. Note that there is also a Step 7.5 in the existing file ('Decide — Ready or Needs Clarification?') — the gate is logically before 7.5; both can coexist (gate is a stricter pre-decomposition check; 7.5 is the post-decomposition status decision). Voice: use bober's procedural voice; do NOT replicate 'EVERY project regardless of perceived simplicity' kind of phrasing — bober already handles simplicity via the sprintSize config.",
+  "evaluatorNotes": "Verify the <HARD-GATE> tag uses the exact syntax (with hyphen, capitalized HARD-GATE). This matters because superpowers's empirical tuning is around the exact tag — the model has been trained to recognize it. Verify the gate is INSERTED, not REPLACED — surrounding Step 5/Step 6 content must be intact. Run a textual diff against the prior version of bober.plan/SKILL.md to confirm only insertion, no deletion (unless deletion is restoring contradictory text). Verify the gate's forbidden-action statement mentions the specific .bober/contracts/*.json pattern — vague language ('do not proceed') is not enough. Verify the gate names BOTH protocols. Confirm that the gate does not contradict the existing Step 7.5 ambiguity-score logic — both can coexist (gate is about design approval; 7.5 is about clarification questions). If contradiction is found, flag as a regression."
+}

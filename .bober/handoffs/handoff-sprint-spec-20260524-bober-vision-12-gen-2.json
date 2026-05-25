@@ -1,0 +1,18 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-12-gen-2",
+  "contractId": "sprint-spec-20260524-bober-vision-12",
+  "specId": "spec-20260524-bober-vision",
+  "iteration": 2,
+  "evaluatorFeedback": {
+    "overallResult": "fail",
+    "passedCount": 7,
+    "failedCriteria": [
+      {
+        "id": "s12-c4",
+        "issue": "env var BOBER_CHECKPOINT_ABORT_TOKEN is never read from process.env",
+        "fix": "Default envAbortToken to process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] when caller omits it. Add a test that sets/restores process.env['BOBER_CHECKPOINT_ABORT_TOKEN']='MYTOKEN' (via try/finally), invokes runCheckpointWithFeedback WITHOUT passing envAbortToken, and verifies a feedback containing 'MYTOKEN' triggers USER_ABORT."
+      }
+    ],
+    "preserveBehavior": "Existing 50 feedback-router tests + 820 total tests must continue to pass. The explicit envAbortToken parameter path must still work."
+  }
+}

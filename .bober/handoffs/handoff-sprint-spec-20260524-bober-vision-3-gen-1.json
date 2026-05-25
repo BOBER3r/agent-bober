@@ -1,0 +1,53 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-3",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-24T21:50:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 3 of 28. Final Tier 0 sprint: voice pass across 5 remaining agent prompts (bober-planner, bober-curator, bober-architect, bober-researcher, bober-evaluator). Sprint 2 already handled bober-generator. Each gets exactly one fenced Iron Law block (role-specific, load-bearing), a Red Flags list (>=5 entries), and a Rationalization-Prevention markdown table (>=5 rows).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260524-bober-vision-1",
+        "title": "SessionStart bootstrap + bober.using-bober skill",
+        "summary": "Bootstrap mechanism + verbatim-voice catalog skill (commit 03cf904)."
+      },
+      {
+        "contractId": "sprint-spec-20260524-bober-vision-2",
+        "title": "Verbatim port of verify + debug skills",
+        "summary": "skills/bober.verify and skills/bober.debug ported MIT-attributed from /tmp/superpowers. Iron Law + DISPUTE protocol inlined into bober-generator.md (now 524 lines). Established the structural-block style (Iron Law fenced near top of agent's instruction section; Red Flags list; Rationalization-Prevention markdown table). Commit e9ea377."
+      }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "agents/bober-generator.md — reference for the style: Sprint 2 added Iron Law fenced block at lines 171-177, Forbidden Responses at 318-327, DISPUTE protocol at 333-351. Use this as the STYLE TEMPLATE for the 5 remaining agents in this sprint.",
+      "agents/bober-planner.md — modify: Iron Law about testable success criteria.",
+      "agents/bober-curator.md — modify: Iron Law about file-path-and-line-number evidence.",
+      "agents/bober-architect.md — modify: Iron Law about structured tradeoff evidence.",
+      "agents/bober-researcher.md — modify: Iron Law about file-path-and-line-number evidence.",
+      "agents/bober-evaluator.md — modify: Iron Law about independent verification of every success criterion.",
+      "/tmp/superpowers/skills/verification-before-completion/SKILL.md — reference for table format (Rationalization-Prevention must be markdown table, NOT bullet list)."
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-3.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "configPath": "bober.config.json",
+  "principlesPath": ".bober/principles.md",
+  "principles": null,
+  "evaluatorFeedback": null,
+  "criticalNotes": [
+    "Style pass, NOT a content rewrite. ADD three structural blocks per file (Iron Law, Red Flags list, Rationalization-Prevention table). Existing instructions stay intact.",
+    "Voice: VERBATIM superpowers style — capitalized rules, all-caps STOP conditions, <EXTREMELY-IMPORTANT> tags where they sharpen the rule. The abandoned spec's bober-procedural-voice constraint is REVERSED.",
+    "Each Iron Law must be ROLE-SPECIFIC and LOAD-BEARING. Generic 'do good work' phrasing is a fail.",
+    "Rationalization-Prevention block MUST be markdown table format (| Excuse | Reality |). NOT a bullet list — superpowers empirically tuned the table format.",
+    "Iron Law placement: just after YAML frontmatter and Subagent Context block (the FIRST emphasis block in the file).",
+    "Red Flags: list format >=5 entries per agent, role-appropriate STOP conditions.",
+    "Voice consistency check: NONE of the five files should contain 'your human partner' (those are subagent contexts with the orchestrator, not a human), 'EXTREMELY-IMPORTANT' all-caps as a phrase (the <EXTREMELY-IMPORTANT> tag IS allowed), or '94% rejection' framing.",
+    "Each file must remain under 800 lines (NFR).",
+    "Existing structured-JSON response contracts (e.g., bober-evaluator's EvalResult schema, bober-curator's briefing summary) must remain intact — additions go AROUND them, not on them.",
+    "Iron Law suggestions per role (use these or equivalent, must mention the role-specific load-bearing constraint): planner='NO SPRINT CONTRACTS WITHOUT TESTABLE SUCCESS CRITERIA'; curator='NO BRIEFING WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE'; architect='NO ADR WITHOUT STRUCTURED TRADEOFF EVIDENCE'; researcher='NO FINDING WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE'; evaluator='NO PASS WITHOUT INDEPENDENT VERIFICATION OF EVERY SUCCESS CRITERION'.",
+    "Sprint 2 already established the Iron Law block format in bober-generator.md (lines 171-177) — match that visual style across the 5 remaining files for consistency.",
+    "BONUS but not required: while editing bober.using-bober/SKILL.md is technically OUT OF SCOPE (it's a Sprint 1 artifact), if there's a small annotation to update on the (planned) labels for bober.verify/bober.debug since they now exist, that's allowed as a tiny consistency fix. Otherwise leave alone."
+  ]
+}

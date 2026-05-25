@@ -20,6 +20,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm run lint
+      # Runs all tests including tests/e2e/four-modes.test.ts (Sprint 27 correctness gate).
+      # Runtime <5min (11 e2e tests complete in ~800ms; full suite in ~5s).
       - run: npm run test
 
   kpi-gate:

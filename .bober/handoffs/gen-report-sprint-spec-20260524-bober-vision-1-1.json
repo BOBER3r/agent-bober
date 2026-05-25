@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-1",
+  "iteration": 1,
+  "status": "complete",
+  "criteriaResults": [
+    {"criterionId": "s1-c1", "met": true, "evidence": "hooks/session-start created with #!/usr/bin/env bash shebang, set -euo pipefail, verbatim escape_for_json bash parameter substitution function. test -x hooks/session-start passes. bash hooks/session-start | jq . produces valid JSON with additionalContext field containing the SKILL.md body. CURSOR_PLUGIN_ROOT=1 and CLAUDE_PLUGIN_ROOT=1 branches both verified."},
+    {"criterionId": "s1-c2", "met": true, "evidence": "hooks/hooks.json updated with SessionStart key (matcher: startup|clear|compact, nested hooks array with type/command/async). jq . hooks/hooks.json parses cleanly. jq '.hooks.PostToolUse' returns both original entries byte-identical (echo + node scripts/graph-hook.mjs)."},
+    {"criterionId": "s1-c3", "met": true, "evidence": "skills/bober.using-bober/SKILL.md created. Frontmatter: name: bober-using-bober, description starts 'Use when starting any conversation'. Frontmatter byte count: 211 bytes (under 1024). All 14 skill names present. <EXTREMELY-IMPORTANT> tag: 2 occurrences. Iron Law: 3 occurrences. AGENTS.md: 3 occurrences. Red Flags table: 12 rows."},
+    {"criterionId": "s1-c4", "met": true, "evidence": "time bash hooks/session-start >/dev/null run twice: 0.456s and 0.456s. Both under 500ms."},
+    {"criterionId": "s1-c5", "met": true, "evidence": "grep 'obra/superpowers' and 'MIT' both present in skills/bober.using-bober/SKILL.md. Also as comment in hooks/session-start."},
+    {"criterionId": "s1-c6", "met": true, "evidence": "npm run typecheck: exit 0. npm run lint: exit 0. npm run build: exit 0. npm run test: 44 test files passed, 584 tests passed, 4 skipped — no regressions."}
+  ],
+  "filesChanged": [
+    {"path": "hooks/session-start", "action": "created", "description": "Executable bash SessionStart hook with env-var branch dispatch"},
+    {"path": "hooks/hooks.json", "action": "modified", "description": "Added SessionStart matcher beside preserved PostToolUse entries"},
+    {"path": "skills/bober.using-bober/SKILL.md", "action": "created", "description": "Bootstrap skill with verbatim voice from obra/superpowers"}
+  ],
+  "commits": ["03cf904 - bober(sprint-1): SessionStart bootstrap + bober.using-bober skill"],
+  "blockers": [],
+  "notes": "Hook completes ~456ms warm. bash startup dominates (~450ms). All 14 catalog skills named (with planned annotations for future-sprint skills). Domain skills (anchor, brownfield, graph, impact, onboard, playwright, react, solidity) in a separate section."
+}

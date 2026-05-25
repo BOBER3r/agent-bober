@@ -1,0 +1,31 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-23-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-23",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T08:05:28Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 23 — bober-postmortemer agent (offline read-only) + bober.postmortem skill + generatePostmortem orchestration + auto-postmortem on resolved + CLI subcommands.",
+    "completedSprints": [
+      {"contractId":"sprint-15","title":"bober-diagnoser","summary":"Read-only agent pattern. Postmortemer is similar but with NO observability MCPs."},
+      {"contractId":"sprint-19","title":"Incident timeline","summary":"Sources of artifacts: incident.json, timeline.jsonl, observations.jsonl, actions.jsonl, changelog.jsonl, runbook-execution.jsonl, hypotheses.md, diagnoses/."},
+      {"contractId":"sprint-21","title":"Rollback CLI","summary":"Commander subcommand pattern for nested subcommands (bober rollback)."},
+      {"contractId":"sprint-22","title":"verifyResolution","summary":"resolutionEvidence on incident.json; setIncidentStatus extends opts pattern."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/incident/timeline.ts",
+      "src/incident/types.ts",
+      "src/incident/rollback.ts",
+      "src/cli/commands/rollback.ts",
+      "src/cli/index.ts",
+      "agents/bober-diagnoser.md",
+      "src/orchestrator/deploy/spawn.ts"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-23.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

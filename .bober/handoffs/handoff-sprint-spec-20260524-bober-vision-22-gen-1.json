@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-22-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-22",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T07:46:39Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 22 — verifyResolution gate before incident resolved. Calls observability MCP query_metric, asserts EVERY sample meets threshold, writes evidence file, integrates with setIncidentStatus.",
+    "completedSprints": [
+      {"contractId":"sprint-16","title":"Obs MCP slots","summary":"obs__<provider>__<tool> namespace, ExternalMcpServer.callTool(name,args), mergeObsTools."},
+      {"contractId":"sprint-17","title":"bober.diagnose","summary":"Phase 4 declares resolution criteria shape: metric/threshold/window/baseline/source. THIS sprint enforces them."},
+      {"contractId":"sprint-19","title":"Incident timeline","summary":"setIncidentStatus exists; needs extension for resolved-gate."},
+      {"contractId":"sprint-20","title":"Deployer","summary":"agents/bober-deployer.md prompt; will be modified to call verifyResolution."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/mcp/external-client.ts",
+      "src/orchestrator/observability/merge.ts",
+      "src/incident/timeline.ts",
+      "src/incident/types.ts",
+      "agents/bober-diagnoser.md",
+      "agents/bober-deployer.md"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-22.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

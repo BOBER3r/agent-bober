@@ -1,0 +1,32 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-23-1",
+  "contractId": "sprint-spec-20260524-bober-vision-23",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T11:37:30Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"1030 passed, 4 skipped (75 files)","details":"+7 postmortem tests, baseline 1023 preserved"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s23-c1","result":"pass","evidence":"agents/bober-postmortemer.md YAML tools:[Read,Bash,Grep,Glob] only. NO obs__ MCPs. NO Write/Edit. Line 33 explicitly states no obs__ tools. Iron Law @40-46. 7 Red Flags. 7 Rationalization rows."},
+    {"criterionId":"s23-c2","result":"pass","evidence":"Iron Law verbatim 'NO POSTMORTEM SECTION WITHOUT EVIDENCE FROM INCIDENT ARTIFACTS' @40-46 in agent + @17-22 in SKILL.md."},
+    {"criterionId":"s23-c3","result":"pass","evidence":"SKILL.md synthesis order @38-50 (9 artifacts), 5-Whys heuristic pseudocode @54-90, contributing factors from runbook-execution failures, action items from gaps. Template @92-157."},
+    {"criterionId":"s23-c4","result":"pass","evidence":"All required sections present in template @92-157: Title, Status, Severity, TL;DR, Timeline (table), Impact, Root Cause (5-Whys numbered), Contributing Factors, What Went Well, What Went Wrong, Action Items (Owner|Due TBD placeholders)."},
+    {"criterionId":"s23-c5","result":"pass","evidence":"generatePostmortem(projectRoot, incidentId): Promise<PostmortemResult{path,content,redactionCount,shallowWarning,citationCount}>. Reads 8 artifact sources (incident.json, timeline.jsonl, observations.jsonl, changelog.jsonl, runbook-execution.jsonl, actions.jsonl, diagnoses/, resolution-evidence/). Deterministic programmatic synthesis. Test 1 verifies all required section headings. LOW NOTE: hypotheses.md documented in SKILL/agent but not yet read by impl — gap tracked."},
+    {"criterionId":"s23-c6","result":"pass","evidence":"timeline.ts @484-511 fire-and-forget IIFE on resolved when autoPostmortem !== false. Dynamic import. Post-completion atomic incident.json write with postmortemPath. schema.ts @276 default true; @296 optional incident on BoberConfigSchema. Test 5: status returns <500ms; postmortemPath set after await pmPromise. Test 6: autoPostmortem=false suppresses."},
+    {"criterionId":"s23-c7","result":"pass","evidence":"Test 2 asserts r.citationCount > 5 + spot-checks /(timeline\\.jsonl#L\\d+)/, /(diagnoses\\/diagnosis-)/, '(incident.json)'. countCitations() @603-610. SKILL.md @159-170 + agent @117-126 document citation format table (4 styles)."},
+    {"criterionId":"s23-c8","result":"pass","evidence":"src/cli/commands/postmortem.ts registerPostmortemCommand: parent 'postmortem' @26 + 'generate <id>' @31 + 'show <id>' @66 subcommands. Registered in src/cli/index.ts:262. ENOENT handlers with exitCode=1."},
+    {"criterionId":"s23-c9","result":"pass","evidence":"All 4 strategies exit 0. 1030 tests pass (+7 from 1023). Existing tests updated minimally with autoPostmortem:false (no behavior changes)."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority":"low","category":"quality","file":"src/incident/postmortem.ts","description":"hypotheses.md documented as synthesis source #9 in SKILL.md and agent prompt but NOT read by generatePostmortem. 'Disproved:' lines should feed What Went Well; 'Open:' lines should feed Action Items. Tracked for follow-up."},
+    {"priority":"low","category":"quality","file":"tests/incident/postmortem.test.ts","description":"Auto-trigger non-blocking test uses elapsed < 500ms timing proxy. Stronger structural check would assert postmortem.md NOT exist pre-await and DOES exist post-await."}
+  ],
+  "summary": "All 9 criteria pass on iter 1. Offline read-only postmortemer (no MCPs), full template, deterministic programmatic synthesis with citations (count > 5), redaction (AKIA test verifies fake API key NOT in output), fire-and-forget non-blocking auto-trigger preserves status-transition latency, autoPostmortem=false suppresses. 1030 tests, +7 from 1023. Two low-priority gaps (hypotheses.md not read; non-blocking test uses timing) tracked."
+}

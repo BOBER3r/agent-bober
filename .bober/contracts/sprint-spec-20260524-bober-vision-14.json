@@ -1,0 +1,69 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-14",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Careful-flow mode selection + per-checkpoint mechanism overrides",
+  "description": "Wire bober.config.json schema to support pipeline.mode (autopilot | careful), pipeline.checkpointMechanism (noop | cli | disk | pr), pipeline.checkpointOverrides (per-checkpoint mechanism override). Per-run CLI flag --checkpoint=<mechanism> overrides config. End-of-tier sprint that makes Tier 2 actually usable end-to-end.",
+  "successCriteria": [
+    {
+      "id": "s14-c1",
+      "description": "src/config/schema.ts extends BoberConfigSchema with: pipeline.mode (enum 'autopilot' | 'careful', default 'autopilot'); pipeline.checkpointMechanism (enum 'noop' | 'cli' | 'disk' | 'pr', default 'noop' in autopilot, default 'disk' in careful); pipeline.checkpointOverrides (Record<string, mechanism>, default {}); pipeline.maxCheckpointIterations (number, default 3, Sprint 12 already added — verify present); pipeline.approvalTimeoutMs (number, default 86400000 i.e. 24hrs, Sprint 9 already added — verify present); pipeline.prPollMs (number, default 30000, Sprint 10 already added — verify present).",
+      "verificationMethod": "Read schema. Verify all six fields with documented defaults.",
+      "passed": true
+    },
+    {
+      "id": "s14-c2",
+      "description": "Mode-to-default resolution: when pipeline.mode='autopilot' and pipeline.checkpointMechanism is unset, default to 'noop' (all checkpoints auto-approve, current behavior). When pipeline.mode='careful' and unset, default to 'disk'. Explicit set values always win.",
+      "verificationMethod": "Read defaults resolution logic. Test: config {mode:'autopilot'} → mechanism resolves to 'noop'. Config {mode:'careful'} → mechanism resolves to 'disk'. Config {mode:'careful', checkpointMechanism:'pr'} → resolves to 'pr'.",
+      "passed": true
+    },
+    {
+      "id": "s14-c3",
+      "description": "Per-checkpoint override: getCheckpointMechanism(checkpointId, config) returns config.pipeline.checkpointOverrides[checkpointId] if set, else config.pipeline.checkpointMechanism. Sprint 10 provided the override hook; this sprint wires the config.",
+      "verificationMethod": "Read resolution. Test: config with overrides[post-research]='cli' and default 'disk' → post-research uses cli, others use disk.",
+      "passed": true
+    },
+    {
+      "id": "s14-c4",
+      "description": "Per-run CLI flag: `bober run --checkpoint=<mechanism>` overrides the config's default for all checkpoints in that run. Per-checkpoint overrides in config still apply UNLESS --checkpoint-all is passed (which overrides per-checkpoint overrides too).",
+      "verificationMethod": "Read CLI flag handling. Test: config default 'disk', invoke with --checkpoint=pr → all use pr. Test: config has overrides[post-research]='cli', invoke with --checkpoint=pr (no --checkpoint-all) → post-research still uses cli.",
+      "passed": true
+    },
+    {
+      "id": "s14-c5",
+      "description": "Config validation rejects: (a) mode='careful' with mechanism='noop' (warning, not error — user may be testing); (b) mechanism='pr' when gh CLI unavailable (warning + fallback to disk per Sprint 10); (c) unknown mechanism name (error).",
+      "verificationMethod": "Read validation. Test each case.",
+      "passed": true
+    },
+    {
+      "id": "s14-c6",
+      "description": "Tier 2 end-to-end test: with mode='careful' and mechanism='disk', run a fixture pipeline through to completion using `bober approve` CLI commands. Verify checkpoints fire, approvals are recorded, run completes.",
+      "verificationMethod": "Integration test in tests/integration/careful-flow.test.ts.",
+      "passed": true
+    },
+    {
+      "id": "s14-c7",
+      "description": "Existing bober.config.json files without the new pipeline fields parse successfully (backwards-compat). Defaults preserve current autopilot behavior.",
+      "verificationMethod": "Test: parse current bober.config.json (no pipeline.mode etc.) and confirm orchestrator runs in autopilot/noop mode.",
+      "passed": true
+    },
+    {
+      "id": "s14-c8",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/config/schema.ts", "action": "modify", "description": "Extend BoberConfigSchema with pipeline.mode, checkpointMechanism, checkpointOverrides (plus verify earlier sprints' additions)" },
+    { "path": "src/orchestrator/checkpoints/registry.ts", "action": "modify", "description": "Wire config-driven mechanism resolution" },
+    { "path": "src/cli/", "action": "modify", "description": "Add --checkpoint and --checkpoint-all flags to `bober run`" },
+    { "path": "tests/integration/careful-flow.test.ts", "action": "create", "description": "End-to-end careful-flow integration test" },
+    { "path": "bober.config.json", "action": "no-change", "description": "Existing config remains valid; no migration needed (backward-compat defaults handle it)" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-13"],
+  "status": "completed",
+  "completedAt": "2026-05-25T07:29:30Z",
+  "passedOnIteration": 1,
+  "generatorNotes": "Schema extension goes in the pipeline section of BoberConfigSchema (existing — check src/config/schema.ts for the current shape). All new fields optional with defaults; zod handles validation.\n\nDefault resolution function: separate from schema (schema only handles parsing; runtime resolves mode→mechanism mapping). Implement as a small util:\n```typescript\nfunction resolveCheckpointMechanism(checkpointId: string, config: BoberConfig, cliOverride?: string, cliOverrideAll?: boolean): string {\n  if (cliOverrideAll && cliOverride) return cliOverride;\n  const override = config.pipeline?.checkpointOverrides?.[checkpointId];\n  if (override) return override;\n  if (cliOverride) return cliOverride;\n  if (config.pipeline?.checkpointMechanism) return config.pipeline.checkpointMechanism;\n  return config.pipeline?.mode === 'careful' ? 'disk' : 'noop';\n}\n```\n\nValidation: zod refine() for the warning cases; let the runtime continue but log via console.warn. Hard error (zod fail) only for unknown mechanism name.\n\nCLI flag wiring: depends on the existing CLI framework. Most likely commander — add .option for --checkpoint and --checkpoint-all on the run command.\n\nEnd-to-end test: a tricky test because it needs to exercise the disk mechanism's polling. Strategy:\n1. Create a tmpdir, scaffold a minimal bober project.\n2. Spawn `bober run --mode=careful --checkpoint=disk` in a child process.\n3. Poll .bober/approvals/ for pending files.\n4. For each pending file, write the corresponding .approved.json.\n5. Wait for child process to exit.\n6. Assert .bober/runs/<runId>.completed.json exists.\n7. Assert .bober/audits/<runId>.jsonl has entries for each checkpoint.\n\nThis is integration-level so it lives in tests/integration/ not unit tests.\n\nDocumenting in VISION.md is Sprint 26 — for this sprint, ensure code comments document the resolution logic for the next developer.",
+  "evaluatorNotes": "Verify backward compatibility EXPLICITLY: open the current bober.config.json (the one this repo has on disk RIGHT NOW), parse it via the new schema, and confirm zero errors. Run an existing sprint pipeline through unchanged and confirm behavior identical to pre-Tier-2.\n\nVerify the careful-flow integration test actually does the disk approval dance (not just mocks the mechanism out). The test must produce real .pending.json files and the test harness must write real .approved.json files to unblock — otherwise the test isn't testing the integration.\n\nVerify CLI flag overrides have a clear precedence order documented in `bober run --help` output. Confusing override precedence is a footgun.\n\nVerify the warning cases in config validation actually warn (not silently accept). console.warn output is visible to the user.\n\nCheck for race in the resolveCheckpointMechanism function: if config is reloaded mid-run, the resolution should snapshot at run start. Otherwise hot-reloading would create surprising mid-pipeline behavior. Test: write a config, start a run, modify config, verify run uses the snapshot config not the modified one.\n\nTier 2 COMPLETION GATE: after this sprint, careful-flow mode is fully usable. A user can set mode='careful' in their config, run a sprint, approve via disk mechanism, and see the audit log. If any of those three paths doesn't work end-to-end, Tier 2 isn't done."
+}

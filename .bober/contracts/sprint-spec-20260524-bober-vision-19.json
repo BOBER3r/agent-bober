@@ -1,0 +1,91 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-19",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Incident timeline tracking \u2014 .bober/incidents/<id>/ structured artifacts",
+  "description": "Define the on-disk structure for incident artifacts: timeline.jsonl (chronological events), observations.jsonl (verified facts), hypotheses.md (current top hypotheses with confidence), actions.jsonl (actions taken or proposed), changelog.jsonl (deploys / config changes), runbook-execution.jsonl. Implement append helpers in src/incident/timeline.ts that every other Tier 3 sprint will use.",
+  "successCriteria": [
+    {
+      "id": "s19-c1",
+      "description": "src/incident/types.ts defines: IncidentId (string), IncidentArtifactKind = 'timeline'|'observation'|'hypothesis'|'action'|'change'|'runbook-execution'|'diagnosis'|'postmortem', TimelineEvent shape, ObservationEntry shape, ActionEntry shape, ChangeEntry shape (with required inverse field for rollback).",
+      "verificationMethod": "Read file. Verify each named type with documented fields.",
+      "passed": true
+    },
+    {
+      "id": "s19-c2",
+      "description": "src/incident/timeline.ts exports: createIncident(symptom): Promise<IncidentId> (creates .bober/incidents/<id>/ skeleton with all jsonl files initialized empty + a minimal incident.json metadata), appendTimeline(incidentId, event), appendObservation, appendAction, appendChange, appendRunbookExecution. All append helpers are atomic (rename-after-write or use fs.appendFile with mutex).",
+      "verificationMethod": "Read file. Verify each export. Test: createIncident produces .bober/incidents/<id>/{incident.json,timeline.jsonl,observations.jsonl,actions.jsonl,changelog.jsonl,runbook-execution.jsonl,hypotheses.md,diagnoses/}.",
+      "passed": true
+    },
+    {
+      "id": "s19-c3",
+      "description": "IncidentId format: 'inc-<YYYYMMDD>-<short-slug>' where short-slug is derived from the symptom (first 3 words, kebab-case, max 30 chars).",
+      "verificationMethod": "Test: createIncident('500 errors on checkout endpoint') \u2192 returns 'inc-20260524-500-errors-on'.",
+      "passed": true
+    },
+    {
+      "id": "s19-c4",
+      "description": "TimelineEvent shape: {timestamp, eventKind, source ('diagnoser'|'deployer'|'human'|'observability'|'system'), summary (string), refPath? (path to detail artifact)}. Every other append helper ALSO writes a corresponding timeline event (e.g., appendAction writes both actions.jsonl and timeline.jsonl).",
+      "verificationMethod": "Test: appendAction({...}) results in both actions.jsonl AND timeline.jsonl gaining new lines.",
+      "passed": true
+    },
+    {
+      "id": "s19-c5",
+      "description": "ChangeEntry has REQUIRED inverse field: {id, type, executedAt, description, inverse: {description, command?}, status: 'pending'|'executed'|'rolled-back'|'failed'}. The inverse field is required at write time, NOT optional. Sprint 21 (rollback awareness) consumes this.",
+      "verificationMethod": "Read ChangeEntry definition. Verify inverse is required. Test: appendChange without inverse throws schema error.",
+      "passed": true
+    },
+    {
+      "id": "s19-c6",
+      "description": "incident.json metadata shape: {incidentId, symptom, createdAt, status: 'investigating'|'remediating'|'monitoring'|'resolved'|'aborted', resolvedAt?, resolutionCriteria?, postmortemPath?}. Status updates via setIncidentStatus helper.",
+      "verificationMethod": "Read shape. Verify all fields. Verify setIncidentStatus helper exists.",
+      "passed": true
+    },
+    {
+      "id": "s19-c7",
+      "description": "Listing helper: listIncidents(): Promise<IncidentSummary[]> reads .bober/incidents/*/incident.json and returns summaries sorted by createdAt desc.",
+      "verificationMethod": "Test: create 3 incidents, listIncidents returns 3 sorted entries.",
+      "passed": true
+    },
+    {
+      "id": "s19-c8",
+      "description": "Unit tests cover: createIncident, all five append helpers, listIncidents, setIncidentStatus. Run npm run test.",
+      "verificationMethod": "Locate tests/incident/timeline.test.ts. Verify coverage.",
+      "passed": true
+    },
+    {
+      "id": "s19-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    {
+      "path": "src/incident/types.ts",
+      "action": "create",
+      "description": "TypeScript types for incident artifacts"
+    },
+    {
+      "path": "src/incident/timeline.ts",
+      "action": "create",
+      "description": "Append helpers + createIncident + listIncidents + setIncidentStatus"
+    },
+    {
+      "path": "tests/incident/timeline.test.ts",
+      "action": "create",
+      "description": "Unit tests for timeline helpers"
+    },
+    {
+      "path": ".bober/incidents/",
+      "action": "create",
+      "description": "Directory (created at first incident)"
+    }
+  ],
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-18"
+  ],
+  "status": "completed",
+  "generatorNotes": "Use zod for schema validation on all append helpers. The ChangeEntry inverse-required constraint is the most important \u2014 sprint 21 (rollback awareness) needs every change to have an inverse declared at write time, NOT retrofitted later.\n\nFile creation atomicity: for jsonl appends, fs.appendFile with O_APPEND is atomic for small writes (<PIPE_BUF, ~4KB on most systems). Use the same mutex pattern from Sprint 13 audit.ts for safety on larger payloads.\n\nIncident directory skeleton (createIncident output):\n```\n.bober/incidents/inc-20260524-500-errors-on/\n  incident.json\n  timeline.jsonl\n  observations.jsonl\n  actions.jsonl\n  changelog.jsonl\n  runbook-execution.jsonl\n  hypotheses.md\n  diagnoses/\n```\n\nThe timeline.jsonl acts as the master event log \u2014 every change to incident state appends here too. This makes 'show me what happened in chronological order' a single file read.\n\nChangeEntry inverse examples (for skill body / documentation):\n```typescript\n// Scaling deployment up\n{ type: 'k8s_scale', description: 'kubectl scale deployment api --replicas=6', inverse: { description: 'kubectl scale deployment api --replicas=3', command: 'kubectl scale deployment api --replicas=3' } }\n\n// Feature flag flip\n{ type: 'flag_toggle', description: 'Enabled new_checkout_flow=true', inverse: { description: 'Disable new_checkout_flow', command: 'curl ... -X PATCH ... -d {\"enabled\":false}' } }\n\n// Database migration (more nuanced \u2014 sometimes inverse is 'run rollback migration')\n{ type: 'db_migration', description: 'Applied migration 042', inverse: { description: 'Run rollback migration for 042', command: 'npm run migrate:rollback -- --to 041' } }\n```\n\nResolveProjectRoot util (if not already in agent-bober's utils): walk up from cwd looking for bober.config.json or .bober/. Use across all incident path resolution.",
+  "evaluatorNotes": "Verify ChangeEntry inverse field is REQUIRED at the zod schema level. A test that calls appendChange without inverse MUST throw a clear error before the file is written. If the field is optional, sprint 21's rollback awareness fails silently when older changes have no inverse.\n\nVerify the timeline.jsonl is updated by EVERY append helper, not just appendTimeline. Without this, 'show me what happened' requires reading 5 different files and merging by timestamp \u2014 defeats the timeline.\n\nVerify atomicity: a unit test that crashes mid-append must leave the jsonl file with VALID lines only (no partial JSON). Use the rename-after-write pattern if the mutex approach doesn't guarantee this on the platform.\n\nVerify file permissions follow Sprint 13's pattern (mode 0600 on creation) \u2014 incident artifacts may contain prod data; assume eventually-readable but minimize default exposure.\n\nVerify the IncidentId slug derivation handles edge cases: empty symptom, all-punctuation symptom, unicode symptom. Tests should cover at least: regular text, Unicode chars, empty string (fall back to 'untitled'), very long string (truncate at 30 chars).\n\nVerify listIncidents handles missing .bober/incidents/ directory gracefully \u2014 return empty array, no crash.",
+  "completedAt": "2026-05-25T09:48:00Z"
+}

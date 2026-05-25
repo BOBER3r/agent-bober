@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-18-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-18",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T06:05:51Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Bober Vision Tier 3. Sprint 18 creates skills/bober.runbook/SKILL.md — runbook execution discipline with precondition/postcondition verification per step and hard gates around destructive ops. Sprint 17's bober.diagnose forward-links to this skill (resolves the forward-link).",
+    "completedSprints": [
+      {"contractId": "sprint-2", "title": "bober.debug skill", "summary": "Template for SKILL.md structure with Iron Law / Red Flags / Rationalization-Prevention / Phases."},
+      {"contractId": "sprint-17", "title": "bober.diagnose skill", "summary": "skills/bober.diagnose/SKILL.md (254 lines). 4-phase incident root-cause with hard gates. Forward-links to skills/bober.runbook (THIS sprint)."},
+      {"contractId": "sprint-15", "title": "bober-diagnoser agent", "summary": "DiagnosisResult schema with nextActions[].blastRadius='safe'|'risky' — matches runbook step blastRadius."},
+      {"contractId": "sprint-16", "title": "Observability MCP slots", "summary": "obs__<provider>__<tool> namespace."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "skills/bober.debug/SKILL.md",
+      "skills/bober.diagnose/SKILL.md",
+      "agents/bober-diagnoser.md"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-18.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

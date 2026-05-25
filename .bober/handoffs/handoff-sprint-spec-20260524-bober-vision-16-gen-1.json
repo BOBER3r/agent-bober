@@ -1,0 +1,26 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-16-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-16",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:13:36Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Bober Vision Tier 3 — Prod-incident agent shape. Sprint 16 adds observability MCP plugin slots; agent-bober becomes an MCP CLIENT consuming external observability servers (logs, metrics, traces, errors) and merges their tools into bober-diagnoser's tool list at spawn time. Generic / BYO design: docs only, no vendor-specific code.",
+    "completedSprints": [
+      {"contractId": "sprint-15", "title": "bober-diagnoser agent", "summary": "agents/bober-diagnoser.md created — 244 lines, read-only investigator with DiagnosisResult schema, Iron Law, 6-step Investigation Discipline. Core tools: Read/Bash/Grep/Glob. Sprint 16 will add observability MCP tools at spawn time."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/mcp/",
+      "src/orchestrator/",
+      "agents/bober-diagnoser.md",
+      "tests/orchestrator/"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-16.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

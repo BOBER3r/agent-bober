@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-2",
+  "iteration": 1,
+  "status": "complete",
+  "filesChanged": [
+    {"path": "skills/bober.verify/SKILL.md", "action": "created", "description": "Verbatim port (143 lines), MIT attribution, Iron Law: NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION EVIDENCE"},
+    {"path": "skills/bober.debug/SKILL.md", "action": "created", "description": "Verbatim port (300 lines), MIT attribution, Iron Law: NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST. 4 phases preserved. Supplementary files NOT ported."},
+    {"path": "agents/bober-generator.md", "action": "modified", "description": "Added Iron Law to Step 4 self-verify; verificationOutput field REQUIRED in both completion-report schemas; Handling Evaluator Feedback section expanded with Forbidden Responses (5 phrases) + DISPUTE protocol. 524 lines total."}
+  ],
+  "commits": ["e9ea377 - bober(sprint-2): verbatim port of bober.verify + bober.debug skills + generator self-verify Iron Law"],
+  "blockers": [],
+  "notes": "Iron Law in skills/bober.verify matches source verbatim (ends 'EVIDENCE' not 'COMMAND OUTPUT' as in my contract — contract paraphrased; source verbatim wins per spec directive). 'your human partner' preserved 1x in bober.verify and 2x in bober.debug. bober-generator.md uses 'the orchestrator' instead per subagent-context adaptation. bober.using-bober still labels both as (planned) — Sprint 3 can update.",
+  "verificationOutput": [
+    {"command": "npm run typecheck", "exitCode": 0, "stdoutTail": "tsc --noEmit clean"},
+    {"command": "npm run lint", "exitCode": 0, "stdoutTail": "eslint src/ clean"},
+    {"command": "npm run build", "exitCode": 0, "stdoutTail": "tsc clean"},
+    {"command": "npm run test", "exitCode": 0, "stdoutTail": "44 files, 584 passed, 4 skipped, 2.49s"},
+    {"command": "wc -l agents/bober-generator.md", "exitCode": 0, "stdoutTail": "524"}
+  ]
+}

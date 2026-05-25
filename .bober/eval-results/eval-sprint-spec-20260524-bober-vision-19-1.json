@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-19-1",
+  "contractId": "sprint-spec-20260524-bober-vision-19",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T09:48:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0","details":"tsc --noEmit"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0","details":"eslint src/"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0","details":"tsc"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"951 passed, 4 skipped (71 files)","details":"+31 new tests, baseline 920 preserved"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s19-c1","result":"pass","evidence":"types.ts: IncidentId=string @18, IncidentArtifactKindSchema 8-value enum @22-31, TimelineEventSchema @36-47 (source 5-enum), ObservationEntrySchema @53-60, ActionEntrySchema @65-72, ChangeEntrySchema @78-89 inverse REQUIRED."},
+    {"criterionId":"s19-c2","result":"pass","evidence":"timeline.ts exports 9 functions. createIncident @148-200 creates all 8 artifacts. Per-incidentId Promise-chain mutex @219+. appendOneLine @69-77 uses fs.open O_WRONLY|O_APPEND|O_CREAT + fh.chmod(0o600)."},
+    {"criterionId":"s19-c3","result":"pass","evidence":"deriveSlug @113-124: first 3 tokens, strip non-[a-z0-9], join '-', truncate 30, fallback 'untitled'. Test @150 confirms '500 errors on checkout' → /^inc-\\d{8}-500-errors-on$/."},
+    {"criterionId":"s19-c4","result":"pass","evidence":"All 4 domain append helpers double-write target+timeline.jsonl in same mutex tick. Tests verify all 4 paths produce both files."},
+    {"criterionId":"s19-c5","result":"pass","evidence":"ChangeEntrySchema.inverse @types.ts 78-89 NOT .optional(). appendChange @timeline.ts 311 parse-before-mutex. Test passes object w/o inverse expecting rejects.toThrow(/inverse/) and verifies changelog.jsonl remains empty."},
+    {"criterionId":"s19-c6","result":"pass","evidence":"IncidentMetadataSchema @types.ts 126-134 all 7 fields, status enum 5 values (investigating/remediating/monitoring/resolved/aborted). setIncidentStatus @timeline.ts 379-401 with atomic temp+rename + resolvedAt auto-set."},
+    {"criterionId":"s19-c7","result":"pass","evidence":"listIncidents @timeline.ts 415-457 ENOENT→[], sort by createdAt desc. Test with 3 incidents (15ms delays for distinct timestamps) verifies desc order."},
+    {"criterionId":"s19-c8","result":"pass","evidence":"tests/incident/timeline.test.ts 31 tests using mkdtemp fixture (no repo pollution). Covers createIncident, all 5 append helpers, listIncidents, setIncidentStatus, mutex correctness (100 parallel), file mode 0o600, slug edge cases."},
+    {"criterionId":"s19-c9","result":"pass","evidence":"All 4 strategies exit 0. 951 tests pass (+31 from 920 baseline)."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 criteria pass on iter 1. ChangeEntry.inverse REQUIRED at zod level verified by tests. Double-write to timeline.jsonl from every domain append. Mutex+fh.chmod(0o600) atomic pattern mirrors audit.ts. listIncidents handles missing dir. 31 new tests; baseline 920 preserved."
+}

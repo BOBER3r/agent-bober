@@ -1,0 +1,53 @@
+{
+  "id": "sprint-spec-20260524-superpowers-port-1",
+  "specId": "spec-20260524-superpowers-port",
+  "feature": "SessionStart bootstrap + bober.using-bober skill",
+  "description": "Add a SessionStart hook that injects the bober.using-bober skill content into the model's first-turn context, modeled on /tmp/superpowers/hooks/session-start. Preserve the existing graph-stats SessionStart output by registering both as separate hooks under the SessionStart matcher. Create skills/bober.using-bober/SKILL.md as the bootstrap content: a short, well-structured skill that names the bober.* skill set, the Iron Law convention this spec is introducing, and points to AGENTS.md (to be created in Sprint 7).",
+  "successCriteria": [
+    {
+      "id": "s1-c1",
+      "description": "hooks/session-start exists as an executable bash script (chmod +x), starts with '#!/usr/bin/env bash' + 'set -euo pipefail', and emits valid JSON to stdout with shape {additional_context: string} (Cursor), {hookSpecificOutput: {additionalContext: string}} (Claude Code), or {additionalContext: string} (other) based on env vars CLAUDE_PLUGIN_ROOT / CURSOR_PLUGIN_ROOT / COPILOT_CLI.",
+      "verificationMethod": "Read hooks/session-start. Verify shebang, set -euo pipefail, escape_for_json function, env-var branching mirroring /tmp/superpowers/hooks/session-start. Verify executable bit: `test -x hooks/session-start`. Pipe stdout through `jq .` and confirm valid JSON.",
+      "passed": false
+    },
+    {
+      "id": "s1-c2",
+      "description": "hooks/hooks.json contains both a SessionStart matcher (registering hooks/session-start) AND the existing PostToolUse matchers (Edit|Write echo + graph-hook). The JSON parses with jq.",
+      "verificationMethod": "Read hooks/hooks.json. Verify shape: {hooks: {SessionStart: [...], PostToolUse: [...]}}. Run `jq . hooks/hooks.json` to confirm parse. Confirm the existing PostToolUse Edit|Write hooks are unchanged.",
+      "passed": false
+    },
+    {
+      "id": "s1-c3",
+      "description": "skills/bober.using-bober/SKILL.md exists with valid YAML frontmatter (name: bober-using-bober, description: starts with 'Use when starting any conversation' and stays under 1024 chars total for the whole frontmatter block).",
+      "verificationMethod": "Read skills/bober.using-bober/SKILL.md. Verify frontmatter parses as YAML. Verify name field, description field present. Verify the file body lists every bober.* skill name (bober.principles, bober.plan, bober.research, bober.architect, bober.sprint, bober.run, bober.eval, bober.verify, bober.debug, bober.code-review) and at least mentions the Iron Law / Red Flags structure as a convention.",
+      "passed": false
+    },
+    {
+      "id": "s1-c4",
+      "description": "The SessionStart hook completes in under 500ms (NFR: performance). Measured via `time bash hooks/session-start` on a second run (cache-warm).",
+      "verificationMethod": "Run `time bash hooks/session-start >/dev/null 2>&1` twice, assert second run reports real time <0.5s.",
+      "passed": false
+    },
+    {
+      "id": "s1-c5",
+      "description": "Existing eval strategies (typecheck, lint, build, test) all pass after this sprint's changes — verifying no regressions in the harness runtime.",
+      "verificationMethod": "Run `npm run typecheck && npm run lint && npm run build && npm run test` — assert exit 0 for all four.",
+      "passed": false
+    },
+    {
+      "id": "s1-c6",
+      "description": "skills/bober.using-bober/SKILL.md includes a placeholder reference to AGENTS.md (e.g., 'See AGENTS.md for contributor discipline') — Sprint 7 will create the file. Reference may use a relative path; broken-link warning at this sprint is acceptable.",
+      "verificationMethod": "Grep skills/bober.using-bober/SKILL.md for the literal string 'AGENTS.md'.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "hooks/session-start", "action": "create", "description": "Executable bash hook that emits bootstrap-injected SessionStart JSON per harness env" },
+    { "path": "hooks/hooks.json", "action": "modify", "description": "Add SessionStart matcher alongside existing PostToolUse matchers" },
+    { "path": "skills/bober.using-bober/SKILL.md", "action": "create", "description": "Bootstrap skill loaded at every SessionStart" }
+  ],
+  "dependsOn": [],
+  "status": "proposed",
+  "generatorNotes": "Reference implementation: /tmp/superpowers/hooks/session-start (already cloned during research). Copy its overall shape — set -euo pipefail, escape_for_json function using bash parameter substitution (no character-by-character loops, no jq dep), env-var branching for CURSOR_PLUGIN_ROOT vs CLAUDE_PLUGIN_ROOT vs COPILOT_CLI, printf-based JSON emission (NOT heredoc — see superpowers's comment about bash 5.3+ heredoc hang, github.com/obra/superpowers/issues/571). Adapt to read skills/bober.using-bober/SKILL.md from the project root. Determine project root by: $(cd \"$(dirname \"$0\")/..\" && pwd). Add MIT attribution comment at the top of hooks/session-start citing obra/superpowers as the structural source. For hooks.json, keep the existing PostToolUse entries verbatim — just add a SessionStart sibling. Use matcher 'startup|clear|compact' like superpowers does so the bootstrap reloads on /clear and /compact. The skill body should be short (~80-150 lines): YAML frontmatter, a short overview naming the bober.* skill catalog, the Iron Law convention this spec introduces (one line per agent role), Red Flags as a short rationale, and a link to AGENTS.md. Do NOT replicate the 'EXTREMELY-IMPORTANT' all-caps blocks or 'your human partner' phrasing — use bober's voice (procedural, structured, evidence-based).",
+  "evaluatorNotes": "Critical: verify the bootstrap actually loads at session start in practice. Run a manual test if possible: open a new Claude Code session in this repo and confirm the system reminder contains both 'SessionStart:startup hook success: Nodes: ...' (existing graph stats) AND a new payload citing 'bober.using-bober' or its bootstrap content. If the harness can't be triggered from CI, document the test plan in the EvalResult notes and verify via dry-run: pipe `bash hooks/session-start` output through jq and confirm the additional_context / hookSpecificOutput.additionalContext / additionalContext field contains the SKILL.md body. Verify NO change to PostToolUse hooks (they currently run on Edit|Write and that must keep working — the graph auto-update is load-bearing). Check the SKILL.md frontmatter byte count is under 1024 (spec compliance). Reject if the script uses /bin/bash hardcoded path instead of /usr/bin/env bash; reject if it uses jq (introduces dep)."
+}

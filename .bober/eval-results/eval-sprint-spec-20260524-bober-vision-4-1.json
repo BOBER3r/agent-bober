@@ -1,0 +1,35 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-4-1",
+  "contractId": "sprint-spec-20260524-bober-vision-4",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T02:00:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 7,
+    "criteriaPassed": 7,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit (no errors)", "details": "exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ (no errors)", "details": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc (no errors)", "details": "exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "44 test files passed; 584 tests passed; 4 skipped; 0 failures (2.56s)", "details": "exit 0" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s4-c1", "required": true, "result": "pass", "evidence": "README.md 27 lines, attribution + exact column order '| Anti-pattern | When to flag | File |', all four files referenced" },
+    { "criterionId": "s4-c2", "required": true, "result": "pass", "evidence": "testing-anti-patterns.md 303 lines (>=80), 3-line attribution header, all 5 named anti-patterns confirmed (sections H2)" },
+    { "criterionId": "s4-c3", "required": true, "result": "pass", "evidence": "condition-based-waiting.md 119 lines (>=60), attribution, waitFor pattern at line 47, Quick Patterns table present" },
+    { "criterionId": "s4-c4", "required": true, "result": "pass", "evidence": "root-cause-tracing.md 173 lines (>=60), attribution, 'NEVER fix just where the error appears' verbatim" },
+    { "criterionId": "s4-c5", "required": true, "result": "pass", "evidence": "defense-in-depth.md 126 lines (>=40), attribution, all 4 Layers headings confirmed" },
+    { "criterionId": "s4-c6", "required": true, "result": "pass", "evidence": "agents/bober-evaluator.md Step 6.5 at line 338; example regression entry (lines 357-368) is valid JSON with antiPattern/source/antiPatternEvidence; Sprint 3 IRON LAW (line 70), Red Flags (line 662), Rationalization Prevention (line 675) intact verbatim; src/contracts/eval-result.ts unchanged" },
+    { "criterionId": "s4-c7", "required": true, "result": "pass", "evidence": "All four eval strategies exit 0; 584 tests pass" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 4 passed on iteration 1 with full 7/7 independent verification. Diff scope is exactly the six files listed in expectedChanges; src/contracts/eval-result.ts untouched (extension lives in agent prompt convention as the briefing recommended); all 584 tests still pass."
+}

@@ -1,0 +1,28 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-8-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-8",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T04:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 8 implements the first real Checkpoint mechanism: CLI blocking with stdin/EDITOR + TTY fallback to noop. Plugs into the registry created in Sprint 7. Must NOT change pipeline default behavior (noop stays default until Sprint 14 mode/mechanism config).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-7", "title": "Checkpoint abstraction + 9 call-site wiring (noop)", "summary": "src/orchestrator/checkpoints/{types,registry,noop,sites,index,checkpoints.test}.ts in place; pipeline.ts wired with +10/-0 LOC; noop self-registered at module load" }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/types.ts",
+      "src/orchestrator/checkpoints/registry.ts",
+      "src/orchestrator/checkpoints/noop.ts",
+      "src/orchestrator/checkpoints/index.ts",
+      "src/orchestrator/checkpoints/checkpoints.test.ts",
+      "src/utils/fs.ts",
+      "src/utils/logger.ts",
+      "src/discovery/scanners/test-conventions.ts"
+    ]
+  },
+  "principles": null,
+  "evaluatorFeedback": null,
+  "notes": "COLOCATION HARD CONSTRAINT — the contract's expectedChanges says tests/orchestrator/checkpoints/cli.test.ts but Sprint 5 scanner regression precedent + Sprint 7 colocation precedent make that location WRONG. Test MUST land at src/orchestrator/checkpoints/mechanisms/cli.test.ts (alongside cli.ts). Adding 1 file to tests/ would tip colocated:separate ratio (currently 24:22 per scanner). Briefing has the full implementation plan."
+}

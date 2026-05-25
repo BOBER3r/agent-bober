@@ -1,0 +1,52 @@
+{
+  "id": "sprint-spec-20260524-superpowers-port-3",
+  "specId": "spec-20260524-superpowers-port",
+  "feature": "bober.debug skill + receiving-feedback discipline in bober-generator",
+  "description": "Adopt the systematic-debugging 4-phase discipline (Root Cause → Pattern → Fix Hypothesis → Fix Verification) plus the receiving-code-review discipline (verify before implementing, push back if reviewer is wrong) for the generator's evaluator-feedback retry path. When the evaluator returns failures, the generator must complete Phase 1 (Root Cause Investigation) before any code change.",
+  "successCriteria": [
+    {
+      "id": "s3-c1",
+      "description": "skills/bober.debug/SKILL.md exists with valid YAML frontmatter (name: bober-debug, description starts with 'Use when encountering any bug, test failure, or evaluator-returned failure'). Body contains four labeled phases (Root Cause Investigation, Pattern Analysis, Fix Hypothesis, Fix Verification), one fenced Iron Law block ('NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST'), and a Red Flags list of at least 5 entries.",
+      "verificationMethod": "Read skills/bober.debug/SKILL.md. Verify frontmatter. Grep for each phase title. Grep for the Iron Law. Count Red Flags entries.",
+      "passed": false
+    },
+    {
+      "id": "s3-c2",
+      "description": "agents/bober-generator.md gains a new section titled approximately 'When the Evaluator Returns Failures' or 'Handling Evaluator Feedback'. The section explicitly requires invoking the bober.debug discipline before any code change.",
+      "verificationMethod": "Read agents/bober-generator.md. Locate the new section heading. Verify it cross-references bober.debug. Verify it requires Phase 1 completion (root cause identified, evidence cited) before any fix.",
+      "passed": false
+    },
+    {
+      "id": "s3-c3",
+      "description": "The new section in agents/bober-generator.md contains a Forbidden Responses block listing at least 4 anti-sycophancy phrases the generator must NOT produce when receiving evaluator feedback (e.g., 'You're absolutely right!', 'Great catch!', 'Let me fix that now' [before verification], 'I see what you mean' [as acknowledgment of unverified claim]).",
+      "verificationMethod": "Read agents/bober-generator.md. Grep for 'Forbidden Responses' or similar heading. Count anti-sycophancy phrases listed (>=4).",
+      "passed": false
+    },
+    {
+      "id": "s3-c4",
+      "description": "The new section in agents/bober-generator.md describes a 'technical pushback' protocol: when the generator believes the evaluator is wrong (e.g., evaluator flagged a non-issue, or evaluator's success criterion misreads the contract), it returns a structured DISPUTE response with file:line evidence rather than silently complying or silently ignoring.",
+      "verificationMethod": "Read agents/bober-generator.md. Verify the pushback protocol is documented: it must specify the response format (structured), the evidence requirement (file:line refs), and that silent compliance/ignoring is explicitly forbidden.",
+      "passed": false
+    },
+    {
+      "id": "s3-c5",
+      "description": "Existing eval strategies all pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    },
+    {
+      "id": "s3-c6",
+      "description": "agents/bober-generator.md remains under 600 lines.",
+      "verificationMethod": "wc -l agents/bober-generator.md; assert <=600.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "skills/bober.debug/SKILL.md", "action": "create", "description": "4-phase systematic-debugging discipline" },
+    { "path": "agents/bober-generator.md", "action": "modify", "description": "Add 'Handling Evaluator Feedback' section with bober.debug cross-reference, Forbidden Responses block, and technical-pushback protocol" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-superpowers-port-2"],
+  "status": "proposed",
+  "generatorNotes": "References: /tmp/superpowers/skills/systematic-debugging/SKILL.md (the 4-phase structure) and /tmp/superpowers/skills/receiving-code-review/SKILL.md (the forbidden-responses + pushback protocol). MERGE both into a single bober.debug skill because in the bober pipeline the evaluator IS the code reviewer — there's no separate reviewer to receive feedback FROM other than the evaluator. The four phases in order: Phase 1 (Root Cause Investigation: read error messages carefully, reproduce, check recent changes, gather evidence at component boundaries), Phase 2 (Pattern Analysis: is this a known anti-pattern? cite from .bober/anti-patterns/ — Sprint 4 will populate this), Phase 3 (Fix Hypothesis: state the hypothesis, predict what should happen, then implement), Phase 4 (Fix Verification: red-green cycle for regression tests, full eval re-run, not just the failing criterion). Forbidden Responses block: copy the structural pattern from /tmp/superpowers/skills/receiving-code-review/SKILL.md line 27-37 but adapt — bober's evaluator isn't a human partner, so the framing is 'fresh-context independent reviewer' not 'human partner'. The pushback protocol: define a DISPUTE JSON shape that the generator can return when it has a technical disagreement. Suggested shape: {dispute: true, criterionId: string, reason: string, evidence: [{path: string, line: number, snippet: string}]}. Cross-reference Sprint 4's anti-pattern catalog in Phase 2 even though that sprint hasn't run yet — Sprint 4 depends on this sprint completing, so the forward reference is fine.",
+  "evaluatorNotes": "Verify the four phases are clearly delimited (markdown headings or fenced blocks). Verify Phase 1's gate language is strict: 'BEFORE attempting ANY fix' or equivalent — soft language ('try to understand first') is not enough. Check that the pushback protocol does NOT make pushback the default — generator should still implement most feedback; pushback is a structured escape hatch for genuine technical disagreement. Verify Forbidden Responses are listed as EXACT phrases, not paraphrased — empirical tuning relies on the model recognizing the exact strings. Reference anti-pattern catalog: even though Sprint 4 hasn't completed yet at evaluator time, the prompt should compile by treating the cross-reference as a forward link. Reject if the pushback protocol lacks the evidence requirement (file:line) — pushback without evidence is just disagreement."
+}

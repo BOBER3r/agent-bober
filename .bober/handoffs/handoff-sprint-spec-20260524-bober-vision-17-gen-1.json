@@ -1,0 +1,28 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-17-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-17",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:45:01Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Bober Vision Tier 3 — Prod-incident agent shape. Sprint 17 creates skills/bober.diagnose/SKILL.md — the 4-phase incident root-cause discipline (system-level twin of bober.debug from Sprint 2).",
+    "completedSprints": [
+      {"contractId": "sprint-2", "title": "Iron Law / Red Flags / Rationalization-Prevention voice + bober.debug", "summary": "skills/bober.debug/SKILL.md exists with Iron Law and 4-phase pattern adapted from obra/superpowers systematic-debugging."},
+      {"contractId": "sprint-4", "title": "Anti-pattern catalog", "summary": ".bober/anti-patterns/ MIT-attributed reference docs + README index."},
+      {"contractId": "sprint-15", "title": "bober-diagnoser agent", "summary": "agents/bober-diagnoser.md created with forward-link to skills/bober.diagnose (Sprint 17 — THIS sprint resolves it)."},
+      {"contractId": "sprint-16", "title": "Observability MCP slots", "summary": "observability.providers config + ExternalMcpServer + mergeObsTools + obs__<provider>__<tool> namespace + 5 reference docs."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "skills/bober.debug/SKILL.md",
+      "agents/bober-diagnoser.md",
+      ".bober/anti-patterns/README.md",
+      ".bober/anti-patterns/"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-17.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

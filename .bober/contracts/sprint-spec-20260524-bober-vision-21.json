@@ -1,0 +1,80 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-21",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Rollback awareness + bober rollback CLI command",
+  "description": "Implement `bober rollback <incidentId>` CLI command that reads .bober/incidents/<id>/changelog.jsonl, identifies executed-but-not-rolled-back ChangeEntries, presents the proposed rollback sequence (inverses in reverse order), and executes them via the deployer agent with each rollback step gated as a risky action (Sprint 20 gate applies).",
+  "successCriteria": [
+    {
+      "id": "s21-c1",
+      "description": "src/incident/rollback.ts exports: planRollback(incidentId): Promise<RollbackPlan> reads changelog.jsonl, filters status='executed' AND not status='rolled-back', returns inverses in reverse-execution order.",
+      "verificationMethod": "Read file. Test: changelog with 3 executed entries \u2192 plan has 3 inverses in reverse order.",
+      "passed": true
+    },
+    {
+      "id": "s21-c2",
+      "description": "executeRollback(plan): runs each inverse via the deployer agent's same execution discipline. EACH inverse goes through the Sprint 20 risky-action gate. Updates ChangeEntry status to 'rolled-back' on success.",
+      "verificationMethod": "Read execution. Verify each inverse passes through the gate.",
+      "passed": true
+    },
+    {
+      "id": "s21-c3",
+      "description": "CLI command `bober rollback <incidentId>` (a) calls planRollback, (b) presents the plan to the user (always presents \u2014 even in autopilot mode, this is a destructive op), (c) on confirmation calls executeRollback, (d) writes rollback outcome to .bober/incidents/<id>/rollback-execution.jsonl.",
+      "verificationMethod": "Read command. Test: with a fixture incident, run `bober rollback`, verify plan presentation and execution path.",
+      "passed": true
+    },
+    {
+      "id": "s21-c4",
+      "description": "Partial rollback support: `bober rollback <incidentId> --since <changeId>` rolls back only changes executed after the named change. `--dry-run` flag prints the plan without executing.",
+      "verificationMethod": "Test --since and --dry-run flags.",
+      "passed": true
+    },
+    {
+      "id": "s21-c5",
+      "description": "Rollback failure handling: if an inverse fails its postcondition, STOP the rollback sequence, mark that ChangeEntry's status='rolled-back-failed', escalate via checkpoint with all remaining unrolled changes listed.",
+      "verificationMethod": "Test: simulate inverse failure, verify rollback halts and escalates with remaining plan.",
+      "passed": true
+    },
+    {
+      "id": "s21-c6",
+      "description": "ChangeEntry without an inverse field (legacy data, or malformed) is treated as un-rollbackable: planRollback excludes it from the plan and surfaces it in a warning section. Sprint 19's requirement that inverse is required at write time should prevent this case in practice, but be defensive.",
+      "verificationMethod": "Test: changelog with one no-inverse entry, verify plan excludes it and warning surfaced.",
+      "passed": true
+    },
+    {
+      "id": "s21-c7",
+      "description": "Unit + integration tests cover: planRollback with various changelogs, executeRollback happy-path, --since filter, --dry-run, rollback halts on inverse failure, no-inverse handling.",
+      "verificationMethod": "Locate tests. Run npm run test.",
+      "passed": true
+    },
+    {
+      "id": "s21-c8",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    {
+      "path": "src/incident/rollback.ts",
+      "action": "create",
+      "description": "Plan + execute rollback logic"
+    },
+    {
+      "path": "src/cli/",
+      "action": "modify",
+      "description": "Add `bober rollback` subcommand with --since and --dry-run flags"
+    },
+    {
+      "path": "tests/incident/rollback.test.ts",
+      "action": "create",
+      "description": "Unit + integration tests"
+    }
+  ],
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-20"
+  ],
+  "status": "completed",
+  "generatorNotes": "Rollback is critical-path for incident response. The design here is conservative: every individual inverse goes through the risky-action gate. This means rolling back a 5-step incident requires 5 approvals \u2014 that's intentional because each inverse may itself be destructive (e.g., 'restore database from backup' undoes 'migration ran' but is its own dangerous operation).\n\nRollbackPlan shape:\n```typescript\ninterface RollbackPlan {\n  incidentId: string;\n  totalChanges: number;\n  rollbackableChanges: number;\n  unrollbackableChanges: number;  // missing inverse\n  steps: Array<{\n    originalChangeId: string;\n    originalDescription: string;\n    inverseDescription: string;\n    inverseCommand?: string;\n    originalExecutedAt: string;\n  }>;\n  warnings: string[];  // surfaced for no-inverse changes etc.\n}\n```\n\nPresentation format (CLI):\n```\nRollback plan for incident inc-20260524-500-errors-on:\n\nTotal changes: 4\nRollbackable: 3\nUnrollbackable: 1 (see warnings)\n\nProposed steps (in reverse execution order):\n  1. Undo \"kubectl scale deployment api --replicas=6\"\n     \u2192 kubectl scale deployment api --replicas=3\n  2. Undo \"Enabled new_checkout_flow=true\"\n     \u2192 Disable new_checkout_flow via API\n  3. Undo \"Applied migration 042\"\n     \u2192 Run rollback migration: npm run migrate:rollback -- --to 041\n\nWarnings:\n  - Change \"Restarted api-service pods\" has no recorded inverse; skipped.\n\nProceed? (y/N) \u2014 each step still requires individual approval.\n```\n\nThe presentation is FOR INFORMATION; actual execution still gates each step. This avoids 'I approved the plan' meaning 'I approved 5 destructive ops' \u2014 explicit consent per destructive op.\n\nPartial rollback (--since): useful when the incident's first 2 changes were correct and only changes 3-5 need to be undone. Compare timestamps or change IDs.",
+  "evaluatorNotes": "Verify per-step gating: a test that executes a 3-step rollback must invoke the gate 3 times. If the test passes with only 1 gate invocation, the plan-level approval is being used as a per-step approval \u2014 that's the dangerous design we're explicitly avoiding.\n\nVerify rollback halts CORRECTLY on inverse failure. A 5-step rollback where step 3 fails must NOT execute step 4 and step 5. The test must assert: step 1 'rolled-back', step 2 'rolled-back', step 3 'rolled-back-failed', step 4 'executed' (unchanged), step 5 'executed' (unchanged), and escalation triggered with remaining steps listed.\n\nVerify --dry-run does NOT execute anything: a test must execute a rollback with --dry-run, then verify zero ChangeEntry status updates. NO side effects.\n\nVerify the no-inverse warning is loud \u2014 silent skipping of un-rollbackable changes is a footgun. The warning must appear in the plan presentation AND in the audit log AND on stderr.\n\nVerify --since filter is timestamp-based or changeId-based but consistent \u2014 pick one and document. A user passing --since with a non-existent changeId should get a clear error, not silent inclusion of everything.\n\nIntegration test for the gate interplay: rollback in autopilot mode (allowAutopilotRiskyActions=false) \u2014 must invoke disk mechanism per step. Rollback with allowAutopilotRiskyActions=true \u2014 auto-approves each step BUT still writes audit entries.",
+  "completedAt": "2026-05-25T10:45:00Z"
+}

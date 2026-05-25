@@ -1,0 +1,60 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-8",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "CLI blocking checkpoint mechanism",
+  "description": "Implement the CLI checkpoint mechanism: when invoked, prints the checkpoint name, artifact diff/summary, and an action prompt (a)pprove / (r)eject / (e)dit; blocks on stdin until valid input received. Registers under name 'cli'. Falls back to noop if stdin is not a TTY with a clear warning to stderr.",
+  "successCriteria": [
+    {
+      "id": "s8-c1",
+      "description": "src/orchestrator/checkpoints/mechanisms/cli.ts implements CheckpointMechanism. request() prints checkpoint name, artifact summary (with diff if applicable), and a prompt 'a/r/e' or 'approve/reject/edit'. Reads stdin synchronously (or via readline interface) until valid input.",
+      "verificationMethod": "Read file. Verify the prompt format and stdin reading logic.",
+      "passed": false
+    },
+    {
+      "id": "s8-c2",
+      "description": "On 'a' / 'approve': returns {approved: true}. On 'r' / 'reject': prompts for feedback text, returns {approved: false, feedback}. On 'e' / 'edit': opens $EDITOR with the artifact, reads back on save, returns {edit: true, editDelta}.",
+      "verificationMethod": "Read file. Verify three branches each map to the correct CheckpointOutcome shape. Verify $EDITOR resolution (fallback to nano if unset).",
+      "passed": false
+    },
+    {
+      "id": "s8-c3",
+      "description": "TTY detection: if process.stdin.isTTY is false (e.g., CI, non-interactive), log warning to stderr and fall back to noop mechanism (auto-approve).",
+      "verificationMethod": "Read file. Verify TTY check and fallback to noop. Verify warning is to stderr (stdout is for orchestrator protocol in some harnesses).",
+      "passed": false
+    },
+    {
+      "id": "s8-c4",
+      "description": "The CLI mechanism is registered in src/orchestrator/checkpoints/registry.ts under name 'cli'. The registration happens at module load (not lazy).",
+      "verificationMethod": "Grep registry.ts for the cli registration call.",
+      "passed": false
+    },
+    {
+      "id": "s8-c5",
+      "description": "Unit test mocks stdin and asserts: (a) 'a' input → {approved: true}, (b) 'r' input with feedback → {approved: false, feedback}, (c) 'e' input mocks $EDITOR to a stub that writes a known delta → {edit: true, editDelta}, (d) non-TTY → falls back to noop and warns.",
+      "verificationMethod": "Locate new test file. Run npm run test. Verify all four branches.",
+      "passed": false
+    },
+    {
+      "id": "s8-c6",
+      "description": "CLI prompt overhead under 200ms per checkpoint (NFR performance — excluding the user thinking time, just the orchestrator's prompt-render and stdin-read overhead).",
+      "verificationMethod": "Microbenchmark with stdin pre-stuffed: time the request() call; assert <200ms.",
+      "passed": false
+    },
+    {
+      "id": "s8-c7",
+      "description": "All existing eval strategies pass; pipeline still defaults to noop mechanism (Sprint 14 wires the config-driven selection).",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "src/orchestrator/checkpoints/mechanisms/cli.ts", "action": "create", "description": "CLI blocking mechanism" },
+    { "path": "src/orchestrator/checkpoints/registry.ts", "action": "modify", "description": "Register 'cli' mechanism" },
+    { "path": "tests/orchestrator/checkpoints/cli.test.ts", "action": "create", "description": "Unit tests for CLI mechanism" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-7"],
+  "status": "completed",
+  "completedAt": "2026-05-25T04:02:55.000Z",
+  "generatorNotes": "Use Node's readline module for stdin handling — avoid raw stdin reads. $EDITOR resolution: process.env.EDITOR ?? 'nano'. For edit flow, write artifact to a temp file (use os.tmpdir()), spawn $EDITOR child process, await its exit, read the temp file, compute delta (simple text diff is fine — JSON-diff is overkill here). Delete temp file after.\n\nArtifact summary rendering: for now keep simple — print first 40 lines of the artifact, append '... (N more lines)' if truncated. Sprint 11 (diff renderer) will add per-artifact-type renderers; for THIS sprint, generic text summary is enough.\n\nTTY check: process.stdin.isTTY in Node.js. When false, log to console.error and call into the noop mechanism (don't reimplement the auto-approve — reuse). This makes the CLI mechanism CI-safe.\n\nPrompt format suggestion (verbatim voice — terse, direct):\n```\n[Checkpoint: post-research] Research artifact ready.\n  Path: .bober/research/research-20260524-foo.md\n  Lines: 245 (first 40 shown)\n  ---\n  <summary>\n  ---\n  Approve (a), Reject (r), Edit (e)? \n```\n\nWhen feedback is requested on reject, prompt: `Why are you rejecting? Feedback (one line): `. Multi-line feedback can be a follow-up sprint enhancement.",
+  "evaluatorNotes": "Verify TTY fallback works: test must mock isTTY=false and confirm noop is invoked (not just that it returns approved — that's the same outcome by coincidence; verify the noop path is taken). Verify $EDITOR resolution doesn't crash when EDITOR is unset (nano fallback). Verify temp file cleanup happens even when $EDITOR exits non-zero (defer/finally pattern). Verify the rendered artifact summary is to stderr (or to a separate stream) NOT stdout if the orchestrator uses stdout for protocol (check existing src/orchestrator/ for this convention; if no convention, stderr is the safer default).\n\nPerformance: 200ms budget excludes user think time and editor open time. Measure the wrapping calls (prompt render, stdin read of pre-stuffed buffer). Anything in user-facing flow doesn't count.\n\nVerify mechanism registration happens at module load and not in a function the orchestrator must call — Sprints 9 and 10 will register their mechanisms the same way; consistent registration model matters."
+}

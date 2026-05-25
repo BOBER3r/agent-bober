@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-4",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: brownfield TypeScript/Node multi-mode software engineering teammate. Pipeline = bober-planner → bober-curator → bober-generator → bober-evaluator, orchestrated via Claude Code Agent tool. Artifacts under .bober/ (specs, contracts, briefings, handoffs, eval-results, history.jsonl, progress.md). Sprint 4 starts Tier 1 (quality discipline) after Tier 0 (sprints 1-3) completed first iteration each.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-1", "title": "SessionStart bootstrap + bober.using-bober skill", "summary": "Added hooks/session-start, SessionStart matcher in hooks/hooks.json, skills/bober.using-bober/SKILL.md" },
+      { "contractId": "sprint-spec-20260524-bober-vision-2", "title": "Verbatim port bober.verify + bober.debug skills + generator self-verify Iron Law", "summary": "skills/bober.verify/ + skills/bober.debug/ ported verbatim with attribution; agents/bober-generator.md got DISPUTE protocol + 5 Forbidden Responses + Iron Law" },
+      { "contractId": "sprint-spec-20260524-bober-vision-3", "title": "Voice pass across remaining agent prompts", "summary": "Iron Law + Red Flags (>=8) + Rationalization-Prevention table (>=7 rows) added to 5 agent prompts (planner/curator/evaluator/researcher/architect)" }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "/tmp/superpowers/skills/test-driven-development/testing-anti-patterns.md",
+      "/tmp/superpowers/skills/systematic-debugging/condition-based-waiting.md",
+      "/tmp/superpowers/skills/systematic-debugging/root-cause-tracing.md",
+      "/tmp/superpowers/skills/systematic-debugging/defense-in-depth.md",
+      "agents/bober-evaluator.md",
+      "src/contracts/eval-result.ts",
+      "skills/bober.verify/SKILL.md",
+      "skills/bober.debug/SKILL.md"
+    ]
+  },
+  "principles": null,
+  "evaluatorFeedback": null,
+  "notes": "Full SprintContract lives at .bober/contracts/sprint-spec-20260524-bober-vision-4.json. Sprint Briefing (READ FIRST) at .bober/briefings/sprint-spec-20260524-bober-vision-4-briefing.md. Curator already analyzed sources, schema, attribution convention, and target sections — start from the briefing."
+}

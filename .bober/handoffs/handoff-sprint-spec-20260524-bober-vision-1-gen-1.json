@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-1",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-24T18:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober is a Generator-Evaluator multi-agent harness for building applications. The vision spec transforms it into a multi-mode software engineering teammate (autopilot/careful-flow/diagnose/postmortem). Sprint 1 (this sprint) is the foundation: a SessionStart hook script that injects a bober.using-bober bootstrap skill into the model's first-turn context.",
+    "completedSprints": [],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "hooks/hooks.json — currently registers PostToolUse Edit|Write matchers only (echo + node scripts/graph-hook.mjs). NO SessionStart entry exists yet. The existing 'SessionStart:startup hook success' message comes from a different mechanism (Claude Code's MCP infrastructure), NOT from hooks.json — so 'coexist with existing graph-stats' in the contract description means 'do not break the PostToolUse hooks', not 'merge with an existing SessionStart entry'.",
+      "/tmp/superpowers/hooks/session-start — reference bash script to model the new hooks/session-start on",
+      "/tmp/superpowers/skills/using-superpowers/SKILL.md — voice/style reference for the new skills/bober.using-bober/SKILL.md",
+      "skills/bober.* — existing skill directory pattern to follow (bober.principles, bober.plan, bober.research, bober.architect, bober.sprint, bober.run, bober.eval, bober.brownfield, bober.react, bober.anchor, bober.solidity, bober.playwright)",
+      "agents/*.md — existing subagent definitions (bober-architect, bober-curator, bober-evaluator, bober-generator, bober-planner, bober-researcher) for style reference"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-1.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "configPath": "bober.config.json",
+  "principlesPath": ".bober/principles.md",
+  "principles": null,
+  "evaluatorFeedback": null,
+  "criticalNotes": [
+    "Voice port directive: VERBATIM from /tmp/superpowers. Preserve <EXTREMELY-IMPORTANT> tags, capitalized rules, and 'your human partner' phrasing where it parses. Do NOT soften to bober procedural voice — the abandoned spec's voice constraint is explicitly reversed.",
+    "Frontmatter byte count under 1024 for skills/bober.using-bober/SKILL.md — strict spec requirement.",
+    "Hook script must NOT use jq (introduces dependency). Use bash parameter substitution per the source pattern.",
+    "Hook script must use #!/usr/bin/env bash (not hardcoded /bin/bash).",
+    "AGENTS.md doesn't exist yet (Sprint 6 creates it) — the SKILL.md placeholder reference to AGENTS.md is fine."
+  ]
+}

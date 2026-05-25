@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-10",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "d3264d1",
+  "filesChanged": [
+    { "path": "src/orchestrator/checkpoints/mechanisms/pr.ts", "action": "created" },
+    { "path": "src/orchestrator/checkpoints/mechanisms/pr.test.ts", "action": "created" },
+    { "path": "src/orchestrator/checkpoints/registry.ts", "action": "modified" },
+    { "path": "src/orchestrator/checkpoints/index.ts", "action": "modified" }
+  ],
+  "selfVerify": {
+    "typecheck": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "test": "658 passed, 4 skipped, 0 failed"
+  },
+  "notes": "Tests inject headRef to avoid real git binary; production uses git rev-parse fallback. MIN_POLL_MS warns, doesn't clamp — tests use pollMs:10."
+}

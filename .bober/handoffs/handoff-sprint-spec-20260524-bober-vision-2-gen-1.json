@@ -1,0 +1,42 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-2",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-24T18:36:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of 28. Tier 0 foundation continues: VERBATIM port of two superpowers skills (verification-before-completion, systematic-debugging) into bober.verify and bober.debug, plus inline Iron Law into bober-generator's self-verify section and add a Handling Evaluator Feedback section with Forbidden Responses + DISPUTE protocol.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260524-bober-vision-1",
+        "title": "SessionStart bootstrap + bober.using-bober skill",
+        "summary": "Created hooks/session-start bash hook (modeled on /tmp/superpowers/hooks/session-start), added SessionStart matcher to hooks/hooks.json beside preserved PostToolUse entries, created skills/bober.using-bober/SKILL.md with verbatim voice including <EXTREMELY-IMPORTANT> tags and 14-skill catalog. Commit 03cf904. All 6 criteria passed."
+      }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "/tmp/superpowers/skills/verification-before-completion/SKILL.md — port verbatim into skills/bober.verify/SKILL.md with MIT attribution",
+      "/tmp/superpowers/skills/systematic-debugging/SKILL.md — port verbatim into skills/bober.debug/SKILL.md with MIT attribution (note: this source dir has many supplementary files like root-cause-tracing.md, condition-based-waiting.md — DO NOT port those here; they go to .bober/anti-patterns/ in Sprint 4)",
+      "/tmp/superpowers/skills/receiving-code-review/SKILL.md — reference for the Forbidden Responses block + DISPUTE protocol that goes into bober-generator.md (NOT a new skill)",
+      "agents/bober-generator.md — modify: inline Iron Law in self-verify section; add 'Handling Evaluator Feedback' section with Forbidden Responses (>=4 anti-sycophancy phrases) + DISPUTE protocol {dispute: true, criterionId, reason, evidence: Array<{path, line, snippet}>}",
+      "skills/bober.using-bober/SKILL.md — created in Sprint 1; this sprint's skills should be consistent with the catalog declared there"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-2.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "configPath": "bober.config.json",
+  "principlesPath": ".bober/principles.md",
+  "principles": null,
+  "evaluatorFeedback": null,
+  "criticalNotes": [
+    "VERBATIM port — preserve <EXTREMELY-IMPORTANT> tags, capitalized Iron Law strings, 'your human partner' phrasing where it appears in source files (skills retain original phrasing; only adapt where bober skill cross-references differ).",
+    "Iron Law strings MUST be exact: 'NO COMPLETION CLAIMS WITHOUT FRESH VERIFICATION COMMAND OUTPUT' (bober.verify), 'NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST' (bober.debug).",
+    "MIT attribution required at top of each ported file (after YAML frontmatter): cite obra/superpowers and the source SKILL.md path.",
+    "DO NOT port the supplementary files in /tmp/superpowers/skills/systematic-debugging/ (testing-anti-patterns.md, root-cause-tracing.md, condition-based-waiting.md, defense-in-depth.md, etc.) — those belong to Sprint 4 (.bober/anti-patterns/).",
+    "bober-generator.md modifications: ADD the Iron Law block and the Handling Evaluator Feedback section; DO NOT remove existing instructions. Stay under 800 lines (NFR).",
+    "completion-report JSON schema in bober-generator.md must gain verificationOutput field (REQUIRED, not optional): Array<{command: string, exitCode: number, stdoutTail: string}>.",
+    "Forbidden Responses block must include at least 4 anti-sycophancy phrases (e.g., 'You\\'re absolutely right!', 'Great catch!', 'Let me fix that now' (before verification), 'I see what you mean' (as acknowledgment of unverified claim)).",
+    "DISPUTE protocol must have all required fields documented: criterionId, reason, evidence array with {path, line, snippet}."
+  ]
+}

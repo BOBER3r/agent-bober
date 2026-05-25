@@ -1,0 +1,29 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-19-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-19",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T06:23:29Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Bober Vision Tier 3. Sprint 19 implements src/incident/ — types + append helpers (createIncident, appendTimeline/Observation/Action/Change/RunbookExecution, setIncidentStatus, listIncidents). zod schemas with REQUIRED inverse on ChangeEntry. Atomic appends. Mutex pattern from Sprint 13's audit.ts.",
+    "completedSprints": [
+      {"contractId": "sprint-13", "title": "Audit trail", "summary": "src/orchestrator/checkpoints/audit.ts: append-only JSONL via fs.open(O_WRONLY|O_APPEND|O_CREAT, 0o600) + fh.chmod(0o600), per-runId Promise-chain mutex. Reuse this pattern."},
+      {"contractId": "sprint-15", "title": "bober-diagnoser agent", "summary": "DiagnosisResult schema; writes to .bober/incidents/<id>/diagnoses/<diagnosisId>.json (this sprint creates the diagnoses/ subdir)."},
+      {"contractId": "sprint-17", "title": "bober.diagnose skill", "summary": "References observations.jsonl, changelog.jsonl, hypotheses.md, actions.jsonl — names must match."},
+      {"contractId": "sprint-18", "title": "bober.runbook skill", "summary": "Locked the 7 camelCase field names for runbook-execution.jsonl: timestamp, runbookName, stepNumber, status, preconditionResult, postconditionResult, rollbackTriggered?"}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/audit.ts",
+      "src/orchestrator/checkpoints/audit.test.ts",
+      "src/config/schema.ts",
+      "skills/bober.diagnose/SKILL.md",
+      "skills/bober.runbook/SKILL.md"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-19.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

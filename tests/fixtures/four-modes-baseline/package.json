@@ -1,0 +1,12 @@
+{
+  "name": "four-modes-baseline",
+  "version": "1.0.0",
+  "description": "Minimal fixture project for Sprint 27 four-mode end-to-end tests",
+  "type": "module",
+  "scripts": {
+    "typecheck": "node --input-type=module -e \"import('./src/threshold.js')\" && echo 'typecheck ok'",
+    "lint": "echo 'lint ok'",
+    "build": "echo 'build ok'",
+    "test": "node --test tests/threshold.node.js"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-28-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-28",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T10:11:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — multi-agent orchestrator. This is the FINAL sprint of the bober-vision spec. 27 of 28 sprints completed. Task: extend bober.config.json schema with all new vision-era fields preserving back-compat parsing of existing files, add `bober config migrate` informative CLI subcommand, and wire opt-in local-only telemetry (default OFF, no network egress).",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260524-bober-vision-27", "title": "Four-mode e2e integration test", "summary": "tests/e2e/four-modes.test.ts (940 lines, 11 tests) — spec correctness gate. Real DiskCheckpointMechanism, real ExternalMcpServer subprocess, real incident lifecycle, real rollback. CI integrated."},
+      {"contractId": "sprint-spec-20260524-bober-vision-26", "title": "VISION.md + docs cross-links", "summary": "Created VISION.md + COMMANDS.md, cross-linked README + AGENTS.md."},
+      {"contractId": "sprint-spec-20260524-bober-vision-25", "title": "Playbook library + diagnoser integration + CLI", "summary": "Playbook + symptom-search + diagnoser hooks."},
+      {"contractId": "sprint-spec-20260524-bober-vision-24", "title": "Incident state machine + CLI + integration capstone", "summary": "Full state machine for incident lifecycle."},
+      {"contractId": "sprint-spec-20260524-bober-vision-23", "title": "Postmortemer agent + auto-trigger + CLI", "summary": "Auto postmortem generation on incident resolution."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "specCompletionRitual": "When all success criteria pass, the generator should ALSO update .bober/specs/spec-20260524-bober-vision.json setting status='completed' and completedAt=<ISO timestamp>, append {\"event\":\"plan-completed\",\"specId\":\"spec-20260524-bober-vision\",\"sprintsCompleted\":28,\"timestamp\":\"...\"} to .bober/history.jsonl, and update .bober/progress.md to reflect spec completion. Briefing covers this."
+  },
+  "config": {
+    "commands": {
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "build": "npm run build",
+      "test": "npm run test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "See .bober/principles.md — read it; the briefing also covers key behavioral disciplines.",
+  "evaluatorFeedback": null
+}

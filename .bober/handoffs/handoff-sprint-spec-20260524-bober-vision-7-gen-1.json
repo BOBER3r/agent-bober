@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-7-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-7",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T03:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 7 opens Tier 2 (careful-flow multi-mode). Plumbing-only: install Checkpoint abstraction + 9 call sites invoking a no-op mechanism. Default behavior MUST be unchanged. Sprints 8-10 plug in real mechanisms (CLI/disk/PR) — this sprint installs only the type infrastructure they will use.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-5", "title": "bober-code-reviewer agent + advisory orchestrator wiring", "summary": "src/orchestrator/code-reviewer-agent.ts follows curator-agent.ts spawn pattern. code-reviewer-agent.test.ts is COLOCATED in src/orchestrator/ — established convention for sprint 7." },
+      { "contractId": "sprint-spec-20260524-bober-vision-6", "title": "HARD-GATE + AGENTS.md", "summary": "Docs only; no orchestrator impact." }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/curator-agent.ts",
+      "src/orchestrator/generator-agent.ts",
+      "src/orchestrator/evaluator-agent.ts",
+      "src/orchestrator/code-reviewer-agent.ts",
+      "src/orchestrator/code-reviewer-agent.test.ts",
+      "src/orchestrator/planner-agent.ts",
+      "src/orchestrator/research-agent.ts",
+      "src/contracts/sprint-contract.ts",
+      "src/contracts/eval-result.ts",
+      "src/discovery/scanners/test-conventions.ts"
+    ]
+  },
+  "principles": null,
+  "evaluatorFeedback": null,
+  "notes": "Briefing has 9 exact call-site line ranges, the 10-line pipeline.ts patch shape, module layout, CheckpointOutcome design, and the COLOCATED test HARD CONSTRAINT (src/orchestrator/checkpoints/checkpoints.test.ts, NOT tests/orchestrator/ — see Sprint 5 regression for why). READ THE BRIEFING FIRST."
+}

@@ -1,0 +1,37 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-5-2",
+  "contractId": "sprint-spec-20260524-bober-vision-5",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T02:41:55.000Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 9,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 9,
+    "requiredFailed": 0,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "no errors" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0", "details": "no violations" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "no errors" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "45 files / 589 passed / 4 skipped / 0 failed (2.60s)", "details": "matches iter 1 baseline; rewritten tests replaced hollow tests 1-for-1" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s5-c1", "required": true, "result": "pass", "evidence": "tools=[Read,Bash,Grep,Glob] only; no Write/Edit/MultiEdit" },
+    { "criterionId": "s5-c2", "required": true, "result": "pass", "evidence": "Red Flags=8 (>=8); Rationalization=7 (>=7). New 8th RF and 7th RP row both code-review-specific (pre-existing code scope and whole-file review scope creep)" },
+    { "criterionId": "s5-c3", "required": true, "result": "pass", "evidence": "SKILL.md prefix correct; .bober/anti-patterns/ cited 12x; obra/superpowers attribution at L7" },
+    { "criterionId": "s5-c4", "required": true, "result": "pass", "evidence": "pipeline.ts L330 spawn inside if (evaluation.passed); try/catch L370-382 logger.warn + proceeds; iter 2 only added export keywords" },
+    { "criterionId": "s5-c5", "required": true, "result": "pass", "evidence": "renderReviewMarkdown emits 6 sections at L186/188/192/210/225/240; test (b) verifies order via indexOf" },
+    { "criterionId": "s5-c6", "required": true, "result": "pass", "evidence": "All 3 tests rewritten to exercise pipeline.ts. (a) runSprintCycle + reviewerSpy.toHaveBeenCalledWith pipeline-propagated args; (b) renderReviewMarkdown called with fixture + 6 headings verified by position; (c) spy mockRejectedValueOnce + runSprintCycle → no throw + status='passed' + logger.warn called — stderr confirmed 'Code review skipped: reviewer crashed — boom' so pipeline.ts L370-382 actually executed. All 5 tests pass in 211ms." },
+    { "criterionId": "s5-c7", "required": true, "result": "pass", "evidence": "Reviewer block L348-389 — no critical→retry/needs-rework branch; counts only in appendHistory details payload" },
+    { "criterionId": "s5-c8", "required": true, "result": "pass", "evidence": "all 4 strategies exit 0; 589 pass / 4 skip / 0 fail (no growth or drift)" },
+    { "criterionId": "s5-c9", "required": true, "result": "pass", "evidence": "git diff 56476f0..HEAD -- src/orchestrator/: code-reviewer-agent.test.ts +396 (new), code-reviewer-agent.ts +374 (new), pipeline.ts +42/-2 (2 export keywords in iter 2, no logic changes); evaluator-agent.ts zero diff" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 5 iter 2 PASSES all 9 required criteria. s5-c2 and s5-c6 fixed cleanly; 7 previously-passing criteria unchanged. Test count holds at 589/4 — rewritten tests replaced hollow tests 1-for-1. All 4 strategies green."
+}

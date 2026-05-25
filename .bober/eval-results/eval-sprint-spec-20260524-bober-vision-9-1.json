@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-9-1",
+  "contractId": "sprint-spec-20260524-bober-vision-9",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T04:24:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 9, "criteriaPassed": 9, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 9, "requiredFailed": 0, "requiredTotal": 9 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "no errors" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0", "details": "no errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "no errors" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "51 files / 633 pass / 4 skip / 0 fail (2.93s)", "details": "+33 vs Sprint 8 baseline; scanner colocated invariant green; pipeline.ts unchanged" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s9-c1", "required": true, "result": "pass", "evidence": "disk.ts L58-110: CheckpointMechanism impl; pending file shape verified; setTimeout polling default 2000ms" },
+    { "criterionId": "s9-c2", "required": true, "result": "pass", "evidence": "L125-145: both branches unlink pending+resolution; tests 'deletes pending after approval/rejection' pass" },
+    { "criterionId": "s9-c3", "required": true, "result": "pass", "evidence": "L77-79 Math.min(24h, 7d cap); L151-163 timeout writes .timeout.json + returns {approved:false,feedback:'TIMEOUT'}; 3 timeout tests pass" },
+    { "criterionId": "s9-c4", "required": true, "result": "pass", "evidence": "approve.ts/reject.ts use findProjectRoot; pendingExists guard + exitCode=1; --edit on approve; --feedback requiredOption on reject" },
+    { "criterionId": "s9-c5", "required": true, "result": "pass", "evidence": "list-approvals.ts: table (id/age/prompt) + --json flag; findProjectRoot used; 10 tests pass" },
+    { "criterionId": "s9-c6", "required": true, "result": "pass", "evidence": "Perf test L256-299: 5MB artifact summarized; assert elapsed<100ms; passes" },
+    { "criterionId": "s9-c7", "required": true, "result": "pass", "evidence": "All 7 branches across 4 colocated test files (12+6+5+10=33 tests, all pass)" },
+    { "criterionId": "s9-c8", "required": true, "result": "pass", "evidence": "registry.ts L41 module-load registration of 'disk'" },
+    { "criterionId": "s9-c9", "required": true, "result": "pass", "evidence": "all 4 strategies exit 0; pipeline.ts unchanged; colocation invariant green" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 9 PASSES 9/9 iter 1. Disk-marker production-friendly mechanism + 3 CLI commands shipped. Timer cleanup in finally prevents leaks; artifact summarization meets 100ms budget; all tests colocated; pipeline.ts unchanged."
+}

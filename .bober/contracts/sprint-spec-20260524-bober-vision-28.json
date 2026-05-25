@@ -1,0 +1,116 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-28",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Config schema migration + telemetry hooks (opt-in, local-only)",
+  "description": "Final spec sprint. Bober.config.json existing files (pre-this-spec) parse with the extended schema — all new fields have defaults preserving current autopilot behavior. Add telemetry hooks emitting opt-in local-only JSONL events to .bober/telemetry/ for tracking checkpoint approval rates, incident resolution times, agent retry counts. Telemetry default OFF. No network egress under any condition.",
+  "successCriteria": [
+    {
+      "id": "s28-c1",
+      "description": "src/config/schema.ts: extended schema parses bober.config.json files at the current state (no pipeline.mode, no observability.providers, etc.) without error. Defaults applied: pipeline.mode='autopilot', pipeline.checkpointMechanism='noop', observability.providers=[], incident.autoPostmortem=true, telemetry.enabled=false.",
+      "verificationMethod": "Test: parse existing bober.config.json (the one in this repo NOW). Verify zero errors. Verify resolved defaults via getConfig().",
+      "passed": true
+    },
+    {
+      "id": "s28-c2",
+      "description": "Schema migration helper: `bober config migrate` CLI subcommand updates an existing bober.config.json to explicitly include all new fields with their default values (informative, not required — back-compat parsing handles missing fields).",
+      "verificationMethod": "Verify subcommand. Test: run on a minimal config; verify new file has new sections.",
+      "passed": true
+    },
+    {
+      "id": "s28-c3",
+      "description": "telemetry.enabled (bool, default false): when true, emit events to .bober/telemetry/<date>.jsonl. Event shape: {timestamp, eventType, runId?, incidentId?, specId?, durationMs?, outcome?, ... event-specific fields}. EventTypes: 'checkpoint-approved', 'checkpoint-rejected', 'checkpoint-edited', 'sprint-pass', 'sprint-fail-retry', 'incident-resolved', 'incident-aborted', 'agent-spawn', 'agent-error'.",
+      "verificationMethod": "Read telemetry module. Verify event shapes. Test: with enabled=true, simulate each event type, verify line written.",
+      "passed": true
+    },
+    {
+      "id": "s28-c4",
+      "description": "Network egress guard: telemetry implementation MUST not contain any fetch/http/https/net imports. Static analysis (grep or eslint rule) enforces.",
+      "verificationMethod": "Grep src/telemetry/ for: 'fetch(', 'require(\\'http\\')', 'from \\'http\\'', 'require(\\'https\\')', 'from \\'https\\''. Assert zero matches. Add ESLint rule restricting these imports in src/telemetry/.",
+      "passed": true
+    },
+    {
+      "id": "s28-c5",
+      "description": "Privacy: telemetry events do NOT include feedbackText content, ChangeEntry commands, observability MCP response bodies, or any field that could contain user code or prod data. Allowed: timestamps, IDs, durations, counts, enum outcomes.",
+      "verificationMethod": "Read each event-emission call site. Verify NONE include user-content fields. Test: simulate an incident with prod-looking data; verify telemetry .jsonl contains zero prod content.",
+      "passed": true
+    },
+    {
+      "id": "s28-c6",
+      "description": "CLI: `bober telemetry status` (prints whether enabled + recent event counts), `bober telemetry purge` (deletes all .bober/telemetry/ files with confirmation), `bober telemetry export` (prints all events as JSONL for offline analysis).",
+      "verificationMethod": "Verify subcommands.",
+      "passed": true
+    },
+    {
+      "id": "s28-c7",
+      "description": "VISION.md (Sprint 26) and AGENTS.md (Sprint 6) updated to document telemetry: opt-in, local-only, what's collected, how to purge.",
+      "verificationMethod": "Grep VISION.md and AGENTS.md for 'telemetry'. Verify the documented properties.",
+      "passed": true
+    },
+    {
+      "id": "s28-c8",
+      "description": "Spec COMPLETION: all 28 sprints completed. spec-20260524-bober-vision status flips to 'completed' in the spec JSON file. progress.md updated to reflect completion. history.jsonl appends a 'spec-completed' event.",
+      "verificationMethod": "Read .bober/specs/spec-20260524-bober-vision.json. Verify status='completed'. Verify progress.md updated. Verify history.jsonl event.",
+      "passed": true
+    },
+    {
+      "id": "s28-c9",
+      "description": "All existing eval strategies pass. Final regression sweep: re-run the Sprint 27 four-modes integration test; assert exit 0.",
+      "verificationMethod": "Run typecheck/lint/build/test AND tests/e2e/four-modes.test.ts — assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    {
+      "path": "src/config/schema.ts",
+      "action": "modify",
+      "description": "Final schema review — all new fields with defaults preserving back-compat"
+    },
+    {
+      "path": "src/cli/",
+      "action": "modify",
+      "description": "Add config migrate and telemetry subcommands"
+    },
+    {
+      "path": "src/telemetry/",
+      "action": "create",
+      "description": "Telemetry module — local-only, opt-in, network-free"
+    },
+    {
+      "path": ".eslintrc.json or eslint.config.js",
+      "action": "modify",
+      "description": "Add no-network rule for src/telemetry/"
+    },
+    {
+      "path": "VISION.md",
+      "action": "modify",
+      "description": "Add telemetry section"
+    },
+    {
+      "path": "AGENTS.md",
+      "action": "modify",
+      "description": "Document telemetry guarantee (no network egress)"
+    },
+    {
+      "path": "tests/telemetry/",
+      "action": "create",
+      "description": "Tests for event emission, privacy, network-guard"
+    },
+    {
+      "path": ".bober/specs/spec-20260524-bober-vision.json",
+      "action": "modify",
+      "description": "Flip status to 'completed' at the very end of this sprint"
+    },
+    {
+      "path": ".bober/progress.md",
+      "action": "modify",
+      "description": "Mark spec completed"
+    }
+  ],
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-27"
+  ],
+  "status": "completed",
+  "generatorNotes": "Backward-compat is the highest priority for the config schema work. Every existing bober.config.json file in the wild must parse and produce identical runtime behavior to before this spec. New fields are ADDITIONS with defaults preserving the old behavior.\n\nDefault chain (final reference):\n- pipeline.mode default 'autopilot' → preserves single-mode behavior\n- pipeline.checkpointMechanism default 'noop' (in autopilot) → no checkpoints fire\n- pipeline.maxCheckpointIterations default 3 → unused in autopilot/noop\n- pipeline.allowAutopilotRiskyActions default false → preserved gates if observability declared\n- observability.providers default [] → no MCP plugin slots active\n- incident.autoPostmortem default true → applies only if incident mode used\n- incident.playbookAutoInvokeThreshold default 0.6 → applies only if incident mode used\n- telemetry.enabled default false → no events written\n\nTelemetry implementation:\n```typescript\n// src/telemetry/emit.ts\nimport { appendFile } from 'fs/promises';\nimport { resolveTelemetryPath, isTelemetryEnabled } from './config';\n\nexport async function emit(eventType: string, data: Record<string, unknown>): Promise<void> {\n  if (!isTelemetryEnabled()) return;\n  const event = {\n    timestamp: new Date().toISOString(),\n    eventType,\n    ...data,\n  };\n  await appendFile(resolveTelemetryPath(), JSON.stringify(event) + '\\n', { mode: 0o600 });\n}\n```\n\nNo http imports anywhere in src/telemetry/. ESLint rule:\n```json\n{\n  \"files\": [\"src/telemetry/**/*\"],\n  \"rules\": {\n    \"no-restricted-imports\": [\"error\", {\n      \"patterns\": [\"http\", \"https\", \"net\", \"tls\", \"node:http\", \"node:https\", \"node:net\", \"node:tls\"],\n      \"paths\": [{ \"name\": \"undici\", \"message\": \"Network access forbidden in telemetry module\" }]\n    }]\n  }\n}\n```\n\nEmit call sites: at each natural event boundary in the existing code — checkpoint resolution (Sprint 13 audit emits a record; mirror an emit() call here), incident status transition (Sprint 22 verifyResolution success → emit), sprint pass/fail in evaluator, agent spawn/error in orchestrator. ~15-20 emit call sites total across the codebase.\n\nPrivacy enforcement is HARD discipline. Reviewers should grep the entire src/ for `emit(` and inspect every data payload. The bar: no string-typed fields from user input. IDs and enum outcomes only.\n\nThe spec completion step at the end of this sprint is intentional — only the final sprint's generator can confidently flip status to 'completed' because all prior sprints must be passing. This sprint's evaluator verifies the regression sweep before allowing the status flip.",
+  "evaluatorNotes": "Verify backward compat with a HARD test: parse the CURRENT bober.config.json (the one this repo has on disk this moment) via the post-Sprint-28 schema. Confirm zero errors AND that resolved runtime config produces identical autopilot behavior (run an autopilot sprint pipeline before/after, compare commits — should be identical modulo timestamps).\n\nVerify the no-network ESLint rule actually CATCHES violations: write a test file in src/telemetry/ that imports 'http', run lint, confirm it errors. Then delete the test file. This is a regression-prevention test.\n\nVerify privacy: grep ALL telemetry emit() call sites and inspect every data payload. Any field that takes a string from user input is a privacy fail (e.g., `emit('checkpoint-rejected', { feedback: feedbackText })` is wrong; correct: `emit('checkpoint-rejected', { feedbackLength: feedbackText.length })`). Document this in the audit.\n\nVerify telemetry.enabled gate works: when false (default), zero file writes happen even with hundreds of emit() calls. Test: simulate 100 events with enabled=false, verify zero bytes in .bober/telemetry/.\n\nVerify file mode 0600 on telemetry files (matches Sprint 13 audit pattern).\n\nFINAL REGRESSION SWEEP: re-run the Sprint 27 four-modes integration test as part of THIS sprint's eval. If it fails, the spec is not 'completed'. Flip to status='completed' ONLY when full regression passes.\n\nVerify the spec-completed history.jsonl event includes useful metadata: total sprints completed, total duration, ambiguity score at start vs revised, list of any deferred decisions documented in resolvedClarifications.",
+  "completedAt": "2026-05-25T13:40:00Z"
+}

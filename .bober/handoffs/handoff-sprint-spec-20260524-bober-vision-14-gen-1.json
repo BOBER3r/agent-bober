@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-14-gen-1",
+  "contractId": "sprint-spec-20260524-bober-vision-14",
+  "specId": "spec-20260524-bober-vision",
+  "iteration": 1,
+  "timestamp": "2026-05-25T07:08:00Z",
+  "context": {
+    "projectOverview": "Sprint 14 of 28. CLOSES Tier 2 (careful-flow). Wires bober.config.json schema knobs (pipeline.mode, checkpointMechanism, checkpointOverrides), per-run CLI flags (--checkpoint, --checkpoint-all), config validation warnings, and end-to-end integration test that exercises careful-flow via the disk mechanism.",
+    "currentBranch": "bober/bober-vision",
+    "completedSprintsInTier2": [
+      "Sprint 7: plumbing", "Sprint 8: cli", "Sprint 9: disk + approve/reject CLI",
+      "Sprint 10: pr + getCheckpointMechanismFor (override resolver added)",
+      "Sprint 11: 9 renderers + registry",
+      "Sprint 12: feedback-router (maxCheckpointIterations 1-10 default 3 in schema)",
+      "Sprint 13: audit trail (runWithAudit wraps all 9 pipeline sites + router; .bober/audits/ subdir; bober audit show CLI)"
+    ],
+    "alreadyInSchema": [
+      "pipeline.maxCheckpointIterations (Sprint 12)",
+      "Likely existing: maxIterations, requireApproval, contextReset, researchPhase, architectPhase (check src/config/schema.ts)"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-14.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "config": { "commands": { "typecheck": "npm run typecheck", "lint": "npm run lint", "build": "npm run build", "test": "npm run test" } },
+  "principles": null,
+  "evaluatorFeedback": null
+}

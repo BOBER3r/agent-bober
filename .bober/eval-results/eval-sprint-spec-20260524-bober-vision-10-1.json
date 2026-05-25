@@ -1,0 +1,41 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-10-1",
+  "contractId": "sprint-spec-20260524-bober-vision-10",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:03:30Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 8,
+    "criteriaFailed": 1,
+    "criteriaSkipped": 0,
+    "requiredPassed": 8,
+    "requiredFailed": 1,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit: exit 0", "details": "" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/: exit 0", "details": "" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc: exit 0", "details": "" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "vitest: 658 passed | 4 skipped (662) across 52 files. Exit 0", "details": "pr.test.ts 25 tests pass; disk 12; cli 7. No regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s10-c1", "result": "pass", "evidence": "PrCheckpointMechanism + GhClient seam + run-tracking PR." },
+    { "criterionId": "s10-c2", "result": "pass", "evidence": "All four signals (merge/approve/reject/edit) parsed in parseSignals + parseCommentSignal." },
+    { "criterionId": "s10-c3", "result": "pass", "evidence": "DEFAULT_POLL_MS=30000, MIN=10000 warning, rate-limit backoff cap 5min. Minor: warning says 'clamping' but doesn't clamp (does not affect default behavior)." },
+    { "criterionId": "s10-c4", "result": "pass", "evidence": "checkAvailability covers version+auth+repo; fallback is DiskCheckpointMechanism (confirmed); three test cases verify all failure paths via spy." },
+    { "criterionId": "s10-c5", "result": "pass", "evidence": "getCheckpointMechanismFor in registry.ts resolves override → global → fallback. 5 tests confirm order." },
+    { "criterionId": "s10-c6", "result": "fail", "evidence": "PR title OK; new comment per checkpoint OK. BUT: (1) PR body renders a static placeholder, no '- [ ] <checkpointId>' checkbox items. (2) No mechanism for draft→ready transition when all checkpoints approved — GhClient lacks prReady, poll resolution never marks ready.", "feedback": "Add (1) per-checkpoint checkbox list rendering: maintain a pendingCheckpoints set/map keyed by checkpointId. On each request() call, edit the PR body via a new GhClient.prEdit(prNumber, body) to include '- [ ] <id>' for each known checkpoint. When a checkpoint resolves as approved, update its line to '- [x] <id>'. (2) Draft→ready transition: add GhClient.prReady(prNumber) wrapping 'gh pr ready <number>'. After resolution if pending set is now empty, call prReady. Add tests: (a) body contains '- [ ]' / '- [x]' lines; (b) prReady is called when all pending checkpoints have resolved as approved; (c) prReady is NOT called if any checkpoint rejected." },
+    { "criterionId": "s10-c7", "result": "pass", "evidence": "registerCheckpointMechanism('pr', ...) at module load in registry.ts." },
+    { "criterionId": "s10-c8", "result": "pass", "evidence": "25 tests cover all required branches. No real gh invocations (vi.fn stubs throughout)." },
+    { "criterionId": "s10-c9", "result": "pass", "evidence": "All 4 strategies exit 0. No regressions." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "high", "criterion": "s10-c6", "file": "src/orchestrator/checkpoints/mechanisms/pr.ts", "description": "PR body must contain '- [ ] <checkpointId>' markdown checkboxes; add GhClient.prEdit(prNumber, body) and update body on each new checkpoint. Update '[ ]' to '[x]' when checkpoint resolves as approved." },
+    { "priority": "high", "criterion": "s10-c6", "file": "src/orchestrator/checkpoints/mechanisms/pr.ts", "description": "Add GhClient.prReady(prNumber) wrapping 'gh pr ready <number>'. Track pending checkpoints; when all have resolved as approved, call prReady to convert draft→ready. Add unit tests for these two behaviors." },
+    { "priority": "low", "criterion": "s10-c3", "file": "src/orchestrator/checkpoints/mechanisms/pr.ts", "line": 323, "description": "Misleading warning: says 'clamping' but doesn't clamp. Either clamp via Math.max OR rewrite the warning to not promise clamping." }
+  ],
+  "summary": "8/9 required criteria pass; s10-c6 fails: PR body has no checkbox list and no draft→ready transition logic when all checkpoints approved. All strategies (typecheck/lint/build/test) pass; no regressions."
+}

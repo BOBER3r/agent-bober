@@ -1,0 +1,30 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-25-1",
+  "contractId": "sprint-spec-20260524-bober-vision-25",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T12:19:30Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":10,"criteriaPassed":10,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":10,"requiredFailed":0,"requiredTotal":10},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"1083 passed, 4 skipped (78 files)","details":"+43 from 1040 baseline (38 playbook-search + 5 integration)"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s25-c1","result":"pass","evidence":"README.md index with 4 playbooks (name/classification/file-link/applicableSymptoms), how-to-add with Sprint 18 parse format, how-to-test with CLI examples, confidence threshold table."},
+    {"criterionId":"s25-c2","result":"pass","evidence":"build-failure.md: name+classification=standard+applicableSymptoms (all 4 required + 3 more). 6 steps all with blastRadius/pre/exec/post fields. Steps: identify→fetch logs→classify→branch act→correlate commits→record."},
+    {"criterionId":"s25-c3","result":"pass","evidence":"migration-timeout.md classification=emergency. applicableSymptoms generic (db/migration synonyms incl alembic/flyway/liquibase — tool synonyms not platform-specific). 6 steps incl kill-or-wait (blastRadius:risky+rollback), rollback-if-killed step."},
+    {"criterionId":"s25-c4","result":"pass","evidence":"error-spike.md classification=emergency. Generic symptoms (no stack tokens). 6 steps: gather metrics→changelog.jsonl correlation→scope→classify cause→executor handoff (risky+rollback)→verify."},
+    {"criterionId":"s25-c5","result":"pass","evidence":"latency-regression.md classification=standard. Generic p95/p99 symptoms. 7 steps: identify+baseline→resource saturation→downstream deps→deploy correlation→classify→remediation (risky+rollback)→verify."},
+    {"criterionId":"s25-c6","result":"pass","evidence":"playbook-search.ts: Playbook, PlaybookMatch, loadPlaybooks, searchPlaybooks, searchPlaybooksList, tokenize, HIGH=0.6/LOW=0.3 exported. Sorted desc, confidence [0,1]. Tests verify 'button is grey' returns zero ≥0.6 matches; 'database migration timing out' → migration-timeout ≥0.6; 'p99 latency spike' → latency-regression ≥0.6. loadPlaybooks skips README, gracefully handles malformed YAML, ENOENT→[]."},
+    {"criterionId":"s25-c7","result":"pass","evidence":"agents/bober-diagnoser.md:132 'call searchPlaybooks(incident.symptom)'. Step 0 documents branching: ≥0.6 follow playbook, 0.3-0.59 suggest, <0.3 freeform. EXTREMELY-IMPORTANT block."},
+    {"criterionId":"s25-c8","result":"pass","evidence":"playbook.ts list/show/search subcommands. show ENOENT→exitCode=1. search prints NAME/CONFIDENCE/TIER/MATCHED TOKENS with color tiers. Registered in cli/index.ts:31,270."},
+    {"criterionId":"s25-c9","result":"pass","evidence":"Sprint 24 integration 10/10 still passing. New incident-lifecycle-playbook.test.ts 5/5 passes — full flow createIncident → searchPlaybooks (build-failure ≥0.6) → applyDiagnosisOutcome → executeAction → applyDeploymentOutcome → verifyResolution → resolved → postmortem.md → timeline chronological."},
+    {"criterionId":"s25-c10","result":"pass","evidence":"All 4 strategies exit 0. 1083 tests, +43 from 1040."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 10 criteria pass on iter 1. TIER 3 COMPLETE. 4 starter playbooks well-formed with generic symptoms (no platform tokens), all risky steps have rollbacks. searchPlaybooks correctly handles false-positive case. 1083 tests, +43 from 1040. Sprint 24 + Sprint 25 integration tests both passing — full incident workflow end-to-end verified."
+}

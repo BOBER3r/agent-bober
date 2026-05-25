@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-8",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "9d82c04",
+  "criteriaResults": [
+    {"criterionId": "s8-c1", "met": true, "evidence": "cli.ts L166 readline.createInterface; prompt to stderr 'Approve (a), Reject (r), Edit (e)?'"},
+    {"criterionId": "s8-c2", "met": true, "evidence": "L192-225: a→approved; r→feedback prompt+approved:false; e→spawn editor+{edit:true,editDelta:{before,after}}; editor = this.editor ?? process.env.EDITOR ?? 'nano'"},
+    {"criterionId": "s8-c3", "met": true, "evidence": "L154-158: !isTTY → stderr warn 'not a TTY' → this.fallback.request(...). Fallback injected via constructor; tests assert noopSpy.request called once."},
+    {"criterionId": "s8-c4", "met": true, "evidence": "registry.ts L34: registerCheckpointMechanism('cli', new CliCheckpointMechanism()) at module top-level after noop registration"},
+    {"criterionId": "s8-c5", "met": true, "evidence": "cli.test.ts COLOCATED at src/orchestrator/checkpoints/mechanisms/; 7 tests pass; tests/orchestrator/checkpoints/ does not exist"},
+    {"criterionId": "s8-c6", "met": true, "evidence": "Perf test: pre-stuffed Readable + stubReadline → elapsed 0ms; assertion <200ms"},
+    {"criterionId": "s8-c7", "met": true, "evidence": "typecheck/lint/build exit 0; 47 files / 600 pass / 4 skip / 0 fail (+7 vs Sprint 7 baseline 593); scanner colocated 25:22; pipeline.ts UNCHANGED"}
+  ],
+  "filesChanged": [
+    {"path": "src/orchestrator/checkpoints/mechanisms/cli.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/registry.ts", "action": "modified", "description": "+import + 1 registration line"},
+    {"path": "src/orchestrator/checkpoints/mechanisms/cli.test.ts", "action": "created", "description": "COLOCATED — 7 tests including perf"}
+  ],
+  "notes": "Constructor-injected fallback (CheckpointMechanism) enables s8-c3 noop-path verification via spy. vi.clearAllMocks() (not restoreAllMocks) preserves vi.mock factories across tests. Edit branch uses mocked child_process + fs/promises for portability."
+}

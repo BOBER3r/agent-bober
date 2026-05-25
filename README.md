@@ -48,6 +48,20 @@ You describe a feature
 
 ---
 
+## Operating Modes
+
+agent-bober operates in four modes — pick the one that matches your situation. See
+[VISION.md](./VISION.md) for full documentation, worked examples, and configuration details.
+
+| Mode | When to Use | Entry Point |
+|------|-------------|-------------|
+| **Autopilot** | Feature spikes, greenfield work, no production risk | `bober run` |
+| **Careful-Flow** | Production behavior changes, want checkpoint approval | `bober run --mode careful` |
+| **Diagnose** | Production system is broken right now | `bober incident start` |
+| **Postmortem** | After resolving an incident, generate a retrospective | `bober postmortem generate` |
+
+---
+
 ## Installation
 
 ```bash
@@ -329,6 +343,39 @@ npx agent-bober sprint                                   # Execute next sprint
 npx agent-bober eval                                     # Evaluate current sprint
 npx agent-bober run "feature"                            # Full autonomous loop
 npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
+```
+
+#### New Commands (Sprints 9–25)
+
+The following commands were added after the initial release. Full reference in [COMMANDS.md](./COMMANDS.md).
+
+```bash
+# Checkpoint approval (careful-flow mode)
+npx agent-bober list-approvals                        # List pending checkpoints
+npx agent-bober approve <checkpointId>                # Approve a checkpoint
+npx agent-bober approve <checkpointId> --edit <file>  # Approve with edit delta
+npx agent-bober reject <checkpointId>                 # Reject a checkpoint
+npx agent-bober audit show <runId>                    # Show audit log for a run
+
+# Incident response
+npx agent-bober incident start '<symptom>' --severity S2   # Start incident
+npx agent-bober incident status <incidentId>               # Check status
+npx agent-bober incident end <incidentId> --verified       # Mark resolved
+npx agent-bober incident list                              # List all incidents
+npx agent-bober incident abort <incidentId> --reason "..."  # Abort incident
+
+# Rollback
+npx agent-bober rollback <incidentId> --dry-run    # Preview rollback plan
+npx agent-bober rollback <incidentId>              # Execute rollback
+
+# Postmortem
+npx agent-bober postmortem generate <incidentId>   # Generate retrospective
+npx agent-bober postmortem show <incidentId>       # Print retrospective
+
+# Playbooks
+npx agent-bober playbook list                      # List all playbooks
+npx agent-bober playbook show <name>               # Show playbook content
+npx agent-bober playbook search '<symptom>'        # Search by symptom
 ```
 
 #### Clarification gating
@@ -777,6 +824,8 @@ bash scripts/run-eval.sh /path/to/project
 ---
 
 ## Contributing
+
+See [AGENTS.md](./AGENTS.md) for contributor discipline including the anti-slop pre-PR checklist.
 
 Contributions are welcome. To set up the development environment:
 

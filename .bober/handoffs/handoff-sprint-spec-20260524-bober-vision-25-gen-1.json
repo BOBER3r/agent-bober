@@ -1,0 +1,28 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-25-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-25",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T09:05:55Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 25 — Tier 3 closure. .bober/playbooks/ starter library (4 + README) + symptom-to-playbook search + diagnoser integration + CLI 'bober playbook list|show|search'.",
+    "completedSprints": [
+      {"contractId":"sprint-15","title":"bober-diagnoser","summary":"Read-only investigator. Will gain searchPlaybooks reference in Phase 1."},
+      {"contractId":"sprint-18","title":"bober.runbook skill","summary":"PARSE FORMAT: frontmatter (name, classification:'standard'|'emergency', prerequisites) + numbered steps with description / blastRadius / precondition-check / execute / postcondition-check / rollback. Sprint 25 playbooks MUST follow this format."},
+      {"contractId":"sprint-24","title":"/bober-incident","summary":"Top-level workflow. Sprint 25's playbook integration enables 'playbook matched' path through this workflow."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "skills/bober.runbook/SKILL.md",
+      "agents/bober-diagnoser.md",
+      "src/incident/",
+      "src/cli/commands/",
+      "src/cli/index.ts"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-25.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

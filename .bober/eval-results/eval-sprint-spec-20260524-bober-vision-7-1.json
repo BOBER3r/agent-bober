@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-7-1",
+  "contractId": "sprint-spec-20260524-bober-vision-7",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T03:45:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0,
+    "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "no errors" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0", "details": "no errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "no errors" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "46 files / 593 pass / 4 skip / 0 fail (2.64s)", "details": "+4 vs Sprint 6 baseline; canary code-reviewer-agent.test.ts 5/5; scanner.test.ts 52/52" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s7-c1", "required": true, "result": "pass", "evidence": "types.ts: CheckpointId union (9 literals), CheckpointArtifact, CheckpointMechanism interface, CheckpointOutcome 3-variant DU including {approved:false,feedback:string}" },
+    { "criterionId": "s7-c2", "required": true, "result": "pass", "evidence": "registry.ts: register/get + clear-error throw; noop self-registered at L32; grep across src/ finds noop as sole registered mechanism" },
+    { "criterionId": "s7-c3", "required": true, "result": "pass", "evidence": "sites.ts: CHECKPOINT_SITES = 9 entries matching CheckpointId union with when/artifact/pipelineLocation" },
+    { "criterionId": "s7-c4", "required": true, "result": "pass", "evidence": "pipeline.ts +10/-0: 1 import + 9 await calls at sensible positions; imports through barrel index.ts; canary test passes unchanged" },
+    { "criterionId": "s7-c5", "required": true, "result": "pass", "evidence": "checkpoints.test.ts COLOCATED at src/orchestrator/checkpoints/ (find tests/orchestrator/ empty); 4 tests covering s7-c5a/b/c + runtime registration; all pass" },
+    { "criterionId": "s7-c6", "required": true, "result": "pass", "evidence": "all 4 strategies exit 0; behavior-unchanged canary green; scanner colocated invariant green" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 7 PASSES all 6 — checkpoint plumbing in place with noop sole mechanism, +10 LOC pipeline diff, colocated test, behavior unchanged."
+}

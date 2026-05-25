@@ -1,0 +1,32 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-13-1",
+  "contractId": "sprint-spec-20260524-bober-vision-13",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T07:03:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 9, "criteriaPassed": 9, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 9, "requiredFailed": 0, "requiredTotal": 9 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "65 files, 861 passed, 4 skipped, 0 failed" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s13-c1", "result": "pass", "evidence": "audit.ts ApprovalRecord has all 10 fields. appendOneLine writes one JSONL per call." },
+    { "criterionId": "s13-c2", "result": "pass", "evidence": "runWithAudit try/catch/finally; throw still writes entry then re-throws original error. 9 pipeline sites + feedback-router:608 use it." },
+    { "criterionId": "s13-c3", "result": "pass", "evidence": "fs.open O_WRONLY|O_APPEND|O_CREAT; per-runId Promise chain. 100-parallel test asserts Set.size===100 distinct iterations." },
+    { "criterionId": "s13-c4", "result": "pass", "evidence": "5-case switch (pr/cli/disk/noop/default). Disk uses git config user.name then USER per generatorNotes." },
+    { "criterionId": "s13-c5", "result": "pass", "evidence": "truncateFeedback 500-char cap; summarizeEditDelta {lineCount, firstChars(200)}." },
+    { "criterionId": "s13-c6", "result": "pass", "evidence": "registerAuditCommand commander pattern; table + --json + ENOENT handler with exitCode=1." },
+    { "criterionId": "s13-c7", "result": "pass", "evidence": "fs.open with 0o600 mode + explicit fh.chmod(0o600) — double-enforced. Test stats file." },
+    { "criterionId": "s13-c8", "result": "pass", "evidence": "All 5 branches covered in audit.test.ts + audit-show.test.ts." },
+    { "criterionId": "s13-c9", "result": "pass", "evidence": "All strategies exit 0. No regressions." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "low", "criterion": "s13-c4-quality", "description": "Disk approverId tests assert typeof string instead of mocked value 'Git User' — weak coverage. Non-blocking." },
+    { "priority": "low", "criterion": "s13-c6-quality", "description": "audit-show ENOENT test doesn't exercise CLI action handler end-to-end. Non-blocking." }
+  ],
+  "summary": "All 9 criteria pass on iter 1. audit.ts append-only JSONL with mode 0o600, per-runId mutex, runWithAudit wrapping all 9 pipeline sites + feedback-router. bober audit show CLI subcommand. 861 tests pass."
+}

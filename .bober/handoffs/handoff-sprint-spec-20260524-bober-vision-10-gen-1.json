@@ -1,0 +1,54 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-10-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-10",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T01:41:52Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — multi-mode software engineering teammate harness with autopilot, careful-flow, diagnose, postmortem modes. Tier 2 (careful-flow) checkpoint mechanism family: noop (Sprint 7), cli (Sprint 8), disk (Sprint 9), pr (this Sprint 10).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260524-bober-vision-1", "title": "SessionStart bootstrap + bober.using-bober skill", "summary": "Hook + skill bootstrap injected at session start" },
+      { "contractId": "sprint-spec-20260524-bober-vision-2", "title": "Verbatim port: verification-before-completion + systematic-debugging", "summary": "bober.verify, bober.debug skills ported" },
+      { "contractId": "sprint-spec-20260524-bober-vision-3", "title": "Voice pass on agent prompts (Iron Law / Red Flags / Rationalization-Prevention)", "summary": "Agent prompts adopt verbatim discipline structure" },
+      { "contractId": "sprint-spec-20260524-bober-vision-4", "title": "Anti-pattern reference catalog + evaluator wiring", "summary": ".bober/anti-patterns + evaluator integration" },
+      { "contractId": "sprint-spec-20260524-bober-vision-5", "title": "bober-code-reviewer + bober.code-review (advisory)", "summary": "Advisory reviewer agent + skill" },
+      { "contractId": "sprint-spec-20260524-bober-vision-6", "title": "HARD-GATE in bober.plan + AGENTS.md", "summary": "Plan HARD-GATE + AGENTS.md at repo root" },
+      { "contractId": "sprint-spec-20260524-bober-vision-7", "title": "Careful-flow plumbing: hook points + Checkpoint abstraction", "summary": "Checkpoint types + registry + noop mechanism" },
+      { "contractId": "sprint-spec-20260524-bober-vision-8", "title": "CLI blocking checkpoint mechanism", "summary": "src/orchestrator/checkpoints/mechanisms/cli.ts with TTY fallback to noop" },
+      { "contractId": "sprint-spec-20260524-bober-vision-9", "title": "Disk-marker checkpoint mechanism + approve/reject CLI", "summary": "src/orchestrator/checkpoints/mechanisms/disk.ts + CLI commands" }
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/types.ts",
+      "src/orchestrator/checkpoints/registry.ts",
+      "src/orchestrator/checkpoints/noop.ts",
+      "src/orchestrator/checkpoints/mechanisms/cli.ts",
+      "src/orchestrator/checkpoints/mechanisms/disk.ts",
+      "src/orchestrator/checkpoints/mechanisms/disk.test.ts",
+      "src/orchestrator/checkpoints/mechanisms/cli.test.ts",
+      ".bober/contracts/sprint-spec-20260524-bober-vision-10.json"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-10.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "config": {
+    "commands": {
+      "install": "npm install",
+      "build": "npm run build",
+      "test": "npm run test",
+      "lint": "npm run lint",
+      "typecheck": "npm run typecheck",
+      "dev": "npm run dev"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": null,
+  "evaluatorFeedback": null
+}

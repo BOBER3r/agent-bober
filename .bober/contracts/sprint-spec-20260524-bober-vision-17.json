@@ -1,0 +1,76 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-17",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "bober.diagnose skill \u2014 incident root-cause discipline",
+  "description": "skills/bober.diagnose/SKILL.md adapts the 4-phase systematic-debugging discipline to incident investigation (system-level not code-level). Phases: Reproduce/Confirm \u2192 Gather Evidence at Boundaries \u2192 Hypothesize-and-Test \u2192 Verify Resolution. Designed for use by bober-diagnoser. Cross-references bober.debug for code-level overlap.",
+  "successCriteria": [
+    {
+      "id": "s17-c1",
+      "description": "skills/bober.diagnose/SKILL.md exists with YAML frontmatter (name: bober-diagnose, description starts with 'Use when investigating a production incident or system-level failure'). MIT attribution to obra/superpowers as structural source.",
+      "verificationMethod": "Read file. Verify YAML and attribution.",
+      "passed": true
+    },
+    {
+      "id": "s17-c2",
+      "description": "Iron Law: 'NO REMEDIATION WITHOUT VERIFIED ROOT CAUSE AT TWO INDEPENDENT BOUNDARIES' (or equivalent \u2014 must require multi-source confirmation of root cause before suggesting fix). Red Flags list >=6 entries. Rationalization-Prevention table >=6 rows.",
+      "verificationMethod": "Grep file for the Iron Law structure and count entries.",
+      "passed": true
+    },
+    {
+      "id": "s17-c3",
+      "description": "Four phases documented in order with explicit gate language between each: Phase 1 Reproduce/Confirm, Phase 2 Gather Evidence at Boundaries, Phase 3 Hypothesize-and-Test, Phase 4 Verify Resolution. Each phase has a 'BEFORE proceeding to Phase N+1' gate.",
+      "verificationMethod": "Read each phase. Verify gate language between phases.",
+      "passed": true
+    },
+    {
+      "id": "s17-c4",
+      "description": "Phase 1 includes: confirm symptom is current (not stale), confirm scope (one user / many / all), confirm timing (when did it start, has it changed in severity), record initial state to .bober/incidents/<id>/observations.jsonl.",
+      "verificationMethod": "Read Phase 1. Verify all four sub-requirements documented.",
+      "passed": true
+    },
+    {
+      "id": "s17-c5",
+      "description": "Phase 2 includes: enumerate component boundaries (e.g., client\u2192CDN\u2192loadbalancer\u2192service\u2192database\u2192storage), gather evidence AT each boundary from observability MCPs, correlate timestamps with .bober/incidents/<id>/changelog.jsonl (recent deploys / changes).",
+      "verificationMethod": "Read Phase 2. Verify boundary enumeration discipline + observability MCP use + timestamp correlation.",
+      "passed": true
+    },
+    {
+      "id": "s17-c6",
+      "description": "Phase 3 includes: formulate hypotheses ranked by evidence, ACTIVELY seek contradicting evidence, propose tests that DISPROVE the top hypothesis. 'A hypothesis you cannot disprove is not strongly tested.'",
+      "verificationMethod": "Read Phase 3. Verify the disproof-seeking discipline.",
+      "passed": true
+    },
+    {
+      "id": "s17-c7",
+      "description": "Phase 4 includes: define resolution-verification criteria BEFORE remediation (e.g., 'error rate < 0.1% sustained for 10 minutes'), apply remediation via bober-deployer (Sprint 20) with checkpoint gates, monitor against criteria via observability MCPs, mark resolved only when criteria met for the named window.",
+      "verificationMethod": "Read Phase 4. Verify the explicit pre-defined criteria requirement.",
+      "passed": true
+    },
+    {
+      "id": "s17-c8",
+      "description": "Cross-references: bober.debug (code-level overlap), bober.runbook (Sprint 18, for runbook-driven flows), bober.deploy (Sprint 20, for remediation execution), .bober/anti-patterns/ catalog.",
+      "verificationMethod": "Grep file for each cross-reference.",
+      "passed": true
+    },
+    {
+      "id": "s17-c9",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test \u2014 assert exit 0.",
+      "passed": true
+    }
+  ],
+  "expectedChanges": [
+    {
+      "path": "skills/bober.diagnose/SKILL.md",
+      "action": "create",
+      "description": "Incident root-cause discipline (4-phase, system-level)"
+    }
+  ],
+  "dependsOn": [
+    "sprint-spec-20260524-bober-vision-16"
+  ],
+  "status": "completed",
+  "generatorNotes": "Adapt /tmp/superpowers/skills/systematic-debugging/SKILL.md (the 4-phase structure) to incident context. Sprint 2 already ported it for code-level bugs (bober.debug). THIS skill is the system-level twin.\n\nKey divergences from bober.debug:\n- Phase 1 is REPRODUCE+CONFIRM, not just reproduce \u2014 incidents can be transient or stale.\n- Phase 2 is GATHER AT BOUNDARIES \u2014 emphasizes the multi-component nature of production systems. Adapt the 'Gather Evidence in Multi-Component Systems' subsection from the source SKILL.md.\n- Phase 3 includes ACTIVELY SEEK CONTRADICTING EVIDENCE \u2014 superpowers's source mentions this; emphasize it more for incidents because confirmation bias under pressure is the dominant failure mode.\n- Phase 4 adds RESOLUTION VERIFICATION CRITERIA with metric+window \u2014 code bugs are 'tests pass'; incidents are 'metric returned to baseline'.\n\nGate language between phases (verbatim style):\n```\n<EXTREMELY-IMPORTANT>\nBEFORE proceeding to Phase 2, you MUST have completed Phase 1 in writing \u2014 symptom confirmed current, scope confirmed, timing confirmed, observations.jsonl appended. If any of these is incomplete, return to Phase 1. Skipping Phase 1 makes Phase 2 evidence-gathering ungrounded.\n</EXTREMELY-IMPORTANT>\n```\n\nObservation log shape (.bober/incidents/<id>/observations.jsonl):\n```\n{\"timestamp\": \"...\", \"phase\": 1, \"observation\": \"Symptom: 500 errors on /api/checkout from 14:00 UTC\", \"source\": \"user-report\", \"verified\": true}\n```\n\nResolution-verification criteria example for Phase 4 (in the skill body as a worked example):\n```\nResolution criteria for INC-2026-0524-001:\n  - Metric: api.checkout.error_rate\n  - Threshold: < 0.1%\n  - Window: 10 minutes sustained\n  - Comparison baseline: 7-day rolling average\n  - Verification source: obs__datadog__query_metric\n```\n\nLength: 200-300 lines. Verbatim voice (per spec directive) \u2014 capitalized rules, all-caps STOP, <EXTREMELY-IMPORTANT> tags.",
+  "evaluatorNotes": "Verify gate language between phases is ACTUALLY GATING \u2014 language like 'consider doing X before Y' is not a gate. Required language: 'BEFORE proceeding to Phase N+1, you MUST have done X'. Without this strict framing the phases collapse into suggestions.\n\nVerify Phase 4's resolution-verification criteria are PRE-DEFINED (before remediation), not retrofitted after. The skill must explicitly forbid 'mark resolved because the dashboard looks better' \u2014 that's the very anti-pattern this skill exists to prevent.\n\nVerify hypothesis-disproof discipline in Phase 3 is REQUIRED not advisory. 'Try to find evidence that DISPROVES your top hypothesis. A hypothesis you cannot disprove is not strongly tested.' or equivalent \u2014 must appear as a step, not a suggestion.\n\nCross-check: bober.debug (Sprint 2) and bober.diagnose (this sprint) should be DIFFERENT enough to justify both existing. bober.debug = code-level, sprint-evaluator-feedback-driven; bober.diagnose = system-level, incident-driven. If the two skills are 80% the same, consolidate them (rare; usually they diverge naturally). Read both to confirm distinct value.\n\nVerify the verbatim-voice directive holds: <EXTREMELY-IMPORTANT> tags should appear at least at phase transitions. Iron Law in capitalized fenced block.\n\nVerify .bober/incidents/ schema references are CONSISTENT with what Sprint 19 will create \u2014 phases reference observations.jsonl, changelog.jsonl. Sprint 19 must use the same names.",
+  "completedAt": "2026-05-25T09:02:00Z"
+}

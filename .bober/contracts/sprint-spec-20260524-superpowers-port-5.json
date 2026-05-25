@@ -1,0 +1,79 @@
+{
+  "id": "sprint-spec-20260524-superpowers-port-5",
+  "specId": "spec-20260524-superpowers-port",
+  "feature": "Iron Law / Red Flags style pass across remaining agent prompts",
+  "description": "Apply the Iron Law / Red Flags / Rationalization-Prevention table structure consistently across five remaining agent prompts: bober-planner, bober-curator, bober-architect, bober-researcher, bober-evaluator. Generator was covered by Sprints 2-3. Each agent gets exactly one Iron Law block stating its single non-negotiable rule and at least one Red Flags table appropriate to its role. Voice remains bober's — no 'your human partner', no 'EXTREMELY-IMPORTANT', no 94%-rejection framing.",
+  "successCriteria": [
+    {
+      "id": "s5-c1",
+      "description": "agents/bober-planner.md contains exactly one fenced Iron Law block stating the planner's non-negotiable: 'NO SPRINT CONTRACTS WITHOUT TESTABLE SUCCESS CRITERIA' (or equivalent — must mention testability of success criteria as the load-bearing constraint).",
+      "verificationMethod": "Read agents/bober-planner.md. Grep for 'Iron Law' or the literal rule string. Verify exactly one occurrence.",
+      "passed": false
+    },
+    {
+      "id": "s5-c2",
+      "description": "agents/bober-curator.md contains exactly one fenced Iron Law block stating the curator's non-negotiable: 'NO BRIEFING WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE FOR EVERY PATTERN' (or equivalent — must mention file:line evidence as required).",
+      "verificationMethod": "Read agents/bober-curator.md. Grep for the Iron Law structure.",
+      "passed": false
+    },
+    {
+      "id": "s5-c3",
+      "description": "agents/bober-architect.md contains exactly one fenced Iron Law block stating the architect's non-negotiable: 'NO ADR WITHOUT EXPLICIT TRADEOFF EVIDENCE' (or equivalent — must require structured pros/cons or comparable rigor).",
+      "verificationMethod": "Read agents/bober-architect.md. Grep for the Iron Law structure.",
+      "passed": false
+    },
+    {
+      "id": "s5-c4",
+      "description": "agents/bober-researcher.md contains exactly one fenced Iron Law block stating the researcher's non-negotiable: 'NO FINDING WITHOUT FILE-PATH-AND-LINE-NUMBER EVIDENCE' (or equivalent — must require file:line citations).",
+      "verificationMethod": "Read agents/bober-researcher.md. Grep for the Iron Law structure.",
+      "passed": false
+    },
+    {
+      "id": "s5-c5",
+      "description": "agents/bober-evaluator.md contains exactly one fenced Iron Law block stating the evaluator's non-negotiable: 'NO PASS WITHOUT INDEPENDENT VERIFICATION OF EVERY SUCCESS CRITERION' (or equivalent — must forbid trusting the generator's success claim).",
+      "verificationMethod": "Read agents/bober-evaluator.md. Grep for the Iron Law structure.",
+      "passed": false
+    },
+    {
+      "id": "s5-c6",
+      "description": "Each of the five files contains a Red Flags table or list of at least 5 STOP conditions specific to that agent's role.",
+      "verificationMethod": "For each of the five files: locate the Red Flags section, count entries (>=5 per agent).",
+      "passed": false
+    },
+    {
+      "id": "s5-c7",
+      "description": "Each of the five files contains a Rationalization-Prevention table mapping at least 5 role-appropriate excuses to refutations.",
+      "verificationMethod": "For each of the five files: locate the Rationalization-Prevention table, count rows (>=5 per agent).",
+      "passed": false
+    },
+    {
+      "id": "s5-c8",
+      "description": "Voice consistency: NONE of the five files contain the strings 'your human partner', 'EXTREMELY-IMPORTANT' (as a tag or all-caps phrase), or '94% rejection'.",
+      "verificationMethod": "Grep all five files for each forbidden string; assert zero matches across the set.",
+      "passed": false
+    },
+    {
+      "id": "s5-c9",
+      "description": "Each of the five agent prompt files remains under 600 lines (NFR: maintainability).",
+      "verificationMethod": "wc -l for each of the five files; assert <=600 each.",
+      "passed": false
+    },
+    {
+      "id": "s5-c10",
+      "description": "Existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": "agents/bober-planner.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
+    { "path": "agents/bober-curator.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
+    { "path": "agents/bober-architect.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
+    { "path": "agents/bober-researcher.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table" },
+    { "path": "agents/bober-evaluator.md", "action": "modify", "description": "Add Iron Law + Red Flags + Rationalization-Prevention table (preserving Sprint 4's anti-pattern-citation guidance)" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-superpowers-port-4"],
+  "status": "proposed",
+  "generatorNotes": "Treat this as a focused style pass, NOT a content rewrite. The existing prose in each agent file stays intact; you're ADDING three structural blocks per file: (1) a single fenced Iron Law block at the top of each agent's instruction section (just after the YAML frontmatter and the 'Subagent Context' header), (2) a Red Flags table or list in the agent's pre-output section, (3) a Rationalization-Prevention table near the end of the prompt. For each agent, the Iron Law must be the ONE thing the agent must never violate. Don't make it generic ('do good work'); make it role-specific and load-bearing. Suggested Red Flags per agent: planner — 'asking a question whose answer is in package.json', 'success criterion uses \"works correctly\"', 'sprint touches >15 files'; curator — 'briefing without a file:line', 'pattern claim without grep evidence', 'recommending a util that does not exist'; architect — 'approach selected without listing 2+ alternatives', 'ADR without pros AND cons sections', 'component design without TypeScript signature'; researcher — 'finding without file:line', 'claim with hedging language (\"likely\", \"probably\")', 'recommendation appearing in a research doc'; evaluator — 'trusting generator success report', 'partial criterion check', 'claiming pass when a strategy command was not run'. Suggested Rationalization-Prevention rows: format is | Excuse | Reality |. Example for evaluator: | 'Generator said tests pass' | Run the test command yourself | / | 'Only 1 criterion failed' | A required criterion is required |. Refer to /tmp/superpowers/skills/verification-before-completion/SKILL.md:64-75 for the table format. Voice: bober's voice is procedural and structured. Keep that. Don't introduce dramatic phrasing.",
+  "evaluatorNotes": "This is the highest-touch sprint. Verify changes are ADDITIVE — no existing instructions removed except where they directly contradict the new Iron Law. Verify the Iron Law in each file is the FIRST emphasis block after the YAML frontmatter — placement matters for empirical effectiveness (superpowers consistently puts Iron Laws near the top). Run a grep across all five files for the forbidden strings ('your human partner', 'EXTREMELY-IMPORTANT', '94%') as a single pass — any hit is a fail. Verify each agent's Iron Law is DIFFERENT (no copy-paste of the generator's Iron Law into the planner) and ROLE-SPECIFIC (a generic 'do high-quality work' is a fail). Cross-reference Sprint 4: bober-evaluator.md already gained anti-pattern citation guidance in Sprint 4 — this sprint adds the Iron Law structure on top WITHOUT removing or duplicating the anti-pattern guidance. If any of the existing tools, instructions, or output schemas are inadvertently modified, that's a regression — flag with file:line. Reject if any agent file exceeds 600 lines (NFR violation)."
+}

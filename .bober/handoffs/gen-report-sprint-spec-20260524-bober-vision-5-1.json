@@ -1,0 +1,31 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-5",
+  "iteration": 1,
+  "status": "complete",
+  "commits": [
+    "ac29dda - bober(sprint-5): bober-code-reviewer agent + advisory orchestrator wiring",
+    "2cd7b9d - bober(sprint-5): colocate code-reviewer test to preserve scanner colocated convention"
+  ],
+  "criteriaResults": [
+    {"criterionId": "s5-c1", "met": true, "evidence": "agents/bober-code-reviewer.md YAML tools: [Read, Bash, Grep, Glob] only"},
+    {"criterionId": "s5-c2", "met": true, "evidence": "Subagent Context block, Iron Law line 59, Red Flags 7 bullets, Rationalization Prevention 6-row table, ReviewResult schema lines 29-57"},
+    {"criterionId": "s5-c3", "met": true, "evidence": "skills/bober.code-review/SKILL.md description prefix correct; cites .bober/anti-patterns/ (12 occurrences); What NOT to flag + Process Flow + obra/superpowers attribution"},
+    {"criterionId": "s5-c4", "met": true, "evidence": "New src/orchestrator/code-reviewer-agent.ts; pipeline.ts 38 insertions 0 deletions inside if (evaluation.passed) branch; try/catch + Promise.race timeout; logger.warn + proceeds on error"},
+    {"criterionId": "s5-c5", "met": true, "evidence": "renderReviewMarkdown emits 6 sections in contract order with empty-section fallback"},
+    {"criterionId": "s5-c6", "met": true, "evidence": "src/orchestrator/code-reviewer-agent.test.ts 5 tests covering spawn inputs, file write, error-does-not-block"},
+    {"criterionId": "s5-c7", "met": true, "evidence": "grep critical→retry / needs-rework / updateContractStatus in reviewer block returns NO MATCHES"},
+    {"criterionId": "s5-c8", "met": true, "evidence": "typecheck/lint/build exit 0; npm run test 589 passed 4 skipped 0 failed across 45 test files"},
+    {"criterionId": "s5-c9", "met": true, "evidence": "src/orchestrator diff is additive: pipeline.ts +38/-0; two new files (code-reviewer-agent.ts + colocated test); evaluator-agent.ts untouched"}
+  ],
+  "filesChanged": [
+    {"path": "agents/bober-code-reviewer.md", "action": "created"},
+    {"path": "skills/bober.code-review/SKILL.md", "action": "created"},
+    {"path": "src/config/schema.ts", "action": "modified"},
+    {"path": "src/orchestrator/code-reviewer-agent.ts", "action": "created"},
+    {"path": "src/orchestrator/code-reviewer-agent.test.ts", "action": "created"},
+    {"path": "src/orchestrator/pipeline.ts", "action": "modified"},
+    {"path": "src/state/review-state.ts", "action": "created"},
+    {"path": "src/state/index.ts", "action": "modified"}
+  ],
+  "notes": "Iteration 1, two commits. First commit (ac29dda) introduced a scanner regression because the new test was placed at tests/orchestrator/ which tipped detectColocated() from 22==22 (true) to 22<23 (false). Orchestrator caught it pre-evaluator; fix commit (2cd7b9d) moved the test to src/orchestrator/code-reviewer-agent.test.ts (colocated, matching agent-loader.test.ts and model-resolver.test.ts convention). Final state: all 45 test files pass, 589/4."
+}

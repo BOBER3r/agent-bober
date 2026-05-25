@@ -1,0 +1,29 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-21-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-21",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T07:27:06Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 21 — bober rollback CLI + planRollback/executeRollback. Each inverse goes through Sprint 20 risky-action gate (per-step approval, not plan-level). Writes outcome to rollback-execution.jsonl.",
+    "completedSprints": [
+      {"contractId":"sprint-19","title":"Incident timeline","summary":"appendChange writes to changelog.jsonl; ChangeEntry has REQUIRED inverse + status enum (pending|executed|rolled-back|failed). Status updates need an extension pattern."},
+      {"contractId":"sprint-20","title":"Deployer + gates","summary":"executeAction enforces risky-action gate; resolveRiskyActionMechanismName forced floor; ExecutorSeam pattern. Sprint 21 uses these same gates."},
+      {"contractId":"sprint-9","title":"Disk-marker + bober approve CLI","summary":"CLI commands at src/cli/commands/. Pattern for adding new subcommand."}
+    ],
+    "currentBranch": "bober/bober-vision",
+    "relevantFiles": [
+      "src/incident/timeline.ts",
+      "src/incident/types.ts",
+      "src/orchestrator/deploy/execute.ts",
+      "src/orchestrator/deploy/resolve.ts",
+      "src/cli/",
+      "src/cli/commands/"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-21.json",
+  "configPath": "bober.config.json",
+  "principles": null,
+  "evaluatorFeedback": null
+}

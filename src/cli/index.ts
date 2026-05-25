@@ -21,6 +21,16 @@ import { createBoberMCPServer } from "../mcp/server.js";
 import { registerGraphCommand } from "./commands/graph.js";
 import { registerOnboardCommand } from "./commands/onboard.js";
 import { registerImpactCommand } from "./commands/impact.js";
+import { registerApproveCommand } from "./commands/approve.js";
+import { registerRejectCommand } from "./commands/reject.js";
+import { registerListApprovalsCommand } from "./commands/list-approvals.js";
+import { registerAuditCommand } from "./commands/audit-show.js";
+import { registerRollbackCommand } from "./commands/rollback.js";
+import { registerPostmortemCommand } from "./commands/postmortem.js";
+import { registerIncidentCommand } from "./commands/incident.js";
+import { registerPlaybookCommand } from "./commands/playbook.js";
+import { registerConfigCommand } from "./commands/config.js";
+import { registerTelemetryCommand } from "./commands/telemetry.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -182,13 +192,35 @@ async function main(): Promise<void> {
       "--provider <name>",
       "Override AI provider for all roles (anthropic, openai, google, openai-compat)",
     )
-    .action(async (task?: string, cmdOpts?: { provider?: string }) => {
+    .option(
+      "--mode <mode>",
+      "Pipeline mode: 'autopilot' (default, auto-approves all checkpoints) or 'careful' (requires explicit approval via disk/cli/pr mechanism)",
+    )
+    .option(
+      "--checkpoint <mechanism>",
+      "Override the default checkpoint mechanism for this run: noop|cli|disk|pr. " +
+      "Per-checkpoint config overrides still apply unless --checkpoint-all is also passed.",
+    )
+    .option(
+      "--checkpoint-all",
+      "Apply --checkpoint to ALL checkpoints, overriding per-checkpoint config overrides. " +
+      "Requires --checkpoint to also be set. Without this flag, per-checkpoint overrides in config still win.",
+    )
+    .action(async (task?: string, cmdOpts?: {
+      provider?: string;
+      mode?: "autopilot" | "careful";
+      checkpoint?: string;
+      checkpointAll?: boolean;
+    }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
       const projectRoot = await resolveProjectRoot(opts.config);
       await runRunCommand(task, projectRoot, {
         verbose: opts.verbose,
         provider: cmdOpts?.provider,
+        mode: cmdOpts?.mode,
+        checkpoint: cmdOpts?.checkpoint,
+        checkpointAll: cmdOpts?.checkpointAll,
       });
     });
 
@@ -214,6 +246,36 @@ async function main(): Promise<void> {
 
   // ── impact ─────────────────────────────────────────────────────
   registerImpactCommand(program);
+
+  // ── approve ────────────────────────────────────────────────────
+  registerApproveCommand(program);
+
+  // ── reject ─────────────────────────────────────────────────────
+  registerRejectCommand(program);
+
+  // ── list-approvals ─────────────────────────────────────────────
+  registerListApprovalsCommand(program);
+
+  // ── audit ───────────────────────────────────────────────────────
+  registerAuditCommand(program);
+
+  // ── rollback ─────────────────────────────────────────────────────
+  registerRollbackCommand(program);
+
+  // ── postmortem ───────────────────────────────────────────────────
+  registerPostmortemCommand(program);
+
+  // ── incident ─────────────────────────────────────────────────────
+  registerIncidentCommand(program);
+
+  // ── playbook ─────────────────────────────────────────────────────
+  registerPlaybookCommand(program);
+
+  // ── config ───────────────────────────────────────────────────────
+  registerConfigCommand(program);
+
+  // ── telemetry ────────────────────────────────────────────────────
+  registerTelemetryCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

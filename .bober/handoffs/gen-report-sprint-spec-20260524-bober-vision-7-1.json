@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260524-bober-vision-7",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "e00d064",
+  "criteriaResults": [
+    {"criterionId": "s7-c1", "met": true, "evidence": "checkpoints/types.ts defines CheckpointId (9-literal union), CheckpointArtifact, CheckpointMechanism, CheckpointOutcome (3-variant discriminated union)"},
+    {"criterionId": "s7-c2", "met": true, "evidence": "checkpoints/registry.ts: registerCheckpointMechanism + getCheckpointMechanism with throw-on-unknown; noop self-registered at module init; only mechanism present"},
+    {"criterionId": "s7-c3", "met": true, "evidence": "checkpoints/sites.ts CHECKPOINT_SITES = 9 entries matching all 9 CheckpointId values with when/artifact/pipelineLocation"},
+    {"criterionId": "s7-c4", "met": true, "evidence": "pipeline.ts +10/-0: 1 import + 9 await calls at 9 sites; tsc exit 0; code-reviewer-agent.test.ts canary 5/5 still passes (5 of 9 sites exercised end-to-end via runSprintCycle with noop auto-approving)"},
+    {"criterionId": "s7-c5", "met": true, "evidence": "src/orchestrator/checkpoints/checkpoints.test.ts (COLOCATED — verified find tests/orchestrator/ returns nothing): 4 tests covering noop approval/registry resolution/unknown-name error/runtime registration"},
+    {"criterionId": "s7-c6", "met": true, "evidence": "typecheck/lint/build exit 0; npm test 46 files / 593 pass / 4 skip / 0 fail (+4 vs sprint 6 baseline 589)"}
+  ],
+  "filesChanged": [
+    {"path": "src/orchestrator/checkpoints/types.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/noop.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/registry.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/sites.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/index.ts", "action": "created"},
+    {"path": "src/orchestrator/checkpoints/checkpoints.test.ts", "action": "created"},
+    {"path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "+10 lines: import + 9 await checkpoint calls"}
+  ],
+  "notes": "Behavior unchanged (10-line additive diff; noop always approves; 589 prior tests still pass). Test colocated per Sprint 5 regression precedent. noop is sole registered mechanism — sprints 8-10 plug in CLI/disk/PR."
+}

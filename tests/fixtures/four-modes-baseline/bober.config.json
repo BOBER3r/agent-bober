@@ -1,0 +1,17 @@
+{
+  "pipeline": {
+    "mode": "autopilot",
+    "checkpointMechanism": "noop"
+  },
+  "observability": {
+    "providers": [
+      {
+        "name": "mock-obs",
+        "kind": "metrics",
+        "mcpCommand": "node",
+        "mcpArgs": ["../../tests/fixtures/mock-observability-server.mjs"],
+        "enabled": true
+      }
+    ]
+  }
+}

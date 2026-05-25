@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-20-1",
+  "contractId": "sprint-spec-20260524-bober-vision-20",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T10:25:30Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":8,"criteriaPassed":8,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":8,"requiredFailed":0,"requiredTotal":8},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0","details":"tsc --noEmit zero errors"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0","details":"eslint src/ zero errors"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0","details":"tsc"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"973 passed, 4 skipped (72 files)","details":"+22 deployer tests, baseline 951 preserved"}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s20-c1","result":"pass","evidence":"agents/bober-deployer.md YAML: name:bober-deployer, tools:[Read,Bash,Grep,Glob], model:sonnet. NOT read-only (Bash present); every action gated."},
+    {"criterionId":"s20-c2","result":"pass","evidence":"Iron Law verbatim @52 'NO RISKY ACTION WITHOUT CHECKPOINT APPROVAL; NO ACTION WITHOUT RECORDED INVERSE'. 8 Red Flags, 8 Rationalization rows."},
+    {"criterionId":"s20-c3","result":"pass","evidence":"SAFE/RISKY classification tables @82-114 with 'WHEN IN DOUBT: classify risky' verbatim @114. classify.ts RISKY_PATTERNS default-deny matches docs."},
+    {"criterionId":"s20-c4","result":"pass","evidence":"skills/bober.deploy/SKILL.md 10-step Execution Loop @81-120, Abort Discipline 3-step (inverse→verify→escalate) @171-186, Hard Gate verbatim 'Autopilot mode does NOT bypass risky-action approval' @124-134."},
+    {"criterionId":"s20-c5","result":"pass","evidence":"spawn.ts mergeObsTools+loadAgentDefinition Sprint 16 pattern. execute.ts:112-119 mech.request() payload {kind,actionId,description,classification,classificationReasoning,command,inverse} — all 3 required fields."},
+    {"criterionId":"s20-c6","result":"pass","evidence":"resolve.ts:62-64 forced floor: isRisky && !allow && resolved==='noop' → 'disk'. schema.ts:172 default false. Test verifies autopilot+noop+risky→'disk'; escape hatch true→'noop' with stern stderr warning + ChangeEntry preserved."},
+    {"criterionId":"s20-c7","result":"pass","evidence":"execute.ts:146-155 writes 'pending' BEFORE executor.run, :174-187 writes terminal entry (executed|failed) in catch. Test scenario 5 verifies both pending+failed on executor throw. Missing-inverse aborts BEFORE any ChangeEntry/executor call."},
+    {"criterionId":"s20-c8","result":"pass","evidence":"All 4 strategies exit 0. 973 tests pass, 4 skipped."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 criteria pass on iter 1. Highest-risk Tier 3 sprint shipped clean: unconditional gate (autopilot+noop+risky→disk floor) enforced via pure resolveRiskyActionMechanismName; escape hatch preserves audit + stern warning; inverse-REQUIRED guard fires before any IO; classifyCommand uses default-deny on COMMAND content (authoritative over agent self-declaration, handles multi-command chains); ChangeEntry pending-then-terminal sequence durable on crash. 973 tests (+22), baseline 951 preserved."
+}

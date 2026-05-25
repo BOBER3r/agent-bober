@@ -1,0 +1,42 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-11-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-11",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 11 of 28 in the Bober Vision plan. Tier 2 (careful-flow). Replaces the generic 'first 40 lines' renderer used by cli/disk/pr mechanisms with structured per-artifact-type renderers (9 artifact types).",
+    "currentBranch": "bober/bober-vision",
+    "completedSprintsInTier2": [
+      "Sprint 7: Checkpoint plumbing",
+      "Sprint 8: CLI mechanism (renderArtifact() uses 'first 40 lines')",
+      "Sprint 9: Disk mechanism (summarizeArtifact() picks 4 whitelisted fields)",
+      "Sprint 10: PR mechanism (renderCheckpointComment, renderPrBody — uses checkpointStates Map)"
+    ],
+    "relevantFiles": [
+      "src/orchestrator/checkpoints/types.ts",
+      "src/orchestrator/checkpoints/registry.ts",
+      "src/orchestrator/checkpoints/mechanisms/cli.ts (renderArtifact at top)",
+      "src/orchestrator/checkpoints/mechanisms/disk.ts (summarizeArtifact at top)",
+      "src/orchestrator/checkpoints/mechanisms/pr.ts (renderCheckpointComment, renderPrBody)",
+      ".bober/contracts/sprint-spec-20260524-bober-vision-11.json"
+    ],
+    "artifactTypeShapesToInspect": [
+      ".bober/research/*.md (research doc — H1 + frontmatter)",
+      ".bober/specs/*.json (PlanSpec — already JSON; see spec-20260524-bober-vision.json)",
+      ".bober/contracts/*.json (SprintContract)",
+      ".bober/briefings/*-briefing.md (Curator briefing markdown)",
+      ".bober/eval-results/*.json (EvalResult)",
+      ".bober/reviews/<id>-review.md (code-review markdown)",
+      "git diff --stat output (generator-diff)"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-11.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "config": {
+    "commands": { "typecheck": "npm run typecheck", "lint": "npm run lint", "build": "npm run build", "test": "npm run test" }
+  },
+  "principles": null,
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,30 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-14-1",
+  "contractId": "sprint-spec-20260524-bober-vision-14",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T07:29:30Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "67 files, 879 passed, 4 skipped. Integration test 2/2." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s14-c1", "result": "pass", "evidence": "All 6 fields in PipelineSectionSchema with documented defaults." },
+    { "criterionId": "s14-c2", "result": "pass", "evidence": "resolveCheckpointMechanismName tier 5: mode→default (careful→disk, autopilot→noop). Explicit wins." },
+    { "criterionId": "s14-c3", "result": "pass", "evidence": "Tier 2 per-checkpoint override resolution verified by tests." },
+    { "criterionId": "s14-c4", "result": "pass", "evidence": "--checkpoint preserves overrides; --checkpoint-all clears them. Documented in help." },
+    { "criterionId": "s14-c5", "result": "pass", "evidence": "careful+noop warning at loader.ts:244; pr fallback at pr.ts:207; zod enum rejects unknown." },
+    { "criterionId": "s14-c6", "result": "pass", "evidence": "tests/integration/careful-flow.test.ts 2 tests pass; real DiskCheckpointMechanism + real .pending/.approved files + audit log assertion." },
+    { "criterionId": "s14-c7", "result": "pass", "evidence": "tests/config/graph-schema.test.ts new tests parse real bober.config.json with defaults; all 7 tests pass." },
+    { "criterionId": "s14-c8", "result": "pass", "evidence": "All 4 strategies exit 0." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "medium", "criterion": "s14-c2-quality", "file": "src/orchestrator/pipeline.ts", "line": "149-150", "description": "Audit mechanism label uses `config.pipeline?.checkpointMechanism ?? 'noop'` instead of calling resolveCheckpointMechanismName. With mode='careful' + unset checkpointMechanism, audit records 'noop' while actual mechanism instance is disk. Non-blocking: actual behavior is correct, only audit label is inaccurate. Recommended follow-up: replace with resolveCheckpointMechanismName(checkpointId, config) at both sites." }
+  ],
+  "summary": "All 8 criteria pass on iter 1. Tier 2 closed: schema, resolver, CLI flags, validation, integration test, backward-compat all green. One medium-priority quality follow-up: pipeline.ts uses simplified audit-mechanism label that diverges from resolveCheckpointMechanismName when mode='careful' + checkpointMechanism unset."
+}

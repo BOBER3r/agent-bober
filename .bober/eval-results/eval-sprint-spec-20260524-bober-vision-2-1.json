@@ -1,0 +1,35 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-2-1",
+  "contractId": "sprint-spec-20260524-bober-vision-2",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-24T21:49:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 7,
+    "criteriaPassed": 7,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0"},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0"},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "44 files, 584 passed, 4 skipped"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "s2-c1", "result": "pass", "evidence": "bober.verify/SKILL.md 143 lines (source 139, ±20%). MIT attribution at lines 6-9. Iron Law verbatim at line 23. Gate Function 30-43. Common Failures table 45-55. Red Flags 57-66. Rationalization-Prevention 68-79. Only permitted adaptations applied."},
+    {"criterionId": "s2-c2", "result": "pass", "evidence": "bober.debug/SKILL.md 300 lines (source 296, ±20%). Iron Law verbatim at line 23. 4 phases in order. Read Error Messages Carefully at line 58. Gather Evidence in Multi-Component Systems at line 76. Red Flags 219-236. No supplementary files ported."},
+    {"criterionId": "s2-c3", "result": "pass", "evidence": "Iron Law fenced block at lines 171-177 in Step 4. Cross-ref to skills/bober.verify at line 177. verificationOutput in both schemas (inline 46-49, canonical 280-292). REQUIRED declaration line 295 with type Array<{command:string,exitCode:number,stdoutTail:string}>."},
+    {"criterionId": "s2-c4", "result": "pass", "evidence": "Handling Evaluator Feedback section at line 297. bober.debug invocation requirement at line 301. Forbidden Responses block 318-327 with 5 phrases. DISPUTE protocol 333-351 with documented shape."},
+    {"criterionId": "s2-c5", "result": "pass", "evidence": "your human partner: 1x bober.verify, 2x bober.debug (preserved verbatim), 0x bober-generator.md (subagent voice adaptation)."},
+    {"criterionId": "s2-c6", "result": "pass", "evidence": "wc -l = 524, under 800 NFR."},
+    {"criterionId": "s2-c7", "result": "pass", "evidence": "All 4 strategies exit 0, 584 tests, 0 regressions."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 7 required criteria pass. Verbatim ports with three permitted adaptations only. Iron Law correctly fenced. DISPUTE protocol shape complete. Voice scoped correctly (preserved in skills, adapted in agents). git diff confirms only 3 expected files touched."
+}

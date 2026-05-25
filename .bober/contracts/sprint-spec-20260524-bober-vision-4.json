@@ -1,0 +1,63 @@
+{
+  "id": "sprint-spec-20260524-bober-vision-4",
+  "specId": "spec-20260524-bober-vision",
+  "feature": "Anti-pattern reference catalog + evaluator integration",
+  "description": "Port four MIT-attributed anti-pattern reference docs from obra/superpowers into .bober/anti-patterns/ and wire the evaluator to cite anti-pattern names by handle in EvalResult.regressions when applicable. Files ported verbatim with inline attribution: testing-anti-patterns.md, condition-based-waiting.md, root-cause-tracing.md, defense-in-depth.md.",
+  "successCriteria": [
+    {
+      "id": "s4-c1",
+      "description": ".bober/anti-patterns/README.md exists as table-of-contents indexing all four docs (markdown table: anti-pattern name | when to flag | file). Top-level attribution block cites obra/superpowers (MIT).",
+      "verificationMethod": "Read .bober/anti-patterns/README.md. Verify all four files indexed. Verify attribution.",
+      "passed": false
+    },
+    {
+      "id": "s4-c2",
+      "description": ".bober/anti-patterns/testing-anti-patterns.md exists (>=80 lines), opens with MIT attribution to obra/superpowers and source path, content corresponds to /tmp/superpowers/skills/test-driven-development/testing-anti-patterns.md.",
+      "verificationMethod": "Read file. wc -l. Grep 'obra/superpowers' and 'MIT'. Spot-check named anti-patterns from source are present.",
+      "passed": false
+    },
+    {
+      "id": "s4-c3",
+      "description": ".bober/anti-patterns/condition-based-waiting.md exists (>=60 lines), opens with attribution, reflects /tmp/superpowers/skills/systematic-debugging/condition-based-waiting.md.",
+      "verificationMethod": "Read file. wc -l. Grep attribution. Verify content correspondence.",
+      "passed": false
+    },
+    {
+      "id": "s4-c4",
+      "description": ".bober/anti-patterns/root-cause-tracing.md exists (>=60 lines), opens with attribution, reflects /tmp/superpowers/skills/systematic-debugging/root-cause-tracing.md.",
+      "verificationMethod": "Read file. wc -l. Grep attribution. Verify content correspondence.",
+      "passed": false
+    },
+    {
+      "id": "s4-c5",
+      "description": ".bober/anti-patterns/defense-in-depth.md exists (>=40 lines), opens with attribution, reflects /tmp/superpowers/skills/systematic-debugging/defense-in-depth.md.",
+      "verificationMethod": "Read file. wc -l. Grep attribution. Verify content correspondence.",
+      "passed": false
+    },
+    {
+      "id": "s4-c6",
+      "description": "agents/bober-evaluator.md instructs the evaluator to reference anti-pattern names from .bober/anti-patterns/ catalog in the regressions field of EvalResult when the regression matches a known anti-pattern. Includes a documented example regression entry shape with anti-pattern citation: {antiPattern: string, source: string, evidence: Array<{path, line, snippet}>}.",
+      "verificationMethod": "Read agents/bober-evaluator.md. Grep for '.bober/anti-patterns'. Locate example. Verify shape.",
+      "passed": false
+    },
+    {
+      "id": "s4-c7",
+      "description": "All existing eval strategies pass.",
+      "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
+      "passed": false
+    }
+  ],
+  "expectedChanges": [
+    { "path": ".bober/anti-patterns/README.md", "action": "create", "description": "Index + attribution for ported anti-pattern docs" },
+    { "path": ".bober/anti-patterns/testing-anti-patterns.md", "action": "create", "description": "Verbatim port + attribution" },
+    { "path": ".bober/anti-patterns/condition-based-waiting.md", "action": "create", "description": "Verbatim port + attribution" },
+    { "path": ".bober/anti-patterns/root-cause-tracing.md", "action": "create", "description": "Verbatim port + attribution" },
+    { "path": ".bober/anti-patterns/defense-in-depth.md", "action": "create", "description": "Verbatim port + attribution" },
+    { "path": "agents/bober-evaluator.md", "action": "modify", "description": "Add anti-pattern citation requirement and example to regressions reporting" }
+  ],
+  "dependsOn": ["sprint-spec-20260524-bober-vision-3"],
+  "status": "completed",
+  "completedAt": "2026-05-25T02:00:00.000Z",
+  "generatorNotes": "Sources are already on disk in /tmp/superpowers/skills/test-driven-development/testing-anti-patterns.md and /tmp/superpowers/skills/systematic-debugging/{condition-based-waiting.md,root-cause-tracing.md,defense-in-depth.md}. Read each, port verbatim. MIT permits this; attribution is the required addition. Attribution header (top of every ported file):\n\n```\n> Verbatim port from [obra/superpowers](https://github.com/obra/superpowers) — MIT License.\n> Original: skills/<path>/<file>.md\n```\n\nLight adaptations permitted: (a) replace skill cross-references that point to superpowers-only files; (b) skill name adaptations (superpowers:writing-skills → bober.code-review or omitted if no equivalent); (c) trimming examples that reference superpowers-only files. Do NOT rewrite empirical content (Red Flags tables, anti-pattern catalogs, capitalized rules). README.md: ~30-50 lines, top attribution, markdown table with columns | Anti-pattern | When to flag | File |. The evaluator update is a small addition (~10-15 lines) in the regressions reporting section: an '## Anti-Pattern Citations' subsection with the documented example shape. Existing EvalResult schema is the source of truth — extend, don't replace.",
+  "evaluatorNotes": "Verify each ported file has substantive content (line counts in criteria are minimums — check body). Verify attribution on every file (MIT requires it). Verify the evaluator's example regression entry is parseable JSON or clear TypeScript-like type — vague prose is not enough. Reject if any ported file omits attribution. Reject if evaluator changes contradict the existing regressions schema (additions go INSIDE entries unless schema is intentionally extended). Cross-check: bober-evaluator.md's Iron Law from Sprint 3 must remain intact alongside the new anti-pattern guidance."
+}

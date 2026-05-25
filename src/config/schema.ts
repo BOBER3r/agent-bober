@@ -129,12 +129,47 @@ export const CuratorSectionSchema = z.object({
 });
 export type CuratorSection = z.infer<typeof CuratorSectionSchema>;
 
+export const CodeReviewSectionSchema = z.object({
+  timeoutMs: z.number().int().positive().default(300_000),
+  enabled: z.boolean().default(true),
+  model: ModelChoiceSchema.default("sonnet"),
+  maxTurns: z.number().int().min(1).default(15),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+});
+export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
+
+/** Well-known checkpoint mechanism names. */
+export const CheckpointMechanismSchema = z.enum(["noop", "cli", "disk", "pr"]);
+export type CheckpointMechanismName = z.infer<typeof CheckpointMechanismSchema>;
+
 export const PipelineSectionSchema = z.object({
   maxIterations: z.number().int().min(1).default(20),
+  /** Maximum times the router re-invokes a responsible agent after rejection. Default 3, min 1, max 10. */
+  maxCheckpointIterations: z.number().int().min(1).max(10).default(3),
   requireApproval: z.boolean().default(false),
   contextReset: ContextResetSchema.default("always"),
   researchPhase: z.boolean().default(true),
   architectPhase: z.boolean().default(false),
+  /** Pipeline execution mode. 'autopilot' auto-approves all checkpoints; 'careful' defaults to disk mechanism. Default: 'autopilot'. */
+  mode: z.enum(["autopilot", "careful"]).default("autopilot"),
+  /** Global default checkpoint mechanism name. When unset, resolved at runtime from pipeline.mode. Optional — leave unset to use mode-based default. */
+  checkpointMechanism: CheckpointMechanismSchema.optional(),
+  /** Per-checkpoint mechanism overrides. Keys are checkpoint IDs (e.g., 'post-research'); values are mechanism names. Default: {}. */
+  checkpointOverrides: z.record(z.string(), CheckpointMechanismSchema).default({}),
+  /** How long (ms) the disk and CLI mechanisms wait for approval before timing out. Default: 86400000 (24 hours). */
+  approvalTimeoutMs: z.number().int().min(1000).default(86_400_000),
+  /** How often (ms) the PR mechanism polls for PR merge/close events. Default: 30000 (30 seconds). */
+  prPollMs: z.number().int().min(10_000).default(30_000),
+  /** Sprint 20: escape hatch for fully-automated environments (CI, batch jobs)
+   *  where no human is available. When false (default), risky actions trigger
+   *  a non-noop mechanism floor (default 'disk') even in mode='autopilot' +
+   *  checkpointMechanism='noop'. When true, risky actions are auto-approved
+   *  with a STERN warning logged and the ChangeEntry STILL recorded with the
+   *  required inverse. This is "skip the interactive approval" — NOT "skip
+   *  the audit trail." Documented as a footgun in skills/bober.deploy/SKILL.md. */
+  allowAutopilotRiskyActions: z.boolean().default(false),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -194,6 +229,65 @@ export const GraphSectionSchema = z.object({
 });
 export type GraphSection = z.infer<typeof GraphSectionSchema>;
 
+// ── Observability Section (Sprint 16 — MCP plugin slots) ────────────
+
+/** Categories of observability data a provider can serve. */
+export const ObservabilityProviderKindSchema = z.enum([
+  "logs",
+  "metrics",
+  "traces",
+  "errors",
+  "custom",
+]);
+export type ObservabilityProviderKind = z.infer<typeof ObservabilityProviderKindSchema>;
+
+/**
+ * One declared external MCP server providing observability tools.
+ * At diagnoser spawn time the orchestrator spawns mcpCommand with
+ * mcpArgs and mcpEnv, lists its tools, and merges them into the
+ * diagnoser's tool set under the prefix `obs__<name>__<tool>`.
+ */
+export const ObservabilityProviderSchema = z.object({
+  /** Unique name used in the obs__<name>__<tool> namespace prefix. */
+  name: z.string().min(1).regex(/^[a-z0-9_]+$/i, "name must be alphanumeric/underscore"),
+  kind: ObservabilityProviderKindSchema,
+  /** Executable to spawn (e.g., "node", "/usr/local/bin/mcp-grafana"). */
+  mcpCommand: z.string().min(1),
+  mcpArgs: z.array(z.string()).optional(),
+  /** Env vars passed to the child — may contain SECRETS (treat as opaque). */
+  mcpEnv: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().default(true),
+});
+export type ObservabilityProvider = z.infer<typeof ObservabilityProviderSchema>;
+
+export const ObservabilitySectionSchema = z.object({
+  providers: z.array(ObservabilityProviderSchema).default([]),
+});
+export type ObservabilitySection = z.infer<typeof ObservabilitySectionSchema>;
+
+// ── Incident Section (Sprint 23 — postmortem automation) ─────────────
+
+export const IncidentSectionSchema = z.object({
+  /** When true (default), an incident transition to status='resolved' triggers
+   *  asynchronous postmortem generation. The status transition itself returns
+   *  immediately — postmortem synthesis runs fire-and-forget and updates
+   *  incident.json.postmortemPath when complete. Set false to disable auto-gen
+   *  (e.g., for CI environments or read-only audits). Sprint 23. */
+  autoPostmortem: z.boolean().default(true),
+});
+export type IncidentSection = z.infer<typeof IncidentSectionSchema>;
+
+// ── Telemetry Section (Sprint 28 — opt-in local-only event log) ──────
+
+export const TelemetrySectionSchema = z.object({
+  /** When true, the orchestrator appends JSONL events to .bober/telemetry/<date>.jsonl
+   *  for tracking checkpoint approval rates, incident resolution times, agent retry
+   *  counts. Default false (no events written). No network egress under any condition
+   *  — see ESLint no-restricted-imports rule in eslint.config.js for src/telemetry/. */
+  enabled: z.boolean().default(false),
+});
+export type TelemetrySection = z.infer<typeof TelemetrySectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -206,6 +300,13 @@ export const BoberConfigSchema = z.object({
   pipeline: PipelineSectionSchema,
   commands: CommandsSectionSchema,
   graph: GraphSectionSchema.optional(),
+  codeReview: CodeReviewSectionSchema.optional(),
+  // ── Sprint 16: observability MCP plugin slots ──
+  observability: ObservabilitySectionSchema.optional(),
+  // ── Sprint 23: incident postmortem automation ──
+  incident: IncidentSectionSchema.optional(),
+  // ── Sprint 28: opt-in local-only telemetry ──
+  telemetry: TelemetrySectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
@@ -269,10 +370,16 @@ export function createDefaultConfig(
     },
     pipeline: {
       maxIterations: 20,
+      maxCheckpointIterations: 3,
       requireApproval: false,
       contextReset: "always",
       researchPhase: true,
       architectPhase: false,
+      mode: "autopilot",
+      checkpointOverrides: {},
+      approvalTimeoutMs: 86_400_000,
+      prPollMs: 30_000,
+      allowAutopilotRiskyActions: false,
     },
     commands: {},
   };

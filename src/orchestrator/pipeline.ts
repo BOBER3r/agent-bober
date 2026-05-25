@@ -26,11 +26,26 @@ import {
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
 import { runPlanner } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
+import type { ResearchDoc } from "./research-agent.js";
 import { runArchitect } from "./architect-agent.js";
 import { runCurator } from "./curator-agent.js";
 import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
+import { runCodeReviewer } from "./code-reviewer-agent.js";
+import { getCheckpointMechanismFor } from "./checkpoints/index.js";
+// NOTE (Sprint 12): The feedback-router (src/orchestrator/checkpoints/feedback-router.ts)
+// provides runCheckpointWithFeedback() for full iteration + abort semantics.
+// Full wiring of the iterating checkpoints (post-research, post-plan, post-sprint-contract,
+// post-sprint) into a retry loop is deferred — the plumbing is available via the router
+// module and is exercised in its unit tests. This sprint replaces the plain
+// getCheckpointMechanism("noop") calls with getCheckpointMechanismFor so that
+// config overrides are honoured, which is the minimum-viable pipeline wiring.
+import { writeCompletionMarker } from "./checkpoints/feedback-router.js";
+// Sprint 13: audit wrapper — every checkpoint call site uses runWithAudit so
+// each outcome is appended to .bober/audits/<runId>.jsonl regardless of mechanism.
+import { runWithAudit, type MechanismName } from "./checkpoints/audit.js";
+import { emit } from "../telemetry/emit.js";
 import {
   ensureBoberDir,
   saveContract,
@@ -60,7 +75,7 @@ export interface PipelineResult {
   needsClarification?: boolean;
 }
 
-interface SprintCycleResult {
+export interface SprintCycleResult {
   contract: SprintContract;
   evaluation?: EvaluationRunResult;
   generatorResult?: GeneratorResult;
@@ -113,17 +128,27 @@ async function buildProjectContext(
 
 // ── Sprint cycle ───────────────────────────────────────────────────
 
-async function runSprintCycle(
+export async function runSprintCycle(
   contract: SprintContract,
   spec: PlanSpec,
   completedContracts: SprintContract[],
   projectRoot: string,
   config: BoberConfig,
   projectContext: ProjectContext,
+  pipelineRunId?: string,
 ): Promise<SprintCycleResult> {
   const maxIterations = config.evaluator.maxIterations;
   let currentContract = updateContractStatus(contract, "in-progress");
   await updateContract(projectRoot, currentContract);
+
+  // Audit runId for this sprint cycle: prefer the pipeline-level runId,
+  // fall back to a sprint-specific id derived from the contract.
+  const sprintRunId = pipelineRunId ?? `sprint-${currentContract.contractId}`;
+
+  // Resolve the configured mechanism name for audit records.
+  // Sprint 14: checkpointMechanism is now a real typed field in PipelineSection.
+  const configuredMechanismName: MechanismName =
+    (config.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
 
   let lastEvaluation: EvaluationRunResult | undefined;
   let lastGeneratorResult: GeneratorResult | undefined;
@@ -135,6 +160,14 @@ async function runSprintCycle(
   const curatorEnabled = config.curator?.enabled !== false;
 
   if (curatorEnabled) {
+    await runWithAudit({
+      projectRoot,
+      runId: sprintRunId,
+      checkpointId: "pre-curator",
+      mechanism: configuredMechanismName,
+      iteration: 1,
+      fn: () => getCheckpointMechanismFor("pre-curator", config, "noop").request("pre-curator", { contract: currentContract, spec, completedContracts }),
+    });
     logger.phase(`Sprint ${currentContract.contractId} - Curate`);
 
     await appendHistory(projectRoot, {
@@ -229,6 +262,14 @@ async function runSprintCycle(
     const compactedHandoff = summarizeOlderSprints(completedSummaryHandoff, 3);
 
     // ── Generate ───────────────────────────────────────────────
+    await runWithAudit({
+      projectRoot,
+      runId: sprintRunId,
+      checkpointId: "pre-generator",
+      mechanism: configuredMechanismName,
+      iteration,
+      fn: () => getCheckpointMechanismFor("pre-generator", config, "noop").request("pre-generator", { contract: currentContract, iteration, handoff: compactedHandoff }),
+    });
     logger.phase(`Sprint ${currentContract.contractId} - Generate (Round ${iteration})`);
 
     await appendHistory(projectRoot, {
@@ -291,6 +332,14 @@ async function runSprintCycle(
     }
 
     // ── Evaluate ──────────────────────────────────────────────
+    await runWithAudit({
+      projectRoot,
+      runId: sprintRunId,
+      checkpointId: "pre-evaluator",
+      mechanism: configuredMechanismName,
+      iteration,
+      fn: () => getCheckpointMechanismFor("pre-evaluator", config, "noop").request("pre-evaluator", { contract: currentContract, iteration, generatorResult }),
+    });
     logger.phase(`Sprint ${currentContract.contractId} - Evaluate (Round ${iteration})`);
 
     currentContract = updateContractStatus(currentContract, "evaluating");
@@ -343,7 +392,67 @@ async function runSprintCycle(
         sprintId: currentContract.contractId,
         details: { iteration, feedback: evaluation.summary },
       });
+      // Sprint 28 — telemetry (fire-and-forget, never throws to pipeline)
+      void emit(projectRoot, config, "sprint-pass", {
+        runId: sprintRunId,
+        sprintId: currentContract.contractId,
+        iteration,
+        outcome: "passed",
+      });
 
+      // Sprint 5 — advisory code review (config-gated, time-boxed, never blocks)
+      const reviewEnabled = config.codeReview?.enabled !== false;
+      if (reviewEnabled) {
+        await runWithAudit({
+          projectRoot,
+          runId: sprintRunId,
+          checkpointId: "pre-code-reviewer",
+          mechanism: configuredMechanismName,
+          iteration,
+          fn: () => getCheckpointMechanismFor("pre-code-reviewer", config, "noop").request("pre-code-reviewer", { contract: currentContract, evaluation }),
+        });
+        const reviewTimeoutMs = config.codeReview?.timeoutMs ?? 300_000;
+        try {
+          const review = await Promise.race([
+            runCodeReviewer(currentContract, evaluation, projectRoot, config),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("code-review timeout")), reviewTimeoutMs),
+            ),
+          ]);
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "code-review-complete",
+            phase: "complete",
+            sprintId: currentContract.contractId,
+            details: {
+              critical: review.critical.length,
+              important: review.important.length,
+              minor: review.minor.length,
+            },
+          });
+        } catch (err) {
+          logger.warn(
+            `Code review skipped: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "code-review-failed",
+            phase: "complete",
+            sprintId: currentContract.contractId,
+            details: { error: err instanceof Error ? err.message : String(err) },
+          });
+          // Advisory only — sprint completion proceeds regardless.
+        }
+      }
+
+      await runWithAudit({
+        projectRoot,
+        runId: sprintRunId,
+        checkpointId: "post-sprint",
+        mechanism: configuredMechanismName,
+        iteration,
+        fn: () => getCheckpointMechanismFor("post-sprint", config, "noop").request("post-sprint", { contract: currentContract, evaluation, generatorResult: lastGeneratorResult }),
+      });
       return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
     }
 
@@ -365,6 +474,15 @@ async function runSprintCycle(
       sprintId: currentContract.contractId,
       details: { iteration, feedback: evaluation.summary },
     });
+    // Sprint 28 — telemetry (only emit retry if there are more iterations)
+    if (iteration < maxIterations) {
+      void emit(projectRoot, config, "sprint-fail-retry", {
+        runId: sprintRunId,
+        sprintId: currentContract.contractId,
+        iteration,
+        retryCount: iteration,
+      });
+    }
 
     if (iteration >= maxIterations) {
       logger.error(
@@ -403,6 +521,15 @@ export async function runPipeline(
   const startTime = Date.now();
   const cleanup = setupInterruptHandler();
 
+  // Create a stable runId at the start of the pipeline so all audit entries
+  // (including pre-spec pipeline checkpoints) share the same run identifier.
+  const pipelineRunId = `run-${Date.now()}`;
+
+  // Resolve mechanism name from config for audit records.
+  // Sprint 14: checkpointMechanism is now a real typed field in PipelineSection.
+  const pipelineMechanismName: MechanismName =
+    (config.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
+
   try {
     // Ensure .bober/ directory structure exists
     await ensureBoberDir(projectRoot);
@@ -415,7 +542,7 @@ export async function runPipeline(
     });
 
     // ── Phase 0: Research (optional) ────────────────────────────
-    let researchDoc;
+    let researchDoc: ResearchDoc | undefined;
     if (config.pipeline.researchPhase !== false) {
       await appendHistory(projectRoot, {
         timestamp: new Date().toISOString(),
@@ -437,6 +564,14 @@ export async function runPipeline(
           filesExplored: researchDoc.filesExplored.length,
           questionsAnswered: researchDoc.questionsAnswered,
         },
+      });
+      await runWithAudit({
+        projectRoot,
+        runId: pipelineRunId,
+        checkpointId: "post-research",
+        mechanism: pipelineMechanismName,
+        iteration: 1,
+        fn: () => getCheckpointMechanismFor("post-research", config, "noop").request("post-research", researchDoc),
       });
     }
 
@@ -573,6 +708,14 @@ export async function runPipeline(
         featureCount: spec.features.length,
       },
     });
+    await runWithAudit({
+      projectRoot,
+      runId: pipelineRunId,
+      checkpointId: "post-plan",
+      mechanism: pipelineMechanismName,
+      iteration: 1,
+      fn: () => getCheckpointMechanismFor("post-plan", config, "noop").request("post-plan", spec),
+    });
 
     // ── Phase 2: Sprint loop ─────────────────────────────────────
     logger.phase("Sprint Execution");
@@ -602,6 +745,14 @@ export async function runPipeline(
       contracts.push(contract);
       await saveContract(projectRoot, contract);
     }
+    await runWithAudit({
+      projectRoot,
+      runId: pipelineRunId,
+      checkpointId: "post-sprint-contract",
+      mechanism: pipelineMechanismName,
+      iteration: 1,
+      fn: () => getCheckpointMechanismFor("post-sprint-contract", config, "noop").request("post-sprint-contract", contracts),
+    });
 
     const completedSprints: SprintContract[] = [];
     const failedSprints: SprintContract[] = [];
@@ -625,6 +776,7 @@ export async function runPipeline(
         projectRoot,
         config,
         projectContext,
+        pipelineRunId,
       );
 
       if (result.contract.status === "passed") {
@@ -663,6 +815,21 @@ export async function runPipeline(
       },
     });
 
+    await runWithAudit({
+      projectRoot,
+      runId: pipelineRunId,
+      checkpointId: "end-of-pipeline",
+      mechanism: pipelineMechanismName,
+      iteration: 1,
+      fn: () => getCheckpointMechanismFor("end-of-pipeline", config, "noop").request("end-of-pipeline", { success, completedSprints, failedSprints, duration, spec }),
+    });
+    // Write completion marker for successful runs (Sprint 12 — s12-c2).
+    await writeCompletionMarker(projectRoot, pipelineRunId, {
+      success,
+      completedSprints: completedSprints.length,
+      failedSprints: failedSprints.length,
+      duration,
+    });
     return {
       success,
       spec,

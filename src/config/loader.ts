@@ -213,10 +213,16 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
       },
       pipeline: defaults.pipeline ?? {
         maxIterations: 20,
+        maxCheckpointIterations: 3,
         requireApproval: false,
         contextReset: "always" as const,
         researchPhase: true,
         architectPhase: false,
+        mode: "autopilot" as const,
+        checkpointOverrides: {},
+        approvalTimeoutMs: 86_400_000,
+        prPollMs: 30_000,
+        allowAutopilotRiskyActions: false,
       },
       commands: defaults.commands ?? {},
     },
@@ -234,5 +240,17 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
     );
   }
 
-  return fullResult.data;
+  const cfg = fullResult.data;
+
+  // Warn when mode='careful' is combined with checkpointMechanism='noop' — checkpoints will
+  // auto-approve, defeating the purpose of careful mode. This is a warning (not an error)
+  // because the user might be testing. Mirrors pr.ts:208-211 stderr warning style.
+  if (cfg.pipeline.mode === "careful" && cfg.pipeline.checkpointMechanism === "noop") {
+    process.stderr.write(
+      "warn: pipeline.mode='careful' with checkpointMechanism='noop' — checkpoints will auto-approve. " +
+      "Did you mean 'disk' or 'cli'?\n",
+    );
+  }
+
+  return cfg;
 }

@@ -1,0 +1,37 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-15-1",
+  "contractId": "sprint-spec-20260524-bober-vision-15",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T08:10:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 9,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 9,
+    "requiredFailed": 0,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "exit 0", "details": "tsc --noEmit zero errors"},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "exit 0", "details": "eslint src/ zero violations"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "exit 0", "details": "tsc zero errors"},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "879 passed, 4 skipped, 67 files", "details": "matches baseline, no regressions"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "s15-c1", "result": "pass", "evidence": "YAML frontmatter: name/description/tools=[Read,Bash,Grep,Glob]/model=sonnet. No write tools."},
+    {"criterionId": "s15-c2", "result": "pass", "evidence": "Subagent Context @14, Iron Law @52 fenced, Red Flags 8 entries @208, Rationalization-Prevention 8 rows @219. Sprint 3 style."},
+    {"criterionId": "s15-c3", "result": "pass", "evidence": "Schema @79-117. contradictingEvidence REQUIRED @121. confidence='low'|'medium'|'high' @122. blastRadius='safe'|'risky' @123. risky+requiresApproval:false forbidden @124."},
+    {"criterionId": "s15-c4", "result": "pass", "evidence": "6-step Investigation Discipline @128. Step 4 drops zero-evidence hypotheses. Step 5 seeks contradicting evidence. 2-source rule in Iron Law @52 and Core Principles @69."},
+    {"criterionId": "s15-c5", "result": "pass", "evidence": "bober.diagnose @204, bober.debug @205, .bober/anti-patterns/ @27,73,157,206."},
+    {"criterionId": "s15-c6", "result": "pass", "evidence": "Tools list has no write tools. Exact constraint statement @63. Belt-and-suspenders confirmed."},
+    {"criterionId": "s15-c7", "result": "pass", "evidence": "Allowlist table @171 with 10 patterns. Forbidden table @186 with 9 categories. Both enumerated with examples."},
+    {"criterionId": "s15-c8", "result": "pass", "evidence": "244 lines (30.5% of 800-line budget)"},
+    {"criterionId": "s15-c9", "result": "pass", "evidence": "typecheck/lint/build/test all exit 0. 879 tests pass (baseline preserved)."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 criteria pass on iter 1. bober-diagnoser.md (244 lines) mirrors evaluator structure with required DiagnosisResult schema (contradictingEvidence REQUIRED, correct enums), enumerated Bash allowlist/forbidden tables, belt-and-suspenders read-only enforcement. No regressions; 879 tests preserved."
+}

@@ -17,6 +17,12 @@ export {
   CommandsSectionSchema,
   BoberConfigSchema,
   PartialBoberConfigSchema,
+  // Sprint 16 — observability MCP plugin slots
+  ObservabilityProviderKindSchema,
+  ObservabilityProviderSchema,
+  ObservabilitySectionSchema,
+  // Sprint 28 — opt-in local-only telemetry
+  TelemetrySectionSchema,
   // Types
   type ProjectMode,
   type Stack,
@@ -35,6 +41,12 @@ export {
   type CommandsSection,
   type BoberConfig,
   type PartialBoberConfig,
+  // Sprint 16 types
+  type ObservabilityProviderKind,
+  type ObservabilityProvider,
+  type ObservabilitySection,
+  // Sprint 28 types
+  type TelemetrySection,
   // Factory
   createDefaultConfig,
 } from "./schema.js";

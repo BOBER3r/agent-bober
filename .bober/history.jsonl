@@ -1,0 +1,138 @@
+{"event":"project-initialized","projectName":"agent-bober","mode":"brownfield","preset":"custom","timestamp":"2026-03-28T12:00:00Z"}
+{"event":"plan-created","specId":"spec-20260328-multi-provider-llm-adapter","title":"Multi-Provider LLM Adapter Layer","sprintCount":6,"timestamp":"2026-03-28T12:00:00Z"}
+{"event":"plan-created","specId":"spec-20260328-mcp-server","title":"MCP Server for Cross-IDE Integration","sprintCount":4,"timestamp":"2026-03-28T18:00:00Z"}
+{"event":"plan-created","specId":"spec-20260329-brownfield-auto-discovery","title":"Brownfield Auto-Discovery System","sprintCount":4,"timestamp":"2026-03-29T10:00:00Z"}
+{"event":"plan-created","specId":"spec-20260331-crispy-pipeline-enhance","title":"CRISPY-Inspired Pipeline Enhancement","sprintCount":5,"timestamp":"2026-03-31T12:00:00Z"}
+{"event":"pipeline-started","specId":"spec-20260331-crispy-pipeline-enhance","timestamp":"2026-03-31T12:30:00Z","task":"Execute CRISPY-Inspired Pipeline Enhancement — 5 sprints"}
+{"event":"eval-completed","contractId":"sprint-spec-20260331-crispy-pipeline-enhance-1","evalId":"eval-sprint-spec-20260331-crispy-pipeline-enhance-1-1","result":"pass","timestamp":"2026-03-31T07:04:30.000Z"}
+{"event":"plan-created","specId":"spec-20260331-architect-workflow","title":"Solution Architect Workflow","sprintCount":3,"timestamp":"2026-03-31T14:00:00Z"}
+{"event":"pipeline-started","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T14:30:00Z","task":"Execute Solution Architect Workflow — 3 sprints"}
+{"event":"sprint-started","contractId":"sprint-spec-20260331-architect-workflow-1","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T14:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260331-architect-workflow-1","specId":"spec-20260331-architect-workflow","iteration":1,"timestamp":"2026-03-31T15:56:45Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260331-architect-workflow-2","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T16:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260331-architect-workflow-2","specId":"spec-20260331-architect-workflow","iteration":1,"timestamp":"2026-03-31T17:35:10Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260331-architect-workflow-3","specId":"spec-20260331-architect-workflow","timestamp":"2026-03-31T17:40:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260331-architect-workflow-3","specId":"spec-20260331-architect-workflow","iteration":1,"timestamp":"2026-03-31T17:45:30Z"}
+{"event":"pipeline-completed","specId":"spec-20260331-architect-workflow","sprintsCompleted":3,"sprintsTotal":3,"totalIterations":6,"timestamp":"2026-03-31T17:45:30Z"}
+{"event":"architecture-completed","architectureId":"arch-20260524-port-code-review-graph","feature":"tokensave integration into agent-bober (harness-orchestrated graph layer)","componentCount":17,"decisionCount":10,"timestamp":"2026-05-24T00:00:00Z"}
+{"event":"plan-created","specId":"spec-20260524-tokensave-integration","title":"Tokensave Harness Integration (Phase 1)","sprintCount":10,"architectureId":"arch-20260524-port-code-review-graph","ambiguityScore":3,"status":"draft","timestamp":"2026-05-24T16:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-05-24T17:00:00Z","specId":"spec-20260524-tokensave-integration","task":"Tokensave Harness Integration (Phase 1)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-1","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T17:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-tokensave-integration-1","iteration":1,"result":"pass","timestamp":"2026-05-24T17:35:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-1","specId":"spec-20260524-tokensave-integration","iteration":1,"timestamp":"2026-05-24T17:35:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-2","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T17:36:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-tokensave-integration-2","iteration":1,"result":"pass","timestamp":"2026-05-24T18:05:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-2","specId":"spec-20260524-tokensave-integration","iteration":1,"timestamp":"2026-05-24T18:05:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-3","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T18:05:30Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-tokensave-integration-3","iteration":1,"result":"pass","timestamp":"2026-05-24T18:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-3","specId":"spec-20260524-tokensave-integration","iteration":1,"timestamp":"2026-05-24T18:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-4","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T18:25:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-4","iteration":1,"timestamp":"2026-05-24T18:50:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-5","timestamp":"2026-05-24T18:50:30Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-tokensave-integration-5","iteration":1,"failedCriteria":["s5-c7"],"timestamp":"2026-05-24T19:15:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-5","iteration":2,"timestamp":"2026-05-24T19:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-6","timestamp":"2026-05-24T19:25:30Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-tokensave-integration-6","iteration":1,"failedCriteria":["s6-c6","s6-c7","s6-c9"],"timestamp":"2026-05-24T19:55:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-6","iteration":2,"timestamp":"2026-05-24T20:10:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-7","timestamp":"2026-05-24T20:10:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-7","iteration":1,"timestamp":"2026-05-24T20:30:00Z"}
+{"event":"kpi-gate-recorded","specId":"spec-20260524-tokensave-integration","gatePass":"synthetic","note":"KPI gate infrastructure in place; real measurement deferred to manual run","timestamp":"2026-05-24T20:30:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-8","timestamp":"2026-05-24T20:30:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-8","iteration":1,"timestamp":"2026-05-24T20:55:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-9","timestamp":"2026-05-24T20:55:30Z"}
+{"event":"research-completed","researchId":"research-20260524-superpowers-vs-agent-bober","feature":"Research obra/superpowers — what to port into agent-bober","questionsGenerated":7,"filesExplored":18,"timestamp":"2026-05-24T17:00:19Z","note":"comparative research, two-phase isolation deliberately bypassed for external-repo comparison"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-9","iteration":2,"timestamp":"2026-05-24T21:15:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-tokensave-integration-10","timestamp":"2026-05-24T21:15:30Z"}
+{"event":"plan-created","specId":"spec-20260524-superpowers-port","title":"Port highest-priority superpowers concepts into agent-bober","sprintCount":8,"ambiguityScore":4,"status":"draft","researchBasis":"research-20260524-superpowers-vs-agent-bober","timestamp":"2026-05-24T17:10:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-tokensave-integration-10","iteration":1,"timestamp":"2026-05-24T21:30:00Z"}
+{"event":"plan-completed","specId":"spec-20260524-tokensave-integration","sprintsCompleted":10,"timestamp":"2026-05-24T21:30:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260524-tokensave-integration","timestamp":"2026-05-24T21:30:00Z"}
+{"event":"plan-superseded","oldSpecId":"spec-20260524-superpowers-port","newSpecId":"spec-20260524-bober-vision","reason":"scope expanded to verbatim voice + multi-mode careful-flow + prod-incident agent shape","timestamp":"2026-05-24T17:55:00Z"}
+{"event":"plan-created","specId":"spec-20260524-bober-vision","title":"Bober Vision: Multi-mode software engineering teammate","sprintCount":28,"tierCount":4,"ambiguityScore":5,"status":"draft","supersedes":"spec-20260524-superpowers-port","researchBasis":"research-20260524-superpowers-vs-agent-bober","configChange":"sprint.maxSprints 10->30","timestamp":"2026-05-24T17:55:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-1","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T18:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-1","iteration":1,"result":"pass","criteriaPassed":6,"timestamp":"2026-05-24T18:35:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-1","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T18:35:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-2","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T18:36:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-2","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T21:49:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-3","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T21:50:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-3","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-24T22:06:00Z"}
+{"event":"tier-completed","tier":0,"specId":"spec-20260524-bober-vision","sprintsCompleted":3,"sprintsTotal":28,"iterationsUsed":3,"timestamp":"2026-05-24T22:06:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-4","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-4","iteration":1,"timestamp":"2026-05-25T00:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-4","iteration":1,"result":"pass","timestamp":"2026-05-25T02:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-4","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T02:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-5","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T02:30:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-5","iteration":1,"timestamp":"2026-05-25T02:30:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-bober-vision-5","iteration":1,"failedCriteria":["s5-c2","s5-c6"],"timestamp":"2026-05-25T02:28:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-5","iteration":2,"result":"pass","timestamp":"2026-05-25T02:42:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-5","specId":"spec-20260524-bober-vision","iteration":2,"timestamp":"2026-05-25T02:42:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-6","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T03:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-6","iteration":1,"timestamp":"2026-05-25T03:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-6","iteration":1,"result":"pass","timestamp":"2026-05-25T02:58:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-6","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T02:58:00Z"}
+{"event":"tier-completed","tier":1,"sprints":[4,5,6],"timestamp":"2026-05-25T02:58:00Z"}
+{"event":"tier-started","tier":2,"timestamp":"2026-05-25T03:30:00Z","note":"bumped pipeline.maxIterations 20→40"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-7","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T03:30:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-7","iteration":1,"timestamp":"2026-05-25T03:30:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-7","iteration":1,"result":"pass","timestamp":"2026-05-25T03:46:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-7","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T03:46:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-8","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T04:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-8","iteration":1,"timestamp":"2026-05-25T04:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-8","iteration":1,"result":"pass","timestamp":"2026-05-25T04:03:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-8","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T04:03:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-9","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T04:15:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-9","iteration":1,"timestamp":"2026-05-25T04:15:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-9","iteration":1,"result":"pass","timestamp":"2026-05-25T04:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-9","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T04:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-10","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T01:41:52Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-10","iteration":1,"generatorStatus":"complete","commit":"d3264d1","timestamp":"2026-05-25T01:54:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-bober-vision-10","iteration":1,"failedCriteria":["s10-c6"],"timestamp":"2026-05-25T05:03:30Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-10","iteration":2,"generatorStatus":"complete","commit":"6e5e3ee","timestamp":"2026-05-25T05:18:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-10","specId":"spec-20260524-bober-vision","iteration":2,"timestamp":"2026-05-25T05:27:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-11","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T05:30:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-11","iteration":1,"generatorStatus":"complete","commits":["5b466f2","6ee2b03","5757b33"],"timestamp":"2026-05-25T05:50:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-11","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T05:58:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-12","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T06:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-12","iteration":1,"generatorStatus":"complete","commits":["eedff08","bb57874","8f9eadc","48f037d","adc49f7"],"timestamp":"2026-05-25T06:25:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260524-bober-vision-12","iteration":1,"failedCriteria":["s12-c4"],"timestamp":"2026-05-25T06:32:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-12","specId":"spec-20260524-bober-vision","iteration":2,"timestamp":"2026-05-25T06:39:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-13","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T06:42:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-13","iteration":1,"generatorStatus":"complete","commits":["ff2cbae","bc8ea62","555a6b9","87ffe85"],"timestamp":"2026-05-25T06:55:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-13","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T07:03:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-14","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T07:08:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-14","iteration":1,"generatorStatus":"complete","commits":["f8bd3c7","f09e86d","933de64","67fbffa"],"timestamp":"2026-05-25T07:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-14","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T07:29:30Z"}
+{"event":"tier-2-completed","tier":"2","specId":"spec-20260524-bober-vision","sprintsCompleted":8,"timestamp":"2026-05-25T07:29:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-15","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T04:57:18Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-15","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T05:12:56Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-16","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T05:13:36Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-16","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T05:44:37Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-17","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T05:45:01Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-17","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T06:05:17Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-18","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T06:05:51Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-18","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T06:22:57Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-19","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T06:23:29Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-19","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T06:42:26Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-20","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T06:43:04Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-20","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T07:26:33Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-21","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T07:27:06Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-21","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T07:46:12Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-22","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T07:46:39Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-22","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T08:04:50Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-23","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T08:05:28Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-23","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T08:40:17Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-24","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T08:40:46Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-24","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T09:05:16Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-25","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T09:05:55Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-25","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T09:22:52Z"}
+{"event":"tier-3-completed","tier":"3","specId":"spec-20260524-bober-vision","sprintsCompleted":11,"timestamp":"2026-05-25T09:22:52Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-26","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T09:23:22Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-26","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T09:35:23Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-27","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T09:36:06Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260524-bober-vision-27","iteration":1,"timestamp":"2026-05-25T10:01:45Z","note":"resumed-from-orphaned-generator-commit"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-27","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T10:10:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260524-bober-vision-28","specId":"spec-20260524-bober-vision","timestamp":"2026-05-25T10:11:00Z"}
+{"event":"spec-completed","specId":"spec-20260524-bober-vision","sprintsCompleted":28,"timestamp":"2026-05-25T13:30:00Z","details":{"totalSprints":28,"ambiguityScoreAtStart":5,"ambiguityScoreFinal":5,"deferredDecisions":[]}}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260524-bober-vision-28","iteration":1,"timestamp":"2026-05-25T10:30:00Z","commit":"c1f1fe4"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260524-bober-vision-28","specId":"spec-20260524-bober-vision","iteration":1,"timestamp":"2026-05-25T13:40:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260524-bober-vision","sprintsCompleted":28,"sprintsTotal":28,"timestamp":"2026-05-25T13:40:00Z"}

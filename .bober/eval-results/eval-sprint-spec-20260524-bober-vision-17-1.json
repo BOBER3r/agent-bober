@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-17-1",
+  "contractId": "sprint-spec-20260524-bober-vision-17",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T09:02:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","output":"exit 0","details":"tsc --noEmit"},
+    {"strategy":"lint","required":true,"result":"pass","output":"exit 0","details":"eslint src/"},
+    {"strategy":"build","required":true,"result":"pass","output":"exit 0","details":"tsc"},
+    {"strategy":"unit-test","required":true,"result":"pass","output":"920 passed, 4 skipped","details":"70 files. No regressions."}
+  ],
+  "criteriaResults": [
+    {"criterionId":"s17-c1","result":"pass","evidence":"name:bober-diagnose, description starts 'Use when investigating a production incident...', MIT+obra/superpowers attribution lines 6-7."},
+    {"criterionId":"s17-c2","result":"pass","evidence":"Iron Law fenced @22-24 'NO REMEDIATION WITHOUT VERIFIED ROOT CAUSE AT TWO INDEPENDENT BOUNDARIES'. 11 Red Flags, 8 Rationalization rows (>=6)."},
+    {"criterionId":"s17-c3","result":"pass","evidence":"4 phases in order. 3 GATING blocks: Phase1->2 @84-86, Phase2->3 @118-120, Phase3->4 @150-152. All 'BEFORE proceeding to Phase N+1, you MUST...' inside <EXTREMELY-IMPORTANT>."},
+    {"criterionId":"s17-c4","result":"pass","evidence":"Phase 1: confirm symptom current @58-61, scope @63-66, timing @68-72, observations.jsonl record @73-81 with {timestamp,phase,observation,source,verified} worked example."},
+    {"criterionId":"s17-c5","result":"pass","evidence":"Phase 2: boundary chain @92-95 (client→CDN→LB→service→cache→DB→storage), obs__<provider>__<tool> @97-106 (5 examples), changelog.jsonl correlation @108-112."},
+    {"criterionId":"s17-c6","result":"pass","evidence":"Phase 3 step 3 @136 'ACTIVELY DISPROVE the Top Hypothesis (REQUIRED — not advisory)'. Literal sentence @137 'A hypothesis you cannot disprove is not strongly tested.'"},
+    {"criterionId":"s17-c7","result":"pass","evidence":"Phase 4 @156 'Resolution criteria MUST be defined BEFORE remediation'. All 5 fields @158-168 (metric/threshold/window/baseline/source). bober-deployer + Tier 2 checkpoint @174-177. Forbids 'dashboard looks better' @184,189."},
+    {"criterionId":"s17-c8","result":"pass","evidence":"All 4 cross-refs present: bober.debug @243, bober.runbook @244, bober.deploy @175,178,245, .bober/anti-patterns/ @132,246."},
+    {"criterionId":"s17-c9","result":"pass","evidence":"All 4 strategies exit 0. 920 tests pass, 4 skipped — no regressions."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 criteria pass on iter 1. bober.diagnose substantively distinct from bober.debug (system vs code level). Iron Law verbatim, three hard gates (not advisory), Phase 3 disproof REQUIRED, Phase 4 PRE-DEFINED criteria with explicit forbid of 'dashboard looks better'. Schema names align with Sprint 19 (observations.jsonl/changelog.jsonl/actions.jsonl/hypotheses.md)."
+}
