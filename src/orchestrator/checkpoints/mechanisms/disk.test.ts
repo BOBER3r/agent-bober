@@ -287,11 +287,16 @@ describe("DiskCheckpointMechanism — 100ms write budget (s9-c6)", () => {
     expect(elapsed).toBeLessThan(100);
 
     // Also verify the pending file does NOT contain the 5MB fullContent.
+    // Sprint 11: rendered summary lives in `prompt`; `artifact` is now a type-only stub.
     const raw = await readFile(pendingPath, "utf-8");
-    const parsed = JSON.parse(raw) as { artifact: Record<string, unknown> };
-    expect(JSON.stringify(parsed.artifact)).not.toContain("aaaaa");
+    const parsed = JSON.parse(raw) as { artifact: Record<string, unknown>; prompt: string };
+    // The 5MB blob must NOT appear in prompt (renderer is pure — ignores unknown fields).
+    expect(parsed.prompt).not.toContain("aaaaa");
+    // artifact stub holds only the type field.
     expect(parsed.artifact["type"]).toBe("plan");
-    expect(parsed.artifact["summary"]).toBe("8-sprint plan");
+    // prompt is a non-empty string from the renderer (markdown or JSON fence).
+    expect(typeof parsed.prompt).toBe("string");
+    expect(parsed.prompt.length).toBeGreaterThan(0);
 
     // Resolve to clean up.
     await writeApproved(tmpDir, id);

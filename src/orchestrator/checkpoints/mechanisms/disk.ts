@@ -18,6 +18,7 @@ import type {
   CheckpointMechanism,
   CheckpointOutcome,
 } from "../types.js";
+import { render } from "../renderers/registry.js";
 
 const DEFAULT_POLL_MS = 2000;
 const DEFAULT_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -32,27 +33,17 @@ export interface DiskMechanismOptions {
   runId?: string;
 }
 
-/** Summary written to disk — NOT the full artifact (perf budget). */
-interface ArtifactSummary {
-  type?: string;
-  path?: string;
-  summary?: string;
-  lines?: number;
-}
-
 /**
- * Extract a small summary from a potentially large artifact.
- * Only picks the four whitelisted fields — never stringifies the whole artifact.
+ * Extract a minimal artifact stub for the pending file.
+ * Only picks the `type` field — the full rendered summary goes into `prompt`.
+ * Never stringifies the whole artifact (perf budget / large-artifact safety).
  */
-function summarizeArtifact(artifact: CheckpointArtifact): ArtifactSummary {
+function artifactStub(artifact: CheckpointArtifact): { type?: string } {
   const a = artifact as Record<string, unknown> | null | undefined;
   if (!a || typeof a !== "object") return {};
-  const out: ArtifactSummary = {};
-  if (typeof a["type"] === "string") out.type = a["type"];
-  if (typeof a["path"] === "string") out.path = a["path"];
-  if (typeof a["summary"] === "string") out.summary = a["summary"];
-  if (typeof a["lines"] === "number") out.lines = a["lines"];
-  return out;
+  const stub: { type?: string } = {};
+  if (typeof a["type"] === "string") stub.type = a["type"];
+  return stub;
 }
 
 export class DiskCheckpointMechanism implements CheckpointMechanism {
@@ -95,11 +86,12 @@ export class DiskCheckpointMechanism implements CheckpointMechanism {
     const timeoutAt = new Date(this.now() + timeoutMs).toISOString();
 
     // 1) Write the pending marker (SUMMARY only — perf budget 100ms).
+    //    `artifact` holds only type metadata; full rendering goes into `prompt`.
     const pending = {
       checkpointId: checkpoint,
       runId: this.options.runId,
-      artifact: summarizeArtifact(artifact),
-      prompt: `Checkpoint "${checkpoint}" awaiting approval.`,
+      artifact: artifactStub(artifact),
+      prompt: render(artifact),
       requestedAt,
       timeoutAt,
     };

@@ -19,6 +19,7 @@ import type {
   CheckpointOutcome,
 } from "../types.js";
 import { DiskCheckpointMechanism } from "./disk.js";
+import { render } from "../renderers/registry.js";
 
 const DEFAULT_POLL_MS = 30_000;
 const MIN_POLL_MS = 10_000;
@@ -379,32 +380,15 @@ export class PrCheckpointMechanism implements CheckpointMechanism {
 
   /** Render a checkpoint comment to post on the PR. */
   private renderCheckpointComment(checkpoint: CheckpointId, artifact: CheckpointArtifact): string {
-    const art = artifact as Record<string, unknown> | null | undefined;
-    const lines: string[] = [
+    return [
       `## Checkpoint: \`${checkpoint}\``,
       ``,
-    ];
-
-    if (art && typeof art === "object") {
-      if (typeof art["type"] === "string") {
-        lines.push(`**Type:** ${art["type"]}`);
-      }
-      if (typeof art["path"] === "string") {
-        lines.push(`**Path:** ${art["path"]}`);
-      }
-      if (typeof art["summary"] === "string") {
-        lines.push(``, `**Summary:** ${art["summary"]}`);
-      }
-    }
-
-    lines.push(
+      render(artifact),
       ``,
       `---`,
       ``,
       `Reply with \`approve ${checkpoint}\`, \`reject ${checkpoint} <reason>\`, or \`edit ${checkpoint}\n\`\`\`\n<new content>\n\`\`\`\`.`,
-    );
-
-    return lines.join("\n");
+    ].join("\n");
   }
 
   /** Poll the PR until it resolves (merge / approve / reject / edit) or times out. */

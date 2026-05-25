@@ -28,56 +28,10 @@ import type {
   CheckpointOutcome,
 } from "../types.js";
 import { NoopCheckpointMechanism } from "../noop.js";
+import { render } from "../renderers/registry.js";
 
 /** Fallback mechanism used when stdin is not a TTY. */
 const DEFAULT_NOOP = new NoopCheckpointMechanism();
-
-/**
- * Renders a human-readable summary of an artifact to a string.
- * Sprint 11 will add per-type renderers; for now we use a generic text summary.
- */
-function renderArtifact(
-  checkpoint: CheckpointId,
-  artifact: CheckpointArtifact,
-): string {
-  const lines: string[] = [];
-  const art = artifact as Record<string, unknown> | null | undefined;
-
-  // Header line
-  lines.push(`[Checkpoint: ${checkpoint}] Artifact ready.`);
-
-  if (art && typeof art === "object") {
-    // Optional path line
-    if (typeof art["path"] === "string") {
-      lines.push(`  Path: ${art["path"]}`);
-    }
-
-    // Text summary
-    let textContent: string | null = null;
-    if (typeof art["text"] === "string") {
-      textContent = art["text"];
-    } else if (typeof art["content"] === "string") {
-      textContent = art["content"];
-    }
-
-    if (textContent !== null) {
-      const textLines = textContent.split("\n");
-      const totalLines = textLines.length;
-      const shown = textLines.slice(0, 40);
-      lines.push(`  Lines: ${totalLines}${totalLines > 40 ? " (first 40 shown)" : ""}`);
-      lines.push("  ---");
-      for (const l of shown) {
-        lines.push(`  ${l}`);
-      }
-      if (totalLines > 40) {
-        lines.push(`  ... (${totalLines - 40} more lines)`);
-      }
-      lines.push("  ---");
-    }
-  }
-
-  return lines.join("\n");
-}
 
 /**
  * Asks a question via readline and resolves with the user's answer.
@@ -158,8 +112,8 @@ export class CliCheckpointMechanism implements CheckpointMechanism {
       return this.fallback.request(checkpoint, artifact);
     }
 
-    // Render the artifact summary to stderr.
-    const summary = renderArtifact(checkpoint, artifact);
+    // Render the artifact summary to stderr using the renderer registry.
+    const summary = `[Checkpoint: ${checkpoint}] Artifact ready.\n${render(artifact)}`;
     process.stderr.write(`${summary}\n`);
     process.stderr.write(`  Approve (a), Reject (r), Edit (e)? `);
 
