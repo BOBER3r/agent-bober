@@ -9,6 +9,7 @@ import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js"
 import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
+import { emit } from "../telemetry/emit.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -45,6 +46,8 @@ export async function runGenerator(
   const title = handoff.currentContract?.title ?? "unknown";
 
   logger.sprint(contractId, `Generating: ${title}`);
+  // Sprint 28 — telemetry: emit agent-spawn at entry (fire-and-forget)
+  void emit(projectRoot, config, "agent-spawn", { agentName: "generator", contractId });
 
   const model = resolveModel(config.generator.model);
   const maxTurns = config.generator.maxTurnsPerSprint;

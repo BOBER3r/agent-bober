@@ -16,6 +16,7 @@ import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js"
 import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
+import { emit } from "../telemetry/emit.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
 
@@ -50,6 +51,8 @@ export async function runEvaluatorAgent(
   const sprintId = contract.contractId;
 
   logger.sprint(sprintId, `Evaluating: ${contract.title}`);
+  // Sprint 28 — telemetry: emit agent-spawn at entry (fire-and-forget)
+  void emit(projectRoot, config, "agent-spawn", { agentName: "evaluator", contractId: sprintId });
 
   // 1. Programmatic evaluation — run registered evaluator plugins
   logger.info("Running programmatic evaluations...");

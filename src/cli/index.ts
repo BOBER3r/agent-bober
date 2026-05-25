@@ -29,6 +29,8 @@ import { registerRollbackCommand } from "./commands/rollback.js";
 import { registerPostmortemCommand } from "./commands/postmortem.js";
 import { registerIncidentCommand } from "./commands/incident.js";
 import { registerPlaybookCommand } from "./commands/playbook.js";
+import { registerConfigCommand } from "./commands/config.js";
+import { registerTelemetryCommand } from "./commands/telemetry.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -268,6 +270,12 @@ async function main(): Promise<void> {
 
   // ── playbook ─────────────────────────────────────────────────────
   registerPlaybookCommand(program);
+
+  // ── config ───────────────────────────────────────────────────────
+  registerConfigCommand(program);
+
+  // ── telemetry ────────────────────────────────────────────────────
+  registerTelemetryCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

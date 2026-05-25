@@ -45,6 +45,7 @@ import { writeCompletionMarker } from "./checkpoints/feedback-router.js";
 // Sprint 13: audit wrapper — every checkpoint call site uses runWithAudit so
 // each outcome is appended to .bober/audits/<runId>.jsonl regardless of mechanism.
 import { runWithAudit, type MechanismName } from "./checkpoints/audit.js";
+import { emit } from "../telemetry/emit.js";
 import {
   ensureBoberDir,
   saveContract,
@@ -391,6 +392,13 @@ export async function runSprintCycle(
         sprintId: currentContract.contractId,
         details: { iteration, feedback: evaluation.summary },
       });
+      // Sprint 28 — telemetry (fire-and-forget, never throws to pipeline)
+      void emit(projectRoot, config, "sprint-pass", {
+        runId: sprintRunId,
+        sprintId: currentContract.contractId,
+        iteration,
+        outcome: "passed",
+      });
 
       // Sprint 5 — advisory code review (config-gated, time-boxed, never blocks)
       const reviewEnabled = config.codeReview?.enabled !== false;
@@ -466,6 +474,15 @@ export async function runSprintCycle(
       sprintId: currentContract.contractId,
       details: { iteration, feedback: evaluation.summary },
     });
+    // Sprint 28 — telemetry (only emit retry if there are more iterations)
+    if (iteration < maxIterations) {
+      void emit(projectRoot, config, "sprint-fail-retry", {
+        runId: sprintRunId,
+        sprintId: currentContract.contractId,
+        iteration,
+        retryCount: iteration,
+      });
+    }
 
     if (iteration >= maxIterations) {
       logger.error(

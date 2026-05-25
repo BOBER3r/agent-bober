@@ -133,6 +133,37 @@ The following structures were introduced by empirical tuning and are protected:
 
 This project's verbatim-voice directive: the framing in behavior-shaping content was chosen by testing, not by convention. When in doubt, preserve the voice.
 
+## Telemetry Guarantee
+
+agent-bober includes an opt-in local-only telemetry system (Sprint 28). This section documents the hard invariants.
+
+**Opt-in, default OFF.** Telemetry is disabled by default. No files are written unless `telemetry.enabled: true` is explicitly set in `bober.config.json`. The schema default is `false`. A fresh-init'd config has no `telemetry` section.
+
+**Local-only. No network egress. Ever.** The `src/telemetry/` module has zero imports of `node:http`, `node:https`, `node:net`, `node:tls`, `undici`, `got`, `axios`, or any other network primitive. This is enforced by an ESLint `no-restricted-imports` rule in `eslint.config.js` scoped to `src/telemetry/**` — a violation is a lint error, not a warning. The rule is regression-tested: see `tests/telemetry/emit.test.ts`.
+
+**What is collected (IDs, counts, durations, enum outcomes ONLY):**
+- `runId`, `specId`, `sprintId`, `contractId`, `incidentId` — opaque identifiers
+- `iteration`, `retryCount` — integer counts
+- `durationMs` — wall-clock duration in milliseconds
+- `outcome` — enum string (e.g., `"passed"`, `"failed"`)
+- `errorKind` — enum string (e.g., `"timeout"`, `"rate-limit"`)
+- `agentName` — enum string (e.g., `"curator"`, `"generator"`)
+- `checkpointId` — enum string (e.g., `"post-plan"`, `"pre-evaluator"`)
+
+**What is NEVER collected:**
+- User code, file contents, prompt text
+- Feedback text from the evaluator
+- MCP response bodies, observability payloads
+- Any string sourced from user input or LLM output
+
+This is enforced by code review discipline: every `emit(...)` call site is grep-auditable (`grep 'emit(' src/`). The `TelemetryEventData` TypeScript interface (`src/telemetry/emit.ts`) has no string fields that accept user-provided content. Evidence: `src/telemetry/emit.ts:36-57`.
+
+**How to inspect / disable / purge:**
+- `bober telemetry status` — print whether enabled and show event counts by type
+- `bober telemetry export` — print all events as JSONL to stdout
+- `bober telemetry purge` — delete all `.bober/telemetry/` files (requires y/N confirmation)
+- Set `telemetry.enabled: false` in `bober.config.json` and restart — no further events will be written
+
 ## Understand the Project Before Contributing
 
 Before proposing changes to skill design, workflow philosophy, or architecture, read existing skills and understand the project's design decisions. agent-bober has its own tested philosophy about skill design, agent behavior shaping, and terminology. Changes that rewrite the project's voice or restructure its approach without understanding why it exists will be rejected.

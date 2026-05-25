@@ -21,6 +21,8 @@ export {
   ObservabilityProviderKindSchema,
   ObservabilityProviderSchema,
   ObservabilitySectionSchema,
+  // Sprint 28 — opt-in local-only telemetry
+  TelemetrySectionSchema,
   // Types
   type ProjectMode,
   type Stack,
@@ -43,6 +45,8 @@ export {
   type ObservabilityProviderKind,
   type ObservabilityProvider,
   type ObservabilitySection,
+  // Sprint 28 types
+  type TelemetrySection,
   // Factory
   createDefaultConfig,
 } from "./schema.js";

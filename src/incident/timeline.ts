@@ -26,6 +26,8 @@
 import { open, mkdir, writeFile, readdir, readFile, rename } from "node:fs/promises";
 import { constants } from "node:fs";
 import { join } from "node:path";
+import { emit } from "../telemetry/emit.js";
+import type { BoberConfig } from "../config/schema.js";
 import {
   IncidentMetadataSchema,
   TimelineEventSchema,
@@ -373,7 +375,7 @@ export async function appendRunbookExecution(
 /** Override token regex: prefix 'SKIP_METRIC_VERIFY:' with at least one non-whitespace char after optional spaces. */
 const OVERRIDE_TOKEN_RE = /^SKIP_METRIC_VERIFY:\s*(.+)$/;
 
-/** Options for the resolution gate (Sprint 22) + postmortem trigger (Sprint 23). */
+/** Options for the resolution gate (Sprint 22) + postmortem trigger (Sprint 23) + telemetry (Sprint 28). */
 export interface SetStatusOpts {
   /** REQUIRED when status='resolved' (unless overrideToken given). Must have verified=true. */
   verifyResult?: VerifyResult;
@@ -387,6 +389,13 @@ export interface SetStatusOpts {
    *  postmortem synthesis completes. Production callers leave this undefined and rely on
    *  fire-and-forget behavior. Sprint 23. */
   onPostmortemPromise?: (p: Promise<void>) => void;
+  /** Sprint 28 — optional config for telemetry. When provided and telemetry.enabled=true,
+   *  an 'incident-resolved' event is emitted (fire-and-forget) after the status write.
+   *  Callers that don't have config available leave this undefined; no telemetry fires. */
+  config?: BoberConfig;
+  /** Sprint 28 — absolute project root for telemetry file path resolution.
+   *  Required when config is provided for telemetry emit. */
+  telemetryProjectRoot?: string;
 }
 
 /**
@@ -479,6 +488,18 @@ export async function setIncidentStatus(
 
   if (timelineEvent !== undefined) {
     await appendTimeline(projectRoot, incidentId, timelineEvent);
+  }
+
+  // ── Sprint 28: telemetry emit for incident-resolved (fire-and-forget) ────────
+  // Only when opts.config is provided (callers without config skip telemetry).
+  if (status === "resolved" && opts?.config && opts.telemetryProjectRoot) {
+    const durationMs = existing.createdAt
+      ? Date.now() - new Date(existing.createdAt).getTime()
+      : undefined;
+    void emit(opts.telemetryProjectRoot, opts.config, "incident-resolved", {
+      incidentId,
+      durationMs,
+    });
   }
 
   // ── Sprint 23: async postmortem trigger (fire-and-forget) ─────────────────

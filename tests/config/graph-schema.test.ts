@@ -230,3 +230,52 @@ describe("Sprint 14 — backward-compat: existing bober.config.json parses with 
     }
   });
 });
+
+describe("Sprint 28 — backward-compat: existing bober.config.json parses without telemetry section", () => {
+  it("repo's bober.config.json (no telemetry section) parses successfully via BoberConfigSchema", async () => {
+    const raw = await readFile(resolve(repoRoot, "bober.config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    const result = BoberConfigSchema.safeParse(parsed);
+    expect(result.success, `parse failed: ${JSON.stringify(result.error?.issues)}`).toBe(true);
+    if (result.success) {
+      expect(result.data.telemetry).toBeUndefined();
+    }
+  });
+
+  it("loadConfig returns config with telemetry undefined when section absent", async () => {
+    const config = await loadConfig(repoRoot);
+    expect(config.telemetry).toBeUndefined();
+  });
+
+  it("BoberConfigSchema accepts telemetry section with enabled=true", () => {
+    const minimal = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      telemetry: { enabled: true },
+    };
+    const result = BoberConfigSchema.safeParse(minimal);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.telemetry?.enabled).toBe(true);
+  });
+
+  it("telemetry.enabled defaults to false when section is {}", () => {
+    const minimal = {
+      project: { name: "test", mode: "brownfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      telemetry: {},
+    };
+    const result = BoberConfigSchema.safeParse(minimal);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.telemetry?.enabled).toBe(false);
+  });
+});

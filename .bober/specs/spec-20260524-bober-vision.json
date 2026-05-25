@@ -7,7 +7,8 @@
   "description": "Transform agent-bober from a single-mode autopilot harness into a coherent multi-mode software engineering teammate. Four operating modes share one foundation: (1) Autopilot — current generator-evaluator loop, used for spikes and greenfield; (2) Careful-flow — checkpoint-gated execution where every research/plan/sprint/task boundary surfaces a diff and waits for approval via CLI prompt, disk marker, or GitHub PR; (3) Diagnose — incident-response agent shape with generic observability MCP plugin slots, structured incident timeline, change-management gates around destructive ops; (4) Postmortem — automated synthesis of incident timeline into a structured postmortem document. Foundation across all four modes: verbatim port of obra/superpowers behavior-shaping disciplines (Iron Laws, Red Flags, Rationalization-Prevention tables, SessionStart bootstrap, anti-pattern catalog, AGENTS.md contract). Supersedes spec-20260524-superpowers-port.",
   "mode": "brownfield",
   "preset": "custom",
-  "status": "draft",
+  "status": "completed",
+  "completedAt": "2026-05-25T13:30:00Z",
   "ambiguityScore": 5,
   "clarificationQuestions": [],
   "resolvedClarifications": [

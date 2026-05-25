@@ -12,6 +12,7 @@ import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { ensureDir } from "../utils/fs.js";
+import { emit } from "../telemetry/emit.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -63,6 +64,8 @@ export async function runCurator(
 ): Promise<SprintBriefing> {
   const contractId = contract.contractId;
   logger.sprint(contractId, `Curating: ${contract.title}`);
+  // Sprint 28 — telemetry: emit agent-spawn at entry (fire-and-forget)
+  void emit(projectRoot, config, "agent-spawn", { agentName: "curator", contractId });
 
   // Curator uses its own model config, falling back to planner model
   const curatorConfig = config.curator;

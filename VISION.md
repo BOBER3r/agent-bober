@@ -344,10 +344,11 @@ match confidence exceeds `HIGH_CONFIDENCE_THRESHOLD = 0.6`, the playbook is auto
 exceeds `LOW_CONFIDENCE_THRESHOLD = 0.3` but not `0.6`, the diagnoser surfaces the playbook as a
 suggestion. A future sprint may promote this to a configurable field.
 
-### `telemetry` section — Sprint 28
+### `telemetry` section
 
-`telemetry.enabled` will be added in Sprint 28. It is not present in the current schema. Do not
-set this field before Sprint 28 ships.
+| Field | Type | Default | Since | Description |
+|-------|------|---------|-------|-------------|
+| `telemetry.enabled` | `boolean` | `false` | Sprint 28 | When `true`, the orchestrator appends opt-in local-only JSONL events to `.bober/telemetry/<YYYY-MM-DD>.jsonl` for tracking checkpoint approval rates, incident resolution times, agent retry counts, and sprint pass/fail counts. Default `false` — no files written. No network egress under any condition (enforced by an ESLint no-restricted-imports rule in `eslint.config.js` scoped to `src/telemetry/`). Event payloads contain IDs, durations, counts, and enum outcomes ONLY — no user-content strings, no MCP response bodies, no feedback text. Inspect with `bober telemetry status`, export with `bober telemetry export`, delete with `bober telemetry purge`. |
 
 ---
 

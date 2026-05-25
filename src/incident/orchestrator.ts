@@ -61,6 +61,7 @@ import {
   setIncidentStatus,
   type SetStatusOpts,
 } from "./timeline.js";
+import { emit } from "../telemetry/emit.js";
 import {
   IncidentMetadataSchema,
   STATUS_TRANSITIONS,
@@ -81,6 +82,7 @@ import {
   type VerifyResolutionDeps,
 } from "./resolution-verify.js";
 import type { RiskyActionConfig } from "../orchestrator/deploy/resolve.js";
+import type { BoberConfig } from "../config/schema.js";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -142,6 +144,8 @@ export interface AbortOpts {
   config?: RiskyActionConfig;
   rollbackOpts?: ExecuteRollbackOpts;
   now?: () => Date;
+  /** Sprint 28 — optional BoberConfig for telemetry emit on incident-aborted. */
+  boberConfig?: BoberConfig;
 }
 
 export interface AbortResult {
@@ -395,6 +399,11 @@ ${rollbackSection}
   // Transition to aborted (terminal). aborted does not require verifyResult/overrideToken.
   // setIncidentStatus does NOT gate on 'aborted' — only 'resolved' is gated.
   await setIncidentStatus(projectRoot, incidentId, "aborted");
+
+  // Sprint 28 — telemetry: emit incident-aborted (fire-and-forget)
+  if (opts.boberConfig) {
+    void emit(projectRoot, opts.boberConfig, "incident-aborted", { incidentId });
+  }
 
   return {
     rollback: rollbackResult,

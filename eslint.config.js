@@ -40,6 +40,34 @@ export default [
     },
   },
   {
+    // Sprint 28: network egress guard for telemetry module (local-only invariant).
+    // Any import of a network/socket module inside src/telemetry/ is a lint error.
+    files: ["src/telemetry/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            { name: "undici", message: "Network access forbidden in telemetry module (Sprint 28 — local-only)" },
+            { name: "got", message: "Network access forbidden in telemetry module" },
+            { name: "axios", message: "Network access forbidden in telemetry module" },
+            { name: "node-fetch", message: "Network access forbidden in telemetry module" },
+          ],
+          patterns: [
+            {
+              group: ["http", "https", "net", "tls", "dgram", "node:http", "node:https", "node:net", "node:tls", "node:dgram"],
+              message: "Network/socket imports forbidden in src/telemetry/ — Sprint 28 local-only guarantee",
+            },
+          ],
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "Network access forbidden in telemetry module" },
+      ],
+    },
+  },
+  {
     ignores: ["dist/", "node_modules/", "templates/"],
   },
 ];

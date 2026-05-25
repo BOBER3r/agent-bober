@@ -277,6 +277,17 @@ export const IncidentSectionSchema = z.object({
 });
 export type IncidentSection = z.infer<typeof IncidentSectionSchema>;
 
+// ── Telemetry Section (Sprint 28 — opt-in local-only event log) ──────
+
+export const TelemetrySectionSchema = z.object({
+  /** When true, the orchestrator appends JSONL events to .bober/telemetry/<date>.jsonl
+   *  for tracking checkpoint approval rates, incident resolution times, agent retry
+   *  counts. Default false (no events written). No network egress under any condition
+   *  — see ESLint no-restricted-imports rule in eslint.config.js for src/telemetry/. */
+  enabled: z.boolean().default(false),
+});
+export type TelemetrySection = z.infer<typeof TelemetrySectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -294,6 +305,8 @@ export const BoberConfigSchema = z.object({
   observability: ObservabilitySectionSchema.optional(),
   // ── Sprint 23: incident postmortem automation ──
   incident: IncidentSectionSchema.optional(),
+  // ── Sprint 28: opt-in local-only telemetry ──
+  telemetry: TelemetrySectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
