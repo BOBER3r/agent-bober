@@ -45,6 +45,28 @@ export interface RunState {
   error?: string;
   projectRoot: string;
   specId?: string;
+  /** Sprint 4: when this run was launched via runInWorktree(), the absolute
+   *  path of the git worktree the pipeline executed in. Undefined for in-place
+   *  runs (the existing bober_run path). */
+  worktreePath?: string;
+  /** Sprint 4: the git branch the worktree was created on. Undefined for
+   *  in-place runs. */
+  branch?: string;
+}
+
+// ── StartRunOptions ───────────────────────────────────────────────────
+
+/**
+ * Optional parameters for startRun().
+ * All fields are optional for back-compatibility with existing 3-arg callers.
+ */
+export interface StartRunOptions {
+  /** Pre-computed runId. When omitted, RunManager generates one with randomUUID(). */
+  runId?: string;
+  /** When the run is executed inside a git worktree, the absolute path of that worktree. */
+  worktreePath?: string;
+  /** Branch the worktree was created on. */
+  branch?: string;
 }
 
 // ── RunManager ───────────────────────────────────────────────────────
@@ -145,8 +167,9 @@ export class RunManager {
       projectRoot: string,
       config: BoberConfig,
     ) => Promise<PipelineResult> = runPipeline,
+    opts: StartRunOptions = {},
   ): Promise<string> {
-    const runId = randomUUID();
+    const runId = opts.runId ?? randomUUID();
     const now = new Date().toISOString();
 
     const state: RunState = {
@@ -156,6 +179,8 @@ export class RunManager {
       startedAt: now,
       progress: { completed: 0, total: 0 },
       projectRoot,
+      ...(opts.worktreePath ? { worktreePath: opts.worktreePath } : {}),
+      ...(opts.branch ? { branch: opts.branch } : {}),
     };
 
     this.runs.set(runId, state);

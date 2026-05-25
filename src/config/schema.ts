@@ -176,6 +176,14 @@ export const PipelineSectionSchema = z.object({
    *  notification with `{ subscriptionId, dropped: N }` is emitted per
    *  overflow window. */
   eventQueueBound: z.number().int().min(1).default(1000),
+  /** Sprint 4 (cockpit-integration): root directory (relative to projectRoot) under
+   *  which git worktrees are created. Default '.bober/worktrees'. The full worktree
+   *  path is <projectRoot>/<worktreeRoot>/<runId>. */
+  worktreeRoot: z.string().default(".bober/worktrees"),
+  /** Sprint 4 (cockpit-integration): when true (default), the worktree is removed
+   *  via `git worktree remove` after a successful pipeline run. On failure the
+   *  worktree is ALWAYS retained for debugging regardless of this flag. */
+  cleanupWorktreeOnSuccess: z.boolean().default(true),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -387,6 +395,8 @@ export function createDefaultConfig(
       prPollMs: 30_000,
       allowAutopilotRiskyActions: false,
       eventQueueBound: 1000,
+      worktreeRoot: ".bober/worktrees",
+      cleanupWorktreeOnSuccess: true,
     },
     commands: {},
   };

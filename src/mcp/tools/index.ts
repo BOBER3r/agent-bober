@@ -25,12 +25,13 @@ import { registerGetRunStatusTool } from "./get-run-status.js";
 import { registerAbortRunTool } from "./abort-run.js";
 import { registerSubscribeEventsTool } from "./subscribe-events.js";
 import { registerUnsubscribeEventsTool } from "./unsubscribe-events.js";
+import { registerRunInWorktreeTool } from "./run-in-worktree.js";
 
 /**
  * Registers all built-in agent-bober MCP tools into the global registry.
  * Call this once before starting the MCP server.
  *
- * Registered tools (22 total):
+ * Registered tools (23 total):
  *   1. bober_init              – Initialise a project
  *   2. bober_plan              – Generate a sprint plan
  *   3. bober_sprint            – Execute the next sprint cycle
@@ -53,6 +54,7 @@ import { registerUnsubscribeEventsTool } from "./unsubscribe-events.js";
  *  20. bober_abort_run         – Abort a run by runId
  *  21. bober_subscribe_events  – Subscribe to runId-scoped event notifications
  *  22. bober_unsubscribe_events– Unsubscribe from a runId-scoped event stream
+ *  23. bober_run_in_worktree   – Start the pipeline in an isolated git worktree
  */
 export function registerAllTools(): void {
   // ── Core workflow tools ─────────────────────────────────────────
@@ -65,6 +67,7 @@ export function registerAllTools(): void {
 
   // ── Async pipeline tools ────────────────────────────────────────
   registerRunTool();
+  registerRunInWorktreeTool();
   registerBrownfieldTool();
   registerReactTool();
   registerSolidityTool();

@@ -31,21 +31,21 @@ describe("external MCP server tool registration", () => {
     vi.resetModules();
   });
 
-  it("with graph.enabled=false: registerAllTools registers exactly 22 tools", async () => {
+  it("with graph.enabled=false: registerAllTools registers exactly 23 tools", async () => {
     const { registerAllTools, getAllTools } = await import("../../src/mcp/tools/index.js");
     registerAllTools();
     const tools = getAllTools();
-    expect(tools.length).toBe(22);
+    expect(tools.length).toBe(23);
   });
 
-  it("with graph.enabled=true: 20 + 6 graph tools appended (26 total)", async () => {
+  it("with graph.enabled=true: 23 + 6 graph tools appended (29 total)", async () => {
     const { registerAllTools, getAllTools, registerTool } = await import("../../src/mcp/tools/index.js");
     const { createGraphTools } = await import("../../src/mcp/tools/graph.js");
     const { GraphFallback } = await import("../../src/graph/fallback.js");
 
     registerAllTools();
     const baseline = getAllTools().length;
-    expect(baseline).toBe(22);
+    expect(baseline).toBe(23);
 
     const deps = { client: mockClient(), fallback: new GraphFallback("dual") };
     const graphTools = createGraphTools(deps);
@@ -56,7 +56,7 @@ describe("external MCP server tool registration", () => {
 
     const after = getAllTools();
     expect(after.length).toBe(baseline + 6);
-    expect(after.length).toBe(28);
+    expect(after.length).toBe(29);
 
     const names = after.map((t) => t.name);
     expect(names).toContain("graph_search");
@@ -67,7 +67,7 @@ describe("external MCP server tool registration", () => {
     expect(names).toContain("graph_changes");
   });
 
-  it("graph tools are appended after existing 22 tools (not interleaved)", async () => {
+  it("graph tools are appended after existing 23 tools (not interleaved)", async () => {
     const { registerAllTools, getAllTools, registerTool } = await import("../../src/mcp/tools/index.js");
     const { createGraphTools } = await import("../../src/mcp/tools/graph.js");
     const { GraphFallback } = await import("../../src/graph/fallback.js");
@@ -79,7 +79,7 @@ describe("external MCP server tool registration", () => {
     }
 
     const names = getAllTools().map((t) => t.name);
-    // First 22 should all be bober_* tools, last 6 should be graph_*
+    // Last 6 should be graph_* tools
     const last6 = names.slice(-6).sort();
     expect(last6).toEqual([
       "graph_changes",
@@ -90,9 +90,9 @@ describe("external MCP server tool registration", () => {
       "graph_search",
     ]);
 
-    // All original 22 bober_* tools should still be present
+    // All original 23 bober_* tools should still be present
     const boberTools = names.filter((n) => n.startsWith("bober_"));
-    expect(boberTools.length).toBe(22);
+    expect(boberTools.length).toBe(23);
   });
 
   it("exposeOnExternalMcp=false: graph tools not in external registry but createGraphTools still returns 6", async () => {
@@ -103,11 +103,11 @@ describe("external MCP server tool registration", () => {
     const tools = createGraphTools({ client: mockClient(), fallback: new GraphFallback("dual") });
     expect(tools).toHaveLength(6);
 
-    // If we don't register them (simulating exposeOnExternalMcp=false), registry stays at 22
+    // If we don't register them (simulating exposeOnExternalMcp=false), registry stays at 23
     const { registerAllTools, getAllTools } = await import("../../src/mcp/tools/index.js");
     registerAllTools();
     // We do NOT call registerTool for graph tools here
-    expect(getAllTools().length).toBe(22);
+    expect(getAllTools().length).toBe(23);
   });
 
   it("createGraphTools is defined exactly once (DRY enforcement)", async () => {

@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`bober_run_in_worktree`**: Start a pipeline inside an isolated git worktree on a new branch.
+  Input: `{ task: string, allowDirty?: boolean, keepOnSuccess?: boolean }`. Returns
+  `{ runId, branch, worktreePath, status: 'running' }` immediately (fire-and-forget like `bober_run`).
+  Multiple worktree runs can execute concurrently on the same project. Use `bober_get_run_status`
+  to track progress.
+- **`bober worktree run <task>`** CLI subcommand mirroring the MCP tool. Flags:
+  `--allow-dirty` (skip uncommitted-changes guard), `--keep-on-success` (retain worktree after success).
+  Prints `{ runId, branch, worktreePath, projectRoot }` JSON to stdout.
+- **`runInWorktree(task, projectRoot, config, opts)`** (`src/orchestrator/worktree.ts`): the shared helper
+  the CLI and MCP tool both use. Creates a git worktree under `<pipeline.worktreeRoot>/<runId>` on a
+  branch derived from `generator.branchPattern`, runs the pipeline inside it, and on success removes
+  the worktree per `pipeline.cleanupWorktreeOnSuccess`. On failure (or if `--keep-on-success`/`keepOnSuccess`)
+  the worktree is retained for debugging and its path is printed to stderr.
+- **`pipeline.worktreeRoot`** config field: directory (relative to projectRoot) under which
+  worktrees are created. Default `.bober/worktrees`.
+- **`pipeline.cleanupWorktreeOnSuccess`** config field: when true (default), remove the worktree
+  via `git worktree remove` after a successful run. On failure the worktree is always retained.
+- **`RunState.worktreePath`** and **`RunState.branch`** optional fields. Populated by `runInWorktree`
+  before the pipeline starts; surfaced in `bober_get_run_status` output.
+- **`RunManager.startRun(task, projectRoot, config, pipelineFn?, opts?)`** signature extended with
+  optional `opts: { runId?, worktreePath?, branch? }`. Existing 3- and 4-arg callers are unchanged.
+- **`git.ts`** helpers: `addWorktree`, `removeWorktree`, `isClean` shelling out to git CLI (no new deps).
+
+### Follow-ups (documented, NOT implemented this sprint)
+
+- Garbage collection of orphaned worktrees from prior failed runs (`bober worktree prune`).
+- Worktree-aware bober_status (the cockpit uses bober_get_run_status by runId instead).
+- Cross-worktree merge automation.
+
 - **`bober_subscribe_events`**: Subscribe to runId-scoped live events. Input: `{ runId: string, since?: string }`. Returns `{ subscriptionId, status: 'subscribed', startedAt }`. The server begins emitting `bober/events` notifications for every line appended to `.bober/history.jsonl` or `.bober/telemetry/<date>.jsonl` whose `runId` matches the subscription. The optional `since` parameter triggers a one-time backfill of pre-existing events with `timestamp > since`.
 - **`bober_unsubscribe_events`**: Unsubscribe from a runId-scoped event stream. Input: `{ subscriptionId: string }`. Releases file-watch handles when no other subscription is watching the same files. Returns `{ subscriptionId, status: 'unsubscribed' }` or a soft-error `{ error: 'Subscription not found: <id>' }`.
 - **`EventStreamManager`** (`src/mcp/event-stream.ts`): In-process class that tails `.bober/history.jsonl` and `.bober/telemetry/<date>.jsonl` using `fs.watch`. One file-watch handle is shared across all subscriptions watching the same file (reference-counted). Date roll-over is detected via a polling interval (5 s, `unref()`'d). Lines without an extractable `runId` (top-level or `details.runId`) are silently skipped. Per-subscription bounded queue (default 1000) drops the oldest events on overflow; a single `bober/events.dropped` notification with `{ subscriptionId, dropped: N }` is emitted once per overflow window. All diagnostic output is routed to `process.stderr` (stdout is reserved for the MCP JSON-RPC transport).
