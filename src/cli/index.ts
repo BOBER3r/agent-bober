@@ -28,6 +28,7 @@ import { registerAuditCommand } from "./commands/audit-show.js";
 import { registerRollbackCommand } from "./commands/rollback.js";
 import { registerPostmortemCommand } from "./commands/postmortem.js";
 import { registerIncidentCommand } from "./commands/incident.js";
+import { registerPlaybookCommand } from "./commands/playbook.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -264,6 +265,9 @@ async function main(): Promise<void> {
 
   // ── incident ─────────────────────────────────────────────────────
   registerIncidentCommand(program);
+
+  // ── playbook ─────────────────────────────────────────────────────
+  registerPlaybookCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

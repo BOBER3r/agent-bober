@@ -127,6 +127,18 @@ Document every field below. The orchestrator will save this as `.bober/incidents
 
 ## Investigation Discipline
 
+### Step 0 — SEARCH the playbook library (Sprint 25)
+
+Before reading incident artifacts, call `searchPlaybooks(incident.symptom)` from `src/incident/playbook-search.ts` with the incident's symptom string.
+
+- **High-confidence match (confidence ≥ 0.6):** Follow the matched playbook step-by-step under the `bober.runbook` discipline (`skills/bober.runbook/SKILL.md`). Do not proceed with freeform investigation — the playbook IS the investigation and remediation procedure. Record the playbook name and match confidence in your DiagnosisResult `summary`.
+- **Low-confidence match (0.3 ≤ confidence < 0.6):** Surface the match as `"consider playbook <name> (confidence: <score>)"` in your DiagnosisResult `summary`. Proceed with freeform investigation (Steps 1–6 below). The playbook is a hint, not an execution target.
+- **No match (confidence < 0.3):** Proceed with freeform investigation (Steps 1–6). Note "no playbook match" in `summary`.
+
+<EXTREMELY-IMPORTANT>
+A high-confidence playbook match (≥ 0.6) routes the investigation through a curated, pre-verified procedure. Following it is NOT optional. Skipping a high-confidence match in favour of freeform investigation wastes time and may miss steps that the playbook author verified through prior incidents. The threshold exists precisely to distinguish "good enough to trust" from "take note but explore freely."
+</EXTREMELY-IMPORTANT>
+
 ### Step 1 — READ the incident artifacts
 
 Read in order, do not skip:
