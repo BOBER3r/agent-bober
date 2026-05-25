@@ -535,7 +535,10 @@ export interface RunCheckpointWithFeedbackOpts {
    * If omitted, edit deltas are returned but not written to disk.
    */
   artifactPath?: string;
-  /** Optional env-var abort token (checked alongside ABORT_TOKEN). */
+  /**
+   * Optional env-var abort token (checked alongside ABORT_TOKEN).
+   * If omitted, falls back to process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] automatically.
+   */
   envAbortToken?: string;
 }
 
@@ -567,8 +570,12 @@ export async function runCheckpointWithFeedback(
     reinvokeAgent,
     originalPrompt,
     artifactPath,
-    envAbortToken,
   } = opts;
+
+  // Default the env-var abort token to BOBER_CHECKPOINT_ABORT_TOKEN when the
+  // caller omits it. This ensures the named env var is honored without requiring
+  // every call site to thread the value through explicitly.
+  const envAbortToken = opts.envAbortToken ?? process.env['BOBER_CHECKPOINT_ABORT_TOKEN'];
 
   let currentArtifact = opts.artifact;
   let feedbackHistory: FeedbackHistoryEntry[] = [];

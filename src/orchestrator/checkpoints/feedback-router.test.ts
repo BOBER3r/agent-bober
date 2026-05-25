@@ -594,6 +594,33 @@ describe("runCheckpointWithFeedback (s12-c7)", () => {
     }
   });
 
+  // (d) BOBER_CHECKPOINT_ABORT_TOKEN read from process.env when envAbortToken not passed
+  it("(d) reads BOBER_CHECKPOINT_ABORT_TOKEN from process.env when envAbortToken not passed", async () => {
+    const original = process.env['BOBER_CHECKPOINT_ABORT_TOKEN'];
+    process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] = 'ABORTNOW42';
+    try {
+      const mechanism = makeMechanism([rejectedOutcome('please ABORTNOW42 cancel run')]);
+      const resolution = await runCheckpointWithFeedback({
+        checkpointId: 'post-plan',
+        artifact: { type: 'plan-spec' },
+        mechanism,
+        maxIterations: 3,
+        runId: `env-test-run-${Date.now()}`,
+        projectRoot: tmpDir,
+        reinvokeAgent: async () => ({}),
+        originalPrompt: '...',
+        // NOTE: envAbortToken intentionally omitted
+      });
+      expect(resolution.kind).toBe('aborted');
+      if (resolution.kind === 'aborted') {
+        expect(resolution.reason.reason).toBe('USER_ABORT');
+      }
+    } finally {
+      if (original === undefined) delete process.env['BOBER_CHECKPOINT_ABORT_TOKEN'];
+      else process.env['BOBER_CHECKPOINT_ABORT_TOKEN'] = original;
+    }
+  });
+
   // (e) per-agent feedback adaptation: planner vs generator receive DIFFERENT prompts
   it("(e) planner and generator receive DISTINCTLY DIFFERENT augmented prompts", async () => {
     const plannerCalls: string[] = [];
