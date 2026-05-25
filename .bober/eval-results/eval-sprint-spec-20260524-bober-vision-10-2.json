@@ -1,0 +1,32 @@
+{
+  "evalId": "eval-sprint-spec-20260524-bober-vision-10-2",
+  "contractId": "sprint-spec-20260524-bober-vision-10",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:27:00Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 9, "criteriaPassed": 9, "criteriaFailed": 0, "criteriaSkipped": 0,
+    "requiredPassed": 9, "requiredFailed": 0, "requiredTotal": 9
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "eslint exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "vitest 663 passed | 4 skipped (667) across 52 files exit 0. pr.test.ts 30/30" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "s10-c1", "result": "pass", "evidence": "PrCheckpointMechanism.request implements run-tracking PR with prList/prCreate caching." },
+    { "criterionId": "s10-c2", "result": "pass", "evidence": "parseSignals handles all 4 signals (merge/approve/reject/edit) + label variant." },
+    { "criterionId": "s10-c3", "result": "pass", "evidence": "DEFAULT 30s, MIN 10s warning (clarified text), rate-limit backoff cap 5min." },
+    { "criterionId": "s10-c4", "result": "pass", "evidence": "Availability check (version/auth/repo) → disk fallback with stderr warning. 3 tests." },
+    { "criterionId": "s10-c5", "result": "pass", "evidence": "getCheckpointMechanismFor: override → global → fallback. 5 tests." },
+    { "criterionId": "s10-c6", "result": "pass", "evidence": "Title format correct. checkpointStates Map drives renderPrBody '- [ ]'/'- [x]'. prEdit called before+after. prReady called via cancellable setTimeout(0) only when all approved + zero rejected. 5 new tests inspect actual mock body args." },
+    { "criterionId": "s10-c7", "result": "pass", "evidence": "registerCheckpointMechanism('pr', ...) at module load in registry.ts." },
+    { "criterionId": "s10-c8", "result": "pass", "evidence": "30 tests, all gh mocked at GhClient seam." },
+    { "criterionId": "s10-c9", "result": "pass", "evidence": "All strategies exit 0, no regressions in cli/disk/other test suites." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 9 required criteria pass on iteration 2. s10-c6 fully resolved (checkbox list + draft→ready via prReady)."
+}

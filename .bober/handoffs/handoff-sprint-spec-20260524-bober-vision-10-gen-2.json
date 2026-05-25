@@ -1,0 +1,56 @@
+{
+  "handoffId": "handoff-sprint-spec-20260524-bober-vision-10-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260524-bober-vision-10",
+  "specId": "spec-20260524-bober-vision",
+  "timestamp": "2026-05-25T05:05:00Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Sprint 10 iteration 1 FAILED on s10-c6. Iteration 1 produced commit d3264d1 which covers 8/9 criteria. Two missing behaviors require fixing.",
+    "currentBranch": "bober/bober-vision",
+    "filesAlreadyCreated": [
+      "src/orchestrator/checkpoints/mechanisms/pr.ts",
+      "src/orchestrator/checkpoints/mechanisms/pr.test.ts"
+    ],
+    "filesAlreadyModified": [
+      "src/orchestrator/checkpoints/registry.ts",
+      "src/orchestrator/checkpoints/index.ts"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260524-bober-vision-10.json",
+  "specPath": ".bober/specs/spec-20260524-bober-vision.json",
+  "config": {
+    "commands": { "typecheck": "npm run typecheck", "lint": "npm run lint", "build": "npm run build", "test": "npm run test" }
+  },
+  "principles": null,
+  "evaluatorFeedback": {
+    "overallResult": "fail",
+    "passedCount": 8,
+    "failedCount": 1,
+    "failedCriteria": [
+      {
+        "id": "s10-c6",
+        "description": "PR title format 'bober: <runId> — <feature-name>'; PR body lists each checkpoint as a checkbox item; new comment per checkpoint. Mergeable from draft to ready when ALL checkpoints approved.",
+        "passedParts": ["title format correct", "new comment per checkpoint works"],
+        "failedParts": [
+          "PR body has only a static placeholder ('Checkpoint comments will be appended below as the run progresses.') — no per-checkpoint '- [ ] <checkpointId>' checkbox items",
+          "No draft→ready conversion when all checkpoints approved — GhClient has no prReady method, poll resolution never marks ready"
+        ],
+        "fixRequirements": [
+          "FIX 1: Per-checkpoint checkbox list. Maintain a Map<CheckpointId, 'pending'|'approved'|'rejected'> on the mechanism instance. On each request() call, BEFORE polling, add a new GhClient.prEdit(prNumber: number, body: string) call that re-renders the PR body with one '- [ ] <id>' line per known checkpoint. When a checkpoint resolves: if approved, update its line to '- [x] <id>' (call prEdit again after resolution). Update renderPrBody() to accept the checkpoint map and render checkboxes.",
+          "FIX 2: Draft→ready transition. Add GhClient.prReady(prNumber: number): Promise<void> wrapping 'gh pr ready <number>'. After a checkpoint resolves as approved, count pending checkpoints in the map. If pending count is 0 AND no rejections, call gh.prReady(runPrNumber) to mark the draft PR ready for review. Do NOT call prReady if any checkpoint was rejected.",
+          "FIX 3 (optional, low priority): The MIN_POLL_MS warning at line 323 of pr.ts says 'clamping' but does not clamp. Either clamp via Math.max(rawPollMs, MIN_POLL_MS) OR change the warning text to 'using configured value but may hit rate limits' — pick one."
+        ],
+        "newTestsRequired": [
+          "Test: after pr.request('post-research', {}) → prCreate call's body argument contains the line '- [ ] post-research'",
+          "Test: after pr.request resolves as approved → prEdit was called with body containing '- [x] post-research'",
+          "Test: two checkpoints both approved → prReady was called with the run PR number",
+          "Test: one approved + one rejected → prReady was NOT called",
+          "Test: only one checkpoint, approved → prReady IS called (single-checkpoint case)"
+        ]
+      }
+    ],
+    "passedStrategies": ["typecheck", "lint", "build", "unit-test"],
+    "preserveBehavior": "All 8 passing criteria (s10-c1, c2, c3, c4, c5, c7, c8, c9) and existing 25 tests must continue to pass. Do not break the gh-availability fallback to disk (s10-c4) or the override resolver (s10-c5)."
+  }
+}
