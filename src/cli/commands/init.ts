@@ -957,6 +957,15 @@ const UNIVERSAL_COMMANDS = new Set<string>([
   "bober.graph",
   "bober.onboard",
   "bober.impact",
+  "bober.using-bober",
+  "bober.verify",
+  "bober.debug",
+  "bober.code-review",
+  "bober.incident",
+  "bober.diagnose",
+  "bober.deploy",
+  "bober.runbook",
+  "bober.postmortem",
 ]);
 
 /**
@@ -1008,6 +1017,15 @@ async function installClaudeCommands(
     "bober.graph": "bober-graph.md",
     "bober.onboard": "bober-onboard.md",
     "bober.impact": "bober-impact.md",
+    "bober.using-bober": "bober-using-bober.md",
+    "bober.verify": "bober-verify.md",
+    "bober.debug": "bober-debug.md",
+    "bober.code-review": "bober-code-review.md",
+    "bober.incident": "bober-incident.md",
+    "bober.diagnose": "bober-diagnose.md",
+    "bober.deploy": "bober-deploy.md",
+    "bober.runbook": "bober-runbook.md",
+    "bober.postmortem": "bober-postmortem.md",
   };
 
   // Determine which skill keys to install based on mode and preset.
@@ -1060,7 +1078,18 @@ async function installClaudeCommands(
   const agentsDir = join(projectRoot, ".claude", "agents");
   await ensureDir(agentsDir);
 
-  const agentFiles = ["bober-planner.md", "bober-generator.md", "bober-evaluator.md", "bober-researcher.md", "bober-architect.md", "bober-curator.md"];
+  const agentFiles = [
+    "bober-planner.md",
+    "bober-generator.md",
+    "bober-evaluator.md",
+    "bober-researcher.md",
+    "bober-architect.md",
+    "bober-curator.md",
+    "bober-code-reviewer.md",
+    "bober-diagnoser.md",
+    "bober-deployer.md",
+    "bober-postmortemer.md",
+  ];
   const agentsSrc = join(packageRoot, "agents");
 
   for (const agentFile of agentFiles) {

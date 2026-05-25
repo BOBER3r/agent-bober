@@ -5,6 +5,99 @@ All notable changes to `agent-bober` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] — 2026-05-25
+
+Bober Vision — agent-bober becomes a four-mode software engineering teammate
+instead of a single-mode autopilot. The pipeline you already know is Mode 1;
+the other three modes share its scaffolding (planner, evaluator, audit log)
+but pause at different boundaries and operate at different blast radii.
+
+The headline change: it is now safe to delegate production-touching work.
+Careful-flow gates every meaningful boundary; Diagnose has a native vocabulary
+for incidents; Postmortem auto-synthesizes from the audit trail.
+
+See [VISION.md](./VISION.md) for the full design rationale and example flows.
+
+### Added
+
+- **Mode 1 — Autopilot** (unchanged): the existing generator-evaluator loop.
+  Use for spikes and greenfield. `bober run`.
+- **Mode 2 — Careful-flow**: checkpoint-gated execution. Every
+  research/plan/sprint boundary surfaces a diff and waits for approval via
+  CLI prompt, disk marker (`.bober/approvals/*.pending.json`), or GitHub PR.
+  Per-run audit log at `.bober/audits/<runId>.jsonl`. New CLI:
+  `bober approve <checkpointId>`, `bober reject <checkpointId>`,
+  `bober list-approvals`, `bober audit-show <runId>`.
+- **Mode 3 — Diagnose**: production-incident response. Generic observability
+  MCP plugin slots (any MCP server matching the schema can supply metrics
+  and logs). Structured incident timeline at `.bober/incidents/<id>/`.
+  Change-management gates around destructive actions. Playbook library
+  searchable by symptom. New CLI: `bober incident [start|status|end|list|abort]`,
+  `bober rollback <incidentId>`, `bober playbook [list|show|search]`.
+- **Mode 4 — Postmortem**: auto-synthesized from incident artifacts when an
+  incident transitions to `resolved`. Every claim has an inline citation
+  back to timeline/changelog/observations. Required sections enforced
+  (TL;DR, Impact, Timeline, Root Cause 5-Whys, Contributing Factors, What
+  Went Well, What Went Wrong, Action Items). New CLI:
+  `bober postmortem [generate|show] <incidentId>`.
+- **Behavioral discipline foundation** (verbatim port of obra/superpowers):
+  Iron Laws, Red Flags, Rationalization-Prevention tables, SessionStart
+  bootstrap, anti-pattern catalog, AGENTS.md contract. Surfaces as 9 new
+  universal skills: `bober.using-bober`, `bober.verify`, `bober.debug`,
+  `bober.code-review`, `bober.incident`, `bober.diagnose`, `bober.deploy`,
+  `bober.runbook`, `bober.postmortem`. Installed by `agent-bober init` and
+  copied to `.claude/commands/`.
+- **4 new agent definitions** in `agents/`: `bober-code-reviewer`,
+  `bober-diagnoser`, `bober-deployer`, `bober-postmortemer`.
+- **Opt-in local-only telemetry** (default OFF). When enabled, writes mode-0600
+  JSONL events to `.bober/telemetry/<date>.jsonl`. ESLint rule
+  (`no-restricted-imports` + `no-restricted-globals`) scoped to
+  `src/telemetry/**` blocks all network primitives at lint time. Privacy
+  invariant: only IDs, counts, durations, and enums in payloads; never
+  user-content strings. New CLI: `bober telemetry [status|purge|export]`.
+- **Config schema migration**: `bober config migrate` rewrites an existing
+  `bober.config.json` to explicitly include all new vision-era fields with
+  default values. Back-compat parsing handles missing fields automatically —
+  the migrate command is informative, not required.
+- **Mode + checkpoint config**: `pipeline.mode` (`autopilot` | `careful`,
+  default `autopilot`), `pipeline.checkpointMechanism` (`noop` | `disk` |
+  `cli` | `github-pr`, default `noop`). All optional; absence means autopilot.
+- **End-to-end correctness gate**: `tests/e2e/four-modes.test.ts` (11 tests)
+  exercises all four modes on a fixture project. Uses the real
+  `DiskCheckpointMechanism` (not a mock), spawns the real
+  `ExternalMcpServer` subprocess for the MCP protocol boundary, runs the
+  real incident lifecycle including `verifyResolution`, and validates the
+  auto-generated postmortem against the required-sections + citation rules.
+
+### Changed
+
+- `src/cli/commands/init.ts`: `UNIVERSAL_COMMANDS` extended with the 9 new
+  vision skills. `agentFiles` extended with the 4 new agent definitions.
+  All vision-era surfaces now ship with every brownfield/preset init.
+- `VISION.md`, `README.md`, `AGENTS.md` updated to document the four modes,
+  the careful-flow mechanisms, the incident lifecycle, the telemetry
+  guarantee, and the slash-command set.
+
+### Tests
+
+563 → **1115 tests passing** across 82 test files (4 pre-existing skipped).
+New test coverage includes: incident timeline + state machine, resolution
+verification, rollback (full + per-step gates), postmortem section/citation
+assertions, playbook search, careful-flow integration, observability MCP
+spawn, deployer change classification + ChangeEntry recording, config
+schema back-compat, telemetry writer (mode-0600, default-off, concurrency,
+privacy), CLI subcommands for config/telemetry.
+
+### Backward compatibility
+
+- Existing `bober.config.json` files (pre-vision) parse cleanly with the
+  extended schema — all new fields are optional and default to current
+  autopilot behavior. No migration required.
+- Existing CLI surface (`bober plan`, `bober sprint`, `bober eval`,
+  `bober run`, `bober graph`, etc.) is unchanged.
+- Telemetry defaults OFF. No network egress under any condition; enforced
+  statically by ESLint and verified at runtime.
+
 ## [0.13.0] — 2026-05-24
 
 Graph (tokensave) integration — user-facing CLI commands and slash-command skills for code-graph workflows.
