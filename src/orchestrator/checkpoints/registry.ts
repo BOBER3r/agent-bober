@@ -1,5 +1,6 @@
 import type { CheckpointMechanism } from "./types.js";
 import { NoopCheckpointMechanism } from "./noop.js";
+import { CliCheckpointMechanism } from "./mechanisms/cli.js";
 
 /**
  * Module-level registry mapping mechanism names to CheckpointMechanism implementations.
@@ -30,3 +31,4 @@ export function getCheckpointMechanism(name: string): CheckpointMechanism {
 // Self-register the noop mechanism at module init.
 // This mirrors how src/evaluators/registry.ts:41-50 populates built-ins.
 registerCheckpointMechanism("noop", new NoopCheckpointMechanism());
+registerCheckpointMechanism("cli", new CliCheckpointMechanism());
