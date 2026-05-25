@@ -53,7 +53,7 @@
     "sprintSize": "medium"
   },
   "pipeline": {
-    "maxIterations": 20,
+    "maxIterations": 40,
     "requireApproval": false,
     "contextReset": "always",
     "researchPhase": true,
