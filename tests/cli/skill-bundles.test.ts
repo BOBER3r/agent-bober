@@ -158,18 +158,23 @@ describe("init.ts — UNIVERSAL_COMMANDS includes all 3 new skills", () => {
 // ── Version bump ──────────────────────────────────────────────────────────────
 
 describe("package.json version", () => {
-  it("is 0.13.0", async () => {
+  it("is 0.14.0", async () => {
     const pkg = JSON.parse(
       await readFile(join(repoRoot, "package.json"), "utf-8"),
     ) as { version: string };
-    expect(pkg.version).toBe("0.13.0");
+    expect(pkg.version).toBe("0.14.0");
   });
 });
 
 // ── CHANGELOG ────────────────────────────────────────────────────────────────
 
 describe("CHANGELOG.md", () => {
-  it("has a 0.13.0 entry", async () => {
+  it("has a 0.14.0 entry", async () => {
+    const changelog = await readFile(join(repoRoot, "CHANGELOG.md"), "utf-8");
+    expect(changelog).toContain("## [0.14.0]");
+  });
+
+  it("retains the 0.13.0 entry (history is append-only)", async () => {
     const changelog = await readFile(join(repoRoot, "CHANGELOG.md"), "utf-8");
     expect(changelog).toContain("## [0.13.0]");
   });
