@@ -85,7 +85,7 @@ export const ChangeEntrySchema = z.object({
     description: z.string(),
     command: z.string().optional(),
   }),
-  status: z.enum(["pending", "executed", "rolled-back", "failed"]),
+  status: z.enum(["pending", "executed", "rolled-back", "rolled-back-failed", "failed"]),
 });
 export type ChangeEntry = z.infer<typeof ChangeEntrySchema>;
 
