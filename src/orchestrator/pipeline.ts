@@ -32,6 +32,7 @@ import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
 import { runCodeReviewer } from "./code-reviewer-agent.js";
+import { getCheckpointMechanism } from "./checkpoints/index.js";
 import {
   ensureBoberDir,
   saveContract,
@@ -136,6 +137,7 @@ export async function runSprintCycle(
   const curatorEnabled = config.curator?.enabled !== false;
 
   if (curatorEnabled) {
+    await getCheckpointMechanism("noop").request("pre-curator", { contract: currentContract, spec, completedContracts });
     logger.phase(`Sprint ${currentContract.contractId} - Curate`);
 
     await appendHistory(projectRoot, {
@@ -230,6 +232,7 @@ export async function runSprintCycle(
     const compactedHandoff = summarizeOlderSprints(completedSummaryHandoff, 3);
 
     // ── Generate ───────────────────────────────────────────────
+    await getCheckpointMechanism("noop").request("pre-generator", { contract: currentContract, iteration, handoff: compactedHandoff });
     logger.phase(`Sprint ${currentContract.contractId} - Generate (Round ${iteration})`);
 
     await appendHistory(projectRoot, {
@@ -292,6 +295,7 @@ export async function runSprintCycle(
     }
 
     // ── Evaluate ──────────────────────────────────────────────
+    await getCheckpointMechanism("noop").request("pre-evaluator", { contract: currentContract, iteration, generatorResult });
     logger.phase(`Sprint ${currentContract.contractId} - Evaluate (Round ${iteration})`);
 
     currentContract = updateContractStatus(currentContract, "evaluating");
@@ -348,6 +352,7 @@ export async function runSprintCycle(
       // Sprint 5 — advisory code review (config-gated, time-boxed, never blocks)
       const reviewEnabled = config.codeReview?.enabled !== false;
       if (reviewEnabled) {
+        await getCheckpointMechanism("noop").request("pre-code-reviewer", { contract: currentContract, evaluation });
         const reviewTimeoutMs = config.codeReview?.timeoutMs ?? 300_000;
         try {
           const review = await Promise.race([
@@ -382,6 +387,7 @@ export async function runSprintCycle(
         }
       }
 
+      await getCheckpointMechanism("noop").request("post-sprint", { contract: currentContract, evaluation, generatorResult: lastGeneratorResult });
       return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
     }
 
@@ -476,6 +482,7 @@ export async function runPipeline(
           questionsAnswered: researchDoc.questionsAnswered,
         },
       });
+      await getCheckpointMechanism("noop").request("post-research", researchDoc);
     }
 
     // ── Phase 0b: Architecture (optional) ───────────────────────
@@ -611,6 +618,7 @@ export async function runPipeline(
         featureCount: spec.features.length,
       },
     });
+    await getCheckpointMechanism("noop").request("post-plan", spec);
 
     // ── Phase 2: Sprint loop ─────────────────────────────────────
     logger.phase("Sprint Execution");
@@ -640,6 +648,7 @@ export async function runPipeline(
       contracts.push(contract);
       await saveContract(projectRoot, contract);
     }
+    await getCheckpointMechanism("noop").request("post-sprint-contract", contracts);
 
     const completedSprints: SprintContract[] = [];
     const failedSprints: SprintContract[] = [];
@@ -701,6 +710,7 @@ export async function runPipeline(
       },
     });
 
+    await getCheckpointMechanism("noop").request("end-of-pipeline", { success, completedSprints, failedSprints, duration, spec });
     return {
       success,
       spec,
