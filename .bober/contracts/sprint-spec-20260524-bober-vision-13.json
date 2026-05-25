@@ -8,55 +8,55 @@
       "id": "s13-c1",
       "description": "src/orchestrator/checkpoints/audit.ts exports recordApproval(runId, record): Promise<void>. Each call appends one JSON line to .bober/audits/<runId>.jsonl with shape: {timestamp, runId, checkpointId, mechanism, outcome, approverId, iteration, feedbackText?, editDeltaSummary?, durationMs}.",
       "verificationMethod": "Read audit.ts. Verify ApprovalRecord shape. Test: call recordApproval, verify .jsonl line.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c2",
       "description": "All three mechanisms (CLI, disk, PR) record an approval entry on every outcome. The CheckpointMechanism interface includes a hook that the orchestrator calls in a finally block — guarantees the audit is recorded even on mechanism error.",
       "verificationMethod": "Grep mechanism files for audit.recordApproval calls. Verify each is in a finally or try-catch path. Test: simulate mechanism throwing — verify audit entry still written.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c3",
       "description": "Append-only: audit.ts uses fs.appendFile (or stream-append) — never overwrites. Concurrent appends from multiple async checkpoints serialize via in-process mutex.",
       "verificationMethod": "Read audit.ts. Verify appendFile usage (not writeFile). Verify mutex. Test: 100 parallel recordApproval calls produce 100 distinct lines.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c4",
       "description": "approverId resolution: from $USER env var, then `git config user.name`, then 'unknown'. PR mechanism uses the GitHub username from the comment/merge actor.",
       "verificationMethod": "Read audit.ts and PR mechanism. Verify the resolution chain.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c5",
       "description": "Edit delta summary: when outcome is 'edit', editDeltaSummary contains the line count of the delta and the first 200 chars (not the full delta — that's stored elsewhere). Full delta path referenced in the entry.",
       "verificationMethod": "Test: edit outcome → audit entry has editDeltaSummary with line count and char-truncated preview.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c6",
       "description": "Replay tool: `bober audit show <runId>` CLI subcommand prints a human-readable table of all approval records for that run (timestamp, checkpoint, outcome, approver, iteration).",
       "verificationMethod": "Verify CLI subcommand. Test: produce an audit log, invoke the command, verify table output.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c7",
       "description": "Audit file is created with permissions that allow user read but not world-read (mode 0600 on POSIX); approverId may include sensitive identifiers.",
       "verificationMethod": "Read file-creation logic. Verify mode 0600. Test: stat the created file, verify permissions.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c8",
       "description": "Unit tests cover: (a) approval, rejection, edit, abort each produce a distinct entry, (b) mechanism-error path still writes entry, (c) concurrent appends produce distinct lines, (d) approverId fallback chain, (e) audit show command.",
       "verificationMethod": "Locate tests. Run npm run test. Verify all branches.",
-      "passed": false
+      "passed": true
     },
     {
       "id": "s13-c9",
       "description": "All existing eval strategies pass.",
       "verificationMethod": "Run typecheck/lint/build/test — assert exit 0.",
-      "passed": false
+      "passed": true
     }
   ],
   "expectedChanges": [
@@ -69,7 +69,9 @@
     { "path": ".bober/audits/", "action": "create", "description": "Directory for per-run audit JSONL files" }
   ],
   "dependsOn": ["sprint-spec-20260524-bober-vision-12"],
-  "status": "proposed",
+  "status": "completed",
+  "completedAt": "2026-05-25T07:03:00Z",
+  "passedOnIteration": 1,
   "generatorNotes": "JSONL is the right format: append-only, line-oriented, easy to grep, easy to replay. Each record is self-contained JSON on one line. Never spans lines.\n\nApprovalRecord shape (complete):\n```json\n{\n  \"timestamp\": \"2026-05-24T15:30:00.123Z\",\n  \"runId\": \"run-20260524-153000\",\n  \"checkpointId\": \"post-research-spec-20260524-foo-1\",\n  \"mechanism\": \"disk\" | \"cli\" | \"pr\" | \"noop\",\n  \"outcome\": \"approved\" | \"rejected\" | \"edited\" | \"aborted\",\n  \"approverId\": \"oleksii\" | \"github:obra\" | \"unknown\",\n  \"iteration\": 1,\n  \"feedbackText\": \"first 500 chars of feedback if any\",\n  \"editDeltaSummary\": { \"lineCount\": 12, \"firstChars\": \"...\" } | null,\n  \"durationMs\": 12345\n}\n```\n\nIn-process mutex: use a simple Promise chain — every recordApproval enqueues behind the previous. With async appendFile under the hood, this serializes writes.\n\n```typescript\nlet writeChain: Promise<void> = Promise.resolve();\nexport function recordApproval(runId, record): Promise<void> {\n  const next = writeChain.then(() => fs.appendFile(...));\n  writeChain = next.catch(() => {}); // don't block subsequent on prior errors\n  return next;\n}\n```\n\nMechanism integration: wrap each mechanism's request() body in a try-finally that calls recordApproval with the outcome. Mechanism errors still record an entry (outcome: 'aborted', errorMessage in feedbackText).\n\napproverId resolution chain (precise order):\n1. PR mechanism: GitHub user from comment/merge event\n2. CLI mechanism: process.env.USER || process.env.USERNAME\n3. disk mechanism: try git config user.name, fallback to env USER\n4. noop mechanism: 'autopilot'\n5. fallback for all: 'unknown'\n\nFile permissions: fs.open with mode 0o600 on creation. For append, the existing mode is preserved by appendFile.\n\n`bober audit show <runId>`: read .bober/audits/<runId>.jsonl, parse each line, render as a table:\n```\nTimestamp                Checkpoint                       Outcome     Approver     Iter   Duration\n2026-05-24T15:30:00.123  post-research-...                approved    oleksii      1      45.2s\n2026-05-24T15:31:00.456  post-plan-...                    rejected    oleksii      1      12.1s\n2026-05-24T15:35:00.789  post-plan-...                    approved    oleksii      2      3m12s\n```\n\nSupport `--json` flag for machine-readable output.",
   "evaluatorNotes": "Verify file mode 0600 is set on CREATION (not just when chmod'd later — race condition). Use fs.open with O_CREAT|O_APPEND|O_WRONLY and mode arg, then write.\n\nVerify concurrent-append test actually exercises concurrency: 100 setImmediate-scheduled appendFile calls should NOT produce partial lines or interleaved JSON. The mutex must prevent this.\n\nVerify mechanism-error path: a test that throws inside a mechanism's request() must still produce an audit entry (outcome: aborted, with error message). If the test passes without the throw producing an entry, the finally block isn't wired correctly.\n\nVerify approverId resolution chain: a test should mock each fallback in sequence and assert correct attribution. Document the chain in audit.ts comments so it's auditable later.\n\nVerify NO sensitive data leaks into the audit log unexpectedly: feedbackText is truncated to 500 chars — verify this in test. editDeltaSummary should NOT include the full delta — that's stored elsewhere. The audit file is mode 0600 BUT it's still on disk and may be backed up; assume it's eventually readable.\n\nThe `bober audit show` command should work even if .bober/audits/<runId>.jsonl doesn't exist (print 'No audit log found for run X' and exit non-zero). Don't crash with ENOENT."
 }
