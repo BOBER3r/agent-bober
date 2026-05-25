@@ -89,3 +89,74 @@ describe("renderSprintContract (s11-c5)", () => {
     expect(out).toMatch(/more lines truncated/);
   });
 });
+
+describe("renderSprintContract — iteration metadata (s12-c5)", () => {
+  it("shows 'Previous feedback' section at iteration 2+ via iterationMeta", () => {
+    const contract = {
+      ...SAMPLE_CONTRACT,
+      iterationMeta: {
+        currentIteration: 2,
+        maxIterations: 3,
+        priorRejections: [
+          { iteration: 1, feedback: "The feature is missing error handling" },
+        ],
+      },
+    };
+    const out = renderSprintContract(contract);
+    expect(out).toContain("### Previous feedback (iteration 2 of 3)");
+    expect(out).toContain("_iteration 1:_ The feature is missing error handling");
+  });
+
+  it("shows 'Previous feedback' section via _iterationMetadata (pipeline writer format)", () => {
+    const contract = {
+      ...SAMPLE_CONTRACT,
+      _iterationMetadata: {
+        iteration: 3,
+        maxIterations: 3,
+        priorFeedback: [
+          { iteration: 1, feedback: "First rejection reason" },
+          { iteration: 2, feedback: "Second rejection reason" },
+        ],
+      },
+    };
+    const out = renderSprintContract(contract);
+    expect(out).toContain("### Previous feedback (iteration 3 of 3)");
+    expect(out).toContain("_iteration 1:_ First rejection reason");
+    expect(out).toContain("_iteration 2:_ Second rejection reason");
+  });
+
+  it("does NOT show 'Previous feedback' at iteration 1 (no prior feedback)", () => {
+    const contract = {
+      ...SAMPLE_CONTRACT,
+      iterationMeta: {
+        currentIteration: 1,
+        maxIterations: 3,
+        priorRejections: [],
+      },
+    };
+    const out = renderSprintContract(contract);
+    expect(out).not.toContain("Previous feedback");
+  });
+
+  it("does NOT show 'Previous feedback' when iterationMeta is absent", () => {
+    const out = renderSprintContract(SAMPLE_CONTRACT);
+    expect(out).not.toContain("Previous feedback");
+  });
+
+  it("'Previous feedback' section appears AFTER '### Depends on' (not interleaved)", () => {
+    const contract = {
+      ...SAMPLE_CONTRACT,
+      iterationMeta: {
+        currentIteration: 2,
+        maxIterations: 3,
+        priorRejections: [{ iteration: 1, feedback: "Some issue" }],
+      },
+    };
+    const out = renderSprintContract(contract);
+    const dependsOnIdx = out.indexOf("### Depends on");
+    const feedbackIdx = out.indexOf("### Previous feedback");
+    expect(dependsOnIdx).toBeGreaterThan(-1);
+    expect(feedbackIdx).toBeGreaterThan(-1);
+    expect(feedbackIdx).toBeGreaterThan(dependsOnIdx);
+  });
+});
