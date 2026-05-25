@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260525-cockpit-integration-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260525-cockpit-integration-1",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T15:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — multi-agent orchestrator at v0.14.0. Plan: cockpit-integration (6 sprints). This is Sprint 1, foundation for the rest. Refactors src/mcp/run-manager.ts from a singleton-with-single-activeRun to a keyed Map<runId, RunState> backed by per-run state files at .bober/runs/<runId>/state.json. Adds crash-recovery via load(projectRoot) that reconciles orphaned 'running' entries to 'failed'.",
+    "completedSprints": [],
+    "currentBranch": "bober/cockpit-integration",
+    "criticalBackCompatNote": "The singleton `runManager` export, `isRunning()`, and `getStatus()` methods must continue working unchanged — bober_run and bober_status MCP tools rely on them. The shim semantics: isRunning() and getStatus() operate on a 'current' or 'last started' run pointer for back-compat. New callers use the keyed methods."
+  },
+  "config": {
+    "commands": {
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "build": "npm run build",
+      "test": "npm run test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "Read .bober/principles.md",
+  "evaluatorFeedback": null
+}

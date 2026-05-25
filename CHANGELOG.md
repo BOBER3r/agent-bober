@@ -5,6 +5,87 @@ All notable changes to `agent-bober` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`bober_list_pending_approvals`**: List all pending careful-flow checkpoints awaiting human
+  approval. Accepts optional `{ projectPath?: string }` (must be absolute when supplied; defaults
+  to cwd). Returns `[{ checkpointId, ageMs, prompt }]` — identical shape to `bober list-approvals
+  --json`. Backed by the new shared `listPendingApprovals(projectRoot)` helper in
+  `src/state/approval-state.ts`.
+- **`bober_approve_checkpoint`**: Approve a pending checkpoint over MCP by writing
+  `.bober/approvals/<id>.approved.json` with the same payload shape as `bober approve`
+  (`{ approvedAt, approverId, editDelta? }`). Accepts `{ checkpointId, projectPath?, editDelta? }`.
+  Guards with `pendingExists` before writing. Returns `{ approvedAt, checkpointId }`.
+- **`bober_reject_checkpoint`**: Reject a pending checkpoint over MCP by writing
+  `.bober/approvals/<id>.rejected.json` with the same payload shape as `bober reject`
+  (`{ rejectedAt, rejecterId, feedback }`). Accepts `{ checkpointId, projectPath?, feedback }`
+  (feedback required and non-empty). Guards with `pendingExists` before writing.
+  Returns `{ rejectedAt, checkpointId }`.
+- **`bober_list_projects`**: Enumerate bober projects under one or more search roots.
+  Accepts `{ searchRoots: string[] }`. Walks each root one level deep; returns
+  `[{ projectPath, name, mode?, hasActiveRuns, lastRunAt? }]` for every directory
+  containing `bober.config.json`. Unreadable roots are skipped with a stderr warning.
+  READ-ONLY — does not instantiate RunManager; reads `.bober/runs/*/state.json` directly.
+- **`bober_list_specs`**: List PlanSpecs in a project. Accepts `{ projectPath }`.
+  Reads `.bober/specs/*.json` with loose parsing (invalid files silently skipped).
+  Returns `[{ specId, title, status, sprintCount, completedAt? }]`.
+- **`bober_get_project_state`**: Aggregate per-project state counts for the cockpit sidebar.
+  Accepts `{ projectPath }`. Returns `{ configExists, activeRunCount, lastRunAt?,
+  openIncidentCount, pendingApprovalCount, specCount, mode? }`. READ-ONLY — does not
+  instantiate RunManager.
+- All six new tools accept an optional `projectPath` (required for discovery tools; optional
+  for approval tools). When supplied, `projectPath` must be absolute — a relative path returns
+  a soft-error JSON `{ error: "projectPath must be absolute" }` rather than throwing.
+- **`listPendingApprovals(projectRoot)`** helper extracted from
+  `src/cli/commands/list-approvals.ts` into `src/state/approval-state.ts`. Both the CLI and
+  the MCP tool `bober_list_pending_approvals` share this helper. Exported from
+  `src/state/index.ts` as `listPendingApprovals` / `PendingApprovalRow`.
+- **`readRunStatesFromDisk(projectRoot)`** helper added to `src/state/run-state.ts` as a
+  named alias for `listRunStateFiles`. Exported from `src/state/index.ts`. Cockpit discovery
+  tools use it to enumerate run states for arbitrary project roots without touching the
+  RunManager singleton.
+- MCP tool count: **23 → 29**.
+
+- **`bober_run_in_worktree`**: Start a pipeline inside an isolated git worktree on a new branch.
+  Input: `{ task: string, allowDirty?: boolean, keepOnSuccess?: boolean }`. Returns
+  `{ runId, branch, worktreePath, status: 'running' }` immediately (fire-and-forget like `bober_run`).
+  Multiple worktree runs can execute concurrently on the same project. Use `bober_get_run_status`
+  to track progress.
+- **`bober worktree run <task>`** CLI subcommand mirroring the MCP tool. Flags:
+  `--allow-dirty` (skip uncommitted-changes guard), `--keep-on-success` (retain worktree after success).
+  Prints `{ runId, branch, worktreePath, projectRoot }` JSON to stdout.
+- **`runInWorktree(task, projectRoot, config, opts)`** (`src/orchestrator/worktree.ts`): the shared helper
+  the CLI and MCP tool both use. Creates a git worktree under `<pipeline.worktreeRoot>/<runId>` on a
+  branch derived from `generator.branchPattern`, runs the pipeline inside it, and on success removes
+  the worktree per `pipeline.cleanupWorktreeOnSuccess`. On failure (or if `--keep-on-success`/`keepOnSuccess`)
+  the worktree is retained for debugging and its path is printed to stderr.
+- **`pipeline.worktreeRoot`** config field: directory (relative to projectRoot) under which
+  worktrees are created. Default `.bober/worktrees`.
+- **`pipeline.cleanupWorktreeOnSuccess`** config field: when true (default), remove the worktree
+  via `git worktree remove` after a successful run. On failure the worktree is always retained.
+- **`RunState.worktreePath`** and **`RunState.branch`** optional fields. Populated by `runInWorktree`
+  before the pipeline starts; surfaced in `bober_get_run_status` output.
+- **`RunManager.startRun(task, projectRoot, config, pipelineFn?, opts?)`** signature extended with
+  optional `opts: { runId?, worktreePath?, branch? }`. Existing 3- and 4-arg callers are unchanged.
+- **`git.ts`** helpers: `addWorktree`, `removeWorktree`, `isClean` shelling out to git CLI (no new deps).
+
+### Follow-ups (documented, NOT implemented this sprint)
+
+- Garbage collection of orphaned worktrees from prior failed runs (`bober worktree prune`).
+- Worktree-aware bober_status (the cockpit uses bober_get_run_status by runId instead).
+- Cross-worktree merge automation.
+
+- **`bober_subscribe_events`**: Subscribe to runId-scoped live events. Input: `{ runId: string, since?: string }`. Returns `{ subscriptionId, status: 'subscribed', startedAt }`. The server begins emitting `bober/events` notifications for every line appended to `.bober/history.jsonl` or `.bober/telemetry/<date>.jsonl` whose `runId` matches the subscription. The optional `since` parameter triggers a one-time backfill of pre-existing events with `timestamp > since`.
+- **`bober_unsubscribe_events`**: Unsubscribe from a runId-scoped event stream. Input: `{ subscriptionId: string }`. Releases file-watch handles when no other subscription is watching the same files. Returns `{ subscriptionId, status: 'unsubscribed' }` or a soft-error `{ error: 'Subscription not found: <id>' }`.
+- **`EventStreamManager`** (`src/mcp/event-stream.ts`): In-process class that tails `.bober/history.jsonl` and `.bober/telemetry/<date>.jsonl` using `fs.watch`. One file-watch handle is shared across all subscriptions watching the same file (reference-counted). Date roll-over is detected via a polling interval (5 s, `unref()`'d). Lines without an extractable `runId` (top-level or `details.runId`) are silently skipped. Per-subscription bounded queue (default 1000) drops the oldest events on overflow; a single `bober/events.dropped` notification with `{ subscriptionId, dropped: N }` is emitted once per overflow window. All diagnostic output is routed to `process.stderr` (stdout is reserved for the MCP JSON-RPC transport).
+- **`pipeline.eventQueueBound`** config field: per-subscription bounded queue limit. Default `1000`, minimum `1`. Readable by the server from `bober.config.json` and passed to `EventStreamManager` at startup.
+- **`bober_list_active_runs`**: Lists all runs tracked by the RunManager. Accepts optional `{ status?: 'running'|'completed'|'failed'|'aborted' }` filter. Returns a JSON array of RunState objects. Omit the filter to get all runs regardless of status.
+- **`bober_get_run_status`**: Fetches the full RunState for a specific run by `runId`. Input: `{ runId: string }` (required). Returns the complete RunState JSON or `{ error: 'Run not found: <runId>' }` when the runId is unknown.
+- **`bober_abort_run`**: Aborts a currently running pipeline run. Input: `{ runId: string, reason?: string }`. Flips `status` to `'aborted'`, persists `abortedAt` and `abortReason` to `state.json`, and returns `{ runId, status: 'aborted', abortedAt }`. Returns `{ error: 'Run not found: <runId>' }` for unknown runs, `{ error: 'Run is not active' }` for non-running runs. Note: this sprint flips state only; forceful in-flight subprocess termination (SIGTERM propagation) is deferred to a future hardening sprint.
+- **`RunState.status`** type union widened to include `'aborted'`; new optional fields `abortedAt?: string` and `abortReason?: string` added.
+
 ## [0.14.0] — 2026-05-25
 
 Bober Vision — agent-bober becomes a four-mode software engineering teammate

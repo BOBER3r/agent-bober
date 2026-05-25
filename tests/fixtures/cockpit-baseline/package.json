@@ -1,0 +1,12 @@
+{
+  "name": "cockpit-baseline",
+  "version": "1.0.0",
+  "description": "Minimal fixture project for Sprint 6 cockpit-integration e2e tests",
+  "type": "module",
+  "scripts": {
+    "typecheck": "echo 'typecheck ok'",
+    "lint": "echo 'lint ok'",
+    "build": "echo 'build ok'",
+    "test": "echo 'test ok'"
+  }
+}

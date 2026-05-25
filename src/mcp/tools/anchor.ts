@@ -67,7 +67,7 @@ export function registerAnchorTool(): void {
       config.project.mode = "greenfield";
       config.project.preset = "anchor";
 
-      const runId = runManager.startRun(task, projectRoot, config);
+      const runId = await runManager.startRun(task, projectRoot, config);
 
       return JSON.stringify(
         {

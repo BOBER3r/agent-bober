@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260525-cockpit-integration-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260525-cockpit-integration-2",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T16:42:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of cockpit-integration. Adds three new MCP tools (bober_list_active_runs, bober_get_run_status, bober_abort_run) that surface the multi-run RunManager from Sprint 1 to MCP clients.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260525-cockpit-integration-1", "title": "Multi-run RunManager with disk persistence and crash recovery", "summary": "Refactored singleton activeRun → Map<runId,RunState>. New methods: getRun, listActiveRuns, abortRun, load. Atomic temp+rename persistence to .bober/runs/<runId>/state.json. Crash recovery via load() flipping orphans → failed. Back-compat for bober_run/bober_status preserved. 1142 tests passing (+26)."}
+    ],
+    "currentBranch": "bober/cockpit-integration",
+    "criticalContext": "RunManager now has getRun(runId), listActiveRuns(), abortRun(runId, reason). These three MCP tools are thin handlers that JSON-stringify the results. Pattern to follow: every existing tool at src/mcp/tools/<name>.ts. Schema lives in registerXxxTool. Handler returns JSON string. Error: throw new McpError(ErrorCode.InvalidRequest, '...')."
+  },
+  "config": {
+    "commands": {
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "build": "npm run build",
+      "test": "npm run test"
+    },
+    "generator": {"model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true, "branchPattern": "bober/{feature-name}"}
+  },
+  "principles": "Read .bober/principles.md",
+  "evaluatorFeedback": null
+}

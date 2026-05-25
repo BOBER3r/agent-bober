@@ -69,7 +69,7 @@ export function registerBrownfieldTool(): void {
       config.sprint.sprintSize = "small";
       config.pipeline.researchPhase = true;
 
-      const runId = runManager.startRun(task, projectRoot, config);
+      const runId = await runManager.startRun(task, projectRoot, config);
 
       return JSON.stringify(
         {

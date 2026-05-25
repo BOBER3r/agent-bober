@@ -68,6 +68,7 @@ export {
   savePending,
   readPending,
   listPending,
+  listPendingApprovals,
   saveApproved,
   saveRejected,
   deletePending,
@@ -75,7 +76,15 @@ export {
   type PendingMarker,
   type ApprovedMarker,
   type RejectedMarker,
+  type PendingApprovalRow,
 } from "./approval-state.js";
+
+export {
+  writeRunState,
+  readRunState,
+  listRunStateFiles,
+  readRunStatesFromDisk,
+} from "./run-state.js";
 
 const BOBER_DIR = ".bober";
 const SUBDIRS = ["contracts", "specs", "research", "designs", "outlines", "architecture", "briefings", "reviews", "approvals", "runs", "audits"] as const;

@@ -4,7 +4,7 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T04:25:00Z
+Last updated: 2026-05-25T18:33:19Z
 
 ---
 
@@ -150,3 +150,34 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Ambiguity score: 5 (start) → 5 (final, unchanged)
 - Deferred decisions: none — all clarifications resolved in spec planning
 - Key capabilities shipped: four operating modes (autopilot, careful-flow, diagnose, postmortem), behavior-shaping skill catalog (Iron Laws / Red Flags / Rationalization-Prevention), incident lifecycle with SLO verification, playbook library, 28-sprint regression suite with e2e four-mode coverage, opt-in local-only telemetry (zero network egress, ESLint-enforced)
+
+---
+
+## Plan: Cockpit Integration
+- Spec: spec-20260525-cockpit-integration
+- Created: 2026-05-25
+- Sprints: 6
+- Status: completed (6/6 sprints, completedAt 2026-05-25T18:33:19Z)
+- Mode: brownfield
+- Ambiguity score: 4/10
+- Branch: bober/cockpit-integration
+- Test count: 1116 → 1330 (+214); tool count: 17 → 37 (+20)
+
+### Sprint Breakdown
+1. [completed] Multi-run RunManager — keyed map + .bober/runs/<runId>/state.json with atomic writes + crash recovery via load(). Commit 8fb8f79.
+2. [completed] Run-management MCP tools — bober_list_active_runs, bober_get_run_status, bober_abort_run. Commit caf6c76.
+3. [completed] Event-stream MCP tool — bober_subscribe_events with bounded queues + bober/events.dropped on overflow. Commits b573e22, 014cc06.
+4. [completed] Worktree adapter — runInWorktree + bober worktree run CLI + bober_run_in_worktree MCP. Git CLI shell-out (no new lib), RunState +worktreePath/branch. Commit 48c2953. Passed iter 1 (8/8).
+5. [completed] Careful-flow + discovery MCP — list_pending_approvals, approve_checkpoint, reject_checkpoint, list_projects, list_specs, get_project_state. Shared listPendingApprovals + readRunStatesFromDisk helpers. Commit f3463a2. Passed iter 1 (8/8).
+6. [completed] Vision-era MCP wrappers + e2e capstone — eight new tools (incident_start/status/list/abort, rollback_start, postmortem_get, playbook_list/search) as thin adapters over src/incident/*. tests/e2e/cockpit-integration.test.ts spawns real MCP subprocess via StdioClientTransport, exercises every Sprint 1-6 tool with toMatchObject strong assertions, deterministic ~4s via BOBER_TEST_DETERMINISTIC guard in src/providers/factory.ts. Commits 57f3f4f, 714d47f. Passed iter 1 (12/12).
+
+### Pipeline Statistics
+- Total iterations used: 3 / 40 (sprints 4-6 each passed iter 1)
+- Subagents spawned this run: 9 (3 curator + 3 generator + 3 evaluator)
+- Sprints completed this run: 3 (sprints 4-6); spec total 6/6
+
+### Out of Scope
+- Cockpit UI/backend itself (separate repo, separate team)
+- Credential storage and deployment provider skills (separate parallel spec)
+- Discussion-agent / chat memory layer (cockpit's responsibility)
+- Auth / multi-user / billing (cockpit's responsibility)

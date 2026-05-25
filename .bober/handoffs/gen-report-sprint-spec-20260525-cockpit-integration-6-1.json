@@ -1,0 +1,11 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-6",
+  "iteration": 1,
+  "timestamp": "2026-05-25T18:28:03Z",
+  "status": "complete",
+  "commits": [
+    "57f3f4f",
+    "714d47f"
+  ],
+  "notes": "All 12 criteria reported met. 1330 tests pass (up from 1282). 8 new MCP tools, e2e gate exercises Sprints 1-6. BOBER_TEST_DETERMINISTIC implemented in src/providers/factory.ts."
+}

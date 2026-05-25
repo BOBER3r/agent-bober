@@ -1,0 +1,30 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-2",
+  "status": "complete",
+  "iteration": 1,
+  "timestamp": "2026-05-25T16:55:00Z",
+  "commits": ["caf6c76 - bober(sprint-2): three run-management MCP tools: list, get, abort"],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "met": true, "evidence": "src/mcp/tools/list-active-runs.ts: registerListActiveRunsTool, tool name bober_list_active_runs, optional status filter enum ['running','completed','failed','aborted']. 9 tests pass."},
+    {"criterionId": "sc-2-2", "met": true, "evidence": "src/mcp/tools/get-run-status.ts: bober_get_run_status; full RunState for known runId; soft error {error:'Run not found'} for unknown; McpError for missing/empty. 7 tests pass."},
+    {"criterionId": "sc-2-3", "met": true, "evidence": "src/mcp/tools/abort-run.ts: bober_abort_run; RunState.status widened with 'aborted'; abortedAt + abortReason fields added; soft error {error:'Run is not active'} for non-running. 10 tests including idempotency."},
+    {"criterionId": "sc-2-4", "met": true, "evidence": "src/mcp/tools/index.ts: 'Multi-run management tools' section + all 3 register calls; docblock bumped 17→20; tools.test.ts 'registers exactly 20 tools' passes."},
+    {"criterionId": "sc-2-5", "met": true, "evidence": "CHANGELOG.md [Unreleased] section under ### Added lists all three tools with inputSchema + return shape including the aborted-state caveat about deferred subprocess termination."},
+    {"criterionId": "sc-2-6", "met": true, "evidence": "typecheck 0, lint 0, build 0, test: 86 files, 1169 passed, 4 skipped. Also fixed tests/mcp/external-server-graph.test.ts hardcoded 17→20 counts."}
+  ],
+  "filesChanged": [
+    {"path": "src/mcp/run-manager.ts", "action": "modified", "description": "RunState.status += 'aborted'; abortedAt + abortReason fields; abortRun() sets these (was failed/error); listAllRuns() added"},
+    {"path": "src/mcp/run-manager.test.ts", "action": "modified", "description": "Updated abortRun assertions; listAllRuns test"},
+    {"path": "src/mcp/tools/status.ts", "action": "modified", "description": "Explicit 'aborted' branch in render switch"},
+    {"path": "src/mcp/tools/list-active-runs.ts", "action": "created", "description": "List tool with optional status filter"},
+    {"path": "src/mcp/tools/get-run-status.ts", "action": "created", "description": "Get-by-runId tool"},
+    {"path": "src/mcp/tools/abort-run.ts", "action": "created", "description": "Abort-by-runId tool"},
+    {"path": "src/mcp/tools/index.ts", "action": "modified", "description": "Register 3 new tools; docblock 17→20"},
+    {"path": "src/mcp/tools/tools.test.ts", "action": "modified", "description": "Bump count assertion 17→20; add 3 names"},
+    {"path": "tests/mcp/external-server-graph.test.ts", "action": "modified", "description": "Bump hardcoded 17→20 (and 23→26 totals)"},
+    {"path": "CHANGELOG.md", "action": "modified", "description": "[Unreleased] section with 3 new tools + RunState widening"}
+  ],
+  "testsAdded": ["src/mcp/tools/list-active-runs.test.ts", "src/mcp/tools/get-run-status.test.ts", "src/mcp/tools/abort-run.test.ts"],
+  "blockers": [],
+  "notes": "RunState.status now includes 'aborted'; abortedAt and abortReason fields added (no completedAt set for aborted runs — correct semantics). Forceful in-flight subprocess SIGTERM deferred per nonGoal #3; documented in CHANGELOG. One pre-existing test file (tests/mcp/external-server-graph.test.ts) had hardcoded 17-tool counts that needed bumping to 20."
+}

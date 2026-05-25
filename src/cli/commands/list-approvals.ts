@@ -8,13 +8,11 @@
  * Sprint 9 — colocated CLI command per Sprint 8/10 precedent.
  */
 
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
-
 import chalk from "chalk";
 import type { Command } from "commander";
 
 import { findProjectRoot } from "../../utils/fs.js";
+import { listPendingApprovals } from "../../state/approval-state.js";
 
 async function resolveRoot(): Promise<string> {
   const root = await findProjectRoot();
@@ -43,41 +41,7 @@ export function registerListApprovalsCommand(program: Command): void {
     .option("--json", "Emit machine-readable JSON instead of a table")
     .action(async (opts: { json?: boolean }) => {
       const projectRoot = await resolveRoot();
-      const approvalsDir = join(projectRoot, ".bober", "approvals");
-
-      let entries: string[] = [];
-      try {
-        entries = await readdir(approvalsDir);
-      } catch {
-        // Directory doesn't exist — no pending checkpoints.
-      }
-
-      const pendingFiles = entries.filter((f) => f.endsWith(".pending.json"));
-
-      interface PendingRow {
-        checkpointId: string;
-        ageMs: number;
-        prompt: string;
-      }
-
-      const rows: PendingRow[] = [];
-      for (const f of pendingFiles) {
-        try {
-          const raw = await readFile(join(approvalsDir, f), "utf-8");
-          const parsed = JSON.parse(raw) as {
-            checkpointId: string;
-            prompt: string;
-            requestedAt: string;
-          };
-          rows.push({
-            checkpointId: parsed.checkpointId,
-            ageMs: Date.now() - Date.parse(parsed.requestedAt),
-            prompt: parsed.prompt,
-          });
-        } catch {
-          // Skip corrupted files.
-        }
-      }
+      const rows = await listPendingApprovals(projectRoot);
 
       if (opts.json) {
         process.stdout.write(JSON.stringify(rows, null, 2) + "\n");

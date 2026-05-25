@@ -70,7 +70,7 @@ export function registerRunTool(): void {
         });
       }
 
-      const runId = runManager.startRun(task, projectRoot, config);
+      const runId = await runManager.startRun(task, projectRoot, config);
 
       process.stderr.write(
         `[bober_run] Started pipeline run ${runId} for task: ${task.slice(0, 100)}\n`,

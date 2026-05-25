@@ -153,3 +153,55 @@ export async function pendingExists(
     return false;
   }
 }
+
+/**
+ * Cockpit-shape pending row — what both the CLI (--json) and the MCP
+ * tool bober_list_pending_approvals should return.
+ */
+export interface PendingApprovalRow {
+  checkpointId: string;
+  ageMs: number;
+  prompt: string;
+}
+
+/**
+ * List all pending checkpoints in cockpit-row shape.
+ *
+ * Mirrors the row-builder loop in src/cli/commands/list-approvals.ts
+ * but lives in state/ so both the CLI and the MCP tool can share it.
+ * Reads .bober/approvals/*.pending.json.
+ *
+ * Behavior:
+ * - Missing approvals dir → returns [].
+ * - Corrupted JSON files → skipped silently (matches CLI behavior).
+ * - ageMs = Date.now() - Date.parse(requestedAt).
+ */
+export async function listPendingApprovals(
+  projectRoot: string,
+): Promise<PendingApprovalRow[]> {
+  let entries: string[];
+  try {
+    entries = await readdir(approvalsDir(projectRoot));
+  } catch {
+    return [];
+  }
+  const rows: PendingApprovalRow[] = [];
+  for (const f of entries.filter((x) => x.endsWith(".pending.json"))) {
+    try {
+      const raw = await readFile(join(approvalsDir(projectRoot), f), "utf-8");
+      const parsed = JSON.parse(raw) as {
+        checkpointId: string;
+        prompt: string;
+        requestedAt: string;
+      };
+      rows.push({
+        checkpointId: parsed.checkpointId,
+        ageMs: Date.now() - Date.parse(parsed.requestedAt),
+        prompt: parsed.prompt,
+      });
+    } catch {
+      // skip corrupted files
+    }
+  }
+  return rows;
+}

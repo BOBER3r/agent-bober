@@ -81,6 +81,22 @@ export function registerStatusTool(): void {
         );
       }
 
+      // Aborted run
+      if (state.status === "aborted") {
+        return JSON.stringify(
+          {
+            runId: state.runId,
+            status: state.status,
+            task: state.task,
+            startedAt: state.startedAt,
+            abortedAt: state.abortedAt,
+            abortReason: state.abortReason,
+          },
+          null,
+          2,
+        );
+      }
+
       // Failed run
       return JSON.stringify(
         {

@@ -1,0 +1,258 @@
+{
+  "specId": "spec-20260525-cockpit-integration",
+  "version": 1,
+  "createdAt": "2026-05-25T00:00:00Z",
+  "updatedAt": "2026-05-25T00:00:00Z",
+  "title": "Cockpit Integration: multi-tenant engine surface for the cockpit UI",
+  "description": "Transform agent-bober from a single-project, single-run CLI/MCP tool into the engine for a long-lived cockpit backend that drives N parallel runs across M projects. The cockpit consumes agent-bober purely over MCP; this spec ships the engine-side surface: multi-run RunManager with disk persistence and crash recovery, worktree adapter for parallel runs in isolated git worktrees, event-stream MCP tool for live progress, MCP wrappers for careful-flow approvals and project/spec discovery, and MCP wrappers for the vision-era incident/rollback/postmortem/playbook surface that today is CLI-only. Backward compatible: existing 17 MCP tools and all CLI subcommands keep working unchanged.",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Run state persistence shape: one JSON file per run at `.bober/runs/<runId>/state.json` (mirrors `.bober/incidents/<id>/` and `.bober/audits/<runId>.jsonl` conventions). State file schema: { runId, task, status, startedAt, completedAt?, progress, result?, error?, projectRoot, branch?, worktreePath?, mode: 'autopilot'|'careful', specId? }. RunManager loads all `.bober/runs/*/state.json` on construction so a crashed/restarted bober process can enumerate runs (status of orphans is reconciled to 'failed' with error='orchestrator crashed' if status was 'running' at load time).",
+      "resolvedAt": "2026-05-25T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Backward compatibility for the existing singleton RunManager: keep the module-scoped `runManager` export. The new `RunManager` class adds `startRun(task, projectRoot, config, opts?)` returning runId, `getRun(runId)`, `listActiveRuns()`, `abortRun(runId, reason)`. The legacy `isRunning()` returns true when ANY run is active (preserves the existing bober_run/bober_status guard). The legacy `getStatus()` returns the newest run for back-compat. New tools key explicitly by runId.",
+      "resolvedAt": "2026-05-25T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Event stream transport: use MCP server-initiated notifications via `server.notification({ method, params })` \u2014 the @modelcontextprotocol/sdk Server supports this directly. Define a custom method name `bober/events` and emit one notification per new history.jsonl/telemetry line whose runId matches the subscription. Subscriptions tracked in-process; on bober restart they're lost (the cockpit must re-subscribe). Backpressure: a per-subscription bounded queue (default 1000 events) drops oldest with a `bober/events.dropped` notification when full.",
+      "resolvedAt": "2026-05-25T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Worktree adapter scope: ships as a new CLI subcommand `bober worktree run <task>` and an internal helper `runInWorktree(task, projectRoot, config, opts)` used by the cockpit-facing MCP variant `bober_run_in_worktree`. Worktree root defaults to `<projectRoot>/.bober/worktrees/<runId>` (overridable via `pipeline.worktreeRoot` config). Lifecycle: on success, removes worktree if `pipeline.cleanupWorktreeOnSuccess !== false` (default true); on failure, always retains the worktree and prints its path. Dirty trees rejected unless `--allow-dirty` is passed; this mirrors `git worktree add`'s default safety.",
+      "resolvedAt": "2026-05-25T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "Discovery tool scope: `bober_list_projects(searchRoots[])` walks each root one level deep, returning every directory containing `bober.config.json` (matches src/cli/commands/onboard.ts discovery pattern). `bober_list_specs(projectPath)` reads `.bober/specs/*.json` and returns { specId, title, status, sprintCount, completedAt? } per file. `bober_get_project_state(projectPath)` returns { configExists, activeRunCount, lastRunAt?, openIncidentCount, pendingApprovalCount, specCount }. All three tools accept absolute paths only; relative paths are rejected with a clear error to avoid cwd-coupling bugs.",
+      "resolvedAt": "2026-05-25T00:00:00Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "The cockpit backend mounts agent-bober as a long-lived MCP server (likely via `agent-bober mcp` stdio transport spawned per project root, or one server-per-cwd). The cockpit handles credential injection via env vars; agent-bober does not learn about credentials. Evidence: src/mcp/server.ts:55-58 takes projectRoot as a constructor arg, confirming the per-project-root model.",
+    "The existing 17 MCP tools' input/output JSON schemas remain stable \u2014 the cockpit and other MCP clients (Cursor, Windsurf, Claude Code) may already depend on them. New tools are purely additive. Evidence: src/mcp/tools/index.ts:24-45 enumerates and version-locks the 17 tools; the registry pattern at src/mcp/tools/registry.ts:39-47 supports additive registration.",
+    "MCP server-initiated notifications are well-supported by @modelcontextprotocol/sdk. The Server class exposes a notification() method usable from tool handlers. The cockpit will run an MCP client that subscribes to a notification method name we define. Evidence: @modelcontextprotocol/sdk patterns are documented and used in src/mcp/server.ts; transport is StdioServerTransport which supports server-initiated frames.",
+    "Run state persistence uses one directory per run at `.bober/runs/<runId>/` so callers can stream additional per-run artifacts (logs, generator transcripts) without polluting `.bober/runs/`. Evidence: `.bober/incidents/<id>/` already follows this directory-per-entity pattern at src/incident/timeline.ts:97-99.",
+    "Worktree creation uses raw git CLI (`git worktree add <path> <branch>`) via the existing utils/git module rather than a new library dependency. The branch naming follows the existing `generator.branchPattern` config (`bober/{feature-name}`). Evidence: src/orchestrator/pipeline.ts:57 imports from utils/git; existing branch flow is bober/<feature>.",
+    "Crash recovery is best-effort: a `running` state at load time is reconciled to `failed` with error='orchestrator crashed' (or similar). True resume-where-we-left-off is OUT OF SCOPE \u2014 the cockpit may re-submit the task. Documented in the run state schema.",
+    "Disk approvals already work cross-process via `.bober/approvals/<id>.pending.json` (Sprint 9 of bober-vision). The MCP wrappers simply call the same filesystem helpers (state/approval-state.ts) the CLI uses. No orchestrator coupling. Evidence: src/cli/commands/approve.ts:33-83 + src/state/approval-state.ts.",
+    "Vision-era MCP wrappers reuse existing TS modules: src/incident/timeline.ts (createIncident, listIncidents, setIncidentStatus), src/incident/orchestrator.ts (abort, readIncidentMetadata), src/incident/rollback.ts (planRollback, executeRollback), src/incident/playbook-search.ts (loadPlaybooks, searchPlaybooks). No business logic moves; the MCP layer is a thin adapter. Evidence: src/cli/commands/incident.ts:23-36 + src/cli/commands/playbook.ts:21-28 import these helpers directly.",
+    "Event subscriptions are in-memory; on bober MCP server restart, the cockpit must re-subscribe. This is acceptable because the cockpit is the long-lived process and bober restarts are rare. Persisted run state still survives restart.",
+    "All new MCP tools follow the existing pattern: zod-friendly JSON-schema input, JSON-stringified output via `JSON.stringify(payload, null, 2)`, throws McpError for protocol-level errors, returns `{ error: '...' }` JSON for user-facing soft errors. Evidence: src/mcp/tools/run.ts:36-91 + src/mcp/tools/status.ts:29-99.",
+    "An end-to-end 'fake cockpit client' test in the final sprint exercises every new MCP tool against a real MCP server subprocess speaking stdio JSON-RPC. Pattern: spawn `node dist/cli.js mcp` as a child process, send JSON-RPC requests, assert responses. Mirrors tests/e2e/four-modes.test.ts which spawns ExternalMcpServer subprocess for the MCP protocol boundary (bober-vision Sprint 27).",
+    "The cockpit-integration spec does NOT introduce credential management, auth, or deployment skills. Cockpit handles credentials. Deployment skills are a separate parallel spec. Scope-policed in outOfScope below."
+  ],
+  "outOfScope": [
+    "The cockpit UI itself (separate repo, separate team).",
+    "The cockpit backend that mounts MCP servers (separate repo, separate team).",
+    "Credential storage (AWS/Railway/Cloudflare keys) \u2014 cockpit holds credentials and injects them as env vars when invoking bober. Bober has no awareness of secrets management.",
+    "Deployment provider skills (EC2/Railway/Cloudflare adapters) \u2014 separate spec, runs in parallel.",
+    "Discussion-agent / chat memory layer between user and bober \u2014 belongs in the cockpit, not in bober.",
+    "Multi-user auth / RBAC / billing inside bober \u2014 cockpit owns those.",
+    "Persistent event subscriptions surviving bober restart \u2014 cockpit re-subscribes after detecting a restart.",
+    "True resume-where-it-crashed for interrupted runs \u2014 crash recovery marks as failed only; cockpit may re-submit.",
+    "Cross-project parallel run orchestration policy (rate limiting, queueing across projects) \u2014 cockpit decides when to spawn runs; bober just runs them.",
+    "Changing the existing 17 MCP tools' input/output schemas \u2014 strictly additive.",
+    "Replacing the StdioServerTransport with HTTP/WebSocket transports \u2014 stdio remains the supported transport.",
+    "Auto-detecting cockpit vs non-cockpit consumers \u2014 the engine behaves the same regardless of who is calling.",
+    "Cross-worktree merging / conflict resolution \u2014 each worktree is independent; cockpit handles any merging via standard git workflows."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Multi-run RunManager with disk persistence and crash recovery",
+      "description": "Refactor RunManager from singleton-with-single-activeRun to a keyed map of RunStates, persisted to `.bober/runs/<runId>/state.json`. RunManager.load() enumerates state files on startup. Running-but-orphaned runs are reconciled to failed/orchestrator-crashed. Existing isRunning()/getStatus() preserved as compatibility shims.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `RunManager` exports `startRun`, `getRun(runId)`, `listActiveRuns()`, `abortRun(runId, reason)`, `load(projectRoot)` as new methods alongside the existing `isRunning()`/`getStatus()` shims.",
+        "AC2: Each new run creates `.bober/runs/<runId>/state.json` synchronously before returning. State is updated on every progress/result/error transition (atomic temp-file+rename to avoid torn writes).",
+        "AC3: On `load()`, any state file with status='running' is reconciled to status='failed' with error='orchestrator crashed before completion'.",
+        "AC4: `bober_run` and `bober_status` continue to work unchanged from the external caller's perspective; legacy `isRunning()` returns true if any run is active.",
+        "AC5: Existing 1116 tests all pass."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Multi-run MCP surface: list/get/abort by runId",
+      "description": "New MCP tools `bober_list_active_runs`, `bober_get_run_status(runId)`, `bober_abort_run(runId, reason)`. Built on the feat-1 RunManager. Replaces the singleton-status assumption with explicit runId addressing.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober_list_active_runs` returns `[{ runId, task, status, startedAt, projectRoot, specId?, progress }]` for all runs known to RunManager (not just active \u2014 name retained for cockpit clarity; filter via status field).",
+        "AC2: `bober_get_run_status(runId)` returns full RunState as JSON. Returns `{ error: 'Run not found: <runId>' }` JSON for unknown runIds (not McpError \u2014 soft error per existing tool convention).",
+        "AC3: `bober_abort_run(runId, reason)` flips state to status='aborted' and writes an abort marker to the run state file. If runId is not currently running, returns `{ error: 'Run is not active' }` JSON.",
+        "AC4: All three tools registered via the standard registerTool pattern; appear in `tools/list`."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Event stream MCP tool with backpressure",
+      "description": "New MCP tool `bober_subscribe_events(runId)` that establishes a subscription. The server emits `bober/events` notifications (server-initiated MCP notifications) per matching event from `.bober/history.jsonl` and `.bober/telemetry/<date>.jsonl`. Per-subscription bounded queue (default 1000) drops oldest and emits `bober/events.dropped` when full.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober_subscribe_events({ runId, since? })` returns immediately with `{ subscriptionId, status: 'subscribed' }` JSON.",
+        "AC2: New lines appended to history.jsonl or telemetry/<date>.jsonl whose runId matches are emitted as `bober/events` notifications. Lines without runId fields are filtered out (no broadcast).",
+        "AC3: When the in-process queue for a subscription exceeds the bound, oldest events are dropped and one `bober/events.dropped` notification is sent with `{ subscriptionId, dropped: N }`.",
+        "AC4: `bober_unsubscribe_events({ subscriptionId })` cleanly closes the subscription and stops file-watch handles."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Worktree adapter for parallel runs",
+      "description": "`bober worktree run <task>` CLI subcommand + internal `runInWorktree(task, projectRoot, config, opts)` helper. Creates a git worktree under `.bober/worktrees/<runId>` (or configured root), runs the pipeline inside it, reports back the worktree path + branch + runId. Cleanup-on-success configurable; retain-on-failure always. Dirty trees rejected unless `--allow-dirty`.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober worktree run <task>` registered as a CLI subcommand. Prints `{ runId, branch, worktreePath, projectRoot }` JSON on completion.",
+        "AC2: Worktree created via `git worktree add` from main branch (or configurable base). Branch name derived from `generator.branchPattern` config (default `bober/<slug>`).",
+        "AC3: On pipeline success, worktree is removed via `git worktree remove` when `pipeline.cleanupWorktreeOnSuccess !== false`. On failure, always retained and path printed to stderr.",
+        "AC4: Dirty working tree rejected with exit code 1 and a clear error unless `--allow-dirty` is passed.",
+        "AC5: RunState records the worktreePath and branch so `bober_get_run_status` exposes them to the cockpit."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Careful-flow MCP wrappers",
+      "description": "New MCP tools `bober_list_pending_approvals(projectPath?)`, `bober_approve_checkpoint({ checkpointId, projectPath?, edits? })`, `bober_reject_checkpoint({ checkpointId, projectPath?, feedback })`. Thin wrappers around the existing src/state/approval-state.ts + src/cli/commands/{approve,reject,list-approvals}.ts logic.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober_list_pending_approvals` returns the same data shape as `bober list-approvals --json` (array of `{ checkpointId, ageMs, prompt }`).",
+        "AC2: `bober_approve_checkpoint` writes `.bober/approvals/<id>.approved.json` with the same payload shape as the CLI. Returns `{ approvedAt, checkpointId }` on success.",
+        "AC3: `bober_reject_checkpoint` writes `.bober/approvals/<id>.rejected.json` with `{ feedback, rejectedAt }`. Feedback is required (non-empty string).",
+        "AC4: All three tools accept an optional `projectPath` arg; default to `cwd()` when omitted. Reject relative paths to avoid cwd-coupling bugs."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Project + spec discovery MCP",
+      "description": "New MCP tools `bober_list_projects({ searchRoots[] })`, `bober_list_specs({ projectPath })`, `bober_get_project_state({ projectPath })`. Enables a project-list sidebar in the cockpit.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober_list_projects({ searchRoots: [...] })` walks each root one level deep, returns `[{ projectPath, name, mode, hasActiveRuns, lastRunAt? }]` for every directory containing `bober.config.json`.",
+        "AC2: `bober_list_specs({ projectPath })` returns `[{ specId, title, status, sprintCount, completedAt? }]` reading from `.bober/specs/*.json`.",
+        "AC3: `bober_get_project_state({ projectPath })` returns `{ configExists, activeRunCount, lastRunAt?, openIncidentCount, pendingApprovalCount, specCount, mode? }`.",
+        "AC4: All three tools accept absolute paths only; relative paths return `{ error: 'projectPath must be absolute' }` JSON."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "Vision-era MCP wrappers",
+      "description": "Eight new MCP tools wrapping the vision-era incident/rollback/postmortem/playbook surfaces: `bober_incident_start`, `bober_incident_status`, `bober_incident_list`, `bober_incident_abort`, `bober_rollback_start`, `bober_postmortem_get`, `bober_playbook_list`, `bober_playbook_search`. Thin adapters over existing src/incident/* modules.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: All eight tools registered, each delegating to the corresponding helper in src/incident/{timeline,orchestrator,rollback,playbook-search,postmortem}.ts.",
+        "AC2: Each tool returns JSON with the same data shape the corresponding CLI subcommand emits (e.g. `bober incident list` JSON shape).",
+        "AC3: `bober_rollback_start({ incidentId, projectPath })` invokes planRollback then executeRollback; returns `{ planned, executed, escalated?, remaining? }`.",
+        "AC4: `bober_postmortem_get({ incidentId, projectPath })` returns the raw postmortem.md content + parsed structured metadata."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-8",
+      "title": "End-to-end fake-cockpit-client integration test",
+      "description": "tests/e2e/cockpit-integration.test.ts spawns `node dist/cli.js mcp` as a child subprocess, speaks JSON-RPC over stdio, and exercises every new MCP tool against real state on a fixture project. Acts as the correctness gate for the cockpit-integration spec.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: tests/e2e/cockpit-integration.test.ts exists. Sets up a tmpdir fixture, spawns the MCP server subprocess, performs JSON-RPC handshake, exercises every new tool.",
+        "AC2: Lists active runs initially returns [], then starts a run via bober_run (or runInWorktree), then lists shows the run present with correct runId.",
+        "AC3: Subscribes to events for the new runId, asserts at least one bober/events notification arrives within the test timeout.",
+        "AC4: Exercises the careful-flow MCP tools: lists pending approvals, approves one, rejects one (with feedback), verifies the disk markers and downstream pipeline behavior.",
+        "AC5: Exercises the vision-era MCP tools: starts an incident, lists it, aborts it. Reads back the same incident via the status tool.",
+        "AC6: Total runtime under 90 seconds (excluding any LLM-spawning paths \u2014 those are mocked at the spawn-mechanism level via the same BOBER_TEST_DETERMINISTIC pattern used in tests/e2e/four-modes.test.ts).",
+        "AC7: All 1116 existing tests still pass; new test additions pass deterministically."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2",
+        "feat-3",
+        "feat-4",
+        "feat-5",
+        "feat-6",
+        "feat-7"
+      ],
+      "estimatedComplexity": "high"
+    }
+  ],
+  "techStack": [
+    "TypeScript",
+    "Node.js",
+    "@modelcontextprotocol/sdk",
+    "vitest",
+    "commander",
+    "git"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "Cockpit backend (external) consumes agent-bober via MCP stdio transport",
+      "Git CLI for worktree management (no new npm dependency)",
+      "Existing .bober/ disk artifacts (history.jsonl, telemetry/, approvals/, incidents/, specs/, contracts/)"
+    ],
+    "dataModel": "RunState (new): one JSON file per run at .bober/runs/<runId>/state.json. Schema includes runId, task, status, startedAt, completedAt, progress, result, error, projectRoot, branch, worktreePath, specId, mode. Backward compat with existing in-memory RunState shape via shared TypeScript type.",
+    "securityConsiderations": [
+      "MCP tools accepting projectPath must reject relative paths to prevent cwd-coupling bugs that could write to unintended directories",
+      "Worktree creation must respect git's clean-tree safety unless explicit --allow-dirty",
+      "Event stream notifications must not leak secrets present in env vars or task descriptions; filter sensitive substrings in a future hardening pass (documented as follow-up, not in this spec)",
+      "No new credential handling \u2014 cockpit owns credentials"
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "performance",
+      "requirement": "RunManager.load() must complete in under 500ms for up to 100 run state files (typical cockpit-managed project count).",
+      "verificationMethod": "Unit test loads 100 synthetic state files and asserts load duration."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Run state writes must be atomic (temp-file + rename) so a crash mid-write does not leave a torn state.json.",
+      "verificationMethod": "Code inspection + unit test that simulates write interruption."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "All new MCP tools follow the existing pattern (registerTool + zod-friendly inputSchema + JSON-stringified return + JSON soft errors).",
+      "verificationMethod": "Code review against src/mcp/tools/run.ts + src/mcp/tools/status.ts as templates."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Existing 17 MCP tool input/output schemas remain byte-identical to current behavior.",
+      "verificationMethod": "Snapshot-style assertions on tools/list output + existing tool tests must pass unchanged."
+    }
+  ],
+  "constraints": [
+    "Brownfield: all existing 1116 tests must pass; no breaking changes to existing CLI or MCP surface.",
+    "Sprint budget: 6 sprints total; bober.config.json caps maxSprints at 30 \u2014 well within budget.",
+    "Stack-locked: TypeScript + @modelcontextprotocol/sdk; no new heavyweight dependencies.",
+    "Adhere to existing patterns: src/state/ for state-helper modules, src/mcp/tools/ for MCP tools, src/cli/commands/ for CLI subcommands.",
+    "Telemetry guarantees from bober-vision (no network egress; mode-0600 JSONL only) must remain enforceable; new event stream is in-process MCP only."
+  ],
+  "completedAt": "2026-05-25T18:33:19Z"
+}

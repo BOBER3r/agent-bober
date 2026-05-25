@@ -1,0 +1,4 @@
+{
+  "project": { "name": "cockpit-baseline", "mode": "brownfield" },
+  "pipeline": { "mode": "autopilot", "checkpointMechanism": "noop" }
+}

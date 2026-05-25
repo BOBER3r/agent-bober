@@ -1,0 +1,94 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-2",
+  "specId": "spec-20260525-cockpit-integration",
+  "sprintNumber": 2,
+  "title": "Multi-run MCP tools: list, get, and abort by runId",
+  "description": "Add three new MCP tools that address runs explicitly by runId, complementing the singleton-style bober_status. bober_list_active_runs returns all known runs (filterable by status). bober_get_run_status(runId) returns one run's full state. bober_abort_run(runId, reason) flips a running run to status='aborted' and persists the reason. All three are thin wrappers around the Sprint 1 RunManager methods.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260525-cockpit-integration-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "src/mcp/tools/list-active-runs.ts exports registerListActiveRunsTool(); registered tool name is bober_list_active_runs and accepts optional `{ status?: 'running'|'completed'|'failed'|'aborted' }` filter.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "src/mcp/tools/get-run-status.ts exports registerGetRunStatusTool(); registered tool name is bober_get_run_status; returns full RunState JSON for known runIds, returns `{ error: 'Run not found: <runId>' }` JSON for unknown runIds.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "src/mcp/tools/abort-run.ts exports registerAbortRunTool(); registered tool name is bober_abort_run; flips state to status='aborted', persists `{ reason, abortedAt }` into state.json, returns `{ runId, status: 'aborted', abortedAt }`. Returns `{ error: 'Run is not active' }` if the run is not currently running.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "All three tools registered via src/mcp/tools/index.ts; they appear in the tools/list MCP response when the server is queried.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "Documented in CHANGELOG.md under an Unreleased section: tool name, inputSchema summary, return shape.",
+      "verificationMethod": "manual",
+      "required": false,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass; the existing test suite plus new tests pass.",
+      "verificationMethod": "build",
+      "required": true,
+      "passed": true
+    }
+  ],
+  "nonGoals": [
+    "Do not modify the existing bober_status tool's input or output schema.",
+    "Do not add WebSocket or HTTP transport — stdio remains the only supported transport.",
+    "Do not add per-run cancellation tokens to the pipeline itself in this sprint — bober_abort_run flips state but does not yet forcefully terminate in-flight subprocesses; document this caveat in generatorNotes for a future hardening sprint.",
+    "Do not introduce new npm dependencies."
+  ],
+  "stopConditions": [
+    "All required success criteria pass evaluation.",
+    "`npm run test` passes with the three new tool tests included.",
+    "Manual sanity check: invoke bober_list_active_runs via stdio JSON-RPC and verify it returns the runs created in Sprint 1's persistence layer."
+  ],
+  "definitionOfDone": "A cockpit MCP client can enumerate all runs known to the bober server, fetch the full state of any specific run by runId, and request abort by runId. The three new tools follow the existing zod-friendly inputSchema + JSON-stringified return + JSON soft-error pattern established by src/mcp/tools/run.ts and src/mcp/tools/status.ts. Aborting a running run updates the persisted state.json and the in-memory map atomically; subsequent get_run_status reflects the aborted state.",
+  "assumptions": [
+    "bober_abort_run flipping state is sufficient for the cockpit's UX in this sprint — the cockpit shows the run as aborted; truly killing in-flight subprocess invocations is a follow-up hardening (a SIGTERM-propagating abort flag in pipeline.ts).",
+    "Tool naming follows the existing bober_<noun_verb> convention (bober_list_active_runs, bober_get_run_status, bober_abort_run) for cockpit consistency."
+  ],
+  "outOfScope": [
+    "Forceful subprocess termination on abort (deferred).",
+    "Run-history pagination — list_active_runs returns the full set; cockpit may filter client-side.",
+    "Cross-project run enumeration — each MCP server instance owns its projectRoot only."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "PATTERN TO FOLLOW: src/mcp/tools/run.ts (registerRunTool) and src/mcp/tools/status.ts (registerStatusTool) — they show the exact import pattern, McpError vs JSON-soft-error convention, and the JSON.stringify(payload, null, 2) return shape. Wire all three new register* functions into src/mcp/tools/index.ts:47-72 next to the existing registerStatusTool() call. For bober_abort_run, when flipping state, ALSO append a one-line marker to .bober/runs/<runId>/state.json — atomic temp-file + rename via the Sprint 1 helper. Soft errors (run not found, run not active) return `{ error: '...' }` JSON, not McpError — match src/mcp/tools/status.ts:33-50 convention. Hard errors (config missing, IO failure) throw McpError(ErrorCode.InvalidRequest|InternalError, ...) — match src/mcp/tools/run.ts:47-53 convention. inputSchema for bober_get_run_status: `{ type: 'object', properties: { runId: { type: 'string' } }, required: ['runId'], additionalProperties: false }`. Update src/mcp/tools/index.ts JSDoc comment to bump 17 → 20 tools.",
+  "evaluatorNotes": "Verify the three tools follow the existing registry pattern exactly — inputSchema is a JsonSchemaObject (not zod), return is JSON.stringify, soft errors are JSON not McpError. Verify tools/list response includes all three new tool names. Test scenarios: (1) start a run, list_active_runs returns it with status='running'; (2) get_run_status with the runId returns the full state; (3) abort_run flips it; (4) get_run_status now returns status='aborted' with the reason; (5) abort_run on an unknown runId returns the soft-error JSON. Negative test: bober_get_run_status with missing runId arg throws McpError InvalidRequest with a clear message.",
+  "estimatedFiles": [
+    "src/mcp/tools/list-active-runs.ts",
+    "src/mcp/tools/list-active-runs.test.ts",
+    "src/mcp/tools/get-run-status.ts",
+    "src/mcp/tools/get-run-status.test.ts",
+    "src/mcp/tools/abort-run.ts",
+    "src/mcp/tools/abort-run.test.ts",
+    "src/mcp/tools/index.ts",
+    "CHANGELOG.md"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-25T17:00:00Z"
+}

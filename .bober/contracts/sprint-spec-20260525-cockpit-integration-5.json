@@ -1,0 +1,116 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-5",
+  "specId": "spec-20260525-cockpit-integration",
+  "sprintNumber": 5,
+  "title": "Careful-flow MCP wrappers + project/spec discovery MCP",
+  "description": "Two coordinated additions for cockpit sidebar functionality. (a) Careful-flow wrappers: bober_list_pending_approvals, bober_approve_checkpoint, bober_reject_checkpoint \u2014 thin MCP adapters over src/state/approval-state.ts and the existing CLI logic in src/cli/commands/{approve,reject,list-approvals}.ts. (b) Discovery: bober_list_projects({ searchRoots }), bober_list_specs({ projectPath }), bober_get_project_state({ projectPath }) \u2014 enable the cockpit's project-list sidebar by walking one level under each searchRoot for bober.config.json, enumerating .bober/specs/, and aggregating per-project counts (active runs, open incidents, pending approvals).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260525-cockpit-integration-1"
+  ],
+  "features": [
+    "feat-5",
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "src/mcp/tools/list-pending-approvals.ts registers bober_list_pending_approvals; accepts optional `{ projectPath?: string }`; returns the same array shape as `bober list-approvals --json` (array of `{ checkpointId, ageMs, prompt }`).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "src/mcp/tools/approve-checkpoint.ts registers bober_approve_checkpoint; accepts `{ checkpointId, projectPath?, editDelta? }`; writes .bober/approvals/<id>.approved.json with the same payload shape as the CLI; returns `{ approvedAt, checkpointId }` JSON.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "src/mcp/tools/reject-checkpoint.ts registers bober_reject_checkpoint; accepts `{ checkpointId, projectPath?, feedback }`; feedback required and non-empty; writes .bober/approvals/<id>.rejected.json with `{ rejectedAt, rejecterId, feedback }`; returns `{ rejectedAt, checkpointId }` JSON.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "src/mcp/tools/list-projects.ts registers bober_list_projects; accepts `{ searchRoots: string[] }`; walks each root one level deep; returns `[{ projectPath, name, mode, hasActiveRuns, lastRunAt? }]` for every directory containing bober.config.json.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "src/mcp/tools/list-specs.ts registers bober_list_specs; accepts `{ projectPath }`; reads .bober/specs/*.json; returns `[{ specId, title, status, sprintCount, completedAt? }]`.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "src/mcp/tools/get-project-state.ts registers bober_get_project_state; accepts `{ projectPath }`; returns `{ configExists, activeRunCount, lastRunAt?, openIncidentCount, pendingApprovalCount, specCount, mode? }`.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "All six tools reject relative paths in the projectPath argument with `{ error: 'projectPath must be absolute' }` JSON; verified by negative test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-8",
+      "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not modify the existing CLI subcommands (approve, reject, list-approvals); the MCP tools and CLI live side-by-side and share the helpers in src/state/approval-state.ts.",
+    "Do not implement caching for list-projects results \u2014 every call walks the filesystem fresh. Performance is acceptable for cockpit-scale (tens of projects).",
+    "Do not implement deep-recursive project discovery \u2014 one level deep under each searchRoot is the documented contract.",
+    "Do not expose write access to .bober/specs/ via MCP \u2014 list-only.",
+    "Do not introduce new npm dependencies."
+  ],
+  "stopConditions": [
+    "All required success criteria pass evaluation.",
+    "Integration smoke: create a fixture project with one pending approval, invoke bober_list_pending_approvals, approve it via bober_approve_checkpoint, verify the .approved.json marker file appears with the correct payload shape.",
+    "Cross-tool smoke: bober_get_project_state on a project with 2 specs, 1 active run, 0 incidents, 1 pending approval returns the correct counts."
+  ],
+  "definitionOfDone": "The cockpit can drive the careful-flow approval lifecycle over MCP without shelling out to the bober CLI: list pending approvals across one or more projects, approve or reject each by checkpointId. The cockpit can also render a sidebar of all known projects under a set of user-configured search roots, listing each project's specs and aggregated state (counts of active runs, open incidents, pending approvals). All six tools follow the existing MCP pattern (registerTool, zod-friendly inputSchema, JSON.stringify return, JSON soft errors, absolute-path validation).",
+  "assumptions": [
+    "src/state/approval-state.ts already exposes pendingExists() \u2014 generator should also export a listPendingApprovals(projectRoot) helper used by both the CLI and the new MCP tool. Refactor the CLI command to use the new helper for consistency.",
+    "Incident discovery: src/incident/timeline.ts:listIncidents already exists and returns IncidentSummary[]. Reuse it; openIncidentCount = incidents.filter(i => i.status !== 'resolved' && i.status !== 'aborted').length.",
+    "Active run count from RunManager: use the Sprint 1 listActiveRuns().filter(r => r.status === 'running').length; per-project, but each MCP server instance owns one projectRoot \u2014 so when called against a different projectPath, the count comes from .bober/runs/*/state.json on that path (load on-demand, do not require pre-population).",
+    "Project name in list-projects: read bober.config.json's project.name field; fall back to basename(projectPath) if missing.",
+    "lastRunAt: max(startedAt) across all .bober/runs/*/state.json files in the project."
+  ],
+  "outOfScope": [
+    "Recursive deep project discovery.",
+    "Write access to specs/contracts via MCP (read-only sufficient for the cockpit sidebar).",
+    "Permission/auth checks on cross-project queries \u2014 cockpit's job.",
+    "Cross-project event aggregation (each MCP server is per-project)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "PATTERNS TO FOLLOW: src/cli/commands/approve.ts (read full file) for the approval payload shape and pendingExists() guard; src/cli/commands/reject.ts for the rejection payload; src/cli/commands/list-approvals.ts for the pending-list reader. EXTRACT a new helper listPendingApprovals(projectRoot) in src/state/approval-state.ts so both CLI and MCP share it. PATTERN for the registerTool template: src/mcp/tools/run.ts and src/mcp/tools/status.ts. CRITICAL: All six tools accept an optional projectPath; when omitted, default to cwd(). When provided, MUST be absolute (validate via path.isAbsolute()); reject relative with `{ error: 'projectPath must be absolute' }` JSON soft error. The discovery tools (list-projects, list-specs, get-project-state) are READ-ONLY on disk \u2014 they do NOT instantiate RunManager. To get activeRunCount for an arbitrary projectPath, write a standalone helper readRunStatesFromDisk(projectRoot) in src/state/run-state.ts (mirrors the Sprint 1 module's read-side). For list-specs, read .bober/specs/*.json and parse via the existing PlanSpecSchema (loose-parse \u2014 tolerate version mismatches). Sprint mode field for the project: read bober.config.json's project.mode if present (greenfield/brownfield).",
+  "evaluatorNotes": "Verify all six tools follow the existing registerTool + JSON.stringify pattern exactly. Verify the absolute-path validation works \u2014 pass './foo' as projectPath and assert the soft-error JSON is returned. Verify the careful-flow tools share state with the CLI commands by exercising a mixed-mode scenario: write a pending approval, list it via bober_list_pending_approvals, approve via bober_approve_checkpoint, then use the CLI `bober list-approvals` to confirm it's gone. Verify list-projects returns ONLY directories containing bober.config.json; directories without it are skipped. Verify list-specs returns the correct title/status/sprintCount for each .bober/specs/<id>.json. Verify get-project-state correctly sums activeRunCount across .bober/runs/*/state.json. Negative test: list-projects with an unreadable searchRoot returns a soft error or skips that root with a warning to stderr, doesn't throw.",
+  "estimatedFiles": [
+    "src/state/approval-state.ts",
+    "src/state/approval-state.test.ts",
+    "src/state/run-state.ts",
+    "src/mcp/tools/list-pending-approvals.ts",
+    "src/mcp/tools/list-pending-approvals.test.ts",
+    "src/mcp/tools/approve-checkpoint.ts",
+    "src/mcp/tools/approve-checkpoint.test.ts",
+    "src/mcp/tools/reject-checkpoint.ts",
+    "src/mcp/tools/reject-checkpoint.test.ts",
+    "src/mcp/tools/list-projects.ts",
+    "src/mcp/tools/list-projects.test.ts",
+    "src/mcp/tools/list-specs.ts",
+    "src/mcp/tools/list-specs.test.ts",
+    "src/mcp/tools/get-project-state.ts",
+    "src/mcp/tools/get-project-state.test.ts",
+    "src/mcp/tools/index.ts",
+    "CHANGELOG.md"
+  ],
+  "estimatedDuration": "large",
+  "startedAt": "2026-05-25T17:39:54Z",
+  "completedAt": "2026-05-25T18:04:24Z"
+}

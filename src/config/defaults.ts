@@ -106,6 +106,9 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       approvalTimeoutMs: 86_400_000,
       prPollMs: 30_000,
       allowAutopilotRiskyActions: false,
+      eventQueueBound: 1000,
+      worktreeRoot: ".bober/worktrees",
+      cleanupWorktreeOnSuccess: true,
     },
     commands: {
       install: "npm install",
@@ -202,6 +205,9 @@ const greenfieldBase: Partial<BoberConfig> = {
     approvalTimeoutMs: 86_400_000,
     prPollMs: 30_000,
     allowAutopilotRiskyActions: false,
+    eventQueueBound: 1000,
+    worktreeRoot: ".bober/worktrees",
+    cleanupWorktreeOnSuccess: true,
   },
   commands: {},
 };
@@ -239,6 +245,9 @@ const brownfieldBase: Partial<BoberConfig> = {
     approvalTimeoutMs: 86_400_000,
     prPollMs: 30_000,
     allowAutopilotRiskyActions: false,
+    eventQueueBound: 1000,
+    worktreeRoot: ".bober/worktrees",
+    cleanupWorktreeOnSuccess: true,
   },
   commands: {},
 };

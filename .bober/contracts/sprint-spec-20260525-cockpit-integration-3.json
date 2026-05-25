@@ -1,0 +1,107 @@
+{
+  "contractId": "sprint-spec-20260525-cockpit-integration-3",
+  "specId": "spec-20260525-cockpit-integration",
+  "sprintNumber": 3,
+  "title": "Event stream MCP tool with server-initiated notifications and backpressure",
+  "description": "Add bober_subscribe_events({ runId, since? }) and bober_unsubscribe_events({ subscriptionId }) MCP tools. Subscriptions tail .bober/history.jsonl and .bober/telemetry/<date>.jsonl; new lines whose runId matches the subscription are emitted as MCP server-initiated `bober/events` notifications. Per-subscription bounded queue (default 1000) drops oldest and emits a single `bober/events.dropped` notification when the bound is exceeded. Subscriptions are in-process; on bober restart the cockpit re-subscribes.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260525-cockpit-integration-1"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "src/mcp/event-stream.ts exports an EventStreamManager class with subscribe(server, runId, since?) returning subscriptionId, and unsubscribe(subscriptionId).",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "EventStreamManager uses fs.watch (or chokidar if already a dependency) to detect appends to .bober/history.jsonl and .bober/telemetry/<date>.jsonl. New lines are parsed; lines whose runId field matches the subscription's runId trigger a server.notification({ method: 'bober/events', params: { subscriptionId, event } }).",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "Per-subscription bounded queue (default 1000, configurable via pipeline.eventQueueBound) drops oldest on overflow and emits exactly one `bober/events.dropped` notification with `{ subscriptionId, dropped: N }` per overflow window.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "src/mcp/tools/subscribe-events.ts and src/mcp/tools/unsubscribe-events.ts register bober_subscribe_events and bober_unsubscribe_events; both follow the standard registerTool pattern; tools appear in tools/list.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "When a subscription is unsubscribed, the file-watch handles are released (no leaked watchers); verified by a test that subscribes then unsubscribes 50 times and asserts no resource leak.",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "Lines in history.jsonl/telemetry without a runId field are silently skipped (no broadcast — runId-targeted only).",
+      "verificationMethod": "unit-test",
+      "required": true,
+      "passed": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "`npm run typecheck`, `npm run lint`, `npm run build`, and `npm run test` all pass.",
+      "verificationMethod": "build",
+      "required": true,
+      "passed": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement persistence of subscriptions across bober restarts.",
+    "Do not implement cross-runId broadcast or wildcard subscriptions — runId is required per subscription.",
+    "Do not introduce chokidar or another file-watch library if the Node built-in fs.watch is sufficient; only add chokidar if a documented platform issue (e.g., macOS rename detection) requires it.",
+    "Do not stream events from other .bober/ files (audits, briefings, eval-results) in this sprint — restricted to history.jsonl + telemetry/<date>.jsonl. Future sprint can extend the schema.",
+    "Do not modify the existing telemetry writer or history writer; this is read-side only."
+  ],
+  "stopConditions": [
+    "All required success criteria pass evaluation.",
+    "Unit test that appends 2000 events to a fixture history.jsonl with a 1000-bound queue asserts exactly 1000 deliveries + a dropped notification with count=1000.",
+    "Integration smoke: subscribe via JSON-RPC, append a line to .bober/history.jsonl with a matching runId, verify a bober/events notification is received within 1 second."
+  ],
+  "definitionOfDone": "A cockpit MCP client subscribes to events for a specific runId and receives a stream of server-initiated `bober/events` notifications for every relevant append to history.jsonl and telemetry/<date>.jsonl. When the cockpit consumer lags and the per-subscription queue exceeds its bound, the oldest events are dropped and a single `bober/events.dropped` notification informs the cockpit of the loss. Unsubscribing releases all file-watch handles cleanly. Existing telemetry and history writers are untouched.",
+  "assumptions": [
+    "@modelcontextprotocol/sdk's Server class supports server-initiated notifications via a notification() method or equivalent. If the SDK surface requires a slightly different invocation pattern, the generator should consult the SDK docs and adapt — the architectural shape (server-initiated notifications keyed by subscription) is the requirement, not the exact API name.",
+    "fs.watch is sufficient on macOS + Linux for detecting appends to .jsonl files. If platform-specific issues arise, the generator may add chokidar as a dependency with justification in the commit message.",
+    "Telemetry files rotate per date (.bober/telemetry/<date>.jsonl); the watcher must detect file creation for new-date files, not just appends to the current file.",
+    "history.jsonl events have a runId field when relevant; legacy events without runId are non-runId-scoped and not delivered to runId-scoped subscriptions (this is the intended filter behavior)."
+  ],
+  "outOfScope": [
+    "Persistence of subscriptions.",
+    "Cross-project event streaming (each MCP server owns its projectRoot only).",
+    "Filtering by event type beyond runId match.",
+    "Compaction or summarization of dropped events — cockpit handles UX of dropped notifications."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "ARCHITECTURE: EventStreamManager is a singleton instantiated alongside the MCP server. It holds a Map<subscriptionId, { runId, server, queue, watchHandle }>. fs.watch is opened on demand per unique file path (history.jsonl, current telemetry/<date>.jsonl), with a fan-out to all subscriptions interested in events from that file. On the first subscription, open the watcher; on the last unsubscribe for a given file, close it. PATTERN TO FOLLOW: src/incident/timeline.ts:67-82 for safe newline-terminated JSONL appends (the inverse — for the reader side, track the last-read offset per file and seek-read on watch events). server.notification: consult @modelcontextprotocol/sdk types — the Server class exposes either `server.sendNotification({ method, params })` or `server.notification(...)`; the exact name should be confirmed against the SDK. The CRITICAL POINT is that this MUST use MCP's server-initiated notification idiom, NOT a polled return value. The cockpit's client subscribes to `bober/events` and `bober/events.dropped` notification handlers. Wire EventStreamManager into src/mcp/server.ts:107-118 — instantiate after server construction so tool handlers can reference it. inputSchema for bober_subscribe_events: `{ type: 'object', properties: { runId: { type: 'string' }, since: { type: 'string', description: 'ISO 8601 timestamp; only deliver events after this time' } }, required: ['runId'], additionalProperties: false }`. Return shape: `{ subscriptionId, status: 'subscribed', startedAt }`. The `since` parameter does a one-time backfill by reading existing history.jsonl/telemetry lines whose timestamp > since AND runId matches.",
+  "evaluatorNotes": "Verify the event stream uses MCP's actual server-initiated notification mechanism — if the implementation polls or stuffs events into a tool's return value, that violates the architecture requirement (rejection criterion). Test scenarios: (1) subscribe to runId X; append a line with runId=X to history.jsonl; assert a bober/events notification was sent within 1s. (2) Append 2000 events with a 1000 bound; assert 1000 delivered + 1 dropped notification with count=1000. (3) Append a line WITHOUT a runId field; assert no notification. (4) Append a line with runId=Y to a subscription for runId=X; assert no notification. (5) Unsubscribe; append a line with runId=X; assert no notification. (6) Subscribe 50 times then unsubscribe all 50; verify watcher handles are released (process should not leak fds — assertable via process.report or simply by lack of EMFILE errors after many cycles). For the `since` backfill: subscribe with since=<timestamp>; assert that pre-subscription events with timestamp > since are delivered as backfill notifications.",
+  "estimatedFiles": [
+    "src/mcp/event-stream.ts",
+    "src/mcp/event-stream.test.ts",
+    "src/mcp/tools/subscribe-events.ts",
+    "src/mcp/tools/subscribe-events.test.ts",
+    "src/mcp/tools/unsubscribe-events.ts",
+    "src/mcp/tools/unsubscribe-events.test.ts",
+    "src/mcp/tools/index.ts",
+    "src/mcp/server.ts",
+    "src/config/schema.ts",
+    "CHANGELOG.md"
+  ],
+  "estimatedDuration": "large",
+  "completedAt": "2026-05-25T17:35:00Z"
+}

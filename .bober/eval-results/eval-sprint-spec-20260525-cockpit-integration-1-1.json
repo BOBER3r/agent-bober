@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260525-cockpit-integration-1-1",
+  "contractId": "sprint-spec-20260525-cockpit-integration-1",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T16:41:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit (exit 0)", "details": "Zero TypeScript errors."},
+    {"strategy": "lint", "required": true, "result": "pass", "output": "eslint src/ (exit 0)", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc (exit 0)", "details": "Clean."},
+    {"strategy": "unit-test", "required": true, "result": "pass", "output": "Test Files 83 passed; Tests 1142 passed | 4 skipped (1146); Duration 5.55s", "details": "+26 net tests vs 1116 baseline. 10 in run-state.test.ts, 16 net in run-manager.test.ts."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-1-1", "description": "RunManager class with new methods + preserved isRunning/getStatus shims", "required": true, "result": "pass", "evidence": "run-manager.ts:50-237: isRunning(59), getStatus(70), getRun(84), listActiveRuns(91), abortRun(99), startRun(129), load(213). Singleton export at 237.", "feedback": ""},
+    {"criterionId": "sc-1-2", "description": "startRun writes state.json synchronously before returning; required fields present", "required": true, "result": "pass", "evidence": "run-manager.ts:154 awaits writeRunState before fire-and-forget at 157. State at 142-149 has runId/task/status/startedAt/progress/projectRoot. Tests 176-205 verify immediately on return.", "feedback": ""},
+    {"criterionId": "sc-1-3", "description": "Atomic temp+rename mirroring src/incident/timeline.ts:86-92", "required": true, "result": "pass", "evidence": "src/state/run-state.ts:41-53 — temp name with pid+timestamp+4-byte random hex, writeFile, rename. 100-concurrent stress test at run-state.test.ts:73-88 confirms no partial writes.", "feedback": ""},
+    {"criterionId": "sc-1-4", "description": "load() reconciles orphaned running→failed with reason", "required": true, "result": "pass", "evidence": "run-manager.ts:213-232: sets status='failed', error='orchestrator crashed before completion', persists. 5 tests at run-manager.test.ts:424-512 cover orphan flip, no-modify completed, populate from disk, no-runs-dir, persisted reconciled state.", "feedback": ""},
+    {"criterionId": "sc-1-5", "description": "Back-compat shims preserve bober_run/bober_status behavior", "required": true, "result": "pass", "evidence": "isRunning walks Map (59-61); getStatus returns max-startedAt (70-79). bober_run + bober_status schemas unchanged. Concurrent-startRun test at 157-173 confirms no throw on parallel calls.", "feedback": ""},
+    {"criterionId": "sc-1-6", "description": "All strategies pass; 1116 baseline tests remain green", "required": true, "result": "pass", "evidence": "typecheck/lint/build/test all exit 0. 1142 pass, 4 pre-existing skipped.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass and all 4 strategies clean. The RunManager refactor correctly implements concurrent-run support with atomic disk persistence, crash-recovery orphan reconciliation, and fully preserved bober_run/bober_status back-compat. +26 net tests, 100-concurrent-write stress test included. No regressions, no nonGoal violations."
+}

@@ -2,13 +2,38 @@ import { AnthropicAdapter } from "./anthropic.js";
 import { OpenAIAdapter } from "./openai.js";
 import { GoogleAdapter } from "./google.js";
 import { OpenAICompatAdapter } from "./openai-compat.js";
-import type { LLMClient } from "./types.js";
+import type { LLMClient, ChatParams, ChatResponse } from "./types.js";
 import { resolveProviderModel } from "../orchestrator/model-resolver.js";
 
 /**
  * The set of provider names currently supported.
  */
 export type ProviderName = "anthropic" | "openai" | "google" | "openai-compat";
+
+// ── Deterministic stub (BOBER_TEST_DETERMINISTIC) ─────────────────────────────
+//
+// When BOBER_TEST_DETERMINISTIC=1 is set in the environment, createClient()
+// returns a stub LLMClient that immediately returns a deterministic "abort me"
+// response instead of calling any real LLM provider. This prevents e2e tests
+// from hitting real API endpoints or failing due to missing API keys.
+//
+// The stub returns end_turn immediately with empty tool calls, which causes
+// the agentic loop to terminate. The pipeline will fail (no plan produced),
+// but the run is still tracked in RunManager and can be tested via the
+// list/abort MCP tools.
+//
+// Sprint 6 (cockpit-integration)
+
+class DeterministicStubClient implements LLMClient {
+  async chat(_params: ChatParams): Promise<ChatResponse> {
+    return {
+      text: "[BOBER_TEST_DETERMINISTIC] Stub response — no real LLM call made.",
+      toolCalls: [],
+      stopReason: "end_turn",
+      usage: { inputTokens: 0, outputTokens: 0 },
+    };
+  }
+}
 
 /**
  * Validate that the required API key environment variable is set for a given provider.
@@ -96,6 +121,13 @@ export function createClient(
   model?: string,
   role?: string,
 ): LLMClient {
+  // ── BOBER_TEST_DETERMINISTIC guard ─────────────────────────────────
+  // When set, skip all provider resolution and return a stub client.
+  // This suppresses real LLM calls in e2e tests (cockpit-integration sprint 6).
+  if (process.env["BOBER_TEST_DETERMINISTIC"] === "1") {
+    return new DeterministicStubClient();
+  }
+
   // endpoint is used by OpenAI and openai-compat adapters as a base URL
 
   // Resolve provider: explicit wins; otherwise infer from model shorthand

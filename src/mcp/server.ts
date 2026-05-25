@@ -21,6 +21,8 @@ import {
 
 import { registerAllTools, getAllTools, getTool } from "./tools/index.js";
 import { configExists, loadConfig } from "../config/loader.js";
+import { runManager } from "./run-manager.js";
+import { initEventStream, getEventStream } from "./event-stream.js";
 
 // ── Package version loader ──────────────────────────────────────────
 
@@ -59,6 +61,17 @@ export async function createBoberMCPServer(
 
   // ── Register all tools before creating the server ────────────────
   registerAllTools();
+
+  // ── Reconcile prior run state from disk (cockpit-integration sprint 1) ───
+  try {
+    await runManager.load(projectRoot);
+  } catch (err) {
+    process.stderr.write(
+      `[agent-bober mcp] runManager.load failed (continuing): ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+  }
 
   // ── Conditionally register graph_* tools ─────────────────────────
   // Per sprint 4 spec: only when bober.config.json has
@@ -166,6 +179,21 @@ export async function createBoberMCPServer(
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
+  // ── Initialize event-stream subsystem (cockpit-integration sprint 3) ──
+  // Must run AFTER server.connect() so the transport is live for notifications.
+  {
+    let queueBound = 1000;
+    try {
+      if (await configExists(projectRoot)) {
+        const cfg = await loadConfig(projectRoot);
+        queueBound = cfg.pipeline.eventQueueBound ?? 1000;
+      }
+    } catch {
+      // Config read failure is non-fatal — use default
+    }
+    initEventStream(server, projectRoot, queueBound);
+  }
+
   process.stderr.write(
     `[agent-bober mcp] Server v${version} started (project: ${projectRoot})\n`,
   );
@@ -173,6 +201,7 @@ export async function createBoberMCPServer(
   // ── Graceful shutdown ────────────────────────────────────────────
   const shutdown = (): void => {
     process.stderr.write("[agent-bober mcp] Shutting down...\n");
+    try { getEventStream().shutdown(); } catch { /* not initialized — ignore */ }
     server.close().catch(() => {
       // Ignore close errors during shutdown
     });

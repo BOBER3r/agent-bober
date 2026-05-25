@@ -149,7 +149,7 @@ describe("synthesizePrinciples()", () => {
         maxIterations: 3,
       },
       sprint: { maxSprints: 10, requireContracts: true, sprintSize: "medium" },
-      pipeline: { maxIterations: 20, requireApproval: false, contextReset: "always" },
+      pipeline: { maxIterations: 20, requireApproval: false, contextReset: "always", eventQueueBound: 1000 },
       commands: {},
     };
 

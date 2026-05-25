@@ -1,0 +1,27 @@
+{
+  "specId": "spec-cockpit-baseline-1",
+  "version": 1,
+  "title": "Cockpit Baseline Spec",
+  "description": "A seeded spec for cockpit-baseline fixture project e2e testing",
+  "status": "in-progress",
+  "mode": "brownfield",
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Feature One",
+      "description": "The first feature of the baseline spec",
+      "priority": "must-have",
+      "acceptanceCriteria": ["Feature works"],
+      "dependencies": []
+    }
+  ],
+  "assumptions": [],
+  "outOfScope": [],
+  "clarificationQuestions": [],
+  "resolvedClarifications": [],
+  "techStack": [],
+  "nonFunctionalRequirements": [],
+  "constraints": [],
+  "createdAt": "2026-05-25T10:00:00.000Z",
+  "updatedAt": "2026-05-25T10:00:00.000Z"
+}

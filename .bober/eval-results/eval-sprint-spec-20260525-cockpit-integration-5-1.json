@@ -1,0 +1,46 @@
+{
+  "evalId": "eval-sprint-spec-20260525-cockpit-integration-5-1",
+  "contractId": "sprint-spec-20260525-cockpit-integration-5",
+  "specId": "spec-20260525-cockpit-integration",
+  "timestamp": "2026-05-25T18:04:24Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 8,
+    "requiredFailed": 0,
+    "requiredTotal": 8
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "details": "tsc --noEmit, 0 errors"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "details": "eslint, 0 errors"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "details": "tsc, 0 errors"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "details": "1282 pass / 4 skipped / 0 fail across 100 files (up from 1212)"
+    }
+  ],
+  "summary": "Sprint 5 passes all 8 criteria. 6 new MCP tools (list_pending_approvals, approve_checkpoint, reject_checkpoint, list_projects, list_specs, get_project_state); tool count 23\u219229; new tests +70; shared listPendingApprovals + readRunStatesFromDisk helpers; absolute-path soft-error validation; mixed-mode CLI<->MCP test; no RunManager instantiation in discovery tools.",
+  "regressions": [],
+  "generatorFeedback": []
+}
