@@ -29,6 +29,7 @@ import { writeFile, rename, readFile, mkdir } from "node:fs/promises";
 import { join, extname } from "node:path";
 import type { CheckpointId, CheckpointOutcome } from "./types.js";
 import { logger } from "../../utils/logger.js";
+import { runWithAudit, type MechanismName } from "./audit.js";
 
 // ── Responsible-agent mapping ──────────────────────────────────────────────
 
@@ -523,6 +524,11 @@ export interface RunCheckpointWithFeedbackOpts {
   /** Absolute path to the project root (for .bober/runs/ markers). */
   projectRoot: string;
   /**
+   * Mechanism name for audit logging. Defaults to 'noop' when omitted
+   * (safe for tests that don't exercise the audit path).
+   */
+  mechanismName?: MechanismName;
+  /**
    * Orchestrator-injected callback to re-run the responsible agent.
    * Returns the new artifact produced by the agent.
    * The callback receives: (agentType, augmentedPrompt) → Promise<unknown>.
@@ -571,6 +577,7 @@ export async function runCheckpointWithFeedback(
     originalPrompt,
     artifactPath,
   } = opts;
+  const mechanismName: MechanismName = opts.mechanismName ?? "noop";
 
   // Default the env-var abort token to BOBER_CHECKPOINT_ABORT_TOKEN when the
   // caller omits it. This ensures the named env var is honored without requiring
@@ -598,7 +605,14 @@ export async function runCheckpointWithFeedback(
           }
         : currentArtifact;
 
-    const outcome = await mechanism.request(checkpointId, artifactWithMeta);
+    const outcome = await runWithAudit({
+      projectRoot,
+      runId,
+      checkpointId,
+      mechanism: mechanismName,
+      iteration,
+      fn: () => mechanism.request(checkpointId, artifactWithMeta),
+    });
 
     const decision = routeOutcome(
       checkpointId,
