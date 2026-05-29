@@ -206,7 +206,7 @@ export class AnthropicAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const { model, system, messages, tools, maxTokens = 16384 } = params;
+    const { model, system, messages, tools, maxTokens = 16384, effort } = params;
 
     // Convert provider-agnostic Message[] to Anthropic MessageParam[]
     const anthropicMessages: Anthropic.Messages.MessageParam[] =
@@ -236,6 +236,7 @@ export class AnthropicAdapter implements LLMClient {
       system: cachedSystem,
       messages: cachedMessages,
       tools: anthropicTools,
+      ...(effort !== undefined ? { output_config: { effort } } : {}),
     });
 
     const { text, toolCalls } = normalizeContent(response.content);

@@ -183,6 +183,40 @@ describe("AnthropicAdapter prompt caching", () => {
 
   // ── Response normalisation is unchanged ─────────────────────────────────
 
+  // ── C2: effort set -> output_config.effort present with the value ──────────
+
+  it("C2: forwards effort as output_config.effort when set", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "max",
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      output_config?: { effort?: string };
+    };
+    expect(req.output_config).toEqual({ effort: "max" });
+  });
+
+  // ── C3: effort unset -> NO output_config key anywhere in the request ────────
+
+  it("C3: omits output_config entirely when effort is unset", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(req).not.toHaveProperty("output_config");
+    expect(JSON.stringify(req)).not.toContain("output_config");
+  });
+
+  // ── normalises response correctly regardless of caching flag ────────────────
+
   it("normalises response correctly regardless of caching flag", async () => {
     createMock.mockResolvedValue({
       content: [{ type: "text", text: "hello" }],

@@ -125,6 +125,12 @@ export interface ChatParams {
   tools?: ToolDef[];
   /** Maximum tokens to generate. Defaults to 16384. */
   maxTokens?: number;
+  /**
+   * Reasoning/output effort level. Provider-agnostic; only the Anthropic
+   * adapter forwards it (as output_config.effort). When unset, the provider
+   * default applies (high on Opus 4.8). Other adapters ignore it.
+   */
+  effort?: "low" | "medium" | "high" | "xhigh" | "max";
 }
 
 /**
