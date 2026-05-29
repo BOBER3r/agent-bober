@@ -362,6 +362,25 @@ describe("OpenAIAdapter", () => {
     expect(result.toolCalls[2]).toEqual({ id: "c3", name: "tool_c", input: { c: 3 } });
   });
 
+  // ── C4: SystemUpdateMessage handled by non-anthropic adapter without throwing ─
+
+  it("C4: tolerates SystemUpdateMessage without throwing (best-effort system message)", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", systemUpdate: "Switch to terse mode." }],
+    });
+    expect(result.text).toBe("ok");
+
+    // The instruction is rendered as a system message in the OpenAI request
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    expect(callArgs.messages.some((m) => m.content === "Switch to terse mode.")).toBe(true);
+  });
+
   // ── C4: non-anthropic adapter accepts effort, ignores it, no error ──────────
 
   it("C4: accepts effort without error and never sends output_config", async () => {

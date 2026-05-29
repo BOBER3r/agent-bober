@@ -100,14 +100,36 @@ export interface TextMessage {
 }
 
 /**
+ * A provider-agnostic mid-conversation system instruction.
+ *
+ * Rendered by the Anthropic adapter as a `mid_conv_system` content block
+ * inside a message (NOT a top-level role). Non-anthropic adapters render it
+ * as best-effort text or skip it. The optional ephemeral cache TTL lets the
+ * instruction update mid-task without breaking the prompt cache.
+ */
+export interface SystemUpdateMessage {
+  role: "user";
+  /** The mid-conversation system instruction text. */
+  systemUpdate: string;
+  /** Optional ephemeral cache TTL for this instruction block. */
+  cacheTtl?: "5m" | "1h";
+}
+
+/**
  * A message in the conversation history.
  *
- * Three variants:
+ * Four variants:
  * - TextMessage: plain user or assistant text
  * - AssistantMessage: assistant response that includes tool call requests
  * - ToolResultMessage: user message carrying tool execution results
+ * - SystemUpdateMessage: mid-conversation system instruction (rendered as
+ *   mid_conv_system content block by the Anthropic adapter)
  */
-export type Message = TextMessage | AssistantMessage | ToolResultMessage;
+export type Message =
+  | TextMessage
+  | AssistantMessage
+  | ToolResultMessage
+  | SystemUpdateMessage;
 
 // ── Chat params / response ──────────────────────────────────────────
 

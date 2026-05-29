@@ -162,6 +162,12 @@ function toGeminiContents(message: Message): GeminiContent[] {
     return [{ role: "model", parts }];
   }
 
+  // SystemUpdateMessage: best-effort render as a user text part (Gemini has no
+  // in-array system role; the top-level systemInstruction is set separately)
+  if ("systemUpdate" in message) {
+    return [{ role: "user", parts: [{ text: message.systemUpdate }] }];
+  }
+
   // TextMessage — map "user" → "user", "assistant" → "model"
   const textMsg = message as { role: "user" | "assistant"; content: string };
   const geminiRole = textMsg.role === "assistant" ? "model" : "user";

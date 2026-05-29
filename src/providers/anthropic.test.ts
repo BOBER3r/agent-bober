@@ -215,6 +215,46 @@ describe("AnthropicAdapter prompt caching", () => {
     expect(JSON.stringify(req)).not.toContain("output_config");
   });
 
+  // ── SystemUpdateMessage: mid_conv_system block shape ────────────────────────
+
+  it("mid_conv_system: renders block with cache_control ephemeral when ttl supplied", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", systemUpdate: "Always answer in French.", cacheTtl: "1h" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const block = (req.messages[0].content as Array<Record<string, unknown>>)[0];
+    expect(block).toMatchObject({
+      type: "mid_conv_system",
+      content: [{ type: "text", text: "Always answer in French." }],
+      cache_control: { type: "ephemeral", ttl: "1h" },
+    });
+  });
+
+  it("mid_conv_system: omits cache_control when no ttl supplied", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", systemUpdate: "Be terse." }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      messages: Array<{ content: unknown }>;
+    };
+    const block = (req.messages[0].content as Array<Record<string, unknown>>)[0];
+    expect(block).toMatchObject({
+      type: "mid_conv_system",
+      content: [{ type: "text", text: "Be terse." }],
+    });
+    expect(block).not.toHaveProperty("cache_control");
+  });
+
   // ── normalises response correctly regardless of caching flag ────────────────
 
   it("normalises response correctly regardless of caching flag", async () => {

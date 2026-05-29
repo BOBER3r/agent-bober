@@ -7,6 +7,7 @@ export type {
   TextMessage,
   AssistantMessage,
   ToolResultMessage,
+  SystemUpdateMessage,
   Message,
   ChatParams,
   ChatResponse,

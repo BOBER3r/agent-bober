@@ -71,10 +71,11 @@ function normalizeContent(
 /**
  * Convert a provider-agnostic Message to an Anthropic MessageParam.
  *
- * Handles three message variants:
+ * Handles four message variants:
  * - TextMessage: plain string content for user or assistant
  * - AssistantMessage: assistant turn with optional text + tool_use blocks
  * - ToolResultMessage: user turn carrying tool_result blocks
+ * - SystemUpdateMessage: user turn carrying a mid_conv_system content block
  */
 function toAnthropicMessage(
   message: Message,
@@ -111,6 +112,18 @@ function toAnthropicMessage(
     }
 
     return { role: "assistant", content };
+  }
+
+  // SystemUpdateMessage: render as a mid_conv_system content block inside a user turn
+  if ("systemUpdate" in message) {
+    const block: Anthropic.Messages.MidConversationSystemBlockParam = {
+      type: "mid_conv_system",
+      content: [{ type: "text", text: message.systemUpdate }],
+      ...(message.cacheTtl
+        ? { cache_control: { type: "ephemeral", ttl: message.cacheTtl } }
+        : {}),
+    };
+    return { role: "user", content: [block] };
   }
 
   // TextMessage: plain string content
