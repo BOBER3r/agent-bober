@@ -74,8 +74,8 @@ npx agent-bober init
 
 agent-bober works in multiple environments:
 
-- **Claude Code** -- Plugin with 10 slash commands (`/bober-plan`, `/bober-run`, etc.)
-- **Cursor / Windsurf** -- MCP server with 10 tools in the chat interface
+- **Claude Code** -- Plugin with 20+ slash commands (`/bober-plan`, `/bober-run`, etc.)
+- **Cursor / Windsurf** -- MCP server with 37 tools in the chat interface
 - **Any MCP-compatible IDE** -- MCP server via stdio transport
 - **Any terminal** -- CLI commands (`npx agent-bober run "feature"`)
 
@@ -130,9 +130,24 @@ Specialized workflows:
 
 ## Graph (Tokensave) Integration
 
+> **Optional.** The graph is an opt-in enhancement — agent-bober's core pipeline (Researcher → Planner → Curator → Generator → Evaluator) works fully without it. Enable it only if you want semantic code search, impact analysis, and auto-generated onboarding docs.
+
 agent-bober integrates with [tokensave](https://github.com/aovestdipaperino/tokensave) to build a structural code graph that powers semantic search, impact analysis, and automated onboarding documentation.
 
-Enable by adding a `graph` section to `bober.config.json`:
+**Prerequisite — install the `tokensave` binary.** It is a native Rust binary, **not** an npm package, so `npm install -g agent-bober` does **not** install it. Install it separately:
+
+```bash
+# macOS (Homebrew)
+brew install aovestdipaperino/tap/tokensave
+# Windows (Scoop)
+scoop bucket add tokensave https://github.com/aovestdipaperino/scoop-bucket && scoop install tokensave
+# Any platform (Cargo / Rust)
+cargo install tokensave
+```
+
+Required version range: **`>=6.0.0-beta.1 <7.0.0`**. agent-bober verifies this on `agent-bober graph init` and prints the correct install hint if `tokensave` is missing or out of range. If the binary is absent, graph features degrade gracefully and the rest of the pipeline is unaffected.
+
+Once `tokensave` is installed, enable the graph by adding a `graph` section to `bober.config.json`:
 
 ```json
 {
@@ -208,11 +223,18 @@ npx agent-bober run "feature" --provider openai
 
 Provider SDKs (`openai`, `@google/generative-ai`) are **optional peer dependencies** -- install only what you use. Only `@anthropic-ai/sdk` is required by default.
 
+### Anthropic features (Claude Opus 4.8)
+
+- **Latest model by default.** The `opus` shorthand resolves to **`claude-opus-4-8`** (1M context, adaptive thinking). Pin the previous generation with the `opus-4-7` shorthand.
+- **Prompt caching, on by default.** Multi-turn Anthropic calls reuse a cached system + recent-message prefix (ephemeral `cache_control`, system-and-last-3 strategy), cutting input-token cost. Disable per role with `"providerConfig": { "promptCaching": false }`.
+- **Effort control.** Set `effort` (`low` | `medium` | `high` | `xhigh` | `max`) to trade latency/cost against depth; when omitted, the API default applies (`high` on Opus 4.8). Other providers ignore it.
+- **Mid-conversation system updates.** Instructions can be revised mid-task without breaking the prompt cache (Anthropic `mid_conv_system` blocks).
+
 ---
 
 ## MCP Server (Cursor, Windsurf, etc.)
 
-agent-bober includes an MCP (Model Context Protocol) server that exposes all functionality as tools in any MCP-compatible IDE.
+agent-bober includes an MCP (Model Context Protocol) server that exposes **37 tools** across pipeline, run-management, careful-flow approvals, multi-project discovery, incident response, and graph in any MCP-compatible IDE.
 
 ### Setup for Cursor
 
@@ -263,6 +285,13 @@ Add to your Windsurf MCP configuration:
 | `bober_spec` | read | Read the current PlanSpec |
 | `bober_principles` | read/write | Read or set project principles |
 | `bober_config` | read/write | Read or update `bober.config.json` |
+| `bober_list_pending_approvals` · `bober_approve_checkpoint` · `bober_reject_checkpoint` | careful-flow | List / approve / reject checkpoint approvals (careful mode) |
+| `bober_list_active_runs` · `bober_get_run_status` · `bober_abort_run` · `bober_run_in_worktree` | run-mgmt | Manage concurrent and isolated-worktree runs |
+| `bober_subscribe_events` · `bober_unsubscribe_events` | events | Live run event stream |
+| `bober_get_project_state` · `bober_list_projects` · `bober_list_specs` | discovery | Multi-project state + spec discovery |
+| `bober_incident_start` · `bober_incident_status` · `bober_incident_list` · `bober_incident_abort` · `bober_rollback_start` · `bober_postmortem_get` · `bober_playbook_search` · `bober_playbook_list` | incident | Diagnose, roll back, postmortem, and search playbooks |
+
+*(37 tools total — the rows above summarize the additional categories beyond the core pipeline tools.)*
 
 ---
 

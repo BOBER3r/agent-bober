@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-05-29
+
 ### Added
 
+- **Claude Opus 4.8 support** ([#17](https://github.com/BOBER3r/agent-bober/pull/17)): the `opus` shorthand now resolves to `claude-opus-4-8` (1M context, adaptive thinking); added an `opus-4-7` shorthand to pin the previous model.
+- **`@anthropic-ai/sdk` upgraded `0.39.0` → `0.100.1`** to expose the Opus 4.8 request fields, with zero adapter behavior change.
+- **Anthropic prompt caching** (pattern borrowed from nousresearch/hermes-agent): ephemeral `cache_control` breakpoints on the system prompt + recent messages (system-and-last-3, capped at 4 per request), behind `providerConfig.promptCaching` — default **on** for Anthropic, no-op for other providers.
+- **`effort` control**: optional `ChatParams.effort` (`low` | `medium` | `high` | `xhigh` | `max`) forwarded as top-level `output_config.effort`; omitted when unset so the API default (`high` on Opus 4.8) applies. Non-Anthropic adapters ignore it.
+- **Mid-conversation system blocks**: a `SystemUpdateMessage` message variant renders to an Anthropic `mid_conv_system` content block with optional ephemeral `cache_control`; OpenAI and Google adapters handle it best-effort without error.
 - **`bober_list_pending_approvals`**: List all pending careful-flow checkpoints awaiting human
   approval. Accepts optional `{ projectPath?: string }` (must be absolute when supplied; defaults
   to cwd). Returns `[{ checkpointId, ageMs, prompt }]` — identical shape to `bober list-approvals
