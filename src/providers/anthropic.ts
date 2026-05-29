@@ -120,6 +120,68 @@ function toAnthropicMessage(
   };
 }
 
+// ── Prompt caching ──────────────────────────────────────────────────
+
+/**
+ * Build a cached system block: wraps the plain system string in a
+ * TextBlockParam array with an ephemeral cache_control marker.
+ */
+function buildCachedSystem(
+  system: string,
+): Anthropic.Messages.TextBlockParam[] {
+  return [{ type: "text", text: system, cache_control: { type: "ephemeral" } }];
+}
+
+/**
+ * Attach ephemeral cache_control breakpoints to the final content block of
+ * up to the last 3 messages (system-and-last-3 strategy, capped at 4 total).
+ *
+ * System counts as 1 breakpoint, so at most 3 message breakpoints are added.
+ * Messages with plain-string content are converted to a one-element
+ * TextBlockParam array so the breakpoint can be attached.
+ */
+function attachMessageBreakpoints(
+  msgs: Anthropic.Messages.MessageParam[],
+): Anthropic.Messages.MessageParam[] {
+  const result: Anthropic.Messages.MessageParam[] = msgs.map((m) => ({ ...m }));
+  const maxMsgBreakpoints = 3; // 4 total - 1 for system
+  let placed = 0;
+
+  // Walk from the end of the array, attaching breakpoints to the last 3.
+  for (let i = result.length - 1; i >= 0 && placed < maxMsgBreakpoints; i--) {
+    const msg = result[i];
+
+    if (typeof msg.content === "string") {
+      // Convert plain-string content to a TextBlockParam array.
+      result[i] = {
+        ...msg,
+        content: [
+          {
+            type: "text",
+            text: msg.content,
+            cache_control: { type: "ephemeral" },
+          } satisfies Anthropic.Messages.TextBlockParam,
+        ],
+      };
+    } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+      // Attach to the LAST block of the existing array.
+      const blocks = msg.content.map((b) => ({ ...b }));
+      const last = blocks[blocks.length - 1] as Anthropic.Messages.ContentBlockParam & {
+        cache_control?: { type: "ephemeral" };
+      };
+      last.cache_control = { type: "ephemeral" };
+      result[i] = { ...msg, content: blocks };
+    } else {
+      // Empty content — skip without consuming a breakpoint slot.
+      continue;
+    }
+
+    placed++;
+  }
+
+  return result;
+}
+
 // ── AnthropicAdapter ────────────────────────────────────────────────
 
 /**
@@ -129,12 +191,18 @@ function toAnthropicMessage(
  * converts provider-agnostic Message[] (including tool call/result variants)
  * to Anthropic MessageParam[], and normalizes Anthropic responses to
  * ChatResponse after each call.
+ *
+ * When promptCaching is enabled (the default), attaches ephemeral
+ * cache_control breakpoints to the system prompt and up to the last 3
+ * messages (system-and-last-3 strategy, capped at 4 breakpoints total).
  */
 export class AnthropicAdapter implements LLMClient {
   private readonly client: Anthropic;
+  private readonly promptCaching: boolean;
 
-  constructor(apiKey?: string) {
+  constructor(apiKey?: string, opts?: { promptCaching?: boolean }) {
     this.client = new Anthropic({ apiKey });
+    this.promptCaching = opts?.promptCaching ?? true;
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
@@ -148,11 +216,25 @@ export class AnthropicAdapter implements LLMClient {
     const anthropicTools =
       tools && tools.length > 0 ? tools.map(toAnthropicTool) : undefined;
 
+    // ── Prompt caching branch ──────────────────────────────────────
+    // When enabled: system becomes a TextBlockParam[] with cache_control,
+    // and breakpoints are attached to the final block of up to the last 3
+    // messages (total capped at 4 across system + messages).
+    // When disabled: plain-string system and unmodified messages (C3 guard).
+    const cachedSystem: string | Anthropic.Messages.TextBlockParam[] =
+      this.promptCaching && system !== undefined
+        ? buildCachedSystem(system)
+        : system;
+
+    const cachedMessages = this.promptCaching
+      ? attachMessageBreakpoints(anthropicMessages)
+      : anthropicMessages;
+
     const response = await this.client.messages.create({
       model,
       max_tokens: maxTokens,
-      system,
-      messages: anthropicMessages,
+      system: cachedSystem,
+      messages: cachedMessages,
       tools: anthropicTools,
     });
 

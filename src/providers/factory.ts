@@ -157,8 +157,13 @@ export function createClient(
       : model ?? resolvedProvider;
 
   switch (resolvedProvider) {
-    case "anthropic":
-      return new AnthropicAdapter(apiKey);
+    case "anthropic": {
+      const promptCaching =
+        typeof providerConfig?.["promptCaching"] === "boolean"
+          ? providerConfig["promptCaching"]
+          : true;
+      return new AnthropicAdapter(apiKey, { promptCaching });
+    }
     case "openai":
       return new OpenAIAdapter(
         resolvedModelId,
