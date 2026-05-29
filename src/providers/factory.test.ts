@@ -14,14 +14,51 @@
  * - Explicit apiKey in providerConfig bypasses env var check
  * - openai-compat skips API key validation (key is optional)
  * - validateApiKey is exported and can be called independently
+ *
+ * Sprint 1 (prompt caching) additions (C4):
+ * - createClient reads promptCaching from providerConfig and forwards it to
+ *   the AnthropicAdapter constructor; defaults to true for the anthropic provider.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createClient, validateApiKey } from "./factory.js";
 import { GoogleAdapter } from "./google.js";
 import { OpenAICompatAdapter } from "./openai-compat.js";
 import { OpenAIAdapter } from "./openai.js";
-import { AnthropicAdapter } from "./anthropic.js";
+
+// ── AnthropicAdapter mock ────────────────────────────────────────────────────
+//
+// We mock ./anthropic.js so that the AnthropicAdapter constructor does NOT
+// call into the real Anthropic SDK (which would require a live API key), and
+// so we can capture the exact arguments passed to the constructor.
+//
+// IMPORTANT: vi.mock is hoisted by vitest to the top of the module, so the
+// factory function must be fully self-contained (no references to outer
+// variables).  We store constructor call records on the class itself so they
+// are accessible from inside the hoisted closure AND from the test body.
+
+vi.mock("./anthropic.js", () => {
+  // Shared recorder attached to the class so it survives hoisting.
+  const calls: Array<[string | undefined, { promptCaching?: boolean } | undefined]> = [];
+
+  class AnthropicAdapter {
+    static readonly _ctorCalls = calls;
+
+    constructor(apiKey?: string, opts?: { promptCaching?: boolean }) {
+      calls.push([apiKey, opts]);
+    }
+
+    // Minimal duck-type to prevent runtime errors in factory tests.
+    chat = () => Promise.resolve({ content: "", usage: { inputTokens: 0, outputTokens: 0 } });
+    countTokens = () => Promise.resolve(0);
+  }
+
+  return { AnthropicAdapter };
+});
+
+// Import AnthropicAdapter AFTER vi.mock so the test file holds the mocked
+// class (needed for instanceof assertions and to access _ctorCalls).
+const { AnthropicAdapter } = await import("./anthropic.js");
 
 // ── API key fixtures ─────────────────────────────────────────────────────────
 
@@ -259,6 +296,33 @@ describe("createClient factory", () => {
         expect(client).toBeInstanceOf(OpenAICompatAdapter);
       });
     });
+  });
+});
+
+// ── promptCaching flag resolution (C4) ──────────────────────────────────────
+
+describe("createClient promptCaching flag resolution", () => {
+  beforeEach(() => {
+    // Clear recorded constructor calls before each test so tests are isolated.
+    (AnthropicAdapter as unknown as { _ctorCalls: unknown[] })._ctorCalls.length = 0;
+  });
+
+  it("forwards promptCaching: false to AnthropicAdapter constructor when explicitly set", () => {
+    createClient("anthropic", null, { apiKey: FAKE_ANTHROPIC_KEY, promptCaching: false });
+
+    const calls = (AnthropicAdapter as unknown as { _ctorCalls: Array<[string | undefined, { promptCaching?: boolean } | undefined]> })._ctorCalls;
+    expect(calls).toHaveLength(1);
+    const [, opts] = calls[0]!;
+    expect(opts).toEqual({ promptCaching: false });
+  });
+
+  it("defaults promptCaching to true for anthropic when promptCaching is omitted from providerConfig", () => {
+    createClient("anthropic", null, { apiKey: FAKE_ANTHROPIC_KEY });
+
+    const calls = (AnthropicAdapter as unknown as { _ctorCalls: Array<[string | undefined, { promptCaching?: boolean } | undefined]> })._ctorCalls;
+    expect(calls).toHaveLength(1);
+    const [, opts] = calls[0]!;
+    expect(opts).toEqual({ promptCaching: true });
   });
 });
 

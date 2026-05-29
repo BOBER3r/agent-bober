@@ -21,7 +21,9 @@ export interface ResolvedModel {
  */
 const SHORTHAND_MAP: Record<string, { provider: string; modelId: string }> = {
   // Anthropic
-  opus: { provider: "anthropic", modelId: "claude-opus-4-7" },
+  opus: { provider: "anthropic", modelId: "claude-opus-4-8" },
+  "opus-4-8": { provider: "anthropic", modelId: "claude-opus-4-8" }, // symmetry alias
+  "opus-4-7": { provider: "anthropic", modelId: "claude-opus-4-7" }, // pinned previous GA
   sonnet: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
   haiku: { provider: "anthropic", modelId: "claude-haiku-4-5" },
   // OpenAI

@@ -178,6 +178,11 @@ function toOpenAIMessages(message: Message): OAIRequestMessage[] {
     return [oaiMsg];
   }
 
+  // SystemUpdateMessage: best-effort render as an OpenAI system message
+  if ("systemUpdate" in message) {
+    return [{ role: "system", content: message.systemUpdate }];
+  }
+
   // TextMessage (user or assistant without tool calls)
   const textMsg = message as { role: "user" | "assistant"; content: string };
   if (textMsg.role === "user") {
