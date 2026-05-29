@@ -3,8 +3,15 @@ import { resolveProviderModel, resolveModel } from "./model-resolver.js";
 
 describe("resolveProviderModel", () => {
   describe("Anthropic shorthands", () => {
-    it("resolves opus to anthropic/claude-opus-4-7", () => {
+    it("resolves opus to anthropic/claude-opus-4-8", () => {
       expect(resolveProviderModel("opus")).toEqual({
+        provider: "anthropic",
+        modelId: "claude-opus-4-8",
+      });
+    });
+
+    it("resolves opus-4-7 to anthropic/claude-opus-4-7 (pinned alias)", () => {
+      expect(resolveProviderModel("opus-4-7")).toEqual({
         provider: "anthropic",
         modelId: "claude-opus-4-7",
       });
@@ -124,7 +131,7 @@ describe("resolveProviderModel", () => {
 
 describe("resolveModel (backward compat)", () => {
   it("returns modelId for opus", () => {
-    expect(resolveModel("opus")).toBe("claude-opus-4-7");
+    expect(resolveModel("opus")).toBe("claude-opus-4-8");
   });
 
   it("returns modelId for sonnet", () => {
