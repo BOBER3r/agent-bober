@@ -189,6 +189,29 @@ agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. M
 
 Shorthands resolve to the latest model version automatically. You can also pass any full model ID directly -- it will be sent to the provider as-is.
 
+### Capability Matrix
+
+| Role                   | anthropic (default)  | deepseek (openai-compat) | claude-code (subscription) |
+| ---------------------- | -------------------- | ------------------------ | -------------------------- |
+| planner                | yes                  | yes                      | yes (no tools needed)      |
+| researcher (phase 1/2) | yes                  | yes                      | yes (no tools needed)      |
+| curator                | yes                  | yes (tools)              | no (runs own loop)         |
+| generator              | yes                  | yes (tools)              | no (runs own loop)         |
+| evaluator              | yes                  | yes (tools)              | no (runs own loop)         |
+| code-reviewer          | yes                  | yes (tools)              | no (runs own loop)         |
+
+**DeepSeek prerequisites:** `npm install openai` (optional peer dep) and set `DEEPSEEK_API_KEY` in
+your environment. DeepSeek supports all roles including tool-calling roles (curator, generator,
+evaluator, code-reviewer).
+
+**claude-code prerequisites:** An active Claude subscription (Pro/Max/Team) and the `claude` CLI
+on PATH. claude-code is **planner and researcher only** — it cannot be used for tool-using roles
+because the `claude -p` interface does not support tool-calling. As of the **2026-06-15 ToS update**,
+programmatic subscription use is metered (Agent-SDK credit, billed at API rates, no rollover).
+Each `claude -p` call injects approximately **40,000 tokens of system-prompt overhead**.
+
+See [`docs/providers.md`](docs/providers.md) for copy-paste config snippets for each provider.
+
 ### Configuration
 
 Set providers per agent role in `bober.config.json`:
