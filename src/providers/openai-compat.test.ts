@@ -14,6 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import type { ChatParams, ToolDef } from "./types.js";
+import { createClient } from "./factory.js";
 
 // ── Fake OpenAI client factory ───────────────────────────────────────
 
@@ -251,5 +252,39 @@ describe("OpenAICompatAdapter", () => {
         messages: [{ role: "user", content: "hi" }],
       }),
     ).rejects.toThrow('OpenAI provider requires the "openai" package. Run: npm install openai');
+  });
+
+  // ── DeepSeek key injection (sc-2-5) ────────────────────────────────────────
+  //
+  // When DEEPSEEK_API_KEY is set and the user calls createClient with a deepseek
+  // shorthand, the key must flow through to the OpenAI client constructor.
+  // We use the existing vi.doMock("openai") + lastConstructorOptions harness.
+
+  it("passes DEEPSEEK_API_KEY env value to the openai client when resolving deepseek-v4-pro (sc-2-5)", async () => {
+    const fakeDeepSeekKey = "sk-fake-deepseek-sc25-test";
+    const savedDeepSeek = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = fakeDeepSeekKey;
+
+    try {
+      createFn.mockResolvedValue(makeOAIResponse({ content: "deepseek reply" }));
+      vi.doMock("openai", () => ({ default: makeFakeOpenAI(createFn) }));
+
+      // Drive through createClient so DEEPSEEK_API_KEY injection in factory.ts fires,
+      // then call .chat() to trigger the lazy openai import and constructor capture.
+      const client = createClient(null, null, undefined, "deepseek-v4-pro");
+      await client.chat({
+        model: "deepseek-v4-pro",
+        system: "sys",
+        messages: [{ role: "user", content: "hi" }],
+      });
+
+      expect(lastConstructorOptions.apiKey).toBe(fakeDeepSeekKey);
+    } finally {
+      if (savedDeepSeek !== undefined) {
+        process.env["DEEPSEEK_API_KEY"] = savedDeepSeek;
+      } else {
+        delete process.env["DEEPSEEK_API_KEY"];
+      }
+    }
   });
 });

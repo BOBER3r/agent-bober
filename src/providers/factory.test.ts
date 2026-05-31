@@ -21,7 +21,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createClient, validateApiKey } from "./factory.js";
+import { createClient, validateApiKey, preflightClaudeBinary } from "./factory.js";
+import { ClaudeCodeAdapter } from "./claude-code.js";
 import { GoogleAdapter } from "./google.js";
 import { OpenAICompatAdapter } from "./openai-compat.js";
 import { OpenAIAdapter } from "./openai.js";
@@ -156,6 +157,48 @@ describe("createClient factory", () => {
         // Pass a fake key so we get past the validation step to the unsupported-provider error
         createClient("unknown-provider", null, { apiKey: "x" }),
       ).toThrow(/anthropic, openai, google, openai-compat/);
+    });
+  });
+
+  // ── claude-code provider (sc-4-1, sc-4-2) ───────────────────────────────────
+
+  describe("claude-code provider", () => {
+    it("sc-4-1: createClient returns a ClaudeCodeAdapter instance", () => {
+      const client = createClient("claude-code", null, undefined, "opus");
+      expect(client).toBeInstanceOf(ClaudeCodeAdapter);
+    });
+
+    it("sc-4-1: createClient returns ClaudeCodeAdapter with default binary when no providerConfig", () => {
+      const client = createClient("claude-code");
+      expect(client).toBeInstanceOf(ClaudeCodeAdapter);
+    });
+
+    it("sc-4-2: validateApiKey('claude-code') does not throw when no API key and no ANTHROPIC_API_KEY are set", () => {
+      const saved = process.env["ANTHROPIC_API_KEY"];
+      delete process.env["ANTHROPIC_API_KEY"];
+      try {
+        expect(() => validateApiKey("claude-code")).not.toThrow();
+      } finally {
+        if (saved !== undefined) process.env["ANTHROPIC_API_KEY"] = saved;
+      }
+    });
+
+    it("sc-4-2: preflightClaudeBinary throws naming the binary when probe reports absent", async () => {
+      await expect(
+        preflightClaudeBinary("claude", async () => false),
+      ).rejects.toThrow(/claude/);
+    });
+
+    it("sc-4-2: preflightClaudeBinary throws naming a custom binary when probe reports absent", async () => {
+      await expect(
+        preflightClaudeBinary("my-claude", async () => false),
+      ).rejects.toThrow(/my-claude/);
+    });
+
+    it("sc-4-2: preflightClaudeBinary does not throw when probe reports present", async () => {
+      await expect(
+        preflightClaudeBinary("claude", async () => true),
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -295,6 +338,31 @@ describe("createClient factory", () => {
         );
         expect(client).toBeInstanceOf(OpenAICompatAdapter);
       });
+
+      // ── DeepSeek key validation (sc-2-4) ──────────────────────────────────
+      it("throws with DEEPSEEK_API_KEY in message when key is absent for deepseek endpoint", () => {
+        const saved = process.env["DEEPSEEK_API_KEY"];
+        delete process.env["DEEPSEEK_API_KEY"];
+
+        try {
+          expect(() =>
+            createClient(null, null, undefined, "deepseek-v4-pro"),
+          ).toThrow(/DEEPSEEK_API_KEY/);
+        } finally {
+          if (saved !== undefined) process.env["DEEPSEEK_API_KEY"] = saved;
+        }
+      });
+
+      it("does not throw for non-deepseek openai-compat endpoint when no key is set", () => {
+        // Ollama must keep its no-key behavior even after the deepseek gate is added.
+        const client = createClient(
+          "openai-compat",
+          "http://localhost:11434/v1",
+          undefined,
+          "llama3",
+        );
+        expect(client).toBeInstanceOf(OpenAICompatAdapter);
+      });
     });
   });
 });
@@ -351,8 +419,38 @@ describe("validateApiKey", () => {
     }
   });
 
-  it("does not throw for openai-compat regardless of key presence", () => {
+  it("does not throw for openai-compat with no endpoint (Ollama path)", () => {
     expect(() => validateApiKey("openai-compat")).not.toThrow();
+  });
+
+  it("throws with DEEPSEEK_API_KEY in message for openai-compat at api.deepseek.com when key absent", () => {
+    const saved = process.env["DEEPSEEK_API_KEY"];
+    delete process.env["DEEPSEEK_API_KEY"];
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", undefined, undefined, "https://api.deepseek.com"),
+      ).toThrow(/DEEPSEEK_API_KEY/);
+    } finally {
+      if (saved !== undefined) process.env["DEEPSEEK_API_KEY"] = saved;
+    }
+  });
+
+  it("does not throw for openai-compat at api.deepseek.com when DEEPSEEK_API_KEY is set", () => {
+    const saved = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "sk-fake-deepseek-key";
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", undefined, undefined, "https://api.deepseek.com"),
+      ).not.toThrow();
+    } finally {
+      if (saved !== undefined) {
+        process.env["DEEPSEEK_API_KEY"] = saved;
+      } else {
+        delete process.env["DEEPSEEK_API_KEY"];
+      }
+    }
   });
 
   it("does not throw for unknown providers", () => {
