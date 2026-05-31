@@ -2,13 +2,15 @@ import { AnthropicAdapter } from "./anthropic.js";
 import { OpenAIAdapter } from "./openai.js";
 import { GoogleAdapter } from "./google.js";
 import { OpenAICompatAdapter } from "./openai-compat.js";
+import { ClaudeCodeAdapter } from "./claude-code.js";
 import type { LLMClient, ChatParams, ChatResponse } from "./types.js";
+import { execa } from "execa";
 import { resolveProviderModel } from "../orchestrator/model-resolver.js";
 
 /**
  * The set of provider names currently supported.
  */
-export type ProviderName = "anthropic" | "openai" | "google" | "openai-compat";
+export type ProviderName = "anthropic" | "openai" | "google" | "openai-compat" | "claude-code";
 
 // ── Deterministic stub (BOBER_TEST_DETERMINISTIC) ─────────────────────────────
 //
@@ -32,6 +34,43 @@ class DeterministicStubClient implements LLMClient {
       stopReason: "end_turn",
       usage: { inputTokens: 0, outputTokens: 0 },
     };
+  }
+}
+
+// ── Claude binary preflight ───────────────────────────────────────────────────
+
+/**
+ * Injectable probe function for verifying the claude CLI is on PATH.
+ * Defaults to an execa-based check; override in tests to avoid real CLI calls.
+ */
+export type BinaryProbe = (binary: string) => Promise<boolean>;
+
+const defaultBinaryProbe: BinaryProbe = async (binary) => {
+  try {
+    const r = await execa(binary, ["--version"], { reject: false, timeout: 5_000 });
+    return r.exitCode === 0;
+  } catch {
+    return false; // ENOENT → not on PATH
+  }
+};
+
+/**
+ * Verify the claude CLI binary is on PATH. Throws an Error naming the binary
+ * when it is absent. Call this before using the claude-code provider.
+ *
+ * @param binary - CLI binary name/path (default "claude").
+ * @param probe - Injectable PATH-check function (default uses execa; override in tests).
+ */
+export async function preflightClaudeBinary(
+  binary = "claude",
+  probe: BinaryProbe = defaultBinaryProbe,
+): Promise<void> {
+  const ok = await probe(binary);
+  if (!ok) {
+    throw new Error(
+      `The "${binary}" CLI was not found on PATH. The claude-code provider ` +
+        `requires the Claude Code CLI. Install it and ensure "${binary}" is on your PATH.`,
+    );
   }
 }
 
@@ -98,6 +137,10 @@ export function validateApiKey(
           );
         }
       }
+      break;
+    case "claude-code":
+      // Subscription provider: no API key is read or required. The `claude`
+      // binary PATH preflight is async and runs via preflightClaudeBinary().
       break;
     default:
       // Unknown providers: no validation, let createClient handle the error.
@@ -215,9 +258,20 @@ export function createClient(
 
       return new OpenAICompatAdapter(resolvedEndpoint, resolvedModelId, compatKey);
     }
+    case "claude-code": {
+      const binary =
+        typeof providerConfig?.["binary"] === "string"
+          ? providerConfig["binary"]
+          : "claude";
+      const timeoutMs =
+        typeof providerConfig?.["timeoutMs"] === "number"
+          ? providerConfig["timeoutMs"]
+          : 180_000;
+      return new ClaudeCodeAdapter(binary, timeoutMs);
+    }
     default:
       throw new Error(
-        `Unsupported provider: "${resolvedProvider}". Supported providers: anthropic, openai, google, openai-compat.`,
+        `Unsupported provider: "${resolvedProvider}". Supported providers: anthropic, openai, google, openai-compat, claude-code.`,
       );
   }
 }
