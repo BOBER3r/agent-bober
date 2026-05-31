@@ -113,12 +113,7 @@ describe("PreflightContextInjector graph-preflight telemetry", () => {
     const out = await injector.inject("generator", contract("sprint-x"), "ORIGINAL");
     expect(out).toBe("ORIGINAL");
 
-    let raw = "";
-    try {
-      raw = await readFile(join(root, ".bober", "history.jsonl"), "utf-8");
-    } catch {
-      raw = "";
-    }
+    const raw = await readFile(join(root, ".bober", "history.jsonl"), "utf-8").catch(() => "");
     expect(raw).toBe("");
   });
 });
