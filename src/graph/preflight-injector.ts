@@ -21,6 +21,7 @@ import type { PrefetchSpec, GraphResult, NodeRef, ImpactReport, SearchHit } from
 import { enforceBudget } from "./preflight-budgets.js";
 import { graphPipelineLifecycle } from "./pipeline-lifecycle.js";
 import type { GraphArtifactStore } from "./artifact-store.js";
+import { appendHistory, type Phase } from "../state/history.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -46,6 +47,20 @@ export interface InjectOverrides {
   questionKeywords?: string[];
   baselineSha?: string;
 }
+
+/**
+ * Maps an agent role to the pipeline phase recorded in graph-preflight
+ * telemetry (the `phase` field required by HistoryEntrySchema).
+ */
+const ROLE_TO_PHASE: Record<BoberAgentRole, Phase> = {
+  planner: "planning",
+  "researcher-phase1": "planning",
+  "researcher-phase2": "planning",
+  architect: "planning",
+  curator: "curating",
+  generator: "generating",
+  evaluator: "evaluating",
+};
 
 // ── Query batch definitions ────────────────────────────────────────
 
@@ -419,14 +434,31 @@ export class PreflightContextInjector {
     firstMessage: string,
     overrides?: InjectOverrides,
   ): Promise<string> {
-    // Fast-path: disabled or no client
-    if (!this.config?.enabled || !this.client) {
+    // Fast-path: graph disabled → zero overhead and NO telemetry, matching the
+    // opt-in philosophy (projects that never enable the graph pay nothing).
+    if (!this.config?.enabled) {
       return firstMessage;
     }
 
-    // Fast-path: engine not ready
+    // From here the graph IS enabled, so every outcome — including skips — is
+    // recorded. This is what makes "is the graph actually firing?" answerable
+    // from .bober/history.jsonl rather than a matter of faith.
+    const startedAt = Date.now();
     const health = graphPipelineLifecycle.engineHealth();
+
+    // Enabled but no client wired in.
+    if (!this.client) {
+      await this.recordTelemetry(
+        role, contract, "skipped-no-client", false, 0, Date.now() - startedAt, health, false,
+      );
+      return firstMessage;
+    }
+
+    // Enabled but engine not ready (starting/syncing/disabled).
     if (health !== "ready") {
+      await this.recordTelemetry(
+        role, contract, "skipped-engine-not-ready", false, 0, Date.now() - startedAt, health, false,
+      );
       return firstMessage;
     }
 
@@ -437,8 +469,20 @@ export class PreflightContextInjector {
           setTimeout(() => reject(new Error("preflight-timeout-5000ms")), 5000),
         ),
       ]);
+      const charsAdded = result.length - firstMessage.length;
+      const injected = charsAdded > 0;
+      const partialFailure = result.includes("queries unavailable");
+      const outcome = !injected
+        ? "no-context"
+        : partialFailure
+          ? "degraded"
+          : "injected";
+      await this.recordTelemetry(
+        role, contract, outcome, injected, charsAdded, Date.now() - startedAt, health, partialFailure,
+      );
       return result;
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       // Log incident; return ORIGINAL firstMessage so spawn proceeds.
       try {
         if (this.incidents) {
@@ -446,13 +490,69 @@ export class PreflightContextInjector {
             ts: new Date().toISOString(),
             event: "preflight-failure",
             role,
-            detail: err instanceof Error ? err.message : String(err),
+            detail: msg,
           });
         }
       } catch {
         // Swallow — incident write failure must not break spawn
       }
+      await this.recordTelemetry(
+        role, contract, /timeout/.test(msg) ? "timeout" : "error",
+        false, 0, Date.now() - startedAt, health, false,
+      );
       return firstMessage;
+    }
+  }
+
+  /**
+   * Record one `graph-preflight` telemetry event to .bober/history.jsonl.
+   *
+   * Resolves a project root by preferring the constructor-injected projectRoot,
+   * then the active pipeline lifecycle singleton — so telemetry fires for every
+   * role even though most call sites construct the injector with only
+   * (client, config). Best-effort: any failure is swallowed so telemetry can
+   * NEVER break an agent spawn.
+   *
+   * Each row answers the runtime question directly: did graph context get added
+   * (`injected`), roughly how many tokens (`approxTokensAdded`), under what
+   * `outcome`, and how long the preflight took (`elapsedMs`).
+   */
+  private async recordTelemetry(
+    role: BoberAgentRole,
+    contract: SprintContract | null,
+    outcome: string,
+    injected: boolean,
+    charsAdded: number,
+    elapsedMs: number,
+    engineHealth: string,
+    partialFailure: boolean,
+  ): Promise<void> {
+    try {
+      // Root resolution is INSIDE the try: projectRootOrNull() may be absent on
+      // a test double of the lifecycle singleton, and a thrown TypeError here
+      // must NOT escape — telemetry can never break an agent spawn.
+      const root = this.projectRoot ?? graphPipelineLifecycle.projectRootOrNull?.() ?? null;
+      if (!root) return;
+      await appendHistory(root, {
+        timestamp: new Date().toISOString(),
+        event: "graph-preflight",
+        phase: ROLE_TO_PHASE[role],
+        sprintId: contract?.contractId,
+        details: {
+          role,
+          outcome,
+          injected,
+          charsAdded,
+          // Rough heuristic (~4 chars/token); telemetry only, not billing.
+          approxTokensAdded: Math.max(0, Math.round(charsAdded / 4)),
+          budgetTokens: this.getBudgetForRole(role),
+          engineHealth,
+          elapsedMs,
+          partialFailure,
+        },
+      });
+    } catch {
+      // Telemetry must NEVER break agent spawn.
     }
   }
 

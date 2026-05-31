@@ -182,8 +182,8 @@ describe("Sprint 14 — backward-compat: existing bober.config.json parses with 
       expect(result.data.pipeline.checkpointOverrides).toEqual({});
       expect(result.data.pipeline.approvalTimeoutMs).toBe(86_400_000);
       expect(result.data.pipeline.prPollMs).toBe(30_000);
-      // Existing fields should be preserved.
-      expect(result.data.pipeline.maxIterations).toBe(40);
+      // Existing fields should be preserved (repo config sets maxIterations: 20).
+      expect(result.data.pipeline.maxIterations).toBe(20);
       expect(result.data.pipeline.requireApproval).toBe(false);
     }
   });
@@ -192,8 +192,8 @@ describe("Sprint 14 — backward-compat: existing bober.config.json parses with 
     // Full load path: partial parse → deep-merge defaults → full schema validation.
     const config = await loadConfig(repoRoot);
 
-    // Backward-compat: existing pipeline fields are preserved.
-    expect(config.pipeline.maxIterations).toBe(40);
+    // Backward-compat: existing pipeline fields are preserved (repo sets 20).
+    expect(config.pipeline.maxIterations).toBe(20);
     expect(config.pipeline.requireApproval).toBe(false);
     expect(config.pipeline.contextReset).toBe("always");
 

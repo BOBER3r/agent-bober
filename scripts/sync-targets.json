@@ -1,0 +1,12 @@
+{
+  "//": "Projects that consume agent-bober's skills/agents. `npm run update-all` rebuilds the CLI once (shared via symlink) and re-inlines skills/agents into each target's .claude/. Add absolute project paths here. Auto-discovery (--discover) appends any initialized project it finds under the configured roots.",
+  "discoverRoots": [
+    "/Users/bober4ik/WebstormProjects",
+    "/Users/bober4ik/agent-bober-workspace"
+  ],
+  "targets": [
+    "/Users/bober4ik/WebstormProjects/solex-integration-demo",
+    "/Users/bober4ik/WebstormProjects/solex-integration-demo/apps/api",
+    "/Users/bober4ik/WebstormProjects/solex-integration-demo/solex-games-betbook (Copy)"
+  ]
+}

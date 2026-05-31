@@ -189,6 +189,20 @@ class GraphPipelineLifecycleImpl {
     return this.mcpClient.health();
   }
 
+  // ── projectRootOrNull ─────────────────────────────────────────────
+
+  /**
+   * Project root of the active pipeline, or null when not started.
+   *
+   * Used by PreflightContextInjector to resolve a telemetry sink when the
+   * injector was constructed without an explicit projectRoot (the common case
+   * at most agent call sites). Lets graph-preflight telemetry fire for every
+   * role with zero changes to the call sites.
+   */
+  projectRootOrNull(): string | null {
+    return this.projectRoot;
+  }
+
   // ── getGraphClient ────────────────────────────────────────────────
 
   /**

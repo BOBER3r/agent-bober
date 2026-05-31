@@ -162,7 +162,7 @@ describe("package.json version", () => {
     const pkg = JSON.parse(
       await readFile(join(repoRoot, "package.json"), "utf-8"),
     ) as { version: string };
-    expect(pkg.version).toBe("0.14.0");
+    expect(pkg.version).toBe("0.15.0");
   });
 });
 

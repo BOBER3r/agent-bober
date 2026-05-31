@@ -1,0 +1,20 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agent-bober",
+  "description": "Marketplace for the Bober multi-agent harness — installs the bober plugin (24 skills + 10 subagents) so updates propagate via `/plugin update` instead of per-project copies.",
+  "owner": {
+    "name": "BOBER3r"
+  },
+  "plugins": [
+    {
+      "name": "bober",
+      "description": "Generator-Evaluator multi-agent harness for building applications autonomously with Claude. Researcher → Planner → Curator → Generator → Evaluator pipeline with a tokensave code-graph, incident/runbook tooling, and stack-specific workflows (React, Solidity, Anchor).",
+      "author": {
+        "name": "BOBER3r"
+      },
+      "category": "development",
+      "homepage": "https://agentbober.com",
+      "source": "./"
+    }
+  ]
+}
