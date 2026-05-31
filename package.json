@@ -14,6 +14,8 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
+    "update-all": "node scripts/update-all.mjs",
+    "update-all:check": "node scripts/update-all.mjs --check",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
