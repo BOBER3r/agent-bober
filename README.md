@@ -64,6 +64,26 @@ agent-bober operates in four modes — pick the one that matches your situation.
 
 ## Installation
 
+There are two ways to run agent-bober, and they are complementary:
+
+- **Claude Code plugin** — the skills (`/bober-run`, `/bober-plan`, …) and subagents, running on your Claude Code subscription. No npm or API key required.
+- **npm package** — the standalone CLI + MCP server (`agent-bober`), which calls LLM providers directly (anthropic / deepseek / claude-code) and powers headless, CI, and programmatic runs.
+
+For the full feature set, install both.
+
+### Claude Code Plugin
+
+Install the plugin from its marketplace, then install `bober`:
+
+```text
+/plugin marketplace add BOBER3r/agent-bober
+/plugin install bober@agent-bober
+```
+
+This installs 24 skills + 10 subagents. Update later with `/plugin update bober`. The plugin runs the Researcher → Planner → Curator → Generator → Evaluator pipeline as Claude Code subagents on your Claude subscription — provider selection (the [Capability Matrix](#capability-matrix)) does **not** apply in this mode.
+
+### npm CLI / MCP Server
+
 ```bash
 # Install globally
 npm install -g agent-bober
@@ -72,9 +92,11 @@ npm install -g agent-bober
 npx agent-bober init
 ```
 
+This is required to use the DeepSeek / claude-code providers, run bober headlessly or in CI, or expose the MCP server. A few plugin skills (`bober.plan`, `bober.sprint`, `bober.impact`, `bober.onboard`, `bober.graph`) also shell out to the `agent-bober` CLI, so installing it unlocks their full behavior. Graph features additionally require the separate [`tokensave`](#graph-tokensave-integration) binary.
+
 agent-bober works in multiple environments:
 
-- **Claude Code** -- Plugin with 20+ slash commands (`/bober-plan`, `/bober-run`, etc.)
+- **Claude Code** -- Plugin with 20+ slash commands (`/bober-plan`, `/bober-run`, etc.) — install via the marketplace above
 - **Cursor / Windsurf** -- MCP server with 37 tools in the chat interface
 - **Any MCP-compatible IDE** -- MCP server via stdio transport
 - **Any terminal** -- CLI commands (`npx agent-bober run "feature"`)
@@ -190,6 +212,8 @@ agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. M
 Shorthands resolve to the latest model version automatically. You can also pass any full model ID directly -- it will be sent to the provider as-is.
 
 ### Capability Matrix
+
+> **This matrix applies to the standalone CLI / programmatic provider layer only** (`npx agent-bober run …`), where bober calls each provider's API directly. It does **not** apply to the **Claude Code plugin**: when you run a skill like `/bober-run` inside Claude Code, the roles are spawned as Claude Code subagents on your Claude subscription, so provider selection (including `claude-code`) does not apply. See [Claude Code Plugin](#claude-code-plugin) below.
 
 | Role                   | anthropic (default)  | deepseek (openai-compat) | claude-code (subscription) |
 | ---------------------- | -------------------- | ------------------------ | -------------------------- |

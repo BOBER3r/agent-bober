@@ -3,6 +3,14 @@
 This guide covers all supported providers in agent-bober: how to configure each one,
 which roles each supports, and what prerequisites are required.
 
+**Scope:** Everything in this guide applies to the **standalone CLI / programmatic
+provider layer** (`npx agent-bober run …`), where bober calls each provider's API
+directly. It does **not** apply to the **Claude Code plugin** — when you run a skill
+such as `/bober-run` inside Claude Code, the pipeline roles are spawned as Claude Code
+subagents on your Claude subscription, and provider selection (including `claude-code`)
+is irrelevant. Install the plugin with `/plugin marketplace add BOBER3r/agent-bober`
+then `/plugin install bober@agent-bober`; see the README for details.
+
 agent-bober **never persists API keys**. Keys are read from the environment (or
 `providerConfig` at runtime). `.env` is gitignored — see `.gitignore` lines 10-12
 (`.env`, `.env.local`, `.env.*.local`).
