@@ -15,11 +15,21 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
-        "command": "echo 'Files modified — run /bober:eval to verify'"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Files modified — run /bober:eval to verify'"
+          }
+        ]
       },
       {
         "matcher": "Edit|Write",
-        "command": "node scripts/graph-hook.mjs"
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ${CLAUDE_PLUGIN_ROOT:-.}/scripts/graph-hook.mjs"
+          }
+        ]
       }
     ]
   }
