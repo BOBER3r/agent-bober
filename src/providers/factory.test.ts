@@ -295,6 +295,31 @@ describe("createClient factory", () => {
         );
         expect(client).toBeInstanceOf(OpenAICompatAdapter);
       });
+
+      // ── DeepSeek key validation (sc-2-4) ──────────────────────────────────
+      it("throws with DEEPSEEK_API_KEY in message when key is absent for deepseek endpoint", () => {
+        const saved = process.env["DEEPSEEK_API_KEY"];
+        delete process.env["DEEPSEEK_API_KEY"];
+
+        try {
+          expect(() =>
+            createClient(null, null, undefined, "deepseek-v4-pro"),
+          ).toThrow(/DEEPSEEK_API_KEY/);
+        } finally {
+          if (saved !== undefined) process.env["DEEPSEEK_API_KEY"] = saved;
+        }
+      });
+
+      it("does not throw for non-deepseek openai-compat endpoint when no key is set", () => {
+        // Ollama must keep its no-key behavior even after the deepseek gate is added.
+        const client = createClient(
+          "openai-compat",
+          "http://localhost:11434/v1",
+          undefined,
+          "llama3",
+        );
+        expect(client).toBeInstanceOf(OpenAICompatAdapter);
+      });
     });
   });
 });
@@ -351,8 +376,38 @@ describe("validateApiKey", () => {
     }
   });
 
-  it("does not throw for openai-compat regardless of key presence", () => {
+  it("does not throw for openai-compat with no endpoint (Ollama path)", () => {
     expect(() => validateApiKey("openai-compat")).not.toThrow();
+  });
+
+  it("throws with DEEPSEEK_API_KEY in message for openai-compat at api.deepseek.com when key absent", () => {
+    const saved = process.env["DEEPSEEK_API_KEY"];
+    delete process.env["DEEPSEEK_API_KEY"];
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", undefined, undefined, "https://api.deepseek.com"),
+      ).toThrow(/DEEPSEEK_API_KEY/);
+    } finally {
+      if (saved !== undefined) process.env["DEEPSEEK_API_KEY"] = saved;
+    }
+  });
+
+  it("does not throw for openai-compat at api.deepseek.com when DEEPSEEK_API_KEY is set", () => {
+    const saved = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "sk-fake-deepseek-key";
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", undefined, undefined, "https://api.deepseek.com"),
+      ).not.toThrow();
+    } finally {
+      if (saved !== undefined) {
+        process.env["DEEPSEEK_API_KEY"] = saved;
+      } else {
+        delete process.env["DEEPSEEK_API_KEY"];
+      }
+    }
   });
 
   it("does not throw for unknown providers", () => {

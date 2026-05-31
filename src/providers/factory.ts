@@ -41,12 +41,14 @@ class DeterministicStubClient implements LLMClient {
  * @param resolvedProvider - The resolved provider name.
  * @param role - Optional role label (e.g. "Planner", "Generator", "Evaluator") for the error message.
  * @param apiKey - Optional explicit API key from providerConfig (skips env var check if set).
+ * @param endpoint - Optional endpoint URL used to distinguish DeepSeek from other openai-compat servers.
  * @throws If the required environment variable is missing and no explicit apiKey was provided.
  */
 export function validateApiKey(
   resolvedProvider: string,
   role?: string,
   apiKey?: string,
+  endpoint?: string,
 ): void {
   const roleLabel = role ?? resolvedProvider;
 
@@ -85,7 +87,17 @@ export function validateApiKey(
       break;
     }
     case "openai-compat":
-      // API key is optional for Ollama and other local servers — skip validation.
+      // API key is optional for Ollama and other local servers.
+      // DeepSeek (api.deepseek.com) requires a key — check specifically for it.
+      if (endpoint?.includes("api.deepseek.com")) {
+        const key = apiKey ?? process.env["DEEPSEEK_API_KEY"];
+        if (!key) {
+          throw new Error(
+            `${roleLabel} is configured to use DeepSeek but neither providerConfig.apiKey nor DEEPSEEK_API_KEY is set. ` +
+              `Set the DEEPSEEK_API_KEY environment variable and try again.`,
+          );
+        }
+      }
       break;
     default:
       // Unknown providers: no validation, let createClient handle the error.
@@ -147,8 +159,18 @@ export function createClient(
       ? providerConfig["apiKey"]
       : undefined;
 
+  // Hoist endpoint resolution so validateApiKey can distinguish DeepSeek from
+  // other openai-compat servers (e.g. Ollama). Explicit arg wins, then model
+  // resolution (for deepseek/ and ollama/ shorthands), then providerConfig.
+  const resolvedEndpoint =
+    endpoint ??
+    (!provider && model ? resolveProviderModel(model).endpoint : undefined) ??
+    (typeof providerConfig?.["endpoint"] === "string"
+      ? providerConfig["endpoint"]
+      : undefined);
+
   // Validate API key before constructing the adapter.
-  validateApiKey(resolvedProvider, role, apiKey);
+  validateApiKey(resolvedProvider, role, apiKey, resolvedEndpoint);
 
   // Resolve the model ID (for cases where provider was inferred from shorthand)
   const resolvedModelId =
@@ -177,22 +199,21 @@ export function createClient(
         apiKey ?? process.env["GOOGLE_API_KEY"] ?? process.env["GEMINI_API_KEY"],
       );
     case "openai-compat": {
-      // Resolve endpoint: explicit arg wins, then model resolution (for ollama/ prefix),
-      // then providerConfig, then error.
-      const resolvedEndpoint =
-        endpoint ??
-        (!provider && model ? resolveProviderModel(model).endpoint : undefined) ??
-        (typeof providerConfig?.["endpoint"] === "string"
-          ? providerConfig["endpoint"]
-          : undefined);
-
       if (!resolvedEndpoint) {
         throw new Error(
           'OpenAI-compatible provider requires an endpoint. Set endpoint in provider config or use the "ollama/" model prefix.',
         );
       }
 
-      return new OpenAICompatAdapter(resolvedEndpoint, resolvedModelId, apiKey);
+      // Inject DEEPSEEK_API_KEY env fallback only for the api.deepseek.com endpoint.
+      // Ollama and other openai-compat endpoints keep the no-key (not-needed) behavior.
+      const compatKey =
+        apiKey ??
+        (resolvedEndpoint.includes("api.deepseek.com")
+          ? process.env["DEEPSEEK_API_KEY"]
+          : undefined);
+
+      return new OpenAICompatAdapter(resolvedEndpoint, resolvedModelId, compatKey);
     }
     default:
       throw new Error(

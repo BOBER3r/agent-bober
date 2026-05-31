@@ -127,6 +127,53 @@ describe("resolveProviderModel", () => {
       });
     });
   });
+
+  // ── DeepSeek shorthands (sc-2-1, sc-2-2) ────────────────────────────────────
+
+  describe("DeepSeek shorthands", () => {
+    it("resolves deepseek-v4-pro to openai-compat at api.deepseek.com (sc-2-1)", () => {
+      expect(resolveProviderModel("deepseek-v4-pro")).toEqual({
+        provider: "openai-compat",
+        modelId: "deepseek-v4-pro",
+        endpoint: "https://api.deepseek.com",
+      });
+    });
+
+    it("resolves deepseek shorthand to openai-compat/deepseek-v4-pro at api.deepseek.com (sc-2-2)", () => {
+      expect(resolveProviderModel("deepseek")).toEqual({
+        provider: "openai-compat",
+        modelId: "deepseek-v4-pro",
+        endpoint: "https://api.deepseek.com",
+      });
+    });
+
+    it("resolves deepseek-v4-flash to openai-compat/deepseek-v4-flash at api.deepseek.com (sc-2-2)", () => {
+      expect(resolveProviderModel("deepseek-v4-flash")).toEqual({
+        provider: "openai-compat",
+        modelId: "deepseek-v4-flash",
+        endpoint: "https://api.deepseek.com",
+      });
+    });
+  });
+
+  // ── No-regression: existing shorthands unaffected (sc-2-3) ──────────────────
+
+  describe("no-regression: existing shorthands unaffected", () => {
+    it("ollama/llama3 still resolves to openai-compat at localhost:11434/v1 (sc-2-3)", () => {
+      expect(resolveProviderModel("ollama/llama3")).toEqual({
+        provider: "openai-compat",
+        modelId: "llama3",
+        endpoint: "http://localhost:11434/v1",
+      });
+    });
+
+    it("sonnet still resolves to anthropic with no endpoint (sc-2-3)", () => {
+      expect(resolveProviderModel("sonnet")).toEqual({
+        provider: "anthropic",
+        modelId: "claude-sonnet-4-6",
+      });
+    });
+  });
 });
 
 describe("resolveModel (backward compat)", () => {

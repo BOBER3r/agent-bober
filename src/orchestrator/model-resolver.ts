@@ -34,6 +34,10 @@ const SHORTHAND_MAP: Record<string, { provider: string; modelId: string }> = {
   // Google
   "gemini-pro": { provider: "google", modelId: "gemini-2.5-pro" },
   "gemini-flash": { provider: "google", modelId: "gemini-2.5-flash" },
+  // DeepSeek — resolved via openai-compat adapter at api.deepseek.com
+  deepseek: { provider: "openai-compat", modelId: "deepseek-v4-pro" },
+  "deepseek-v4-pro": { provider: "openai-compat", modelId: "deepseek-v4-pro" },
+  "deepseek-v4-flash": { provider: "openai-compat", modelId: "deepseek-v4-flash" },
 };
 
 /**
@@ -72,6 +76,14 @@ export function resolveProviderModel(
   // 3. Known shorthand
   const mapped = SHORTHAND_MAP[model];
   if (mapped) {
+    if (mapped.provider === "openai-compat") {
+      // openai-compat shorthands (e.g. deepseek) need an endpoint attached.
+      return {
+        provider: mapped.provider,
+        modelId: mapped.modelId,
+        endpoint: "https://api.deepseek.com",
+      };
+    }
     return { provider: mapped.provider, modelId: mapped.modelId };
   }
 
