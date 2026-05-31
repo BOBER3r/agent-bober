@@ -8,6 +8,7 @@ import {
   type BoberConfig,
 } from "./schema.js";
 import { getDefaults } from "./defaults.js";
+import { resolveRoleProviders } from "./role-providers.js";
 
 /**
  * Migrate a v1 config (with `project.type`) to the v2 format (with `project.mode` / `project.preset`).
@@ -254,6 +255,11 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
       "Did you mean 'disk' or 'cli'?\n",
     );
   }
+
+  // Resolve and validate per-role providers. Throws at load time (not mid-sprint) if a
+  // tool-using role would land on claude-code with no alternative provider configured.
+  // Prompt roles (planner, researcher) are always allowed on claude-code.
+  resolveRoleProviders(cfg);
 
   return cfg;
 }
