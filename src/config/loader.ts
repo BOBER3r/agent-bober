@@ -227,6 +227,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         eventQueueBound: 1000,
         worktreeRoot: ".bober/worktrees",
         cleanupWorktreeOnSuccess: true,
+        engine: "ts" as const,
       },
       commands: defaults.commands ?? {},
     },

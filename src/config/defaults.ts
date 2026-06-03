@@ -109,6 +109,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       eventQueueBound: 1000,
       worktreeRoot: ".bober/worktrees",
       cleanupWorktreeOnSuccess: true,
+      engine: "ts",
     },
     commands: {
       install: "npm install",
@@ -208,6 +209,7 @@ const greenfieldBase: Partial<BoberConfig> = {
     eventQueueBound: 1000,
     worktreeRoot: ".bober/worktrees",
     cleanupWorktreeOnSuccess: true,
+    engine: "ts",
   },
   commands: {},
 };
@@ -248,6 +250,7 @@ const brownfieldBase: Partial<BoberConfig> = {
     eventQueueBound: 1000,
     worktreeRoot: ".bober/worktrees",
     cleanupWorktreeOnSuccess: true,
+    engine: "ts",
   },
   commands: {},
 };

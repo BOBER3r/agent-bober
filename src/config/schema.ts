@@ -184,6 +184,8 @@ export const PipelineSectionSchema = z.object({
    *  via `git worktree remove` after a successful pipeline run. On failure the
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
+  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines (sprint 6+). Default: 'ts'. */
+  engine: z.enum(["ts", "skill", "workflow"]).default("ts"),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -397,6 +399,7 @@ export function createDefaultConfig(
       eventQueueBound: 1000,
       worktreeRoot: ".bober/worktrees",
       cleanupWorktreeOnSuccess: true,
+      engine: "ts",
     },
     commands: {},
   };
