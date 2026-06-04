@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { PipelineSectionSchema, EvaluatorSectionSchema } from "./schema.js";
+import {
+  PipelineSectionSchema,
+  EvaluatorSectionSchema,
+  ArchitectSectionSchema,
+  BoberConfigSchema,
+} from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
   it("defaults panel to disabled/empty/4 when omitted", () => {
@@ -29,6 +34,72 @@ describe("EvaluatorSectionSchema.panel", () => {
     expect(parsed.panel.enabled).toBe(false);
     expect(parsed.panel.lenses).toEqual([]);
     expect(parsed.panel.maxConcurrent).toBe(4);
+  });
+});
+
+describe("ArchitectSectionSchema.panel (C3)", () => {
+  it("defaults panel to disabled/empty/4 when section omitted (parse empty object)", () => {
+    const parsed = ArchitectSectionSchema.parse({});
+    expect(parsed.panel).toEqual({ enabled: false, lenses: [], maxConcurrent: 4 });
+  });
+
+  it("rejects maxConcurrent < 1", () => {
+    expect(() =>
+      ArchitectSectionSchema.parse({ panel: { maxConcurrent: 0 } }),
+    ).toThrow();
+  });
+
+  it("accepts a fully-specified enabled panel", () => {
+    const parsed = ArchitectSectionSchema.parse({
+      panel: { enabled: true, lenses: ["scalability", "security"], maxConcurrent: 2 },
+    });
+    expect(parsed.panel.enabled).toBe(true);
+    expect(parsed.panel.lenses).toEqual(["scalability", "security"]);
+    expect(parsed.panel.maxConcurrent).toBe(2);
+  });
+
+  it("parses when panel field is omitted — resolves to defaults", () => {
+    const parsed = ArchitectSectionSchema.parse({});
+    expect(parsed.panel.enabled).toBe(false);
+    expect(parsed.panel.lenses).toEqual([]);
+    expect(parsed.panel.maxConcurrent).toBe(4);
+  });
+});
+
+describe("BoberConfigSchema — architect is optional (C3)", () => {
+  it("parses a valid config that omits the architect section entirely", () => {
+    // Minimal valid config — architect is optional so its absence is fine
+    const result = BoberConfigSchema.safeParse({
+      project: { name: "test-project", mode: "greenfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.architect).toBeUndefined();
+    }
+  });
+
+  it("parses a config with architect.panel present", () => {
+    const result = BoberConfigSchema.safeParse({
+      project: { name: "test-project", mode: "greenfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      architect: { panel: { enabled: true, lenses: ["scalability"], maxConcurrent: 2 } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.architect?.panel.enabled).toBe(true);
+      expect(result.data.architect?.panel.lenses).toEqual(["scalability"]);
+    }
   });
 });
 
