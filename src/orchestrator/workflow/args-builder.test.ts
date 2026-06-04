@@ -12,6 +12,52 @@ import { MissingKnobError, AgentCapError, NonSerializableArgError } from "./erro
 import { createDefaultConfig } from "../../config/schema.js";
 import type { BoberConfig } from "../../config/schema.js";
 import type { ResumeCursor } from "./types.js";
+import { createContract } from "../../contracts/sprint-contract.js";
+import type { SprintContract } from "../../contracts/sprint-contract.js";
+import type { PlanSpec } from "../../contracts/spec.js";
+
+function makePreloadSpec(): PlanSpec {
+  const now = "2026-06-04T12:00:00.000Z";
+  return {
+    specId: "spec-test",
+    version: 1,
+    title: "Preloaded Spec",
+    description: "desc",
+    status: "in-progress",
+    mode: "brownfield",
+    features: [],
+    assumptions: [],
+    outOfScope: [],
+    clarificationQuestions: [],
+    resolvedClarifications: [],
+    techStack: [],
+    nonFunctionalRequirements: [],
+    constraints: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function makePreloadContract(sprintNumber: number): SprintContract {
+  const contract = createContract(
+    `Sprint ${String(sprintNumber)}`,
+    "desc",
+    [{ criterionId: `c-${String(sprintNumber)}`, description: "the feature works end to end as specified", verificationMethod: "agent-evaluation" }],
+    { specId: "spec-test", sprintNumber },
+  );
+  // Round-trip through JSON to mimic a contract loaded from disk (listContracts):
+  // absent optional fields stay absent rather than being explicit `undefined`,
+  // which the args-builder's strict serializability check (correctly) rejects.
+  return JSON.parse(JSON.stringify(contract)) as SprintContract;
+}
+
+/** A config with codeReview enabled so build() does not throw MissingKnobError. */
+function makeBuildConfig(): BoberConfig {
+  return {
+    ...createDefaultConfig("test-project", "brownfield"),
+    codeReview: { enabled: true, model: "sonnet", maxTurns: 15, timeoutMs: 300_000 },
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -342,6 +388,41 @@ describe("ArgsPayloadBuilder", () => {
 
       expect(caught).toBeInstanceOf(NonSerializableArgError);
       expect((caught as NonSerializableArgError).name).toBe("NonSerializableArgError");
+    });
+  });
+
+  describe("build (preloaded resume data)", () => {
+    it("defaults preloadedContracts to [] and omits preloadedSpec when no preloaded arg", () => {
+      const builder = new ArgsPayloadBuilder();
+      const args = builder.build("prompt", makeBuildConfig(), makeDefaultCursor());
+      expect(args.preloadedContracts).toEqual([]);
+      expect("preloadedSpec" in args).toBe(false);
+    });
+
+    it("threads preloaded contracts into the args", () => {
+      const builder = new ArgsPayloadBuilder();
+      const contracts = [makePreloadContract(1), makePreloadContract(2)];
+      const args = builder.build("prompt", makeBuildConfig(), makeDefaultCursor(), "", { contracts });
+      expect(args.preloadedContracts).toHaveLength(2);
+      expect(args.preloadedContracts[0]?.sprintNumber).toBe(1);
+    });
+
+    it("threads a preloaded spec into the args and stays JSON-serializable", () => {
+      const builder = new ArgsPayloadBuilder();
+      const spec = makePreloadSpec();
+      const args = builder.build("prompt", makeBuildConfig(), makeDefaultCursor(), "", { spec });
+      expect(args.preloadedSpec?.specId).toBe("spec-test");
+      // round-trips cleanly (no undefined/function leaked)
+      const roundTripped = JSON.parse(JSON.stringify(args)) as unknown;
+      expect(JSON.stringify(roundTripped)).toBe(JSON.stringify(args));
+    });
+
+    it("does not set preloadedSpec key when only contracts are preloaded", () => {
+      const builder = new ArgsPayloadBuilder();
+      const args = builder.build("prompt", makeBuildConfig(), makeDefaultCursor(), "", {
+        contracts: [makePreloadContract(1)],
+      });
+      expect("preloadedSpec" in args).toBe(false);
     });
   });
 });

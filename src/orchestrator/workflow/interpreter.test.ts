@@ -257,4 +257,39 @@ describe("runWorkflow → RunResultFlusher.flush", () => {
     expect(pipelineResult.completedSprints).toHaveLength(1);
     expect(pipelineResult.failedSprints).toHaveLength(1);
   });
+
+  it("does not re-emit completed sprints' history on resume (no duplicate writes)", async () => {
+    const c1 = makeContract(1);
+    const c2 = makeContract(2);
+    const config = createDefaultConfig("test-project", "brownfield");
+
+    // Run 1: full run, both sprints pass → flush. Two sprint-evaluated events.
+    const run1 = await runWorkflow(
+      makeArgs({ preloadedSpec: makeSpec(), preloadedContracts: [c1, c2] }),
+      tmpDir,
+      makeDeps(),
+    );
+    await new RunResultFlusher().flush(tmpDir, config, run1);
+
+    // Run 2: resume — both sprintNumbers already completed → interpreter runs nothing.
+    const runSprint = vi.fn((input: SprintInput) => Promise.resolve(passOutcome(input.contract)));
+    const run2 = await runWorkflow(
+      makeArgs({
+        preloadedSpec: makeSpec(),
+        preloadedContracts: [c1, c2],
+        resumeCursor: { specId: "spec-1", completedSprintNumbers: [1, 2], lastObservedSprintNumber: 2 },
+      }),
+      tmpDir,
+      makeDeps({ runSprint }),
+    );
+    expect(runSprint).not.toHaveBeenCalled();
+    expect(run2.perSprint).toEqual([]);
+    await new RunResultFlusher().flush(tmpDir, config, run2);
+
+    // History still has exactly TWO sprint-evaluated events (from run1), not four:
+    // the resume skipped completed sprints at dispatch, so run2 emitted none.
+    const history = await loadHistory(tmpDir);
+    const sprintEvents = history.filter((h) => h.event === "workflow-sprint-evaluated");
+    expect(sprintEvents).toHaveLength(2);
+  });
 });

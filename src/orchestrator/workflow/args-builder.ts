@@ -3,6 +3,16 @@
 import type { BoberConfig } from "../../config/schema.js";
 import { MissingKnobError, AgentCapError, NonSerializableArgError } from "./errors.js";
 import type { WorkflowArgs, ResumeCursor } from "./types.js";
+import type { PlanSpec } from "../../contracts/spec.js";
+import type { SprintContract } from "../../contracts/sprint-contract.js";
+
+/** Prior on-disk state for a resumed run. The CALLER loads it (keeps build() pure). */
+export interface PreloadedState {
+  /** Prior plan spec — reused instead of re-planning on resume. */
+  spec?: PlanSpec;
+  /** Prior sprint contracts — the interpreter skips the already-completed ones. */
+  contracts?: SprintContract[];
+}
 
 /**
  * Marshals config + user prompt + resume cursor into a fully JSON-serializable
@@ -20,12 +30,17 @@ export class ArgsPayloadBuilder {
    * @param config      Validated BoberConfig (all defaults already applied).
    * @param resumeCursor  Pre-built cursor from ResumeCursorReconstructor.
    * @param principles  Raw principles text (caller reads from disk; keep build pure).
+   * @param preloaded  Prior spec + contracts for a resumed run. The caller loads
+   *   these from disk (e.g. via loadSpec / listContracts) so build() stays pure.
+   *   The interpreter reuses the spec instead of re-planning and skips the
+   *   already-completed contracts named by `resumeCursor.completedSprintNumbers`.
    */
   build(
     userPrompt: string,
     config: BoberConfig,
     resumeCursor: ResumeCursor,
     principles: string = "",
+    preloaded: PreloadedState = {},
   ): WorkflowArgs {
     // ── 1. Pull required knobs; throw MissingKnobError if undefined ──
 
@@ -123,8 +138,11 @@ export class ArgsPayloadBuilder {
       },
       evaluatorLenses: lenses,
       principles,
-      preloadedContracts: [],
+      preloadedContracts: preloaded.contracts ?? [],
       resumeCursor,
+      // preloadedSpec is optional — only include it when present (the strict
+      // serializability replacer below rejects an explicit `undefined`).
+      ...(preloaded.spec !== undefined ? { preloadedSpec: preloaded.spec } : {}),
     };
 
     // ── 6. JSON round-trip serializability check ─────────────────────
