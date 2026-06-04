@@ -48,12 +48,23 @@ describe("TokensaveCli.init()", () => {
     const cli = new TokensaveCli(tmp);
     await expect(cli.init({ languageTier: "core" })).resolves.toBeUndefined();
 
-    // Verify correct args passed
+    // tokensave init takes no --tier flag (languageTier stays bober-side)
     expect(execa).toHaveBeenCalledWith(
       "tokensave",
-      ["init", "--tier", "core"],
+      ["init"],
       expect.objectContaining({ cwd: tmp, reject: false }),
     );
+  });
+
+  it("is idempotent: treats 'already initialized' as success", async () => {
+    mockExeca({
+      exitCode: 1,
+      all: "error: TokenSave is already initialized at '/repo'.",
+      stderr: "error: TokenSave is already initialized at '/repo'.",
+    });
+    const { TokensaveCli } = await import("../../src/graph/cli.js");
+    const cli = new TokensaveCli(tmp);
+    await expect(cli.init({ languageTier: "core" })).resolves.toBeUndefined();
   });
 
   it("throws on non-zero exit code", async () => {
@@ -73,7 +84,7 @@ describe("TokensaveCli.init()", () => {
     await cli.init({ cwd: customCwd, languageTier: "extended" });
     expect(execa).toHaveBeenCalledWith(
       "tokensave",
-      ["init", "--tier", "extended"],
+      ["init"],
       expect.objectContaining({ cwd: customCwd }),
     );
   });
@@ -94,16 +105,38 @@ describe("TokensaveCli.init()", () => {
 // ── sync() ─────────────────────────────────────────────────────────
 
 describe("TokensaveCli.sync()", () => {
-  it("returns {indexed} parsed from JSON stdout", async () => {
-    mockExeca({ exitCode: 0, stdout: '{"indexed": 42}' });
+  it("sums added + modified from the tokensave summary (on stderr/all)", async () => {
+    mockExeca({
+      exitCode: 0,
+      stdout: "",
+      stderr: "[32m✔[0m sync done — 40 added, 2 modified, 0 removed in 41ms",
+      all: "[32m✔[0m sync done — 40 added, 2 modified, 0 removed in 41ms",
+    });
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp);
     const r = await cli.sync(["src/"], 5_000);
     expect(r).toEqual({ indexed: 42 });
   });
 
-  it("returns {indexed: 0} when stdout is empty", async () => {
-    mockExeca({ exitCode: 0, stdout: "" });
+  it("parses the full re-index summary ('N files')", async () => {
+    const out = "[32m✔[0m indexing done — 743 files, 7421 nodes, 9100 edges in 712ms";
+    mockExeca({ exitCode: 0, stdout: "", stderr: out, all: out });
+    const { TokensaveCli } = await import("../../src/graph/cli.js");
+    const cli = new TokensaveCli(tmp);
+    const r = await cli.sync(["--force", "."], 5_000);
+    expect(r).toEqual({ indexed: 743 });
+  });
+
+  it("still parses the legacy JSON {indexed} shape", async () => {
+    mockExeca({ exitCode: 0, stdout: '{"indexed": 42}', all: '{"indexed": 42}' });
+    const { TokensaveCli } = await import("../../src/graph/cli.js");
+    const cli = new TokensaveCli(tmp);
+    const r = await cli.sync(["src/"], 5_000);
+    expect(r).toEqual({ indexed: 42 });
+  });
+
+  it("returns {indexed: 0} when output is empty", async () => {
+    mockExeca({ exitCode: 0, stdout: "", all: "" });
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp);
     const r = await cli.sync(["src/"], 5_000);
@@ -179,6 +212,21 @@ describe("TokensaveCli.status()", () => {
     expect(r.ready).toBe(true);
     expect(r.indexedFileCount).toBe(123);
     expect(r.tokensaveVersion).toBe("6.0.0-beta.1");
+  });
+
+  it("maps the real tokensave shape {file_count, node_count}", async () => {
+    const statusJson = JSON.stringify({
+      node_count: 8,
+      edge_count: 0,
+      file_count: 4,
+      nodes_by_kind: { file: 4, function: 4 },
+    });
+    mockExeca({ exitCode: 0, stdout: statusJson });
+    const { TokensaveCli } = await import("../../src/graph/cli.js");
+    const cli = new TokensaveCli(tmp);
+    const r = await cli.status();
+    expect(r.ready).toBe(true);
+    expect(r.indexedFileCount).toBe(4);
   });
 
   it("does NOT throw when exit code is non-zero (not initialised case)", async () => {

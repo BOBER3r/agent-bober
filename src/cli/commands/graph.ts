@@ -173,9 +173,9 @@ export function registerGraphCommand(program: Command): void {
         graphCfg.tokensavePath ?? "tokensave",
       );
 
-      // --force → pass --full flag by including a special path signal
-      // tokensave sync with no paths or with --full re-indexes everything
-      const paths: string[] = opts.force ? ["--full"] : ["."];
+      // --force → `tokensave sync --force .` re-indexes everything;
+      // otherwise an incremental sync of the project root.
+      const paths: string[] = opts.force ? ["--force", "."] : ["."];
 
       try {
         const result = await cli.sync(paths, graphCfg.syncTimeoutMs ?? 2000);

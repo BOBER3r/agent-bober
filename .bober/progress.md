@@ -4,7 +4,122 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-05-25T18:33:19Z
+Last updated: 2026-06-05T00:00:00Z
+
+---
+
+## Plan: Scale-Safe Sprint History + Self-Improvement Memory
+- Spec: spec-20260605-scale-safe-history-memory
+- Created: 2026-06-05
+- Sprints: 4
+- Status: ready (0/4 sprints)
+- Mode: brownfield
+- Ambiguity score: 2/10
+
+### Sprint Breakdown
+1. [proposed] Bounded history reads + crash-safe rotation -- loadRecentHistory + archive rotation; loadHistory keeps its full-read contract so resume-cursor + conformance stay byte-equivalent (Layer 1, ships independently).
+2. [proposed] Deterministic lessons memory store -- LessonEntry zod schema (mandatory provenance) + .bober/memory/ append-only store + bounded INDEX.md reader (Layer 2).
+3. [proposed] Deterministic distillation + bober memory CLI -- pure LLM-free distill() + idempotent dedupe + distill|list|show command, out of the autopilot loop (Layer 2).
+4. [proposed] Planner reads bounded memory (close the arc) -- retrieveRelevantLessons (tag/keyword, topK-capped, index-only) wired into bober.plan + bober-planner; demonstrably-improves gate (Layer 2).
+
+### Design Notes
+- Layer 1 / Layer 2 split: storage hardening ships and de-risks before the self-improvement memory builds on it.
+- Safety (from RSI research): deterministic-only distillation (zero LLM, no reward-hacking surface); explicit CLI trigger only (no runaway loop); planner reads bounded + retrieved memory, never raw history; provenance on every lesson.
+- Honest note: history is 272 lines today — Sprint 1 is preventative at-scale hardening, not an acute fix.
+
+---
+
+## Plan: Documentation & Release-Metadata Correction (0.16.0)
+- Spec: spec-20260604-docs-correction
+- Created: 2026-06-04
+- Sprints: 4
+- Status: completed (4/4 sprints) — 2026-06-04
+- Branch: bober/docs-correction-0.16.0 (commit 0a39fa8, not pushed)
+
+### Sprint Breakdown
+1. [completed] CHANGELOG [0.16.0] + npm metadata -- cut dated [0.16.0] (claude-code, DeepSeek, graph telemetry, evaluator/architect/native lens panels, workflow engine, auto-filter, plugin-hooks fix); bumped package.json 0.15.0->0.16.0 + description + deepseek keyword. Verified: ordering [Unreleased]->[0.16.0]->[0.15.0], #17 not duplicated, typecheck clean.
+2. [completed] README corrections -- Lens Panels section + config reference (architect.panel/evaluator.panel/pipeline.engine); slash-command table 12->24 (all 12 missing added); preset-aware install note. Verified 24 rows.
+3. [completed] Ancillary docs -- COMMANDS.md DEEPSEEK_API_KEY; VISION.md config reference (pipeline.engine + evaluator/architect panel tables); docs/providers.md verified accurate (no edits needed).
+4. [completed] Git release tags -- annotated v0.12.0(e30099f)/v0.13.0(0ffc81e)/v0.14.0(b83d641)/v0.15.0(95f9965)/v0.16.0(0a39fa8); all verified, local only (not pushed).
+
+---
+
+## Plan: Architect Decision Lens Panel
+- Spec: spec-20260604-architect-lens-panel
+- Created: 2026-06-04
+- Sprints: 5
+- Status: completed (5/5 sprints) — 2026-06-04
+- Branch: bober/architect-lens-panel
+
+### Sprint Breakdown
+1. [completed] Shared synthesize() reducer + arch-lens catalog + architect.panel config -- Passed iter 1 (4/4), commit 7de08b5. Pure synthesize() + arch-lenses.ts (6 lenses) + architect.panel (optional section, off by default). 1576 passed/3 skipped.
+2. [completed] TS Checkpoint 2 synthesis panel -- Passed iter 2 (4/4), commits 6f82cea + 1d02543. runArchitect gates on config.architect?.panel -> runArchitectSingleLoop (off, byte-identical) | runArchitectPanel (genApproaches + mapBounded per-lens score + synthesize winner + continuation). ArchitectResult.lensScores/selectedApproach additive optional. 1589 passed/3 skipped.
+3. [completed] TS Checkpoint 5 review panel -- Passed iter 1 (4/4), commit 9163a56. CP5 review fan-out inside runArchitectPanel (off-path byte-identical); mapBounded per-lens reviews; reconcile() reused; 2-2 fail-closed; lensReviews + panelReviewPassed additive optional; failing verdict recorded. 1591 passed/3 skipped.
+4. [completed] Native canonical arch-lens reference + lens-aware architect agent + sync gate -- Passed iter 1 (5/5), commit a77625a. skills/shared/arch-lens-panel.md (6 verbatim fragments + CP2/CP5 protocols); additive MODE section; .claude copy byte-identical; drift gate. 1593 passed/3 skipped.
+5. [completed] Wire native architect CP2+CP5 + reference copy + regenerate command + drift gate -- Passed iter 1 (5/5), commit 4050d18. Additive gated panel branches at CP2/CP5; reference copied + inlined; command regenerated; drift gate 4/4 (recomputation). 1595 passed/3 skipped.
+
+### Pipeline Statistics
+- Total iterations used: 6 / 20 (Sprint 2 took 2 iterations; the other four passed on iteration 1)
+- Sprints completed: 5 / 5
+- Subagents spawned: 17 (5 curators + 6 generators + 6 evaluators)
+- Mid-pipeline correction: Sprint 2 iter-1 failed on a missing C2 test assertion (selected approach == synthesize().winner); iter-2 added it via an additive selectedApproach field + test.
+- Architect deep mode is opt-in & OFF by default (architect.panel) — zero behavior change unless enabled with ≥2 lenses. Shared synthesize() reducer is ready for the research/planner deep-mode follow-ons.
+
+---
+
+## Plan: Native-Surface Multi-Lens Evaluator Panel
+- Spec: spec-20260604-native-lens-panel
+- Created: 2026-06-04
+- Sprints: 3
+- Status: completed (3/3 sprints) — 2026-06-04
+- Branch: bober/evaluator-lens-panel
+
+### Sprint Breakdown
+1. [completed] Canonical panel reference + lensVerdicts schema field + drift gate -- Passed iter 1 (4/4), commit 0dc9cd8. skills/shared/lens-panel.md + optional lensVerdicts + drift gate (teeth verified). 1543 passed/3 skipped.
+2. [completed] Lens-aware evaluator agent modes + sync gate -- Passed iter 1 (5/5), commit 0736260. Additive MODE section (full|deterministic|lens); agent copies byte-identical + sync gate. 1544 passed/3 skipped.
+3. [completed] Wire run/sprint/eval orchestrators + per-skill reference copies + regenerate commands -- Passed iter 1 (5/5), commit 34118e3. Gated additive panel branch in 3 SKILL.md (zero deletions); 3 reference copies; 3 commands regenerated + proven byte-equal by in-repo recomputation gate. 1550 passed/3 skipped.
+
+### Pipeline Statistics
+- Total iterations used: 3 / 20 (all sprints passed on iteration 1)
+- Sprints completed: 3 / 3
+- Subagents spawned: 9 (3 curators + 3 generators + 3 evaluators)
+- Mid-sprint correction: Sprint 3 C3/C5 gate switched from update-all:check (external targets) to in-repo vitest recomputation of inlined commands.
+- Native panel is opt-in & OFF by default — zero behavior change unless evaluator.panel.enabled=true with ≥2 lenses.
+
+---
+
+## Plan: Multi-Lens Evaluator Panel
+- Spec: spec-20260604-evaluator-lens-panel
+- Created: 2026-06-04
+- Sprints: 2
+- Status: completed (2/2 sprints) — 2026-06-04
+- Branch: bober/evaluator-lens-panel
+
+### Sprint Breakdown
+1. [completed] Panel config, lens-aware evaluator, and reconcile wiring -- opt-in evaluator.panel + bounded fan-out + reconcile(); byte-identical when off. Passed iter 1 (5/5 criteria), commit 5dc7a5e. Full suite 1531 passed/3 skipped.
+2. [completed] Lens prompt catalog and per-lens verdict telemetry -- built-in correctness/security/regression/quality lenses + generic fallback + per-lens verdicts via appendHistory (open event string, no schema change). Passed iter 1 (5/5 criteria), commit 1560050. Full suite 1540 passed/3 skipped.
+
+### Pipeline Statistics
+- Total iterations used: 2 / 20 (both sprints passed on iteration 1)
+- Sprints completed: 2 / 2
+- Subagents spawned: 6 (2 curators + 2 generators + 2 evaluators)
+- Note: evaluator.panel is opt-in and OFF by default — zero behavior/cost change unless `evaluator.panel.enabled=true` with ≥2 lenses.
+
+---
+
+## Plan: Config-Selectable Workflow Orchestration Engine
+- Spec: spec-20260604-workflow-engine
+- Created: 2026-06-04
+- Sprints: 6
+- Status: completed (6/6 sprints)
+
+### Sprint Breakdown
+1. [completed] Engine-selection seam, pipeline.engine config, and eligibility probe -- Passed on iteration 1 (1423 tests green)
+2. [completed] EvaluatorPanelReconciler -- Passed on iteration 1 (19 tests, verified pure)
+3. [completed] Pure-JS reducer port and twin/port drift gate -- Passed on iteration 1 (gate proven via live mutation)
+4. [completed] Workflow types, ResumeCursorReconstructor, ArgsPayloadBuilder -- Passed on iteration 1 (56 workflow tests)
+5. [completed] bober-pipeline.js workflow script + RunResultFlusher -- Passed on iteration 1 (85 workflow tests)
+6. [completed] WorkflowEngine assembly + selector integration + EngineConformanceHarness -- Passed on iteration 1 (102 workflow tests, 1519 total)
 
 ---
 
@@ -181,3 +296,47 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Credential storage and deployment provider skills (separate parallel spec)
 - Discussion-agent / chat memory layer (cockpit's responsibility)
 - Auth / multi-user / billing (cockpit's responsibility)
+
+## Plan: Anthropic Prompt Caching
+- Spec: spec-20260529-anthropic-prompt-caching
+- Created: 2026-05-29
+- Sprints: 1
+- Status: completed (1/1 sprints)
+- Source: borrow #1 from nousresearch/hermes-agent (see openhands-bober/.bober/research/research-20260529-borrow-from-hermes-agent.md)
+
+### Sprint Breakdown
+1. [completed] Anthropic prompt caching behind a default-on flag -- cache_control breakpoints (system + last-3) in AnthropicAdapter, gated by providerConfig.promptCaching, default on for Anthropic. (commits 5f7824e + 2dab5fb; passed iteration 2/2, 7/7 criteria)
+
+## Plan: Claude Opus 4.8 Support
+- Spec: spec-20260529-opus-4-8-support
+- Created: 2026-05-29
+- Sprints: 4
+- Status: completed (4/4 sprints)
+- Branch: bober/opus-4-8-support (stacked on bober/anthropic-prompt-caching)
+- Source: https://www.anthropic.com/news/claude-opus-4-8 (GA 2026-05-28); shapes confirmed vs platform.claude.com API ref
+
+### Sprint Breakdown
+1. [completed] Repoint opus shorthand to claude-opus-4-8 + pin opus-4-7 -- model-resolver only. Passed iter 1 (5/5 criteria), commit 1fd6497.
+2. [completed] Upgrade @anthropic-ai/sdk 0.39->0.100.1 for output_config.effort + mid_conv_system -- Passed iter 1 (6/6), commit b48c5bb. ZERO adapter code changes (type-backward-compatible).
+3. [completed] Add effort control (output_config.effort, low|medium|high|xhigh|max) -- Passed iter 1 (5/5), commit da7c642.
+4. [completed] Add mid-conversation system blocks (mid_conv_system content block) -- Passed iter 1 (5/5), commit 4d78031.
+
+## Plan: Multi-Provider Strategy — DeepSeek + Claude Code Subscription
+- Spec: spec-20260531-multi-provider-deepseek-claude-code
+- Created: 2026-05-31
+- Status: completed (6/6 sprints) — 2026-05-31
+- Branch: spike/claude-code-provider (commits 99c20e2..71d16be)
+
+### Sprint Breakdown
+1. [completed] Fix eslint peer-dependency conflict — eslint ^10.0.0 (resolves 10.4.1); npm install clean, no ERESOLVE. Passed iter 1, commit 99c20e2.
+2. [completed] DeepSeek shorthand + key handling — deepseek/v4-pro/v4-flash → openai-compat @ api.deepseek.com; DEEPSEEK_API_KEY fallback + DeepSeek-specific missing-key error. Passed iter 1, commit 79971c9.
+3. [completed] openai optional-peer preflight — verified missing-package throw; preflightOpenaiPeer warning hint added. Passed iter 1, commit 43b56a0.
+4. [completed] Promote claude-code provider — ClaudeCodeAdapter in createClient, no key, preflightClaudeBinary, binary/timeoutMs overrides, tools-guard throw (execa mocked). Passed iter 1, commit 417f37f.
+5. [completed] Role-aware provider fallback — resolveRoleProviders wired into loadConfig; tool roles redirect or hard-error naming the role; prompt roles allowed; per-role logging. Passed iter 1, commit 1111e2a.
+6. [completed] Docs + key-gated smoke — README capability matrix + docs/providers.md; deepseek/claude-code smoke scripts skip without secrets, excluded from npm test. Passed iter 1, commit 71d16be.
+
+### Pipeline Statistics
+- Total iterations used: 6 / 20 (every sprint passed on iteration 1)
+- Sprints completed: 6 / 6
+- Subagents spawned: 18 (6 curators + 6 generators + 6 evaluators) + 1 planner = 19
+- Known follow-up (non-blocking): preflightOpenaiPeer is implemented + tested but not yet wired into a startup call site (Sprint-3 advisory; Sprint-5 left the optional loader wiring out to avoid disturbing loader tests).
