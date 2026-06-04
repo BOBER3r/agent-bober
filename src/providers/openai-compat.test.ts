@@ -230,6 +230,36 @@ describe("OpenAICompatAdapter", () => {
     expect(result.stopReason).toBe("end");
   });
 
+  // ── Structured output inheritance ───────────────────────────────
+  //
+  // Proves the local-model path (Ollama / LM Studio / DeepSeek) inherits
+  // structured output for free from OpenAIAdapter: a responseSchema yields a
+  // response_format of type "json_schema" in the create() call.
+
+  it("forwards responseSchema as response_format json_schema (inherited from OpenAIAdapter)", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: '{"ok":true}' }));
+
+    const adapter = await makeAdapter({
+      endpoint: "http://localhost:11434/v1",
+      model: "llama3",
+    });
+    await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "give me json" }],
+      responseSchema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      response_format?: { type: string };
+    };
+    expect(callArgs.response_format?.type).toBe("json_schema");
+  });
+
   // ── Error handling ──────────────────────────────────────────────
 
   it("throws helpful error when openai package is missing", async () => {

@@ -225,9 +225,30 @@ export class AnthropicAdapter implements LLMClient {
     const anthropicMessages: Anthropic.Messages.MessageParam[] =
       messages.map(toAnthropicMessage);
 
-    // Convert ToolDef[] to Anthropic.Messages.Tool[]
-    const anthropicTools =
-      tools && tools.length > 0 ? tools.map(toAnthropicTool) : undefined;
+    // ── Structured output branch ────────────────────────────────────
+    // When responseSchema is set, force a single "structured_output" tool
+    // whose input_schema IS the schema, and do NOT forward the user's tools.
+    // tool_choice forces the model to call it, and we stringify the resulting
+    // tool input into ChatResponse.text (with empty toolCalls).
+    const structured = params.responseSchema !== undefined;
+
+    const forcedTool: Anthropic.Messages.Tool | undefined = structured
+      ? {
+          name: "structured_output",
+          description:
+            "Return your answer as a single structured JSON object matching the schema.",
+          input_schema:
+            params.responseSchema as Anthropic.Messages.Tool["input_schema"],
+        }
+      : undefined;
+
+    // Convert ToolDef[] to Anthropic.Messages.Tool[]. In the structured branch
+    // the user's tools are intentionally suppressed in favour of the forced tool.
+    const anthropicTools = structured
+      ? [forcedTool as Anthropic.Messages.Tool]
+      : tools && tools.length > 0
+        ? tools.map(toAnthropicTool)
+        : undefined;
 
     // ── Prompt caching branch ──────────────────────────────────────
     // When enabled: system becomes a TextBlockParam[] with cache_control,
@@ -250,18 +271,45 @@ export class AnthropicAdapter implements LLMClient {
       messages: cachedMessages,
       tools: anthropicTools,
       ...(effort !== undefined ? { output_config: { effort } } : {}),
+      ...(structured
+        ? {
+            tool_choice: {
+              type: "tool" as const,
+              name: "structured_output",
+            },
+          }
+        : {}),
     });
 
     const { text, toolCalls } = normalizeContent(response.content);
+
+    const usage = {
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens,
+    };
+
+    // ── Structured output normalisation ─────────────────────────────
+    // Take the forced tool call's input, stringify it into text, and return
+    // empty toolCalls with a clean "end" stop reason. If the forced tool call
+    // is somehow absent, fall back to the normal normalized result so the
+    // caller's coerce/repair can still try.
+    if (structured) {
+      const forced = toolCalls.find((tc) => tc.name === "structured_output");
+      if (forced !== undefined) {
+        return {
+          text: JSON.stringify(forced.input),
+          toolCalls: [],
+          stopReason: "end",
+          usage,
+        };
+      }
+    }
 
     return {
       text,
       toolCalls,
       stopReason: normalizeStopReason(response.stop_reason),
-      usage: {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-      },
+      usage,
     };
   }
 }

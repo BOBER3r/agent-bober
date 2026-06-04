@@ -276,4 +276,91 @@ describe("AnthropicAdapter prompt caching", () => {
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
     expect(result.toolCalls).toEqual([]);
   });
+
+  // ── Structured output (responseSchema → forced tool) ────────────────────────
+
+  const schema = {
+    type: "object" as const,
+    properties: { ok: { type: "boolean" } },
+    required: ["ok"],
+  };
+
+  it("forces structured_output tool when responseSchema is set", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      responseSchema: schema,
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      tool_choice?: unknown;
+      tools?: Array<{ name: string; input_schema: unknown }>;
+    };
+    expect(req.tool_choice).toEqual({ type: "tool", name: "structured_output" });
+    expect(Array.isArray(req.tools)).toBe(true);
+    expect(req.tools).toHaveLength(1);
+    expect(req.tools?.[0].name).toBe("structured_output");
+    expect(req.tools?.[0].input_schema).toBe(schema);
+  });
+
+  it("does not forward user tools when responseSchema is set", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      tools: [
+        {
+          name: "search",
+          description: "search the web",
+          input_schema: { type: "object", properties: {} },
+        },
+      ],
+      responseSchema: schema,
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      tools?: Array<{ name: string }>;
+    };
+    const names = (req.tools ?? []).map((t) => t.name);
+    expect(names).not.toContain("search");
+    expect(names).toEqual(["structured_output"]);
+  });
+
+  it("stringifies the forced tool input into text", async () => {
+    createMock.mockResolvedValue({
+      content: [
+        { type: "tool_use", id: "t1", name: "structured_output", input: { ok: true } },
+      ],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 3, output_tokens: 4 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    const result = await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      responseSchema: schema,
+    } satisfies ChatParams);
+
+    expect(result.text).toBe(JSON.stringify({ ok: true }));
+    expect(result.toolCalls).toEqual([]);
+    expect(result.stopReason).toBe("end");
+  });
+
+  it("no tool_choice when responseSchema absent (regression)", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(req).not.toHaveProperty("tool_choice");
+    expect(JSON.stringify(req)).not.toContain("tool_choice");
+  });
 });

@@ -102,6 +102,16 @@ interface OAICreateParams {
   messages: OAIRequestMessage[];
   tools?: OAIToolParam[];
   max_tokens?: number;
+  response_format?:
+    | {
+        type: "json_schema";
+        json_schema: {
+          name: string;
+          schema: Record<string, unknown>;
+          strict?: boolean;
+        };
+      }
+    | { type: "json_object" };
 }
 
 interface OAIClientLike {
@@ -301,7 +311,7 @@ export class OpenAIAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const { model, system, messages, tools, maxTokens = 16384 } = params;
+    const { model, system, messages, tools, maxTokens = 16384, responseSchema } = params;
 
     const client = await this.getClient();
 
@@ -311,14 +321,36 @@ export class OpenAIAdapter implements LLMClient {
       ...messages.flatMap(toOpenAIMessages),
     ];
 
-    // Convert ToolDef[] to OpenAI tools format
+    // When a responseSchema is set, request the provider's native structured
+    // output via response_format. responseSchema and tools are mutually
+    // exclusive — responseSchema wins and user tools are NOT forwarded.
+    // strict:false maximises compatibility (OpenAI strict mode and many
+    // compat servers demand additionalProperties:false + all-keys-required);
+    // the caller validates and repairs the returned JSON.
+    const responseFormat: OAICreateParams["response_format"] | undefined =
+      responseSchema
+        ? {
+            type: "json_schema",
+            json_schema: {
+              name: "structured_output",
+              schema: responseSchema as Record<string, unknown>,
+              strict: false,
+            },
+          }
+        : undefined;
+
+    // Convert ToolDef[] to OpenAI tools format. Skipped entirely when a
+    // responseSchema is present (mutually exclusive with structured output).
     const oaiTools =
-      tools && tools.length > 0 ? tools.map(toOpenAITool) : undefined;
+      !responseSchema && tools && tools.length > 0
+        ? tools.map(toOpenAITool)
+        : undefined;
 
     const response = await client.chat.completions.create({
       model: model || this.model,
       messages: oaiMessages,
       ...(oaiTools ? { tools: oaiTools } : {}),
+      ...(responseFormat ? { response_format: responseFormat } : {}),
       max_tokens: maxTokens,
     });
 

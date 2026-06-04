@@ -31,10 +31,14 @@ function makeFakeGeminiModel(generateContentFn: FakeGenerateContentFn) {
   };
 }
 
-function makeFakeGeminiGenAI(generateContentFn: FakeGenerateContentFn) {
+function makeFakeGeminiGenAI(
+  generateContentFn: FakeGenerateContentFn,
+  getGenerativeModelFn?: Mock,
+) {
   const model = makeFakeGeminiModel(generateContentFn);
   return class FakeGoogleGenerativeAI {
-    getGenerativeModel(_config: unknown) {
+    getGenerativeModel(config: unknown) {
+      getGenerativeModelFn?.(config);
       return model;
     }
   };
@@ -84,13 +88,15 @@ function makeGeminiResponse(opts: {
 
 describe("GoogleAdapter", () => {
   let generateContentFn: FakeGenerateContentFn;
+  let getGenerativeModelFn: Mock;
 
   beforeEach(() => {
     generateContentFn = vi.fn();
+    getGenerativeModelFn = vi.fn();
 
     // Intercept dynamic import("@google/generative-ai") to return our fake class
     vi.doMock("@google/generative-ai", () => ({
-      GoogleGenerativeAI: makeFakeGeminiGenAI(generateContentFn),
+      GoogleGenerativeAI: makeFakeGeminiGenAI(generateContentFn, getGenerativeModelFn),
     }));
   });
 
@@ -182,6 +188,129 @@ describe("GoogleAdapter", () => {
 
     const callArgs = generateContentFn.mock.calls[0][0] as Record<string, unknown>;
     expect(callArgs["tools"]).toBeUndefined();
+  });
+
+  // ── Structured output (responseSchema) ──────────────────────────
+
+  it("passes generationConfig.responseSchema when responseSchema is set", async () => {
+    generateContentFn.mockResolvedValue(
+      makeGeminiResponse({ textParts: ['{"ok":true}'] }),
+    );
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "respond" }],
+      responseSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    const modelConfig = getGenerativeModelFn.mock.calls[0][0] as {
+      generationConfig?: { responseMimeType?: string; responseSchema?: unknown };
+    };
+    expect(modelConfig.generationConfig).toBeDefined();
+    expect(modelConfig.generationConfig?.responseMimeType).toBe("application/json");
+    expect(modelConfig.generationConfig?.responseSchema).toBeDefined();
+  });
+
+  it("strips additionalProperties from the Gemini schema", async () => {
+    generateContentFn.mockResolvedValue(
+      makeGeminiResponse({ textParts: ['{"ok":true}'] }),
+    );
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "respond" }],
+      responseSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    const modelConfig = getGenerativeModelFn.mock.calls[0][0] as {
+      generationConfig?: { responseSchema?: Record<string, unknown> };
+    };
+    const schema = modelConfig.generationConfig?.responseSchema;
+    expect(schema).toBeDefined();
+    expect(schema).not.toHaveProperty("additionalProperties");
+    // The rest of the schema is preserved
+    expect(schema).toHaveProperty("properties");
+    expect(schema).toHaveProperty("required");
+  });
+
+  it("omits tools when responseSchema is set", async () => {
+    generateContentFn.mockResolvedValue(
+      makeGeminiResponse({ textParts: ['{"ok":true}'] }),
+    );
+
+    const tools: ToolDef[] = [
+      {
+        name: "search",
+        description: "Search the web",
+        input_schema: { type: "object" },
+      },
+    ];
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "respond" }],
+      tools,
+      responseSchema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    const callArgs = generateContentFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs["tools"]).toBeUndefined();
+  });
+
+  it("does not pass generationConfig when responseSchema is absent", async () => {
+    generateContentFn.mockResolvedValue(makeGeminiResponse({ textParts: ["hi"] }));
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const modelConfig = getGenerativeModelFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(modelConfig["generationConfig"]).toBeUndefined();
+  });
+
+  it("passes structured JSON text through with empty toolCalls", async () => {
+    generateContentFn.mockResolvedValue(
+      makeGeminiResponse({ textParts: ['{"ok":true}'] }),
+    );
+
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "respond" }],
+      responseSchema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    expect(result.text).toBe('{"ok":true}');
+    expect(result.toolCalls).toEqual([]);
+    expect(result.stopReason).toBe("end");
   });
 
   // ── Message conversion ──────────────────────────────────────────
