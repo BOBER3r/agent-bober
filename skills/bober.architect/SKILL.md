@@ -106,6 +106,13 @@ Wait for user response. If (B) or (C): respawn the subagent with the user's feed
 
 ## Step 6: Checkpoint 2 — Approach Selection
 
+**Panel mode (gated, off by default):** Read `config.architect?.panel`. If `panel.enabled` is `true` AND `panel.lenses.length >= 2`, run the PANEL flow described in the inlined Lens Panel reference below (`<!-- Reference: arch-lens-panel.md -->`):
+- First spawn a generate-approaches subagent (producing 2–3 candidate approaches that satisfy the Checkpoint 1 constraints).
+- Then spawn one bober-architect subagent per lens in **MODE:lens-score:\<name\>** for each name in `panel.lenses`, bounded by `panel.maxConcurrent` concurrent spawns. Each scorer receives the same candidate set and scores them exclusively through its lens focus fragment (see `resolveArchLensFocus(lens)` in the reference).
+- Call `synthesize()` (see `src/orchestrator/synthesizer.ts`) to aggregate per-lens scores and produce the ranked winner with dissent. Proceed with the highest-scoring approach as the selected approach.
+
+OTHERWISE (panel disabled, or fewer than 2 lenses), spawn exactly ONE bober-architect subagent as described below — byte-identical to today's behaviour.
+
 Spawn a subagent with the approved Problem Statement included:
 
 ```
@@ -294,6 +301,12 @@ What would you like to do?
 Handle (B)/(C) by respawning with feedback.
 
 ## Step 9: Checkpoint 5 — Final Assembly
+
+**Panel mode (gated, off by default):** Read `config.architect?.panel`. If `panel.enabled` is `true` AND `panel.lenses.length >= 2`, run the PANEL flow described in the inlined Lens Panel reference below (`<!-- Reference: arch-lens-panel.md -->`):
+- Spawn one bober-architect subagent per lens in **MODE:lens-review:\<name\>** for each name in `panel.lenses`, bounded by `panel.maxConcurrent` concurrent spawns. Each reviewer receives the assembled architecture document and ADRs and produces a PASS/FAIL verdict exclusively through its lens focus fragment.
+- Call `reconcile()` (see `src/orchestrator/workflow/reconciler.ts`) to aggregate verdicts: strict majority (`passCount > failCount`), **fail-closed on tie** (tie → false). Record the reconciled verdict (including `lensVerdicts` array) in the assembly output.
+
+OTHERWISE (panel disabled, or fewer than 2 lenses), spawn exactly ONE bober-architect subagent as described below — byte-identical to today's behaviour.
 
 Spawn a subagent to compile the complete architecture document:
 

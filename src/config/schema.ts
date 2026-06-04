@@ -117,6 +117,17 @@ export const EvaluatorSectionSchema = z.object({
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 
+// ── Architect Section ────────────────────────────────────────────────
+
+export const ArchitectSectionSchema = z.object({
+  panel: z.object({
+    enabled: z.boolean().default(false),
+    lenses: z.array(z.string()).default([]),
+    maxConcurrent: z.number().int().min(1).default(4),
+  }).default({ enabled: false, lenses: [], maxConcurrent: 4 }),
+});
+export type ArchitectSection = z.infer<typeof ArchitectSectionSchema>;
+
 export const SprintSectionSchema = z.object({
   maxSprints: z.number().int().min(1).default(10),
   requireContracts: z.boolean().default(true),
@@ -328,6 +339,8 @@ export const BoberConfigSchema = z.object({
   incident: IncidentSectionSchema.optional(),
   // ── Sprint 28: opt-in local-only telemetry ──
   telemetry: TelemetrySectionSchema.optional(),
+  // ── Architect lens panel (opt-in) ──
+  architect: ArchitectSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
