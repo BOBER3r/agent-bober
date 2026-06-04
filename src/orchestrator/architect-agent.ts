@@ -10,6 +10,8 @@ import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { synthesize } from "./workflow/synthesizer.js";
 import { resolveArchLensFocus } from "./arch-lenses.js";
+import { reconcile } from "./workflow/reconciler.js";
+import type { EvalResult } from "../contracts/eval-result.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -38,6 +40,10 @@ export interface ArchitectResult {
   lensScores?: Array<{ lens: string; scores: Record<string, number> }>;
   /** The approach selected by synthesize().winner on the panel path (additive, optional — absent on the off path). */
   selectedApproach?: string;
+  /** Per-lens CP5 review verdicts from the panel path (additive, optional — absent on the off path). */
+  lensReviews?: Array<{ lens: string; passed: boolean; summary: string; feedback: string }>;
+  /** The reconciled panel verdict for CP5 (additive, optional). false = fail-closed. */
+  panelReviewPassed?: boolean;
 }
 
 // ── ID Generation ──────────────────────────────────────────────────
@@ -807,6 +813,140 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
     }
   }
 
+  // ── Step 5: CP5 review fan-out + reconcile (panel verdict) ──────
+
+  logger.info(`Running CP5 review across ${panel.lenses.length} lenses (maxConcurrent=${panel.maxConcurrent})...`);
+
+  const reviewLens = async (lens: string): Promise<EvalResult> => {
+    const lensBlock = `\n\n## Review Lens: ${lens}\n${resolveArchLensFocus(lens)}`;
+    const reviewMessage = `You are the Bober Architect agent acting as a lens reviewer. Review the assembled architecture document and ADRs through the specified lens and produce a PASS or FAIL verdict.
+
+## Feature Description
+
+${userPrompt}
+
+## Assembled Architecture Document
+
+${document.slice(0, 2000)}
+
+## ADRs
+
+${adrs.slice(0, 3).map((adr, i) => `### ADR-${i + 1}\n${adr.slice(0, 500)}`).join("\n\n")}
+
+## Review Instructions
+
+Review the architecture through the lens specified below. Determine whether the architecture PASSES or FAILS this lens criterion.${lensBlock}
+
+## Output Format
+
+Respond with EXACTLY this JSON (no markdown fences, no other text):
+{
+  "passed": <true|false>,
+  "feedback": "<specific feedback on why the architecture passes or fails this lens>"
+}`;
+
+    const enhancedReviewMessage = await preflightInjector.inject("architect", null, reviewMessage);
+
+    logger.info(`  Reviewing lens: ${lens}...`);
+
+    const reviewResult = await runAgenticLoop({
+      client,
+      model,
+      systemPrompt,
+      userMessage: enhancedReviewMessage,
+      tools: toolSet.schemas,
+      toolHandlers: toolSet.handlers,
+      maxTurns: ARCHITECT_MAX_TURNS,
+      maxTokens: 16384,
+      onToolUse: (name, input) => {
+        const inputStr =
+          typeof input === "object" && input !== null
+            ? JSON.stringify(input).slice(0, 100)
+            : String(input);
+        logger.debug(`  [architect-review:${lens}] ${name}(${inputStr})`);
+      },
+    });
+
+    // Parse review result into EvalResult shape
+    try {
+      const parsed = JSON.parse(reviewResult.finalText.trim()) as unknown;
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "passed" in parsed &&
+        typeof (parsed as Record<string, unknown>).passed === "boolean"
+      ) {
+        const p = parsed as Record<string, unknown>;
+        const passed = p.passed as boolean;
+        const feedback = typeof p.feedback === "string" ? p.feedback : (passed ? "Architecture passes this lens." : "Architecture fails this lens.");
+        return {
+          evaluator: `lens:${lens}`,
+          passed,
+          details: [
+            {
+              criterion: lens,
+              passed,
+              message: feedback,
+              severity: passed ? ("info" as const) : ("error" as const),
+            },
+          ],
+          summary: `Lens ${lens}: ${passed ? "PASS" : "FAIL"}`,
+          feedback,
+          timestamp,
+        };
+      }
+    } catch {
+      // Fall through to fail-closed fallback
+    }
+
+    // Fail-closed fallback: unparseable review counts as FAIL
+    return {
+      evaluator: `lens:${lens}`,
+      passed: false,
+      details: [
+        {
+          criterion: lens,
+          passed: false,
+          message: "Review response could not be parsed; treated as FAIL (fail-closed).",
+          severity: "error" as const,
+        },
+      ],
+      summary: `Lens ${lens}: FAIL (parse error)`,
+      feedback: "Review response could not be parsed; treated as FAIL (fail-closed).",
+      timestamp,
+    };
+  };
+
+  const lensReviews = await mapBounded(panel.lenses, panel.maxConcurrent, reviewLens);
+  const verdict = reconcile(architectId, 1, lensReviews, timestamp);
+
+  logger.info(`CP5 panel verdict: ${verdict.passed ? "PASS" : "FAIL"} (${verdict.summary})`);
+
+  // Record a failing verdict in the document (do NOT silently drop it)
+  if (!verdict.passed) {
+    const failNote = [
+      "",
+      "---",
+      "",
+      "## Panel Review: FAIL",
+      "",
+      `**Verdict:** ${verdict.summary}`,
+      "",
+      "**Failing lens feedback:**",
+      "",
+      verdict.feedback,
+    ].join("\n");
+    document = document + failNote;
+    // Persist the updated document with the FAIL note
+    try {
+      await saveArchitecture(projectRoot, architectId, document);
+    } catch (err) {
+      logger.warn(
+        `Failed to save document with FAIL note: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
   logger.success(`Architecture saved (panel): ${architectId} (${decisionCount} ADRs, winner: ${winner})`);
 
   return {
@@ -818,5 +958,12 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
     decisionCount,
     lensScores,
     selectedApproach: winner,
+    lensReviews: lensReviews.map((r) => ({
+      lens: r.evaluator.replace("lens:", ""),
+      passed: r.passed,
+      summary: r.summary,
+      feedback: r.feedback,
+    })),
+    panelReviewPassed: verdict.passed,
   };
 }
