@@ -301,6 +301,7 @@ each field.
 | `pipeline.approvalTimeoutMs` | `number` | `86400000` (24h) | Sprint 14 | How long (ms) the `disk` and `cli` checkpoint mechanisms wait for approval before timing out. |
 | `pipeline.checkpointMechanism` | `'noop'\|'cli'\|'disk'\|'pr'` | unset (derived from `mode`) | Sprint 14 | Global default checkpoint mechanism. When unset, resolved from `pipeline.mode`: `autopilot` → `noop`, `careful` → `disk`. Override per-checkpoint with `checkpointOverrides`. |
 | `pipeline.checkpointOverrides` | `Record<string, mechanism>` | `{}` | Sprint 14 | Per-checkpoint mechanism overrides. Keys are checkpoint IDs (e.g., `'post-research'`); values are mechanism names. Use to force `pr` for the plan review while keeping `disk` elsewhere. |
+| `pipeline.engine` | `'ts'\|'skill'\|'workflow'` | `'ts'` | 0.16.0 | Orchestration engine selection behind the engine-selection seam. `'ts'` runs the built-in TypeScript pipeline (default). `'skill'` and `'workflow'` select alternative engines; an eligibility probe downgrades `'workflow'` → `'ts'` when ineligible or in `careful` mode. No behavior change on the default `'ts'` path. |
 | `pipeline.maxCheckpointIterations` | `number` | `3` | Sprint 12 | Maximum times the router re-invokes a responsible agent after a checkpoint rejection. Range: 1–10. |
 | `pipeline.mode` | `'autopilot'\|'careful'` | `'autopilot'` | Sprint 14 | Pipeline execution mode. `autopilot` auto-approves all checkpoints. `careful` defaults to `disk` checkpoint mechanism. Set via config or `--mode` CLI flag on `bober run`. |
 | `pipeline.prPollMs` | `number` | `30000` (30s) | Sprint 14 | How often (ms) the `pr` checkpoint mechanism polls for PR merge/close events. Minimum: 10000. |
@@ -349,6 +350,22 @@ suggestion. A future sprint may promote this to a configurable field.
 | Field | Type | Default | Since | Description |
 |-------|------|---------|-------|-------------|
 | `telemetry.enabled` | `boolean` | `false` | Sprint 28 | When `true`, the orchestrator appends opt-in local-only JSONL events to `.bober/telemetry/<YYYY-MM-DD>.jsonl` for tracking checkpoint approval rates, incident resolution times, agent retry counts, and sprint pass/fail counts. Default `false` — no files written. No network egress under any condition (enforced by an ESLint no-restricted-imports rule in `eslint.config.js` scoped to `src/telemetry/`). Event payloads contain IDs, durations, counts, and enum outcomes ONLY — no user-content strings, no MCP response bodies, no feedback text. Inspect with `bober telemetry status`, export with `bober telemetry export`, delete with `bober telemetry purge`. |
+
+### `evaluator` section
+
+| Field | Type | Default | Since | Description |
+|-------|------|---------|-------|-------------|
+| `evaluator.panel.enabled` | `boolean` | `false` | 0.16.0 | Opt-in multi-lens evaluation. When `true`, each sprint evaluation fans out across independent lenses and a reconcile step merges them; per-lens verdicts are recorded as telemetry. When `false` (default), behavior is byte-identical to the single-pass evaluator. |
+| `evaluator.panel.lenses` | `string[]` | `[]` | 0.16.0 | Lens set to run. Empty `[]` uses the built-ins: `correctness`, `security`, `regression`, `quality`. Provide a subset or custom lens names to override. |
+| `evaluator.panel.maxConcurrent` | `number` | `4` | 0.16.0 | Maximum lenses evaluated in parallel. Minimum 1. |
+
+### `architect` section
+
+| Field | Type | Default | Since | Description |
+|-------|------|---------|-------|-------------|
+| `architect.panel.enabled` | `boolean` | `false` | 0.16.0 | Opt-in multi-lens architecture review. When `true`, the approach-selection (CP2) and review (CP5) checkpoints fan out across lenses with a fail-closed reconcile. When `false` (default), the single-pass architect runs. |
+| `architect.panel.lenses` | `string[]` | `[]` | 0.16.0 | Lens set to run. Empty `[]` uses the built-ins: `scalability`, `security`, `cost`, `operability`, `maintainability`, `reversibility`. |
+| `architect.panel.maxConcurrent` | `number` | `4` | 0.16.0 | Maximum lenses evaluated in parallel. Minimum 1. |
 
 ---
 

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-06-04
+
+### Added
+
+- **Multi-provider support — DeepSeek** ([#21](https://github.com/BOBER3r/agent-bober/pull/21), [#24](https://github.com/BOBER3r/agent-bober/pull/24)): DeepSeek is now a first-class provider via the built-in `openai-compat` adapter pointed at `https://api.deepseek.com`. Shorthands `deepseek` / `deepseek-v4-pro` / `deepseek-v4-flash` auto-set the endpoint; set `DEEPSEEK_API_KEY`. Supports **all** roles including tool-calling (curator, generator, evaluator, code-reviewer). See [`docs/providers.md`](docs/providers.md).
+- **Multi-provider support — claude-code (subscription)** ([#21](https://github.com/BOBER3r/agent-bober/pull/21), [#24](https://github.com/BOBER3r/agent-bober/pull/24)): a no-API-key `ClaudeCodeAdapter` that shells out to the `claude` CLI on your Claude subscription (`binary` / `timeoutMs` overrides). Planner and researcher roles only — tool-using roles fall back to another configured provider (role-aware fallback).
+- **Evaluator lens panel** ([#25](https://github.com/BOBER3r/agent-bober/pull/25), [#26](https://github.com/BOBER3r/agent-bober/pull/26)): opt-in `evaluator.panel` runs the evaluation across multiple independent lenses (`correctness`, `security`, `regression`, `quality`) with bounded fan-out and a reconcile step, emitting per-lens verdict telemetry. Off by default — byte-identical behavior when disabled.
+- **Architect lens panel** ([#27](https://github.com/BOBER3r/agent-bober/pull/27)): opt-in `architect.panel` gates the architecture approach-selection and review checkpoints into bounded per-lens fan-out (`scalability`, `security`, `cost`, `operability`, `maintainability`, `reversibility`) with a fail-closed reconcile. Off by default.
+- **Native lens-panel surface**: an optional `lensVerdicts` field on the evaluator result schema plus lens-aware evaluator/architect agent modes and a parity/drift gate, so the Claude Code plugin surface mirrors the TypeScript panel behavior. Canonical references at `skills/shared/lens-panel.md` and `skills/shared/arch-lens-panel.md`.
+- **Config-selectable orchestration engine**: `pipeline.engine` (`'ts'` | `'skill'` | `'workflow'`, default `'ts'`) selects the pipeline orchestration engine behind an engine-selection seam, with an eligibility probe that downgrades `workflow` → `ts` when ineligible or in `careful` mode. No behavior change on the default `ts` path.
+- **Graph telemetry + `update-all`** ([#19](https://github.com/BOBER3r/agent-bober/pull/19), [#20](https://github.com/BOBER3r/agent-bober/pull/20)): tokensave code-graph preflight telemetry written to `.bober/history.jsonl`, and an `update-all` sync flow (`npm run update-all`) that keeps the CLI, skills, agents, and plugin marketplace in sync.
+- **Preset-aware slash-command installation** ([#11](https://github.com/BOBER3r/agent-bober/pull/11), [#12](https://github.com/BOBER3r/agent-bober/pull/12)) *(shipped in 0.12.0, documented here)*: `bober init` now installs only the universal commands plus the commands relevant to the chosen preset, instead of every command.
+
+### Fixed
+
+- **Plugin PostToolUse hooks schema** ([#22](https://github.com/BOBER3r/agent-bober/pull/22), [#23](https://github.com/BOBER3r/agent-bober/pull/23)): PostToolUse hooks are now wrapped in the required `hooks[]` array so the Claude Code plugin loads them correctly.
+
 ## [0.15.0] — 2026-05-29
 
 ### Added

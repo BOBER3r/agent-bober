@@ -407,6 +407,20 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 | `/bober-anchor` | Solana program workflow |
 | `/bober-brownfield` | Existing codebase workflow |
 | `/bober-playwright` | Set up Playwright E2E testing, generate tests, debug failures |
+| `/bober-code-review` | Advisory review of the sprint diff against the contract + anti-pattern catalog |
+| `/bober-verify` | Verification-before-completion -- run checks and confirm output before claiming success |
+| `/bober-debug` | Systematic debugging -- reproduce, isolate, hypothesize, fix, verify |
+| `/bober-graph` | Manage the code graph index -- init, sync, status (requires tokensave) |
+| `/bober-impact` | Analyse the impact radius and test coverage of a symbol or file |
+| `/bober-onboard` | Generate onboarding docs from the code graph |
+| `/bober-incident` | Run the incident lifecycle -- diagnose, deploy, verify, postmortem |
+| `/bober-diagnose` | Investigate a production incident -- evidence at boundaries, hypothesize-and-disprove |
+| `/bober-deploy` | Execute a remediation action with blast-radius classification + change-management gates |
+| `/bober-runbook` | Execute a step-by-step recovery procedure with pre/postcondition gates |
+| `/bober-postmortem` | Synthesize an evidence-cited postmortem from incident artifacts |
+| `/bober-using-bober` | Establishes how to find and use bober skills (loaded at conversation start) |
+
+> **Preset-aware install:** `bober init <preset>` installs the universal commands above plus only the stack-specific commands matching your preset or mode -- e.g. `/bober-solidity` is added for a `solidity` project, `/bober-react` and `/bober-playwright` for `nextjs`/`react-vite`, and `/bober-brownfield` for an existing codebase. The Claude Code plugin (`/plugin install`) always ships the full set.
 
 ### CLI
 
@@ -496,6 +510,30 @@ agent-bober run "Build a complete dashboard with auth, CRUD, and charts" --provi
 
 ---
 
+## Lens Panels (multi-perspective evaluation & architecture)
+
+Both the **evaluator** and the **architect** can run as a *lens panel* -- fanning a single decision out across several independent perspectives, then reconciling them into one verdict. Panels are **opt-in and off by default**; when disabled, behavior is byte-identical to the single-pass path.
+
+- **Evaluator panel** (`evaluator.panel`): runs each sprint evaluation through the built-in lenses **correctness**, **security**, **regression**, and **quality**, with bounded fan-out and a reconcile step, recording per-lens verdicts as telemetry.
+- **Architect panel** (`architect.panel`): gates the architecture approach-selection and review checkpoints through the built-in lenses **scalability**, **security**, **cost**, **operability**, **maintainability**, and **reversibility**, with a fail-closed reconcile.
+
+Enable a panel and (optionally) restrict or override the lenses:
+
+```jsonc
+{
+  "evaluator": {
+    "panel": { "enabled": true, "lenses": ["correctness", "security"], "maxConcurrent": 4 }
+  },
+  "architect": {
+    "panel": { "enabled": true }   // empty "lenses" => all built-ins
+  }
+}
+```
+
+Leave `lenses` empty to use the full built-in set; `maxConcurrent` bounds how many lenses run in parallel (default 4). The same panels are available on the Claude Code plugin surface via the lens-aware evaluator/architect agents.
+
+---
+
 ## Configuration
 
 All configuration lives in `bober.config.json` at your project root. The `init` command creates this file from a template, and you can customize it afterward.
@@ -559,7 +597,21 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
       { "type": "playwright","required": false }
     ],
     "maxIterations": 3,                   // Max rework cycles per sprint
-    "plugins": []                         // Custom evaluator plugin paths
+    "plugins": [],                        // Custom evaluator plugin paths
+    "panel": {                            // Multi-lens evaluation (opt-in, off by default)
+      "enabled": false,                   // Run the evaluator across multiple lenses
+      "lenses": [],                       // [] = built-ins: correctness, security, regression, quality
+      "maxConcurrent": 4                  // Max lenses evaluated in parallel
+    }
+  },
+
+  // -- Architect (lens panel, opt-in) ------------------
+  "architect": {
+    "panel": {
+      "enabled": false,                   // Multi-lens architecture review (off by default)
+      "lenses": [],                       // [] = built-ins: scalability, security, cost, operability, maintainability, reversibility
+      "maxConcurrent": 4
+    }
   },
 
   // -- Sprint ------------------------------------------
@@ -571,6 +623,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
   // -- Pipeline ----------------------------------------
   "pipeline": {
+    "engine": "ts",                       // Orchestration engine: "ts" (default) | "skill" | "workflow"
     "researchPhase": true,                // Run two-phase research before planning (default: true)
     "architectPhase": false,              // Run solution architecture phase before planning (default: false)
     "maxIterations": 20,                  // Max total iterations across all sprints
