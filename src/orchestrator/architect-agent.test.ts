@@ -11,6 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { synthesize } from "./workflow/synthesizer.js";
 import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig } from "../config/schema.js";
 
@@ -205,6 +206,28 @@ describe("architect panel — C2 on path", () => {
       expect(typeof ls.scores).toBe("object");
     }
   });
+
+  it("C2: result.selectedApproach equals synthesize(approaches, lensScores).winner", async () => {
+    // The loopSpy mock returns approaches: ["approach-A","approach-B"] and
+    // scores: { "approach-A": 80, "approach-B": 60 } for every call.
+    // So the generate step gives approaches=["approach-A","approach-B"].
+    // Each scoring step gives scores {"approach-A":80,"approach-B":60} per lens.
+    const lenses = ["scalability", "security"];
+    const config = makeConfig({ enabled: true, lenses, maxConcurrent: 4 });
+    const { runArchitect } = await import("./architect-agent.js");
+    const result = await runArchitect("build a thing", "/tmp/test-proj", config);
+
+    // Reconstruct the same inputs the panel saw from the mock data
+    const expectedApproaches = ["approach-A", "approach-B"];
+    const expectedLensScores = lenses.map((lens) => ({
+      lens,
+      scores: { "approach-A": 80, "approach-B": 60 },
+    }));
+    const expectedWinner = synthesize(expectedApproaches, expectedLensScores).winner;
+
+    expect(result.selectedApproach).toBeDefined();
+    expect(result.selectedApproach).toBe(expectedWinner);
+  });
 });
 
 describe("architect panel — C3 result shape", () => {
@@ -220,6 +243,7 @@ describe("architect panel — C3 result shape", () => {
     expect(typeof result.componentCount).toBe("number");
     expect(typeof result.decisionCount).toBe("number");
     expect(result.lensScores).toBeUndefined();
+    expect(result.selectedApproach).toBeUndefined();
   });
 
   it("on path ArchitectResult has all required fields plus lensScores", async () => {

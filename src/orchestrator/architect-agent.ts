@@ -36,6 +36,8 @@ export interface ArchitectResult {
   decisionCount: number;
   /** Per-lens scores from the panel path (additive, optional — absent on the off path). */
   lensScores?: Array<{ lens: string; scores: Record<string, number> }>;
+  /** The approach selected by synthesize().winner on the panel path (additive, optional — absent on the off path). */
+  selectedApproach?: string;
 }
 
 // ── ID Generation ──────────────────────────────────────────────────
@@ -815,5 +817,6 @@ After saving all files, respond with EXACTLY this JSON (no markdown fences, no o
     componentCount,
     decisionCount,
     lensScores,
+    selectedApproach: winner,
   };
 }
