@@ -17,3 +17,19 @@ describe("lens-panel.md drift gate", () => {
     }
   });
 });
+
+// ── Evaluator agent copy sync gate ─────────────────────────────────
+
+describe("bober-evaluator.md agent-copy sync gate", () => {
+  it("keeps agents/ and .claude/agents/ copies byte-identical", async () => {
+    const source = await readFile(
+      new URL("../../agents/bober-evaluator.md", import.meta.url),
+      "utf-8",
+    );
+    const claudeCopy = await readFile(
+      new URL("../../.claude/agents/bober-evaluator.md", import.meta.url),
+      "utf-8",
+    );
+    expect(claudeCopy).toBe(source);
+  });
+});
