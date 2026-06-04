@@ -11,6 +11,7 @@ import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { synthesize } from "./workflow/synthesizer.js";
 import { resolveArchLensFocus } from "./arch-lenses.js";
 import { reconcile } from "./workflow/reconciler.js";
+import { mapBounded } from "./workflow/scheduler.js";
 import type { EvalResult } from "../contracts/eval-result.js";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -133,26 +134,6 @@ function parseArchitectResponse(text: string): RawArchitectResult {
   // Return empty object — caller will handle with defaults
   logger.warn("Could not parse architect JSON response; using defaults.");
   return {};
-}
-
-// ── Bounded-concurrency helper ──────────────────────────────────────
-
-/**
- * Map over `items` applying `fn` with at most `cap` concurrent calls.
- * Uses chunk-based batching: items are sliced into groups of `cap` and
- * each group is Promise.all'd sequentially, guaranteeing peak concurrency <= cap.
- */
-async function mapBounded<T, R>(
-  items: T[],
-  cap: number,
-  fn: (x: T) => Promise<R>,
-): Promise<R[]> {
-  const out: R[] = [];
-  for (let i = 0; i < items.length; i += cap) {
-    const batch = items.slice(i, i + cap);
-    out.push(...(await Promise.all(batch.map(fn))));
-  }
-  return out;
 }
 
 // ── Main Entry Point ───────────────────────────────────────────────

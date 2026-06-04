@@ -19,6 +19,7 @@ import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { emit } from "../telemetry/emit.js";
 import { appendHistory } from "../state/history.js";
 import { reconcile } from "./workflow/reconciler.js";
+import { mapBounded } from "./workflow/scheduler.js";
 import { resolveLensFocus } from "./eval-lenses.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
@@ -172,26 +173,6 @@ async function runAgentEvaluation(
   }
 
   return reconcile(contractId, 1, lensResults, new Date().toISOString());
-}
-
-// ── Bounded-concurrency helper ──────────────────────────────────────
-
-/**
- * Map over `items` applying `fn` with at most `cap` concurrent calls.
- * Uses chunk-based batching: items are sliced into groups of `cap` and
- * each group is Promise.all'd sequentially, guaranteeing peak concurrency <= cap.
- */
-async function mapBounded<T, R>(
-  items: T[],
-  cap: number,
-  fn: (x: T) => Promise<R>,
-): Promise<R[]> {
-  const out: R[] = [];
-  for (let i = 0; i < items.length; i += cap) {
-    const batch = items.slice(i, i + cap);
-    out.push(...(await Promise.all(batch.map(fn))));
-  }
-  return out;
 }
 
 // ── Single-lens evaluation ──────────────────────────────────────────
