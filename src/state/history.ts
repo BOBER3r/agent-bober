@@ -136,7 +136,7 @@ export async function loadRecentHistory(
   projectRoot: string,
   { limit }: { limit: number },
 ): Promise<HistoryEntry[]> {
-  let activeContent = "";
+  let activeContent: string;
   try {
     activeContent = await readFile(historyPath(projectRoot), "utf-8");
   } catch {
