@@ -400,6 +400,10 @@ bober onboard
 | `ANTHROPIC_API_KEY` | Anthropic | Required for Anthropic provider |
 | `OPENAI_API_KEY` | OpenAI | Required for OpenAI provider |
 | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Google Gemini | Required for Google provider |
+| `DEEPSEEK_API_KEY` | DeepSeek (openai-compat) | Required for the DeepSeek provider (also `npm install openai`) |
+
+The `claude-code` provider requires **no** API key — it uses an active Claude subscription via the
+`claude` CLI on PATH. See [docs/providers.md](./docs/providers.md).
 
 ---
 
