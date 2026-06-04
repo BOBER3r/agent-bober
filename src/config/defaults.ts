@@ -63,6 +63,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       model: "sonnet",
       strategies: [typecheckStrategy, lintStrategy, buildStrategy, unitTestStrategy],
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     commands: {
       build: "npm run build",
@@ -88,6 +89,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       model: "sonnet",
       strategies: [typecheckStrategy, lintStrategy, buildStrategy, playwrightStrategy],
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     sprint: {
       maxSprints: 10,
@@ -109,6 +111,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       eventQueueBound: 1000,
       worktreeRoot: ".bober/worktrees",
       cleanupWorktreeOnSuccess: true,
+      engine: "ts",
     },
     commands: {
       install: "npm install",
@@ -124,6 +127,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       model: "sonnet",
       strategies: [buildStrategy, lintStrategy, unitTestStrategy],
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     commands: {
       build: "npx hardhat compile",
@@ -136,6 +140,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       model: "sonnet",
       strategies: [buildStrategy, unitTestStrategy, lintStrategy],
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     commands: {
       build: "anchor build",
@@ -148,6 +153,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       model: "sonnet",
       strategies: [typecheckStrategy, lintStrategy, unitTestStrategy, apiCheckStrategy],
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     commands: {
       build: "npm run build",
@@ -161,6 +167,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
       model: "sonnet",
       strategies: [lintStrategy, unitTestStrategy, apiCheckStrategy],
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     commands: {
       test: "pytest",
@@ -187,6 +194,7 @@ const greenfieldBase: Partial<BoberConfig> = {
     model: "sonnet",
     strategies: [buildStrategy, lintOptionalStrategy],
     maxIterations: 3,
+    panel: { enabled: false, lenses: [], maxConcurrent: 4 },
   },
   sprint: {
     maxSprints: 10,
@@ -208,6 +216,7 @@ const greenfieldBase: Partial<BoberConfig> = {
     eventQueueBound: 1000,
     worktreeRoot: ".bober/worktrees",
     cleanupWorktreeOnSuccess: true,
+    engine: "ts",
   },
   commands: {},
 };
@@ -227,6 +236,7 @@ const brownfieldBase: Partial<BoberConfig> = {
     model: "sonnet",
     strategies: [typecheckStrategy, lintStrategy, unitTestStrategy],
     maxIterations: 3,
+    panel: { enabled: false, lenses: [], maxConcurrent: 4 },
   },
   sprint: {
     maxSprints: 10,
@@ -248,6 +258,7 @@ const brownfieldBase: Partial<BoberConfig> = {
     eventQueueBound: 1000,
     worktreeRoot: ".bober/worktrees",
     cleanupWorktreeOnSuccess: true,
+    engine: "ts",
   },
   commands: {},
 };

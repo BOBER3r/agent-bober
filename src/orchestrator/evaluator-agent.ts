@@ -17,6 +17,9 @@ import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { emit } from "../telemetry/emit.js";
+import { appendHistory } from "../state/history.js";
+import { reconcile } from "./workflow/reconciler.js";
+import { resolveLensFocus } from "./eval-lenses.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
 
@@ -128,6 +131,11 @@ export async function runEvaluatorAgent(
  * Run the agent-based qualitative evaluation using a multi-turn agentic
  * loop with bash, read_file, glob, and grep tools.
  *
+ * When panel.enabled is true and >=2 lenses are configured, fans out
+ * one judge call per lens (bounded by maxConcurrent) and reconciles
+ * via majority vote into a single evaluator='panel' EvalResult.
+ * Otherwise runs the existing single judge call (byte-identical off path).
+ *
  * The evaluator can run commands, take screenshots, inspect code, start
  * dev servers, and curl endpoints — but CANNOT write or edit files.
  */
@@ -136,6 +144,69 @@ async function runAgentEvaluation(
   programmaticResults: EvalResult[],
   projectRoot: string,
   config: BoberConfig,
+): Promise<EvalResult> {
+  const panel = config.evaluator.panel;
+  if (!panel.enabled || panel.lenses.length < 2) {
+    // Off path — single judge call, byte-identical to the original behavior.
+    return runSingleLensEval(handoff, programmaticResults, projectRoot, config);
+  }
+
+  // On path — fan out one judge per lens with bounded concurrency.
+  const lensResults = await mapBounded(
+    panel.lenses,
+    panel.maxConcurrent,
+    (lens) => runSingleLensEval(handoff, programmaticResults, projectRoot, config, lens),
+  );
+
+  const contractId = handoff.currentContract?.contractId ?? "unknown";
+
+  // C3 — per-lens verdict telemetry (PANEL path only; index-aligned with panel.lenses).
+  for (let i = 0; i < panel.lenses.length; i++) {
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "eval-lens-verdict",
+      phase: "evaluating",
+      sprintId: contractId,
+      details: { lens: panel.lenses[i], passed: lensResults[i].passed },
+    });
+  }
+
+  return reconcile(contractId, 1, lensResults, new Date().toISOString());
+}
+
+// ── Bounded-concurrency helper ──────────────────────────────────────
+
+/**
+ * Map over `items` applying `fn` with at most `cap` concurrent calls.
+ * Uses chunk-based batching: items are sliced into groups of `cap` and
+ * each group is Promise.all'd sequentially, guaranteeing peak concurrency <= cap.
+ */
+async function mapBounded<T, R>(
+  items: T[],
+  cap: number,
+  fn: (x: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += cap) {
+    const batch = items.slice(i, i + cap);
+    out.push(...(await Promise.all(batch.map(fn))));
+  }
+  return out;
+}
+
+// ── Single-lens evaluation ──────────────────────────────────────────
+
+/**
+ * Run a single judge call. When `lens` is provided, a focus block is
+ * appended to the user message; when undefined the prompt is byte-identical
+ * to the original single-judge behavior (C2).
+ */
+async function runSingleLensEval(
+  handoff: ContextHandoff,
+  programmaticResults: EvalResult[],
+  projectRoot: string,
+  config: BoberConfig,
+  lens?: string,
 ): Promise<EvalResult> {
   const timestamp = new Date().toISOString();
 
@@ -221,6 +292,12 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
   "timestamp": "${timestamp}"
 }`;
 
+    // When a lens is provided, append a focus block (on path only).
+    // When lens is undefined the prompt is byte-identical to the original (C2).
+    const lensBlock = lens
+      ? `\n\n## Evaluation Lens: ${lens}\n${resolveLensFocus(lens)}`
+      : "";
+
     // Pre-flight graph context injection (ADR-9): prepend graph context to userMessage.
     // On failure or timeout, userMessage is returned unchanged (spawn not blocked).
     const graphClient = graphPipelineLifecycle.getGraphClient();
@@ -228,12 +305,12 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
     const enhancedMessage = await preflightInjector.inject(
       "evaluator",
       handoff.currentContract ?? null,
-      userMessage,
+      `${userMessage}${lensBlock}`,
       { baselineSha: "HEAD~1" },
     );
 
     logger.info(
-      `Calling evaluator model (${config.evaluator.model} → ${model})...`,
+      `Calling evaluator model (${config.evaluator.model} → ${model})${lens ? ` [lens: ${lens}]` : ""}...`,
     );
 
     const result = await runAgenticLoop({

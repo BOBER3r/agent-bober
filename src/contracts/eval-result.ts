@@ -72,6 +72,9 @@ export const EvalResultSchema = z.object({
   regressions: z.array(RegressionSchema).optional(),
   designScore: z.number().min(0).max(100).optional(),
   generatorFeedback: z.array(GeneratorFeedbackItemSchema).optional(),
+  lensVerdicts: z
+    .array(z.object({ lens: z.string(), passed: z.boolean(), summary: z.string() }))
+    .optional(),
 });
 export type EvalResult = z.infer<typeof EvalResultSchema>;
 

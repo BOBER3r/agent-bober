@@ -109,6 +109,11 @@ export const EvaluatorSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  panel: z.object({
+    enabled: z.boolean().default(false),
+    lenses: z.array(z.string()).default([]),
+    maxConcurrent: z.number().int().min(1).default(4),
+  }).default({ enabled: false, lenses: [], maxConcurrent: 4 }),
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 
@@ -184,6 +189,8 @@ export const PipelineSectionSchema = z.object({
    *  via `git worktree remove` after a successful pipeline run. On failure the
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
+  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines (sprint 6+). Default: 'ts'. */
+  engine: z.enum(["ts", "skill", "workflow"]).default("ts"),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -376,6 +383,7 @@ export function createDefaultConfig(
       model: "sonnet",
       strategies: defaultStrategiesForMode(mode, preset),
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     sprint: {
       maxSprints: 10,
@@ -397,6 +405,7 @@ export function createDefaultConfig(
       eventQueueBound: 1000,
       worktreeRoot: ".bober/worktrees",
       cleanupWorktreeOnSuccess: true,
+      engine: "ts",
     },
     commands: {},
   };

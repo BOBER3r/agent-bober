@@ -513,7 +513,12 @@ export async function runSprintCycle(
  * Each agent invocation is a FRESH call (new message thread). Context
  * is carried via the ContextHandoff document.
  */
-export async function runPipeline(
+/**
+ * Internal implementation: the original TypeScript pipeline body.
+ * Extracted so TsPipelineEngine can wrap it without an import cycle.
+ * Do NOT change the algorithm, phase order, or .bober/ write behaviour here.
+ */
+export async function runTsPipeline(
   userPrompt: string,
   projectRoot: string,
   config: BoberConfig,
@@ -840,4 +845,20 @@ export async function runPipeline(
   } finally {
     cleanup();
   }
+}
+
+// ── Engine-selection seam ──────────────────────────────────────────
+
+import { selectPipelineEngine } from "./workflow/selector.js";
+
+/**
+ * Public entry point. Resolves the configured pipeline engine and delegates.
+ * Signature is frozen — callers must not be updated when the engine changes.
+ */
+export async function runPipeline(
+  userPrompt: string,
+  projectRoot: string,
+  config: BoberConfig,
+): Promise<PipelineResult> {
+  return selectPipelineEngine(config).run(userPrompt, projectRoot, config);
 }

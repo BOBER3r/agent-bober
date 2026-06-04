@@ -642,6 +642,7 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
       strategies: evalConfig.strategies,
       maxIterations: defaults.evaluator?.maxIterations ?? 3,
       provider,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     commands: evalConfig.commands,
   });
@@ -757,6 +758,7 @@ async function brownfieldManualFlow(projectRoot: string): Promise<void> {
       strategies,
       maxIterations: defaults.evaluator?.maxIterations ?? 3,
       provider,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
   });
 
@@ -889,6 +891,7 @@ async function greenfieldFlow(
         strategies,
         maxIterations: defaults.evaluator?.maxIterations ?? 3,
         provider,
+        panel: { enabled: false, lenses: [], maxConcurrent: 4 },
       },
     },
   );

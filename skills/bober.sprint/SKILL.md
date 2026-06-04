@@ -283,6 +283,15 @@ When done, respond with EXACTLY this JSON structure (no other text):
 
 ## Step 6: Spawn the Evaluator Subagent
 
+**Panel mode (gated, off by default):** Read `config.evaluator.panel`. If `panel.enabled` is `true` AND `panel.lenses.length >= 2`, run the PANEL flow described in the inlined Lens Panel reference below (`<!-- Reference: lens-panel.md -->`):
+- Spawn ONE bober-evaluator with **MODE:deterministic** — runs the configured strategy suite exactly once.
+- Then spawn one bober-evaluator per lens with **MODE:lens:<name>** for each name in `panel.lenses`, bounded by `panel.maxConcurrent` concurrent spawns.
+- Collect each lens verdict; majority-vote: `passed = passCount > failCount`, **FAIL-CLOSED on tie** (tie → false).
+- Set `final.passed = deterministic.passed && reconciled.passed`.
+- Save the eval-result with `evaluator: "panel"` and a `lensVerdicts: [{ lens, passed, summary }]` array.
+
+OTHERWISE (panel disabled, or fewer than 2 lenses), spawn exactly ONE bober-evaluator with **MODE:full** exactly as described below — byte-identical to today's behaviour.
+
 **Use the Agent tool to spawn the evaluator:**
 
 ```

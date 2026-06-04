@@ -206,6 +206,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         model: "sonnet" as const,
         strategies: [],
         maxIterations: 3,
+        panel: { enabled: false, lenses: [], maxConcurrent: 4 },
       },
       sprint: defaults.sprint ?? {
         maxSprints: 10,
@@ -227,6 +228,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         eventQueueBound: 1000,
         worktreeRoot: ".bober/worktrees",
         cleanupWorktreeOnSuccess: true,
+        engine: "ts" as const,
       },
       commands: defaults.commands ?? {},
     },

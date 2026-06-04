@@ -1,0 +1,262 @@
+[
+  {
+    "name": "single-lens-pass",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "unanimous-pass",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "unanimous-fail",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue A",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue B",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue C",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "majority-pass",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue A",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue B",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "majority-fail",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue A",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue B",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue C",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "tie",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue A",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue B",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "empty-detail",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-a",
+        "passed": true,
+        "details": [],
+        "summary": "ok",
+        "feedback": "",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [],
+        "summary": "nope",
+        "feedback": "issue A",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  },
+  {
+    "name": "failing-details-dedup",
+    "lensVerdicts": [
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [
+          {
+            "criterion": "c1",
+            "passed": false,
+            "message": "same msg",
+            "severity": "error"
+          },
+          {
+            "criterion": "c2",
+            "passed": false,
+            "message": "other",
+            "severity": "error"
+          }
+        ],
+        "summary": "nope",
+        "feedback": "issue A",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      },
+      {
+        "evaluator": "lens-b",
+        "passed": false,
+        "details": [
+          {
+            "criterion": "c1",
+            "passed": false,
+            "message": "same msg",
+            "severity": "error"
+          }
+        ],
+        "summary": "nope",
+        "feedback": "issue B",
+        "timestamp": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  }
+]
