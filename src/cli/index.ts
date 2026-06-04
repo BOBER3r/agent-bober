@@ -32,6 +32,7 @@ import { registerPlaybookCommand } from "./commands/playbook.js";
 import { registerConfigCommand } from "./commands/config.js";
 import { registerTelemetryCommand } from "./commands/telemetry.js";
 import { registerWorktreeCommand } from "./commands/worktree.js";
+import { registerMemoryCommand } from "./commands/memory.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -280,6 +281,9 @@ async function main(): Promise<void> {
 
   // ── worktree ──────────────────────────────────────────────────────
   registerWorktreeCommand(program);
+
+  // ── memory ────────────────────────────────────────────────────────
+  registerMemoryCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
