@@ -109,6 +109,11 @@ export const EvaluatorSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  panel: z.object({
+    enabled: z.boolean().default(false),
+    lenses: z.array(z.string()).default([]),
+    maxConcurrent: z.number().int().min(1).default(4),
+  }).default({ enabled: false, lenses: [], maxConcurrent: 4 }),
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 
@@ -378,6 +383,7 @@ export function createDefaultConfig(
       model: "sonnet",
       strategies: defaultStrategiesForMode(mode, preset),
       maxIterations: 3,
+      panel: { enabled: false, lenses: [], maxConcurrent: 4 },
     },
     sprint: {
       maxSprints: 10,

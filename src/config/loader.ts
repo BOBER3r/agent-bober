@@ -206,6 +206,7 @@ export async function loadConfig(projectRoot: string): Promise<BoberConfig> {
         model: "sonnet" as const,
         strategies: [],
         maxIterations: 3,
+        panel: { enabled: false, lenses: [], maxConcurrent: 4 },
       },
       sprint: defaults.sprint ?? {
         maxSprints: 10,

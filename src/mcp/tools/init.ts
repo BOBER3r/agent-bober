@@ -127,6 +127,7 @@ export function registerInitTool(): void {
             strategies: evalConfig.strategies,
             maxIterations: 3,
             provider,
+            panel: { enabled: false, lenses: [], maxConcurrent: 4 },
           },
           commands: evalConfig.commands,
         });
@@ -221,6 +222,7 @@ export function registerInitTool(): void {
           strategies: [],
           maxIterations: 3,
           provider,
+          panel: { enabled: false, lenses: [], maxConcurrent: 4 },
         },
       });
 
