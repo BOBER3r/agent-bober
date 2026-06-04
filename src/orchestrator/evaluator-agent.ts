@@ -17,7 +17,9 @@ import { runAgenticLoop } from "./agentic-loop.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { emit } from "../telemetry/emit.js";
+import { appendHistory } from "../state/history.js";
 import { reconcile } from "./workflow/reconciler.js";
+import { resolveLensFocus } from "./eval-lenses.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
 
@@ -157,6 +159,18 @@ async function runAgentEvaluation(
   );
 
   const contractId = handoff.currentContract?.contractId ?? "unknown";
+
+  // C3 — per-lens verdict telemetry (PANEL path only; index-aligned with panel.lenses).
+  for (let i = 0; i < panel.lenses.length; i++) {
+    await appendHistory(projectRoot, {
+      timestamp: new Date().toISOString(),
+      event: "eval-lens-verdict",
+      phase: "evaluating",
+      sprintId: contractId,
+      details: { lens: panel.lenses[i], passed: lensResults[i].passed },
+    });
+  }
+
   return reconcile(contractId, 1, lensResults, new Date().toISOString());
 }
 
@@ -281,7 +295,7 @@ Your final response must contain ONLY a JSON object matching this schema (no mar
     // When a lens is provided, append a focus block (on path only).
     // When lens is undefined the prompt is byte-identical to the original (C2).
     const lensBlock = lens
-      ? `\n\n## Evaluation Lens: ${lens}\nFocus your judgment specifically on the ${lens} dimension; other concerns are out of scope for this judge.`
+      ? `\n\n## Evaluation Lens: ${lens}\n${resolveLensFocus(lens)}`
       : "";
 
     // Pre-flight graph context injection (ADR-9): prepend graph context to userMessage.

@@ -25,6 +25,9 @@ let peak = 0;
 // Queue of per-lens pass/fail verdicts (FIFO)
 const verdicts: boolean[] = [];
 
+// Spy for appendHistory — declared at module top so vi.mock hoisting can close over it
+const appendHistorySpy = vi.fn().mockResolvedValue(undefined);
+
 const loopSpy = vi.fn(async () => {
   active++;
   peak = Math.max(peak, active);
@@ -78,6 +81,9 @@ vi.mock("../graph/pipeline-lifecycle.js", () => ({
 }));
 vi.mock("../telemetry/emit.js", () => ({
   emit: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../state/history.js", () => ({
+  appendHistory: appendHistorySpy,
 }));
 vi.mock("../evaluators/registry.js", () => ({
   createDefaultRegistry: vi.fn().mockResolvedValue({}),
@@ -179,6 +185,7 @@ beforeEach(() => {
   verdicts.length = 0;
   loopSpy.mockClear();
   clientSpy.mockClear();
+  appendHistorySpy.mockClear();
 });
 
 describe("evaluator panel — C2 off path", () => {
@@ -272,5 +279,98 @@ describe("evaluator panel — C4 fail-closed reconciliation", () => {
     const out = await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
     // combine: programmaticEval.passed (true) && agentResult.passed (true) = true
     expect(out.passed).toBe(true);
+  });
+});
+
+describe("evaluator panel — C3 per-lens verdict telemetry", () => {
+  it("ON path: 3 lenses → 3 appendHistory calls with event 'eval-lens-verdict' in lens order", async () => {
+    verdicts.push(true, false, true);
+    const lenses = ["correctness", "security", "regression"];
+    const config = makeConfig({
+      enabled: true,
+      lenses,
+      maxConcurrent: 4,
+    });
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    // Filter only the eval-lens-verdict calls (appendHistory may be called for other events by other code)
+    const verdictCalls = appendHistorySpy.mock.calls.filter(
+      (args) =>
+        typeof args[1] === "object" &&
+        args[1] !== null &&
+        (args[1] as Record<string, unknown>).event === "eval-lens-verdict",
+    );
+
+    expect(verdictCalls).toHaveLength(3);
+
+    // Verify each call has correct lens name and pass/fail in order
+    const expectedPassFail = [true, false, true];
+    for (let i = 0; i < lenses.length; i++) {
+      const entry = verdictCalls[i][1] as Record<string, unknown>;
+      const details = entry.details as Record<string, unknown>;
+      expect(details.lens).toBe(lenses[i]);
+      expect(details.passed).toBe(expectedPassFail[i]);
+    }
+  });
+
+  it("ON path: 2 lenses → 2 appendHistory calls, both with event 'eval-lens-verdict'", async () => {
+    verdicts.push(false, true);
+    const lenses = ["correctness", "quality"];
+    const config = makeConfig({
+      enabled: true,
+      lenses,
+      maxConcurrent: 4,
+    });
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    const verdictCalls = appendHistorySpy.mock.calls.filter(
+      (args) =>
+        typeof args[1] === "object" &&
+        args[1] !== null &&
+        (args[1] as Record<string, unknown>).event === "eval-lens-verdict",
+    );
+
+    expect(verdictCalls).toHaveLength(2);
+    const entry0 = verdictCalls[0][1] as Record<string, unknown>;
+    const details0 = entry0.details as Record<string, unknown>;
+    expect(details0.lens).toBe("correctness");
+    expect(details0.passed).toBe(false);
+
+    const entry1 = verdictCalls[1][1] as Record<string, unknown>;
+    const details1 = entry1.details as Record<string, unknown>;
+    expect(details1.lens).toBe("quality");
+    expect(details1.passed).toBe(true);
+  });
+
+  it("OFF path (panel disabled): NO eval-lens-verdict appendHistory calls", async () => {
+    const config = makeConfig({ enabled: false, lenses: [], maxConcurrent: 4 });
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    const verdictCalls = appendHistorySpy.mock.calls.filter(
+      (args) =>
+        typeof args[1] === "object" &&
+        args[1] !== null &&
+        (args[1] as Record<string, unknown>).event === "eval-lens-verdict",
+    );
+
+    expect(verdictCalls).toHaveLength(0);
+  });
+
+  it("OFF path (panel enabled but <2 lenses): NO eval-lens-verdict appendHistory calls", async () => {
+    const config = makeConfig({ enabled: true, lenses: ["correctness"], maxConcurrent: 4 });
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    const verdictCalls = appendHistorySpy.mock.calls.filter(
+      (args) =>
+        typeof args[1] === "object" &&
+        args[1] !== null &&
+        (args[1] as Record<string, unknown>).event === "eval-lens-verdict",
+    );
+
+    expect(verdictCalls).toHaveLength(0);
   });
 });
