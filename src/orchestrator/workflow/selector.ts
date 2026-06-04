@@ -3,6 +3,7 @@ import { logger } from "../../utils/logger.js";
 import type { PipelineEngine, PipelineEngineName } from "./engine.js";
 import { isWorkflowEligible } from "./eligibility.js";
 import { TsPipelineEngine } from "./ts-engine.js";
+import { WorkflowEngine } from "./workflow-engine.js";
 
 // ── Resolver ───────────────────────────────────────────────────────
 
@@ -39,9 +40,12 @@ export function resolveEngineName(config: BoberConfig): PipelineEngineName {
 
 /**
  * Resolve config.pipeline.engine to a PipelineEngine instance.
- * 'skill' and 'workflow' engines are not implemented this sprint (sprint 6);
- * resolveEngineName makes them unreachable via the default-ineligible probe.
- * TODO(sprint-6): map 'skill' and 'workflow' to their respective engines.
+ *
+ * Belt-and-suspenders per ADR-6:
+ *   - resolveEngineName (above) ALREADY downgrades workflow→ts when ineligible/careful.
+ *   - In the eligible case, WorkflowEngine is returned; its run() has a second guard
+ *     that catches WorkflowUnavailableError from the dormant invoke and re-dispatches TS.
+ *   - 'skill' remains on TsPipelineEngine (no skill engine this sprint — non-goal).
  */
 export function selectPipelineEngine(config: BoberConfig): PipelineEngine {
   const name = resolveEngineName(config);
@@ -49,9 +53,11 @@ export function selectPipelineEngine(config: BoberConfig): PipelineEngine {
     case "ts":
       return new TsPipelineEngine();
     case "skill":
-    case "workflow":
-      // Sprint 6: real engine implementations go here.
-      // For now, fall back to TS engine (unreachable via default-ineligible probe).
+      // Skill engine deferred (non-goal this sprint); falls through to TS.
       return new TsPipelineEngine();
+    case "workflow":
+      // Reachable only when resolveEngineName returns 'workflow' (eligible + not careful).
+      // WorkflowEngine.run has a belt-and-suspenders catch for WorkflowUnavailableError.
+      return new WorkflowEngine();
   }
 }
