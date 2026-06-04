@@ -140,6 +140,30 @@ export async function runEvaluatorAgent(
  * The evaluator can run commands, take screenshots, inspect code, start
  * dev servers, and curl endpoints — but CANNOT write or edit files.
  */
+/**
+ * Side-effect-free lens-evaluation core. Runs the judge call(s) and returns the
+ * per-lens verdicts — a single verdict when the panel is off, one per lens
+ * (bounded concurrency) when on. Writes NOTHING to `.bober/` (no history append,
+ * no reconcile), so the workflow interpreter's `evaluate` dep can call it while
+ * the flusher remains the sole clock/commit source. The persisting wrapper
+ * {@link runAgentEvaluation} layers the history append + reconcile on top for
+ * the TS pipeline.
+ */
+export async function evaluateLenses(
+  handoff: ContextHandoff,
+  programmaticResults: EvalResult[],
+  projectRoot: string,
+  config: BoberConfig,
+): Promise<EvalResult[]> {
+  const panel = config.evaluator.panel;
+  if (!panel.enabled || panel.lenses.length < 2) {
+    return [await runSingleLensEval(handoff, programmaticResults, projectRoot, config)];
+  }
+  return mapBounded(panel.lenses, panel.maxConcurrent, (lens) =>
+    runSingleLensEval(handoff, programmaticResults, projectRoot, config, lens),
+  );
+}
+
 async function runAgentEvaluation(
   handoff: ContextHandoff,
   programmaticResults: EvalResult[],
@@ -147,17 +171,14 @@ async function runAgentEvaluation(
   config: BoberConfig,
 ): Promise<EvalResult> {
   const panel = config.evaluator.panel;
+
+  // Side-effect-free core: run the judge call(s) → per-lens verdicts.
+  const lensResults = await evaluateLenses(handoff, programmaticResults, projectRoot, config);
+
   if (!panel.enabled || panel.lenses.length < 2) {
     // Off path — single judge call, byte-identical to the original behavior.
-    return runSingleLensEval(handoff, programmaticResults, projectRoot, config);
+    return lensResults[0];
   }
-
-  // On path — fan out one judge per lens with bounded concurrency.
-  const lensResults = await mapBounded(
-    panel.lenses,
-    panel.maxConcurrent,
-    (lens) => runSingleLensEval(handoff, programmaticResults, projectRoot, config, lens),
-  );
 
   const contractId = handoff.currentContract?.contractId ?? "unknown";
 
