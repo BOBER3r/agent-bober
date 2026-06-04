@@ -4,6 +4,7 @@ import {
   EvaluatorSectionSchema,
   ArchitectSectionSchema,
   BoberConfigSchema,
+  HistorySectionSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -100,6 +101,24 @@ describe("BoberConfigSchema — architect is optional (C3)", () => {
       expect(result.data.architect?.panel.enabled).toBe(true);
       expect(result.data.architect?.panel.lenses).toEqual(["scalability"]);
     }
+  });
+});
+
+describe("HistorySectionSchema", () => {
+  it("defaults maxActiveLines to 2000 on empty config", () => {
+    expect(HistorySectionSchema.parse({}).maxActiveLines).toBe(2000);
+  });
+
+  it("rejects a non-positive maxActiveLines (0)", () => {
+    expect(() => HistorySectionSchema.parse({ maxActiveLines: 0 })).toThrow();
+  });
+
+  it("rejects a non-positive maxActiveLines (-1)", () => {
+    expect(() => HistorySectionSchema.parse({ maxActiveLines: -1 })).toThrow();
+  });
+
+  it("accepts a positive integer maxActiveLines", () => {
+    expect(HistorySectionSchema.parse({ maxActiveLines: 500 }).maxActiveLines).toBe(500);
   });
 });
 
