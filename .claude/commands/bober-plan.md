@@ -152,6 +152,16 @@ After receiving the user's answers, generate a complete PlanSpec. Follow the sch
 7. **Non-functional requirements:** Performance, security, accessibility, reliability considerations
 8. **Tech notes:** Integration points, data model overview, security considerations
 
+<HARD-GATE>
+Do NOT write any .bober/contracts/*.json file until one of the following has happened:
+
+1. INTERACTIVE protocol — the user has explicitly approved the assumptions and outOfScope sections above. Record approval as a resolvedClarifications entry with questionId='gate-design-approval' and the user's verbatim approval in the answer field.
+
+2. AUTONOMOUS protocol — every assumption in the spec is backed by cited evidence (minimum: a file path; preferred: file:line). Record self-approval as resolvedClarifications entry with questionId='gate-design-approval', answer='Autonomous self-approval', resolvedBy='planner', and metadata.approvalEvidence field listing the cited file paths.
+
+Violating this gate produces orphan contracts that diverge from the spec. Discovered violations result in contracts being deleted and spec status reverted to 'needs-clarification'.
+</HARD-GATE>
+
 ## Step 6: Decompose into Sprint Contracts
 
 Decompose the PlanSpec into ordered sprints. This is the most critical step.

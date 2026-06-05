@@ -22,3 +22,16 @@ export { OpenAICompatAdapter } from "./openai-compat.js";
 export { ClaudeCodeAdapter } from "./claude-code.js";
 
 export { createClient, validateApiKey, preflightClaudeBinary, type ProviderName, type BinaryProbe } from "./factory.js";
+
+export {
+  coerceJson,
+  zodValidator,
+  runStructuredAgent,
+  JsonCoercionError,
+  StructuredOutputError,
+  type Validator,
+  type ValidationResult,
+  type SafeParseable,
+  type RunStructuredAgentOptions,
+  type StructuredAgentResult,
+} from "./structured.js";

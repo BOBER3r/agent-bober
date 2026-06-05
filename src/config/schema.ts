@@ -320,6 +320,15 @@ export const TelemetrySectionSchema = z.object({
 });
 export type TelemetrySection = z.infer<typeof TelemetrySectionSchema>;
 
+// ── History Section (Sprint 1 — scale-safe rotation) ─────────────────
+
+export const HistorySectionSchema = z.object({
+  /** Max entries kept in the active history.jsonl before rotation moves the
+   *  oldest overflow to history.archive.jsonl. Positive integer, default 2000. */
+  maxActiveLines: z.number().int().positive().default(2000),
+});
+export type HistorySection = z.infer<typeof HistorySectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -341,6 +350,8 @@ export const BoberConfigSchema = z.object({
   telemetry: TelemetrySectionSchema.optional(),
   // ── Architect lens panel (opt-in) ──
   architect: ArchitectSectionSchema.optional(),
+  // ── Sprint 1: scale-safe history rotation ──
+  history: HistorySectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

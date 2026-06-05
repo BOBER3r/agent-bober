@@ -25,6 +25,7 @@ export {
   // Functions
   appendHistory,
   loadHistory,
+  loadRecentHistory,
   updateProgress,
 } from "./history.js";
 

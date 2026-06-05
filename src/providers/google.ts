@@ -88,6 +88,10 @@ interface GeminiGenerativeAI {
   getGenerativeModel(config: {
     model: string;
     systemInstruction?: string;
+    generationConfig?: {
+      responseMimeType?: string;
+      responseSchema?: Record<string, unknown>;
+    };
   }): GeminiGenerativeModel;
 }
 
@@ -104,6 +108,20 @@ function toGeminiTool(tools: ToolDef[]): GeminiTool {
       parameters: tool.input_schema as Record<string, unknown>,
     })),
   };
+}
+
+/**
+ * Sanitize a JSON Schema for Gemini's `responseSchema`.
+ *
+ * Gemini rejects the JSON-Schema keyword `additionalProperties`, so we return a
+ * shallow copy of the schema with the top-level `additionalProperties` key
+ * removed. A shallow strip is sufficient for the flat schemas we use.
+ */
+function sanitizeGeminiResponseSchema(
+  schema: Record<string, unknown>,
+): Record<string, unknown> {
+  const { additionalProperties: _additionalProperties, ...rest } = schema;
+  return rest;
 }
 
 /**
@@ -269,22 +287,43 @@ export class GoogleAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const { model, system, messages, tools, maxTokens: _maxTokens = 16384 } = params;
+    const {
+      model,
+      system,
+      messages,
+      tools,
+      responseSchema,
+      maxTokens: _maxTokens = 16384,
+    } = params;
 
     const genAI = await this.getGenAI();
+
+    // When a responseSchema is set, request Gemini's native structured output.
+    // Gemini rejects `additionalProperties`, so strip it before forwarding.
+    const generationConfig = responseSchema
+      ? {
+          responseMimeType: "application/json",
+          responseSchema: sanitizeGeminiResponseSchema(responseSchema),
+        }
+      : undefined;
 
     // Get the generative model — system instruction set at model config level
     const generativeModel = genAI.getGenerativeModel({
       model: model || this.model,
       ...(system ? { systemInstruction: system } : {}),
+      ...(generationConfig ? { generationConfig } : {}),
     });
 
     // Convert provider-agnostic Message[] to Gemini contents format
     const contents: GeminiContent[] = messages.flatMap(toGeminiContents);
 
-    // Convert ToolDef[] to Gemini tools format (all declarations in one tool)
+    // Convert ToolDef[] to Gemini tools format (all declarations in one tool).
+    // responseSchema is mutually exclusive with tools — when set, user tools
+    // are NOT forwarded (structured output wins).
     const geminiTools =
-      tools && tools.length > 0 ? [toGeminiTool(tools)] : undefined;
+      !responseSchema && tools && tools.length > 0
+        ? [toGeminiTool(tools)]
+        : undefined;
 
     const result = await generativeModel.generateContent({
       contents,

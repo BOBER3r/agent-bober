@@ -153,6 +153,25 @@ export interface ChatParams {
    * default applies (high on Opus 4.8). Other adapters ignore it.
    */
   effort?: "low" | "medium" | "high" | "xhigh" | "max";
+  /**
+   * When set, requests schema-constrained ("structured") output. Each adapter
+   * maps this to its native mechanism — OpenAI / openai-compat
+   * `response_format: { type: "json_schema" }`, Gemini `responseSchema`,
+   * Anthropic forced-tool (`tool_choice`) — and upholds a single contract:
+   *
+   *   **When `responseSchema` is set, `ChatResponse.text` holds a JSON document
+   *   that best-effort conforms to this schema, and `toolCalls` is empty.**
+   *
+   * This keeps callers provider-agnostic: they always parse/validate
+   * `response.text`, regardless of how the provider produced it. `responseSchema`
+   * is for single-shot structured calls and is mutually exclusive with `tools`
+   * — when set, user `tools` are NOT forwarded. The `claude-code` adapter
+   * ignores it (no schema-constrainable surface). Local models that don't honor
+   * the native knob still receive a prompt-level schema instruction via
+   * `runStructuredAgent` (see `./structured`), which then validates and repairs
+   * the output.
+   */
+  responseSchema?: JsonSchemaObject;
 }
 
 /**

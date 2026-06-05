@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { ensureDir } from "./helpers.js";
+import { rotateIfNeeded, historyArchivePath } from "./history-rotation.js";
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -43,10 +44,38 @@ export const HistoryEntrySchema = z.object({
 });
 export type HistoryEntry = z.infer<typeof HistoryEntrySchema>;
 
+// ── Parse Helpers ───────────────────────────────────────────────────
+
+/**
+ * Parse a JSONL content string into HistoryEntry objects.
+ * Skips malformed or invalid lines without throwing.
+ */
+function parseEntries(content: string): HistoryEntry[] {
+  const lines = content.split("\n").filter((line) => line.trim().length > 0);
+  const entries: HistoryEntry[] = [];
+
+  for (const line of lines) {
+    try {
+      const parsed: unknown = JSON.parse(line);
+      const result = HistoryEntrySchema.safeParse(parsed);
+      if (result.success) {
+        entries.push(result.data);
+      }
+    } catch {
+      // Skip malformed lines
+    }
+  }
+
+  return entries;
+}
+
 // ── History Operations ──────────────────────────────────────────────
 
 /**
  * Append a history entry to the JSONL log file.
+ * After appending, triggers rotation if active history exceeds maxActiveLines.
+ * Rotation uses a hardcoded default of 2000 — do NOT call loadConfig here
+ * (loadConfig throws when no bober.config.json exists in test fixtures).
  */
 export async function appendHistory(
   projectRoot: string,
@@ -65,39 +94,59 @@ export async function appendHistory(
 
   const line = JSON.stringify(entry) + "\n";
   await appendFile(historyPath(projectRoot), line, "utf-8");
+
+  // Rotate if needed — default limit 2000; no loadConfig call (would throw in test fixtures)
+  await rotateIfNeeded(projectRoot, 2000);
 }
 
 /**
- * Load all history entries from the JSONL log.
- * Skips malformed lines.
+ * Load all history entries from both archive (if present) and active JSONL logs.
+ * Returns entries in chronological order: archive (oldest) first, then active (newest).
+ * Skips malformed lines. Signature is unchanged — always returns the full stream.
  */
 export async function loadHistory(
   projectRoot: string,
 ): Promise<HistoryEntry[]> {
-  let content: string;
+  // Read archive (ENOENT is normal on first run — treat as empty)
+  let archiveContent = "";
   try {
-    content = await readFile(historyPath(projectRoot), "utf-8");
+    archiveContent = await readFile(historyArchivePath(projectRoot), "utf-8");
   } catch {
-    // File doesn't exist yet
+    // Archive does not exist yet — normal, treat as empty
+  }
+
+  // Read active file (ENOENT is normal before first append — treat as empty)
+  let activeContent = "";
+  try {
+    activeContent = await readFile(historyPath(projectRoot), "utf-8");
+  } catch {
+    // Active file does not exist yet
+  }
+
+  // Concatenate: archive (older) first, active (newer) second
+  return [...parseEntries(archiveContent), ...parseEntries(activeContent)];
+}
+
+/**
+ * Load at most `limit` of the most-recent history entries from the ACTIVE log only.
+ * Does NOT read from history.archive.jsonl — use loadHistory for the full stream.
+ * Returns entries newest-last (ascending chronological order within the tail).
+ */
+export async function loadRecentHistory(
+  projectRoot: string,
+  { limit }: { limit: number },
+): Promise<HistoryEntry[]> {
+  let activeContent: string;
+  try {
+    activeContent = await readFile(historyPath(projectRoot), "utf-8");
+  } catch {
+    // Active file does not exist yet
     return [];
   }
 
-  const lines = content.split("\n").filter((line) => line.trim().length > 0);
-  const entries: HistoryEntry[] = [];
-
-  for (const line of lines) {
-    try {
-      const parsed: unknown = JSON.parse(line);
-      const result = HistoryEntrySchema.safeParse(parsed);
-      if (result.success) {
-        entries.push(result.data);
-      }
-    } catch {
-      // Skip malformed lines
-    }
-  }
-
-  return entries;
+  const entries = parseEntries(activeContent);
+  // Return the newest `limit` entries (tail of the array), preserving ascending order
+  return entries.slice(-limit);
 }
 
 // ── Progress Markdown ───────────────────────────────────────────────

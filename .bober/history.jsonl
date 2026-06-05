@@ -163,3 +163,130 @@
 {"event":"plan-completed","specId":"spec-20260525-cockpit-integration","sprintsCompleted":6,"timestamp":"2026-05-25T18:33:19Z"}
 {"event":"pipeline-completed","specId":"spec-20260525-cockpit-integration","sprintsCompleted":6,"totalIterations":3,"timestamp":"2026-05-25T18:33:19Z"}
 {"event":"eval-completed","contractId":"sprint-spec-20260525-cockpit-integration-6","evalId":"eval-sprint-spec-20260525-cockpit-integration-6-2","result":"pass","timestamp":"2026-05-25T18:59:02Z","standalone":true,"iteration":2}
+{"event":"plan-created","specId":"spec-20260529-anthropic-prompt-caching","title":"Anthropic Prompt Caching","sprintCount":1,"timestamp":"2026-05-29T13:30:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260529-anthropic-prompt-caching-1","specId":"spec-20260529-anthropic-prompt-caching","timestamp":"2026-05-29T13:48:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260529-anthropic-prompt-caching-1","iteration":1,"failedCriteria":["C4"],"timestamp":"2026-05-29T17:05:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260529-anthropic-prompt-caching-1","specId":"spec-20260529-anthropic-prompt-caching","iteration":2,"timestamp":"2026-05-29T17:16:00Z"}
+{"event":"plan-completed","specId":"spec-20260529-anthropic-prompt-caching","sprintsCompleted":1,"timestamp":"2026-05-29T17:16:00Z"}
+{"event":"plan-created","specId":"spec-20260529-opus-4-8-support","title":"Claude Opus 4.8 Support","sprintCount":4,"timestamp":"2026-05-29T18:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260529-opus-4-8-support-1","specId":"spec-20260529-opus-4-8-support","timestamp":"2026-05-29T18:20:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260529-opus-4-8-support-1","specId":"spec-20260529-opus-4-8-support","iteration":1,"timestamp":"2026-05-29T18:30:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260529-opus-4-8-support-2","specId":"spec-20260529-opus-4-8-support","timestamp":"2026-05-29T18:40:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260529-opus-4-8-support-2","specId":"spec-20260529-opus-4-8-support","iteration":1,"timestamp":"2026-05-29T18:50:00Z"}
+{"event":"pipeline-started","timestamp":"2026-05-29T18:55:00Z","task":"Resume spec-20260529-opus-4-8-support: sprints 3 (effort) and 4 (mid_conv_system)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260529-opus-4-8-support-3","specId":"spec-20260529-opus-4-8-support","timestamp":"2026-05-29T18:55:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260529-opus-4-8-support-3","specId":"spec-20260529-opus-4-8-support","iteration":1,"timestamp":"2026-05-29T19:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260529-opus-4-8-support-4","specId":"spec-20260529-opus-4-8-support","timestamp":"2026-05-29T19:26:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260529-opus-4-8-support-4","specId":"spec-20260529-opus-4-8-support","iteration":1,"timestamp":"2026-05-29T19:40:00Z"}
+{"event":"plan-completed","specId":"spec-20260529-opus-4-8-support","sprintsCompleted":4,"timestamp":"2026-05-29T19:40:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260529-opus-4-8-support","timestamp":"2026-05-29T19:40:00Z"}
+{"event":"architecture-completed","architectureId":"arch-20260529-ide-desktop-shell","feature":"agent-bober IDE/desktop shell — all-TypeScript Electron, local-first runtime, typed extensibility registry","componentCount":15,"decisionCount":6,"timestamp":"2026-05-29T00:00:00Z"}
+{"timestamp":"2026-05-30T14:13:44.239Z","event":"pipeline-start","phase":"init","details":{"userPrompt":"what is the purpose of this project"}}
+{"timestamp":"2026-05-30T14:13:44.241Z","event":"research-started","phase":"planning","details":{"userPrompt":"what is the purpose of this project"}}
+{"event":"pipeline-started","timestamp":"2026-05-31T00:00:00Z","task":"Multi-Provider Strategy: DeepSeek + Claude Code Subscription (PRD)"}
+{"event":"plan-created","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T00:00:00.000Z","status":"ready","sprintCount":6}
+{"event":"sprint-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-1","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T00:05:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-1","iteration":1,"timestamp":"2026-05-31T00:20:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-1","specId":"spec-20260531-multi-provider-deepseek-claude-code","iteration":1,"timestamp":"2026-05-31T14:19:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-2","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T14:20:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-2","iteration":1,"timestamp":"2026-05-31T14:27:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-2","specId":"spec-20260531-multi-provider-deepseek-claude-code","iteration":1,"timestamp":"2026-05-31T14:30:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-3","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T14:31:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-3","iteration":1,"timestamp":"2026-05-31T14:36:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-3","specId":"spec-20260531-multi-provider-deepseek-claude-code","iteration":1,"timestamp":"2026-05-31T14:39:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-4","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T14:40:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-4","iteration":1,"timestamp":"2026-05-31T14:46:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-4","specId":"spec-20260531-multi-provider-deepseek-claude-code","iteration":1,"timestamp":"2026-05-31T14:53:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-5","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T14:54:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-5","iteration":1,"timestamp":"2026-05-31T15:02:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-5","specId":"spec-20260531-multi-provider-deepseek-claude-code","iteration":1,"timestamp":"2026-05-31T15:05:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-6","specId":"spec-20260531-multi-provider-deepseek-claude-code","timestamp":"2026-05-31T15:06:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-6","iteration":1,"timestamp":"2026-05-31T15:15:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260531-multi-provider-deepseek-claude-code-6","specId":"spec-20260531-multi-provider-deepseek-claude-code","iteration":1,"timestamp":"2026-05-31T15:20:00Z"}
+{"event":"plan-completed","specId":"spec-20260531-multi-provider-deepseek-claude-code","sprintsCompleted":6,"timestamp":"2026-05-31T15:20:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260531-multi-provider-deepseek-claude-code","sprints":6,"iterations":6,"timestamp":"2026-05-31T15:20:00Z"}
+{"event":"architecture-completed","architectureId":"arch-20260603-adopt-claude-code-dynamic-workflows","feature":"Adopt Claude Code Dynamic Workflows as a config-selected interchangeable orchestration engine","componentCount":8,"decisionCount":6,"timestamp":"2026-06-03T21:31:32Z"}
+{"event":"plan-created","specId":"spec-20260604-workflow-engine","title":"Config-Selectable Workflow Orchestration Engine","sprintCount":6,"timestamp":"2026-06-04T00:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-03T23:04:36Z","task":"Implement spec-20260604-workflow-engine (Config-Selectable Workflow Orchestration Engine)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-workflow-engine-1","specId":"spec-20260604-workflow-engine","timestamp":"2026-06-03T23:04:36Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-workflow-engine-1","iteration":1,"timestamp":"2026-06-03T23:13:31Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-workflow-engine-1","specId":"spec-20260604-workflow-engine","iteration":1,"timestamp":"2026-06-03T23:17:03Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-workflow-engine-2","specId":"spec-20260604-workflow-engine","timestamp":"2026-06-03T23:17:28Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-workflow-engine-2","iteration":1,"timestamp":"2026-06-03T23:23:02Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-workflow-engine-2","specId":"spec-20260604-workflow-engine","iteration":1,"timestamp":"2026-06-03T23:25:18Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-workflow-engine-3","specId":"spec-20260604-workflow-engine","timestamp":"2026-06-03T23:25:54Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-workflow-engine-3","iteration":1,"timestamp":"2026-06-03T23:33:34Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-workflow-engine-3","specId":"spec-20260604-workflow-engine","iteration":1,"timestamp":"2026-06-03T23:36:43Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-workflow-engine-4","specId":"spec-20260604-workflow-engine","timestamp":"2026-06-03T23:37:21Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-workflow-engine-4","iteration":1,"timestamp":"2026-06-03T23:46:40Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-workflow-engine-4","specId":"spec-20260604-workflow-engine","iteration":1,"timestamp":"2026-06-03T23:50:28Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-workflow-engine-5","specId":"spec-20260604-workflow-engine","timestamp":"2026-06-03T23:51:34Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-workflow-engine-5","iteration":1,"timestamp":"2026-06-04T00:00:53Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-workflow-engine-5","specId":"spec-20260604-workflow-engine","iteration":1,"timestamp":"2026-06-04T00:05:13Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-workflow-engine-6","specId":"spec-20260604-workflow-engine","timestamp":"2026-06-04T00:07:12Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-workflow-engine-6","iteration":1,"timestamp":"2026-06-04T00:18:04Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-workflow-engine-6","specId":"spec-20260604-workflow-engine","iteration":1,"timestamp":"2026-06-04T00:21:25Z"}
+{"event":"plan-completed","specId":"spec-20260604-workflow-engine","sprintsCompleted":6,"timestamp":"2026-06-04T00:21:25Z"}
+{"event":"pipeline-completed","specId":"spec-20260604-workflow-engine","sprintsCompleted":6,"totalIterations":6,"timestamp":"2026-06-04T00:21:25Z"}
+{"event":"plan-created","specId":"spec-20260604-evaluator-lens-panel","title":"Multi-Lens Evaluator Panel","sprintCount":2,"timestamp":"2026-06-04T01:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-04T04:00:00Z","task":"Multi-Lens Evaluator Panel (spec-20260604-evaluator-lens-panel)","specId":"spec-20260604-evaluator-lens-panel"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-evaluator-lens-panel-1","iteration":1,"timestamp":"2026-06-04T04:02:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-evaluator-lens-panel-1","specId":"spec-20260604-evaluator-lens-panel","iteration":1,"timestamp":"2026-06-04T04:06:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-evaluator-lens-panel-2","iteration":1,"timestamp":"2026-06-04T04:12:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-evaluator-lens-panel-2","specId":"spec-20260604-evaluator-lens-panel","iteration":1,"timestamp":"2026-06-04T04:15:30Z"}
+{"event":"plan-completed","specId":"spec-20260604-evaluator-lens-panel","sprintsCompleted":2,"timestamp":"2026-06-04T04:15:30Z"}
+{"event":"plan-created","specId":"spec-20260604-native-lens-panel","title":"Native-Surface Multi-Lens Evaluator Panel","sprintCount":3,"timestamp":"2026-06-04T04:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-04T04:35:00Z","task":"Native-Surface Multi-Lens Evaluator Panel (spec-20260604-native-lens-panel)","specId":"spec-20260604-native-lens-panel"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-native-lens-panel-1","specId":"spec-20260604-native-lens-panel","timestamp":"2026-06-04T04:35:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-native-lens-panel-1","iteration":1,"timestamp":"2026-06-04T05:47:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-native-lens-panel-1","specId":"spec-20260604-native-lens-panel","iteration":1,"timestamp":"2026-06-04T05:55:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-native-lens-panel-2","specId":"spec-20260604-native-lens-panel","timestamp":"2026-06-04T05:56:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-native-lens-panel-2","iteration":1,"timestamp":"2026-06-04T05:57:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-native-lens-panel-2","specId":"spec-20260604-native-lens-panel","iteration":1,"timestamp":"2026-06-04T05:58:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-native-lens-panel-3","specId":"spec-20260604-native-lens-panel","timestamp":"2026-06-04T05:59:00Z"}
+{"event":"contract-adjusted","contractId":"sprint-spec-20260604-native-lens-panel-3","reason":"update-all:check targets external sync projects not this repo; replaced C3/C5 gate with in-repo vitest recomputation of inlined commands","timestamp":"2026-06-04T06:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-native-lens-panel-3","iteration":1,"timestamp":"2026-06-04T06:10:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-native-lens-panel-3","specId":"spec-20260604-native-lens-panel","iteration":1,"timestamp":"2026-06-04T06:12:00Z"}
+{"event":"plan-completed","specId":"spec-20260604-native-lens-panel","sprintsCompleted":3,"timestamp":"2026-06-04T06:12:00Z"}
+{"event":"plan-created","specId":"spec-20260604-architect-lens-panel","title":"Architect Decision Lens Panel","sprintCount":5,"timestamp":"2026-06-04T06:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-04T06:40:00Z","task":"Architect Decision Lens Panel (spec-20260604-architect-lens-panel)","specId":"spec-20260604-architect-lens-panel"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-architect-lens-panel-1","specId":"spec-20260604-architect-lens-panel","timestamp":"2026-06-04T06:40:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-architect-lens-panel-1","iteration":1,"timestamp":"2026-06-04T08:20:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-architect-lens-panel-1","specId":"spec-20260604-architect-lens-panel","iteration":1,"timestamp":"2026-06-04T08:22:50Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-architect-lens-panel-2","specId":"spec-20260604-architect-lens-panel","timestamp":"2026-06-04T08:23:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-architect-lens-panel-2","iteration":1,"timestamp":"2026-06-04T08:34:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260604-architect-lens-panel-2","iteration":1,"failedCriteria":["C2"],"timestamp":"2026-06-04T08:38:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-architect-lens-panel-2","iteration":2,"timestamp":"2026-06-04T08:42:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-architect-lens-panel-2","specId":"spec-20260604-architect-lens-panel","iteration":2,"timestamp":"2026-06-04T08:44:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-architect-lens-panel-3","specId":"spec-20260604-architect-lens-panel","timestamp":"2026-06-04T08:45:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-architect-lens-panel-3","iteration":1,"timestamp":"2026-06-04T08:52:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-architect-lens-panel-3","specId":"spec-20260604-architect-lens-panel","iteration":1,"timestamp":"2026-06-04T08:53:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-architect-lens-panel-4","specId":"spec-20260604-architect-lens-panel","timestamp":"2026-06-04T08:54:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-architect-lens-panel-4","iteration":1,"timestamp":"2026-06-04T09:01:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-architect-lens-panel-4","specId":"spec-20260604-architect-lens-panel","iteration":1,"timestamp":"2026-06-04T09:05:10Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260604-architect-lens-panel-5","specId":"spec-20260604-architect-lens-panel","timestamp":"2026-06-04T09:06:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260604-architect-lens-panel-5","iteration":1,"timestamp":"2026-06-04T09:11:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260604-architect-lens-panel-5","specId":"spec-20260604-architect-lens-panel","iteration":1,"timestamp":"2026-06-04T09:14:25Z"}
+{"event":"plan-completed","specId":"spec-20260604-architect-lens-panel","sprintsCompleted":5,"timestamp":"2026-06-04T09:14:25Z"}
+{"event":"plan-created","specId":"spec-20260604-docs-correction","title":"Documentation & Release-Metadata Correction (0.16.0)","sprintCount":4,"timestamp":"2026-06-04T18:13:40Z"}
+{"event":"plan-completed","specId":"spec-20260604-docs-correction","sprintCount":4,"branch":"bober/docs-correction-0.16.0","commit":"0a39fa8","tags":["v0.12.0","v0.13.0","v0.14.0","v0.15.0","v0.16.0"],"pushed":false,"timestamp":"2026-06-04T18:13:40Z"}
+{"timestamp":"2026-06-05T00:00:00.000Z","event":"plan-created","phase":"planning","details":{"specId":"spec-20260605-scale-safe-history-memory","title":"Scale-Safe Sprint History + Self-Improvement Memory","sprintCount":4,"mode":"brownfield"}}
+{"event":"pipeline-started","timestamp":"2026-06-04T23:02:51Z","task":"Build spec-20260605-scale-safe-history-memory (4 sprints) via bober.run","specId":"spec-20260605-scale-safe-history-memory","branch":"bober/scale-safe-history-memory"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:03:19Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "iteration": 1, "timestamp": "2026-06-04T23:03:19Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "iteration": 1, "result": "pass", "timestamp": "2026-06-04T23:19:02Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-04T23:19:02Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:19:49Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "iteration": 1, "timestamp": "2026-06-04T23:19:49Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "iteration": 1, "result": "pass", "timestamp": "2026-06-04T23:30:29Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-04T23:30:29Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:30:53Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "iteration": 1, "timestamp": "2026-06-04T23:30:53Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "iteration": 1, "result": "pass", "timestamp": "2026-06-04T23:47:43Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-04T23:47:43Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:48:24Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "iteration": 1, "timestamp": "2026-06-04T23:48:24Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "iteration": 1, "result": "pass", "timestamp": "2026-06-05T00:02:07Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-05T00:02:07Z"}
+{"event": "plan-completed", "specId": "spec-20260605-scale-safe-history-memory", "sprintsCompleted": 4, "timestamp": "2026-06-05T00:02:07Z"}
+{"event": "pipeline-completed", "specId": "spec-20260605-scale-safe-history-memory", "sprints": 4, "iterations": 4, "timestamp": "2026-06-05T00:02:07Z"}

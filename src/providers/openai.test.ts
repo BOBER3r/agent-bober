@@ -403,6 +403,102 @@ describe("OpenAIAdapter", () => {
     expect(callArgs).not.toHaveProperty("effort");
   });
 
+  // ── Structured output (responseSchema) ──────────────────────────
+
+  it("sends response_format json_schema when responseSchema is set", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: '{"ok":true}' }));
+
+    const schema = {
+      type: "object" as const,
+      properties: { ok: { type: "boolean" } },
+      required: ["ok"],
+    };
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "give me json" }],
+      responseSchema: schema,
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs["response_format"]).toEqual({
+      type: "json_schema",
+      json_schema: {
+        name: "structured_output",
+        schema,
+        strict: false,
+      },
+    });
+  });
+
+  it("omits tools when responseSchema is set", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: '{"ok":true}' }));
+
+    const tools: ToolDef[] = [
+      {
+        name: "search",
+        description: "Search the web",
+        input_schema: {
+          type: "object",
+          properties: { query: { type: "string" } },
+          required: ["query"],
+        },
+      },
+    ];
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "go" }],
+      tools,
+      responseSchema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs["tools"]).toBeUndefined();
+    expect(callArgs["response_format"]).toBeDefined();
+  });
+
+  it("does not send response_format when responseSchema is absent", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+
+    const adapter = await makeAdapter();
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArgs).not.toHaveProperty("response_format");
+  });
+
+  it("passes structured JSON text through unchanged", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: '{"ok":true}' }));
+
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "give me json" }],
+      responseSchema: {
+        type: "object",
+        properties: { ok: { type: "boolean" } },
+        required: ["ok"],
+      },
+    });
+
+    expect(result.text).toBe('{"ok":true}');
+    expect(result.toolCalls).toEqual([]);
+  });
+
   it("handles malformed tool call arguments gracefully", async () => {
     createFn.mockResolvedValue(
       makeOAIResponse({

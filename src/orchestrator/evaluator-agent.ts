@@ -19,6 +19,7 @@ import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { emit } from "../telemetry/emit.js";
 import { appendHistory } from "../state/history.js";
 import { reconcile } from "./workflow/reconciler.js";
+import { mapBounded } from "./workflow/scheduler.js";
 import { resolveLensFocus } from "./eval-lenses.js";
 
 export type { EvaluationRunResult } from "../evaluators/registry.js";
@@ -139,6 +140,30 @@ export async function runEvaluatorAgent(
  * The evaluator can run commands, take screenshots, inspect code, start
  * dev servers, and curl endpoints — but CANNOT write or edit files.
  */
+/**
+ * Side-effect-free lens-evaluation core. Runs the judge call(s) and returns the
+ * per-lens verdicts — a single verdict when the panel is off, one per lens
+ * (bounded concurrency) when on. Writes NOTHING to `.bober/` (no history append,
+ * no reconcile), so the workflow interpreter's `evaluate` dep can call it while
+ * the flusher remains the sole clock/commit source. The persisting wrapper
+ * {@link runAgentEvaluation} layers the history append + reconcile on top for
+ * the TS pipeline.
+ */
+export async function evaluateLenses(
+  handoff: ContextHandoff,
+  programmaticResults: EvalResult[],
+  projectRoot: string,
+  config: BoberConfig,
+): Promise<EvalResult[]> {
+  const panel = config.evaluator.panel;
+  if (!panel.enabled || panel.lenses.length < 2) {
+    return [await runSingleLensEval(handoff, programmaticResults, projectRoot, config)];
+  }
+  return mapBounded(panel.lenses, panel.maxConcurrent, (lens) =>
+    runSingleLensEval(handoff, programmaticResults, projectRoot, config, lens),
+  );
+}
+
 async function runAgentEvaluation(
   handoff: ContextHandoff,
   programmaticResults: EvalResult[],
@@ -146,17 +171,14 @@ async function runAgentEvaluation(
   config: BoberConfig,
 ): Promise<EvalResult> {
   const panel = config.evaluator.panel;
+
+  // Side-effect-free core: run the judge call(s) → per-lens verdicts.
+  const lensResults = await evaluateLenses(handoff, programmaticResults, projectRoot, config);
+
   if (!panel.enabled || panel.lenses.length < 2) {
     // Off path — single judge call, byte-identical to the original behavior.
-    return runSingleLensEval(handoff, programmaticResults, projectRoot, config);
+    return lensResults[0];
   }
-
-  // On path — fan out one judge per lens with bounded concurrency.
-  const lensResults = await mapBounded(
-    panel.lenses,
-    panel.maxConcurrent,
-    (lens) => runSingleLensEval(handoff, programmaticResults, projectRoot, config, lens),
-  );
 
   const contractId = handoff.currentContract?.contractId ?? "unknown";
 
@@ -172,26 +194,6 @@ async function runAgentEvaluation(
   }
 
   return reconcile(contractId, 1, lensResults, new Date().toISOString());
-}
-
-// ── Bounded-concurrency helper ──────────────────────────────────────
-
-/**
- * Map over `items` applying `fn` with at most `cap` concurrent calls.
- * Uses chunk-based batching: items are sliced into groups of `cap` and
- * each group is Promise.all'd sequentially, guaranteeing peak concurrency <= cap.
- */
-async function mapBounded<T, R>(
-  items: T[],
-  cap: number,
-  fn: (x: T) => Promise<R>,
-): Promise<R[]> {
-  const out: R[] = [];
-  for (let i = 0; i < items.length; i += cap) {
-    const batch = items.slice(i, i + cap);
-    out.push(...(await Promise.all(batch.map(fn))));
-  }
-  return out;
 }
 
 // ── Single-lens evaluation ──────────────────────────────────────────

@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "agent-bober",
-    "mode": "brownfield"
+    "mode": "greenfield"
   },
   "planner": {
     "maxClarifications": 5,
@@ -25,46 +25,52 @@
     "strategies": [
       {
         "type": "typecheck",
-        "required": true,
-        "command": "npm run typecheck"
+        "required": true
       },
       {
         "type": "lint",
-        "required": true,
-        "command": "npm run lint"
-      },
-      {
-        "type": "build",
-        "required": true,
-        "command": "npm run build"
+        "required": false
       },
       {
         "type": "unit-test",
-        "required": true,
-        "command": "npm run test"
+        "required": false
+      },
+      {
+        "type": "build",
+        "required": true
+      },
+      {
+        "type": "api-check",
+        "required": false
       }
     ],
     "maxIterations": 3,
     "provider": "anthropic"
   },
   "sprint": {
-    "maxSprints": 30,
+    "maxSprints": 10,
     "requireContracts": true,
     "sprintSize": "medium"
   },
   "pipeline": {
-    "maxIterations": 40,
+    "maxIterations": 20,
+    "maxCheckpointIterations": 3,
     "requireApproval": false,
     "contextReset": "always",
     "researchPhase": true,
-    "architectPhase": false
+    "architectPhase": false,
+    "mode": "autopilot",
+    "checkpointOverrides": {},
+    "approvalTimeoutMs": 86400000,
+    "prPollMs": 30000,
+    "allowAutopilotRiskyActions": false,
+    "eventQueueBound": 1000,
+    "worktreeRoot": ".bober/worktrees",
+    "cleanupWorktreeOnSuccess": true
   },
-  "commands": {
-    "install": "npm install",
-    "build": "npm run build",
-    "test": "npm run test",
-    "lint": "npm run lint",
-    "typecheck": "npm run typecheck",
-    "dev": "npm run dev"
-  }
+  "graph": {
+    "enabled": true,
+    "languageTier": "core"
+  },
+  "commands": {}
 }

@@ -31,23 +31,32 @@ export class TokensaveCli {
   ) {}
 
   /**
-   * Run `tokensave init --tier <tier>`.
+   * Run `tokensave init` (full index of the project at `cwd`).
+   *
+   * NOTE: tokensave's `init` has no `--tier` flag (that was a pre-6.x API).
+   * `languageTier` is now a bober-level concept recorded in the manifest only,
+   * so it is accepted for caller convenience but NOT forwarded to the binary.
    * Resolves on exit code 0; throws a structured Error on non-zero.
    */
-  async init(opts: { cwd?: string; languageTier: string }): Promise<void> {
+  async init(opts: { cwd?: string; languageTier?: string }): Promise<void> {
     const effectiveCwd = opts.cwd ?? this.cwd;
     const result = await execa(
       this.binary,
-      ["init", "--tier", opts.languageTier],
+      ["init"],
       {
         cwd: effectiveCwd,
         reject: false,
         all: true,
+        // tokensave prompts to create/gitignore; with no TTY it auto-accepts.
+        input: "",
       },
     );
 
     if (result.exitCode !== 0) {
       const output = result.all ?? result.stdout ?? result.stderr ?? "";
+      // `init` is idempotent from bober's perspective: an already-initialised
+      // project is a success, not an error (caller refreshes the manifest).
+      if (/already initialized/i.test(output)) return;
       throw new Error(
         `tokensave init failed (exit ${result.exitCode ?? -1}): ${output.slice(0, 500)}`,
       );
@@ -85,8 +94,10 @@ export class TokensaveCli {
       );
     }
 
-    const stdout = result.stdout ?? "";
-    const indexed = parseSyncOutput(stdout);
+    // tokensave prints its summary ("N added, M modified, K removed") to
+    // stderr, so parse the combined `all` stream rather than stdout alone.
+    const combined = result.all ?? result.stdout ?? "";
+    const indexed = parseSyncOutput(combined);
 
     // Update manifest via store if injected
     if (this.store) {
@@ -136,10 +147,23 @@ export class TokensaveCli {
 
     try {
       const parsed = JSON.parse(stdout) as Record<string, unknown>;
+      // tokensave `status --json` returns {node_count, edge_count, file_count,
+      // nodes_by_kind, ...}. There is no `ready`/`indexedFileCount` field and no
+      // version, so derive `ready` from the presence of an index (file_count).
+      // Tolerate the legacy {ready, indexedFileCount, tokensaveVersion} shape too.
+      const fileCount =
+        typeof parsed.file_count === "number"
+          ? parsed.file_count
+          : typeof parsed.indexedFileCount === "number"
+            ? parsed.indexedFileCount
+            : 0;
+      const ready =
+        parsed.ready === true ||
+        typeof parsed.file_count === "number" ||
+        typeof parsed.node_count === "number";
       return {
-        ready: parsed.ready === true,
-        indexedFileCount:
-          typeof parsed.indexedFileCount === "number" ? parsed.indexedFileCount : 0,
+        ready,
+        indexedFileCount: fileCount,
         tokensaveVersion:
           typeof parsed.tokensaveVersion === "string" ? parsed.tokensaveVersion : "",
       };
@@ -153,14 +177,20 @@ export class TokensaveCli {
 // ── Helpers ────────────────────────────────────────────────────────
 
 /**
- * Parse `{indexed: N}` from tokensave sync stdout.
- * Accepts both plain JSON and a JSON object embedded in other text.
+ * Parse the number of indexed files from tokensave sync output.
+ *
+ * tokensave 6.x prints a human summary like
+ *   "✔ sync done — 3 added, 1 modified, 0 removed in 41ms"
+ * (with ANSI colour codes), so we sum added + modified. Legacy JSON
+ * (`{"indexed": N}`) and `indexed: N` key-value forms are still accepted.
  */
-function parseSyncOutput(stdout: string): number {
-  const trimmed = stdout.trim();
+function parseSyncOutput(output: string): number {
+  // Strip ANSI escape sequences before matching.
+  // eslint-disable-next-line no-control-regex
+  const trimmed = output.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "").trim();
   if (!trimmed) return 0;
 
-  // Try direct JSON parse
+  // Try direct JSON parse (legacy shape)
   try {
     const obj = JSON.parse(trimmed) as Record<string, unknown>;
     if (typeof obj.indexed === "number") return obj.indexed;
@@ -168,7 +198,21 @@ function parseSyncOutput(stdout: string): number {
     // Fall through
   }
 
-  // Try to extract a number from a key-value pattern like "indexed: 42"
+  // Incremental sync summary: "N added, M modified, K removed"
+  const added = /(\d+)\s+added/.exec(trimmed);
+  const modified = /(\d+)\s+modified/.exec(trimmed);
+  if (added || modified) {
+    return (
+      (added ? parseInt(added[1], 10) : 0) +
+      (modified ? parseInt(modified[1], 10) : 0)
+    );
+  }
+
+  // Full re-index summary (--force): "indexing done — N files, ... nodes"
+  const files = /(\d+)\s+files\b/.exec(trimmed);
+  if (files) return parseInt(files[1], 10);
+
+  // Legacy key-value pattern like "indexed: 42"
   const match = /indexed["\s:]+(\d+)/.exec(trimmed);
   if (match) return parseInt(match[1], 10);
 
