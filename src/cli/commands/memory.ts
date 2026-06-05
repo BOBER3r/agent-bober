@@ -23,6 +23,7 @@ import {
   loadLesson,
 } from "../../state/memory.js";
 import { distill } from "../../orchestrator/memory/distill.js";
+import { loadEvalResults } from "../../orchestrator/memory/eval-source.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -47,7 +48,8 @@ export function registerMemoryCommand(program: Command): void {
       try {
         const history = await loadHistory(projectRoot);
         const contracts = await listContracts(projectRoot);
-        const drafts = distill(history, contracts);
+        const evalResults = await loadEvalResults(projectRoot);
+        const drafts = distill(history, contracts, evalResults);
 
         // Stamp createdAt at persist time — never inside the pure distill fn
         const now = new Date().toISOString();

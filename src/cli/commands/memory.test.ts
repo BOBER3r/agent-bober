@@ -37,39 +37,50 @@ async function writeHistoryFixture(): Promise<void> {
   const boberDir = join(tmpDir, ".bober");
   await mkdir(boberDir, { recursive: true });
 
-  // Seed a history.jsonl that includes:
-  //   - 2 "failed" phase entries (will produce sprint-failed category)
-  //   - 2 eval_failed evaluating entries (will produce eval-fail category)
+  // Seed a history.jsonl in the REAL pipeline shape: an evaluation-failed/rework
+  // event (produces a sprint-rework lesson via the history fallback) plus a pass.
   const entries = [
     {
       timestamp: "2026-01-01T00:00:00.000Z",
-      event: "sprint_failed",
-      phase: "failed",
-      sprintId: "sprint-abc-1",
-      details: {},
+      event: "evaluation-failed",
+      phase: "rework",
+      sprintId: "sprint-hist-1",
+      details: { iteration: 1, feedback: "criterion C1 failed" },
     },
     {
       timestamp: "2026-01-02T00:00:00.000Z",
-      event: "sprint_failed",
-      phase: "failed",
-      sprintId: "sprint-abc-2",
+      event: "sprint-passed",
+      phase: "complete",
+      sprintId: "sprint-hist-1",
       details: {},
-    },
-    {
-      timestamp: "2026-01-03T00:00:00.000Z",
-      event: "eval_failed",
-      phase: "evaluating",
-      sprintId: "sprint-abc-3",
-      details: {
-        verificationMethod: "unit-test",
-        criterionId: "C1",
-        result: "fail",
-      },
     },
   ];
 
   const jsonl = entries.map((e) => JSON.stringify(e)).join("\n") + "\n";
   await writeFile(join(boberDir, "history.jsonl"), jsonl, "utf-8");
+}
+
+// Seed .bober/eval-results/ with a failing eval in the real on-disk shape, so the
+// CLI distill path exercises the (a) failed-criterion and (b) failing-strategy signals.
+async function writeEvalResultsFixture(contractId: string): Promise<void> {
+  const dir = join(tmpDir, ".bober", "eval-results");
+  await mkdir(dir, { recursive: true });
+  const evalId = `eval-${contractId}-1`;
+  const evalResult = {
+    evalId,
+    contractId,
+    iteration: 1,
+    overallResult: "fail",
+    strategyResults: [
+      { strategy: "unit-test", required: true, result: "fail" },
+      { strategy: "build", required: true, result: "pass" },
+    ],
+    criteriaResults: [
+      { criterionId: "C1", required: true, result: "fail" },
+      { criterionId: "C2", required: true, result: "pass" },
+    ],
+  };
+  await writeFile(join(dir, `${evalId}.json`), JSON.stringify(evalResult, null, 2), "utf-8");
 }
 
 async function writeContractFixture(
@@ -101,7 +112,13 @@ async function writeContractFixture(
     definitionOfDone: "All tests pass and the build is green with no regressions",
     assumptions: [],
     outOfScope: [],
-    iterationHistory: Array.from({ length: iterationCount }, (_, i) => ({ round: i + 1 })),
+    // Real iterationHistory shape: all but the last iteration failed, last passed.
+    iterationHistory: Array.from({ length: iterationCount }, (_, i) => ({
+      iteration: i + 1,
+      evalId: `eval-${contractId}-${i + 1}`,
+      result: i < iterationCount - 1 ? "fail" : "pass",
+      timestamp: "2026-01-01T00:00:00.000Z",
+    })),
     lastEvalId: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
@@ -256,6 +273,20 @@ describe("C4 — distill handler", () => {
 
     expect(linesAfter).toBe(linesBefore);
     expect(output).toContain("(0 new)");
+  });
+
+  it("distills (a) failed-criterion and (b) failing-strategy lessons from real eval results", async () => {
+    await writeContractFixture("sprint-real-1", 2); // iteration 1 fail, 2 pass
+    await writeEvalResultsFixture("sprint-real-1");
+
+    await invokeDistill();
+    const listOutput = await invokeList();
+
+    // (b) the failing unit-test strategy and (a) the failed unit-test criterion both surface,
+    // alongside the (c) sprint-rework lesson from the failed iteration.
+    expect(listOutput).toContain("eval-strategy-failure:unit-test");
+    expect(listOutput).toContain("failed-criterion:unit-test");
+    expect(listOutput).toContain("sprint-rework");
   });
 });
 
