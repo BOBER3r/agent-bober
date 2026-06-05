@@ -271,3 +271,22 @@
 {"event":"plan-created","specId":"spec-20260604-docs-correction","title":"Documentation & Release-Metadata Correction (0.16.0)","sprintCount":4,"timestamp":"2026-06-04T18:13:40Z"}
 {"event":"plan-completed","specId":"spec-20260604-docs-correction","sprintCount":4,"branch":"bober/docs-correction-0.16.0","commit":"0a39fa8","tags":["v0.12.0","v0.13.0","v0.14.0","v0.15.0","v0.16.0"],"pushed":false,"timestamp":"2026-06-04T18:13:40Z"}
 {"timestamp":"2026-06-05T00:00:00.000Z","event":"plan-created","phase":"planning","details":{"specId":"spec-20260605-scale-safe-history-memory","title":"Scale-Safe Sprint History + Self-Improvement Memory","sprintCount":4,"mode":"brownfield"}}
+{"event":"pipeline-started","timestamp":"2026-06-04T23:02:51Z","task":"Build spec-20260605-scale-safe-history-memory (4 sprints) via bober.run","specId":"spec-20260605-scale-safe-history-memory","branch":"bober/scale-safe-history-memory"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:03:19Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "iteration": 1, "timestamp": "2026-06-04T23:03:19Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "iteration": 1, "result": "pass", "timestamp": "2026-06-04T23:19:02Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-1", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-04T23:19:02Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:19:49Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "iteration": 1, "timestamp": "2026-06-04T23:19:49Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "iteration": 1, "result": "pass", "timestamp": "2026-06-04T23:30:29Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-2", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-04T23:30:29Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:30:53Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "iteration": 1, "timestamp": "2026-06-04T23:30:53Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "iteration": 1, "result": "pass", "timestamp": "2026-06-04T23:47:43Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-3", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-04T23:47:43Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "specId": "spec-20260605-scale-safe-history-memory", "timestamp": "2026-06-04T23:48:24Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "iteration": 1, "timestamp": "2026-06-04T23:48:24Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "iteration": 1, "result": "pass", "timestamp": "2026-06-05T00:02:07Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-05T00:02:07Z"}
+{"event": "plan-completed", "specId": "spec-20260605-scale-safe-history-memory", "sprintsCompleted": 4, "timestamp": "2026-06-05T00:02:07Z"}
+{"event": "pipeline-completed", "specId": "spec-20260605-scale-safe-history-memory", "sprints": 4, "iterations": 4, "timestamp": "2026-06-05T00:02:07Z"}

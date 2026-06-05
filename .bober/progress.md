@@ -340,3 +340,47 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Sprints completed: 6 / 6
 - Subagents spawned: 18 (6 curators + 6 generators + 6 evaluators) + 1 planner = 19
 - Known follow-up (non-blocking): preflightOpenaiPeer is implemented + tested but not yet wired into a startup call site (Sprint-3 advisory; Sprint-5 left the optional loader wiring out to avoid disturbing loader tests).
+
+
+---
+
+## Plan: Scale-Safe Sprint History + Self-Improvement Memory
+- Spec: spec-20260605-scale-safe-history-memory
+- Branch: bober/scale-safe-history-memory
+- Status: in-progress
+- Last updated: 2026-06-04T23:19:49Z
+
+### Sprint Breakdown
+1. [completed] Bounded history reads + crash-safe rotation — passed iteration 1 (a75a376, 59dde7d)
+2. [in-progress] Deterministic lessons memory store — iteration 1
+3. [proposed] Deterministic distillation + bober memory CLI (depends on 2)
+4. [proposed] Planner reads bounded memory / close the arc (depends on 2,3)
+
+### Pipeline Statistics
+- Iteration budget: 1 / 20 used
+- Sprints completed: 1 / 4
+- Subagents spawned: 3 (curator, generator, evaluator)
+
+---
+
+## Plan COMPLETE: Scale-Safe Sprint History + Self-Improvement Memory
+- Spec: spec-20260605-scale-safe-history-memory
+- Branch: bober/scale-safe-history-memory
+- Status: completed (4/4 sprints) — 2026-06-05T00:02:59Z
+
+### Final Sprint Results (all passed iteration 1)
+1. [completed] Bounded history reads + crash-safe rotation (a75a376, +lint fix 59dde7d)
+2. [completed] Deterministic lessons memory store (6e9179b)
+3. [completed] Deterministic distillation + bober memory CLI (b17dff1)
+4. [completed] Planner reads bounded memory / close the arc (b8b6d37, 16a09ae)
+
+### Pipeline Statistics
+- Iterations: 4 / 20 (every sprint passed on iteration 1)
+- Sprints: 4 / 4 passed
+- Subagents spawned: 12 (4 curator + 4 generator + 4 evaluator)
+- Full suite: 1762 passed / 3 skipped / 1 pre-existing-unrelated fail (stale version pin)
+
+### Documented follow-ups (NOT done, out of plan scope)
+- Sprint 3: distill.test.ts C1 could add an exact toHaveLength(N) assertion (evaluator low-priority note).
+- Distribution: skills/bober.plan/SKILL.md + agents/bober-planner.md edited (canonical); run `npm run update-all` to sync the .claude/ distributed copies.
+- Pre-existing: tests/cli/skill-bundles.test.ts pins version 0.15.0 but actual is 0.16.0 (unrelated stale test).
