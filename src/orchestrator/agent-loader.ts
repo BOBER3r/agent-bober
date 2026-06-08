@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { fileExists } from "../utils/fs.js";
 import type { BoberAgentRole } from "../graph/preflight-injector.js";
 import { AgentGraphPrompts } from "../graph/prompts.js";
+import { ROLE_TOOLS } from "./tools/index.js";
+import { detectEnvironment, formatEnvironmentContext } from "./environment.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -195,5 +197,22 @@ export async function assembleSystemPrompt(
   ctx: { graphEnabled: boolean; engineHealth: string },
 ): Promise<string> {
   const definition = await loadAgentDefinition(agentName, projectRoot);
-  return AgentGraphPrompts.decorate(role, definition.systemPrompt, ctx);
+  const decorated = AgentGraphPrompts.decorate(
+    role,
+    definition.systemPrompt,
+    ctx,
+  );
+
+  // Append host-environment + exact-tool context so agents target the right OS
+  // and only call tools they actually have (esp. helps non-Claude models that
+  // otherwise hallucinate tools or assume Linux/GNU commands).
+  try {
+    const env = await detectEnvironment(projectRoot);
+    const toolNames =
+      ROLE_TOOLS[role as keyof typeof ROLE_TOOLS] ?? [];
+    return `${decorated}\n\n${formatEnvironmentContext(env, [...toolNames])}`;
+  } catch {
+    // Environment detection is best-effort — never block agent spawn.
+    return decorated;
+  }
 }

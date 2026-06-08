@@ -45,23 +45,40 @@ describe("agent-loader — assembleSystemPrompt", () => {
     expect(result).toContain("ALL exploration");
   });
 
-  it("returns base prompt unchanged when graphEnabled=false", async () => {
+  it("applies no graph decoration when graphEnabled=false", async () => {
     const result = await assembleSystemPrompt(
       "curator",
       "bober-curator",
       "/fake/root",
       { graphEnabled: false, engineHealth: "ready" },
     );
-    expect(result).toBe("Base system prompt content.");
+    // Base prompt is preserved verbatim at the head; no graph guidance is added.
+    // (Host-environment + tool context is appended unconditionally — see below.)
+    expect(result.startsWith("Base system prompt content.")).toBe(true);
+    expect(result).not.toContain("graph_search");
+    expect(result).not.toContain("ALL exploration");
   });
 
-  it("returns base prompt unchanged for planner (disabled mode)", async () => {
+  it("applies no graph decoration for planner (disabled mode)", async () => {
     const result = await assembleSystemPrompt(
       "planner",
       "bober-planner",
       "/fake/root",
       { graphEnabled: true, engineHealth: "ready" },
     );
-    expect(result).toBe("Base system prompt content.");
+    expect(result.startsWith("Base system prompt content.")).toBe(true);
+    expect(result).not.toContain("graph_search");
+    expect(result).not.toContain("ALL exploration");
+  });
+
+  it("appends host-environment + tool context to every assembled prompt", async () => {
+    const result = await assembleSystemPrompt(
+      "curator",
+      "bober-curator",
+      "/fake/root",
+      { graphEnabled: false, engineHealth: "ready" },
+    );
+    expect(result).toContain("# Host Environment");
+    expect(result).toContain("# Your Tools");
   });
 });
