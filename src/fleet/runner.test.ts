@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { execa } from "execa";
-import { resolveCliEntry, probeCliVersion } from "./runner.js";
+import { ChildRunner, resolveCliEntry, probeCliVersion } from "./runner.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -44,86 +43,92 @@ describe("probeCliVersion()", () => {
   });
 });
 
-// ── run() exit-code mapping (sc-2-7) ─────────────────────────────────
+// ── ChildRunner.run() — success path (sc-2-7) ────────────────────────
+// run() calls: process.execPath [cliEntry, 'run', task]
+// For an exit-0 test we use a fixture that exits 0 unconditionally.
 
-describe("ChildRunner-pattern — exit code mapping via stub (sc-2-7)", () => {
-  it("returns exitCode 3 when stub exits with code 3", async () => {
-    const r = await execa(process.execPath, [stub, "exit", "3"], {
-      reject: false,
-    });
-    expect(r.exitCode).toBe(3);
-  });
+describe("ChildRunner.run() — success exit 0 (sc-2-7)", () => {
+  it("returns ChildSpawnResult with exitCode 0 when cliEntry exits 0", async () => {
+    // A minimal fixture that always exits 0 regardless of argv
+    const alwaysOk = join(tmpDir, "always-ok.js");
+    await writeFile(alwaysOk, "process.exit(0);\n", "utf8");
 
-  it("returns exitCode 0 and correct fields with reject:false + timeout (sc-2-7)", async () => {
-    const result = await execa(process.execPath, [stub, "exit", "0"], {
-      cwd: tmpDir,
-      reject: false,
-      timeout: 5_000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
+    const runner = new ChildRunner({ cliEntry: alwaysOk });
+    const result = await runner.run({ cwd: tmpDir, task: "anything" });
 
+    expect(result.cwd).toBe(tmpDir);
     expect(result.exitCode).toBe(0);
     expect(typeof result.stdout).toBe("string");
     expect(typeof result.stderr).toBe("string");
     expect(result.timedOut).toBeFalsy();
+    expect(result.spawnError).toBeUndefined();
   });
 });
 
-// ── spawn failure path → spawnError pattern (sc-2-7) ─────────────────
+// ── ChildRunner.run() — non-zero exit (sc-2-7) ───────────────────────
 
-describe("ChildRunner-pattern — spawn-failure capture (sc-2-7)", () => {
-  it("catches ENOENT from a missing binary and sets spawnError, never throws", async () => {
-    let caughtError: string | undefined;
-    let threw = false;
+describe("ChildRunner.run() — non-zero exit (sc-2-7)", () => {
+  it("returns exitCode 3 when cliEntry exits with code 3", async () => {
+    // Fixture that always exits 3
+    const exit3 = join(tmpDir, "exit-3.js");
+    await writeFile(exit3, "process.exit(3);\n", "utf8");
 
-    try {
-      await execa("/nonexistent/node/binary", [stub, "run", "task"], {
-        cwd: tmpDir,
-        reject: false,
-        timeout: 5_000,
-      });
-    } catch (err) {
-      caughtError = (err as Error).message;
-    }
+    const runner = new ChildRunner({ cliEntry: exit3 });
+    const result = await runner.run({ cwd: tmpDir, task: "sometask" });
 
-    // execa with a non-existent binary throws even with reject:false (spawn-level error)
-    // This is exactly the error path that ChildRunner.run() catches to set spawnError
-    if (!threw) {
-      // The catch block set caughtError — this proves the catch path works
-      expect(typeof caughtError === "string" || caughtError === undefined).toBe(true);
-    }
+    expect(result.cwd).toBe(tmpDir);
+    expect(result.exitCode).toBe(3);
+    expect(result.spawnError).toBeUndefined();
+    // run() must not throw — we reached this line
   });
 });
 
-// ── run() timeout (sc-2-8) ────────────────────────────────────────────
+// ── ChildRunner.run() — spawn failure (sc-2-7) ───────────────────────
+// Inject a nonexistent binary path via nodeBin to trigger an ENOENT spawn error.
 
-describe("ChildRunner-pattern — timeout behavior (sc-2-8)", () => {
-  it("timedOut is true when a stub sleeper exceeds a short timeout (sc-2-8)", async () => {
-    // stub sleeps 5000ms, we give it only 100ms timeout
-    const result = await execa(
-      process.execPath,
-      [stub, "sleep", "5000"],
-      {
-        reject: false,
-        timeout: 100,
-      },
-    );
+describe("ChildRunner.run() — spawn failure capture (sc-2-7)", () => {
+  it("captures ENOENT in spawnError and returns null exitCode without throwing", async () => {
+    const runner = new ChildRunner({
+      cliEntry: stub,
+      nodeBin: "/nonexistent/node-binary",
+    });
+    const result = await runner.run({ cwd: tmpDir, task: "sometask" });
+
+    expect(result.cwd).toBe(tmpDir);
+    expect(result.exitCode).toBeNull();
+    expect(result.spawnError).toBeDefined();
+    expect(typeof result.spawnError).toBe("string");
+    expect((result.spawnError as string).length).toBeGreaterThan(0);
+    // ENOENT or similar spawn error in message
+    expect(result.spawnError).toMatch(/ENOENT|spawn|not found/i);
+    // run() must not throw — we reached this line
+  });
+});
+
+// ── ChildRunner.run() — timeout behavior (sc-2-8) ────────────────────
+
+describe("ChildRunner.run() — timeout (sc-2-8)", () => {
+  it("returns timedOut true when cliEntry sleeps beyond timeoutMs (sc-2-8)", async () => {
+    // Fixture that sleeps 10 seconds — will be killed by 100 ms timeout
+    const sleeper = join(tmpDir, "sleeper.js");
+    await writeFile(sleeper, "setTimeout(() => process.exit(0), 10000);\n", "utf8");
+
+    const runner = new ChildRunner({ cliEntry: sleeper });
+    const result = await runner.run({ cwd: tmpDir, task: "any", timeoutMs: 100 });
 
     expect(result.timedOut).toBe(true);
+    expect(result.cwd).toBe(tmpDir);
   }, 10_000);
 
-  it("default timeout mirrors 10*60*1000 ms and fast exit completes without timedOut (sc-2-8)", async () => {
-    const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-    const result = await execa(
-      process.execPath,
-      [stub, "exit", "0"],
-      {
-        reject: false,
-        timeout: DEFAULT_TIMEOUT_MS,
-      },
-    );
+  it("fast cliEntry completes without timedOut when no timeoutMs is provided (DEFAULT_TIMEOUT_MS used) (sc-2-8)", async () => {
+    // A fast-exit fixture; omitting timeoutMs exercises the DEFAULT_TIMEOUT_MS path
+    const alwaysOk = join(tmpDir, "always-ok2.js");
+    await writeFile(alwaysOk, "process.exit(0);\n", "utf8");
 
-    expect(result.exitCode).toBe(0);
+    const runner = new ChildRunner({ cliEntry: alwaysOk });
+    const result = await runner.run({ cwd: tmpDir, task: "any" }); // no timeoutMs
+
     expect(result.timedOut).toBeFalsy();
+    expect(result.exitCode).toBe(0);
   });
 });

@@ -56,6 +56,26 @@ export async function probeCliVersion(cliEntry: string): Promise<boolean> {
 
 export class ChildRunner {
   /**
+   * Optional override for the CLI entry path.
+   * Production code leaves this undefined (defaults to resolveCliEntry()).
+   * Tests inject the stub fixture path via the constructor to avoid
+   * requiring a built dist/cli/index.js during unit testing.
+   */
+  private readonly _cliEntry?: string;
+
+  /**
+   * Optional override for the Node.js binary path.
+   * Production code leaves this undefined (defaults to process.execPath).
+   * Tests may inject a bad path to exercise the spawn-failure / ENOENT path.
+   */
+  private readonly _nodeBin?: string;
+
+  constructor(options?: { cliEntry?: string; nodeBin?: string }) {
+    this._cliEntry = options?.cliEntry;
+    this._nodeBin = options?.nodeBin;
+  }
+
+  /**
    * Spawn one `agent-bober run <task>` child process in spec.cwd.
    * Uses process.execPath (the current Node binary) + the parent's own
    * dist/cli/index.js — never a bare PATH lookup.
@@ -63,12 +83,13 @@ export class ChildRunner {
    * Never throws: spawn errors are captured in spawnError.
    */
   async run(spec: ChildRunSpec): Promise<ChildSpawnResult> {
-    const cliEntry = resolveCliEntry();
+    const cliEntry = this._cliEntry ?? resolveCliEntry();
+    const nodeBin = this._nodeBin ?? process.execPath;
     const timeout = spec.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     try {
       const result = await execa(
-        process.execPath,
+        nodeBin,
         [cliEntry, "run", spec.task],
         {
           cwd: spec.cwd,
@@ -77,6 +98,19 @@ export class ChildRunner {
           maxBuffer: MAX_BUFFER,
         },
       );
+
+      // With reject:false, execa resolves even on spawn-level failures (e.g. ENOENT).
+      // Detect a spawn failure by checking whether exitCode is absent and the process
+      // did not actually start (originalMessage contains the spawn error details).
+      if (result.exitCode === undefined && result.failed && result.originalMessage) {
+        return {
+          cwd: spec.cwd,
+          exitCode: null,
+          stdout: result.stdout ?? "",
+          stderr: result.stderr ?? "",
+          spawnError: result.originalMessage,
+        };
+      }
 
       const spawnResult: ChildSpawnResult = {
         cwd: spec.cwd,
@@ -89,7 +123,7 @@ export class ChildRunner {
       }
       return spawnResult;
     } catch (err) {
-      // Spawn-level failure (e.g. ENOENT for bad entry path)
+      // Fallback: if execa throws despite reject:false (older execa versions)
       return {
         cwd: spec.cwd,
         exitCode: null,
