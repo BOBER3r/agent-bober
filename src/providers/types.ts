@@ -172,6 +172,15 @@ export interface ChatParams {
    * the output.
    */
   responseSchema?: JsonSchemaObject;
+  /**
+   * When true, request the provider's *loose* JSON-object mode
+   * (`response_format: { type: "json_object" }` for OpenAI / openai-compat).
+   * Unlike `responseSchema` (strict json_schema, which DeepSeek rejects), this
+   * only guarantees the output is a syntactically valid JSON object — the caller
+   * must spell out the required fields in the prompt. Ignored by adapters that
+   * lack the knob. When both are set, `responseSchema` takes precedence.
+   */
+  jsonObjectMode?: boolean;
 }
 
 /**

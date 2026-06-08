@@ -16,7 +16,7 @@ import type { EvalResult } from "../contracts/eval-result.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const ARCHITECT_MAX_TURNS = 25;
+const ARCHITECT_MAX_TURNS = 100;
 const RESEARCH_MAX_LINES = 300;
 
 // ── Types ──────────────────────────────────────────────────────────

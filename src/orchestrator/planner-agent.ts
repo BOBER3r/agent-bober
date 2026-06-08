@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { BoberConfig } from "../config/schema.js";
-import type { PlanSpec } from "../contracts/spec.js";
+import type { PlanSpec, FeatureSpec } from "../contracts/spec.js";
 import { PlanSpecSchema } from "../contracts/spec.js";
 import { createClient } from "../providers/factory.js";
 import { saveSpec } from "../state/index.js";
@@ -11,13 +11,50 @@ import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { assembleSystemPrompt } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
-import { runAgenticLoop } from "./agentic-loop.js";
+import { runAgenticLoop, coerceJsonOutput } from "./agentic-loop.js";
 import type { ResearchDoc } from "./research-agent.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const PLANNER_MAX_TURNS = 15;
+const PLANNER_MAX_TURNS = 100;
 const RESEARCH_MAX_LINES = 300;
+
+/**
+ * Fallback instruction used when the planner's response isn't a valid PlanSpec.
+ * Some OpenAI-compatible models (DeepSeek) emit valid JSON of the WRONG shape
+ * (e.g. the short {specId, sprintCount, contractIds} summary the agent prompt
+ * asks for) rather than the full PlanSpec the orchestrator parses. This spells
+ * out every required field so json_object mode produces a parseable spec.
+ */
+const PLAN_SPEC_COERCION_INSTRUCTION = `Your previous response was not a complete PlanSpec object.
+Output ONLY a single JSON object (no prose, no markdown fences, no tool calls) with EXACTLY this shape, filled in from the task and research above:
+{
+  "specId": "spec-<yyyymmdd>-<slug>",
+  "version": 1,
+  "title": "<short title>",
+  "description": "<2-3 sentence summary of what this builds and why>",
+  "status": "ready",
+  "mode": "greenfield",
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "<feature title>",
+      "description": "<what this feature does>",
+      "priority": "must-have",
+      "acceptanceCriteria": ["<verifiable criterion>", "<verifiable criterion>"],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "techStack": [],
+  "createdAt": "<ISO-8601 timestamp>",
+  "updatedAt": "<ISO-8601 timestamp>"
+}
+Rules: "status" must be one of draft|needs-clarification|ready|in-progress|completed (use "ready" for autonomous runs). "mode" is greenfield or brownfield. "priority" is must-have|should-have|nice-to-have. Each feature needs at least one acceptanceCriteria entry. Provide 3-6 features that fully cover the task. Output the JSON object and nothing else.`;
 const ARCHITECT_MAX_LINES = 200;
 
 // ── Research truncation ────────────────────────────────────────────
@@ -195,8 +232,29 @@ Your final response must contain ONLY valid JSON matching the PlanSpec schema (n
     `Planner completed in ${result.turnsUsed} turns (tools: ${result.toolsCalled.length})`,
   );
 
-  // Parse the final response for PlanSpec JSON
-  const spec = parsePlanSpec(result.finalText);
+  // Parse the final response for PlanSpec JSON. Some OpenAI-compatible models
+  // (e.g. DeepSeek) explore correctly but narrate prose instead of emitting the
+  // required JSON. On parse failure, fall back to a JSON-mode coercion call that
+  // forces a structured PlanSpec object. No-op for models that already comply.
+  let spec: PlanSpec;
+  try {
+    spec = parsePlanSpec(result.finalText);
+  } catch (parseErr) {
+    logger.warn(
+      `Planner output was not a valid PlanSpec (${parseErr instanceof Error ? parseErr.message : String(parseErr)}). ` +
+        `Retrying via JSON mode...`,
+    );
+    const coerced = await coerceJsonOutput({
+      client,
+      model,
+      systemPrompt,
+      userMessage,
+      priorText: result.finalText,
+      instruction: PLAN_SPEC_COERCION_INSTRUCTION,
+    });
+    spec = parsePlanSpec(coerced);
+    logger.info("Planner JSON-mode coercion succeeded.");
+  }
 
   // Save to .bober/specs/
   await saveSpec(projectRoot, spec);
@@ -273,4 +331,129 @@ function parsePlanSpec(text: string): PlanSpec {
   }
 
   return result.data;
+}
+
+// ── Contract precision generation ──────────────────────────────────
+
+/** Vague phrases the generator's contract preflight rejects (bober-generator.md). */
+const BANNED_CONTRACT_PHRASES = [
+  "works correctly",
+  "works as expected",
+  "looks good",
+  "looks nice",
+  "is reasonable",
+  "behaves properly",
+  "behaves correctly",
+  "is correct",
+  "appears correct",
+  "as needed",
+  "if appropriate",
+];
+
+/** The substantive precision fields a generator-passable contract requires. */
+export interface ContractPrecision {
+  nonGoals: string[];
+  stopConditions: string[];
+  definitionOfDone: string;
+  assumptions: string[];
+  outOfScope: string[];
+}
+
+function hasBannedPhrase(s: string): boolean {
+  const lower = s.toLowerCase();
+  return BANNED_CONTRACT_PHRASES.some((p) => lower.includes(p));
+}
+
+function validatePrecision(obj: unknown): ContractPrecision | undefined {
+  if (typeof obj !== "object" || obj === null) return undefined;
+  const o = obj as Record<string, unknown>;
+  const strArr = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      : [];
+  const nonGoals = strArr(o.nonGoals);
+  const stopConditions = strArr(o.stopConditions);
+  const definitionOfDone =
+    typeof o.definitionOfDone === "string" ? o.definitionOfDone.trim() : "";
+
+  // Enforce the same bar the generator preflight does — else it's wasted effort.
+  if (nonGoals.length === 0 || stopConditions.length === 0) return undefined;
+  if (definitionOfDone.length < 20) return undefined;
+  if (nonGoals[0].startsWith("Auto-generated contract")) return undefined;
+  const allStrings = [...nonGoals, ...stopConditions, definitionOfDone];
+  if (allStrings.some(hasBannedPhrase)) return undefined;
+
+  return {
+    nonGoals,
+    stopConditions,
+    definitionOfDone,
+    assumptions: strArr(o.assumptions),
+    outOfScope: strArr(o.outOfScope),
+  };
+}
+
+/**
+ * Generate substantive contract precision fields (nonGoals, stopConditions,
+ * definitionOfDone) for a feature via a json_object model call.
+ *
+ * The standalone pipeline otherwise creates contracts with placeholder precision
+ * fields, which the generator's BLOCKING precision preflight rejects. This fills
+ * them with concrete, verifiable values so the sprint can actually run.
+ *
+ * Returns undefined if generation fails or the output doesn't meet the bar — the
+ * caller then keeps placeholders (and the generator correctly blocks) rather than
+ * shipping a vague contract.
+ */
+export async function generateContractPrecision(
+  feature: FeatureSpec,
+  spec: Pick<PlanSpec, "title" | "description">,
+  config: BoberConfig,
+): Promise<ContractPrecision | undefined> {
+  try {
+    const model = resolveModel(config.planner.model);
+    const client = createClient(
+      config.planner.provider ?? null,
+      config.planner.endpoint ?? null,
+      config.planner.providerConfig,
+      config.planner.model,
+    );
+    const userMessage = `# Overall Plan\nTitle: ${spec.title}\n${spec.description}\n\n# This Sprint's Feature\nTitle: ${feature.title}\nDescription: ${feature.description}\nAcceptance Criteria:\n${feature.acceptanceCriteria.map((a) => `- ${a}`).join("\n")}`;
+    const instruction = `Output ONLY a JSON object with the precision fields for THIS sprint's contract:
+{
+  "nonGoals": ["a specific thing the implementer must NOT do in this sprint (e.g. 'Do not implement the settings UI — that is sprint 3')"],
+  "stopConditions": ["a concrete, verifiable signal the sprint is finished (e.g. 'npm test passes and src/foo.ts exports bar()')"],
+  "definitionOfDone": "a specific paragraph (at least 20 characters) describing exactly when this sprint is complete and how to verify it",
+  "assumptions": ["any assumption made"],
+  "outOfScope": ["work explicitly deferred to other sprints"]
+}
+Rules: every string must be concrete and verifiable. "nonGoals" and "stopConditions" each need at least one specific entry. Do NOT use any of these banned vague phrases: ${BANNED_CONTRACT_PHRASES.map((p) => `"${p}"`).join(", ")}. Output the JSON object and nothing else.`;
+
+    const text = await coerceJsonOutput({
+      client,
+      model,
+      systemPrompt:
+        "You write precise, verifiable sprint contract fields for an autonomous coding harness.",
+      userMessage,
+      priorText: "",
+      instruction,
+    });
+
+    // Extract the JSON object from the response.
+    let parsed: unknown;
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      try {
+        parsed = JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return undefined;
+      }
+    }
+    return validatePrecision(parsed);
+  } catch (err) {
+    logger.warn(
+      `Contract precision generation failed for "${feature.featureId}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
 }

@@ -311,7 +311,7 @@ export class OpenAIAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
-    const { model, system, messages, tools, maxTokens = 16384, responseSchema } = params;
+    const { model, system, messages, tools, maxTokens = 16384, responseSchema, jsonObjectMode } = params;
 
     const client = await this.getClient();
 
@@ -321,12 +321,11 @@ export class OpenAIAdapter implements LLMClient {
       ...messages.flatMap(toOpenAIMessages),
     ];
 
-    // When a responseSchema is set, request the provider's native structured
-    // output via response_format. responseSchema and tools are mutually
-    // exclusive — responseSchema wins and user tools are NOT forwarded.
-    // strict:false maximises compatibility (OpenAI strict mode and many
-    // compat servers demand additionalProperties:false + all-keys-required);
-    // the caller validates and repairs the returned JSON.
+    // Structured output via response_format. `responseSchema` (strict json_schema)
+    // wins when set; otherwise `jsonObjectMode` requests the loose json_object
+    // mode (broadly supported, incl. DeepSeek, which rejects json_schema).
+    // Both disable tool forwarding (mutually exclusive with structured output).
+    // strict:false maximises compatibility; the caller validates/repairs output.
     const responseFormat: OAICreateParams["response_format"] | undefined =
       responseSchema
         ? {
@@ -337,12 +336,14 @@ export class OpenAIAdapter implements LLMClient {
               strict: false,
             },
           }
-        : undefined;
+        : jsonObjectMode
+          ? { type: "json_object" }
+          : undefined;
 
-    // Convert ToolDef[] to OpenAI tools format. Skipped entirely when a
-    // responseSchema is present (mutually exclusive with structured output).
+    // Convert ToolDef[] to OpenAI tools format. Skipped entirely when structured
+    // output (responseSchema or json_object mode) is requested.
     const oaiTools =
-      !responseSchema && tools && tools.length > 0
+      !responseSchema && !jsonObjectMode && tools && tools.length > 0
         ? tools.map(toOpenAITool)
         : undefined;
 

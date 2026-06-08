@@ -81,7 +81,7 @@ const presetDefaults: Record<string, Partial<BoberConfig>> = {
     },
     generator: {
       model: "sonnet",
-      maxTurnsPerSprint: 50,
+      maxTurnsPerSprint: 100,
       autoCommit: true,
       branchPattern: "bober/{feature-name}",
     },
@@ -186,7 +186,7 @@ const greenfieldBase: Partial<BoberConfig> = {
   },
   generator: {
     model: "sonnet",
-    maxTurnsPerSprint: 50,
+    maxTurnsPerSprint: 100,
     autoCommit: true,
     branchPattern: "bober/{feature-name}",
   },
@@ -228,7 +228,7 @@ const brownfieldBase: Partial<BoberConfig> = {
   },
   generator: {
     model: "sonnet",
-    maxTurnsPerSprint: 50,
+    maxTurnsPerSprint: 100,
     autoCommit: true,
     branchPattern: "bober/{feature-name}",
   },

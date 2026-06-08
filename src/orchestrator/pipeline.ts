@@ -24,9 +24,10 @@ import {
   summarizeOlderSprints,
 } from "./context-handoff.js";
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
-import { runPlanner } from "./planner-agent.js";
+import { runPlanner, generateContractPrecision } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
 import type { ResearchDoc } from "./research-agent.js";
+import { listResearch, readResearch } from "../state/research-state.js";
 import { runArchitect } from "./architect-agent.js";
 import { runCurator } from "./curator-agent.js";
 import { runGenerator } from "./generator-agent.js";
@@ -556,7 +557,40 @@ export async function runTsPipeline(
         details: { userPrompt: userPrompt.slice(0, 200) },
       });
 
-      researchDoc = await runResearch(userPrompt, projectRoot, config);
+      // Reuse a previously-saved research doc for this prompt instead of
+      // regenerating (saves tokens on re-runs after a later-phase failure).
+      // Force fresh generation with BOBER_FRESH_RESEARCH=1.
+      researchDoc = undefined;
+      if (process.env["BOBER_FRESH_RESEARCH"] !== "1") {
+        const slug = userPrompt
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, "")
+          .trim()
+          .split(/\s+/)
+          .slice(0, 5)
+          .join("-")
+          .slice(0, 40);
+        try {
+          const existingIds = (await listResearch(projectRoot))
+            .filter((id) => new RegExp(`^research-\\d{8}-${slug}$`).test(id))
+            .sort();
+          const reuseId = existingIds[existingIds.length - 1];
+          if (reuseId) {
+            researchDoc = await readResearch(projectRoot, reuseId);
+            logger.info(
+              `Reusing saved research "${reuseId}" (set BOBER_FRESH_RESEARCH=1 to regenerate).`,
+            );
+          }
+        } catch (err) {
+          logger.debug(
+            `Research reuse check failed, regenerating: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
+
+      if (!researchDoc) {
+        researchDoc = await runResearch(userPrompt, projectRoot, config);
+      }
 
       const researchLineCount = researchDoc.findings.split("\n").length;
       await appendHistory(projectRoot, {
@@ -733,6 +767,20 @@ export async function runTsPipeline(
     const contracts: SprintContract[] = [];
     for (let i = 0; i < spec.features.length; i++) {
       const feature = spec.features[i];
+      // Generate substantive precision fields (nonGoals/stopConditions/
+      // definitionOfDone) so the contract passes the generator's BLOCKING
+      // precision preflight. Without this the standalone pipeline emits
+      // placeholder contracts that every generator (Claude or DeepSeek) refuses.
+      const precision = await generateContractPrecision(feature, spec, config);
+      if (precision) {
+        logger.info(
+          `Generated precision fields for sprint ${i + 1} (${precision.nonGoals.length} non-goals, ${precision.stopConditions.length} stop conditions).`,
+        );
+      } else {
+        logger.warn(
+          `Could not generate precision fields for sprint ${i + 1}; contract will use placeholders and the generator may block it.`,
+        );
+      }
       const contract = createContract(
         feature.title,
         feature.description,
@@ -745,8 +793,20 @@ export async function runTsPipeline(
           specId: spec.specId,
           sprintNumber: i + 1,
           features: [feature.featureId],
+          ...(precision
+            ? {
+                nonGoals: precision.nonGoals,
+                stopConditions: precision.stopConditions,
+                definitionOfDone: precision.definitionOfDone,
+              }
+            : {}),
         },
       );
+      // createContract doesn't take assumptions/outOfScope; set them directly.
+      if (precision) {
+        contract.assumptions = precision.assumptions;
+        contract.outOfScope = precision.outOfScope;
+      }
       contracts.push(contract);
       await saveContract(projectRoot, contract);
     }

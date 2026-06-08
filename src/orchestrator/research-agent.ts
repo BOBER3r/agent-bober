@@ -11,8 +11,8 @@ import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const RESEARCHER_PHASE1_MAX_TURNS = 3;
-const RESEARCHER_PHASE2_MAX_TURNS = 20;
+const RESEARCHER_PHASE1_MAX_TURNS = 100;
+const RESEARCHER_PHASE2_MAX_TURNS = 100;
 
 // ── Types ──────────────────────────────────────────────────────────
 
