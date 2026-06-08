@@ -26,6 +26,22 @@ export interface AgenticLoopParams {
   onToolUse?: (name: string, input: unknown) => void;
   /** Called after each completed turn (for progress tracking). */
   onTurnComplete?: (turn: number, toolsCalled: string[]) => void;
+  /**
+   * Optional completion predicate. When the model ends a turn WITHOUT calling a
+   * tool, the loop normally treats that as "done". Some OpenAI-compatible models
+   * (e.g. DeepSeek) instead narrate intentions ("let me write the files...") and
+   * stop without calling any tool — which would end the loop with no work done.
+   *
+   * When this predicate is provided and returns `false` for a tool-less turn,
+   * the loop injects a nudge message (see `nudgeMessage`) and continues, up to
+   * `maxNudges` times, instead of returning prematurely. When omitted, behavior
+   * is unchanged (any tool-less turn ends the loop).
+   */
+  completionCheck?: (text: string) => boolean;
+  /** Max nudges before giving up on an apparently-incomplete tool-less turn. Default 2. */
+  maxNudges?: number;
+  /** The nudge text appended when `completionCheck` fails. A sensible default is used if omitted. */
+  nudgeMessage?: string;
 }
 
 export interface AgenticLoopResult {
@@ -202,6 +218,9 @@ export async function runAgenticLoop(
     maxTokens = 16384,
     onToolUse,
     onTurnComplete,
+    completionCheck,
+    maxNudges = 2,
+    nudgeMessage,
   } = params;
 
   const messages: Message[] = [
@@ -212,6 +231,7 @@ export async function runAgenticLoop(
   let totalOutputTokens = 0;
   const allToolsCalled: string[] = [];
   let finalText = "";
+  let nudgesUsed = 0;
 
   for (let turn = 1; turn <= maxTurns; turn++) {
     logger.debug(`Agentic loop turn ${turn}/${maxTurns}...`);
@@ -252,9 +272,35 @@ export async function runAgenticLoop(
 
     const turnStopReason = response.stopReason;
 
-    // If the model is done (no more tool use), return
+    // If the model is done (no more tool use), return — UNLESS a completion
+    // predicate says this tool-less turn isn't actually complete (model narrated
+    // intentions instead of acting). In that case, nudge it to act and continue.
     if (response.stopReason !== "tool_use") {
       finalText = response.text;
+
+      const incomplete =
+        completionCheck !== undefined &&
+        !completionCheck(finalText) &&
+        nudgesUsed < maxNudges;
+
+      if (incomplete) {
+        nudgesUsed += 1;
+        logger.warn(
+          `Model ended turn ${turn} without calling a tool and without ` +
+            `completing (nudge ${nudgesUsed}/${maxNudges}). Prompting it to continue.`,
+        );
+        messages.push({ role: "assistant", content: finalText });
+        messages.push({
+          role: "user",
+          content:
+            nudgeMessage ??
+            "You stopped without calling any tool and without producing your " +
+              "final result. If work remains, CALL THE APPROPRIATE TOOL now to " +
+              "do it (do not describe what you would do — actually call the tool). " +
+              "If you are genuinely finished, output ONLY your final result now.",
+        });
+        continue;
+      }
 
       return {
         finalText,

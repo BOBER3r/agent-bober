@@ -130,6 +130,18 @@ When you are done, your final response must contain ONLY a JSON object with this
       const inputStr = JSON.stringify(inp).slice(0, 120);
       logger.debug(`  [generator] ${name}(${inputStr})`);
     },
+    // DeepSeek-style models sometimes narrate ("let me write the files...") and
+    // stop without calling any tool, which would end the sprint with no work
+    // done. Treat a tool-less turn as complete ONLY if it carries the JSON
+    // report; otherwise nudge the model to actually call its tools.
+    completionCheck: (text) => looksLikeGeneratorReport(text),
+    nudgeMessage:
+      "You stopped without calling any tool and without producing the final " +
+      "JSON report. If implementation work remains, CALL write_file / edit_file " +
+      "/ your other tools NOW to make the changes — do not just describe them. " +
+      "Only once everything is implemented and verified, output ONLY the final " +
+      "JSON report object described in the instructions.",
+    maxNudges: 3,
   });
 
   logger.debug(
@@ -137,6 +149,28 @@ When you are done, your final response must contain ONLY a JSON object with this
   );
 
   return parseGeneratorResult(result.finalText, filesWritten, result);
+}
+
+/**
+ * True when the text contains a JSON object that looks like the generator's
+ * completion report (has a "status" or "success" field). Used as the agentic
+ * loop's completion predicate so a tool-less "I'll write the files" narration
+ * is treated as incomplete (and nudged) rather than as a finished sprint.
+ */
+function looksLikeGeneratorReport(text: string): boolean {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return false;
+  try {
+    const obj = JSON.parse(text.slice(start, end + 1)) as unknown;
+    return (
+      typeof obj === "object" &&
+      obj !== null &&
+      ("status" in obj || "success" in obj)
+    );
+  } catch {
+    return false;
+  }
 }
 
 // ── JSON parser ────────────────────────────────────────────────────
