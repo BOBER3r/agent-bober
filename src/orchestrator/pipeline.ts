@@ -19,6 +19,7 @@ import {
   updateContractStatus,
 } from "../contracts/sprint-contract.js";
 import type { EvaluationRunResult } from "../evaluators/registry.js";
+import { persistEvalResult } from "./eval-persist.js";
 import {
   createHandoff,
   summarizeOlderSprints,
@@ -375,6 +376,16 @@ export async function runSprintCycle(
       config,
     );
     lastEvaluation = evaluation;
+
+    // Persist per-evaluator/lens detail to .bober/eval-results/ so a failing
+    // round is inspectable (which evaluator/lens returned passed:false), instead
+    // of only surfacing the aggregate "N/M evaluators passed" summary. Best-effort.
+    await persistEvalResult(
+      projectRoot,
+      currentContract.contractId,
+      iteration,
+      evaluation,
+    );
 
     if (evaluation.passed) {
       logger.success(`Sprint ${currentContract.contractId} passed all evaluations!`);
