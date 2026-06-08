@@ -1,4 +1,4 @@
-import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage, ToolResult, JsonSchemaObject } from "../providers/types.js";
+import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage, ToolResult } from "../providers/types.js";
 
 import type { ToolHandler } from "./tools/index.js";
 import { logger } from "../utils/logger.js";
@@ -137,25 +137,31 @@ export interface CoerceJsonParams {
   systemPrompt: string;
   /** The original task/user message that started the loop. */
   userMessage: string;
-  /** The (non-JSON) text the agentic loop produced, fed back for context. */
+  /** The (non-JSON / wrong-shape) text the agentic loop produced, fed back for context. */
   priorText: string;
-  /** JSON Schema the provider must conform its output to (enables JSON mode). */
-  responseSchema: JsonSchemaObject;
-  /** Final instruction telling the model to emit ONLY the JSON object. */
+  /**
+   * Final instruction telling the model EXACTLY what JSON to emit. Because we
+   * use the provider's loose json_object mode (not strict json_schema — DeepSeek
+   * rejects the latter), this instruction must spell out every required field;
+   * json_object mode only guarantees the output is *a* valid JSON object.
+   */
   instruction: string;
   maxTokens?: number;
 }
 
 /**
- * Force a structured-JSON response after an agentic loop failed to terminate
- * with parseable JSON. Some OpenAI-compatible models (notably DeepSeek) explore
- * with tools correctly but then narrate prose instead of emitting the required
- * JSON object. Setting `responseSchema` flips the adapter into native JSON mode
- * (response_format) with tools disabled, which reliably yields a JSON document.
+ * Force a structured-JSON response after an agentic loop failed to produce the
+ * required object. Some OpenAI-compatible models (notably DeepSeek) either
+ * narrate prose instead of JSON, or emit valid JSON of the WRONG shape (e.g.
+ * following a short "summary" prompt instead of the full schema).
  *
- * Provider-agnostic: Anthropic/Claude rarely needs this (it follows the
- * "JSON only" instruction directly), so callers should use it as a *fallback*
- * after a normal parse attempt fails — zero behavior change for compliant models.
+ * Strategy: re-ask with `json_object` response_format (broadly supported,
+ * including DeepSeek) plus an explicit field-by-field instruction. If the
+ * provider rejects response_format at all (some servers 400 on it), fall back
+ * to a plain prompt-only call — the instruction itself demands JSON-only output.
+ *
+ * Provider-agnostic and meant as a *fallback* after a normal parse attempt
+ * fails, so it's a no-op for models that already comply (Claude).
  *
  * @returns The raw text of the coerced response (a JSON document). The caller
  *   still validates/repairs it against its domain schema.
@@ -169,7 +175,6 @@ export async function coerceJsonOutput(
     systemPrompt,
     userMessage,
     priorText,
-    responseSchema,
     instruction,
     maxTokens = 16384,
   } = params;
@@ -180,13 +185,31 @@ export async function coerceJsonOutput(
     { role: "user", content: instruction },
   ];
 
-  const response = await chatWithRetry(
-    client,
-    { model, system: systemPrompt, messages, responseSchema, maxTokens },
-    0,
-  );
-
-  return response.text;
+  try {
+    const response = await chatWithRetry(
+      client,
+      { model, system: systemPrompt, messages, jsonObjectMode: true, maxTokens },
+      0,
+    );
+    return response.text;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // Provider rejected response_format (e.g. DeepSeek 400 "response_format type
+    // is unavailable"). Retry without it — the instruction still demands JSON.
+    if (/response_format|json/i.test(message)) {
+      logger.warn(
+        `Provider rejected json_object mode (${message}); ` +
+          `retrying coercion without response_format.`,
+      );
+      const response = await chatWithRetry(
+        client,
+        { model, system: systemPrompt, messages, maxTokens },
+        0,
+      );
+      return response.text;
+    }
+    throw err;
+  }
 }
 
 // ── Main loop ──────────────────────────────────────────────────────

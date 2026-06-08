@@ -13,13 +13,48 @@ import { assembleSystemPrompt } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
 import { runAgenticLoop, coerceJsonOutput } from "./agentic-loop.js";
 import type { ResearchDoc } from "./research-agent.js";
-import type { JsonSchemaObject } from "../providers/types.js";
-import { zodToJsonSchema } from "zod-to-json-schema";
 
 // ── Constants ──────────────────────────────────────────────────────
 
 const PLANNER_MAX_TURNS = 100;
 const RESEARCH_MAX_LINES = 300;
+
+/**
+ * Fallback instruction used when the planner's response isn't a valid PlanSpec.
+ * Some OpenAI-compatible models (DeepSeek) emit valid JSON of the WRONG shape
+ * (e.g. the short {specId, sprintCount, contractIds} summary the agent prompt
+ * asks for) rather than the full PlanSpec the orchestrator parses. This spells
+ * out every required field so json_object mode produces a parseable spec.
+ */
+const PLAN_SPEC_COERCION_INSTRUCTION = `Your previous response was not a complete PlanSpec object.
+Output ONLY a single JSON object (no prose, no markdown fences, no tool calls) with EXACTLY this shape, filled in from the task and research above:
+{
+  "specId": "spec-<yyyymmdd>-<slug>",
+  "version": 1,
+  "title": "<short title>",
+  "description": "<2-3 sentence summary of what this builds and why>",
+  "status": "ready",
+  "mode": "greenfield",
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "<feature title>",
+      "description": "<what this feature does>",
+      "priority": "must-have",
+      "acceptanceCriteria": ["<verifiable criterion>", "<verifiable criterion>"],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "techStack": [],
+  "createdAt": "<ISO-8601 timestamp>",
+  "updatedAt": "<ISO-8601 timestamp>"
+}
+Rules: "status" must be one of draft|needs-clarification|ready|in-progress|completed (use "ready" for autonomous runs). "mode" is greenfield or brownfield. "priority" is must-have|should-have|nice-to-have. Each feature needs at least one acceptanceCriteria entry. Provide 3-6 features that fully cover the task. Output the JSON object and nothing else.`;
 const ARCHITECT_MAX_LINES = 200;
 
 // ── Research truncation ────────────────────────────────────────────
@@ -206,23 +241,16 @@ Your final response must contain ONLY valid JSON matching the PlanSpec schema (n
     spec = parsePlanSpec(result.finalText);
   } catch (parseErr) {
     logger.warn(
-      `Planner output was not valid PlanSpec JSON (${parseErr instanceof Error ? parseErr.message : String(parseErr)}). ` +
+      `Planner output was not a valid PlanSpec (${parseErr instanceof Error ? parseErr.message : String(parseErr)}). ` +
         `Retrying via JSON mode...`,
     );
-    const planSpecJsonSchema = zodToJsonSchema(PlanSpecSchema, {
-      target: "openApi3",
-    }) as unknown as JsonSchemaObject;
     const coerced = await coerceJsonOutput({
       client,
       model,
       systemPrompt,
       userMessage,
       priorText: result.finalText,
-      responseSchema: planSpecJsonSchema,
-      instruction:
-        "Based on everything above, output ONLY the PlanSpec JSON object now. " +
-        "No prose, no explanation, no markdown fences, no tool calls. " +
-        "It must validate against the PlanSpec schema.",
+      instruction: PLAN_SPEC_COERCION_INSTRUCTION,
     });
     spec = parsePlanSpec(coerced);
     logger.info("Planner JSON-mode coercion succeeded.");
