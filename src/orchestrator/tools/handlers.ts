@@ -1,5 +1,5 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { resolve, relative, isAbsolute } from "node:path";
+import { resolve, relative, isAbsolute, basename, sep } from "node:path";
 import { execa } from "execa";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -27,14 +27,41 @@ export type ToolHandler = (
 /**
  * Resolve and validate a file path, ensuring it stays within projectRoot.
  * Returns the absolute path or throws if the path escapes the sandbox.
+ *
+ * Re-anchoring recovery: non-Claude models (e.g. DeepSeek) sometimes ignore the
+ * "relative to project root" contract and invent an ABSOLUTE path with the wrong
+ * home dir — e.g. `/Users/boberik/.../agent-bober-ide/src` when the real root is
+ * `/Users/bober4ik/.../agent-bober-ide`. When such a path lands outside the root
+ * but still contains the root's basename, we re-anchor the suffix after it
+ * (`src`) relative to the real root and retry. This NEVER widens the sandbox: the
+ * re-anchored path is `resolve(projectRoot, suffix)` and is re-validated to be
+ * inside the root before use, so a genuinely-foreign path still fails closed.
  */
-function sandboxPath(projectRoot: string, inputPath: string): string {
-  const abs = isAbsolute(inputPath)
+export function sandboxPath(projectRoot: string, inputPath: string): string {
+  let abs = isAbsolute(inputPath)
     ? resolve(inputPath)
     : resolve(projectRoot, inputPath);
 
+  let rel = relative(projectRoot, abs);
+
+  if ((rel.startsWith("..") || isAbsolute(rel)) && isAbsolute(inputPath)) {
+    const rootName = basename(projectRoot);
+    if (rootName) {
+      const segments = abs.split(sep);
+      const idx = segments.lastIndexOf(rootName);
+      if (idx !== -1) {
+        const suffix = segments.slice(idx + 1).join(sep);
+        const reAnchored = resolve(projectRoot, suffix);
+        const reRel = relative(projectRoot, reAnchored);
+        if (!reRel.startsWith("..") && !isAbsolute(reRel)) {
+          abs = reAnchored;
+          rel = reRel;
+        }
+      }
+    }
+  }
+
   // Ensure the resolved path is within the project root
-  const rel = relative(projectRoot, abs);
   if (rel.startsWith("..") || isAbsolute(rel)) {
     throw new Error(
       `Path "${inputPath}" resolves outside the project root. Access denied.`,
