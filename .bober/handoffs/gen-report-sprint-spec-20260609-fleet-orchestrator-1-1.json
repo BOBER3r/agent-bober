@@ -1,0 +1,9 @@
+{
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["5c8e6fe - bober(sprint-1): add fleet manifest schema, loader, and child config builder"],
+  "filesChanged": ["src/fleet/manifest.ts","src/fleet/child-config.ts","src/fleet/manifest.test.ts","src/fleet/child-config.test.ts"],
+  "selfVerify": {"typecheck":"pass","lint":"pass (0 errors)","build":"pass","test":"1791 pass, 1 pre-existing failure (skill-bundles version 0.15.0 vs 0.16.0, confirmed via git stash)"},
+  "notes": "Pre-existing skill-bundles version-assertion failure is unrelated to fleet module."
+}

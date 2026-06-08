@@ -1,0 +1,57 @@
+{
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-2",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "sprintNumber": 2,
+  "title": "Child folder scaffolding and subprocess runner",
+  "description": "Implement ChildScaffolder.scaffold() (mkdir + write Zod-valid config + git init, with all failures captured as data and non-empty folders skipped) and ChildRunner.run() (spawn one `agent-bober run` child via execa with reject:false, a default per-child timeout, and CLI-entry resolution via the parent's own dist/cli/index.js). Tackles ADR-4 (entry resolution) and ADR-5 (timeout).",
+  "status": "completed",
+  "createdAt": "2026-06-08T22:17:46Z",
+  "updatedAt": "2026-06-09T02:01:30Z",
+  "completedAt": "2026-06-09T02:01:30Z",
+  "dependsOn": ["sprint-spec-20260609-fleet-orchestrator-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "sc-2-1", "description": "The project builds successfully (tsc) with zero errors.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-2-2", "description": "TypeScript compilation produces zero type errors.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-2-3", "description": "ESLint reports zero errors on all new/modified files.", "verificationMethod": "lint", "required": true },
+    { "criterionId": "sc-2-4", "description": "scaffold(rootDir, child) on a fresh target creates the folder, writes a Zod-valid bober.config.json (from buildChildConfig), runs `git init`, and returns ScaffoldResult{folder, absPath, configWritten:true, gitInitialized:true}.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-5", "description": "scaffold() into a pre-existing NON-EMPTY folder returns a ScaffoldResult with `error` set and leaves the folder's existing contents untouched (no overwrite, no delete, no spawn).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-6", "description": "scaffold() never throws; mkdir/write/git-init failures are captured in ScaffoldResult.error (git init invoked via execa with reject:false).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-7", "description": "run(spec) spawns process.execPath with the resolved dist/cli/index.js entry and ['run', task] in spec.cwd via execa({reject:false, timeout}), and returns ChildSpawnResult{cwd, exitCode, stdout, stderr, timedOut?, spawnError?} without throwing.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-8", "description": "A default per-child timeout is applied when spec.timeoutMs is unset, and an exceeded timeout yields a result with timedOut true rather than hanging (ADR-5).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-9", "description": "The child CLI entry is resolved to the parent's own dist/cli/index.js via fileURLToPath(import.meta.url) (not a bare PATH lookup), and a `--version` probe helper exists to verify the binary before fan-out (ADR-4).", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-2-10", "description": "All existing tests continue to pass with zero failures.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "No mapBounded fan-out or per-child thunk orchestration (Sprint 3)",
+    "No outcome aggregation or RunState reading (Sprint 3)",
+    "No CLI command registration, runFleet, report writing, or credential fail-fast (Sprint 4)",
+    "Do not modify the `run` command or runPipeline"
+  ],
+  "stopConditions": [
+    "All ten success criteria pass programmatic or manual verification",
+    "scaffold + run can, against the real built dist/cli/index.js or a lightweight stub, produce a ChildSpawnResult, and the non-empty-folder safety case is proven by test"
+  ],
+  "definitionOfDone": "src/fleet/scaffolder.ts exports ChildScaffolder with scaffold(rootDir, child): Promise<ScaffoldResult> (reusing buildChildConfig from Sprint 1) and src/fleet/runner.ts exports ChildRunner with run(spec): Promise<ChildSpawnResult> plus a CLI-entry resolver and a --version probe helper. Errors are captured as data, never thrown. Collocated tests use temp dirs and cover fresh scaffold, non-empty-folder skip/safety, error capture, spawn result capture, default + exceeded timeout. Build, typecheck, lint clean; all tests pass.",
+  "assumptions": [
+    "execa is the established subprocess primitive; the reject:false non-throwing pattern at src/utils/git.ts is the template, and execa supports a `timeout` option (used at src/providers/factory.ts).",
+    "The parent runs from a built dist/; resolving the parent's own dist/cli/index.js via import.meta.url is correct (ADR-4). Running from un-built source is unsupported.",
+    "git is available on PATH; a git-init failure is captured as ScaffoldResult.error, not thrown.",
+    "A folder is considered non-empty if it contains any entries (e.g. readdir length > 0)."
+  ],
+  "outOfScope": [
+    "Concurrency, isolation thunk, aggregation, report, CLI (later sprints)",
+    "DEEPSEEK_API_KEY fail-fast (Sprint 4)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "READ FIRST: src/utils/git.ts (execa import + the {reject:false} pattern + any async fs helpers), src/providers/factory.ts (execa timeout usage), src/cli/index.ts (how it resolves its own entry via fileURLToPath(import.meta.url) and registers commands), and Sprint 1's manifest.ts/child-config.ts.\n\nscaffolder.ts:\n- scaffold(rootDir, child): resolve absPath = path.resolve(rootDir, child.folder). Check existence + emptiness with node:fs/promises (stat/readdir). If it exists and is non-empty → return { folder, absPath, configWritten:false, gitInitialized:false, error: 'folder exists and is non-empty' } WITHOUT touching it. Otherwise mkdir({recursive:true}), write bober.config.json (JSON.stringify(buildChildConfig(child), null, 2)) via writeFile, then `git init` via execa(..., { cwd: absPath, reject:false }). Capture any failure into error. NEVER throw.\n- Use async fs only. No fs.*Sync.\n\nrunner.ts:\n- resolveCliEntry(): const here = fileURLToPath(import.meta.url); resolve up to the package's dist/cli/index.js (compute relative to the module location, mirroring src/cli/index.ts entry handling). Export it so Sprint 4 can probe it.\n- probeCliVersion(cliEntry): execa(process.execPath, [cliEntry, '--version'], { reject:false, timeout: 5000 }) → boolean ok.\n- run(spec): const DEFAULT_TIMEOUT_MS = 10*60*1000; execa(process.execPath, [resolveCliEntry(), 'run', spec.task], { cwd: spec.cwd, reject:false, timeout: spec.timeoutMs ?? DEFAULT_TIMEOUT_MS, maxBuffer: <bounded> }). Map execa result fields to ChildSpawnResult (exitCode, stdout, stderr, timedOut, and on spawn error set spawnError). NEVER throw.\n\nTesting: for run(), prefer a tiny stub script invoked via process.execPath (e.g. a fixture .js that exits with a chosen code / sleeps to trigger timeout) so tests don't need the full pipeline. Use temp dirs (mkdtemp) and clean up; do not mock fs.\n\nESM .js import extensions; import type for types; no `any`.",
+  "evaluatorNotes": "sc-2-4: Inspect scaffold(); confirm it writes a config that parses against BoberConfigSchema and that git init ran (e.g. .git exists) in a fresh temp dir test.\nsc-2-5: CRITICAL safety — confirm a non-empty pre-existing folder is detected and its contents are byte-for-byte untouched, error is set, and no config is written. Try to break it (folder with a sentinel file).\nsc-2-6: Force a failure (e.g. unwritable path) and confirm error is captured, not thrown.\nsc-2-7/sc-2-8: Using the stub fixture, confirm run() returns the right exitCode for a non-zero-exit child and timedOut:true for a sleeper exceeding a short timeout; confirm it never throws on spawn failure (bad entry path → spawnError set).\nsc-2-9: Read resolveCliEntry — confirm it uses fileURLToPath(import.meta.url) and resolves to dist/cli/index.js, NOT a bare 'agent-bober' PATH lookup; confirm a --version probe helper exists.\nsc-2-10: full suite green.\nCheck: async fs only, .js import extensions, no leaked SDK types.",
+  "estimatedFiles": [
+    "src/fleet/scaffolder.ts",
+    "src/fleet/scaffolder.test.ts",
+    "src/fleet/runner.ts",
+    "src/fleet/runner.test.ts",
+    "src/fleet/__fixtures__/stub-child.js"
+  ],
+  "estimatedDuration": "medium"
+}

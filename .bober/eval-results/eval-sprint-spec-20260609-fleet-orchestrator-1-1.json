@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260609-fleet-orchestrator-1-1",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-1",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T01:37:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {"criteriaTotal":8,"criteriaPassed":8,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":8,"requiredFailed":0,"requiredTotal":8},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass","details":"Zero TypeScript errors."},
+    {"strategy":"lint","required":false,"result":"pass","details":"Zero errors; 2 warnings in unrelated eval-persist.test.ts."},
+    {"strategy":"build","required":true,"result":"pass","details":"Clean build, zero errors."},
+    {"strategy":"unit-test","required":false,"result":"pass","details":"1791 pass; 1 pre-existing failure (skill-bundles version 0.15.0 vs 0.16.0) confirmed via git history. All 13 fleet tests pass."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 required criteria pass. Build/typecheck/lint clean; 13 new fleet tests pass; the single suite failure is a confirmed pre-existing defect. Full principles compliance."
+}

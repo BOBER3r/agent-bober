@@ -290,3 +290,22 @@
 {"event": "sprint-completed", "contractId": "sprint-spec-20260605-scale-safe-history-memory-4", "specId": "spec-20260605-scale-safe-history-memory", "iteration": 1, "timestamp": "2026-06-05T00:02:07Z"}
 {"event": "plan-completed", "specId": "spec-20260605-scale-safe-history-memory", "sprintsCompleted": 4, "timestamp": "2026-06-05T00:02:07Z"}
 {"event": "pipeline-completed", "specId": "spec-20260605-scale-safe-history-memory", "sprints": 4, "iterations": 4, "timestamp": "2026-06-05T00:02:07Z"}
+{"event":"architecture-completed","architectureId":"arch-20260609-fleet-orchestrator-tech-lead","feature":"fleet orchestrator (tech-lead orchestrator) layer above runPipeline — subprocess fan-out of agent-bober child runs per sub-project","componentCount":7,"decisionCount":5,"timestamp":"2026-06-08T21:58:24Z"}
+{"event":"plan-created","specId":"spec-20260609-fleet-orchestrator","title":"Fleet Orchestrator (Tech-Lead Orchestrator)","sprintCount":4,"timestamp":"2026-06-08T22:17:46Z"}
+{"event":"pipeline-started","timestamp":"2026-06-08T22:27:19Z","task":"Build Fleet Orchestrator (spec-20260609-fleet-orchestrator) — 4 sprints","specId":"spec-20260609-fleet-orchestrator"}
+{"event":"sprint-started","contractId":"sprint-spec-20260609-fleet-orchestrator-1","specId":"spec-20260609-fleet-orchestrator","timestamp":"2026-06-08T22:28:17Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260609-fleet-orchestrator-1","iteration":1,"timestamp":"2026-06-08T22:34:26Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260609-fleet-orchestrator-1","specId":"spec-20260609-fleet-orchestrator","iteration":1,"timestamp":"2026-06-08T22:37:45Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260609-fleet-orchestrator-2","specId":"spec-20260609-fleet-orchestrator","timestamp":"2026-06-08T22:38:18Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260609-fleet-orchestrator-2","iteration":1,"timestamp":"2026-06-08T22:46:26Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260609-fleet-orchestrator-2","iteration":1,"failedCriteria":["sc-2-3","sc-2-7","sc-2-8"],"timestamp":"2026-06-08T22:53:14Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260609-fleet-orchestrator-2","iteration":2,"timestamp":"2026-06-08T22:59:20Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260609-fleet-orchestrator-2","specId":"spec-20260609-fleet-orchestrator","iteration":2,"timestamp":"2026-06-08T23:03:11Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260609-fleet-orchestrator-3","specId":"spec-20260609-fleet-orchestrator","timestamp":"2026-06-08T23:03:47Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260609-fleet-orchestrator-3","iteration":1,"timestamp":"2026-06-08T23:10:52Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260609-fleet-orchestrator-3","specId":"spec-20260609-fleet-orchestrator","iteration":1,"timestamp":"2026-06-08T23:14:06Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260609-fleet-orchestrator-4","specId":"spec-20260609-fleet-orchestrator","timestamp":"2026-06-08T23:14:40Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260609-fleet-orchestrator-4","iteration":1,"timestamp":"2026-06-08T23:23:46Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260609-fleet-orchestrator-4","specId":"spec-20260609-fleet-orchestrator","iteration":1,"timestamp":"2026-06-08T23:28:59Z"}
+{"event":"plan-completed","specId":"spec-20260609-fleet-orchestrator","sprintsCompleted":4,"timestamp":"2026-06-08T23:28:59Z"}
+{"event":"pipeline-completed","specId":"spec-20260609-fleet-orchestrator","sprintsCompleted":4,"totalIterations":5,"timestamp":"2026-06-08T23:28:59Z"}

@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260609-fleet-orchestrator-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-1",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Fleet Orchestrator: a manifest-driven tech-lead layer above runPipeline that builds N independent small projects in bulk by spawning one isolated `agent-bober run` child process per sub-project folder, targeting DeepSeek for cheap bulk work. Sprint 1 builds the deterministic foundation: the Zod manifest schema, loader, and per-child DeepSeek config builder.",
+    "completedSprints": [],
+    "currentBranch": "bober/fleet-orchestrator",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/providers/factory.ts",
+      "src/providers/openai-compat.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260609-fleet-orchestrator-1.json",
+  "specRef": ".bober/specs/spec-20260609-fleet-orchestrator.json",
+  "architectureRef": ".bober/architecture/arch-20260609-fleet-orchestrator-tech-lead-architecture.md",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test -- --run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

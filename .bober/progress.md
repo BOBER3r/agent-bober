@@ -4,7 +4,29 @@ Project: agent-bober
 Mode: brownfield
 Preset: custom
 Initialized: 2026-03-28
-Last updated: 2026-06-05T00:00:00Z
+Last updated: 2026-06-09T02:26:30Z
+
+---
+
+## Plan: Fleet Orchestrator (Tech-Lead Orchestrator)
+- Spec: spec-20260609-fleet-orchestrator
+- Created: 2026-06-09
+- Sprints: 4
+- Status: completed (4/4 sprints)
+- Mode: greenfield
+- Branch: bober/fleet-orchestrator (unpushed)
+
+### Sprint Breakdown
+1. [completed] Fleet manifest schema, loader, child config builder -- Passed iteration 1 (5c8e6fe). src/fleet/manifest.ts + child-config.ts.
+2. [completed] Child folder scaffolding + subprocess runner -- Passed iteration 2 (f1a88de, 3a062cc). Iter 1 failed lint + untested ChildRunner.run(); fixed with eslint .js-globals block + real run() tests + spawn-failure seam. src/fleet/scaffolder.ts + runner.ts + stub fixture.
+3. [completed] Bounded fan-out coordinator + outcome aggregator -- Passed iteration 1 (774d18b). src/fleet/coordinator.ts (mapBounded, never-reject thunk) + aggregator.ts (disk-primary + exit-code fallback) + types.ts.
+4. [completed] Portfolio reporter, runFleet entrypoint, fleet CLI command -- Passed iteration 1 (69f909f). src/fleet/reporter.ts + index.ts (runFleet + registerFleetCommand) + cli/index.ts wiring. E2E smoke verified: `agent-bober fleet <manifest>` writes .bober/fleet-report.json, exits 0 on child failure, credential fail-fast before spawn.
+
+### Pipeline Statistics
+- Total Generator-Evaluator iterations: 5 / 20
+- Sprints completed: 4 / 4
+- Subagents spawned: 13 (4 curator, 5 generator, 4 evaluator)
+- 53 fleet tests added; run command/runPipeline untouched.
 
 ---
 
@@ -384,3 +406,16 @@ PreflightContextInjector or prompt fragments before unblocking Sprints 8-10.
 - Sprint 3: distill.test.ts C1 could add an exact toHaveLength(N) assertion (evaluator low-priority note).
 - Distribution: skills/bober.plan/SKILL.md + agents/bober-planner.md edited (canonical); run `npm run update-all` to sync the .claude/ distributed copies.
 - Pre-existing: tests/cli/skill-bundles.test.ts pins version 0.15.0 but actual is 0.16.0 (unrelated stale test).
+
+## Plan: Fleet Orchestrator (Tech-Lead Orchestrator)
+- Spec: spec-20260609-fleet-orchestrator
+- Architecture: arch-20260609-fleet-orchestrator-tech-lead
+- Created: 2026-06-09
+- Sprints: 4
+- Status: planned
+
+### Sprint Breakdown
+1. [proposed] Fleet manifest schema, loader, and child config builder -- Zod manifest + load() + buildChildConfig() producing a Zod-valid DeepSeek BoberConfig (ADR-2).
+2. [proposed] Child folder scaffolding and subprocess runner -- scaffold() (mkdir+config+git init, skip non-empty) + run() (execa reject:false + timeout + import.meta.url CLI resolution) (ADR-4, ADR-5).
+3. [proposed] Bounded fan-out coordinator and outcome aggregator -- execute() via mapBounded never-reject thunk + aggregate() disk-primary RunState with exit-code fallback (critical isolation+concurrency).
+4. [proposed] Portfolio reporter, runFleet entrypoint, and fleet CLI command -- atomic fleet-report.json + runFleet() + registerFleetCommand + DEEPSEEK_API_KEY fail-fast (user-visible end-to-end).

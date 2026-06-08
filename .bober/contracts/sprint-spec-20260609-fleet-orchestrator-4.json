@@ -1,0 +1,57 @@
+{
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-4",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "sprintNumber": 4,
+  "title": "Portfolio reporter, runFleet entrypoint, and fleet CLI command",
+  "description": "Implement PortfolioReporter (build + atomic write of .bober/fleet-report.json), the runFleet() entrypoint that orchestrates load → fail-fast credential check → execute → aggregate → report, and registerFleetCommand(program) that registers `agent-bober fleet <manifest.json>`. This sprint makes the feature user-visible end-to-end while leaving the `run` command and runPipeline untouched.",
+  "status": "completed",
+  "createdAt": "2026-06-08T22:17:46Z",
+  "updatedAt": "2026-06-09T02:26:30Z",
+  "completedAt": "2026-06-09T02:26:30Z",
+  "dependsOn": ["sprint-spec-20260609-fleet-orchestrator-3"],
+  "features": ["feat-4"],
+  "successCriteria": [
+    { "criterionId": "sc-4-1", "description": "The project builds successfully (tsc) with zero errors.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-4-2", "description": "TypeScript compilation produces zero type errors.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-4-3", "description": "ESLint reports zero errors on all new/modified files.", "verificationMethod": "lint", "required": true },
+    { "criterionId": "sc-4-4", "description": "PortfolioReporter.build(outcomes) returns a PortfolioReport with correct total/completed/failed/other counts (other = running/aborted/unknown) and an ISO-8601 generatedAt.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-5", "description": "PortfolioReporter.write(rootDir, report) writes .bober/fleet-report.json atomically (temp file + rename) and returns the absolute path; partial/corrupt files are not left on failure.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-6", "description": "runFleet(manifestPath, options) loads the manifest, runs execute → aggregate → build → write end-to-end and returns the PortfolioReport; --concurrency/--rootDir options override manifest fields.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-7", "description": "When the manifest targets DeepSeek and neither DEEPSEEK_API_KEY nor a child providerConfig.apiKey is available, runFleet fails fast (throws/aborts) BEFORE spawning any child.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-8", "description": "registerFleetCommand(program) registers a `fleet` command (positional manifest path + --concurrency/--rootDir options) following the existing command-registration pattern, and is wired into the CLI; running it returns exit code 0 even when some children fail.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-4-9", "description": "The existing `run` command and runPipeline are unchanged (no diff to their signatures/behavior), confirmed by existing run-command tests still passing.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-10", "description": "All existing tests continue to pass with zero failures.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "No --expand LLM decomposition",
+    "No --strict non-zero-exit-on-failure flag",
+    "No resume/re-run mode",
+    "Do not modify runPipeline, runRunCommand, or the `run` command contract"
+  ],
+  "stopConditions": [
+    "All ten success criteria pass programmatic or manual verification",
+    "An end-to-end run of `agent-bober fleet <manifest>` over a small manifest (e.g. against stub children) produces .bober/fleet-report.json with correct counts and exits 0"
+  ],
+  "definitionOfDone": "src/fleet/reporter.ts exports PortfolioReporter (build + atomic write). src/fleet/index.ts exports runFleet(manifestPath, options): Promise<PortfolioReport> (load → credential fail-fast → coordinator.execute → aggregate each → reporter.build → reporter.write) and registerFleetCommand(program). The CLI entry (src/cli/index.ts) calls registerFleetCommand. runFleet returns a report and the command exits 0 regardless of per-child failures. Collocated tests cover build counts, atomic write, end-to-end runFleet (with injected/stub children), and the credential fail-fast. Build/typecheck/lint clean; all tests pass and the `run` command tests are untouched and green.",
+  "assumptions": [
+    "Atomic write mirrors the temp-file + rename approach used by writeRunState in src/state/run-state.ts.",
+    "CLI command registration follows the registerWorktreeCommand pattern in src/cli/index.ts (commander).",
+    "runFleet always resolves with a PortfolioReport for per-child failures and only throws on batch-setup failures (bad manifest, missing credentials, report-write failure) — resolved clarification Q2-failure-exit (exit 0).",
+    "Credential check: if any child's effective config uses the DeepSeek/openai-compat provider, require process.env.DEEPSEEK_API_KEY OR a providerConfig.apiKey on that child's config; otherwise fail fast."
+  ],
+  "outOfScope": [
+    "--expand, --strict, resume mode",
+    "Changing runPipeline or the run command"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "READ FIRST: src/state/run-state.ts (writeRunState atomic temp+rename pattern + where .bober paths come from), src/cli/index.ts (registerWorktreeCommand pattern, how commands are added, how the entry calls register* fns, and how options are parsed), src/cli/commands/run.ts (to mirror option handling WITHOUT modifying it), src/providers/factory.ts (DeepSeek key validation: DEEPSEEK_API_KEY / providerConfig.apiKey), and Sprints 1-3 modules.\n\nreporter.ts:\n- build(outcomes): tally total/completed/failed/other (other = anything not completed/failed), generatedAt = new Date().toISOString(). Return PortfolioReport.\n- write(rootDir, report): write to <rootDir>/.bober/fleet-report.json via temp file + rename (copy the writeRunState technique; ensure .bober exists). Return abs path. This is the ONE place allowed to throw on IO failure.\n\nindex.ts (src/fleet/index.ts):\n- runFleet(manifestPath, options): const manifest = await load(manifestPath); apply options.concurrency/rootDir overrides; CREDENTIAL FAIL-FAST: for each child compute effective config (buildChildConfig) and if it uses DeepSeek/openai-compat, ensure DEEPSEEK_API_KEY or providerConfig.apiKey present — else throw a clear error BEFORE any spawn; optionally probe the CLI entry (probeCliVersion from Sprint 2) and throw if missing (ADR-4). const executions = await coordinator.execute(manifest); const outcomes = await Promise.all(executions.map(e => aggregator.aggregate(e))); const report = reporter.build(outcomes); await reporter.write(manifest.rootDir, report); return report.\n- registerFleetCommand(program): program.command('fleet <manifest>').option('--concurrency <n>', ...).option('--root <dir>', ...).action(async (manifest, opts) => { try { const report = await runFleet(manifest, { concurrency: opts.concurrency?Number(opts.concurrency):undefined, rootDir: opts.root }); print a summary (mirror run.ts summary style); process.exitCode = 0; } catch (e) { logger.error(...); process.exitCode = 1; } }). Per-child failures never set a non-zero code; only batch-setup errors do.\n- Wire registerFleetCommand into src/cli/index.ts next to the other register*Command calls. Do NOT touch the run command.\n\nTesting: inject fakes for coordinator/aggregator (or use stub children from Sprint 2 fixtures) to drive runFleet end-to-end deterministically. Test the credential fail-fast by unsetting DEEPSEEK_API_KEY and using a DeepSeek manifest with no providerConfig.apiKey → expect throw before any spawn. Test atomic write leaves no temp file on success and a valid JSON report. Use temp dirs; clean up.\n\nESM .js imports; import type; no `any`; async fs only.",
+  "evaluatorNotes": "sc-4-4/sc-4-5: Verify count tallies for a mixed outcomes list; verify the report file is valid JSON at .bober/fleet-report.json and that the write is atomic (no leftover temp file; a write to an unwritable dir throws).\nsc-4-6: Drive runFleet with stub/injected children; confirm it returns a report and that --concurrency/--rootDir overrides take effect.\nsc-4-7: CRITICAL — with DEEPSEEK_API_KEY unset and a DeepSeek manifest lacking providerConfig.apiKey, confirm runFleet throws BEFORE any child spawn (assert no folders scaffolded / no spawn). With the key set, confirm it proceeds.\nsc-4-8: Inspect registerFleetCommand — confirm it matches the commander registration pattern and is actually wired into src/cli/index.ts; confirm the action sets exit 0 on per-child failures and only non-zero on setup errors.\nsc-4-9: Diff-check that run.ts / runPipeline are unchanged; run their existing tests.\nsc-4-10: full suite green.\nAlso verify: atomic-write reuse, async fs only, .js extensions, no SDK leakage, no `any`.",
+  "estimatedFiles": [
+    "src/fleet/reporter.ts",
+    "src/fleet/reporter.test.ts",
+    "src/fleet/index.ts",
+    "src/fleet/index.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium"
+}

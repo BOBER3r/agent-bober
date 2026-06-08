@@ -1,0 +1,164 @@
+{
+  "specId": "spec-20260609-fleet-orchestrator",
+  "version": 1,
+  "createdAt": "2026-06-08T22:17:46Z",
+  "updatedAt": "2026-06-08T22:17:46Z",
+  "title": "Fleet Orchestrator (Tech-Lead Orchestrator)",
+  "description": "A manifest-driven fleet orchestrator that sits above runPipeline and builds a portfolio of N independent small projects in bulk by spawning one isolated `agent-bober run` child process per sub-project folder, targeting DeepSeek for cheap bulk work. Exposed as a new `agent-bober fleet <manifest.json>` command plus an exported runFleet() API, it scaffolds each folder, fans children out through the existing mapBounded semaphore at a bounded cap, and aggregates each child's outcome disk-primary into a single .bober/fleet-report.json.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-09T02:26:30Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-config-merge",
+      "answer": "Shallow merge: top-level keys in child.config replace the createDefaultConfig()+DeepSeek base wholesale ({...base, ...childConfig}).",
+      "resolvedAt": "2026-06-08T22:17:46Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-failure-exit",
+      "answer": "fleet always exits 0; per-child failures surface only in .bober/fleet-report.json. No --strict flag in this plan.",
+      "resolvedAt": "2026-06-08T22:17:46Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-scope-expand",
+      "answer": "Manifest-only. The one-prompt LLM decomposition (--expand) is deferred to a Phase 2 follow-up.",
+      "resolvedAt": "2026-06-08T22:17:46Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approved (user replied 'Ф' = 'A' approval on Russian keyboard layout) — assumptions, out-of-scope, and the 4-sprint breakdown approved before contract generation.",
+      "resolvedAt": "2026-06-08T22:17:46Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "New code lives under src/fleet/, ESM with .js import extensions, Zod schemas, async fs (node:fs/promises), and execa for subprocesses — matching .bober/principles.md.",
+    "Child config is createDefaultConfig() (src/config/schema.ts) plus DeepSeek (openai-compat) provider overrides across planner/generator/evaluator; per-child manifest `config` is SHALLOW-merged over that base (ADR-2).",
+    "Concurrency reuses mapBounded()/Semaphore from src/orchestrator/workflow/scheduler.ts verbatim; default cap 3; concurrency Zod-clamped to int >= 1.",
+    "Child CLI entry is resolved to the parent's own dist/cli/index.js via fileURLToPath(import.meta.url) (pattern at src/cli/index.ts) and spawned with process.execPath, gated by a pre-flight `--version` probe (ADR-4); running the fleet from un-built source is unsupported.",
+    "Per-child outcome is read disk-primary from each child's newest .bober/runs/<runId>/state.json by startedAt (src/state/run-state.ts readRunStatesFromDisk), with the subprocess exit code as fallback when no state file exists (ADR-3).",
+    "Each child runs under a default per-child timeout (~10 min) via execa's timeout option, overridable per child in the manifest (ADR-5).",
+    "The `fleet` command always exits 0; failures live in the report. DEEPSEEK_API_KEY presence is checked fail-fast before fan-out (or providerConfig.apiKey is written into each child config).",
+    "runPipeline, PipelineResult, runRunCommand, and the `run` CLI contract (positional task + --provider/--mode/--checkpoint) are NOT changed — the orchestrator strictly sits above them and spawns the published binary as a black box."
+  ],
+  "outOfScope": [
+    "One-prompt LLM decomposition / `--expand <goal>` (deferred to Phase 2).",
+    "A `--strict` flag mapping child failures to a non-zero parent exit code.",
+    "Resume / re-run into pre-existing portfolio folders (scaffold skips non-empty folders, reports `failed`, never deletes user data).",
+    "Deep/recursive per-role config merge (shallow merge only).",
+    "Live / streaming progress UI; the PortfolioReport is a point-in-time snapshot built after all children settle.",
+    "Any change to child-pipeline internals, runPipeline, or the `run` CLI command."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Fleet manifest schema, loader, and child config builder",
+      "description": "A Zod-validated manifest format describing the portfolio, a loader that reads and validates it, and a builder that produces a Zod-valid DeepSeek BoberConfig per child.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When load() is given a valid manifest JSON, it returns a typed FleetManifest with rootDir defaulting to '.', concurrency defaulting to 3, and a non-empty children array.",
+        "AC2: When the manifest file is missing, not valid JSON, has an empty children array, or concurrency < 1, load() throws an error naming the failing field/path.",
+        "AC3: When buildChildConfig() is called for a child, it returns a config that passes BoberConfigSchema validation and sets the openai-compat/DeepSeek provider across planner, generator, and evaluator.",
+        "AC4: When a child supplies a `config` override, its top-level keys shallow-merge over (replace) the corresponding base keys."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Child folder scaffolding and subprocess runner",
+      "description": "Scaffolds one child folder (mkdir, write config, git init) capturing errors as data, and a runner that spawns one `agent-bober run` child process via execa with timeout and robust CLI-entry resolution.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When scaffold() targets a fresh path, it creates the folder, writes a Zod-valid bober.config.json, runs `git init`, and returns ScaffoldResult with configWritten and gitInitialized true.",
+        "AC2: When scaffold()'s target folder already exists and is non-empty, it returns a ScaffoldResult with an `error` set and does NOT modify the folder (no spawn will follow).",
+        "AC3: When run() is invoked, it spawns process.execPath with the resolved dist/cli/index.js entry and ['run', task] in the given cwd using execa with reject:false, and returns ChildSpawnResult capturing exitCode/stdout/stderr without throwing.",
+        "AC4: When a child exceeds its timeout, run() returns a result with timedOut true (via execa timeout) rather than hanging, and the default timeout applies when none is supplied.",
+        "AC5: A pre-flight resolution of the child CLI entry exists (via fileURLToPath(import.meta.url)) and a `--version` probe can verify the binary before fan-out."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Bounded fan-out coordinator and outcome aggregator",
+      "description": "A coordinator that fans children through mapBounded with a never-reject per-child thunk (preserving isolation), and an aggregator that resolves each child's status disk-primary with exit-code fallback.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When execute() runs a manifest, it uses mapBounded(children, concurrency, thunk) so peak concurrent children never exceeds the configured cap.",
+        "AC2: When one child's scaffold or spawn throws, the coordinator still resolves every other child to a ChildExecution (the batch is NOT aborted) — verified by a sibling-survival test.",
+        "AC3: When aggregate() finds one or more RunState files under the child folder, it returns ChildOutcome with status derived from the newest-by-startedAt RunState and source 'disk'.",
+        "AC4: When no RunState file exists for a child, aggregate() falls back to exitCode === 0 ? completed : failed with source 'exit-code', and never throws.",
+        "AC5: When scaffold failed and no spawn occurred, aggregate() returns status 'failed' with source 'exit-code'."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Portfolio reporter, runFleet entrypoint, and fleet CLI command",
+      "description": "Builds and atomically writes the portfolio report, wires the end-to-end runFleet() orchestration, registers the `agent-bober fleet` command, and fail-fast checks DeepSeek credentials before fan-out.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When build() is given a list of ChildOutcome, it returns a PortfolioReport with correct total/completed/failed/other counts and an ISO-8601 generatedAt.",
+        "AC2: When write() persists a report, it writes .bober/fleet-report.json atomically (temp file + rename) and returns the written path.",
+        "AC3: When `agent-bober fleet <manifest.json>` is run end-to-end, it loads the manifest, executes the fleet, writes the report, and the parent process exits 0 regardless of per-child failures.",
+        "AC4: When no DeepSeek credential is available (neither DEEPSEEK_API_KEY nor a child providerConfig.apiKey) and the manifest uses DeepSeek, runFleet fails fast before spawning any child.",
+        "AC5: registerFleetCommand(program) registers the `fleet` command following the existing command-registration pattern, and the existing `run` command behavior is unchanged."
+      ],
+      "dependencies": ["feat-3"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "One child's crash, non-zero exit, scaffold failure, or timeout must never abort sibling children.",
+      "verificationMethod": "Unit test forces a thunk-level throw on one child and asserts all siblings still resolve to ChildExecution entries."
+    },
+    {
+      "category": "performance",
+      "requirement": "Peak concurrent child processes must never exceed the configured concurrency cap (default 3).",
+      "verificationMethod": "Test instruments the per-child thunk to track in-flight count and asserts the observed peak <= cap."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Zero TypeScript errors, zero ESLint errors, clean tsc build; ESM with .js import extensions; no synchronous fs; no SDK leakage outside providers/.",
+      "verificationMethod": "Run typecheck, lint, and build evaluator strategies; all must pass."
+    },
+    {
+      "category": "security",
+      "requirement": "Scaffolding must never delete or overwrite a pre-existing non-empty user folder.",
+      "verificationMethod": "Test scaffolds into a non-empty temp folder and asserts the folder contents are untouched and an error is returned."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "Published agent-bober binary spawned via execa (process.execPath + resolved dist/cli/index.js)",
+      "DeepSeek API via openai-compat provider (src/providers/openai-compat.ts, factory.ts)"
+    ],
+    "dataModel": "One new on-disk artifact: PortfolioReport at .bober/fleet-report.json {total, completed, failed, other, children: ChildOutcome[], generatedAt}. Each child owns its existing, unchanged .bober/runs/<runId>/state.json (RunState), read-only to the fleet.",
+    "securityConsiderations": [
+      "Never delete/overwrite non-empty user folders during scaffold",
+      "Fail-fast on missing DeepSeek credentials before spawning children",
+      "Bound execa maxBuffer to avoid memory exhaustion from chatty children"
+    ],
+    "existingPatterns": "Reuse mapBounded()/Semaphore (src/orchestrator/workflow/scheduler.ts), execa {reject:false} (src/utils/git.ts), createDefaultConfig() + BoberConfigSchema (src/config/schema.ts), readRunStatesFromDisk() (src/state/run-state.ts), atomic temp+rename write (src/state/run-state.ts writeRunState), command registration (src/cli/index.ts registerWorktreeCommand), import.meta.url entry resolution (src/cli/index.ts)."
+  },
+  "sprints": [
+    "sprint-spec-20260609-fleet-orchestrator-1",
+    "sprint-spec-20260609-fleet-orchestrator-2",
+    "sprint-spec-20260609-fleet-orchestrator-3",
+    "sprint-spec-20260609-fleet-orchestrator-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "6-10 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Reuses tested concurrency and disk-state primitives, keeping risk moderate. The load-bearing risks are: mapBounded uses Promise.all so the per-child thunk MUST never reject (per-child isolation), child CLI-entry resolution must not fail fleet-wide (ADR-4), and a hung child must not wedge a semaphore slot (ADR-5). Architecture: arch-20260609-fleet-orchestrator-tech-lead."
+  }
+}

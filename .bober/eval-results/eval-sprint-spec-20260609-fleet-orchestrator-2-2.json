@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260609-fleet-orchestrator-2-2",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-2",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T02:01:30Z",
+  "iteration": 2,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {"criteriaTotal":10,"criteriaPassed":10,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":10,"requiredFailed":0,"requiredTotal":10},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass"},
+    {"strategy":"lint","required":true,"result":"pass","details":"0 errors; scoped src/**/*.js node-globals block, no TS rules weakened."},
+    {"strategy":"build","required":true,"result":"pass"},
+    {"strategy":"unit-test","required":false,"result":"pass","details":"1802 pass; only pre-existing skill-bundles failure. 24 fleet tests pass."}
+  ],
+  "regressions": [],
+  "summary": "All 10 criteria pass on iteration 2. Lint clean, ChildRunner.run() directly tested for success/non-zero/spawn-failure/timeout with genuine assertions; spawn-failure detection verified against execa behavior."
+}
