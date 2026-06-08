@@ -16,7 +16,7 @@ import { emit } from "../telemetry/emit.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const CURATOR_MAX_TURNS = 25;
+const CURATOR_MAX_TURNS = 100;
 
 // ── Types ──────────────────────────────────────────────────────────
 

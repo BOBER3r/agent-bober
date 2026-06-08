@@ -11,12 +11,14 @@ import { logger } from "../utils/logger.js";
 import { resolveModel } from "./model-resolver.js";
 import { assembleSystemPrompt } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
-import { runAgenticLoop } from "./agentic-loop.js";
+import { runAgenticLoop, coerceJsonOutput } from "./agentic-loop.js";
 import type { ResearchDoc } from "./research-agent.js";
+import type { JsonSchemaObject } from "../providers/types.js";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const PLANNER_MAX_TURNS = 15;
+const PLANNER_MAX_TURNS = 100;
 const RESEARCH_MAX_LINES = 300;
 const ARCHITECT_MAX_LINES = 200;
 
@@ -195,8 +197,36 @@ Your final response must contain ONLY valid JSON matching the PlanSpec schema (n
     `Planner completed in ${result.turnsUsed} turns (tools: ${result.toolsCalled.length})`,
   );
 
-  // Parse the final response for PlanSpec JSON
-  const spec = parsePlanSpec(result.finalText);
+  // Parse the final response for PlanSpec JSON. Some OpenAI-compatible models
+  // (e.g. DeepSeek) explore correctly but narrate prose instead of emitting the
+  // required JSON. On parse failure, fall back to a JSON-mode coercion call that
+  // forces a structured PlanSpec object. No-op for models that already comply.
+  let spec: PlanSpec;
+  try {
+    spec = parsePlanSpec(result.finalText);
+  } catch (parseErr) {
+    logger.warn(
+      `Planner output was not valid PlanSpec JSON (${parseErr instanceof Error ? parseErr.message : String(parseErr)}). ` +
+        `Retrying via JSON mode...`,
+    );
+    const planSpecJsonSchema = zodToJsonSchema(PlanSpecSchema, {
+      target: "openApi3",
+    }) as unknown as JsonSchemaObject;
+    const coerced = await coerceJsonOutput({
+      client,
+      model,
+      systemPrompt,
+      userMessage,
+      priorText: result.finalText,
+      responseSchema: planSpecJsonSchema,
+      instruction:
+        "Based on everything above, output ONLY the PlanSpec JSON object now. " +
+        "No prose, no explanation, no markdown fences, no tool calls. " +
+        "It must validate against the PlanSpec schema.",
+    });
+    spec = parsePlanSpec(coerced);
+    logger.info("Planner JSON-mode coercion succeeded.");
+  }
 
   // Save to .bober/specs/
   await saveSpec(projectRoot, spec);

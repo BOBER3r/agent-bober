@@ -26,7 +26,7 @@ export type { EvaluationRunResult } from "../evaluators/registry.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
-const EVALUATOR_MAX_TURNS = 25;
+const EVALUATOR_MAX_TURNS = 100;
 
 // ── Main ───────────────────────────────────────────────────────────
 

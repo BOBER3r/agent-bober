@@ -69,11 +69,12 @@
     "ora": "^8.1.1",
     "prompts": "^2.4.2",
     "semver": "^7.8.1",
-    "zod": "^3.24.2"
+    "zod": "^3.24.2",
+    "zod-to-json-schema": "^3.25.2"
   },
   "peerDependencies": {
     "@google/generative-ai": ">=0.21.0",
-    "openai": ">=4.0.0"
+    "openai": "^6.42.0"
   },
   "peerDependenciesMeta": {
     "openai": {
