@@ -24,7 +24,7 @@ import {
   summarizeOlderSprints,
 } from "./context-handoff.js";
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
-import { runPlanner } from "./planner-agent.js";
+import { runPlanner, generateContractPrecision } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
 import type { ResearchDoc } from "./research-agent.js";
 import { listResearch, readResearch } from "../state/research-state.js";
@@ -767,6 +767,20 @@ export async function runTsPipeline(
     const contracts: SprintContract[] = [];
     for (let i = 0; i < spec.features.length; i++) {
       const feature = spec.features[i];
+      // Generate substantive precision fields (nonGoals/stopConditions/
+      // definitionOfDone) so the contract passes the generator's BLOCKING
+      // precision preflight. Without this the standalone pipeline emits
+      // placeholder contracts that every generator (Claude or DeepSeek) refuses.
+      const precision = await generateContractPrecision(feature, spec, config);
+      if (precision) {
+        logger.info(
+          `Generated precision fields for sprint ${i + 1} (${precision.nonGoals.length} non-goals, ${precision.stopConditions.length} stop conditions).`,
+        );
+      } else {
+        logger.warn(
+          `Could not generate precision fields for sprint ${i + 1}; contract will use placeholders and the generator may block it.`,
+        );
+      }
       const contract = createContract(
         feature.title,
         feature.description,
@@ -779,8 +793,20 @@ export async function runTsPipeline(
           specId: spec.specId,
           sprintNumber: i + 1,
           features: [feature.featureId],
+          ...(precision
+            ? {
+                nonGoals: precision.nonGoals,
+                stopConditions: precision.stopConditions,
+                definitionOfDone: precision.definitionOfDone,
+              }
+            : {}),
         },
       );
+      // createContract doesn't take assumptions/outOfScope; set them directly.
+      if (precision) {
+        contract.assumptions = precision.assumptions;
+        contract.outOfScope = precision.outOfScope;
+      }
       contracts.push(contract);
       await saveContract(projectRoot, contract);
     }

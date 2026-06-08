@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { BoberConfig } from "../config/schema.js";
-import type { PlanSpec } from "../contracts/spec.js";
+import type { PlanSpec, FeatureSpec } from "../contracts/spec.js";
 import { PlanSpecSchema } from "../contracts/spec.js";
 import { createClient } from "../providers/factory.js";
 import { saveSpec } from "../state/index.js";
@@ -331,4 +331,129 @@ function parsePlanSpec(text: string): PlanSpec {
   }
 
   return result.data;
+}
+
+// ── Contract precision generation ──────────────────────────────────
+
+/** Vague phrases the generator's contract preflight rejects (bober-generator.md). */
+const BANNED_CONTRACT_PHRASES = [
+  "works correctly",
+  "works as expected",
+  "looks good",
+  "looks nice",
+  "is reasonable",
+  "behaves properly",
+  "behaves correctly",
+  "is correct",
+  "appears correct",
+  "as needed",
+  "if appropriate",
+];
+
+/** The substantive precision fields a generator-passable contract requires. */
+export interface ContractPrecision {
+  nonGoals: string[];
+  stopConditions: string[];
+  definitionOfDone: string;
+  assumptions: string[];
+  outOfScope: string[];
+}
+
+function hasBannedPhrase(s: string): boolean {
+  const lower = s.toLowerCase();
+  return BANNED_CONTRACT_PHRASES.some((p) => lower.includes(p));
+}
+
+function validatePrecision(obj: unknown): ContractPrecision | undefined {
+  if (typeof obj !== "object" || obj === null) return undefined;
+  const o = obj as Record<string, unknown>;
+  const strArr = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? v.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      : [];
+  const nonGoals = strArr(o.nonGoals);
+  const stopConditions = strArr(o.stopConditions);
+  const definitionOfDone =
+    typeof o.definitionOfDone === "string" ? o.definitionOfDone.trim() : "";
+
+  // Enforce the same bar the generator preflight does — else it's wasted effort.
+  if (nonGoals.length === 0 || stopConditions.length === 0) return undefined;
+  if (definitionOfDone.length < 20) return undefined;
+  if (nonGoals[0].startsWith("Auto-generated contract")) return undefined;
+  const allStrings = [...nonGoals, ...stopConditions, definitionOfDone];
+  if (allStrings.some(hasBannedPhrase)) return undefined;
+
+  return {
+    nonGoals,
+    stopConditions,
+    definitionOfDone,
+    assumptions: strArr(o.assumptions),
+    outOfScope: strArr(o.outOfScope),
+  };
+}
+
+/**
+ * Generate substantive contract precision fields (nonGoals, stopConditions,
+ * definitionOfDone) for a feature via a json_object model call.
+ *
+ * The standalone pipeline otherwise creates contracts with placeholder precision
+ * fields, which the generator's BLOCKING precision preflight rejects. This fills
+ * them with concrete, verifiable values so the sprint can actually run.
+ *
+ * Returns undefined if generation fails or the output doesn't meet the bar — the
+ * caller then keeps placeholders (and the generator correctly blocks) rather than
+ * shipping a vague contract.
+ */
+export async function generateContractPrecision(
+  feature: FeatureSpec,
+  spec: Pick<PlanSpec, "title" | "description">,
+  config: BoberConfig,
+): Promise<ContractPrecision | undefined> {
+  try {
+    const model = resolveModel(config.planner.model);
+    const client = createClient(
+      config.planner.provider ?? null,
+      config.planner.endpoint ?? null,
+      config.planner.providerConfig,
+      config.planner.model,
+    );
+    const userMessage = `# Overall Plan\nTitle: ${spec.title}\n${spec.description}\n\n# This Sprint's Feature\nTitle: ${feature.title}\nDescription: ${feature.description}\nAcceptance Criteria:\n${feature.acceptanceCriteria.map((a) => `- ${a}`).join("\n")}`;
+    const instruction = `Output ONLY a JSON object with the precision fields for THIS sprint's contract:
+{
+  "nonGoals": ["a specific thing the implementer must NOT do in this sprint (e.g. 'Do not implement the settings UI — that is sprint 3')"],
+  "stopConditions": ["a concrete, verifiable signal the sprint is finished (e.g. 'npm test passes and src/foo.ts exports bar()')"],
+  "definitionOfDone": "a specific paragraph (at least 20 characters) describing exactly when this sprint is complete and how to verify it",
+  "assumptions": ["any assumption made"],
+  "outOfScope": ["work explicitly deferred to other sprints"]
+}
+Rules: every string must be concrete and verifiable. "nonGoals" and "stopConditions" each need at least one specific entry. Do NOT use any of these banned vague phrases: ${BANNED_CONTRACT_PHRASES.map((p) => `"${p}"`).join(", ")}. Output the JSON object and nothing else.`;
+
+    const text = await coerceJsonOutput({
+      client,
+      model,
+      systemPrompt:
+        "You write precise, verifiable sprint contract fields for an autonomous coding harness.",
+      userMessage,
+      priorText: "",
+      instruction,
+    });
+
+    // Extract the JSON object from the response.
+    let parsed: unknown;
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start !== -1 && end > start) {
+      try {
+        parsed = JSON.parse(text.slice(start, end + 1));
+      } catch {
+        return undefined;
+      }
+    }
+    return validatePrecision(parsed);
+  } catch (err) {
+    logger.warn(
+      `Contract precision generation failed for "${feature.featureId}": ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return undefined;
+  }
 }
