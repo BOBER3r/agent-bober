@@ -139,14 +139,18 @@ export function resetEnvironmentCache(): void {
  * Render the environment + the role's exact harness tools as a markdown block
  * for injection into an agent's system prompt.
  *
- * @param env       Detected host environment.
- * @param toolNames The exact harness tool names available to this role (e.g.
- *                  ["read_file","glob","grep"]). Used to stop models inventing
- *                  tools (e.g. a non-existent "bash" for read-only roles).
+ * @param env         Detected host environment.
+ * @param toolNames   The exact harness tool names available to this role (e.g.
+ *                    ["read_file","glob","grep"]). Used to stop models inventing
+ *                    tools (e.g. a non-existent "bash" for read-only roles).
+ * @param projectRoot Absolute path to the project root. Surfaced so models stop
+ *                    guessing it — non-Claude models otherwise invent an absolute
+ *                    path with the wrong home dir, which the path sandbox rejects.
  */
 export function formatEnvironmentContext(
   env: HostEnvironment,
   toolNames: string[],
+  projectRoot?: string,
 ): string {
   const lines: string[] = [];
   lines.push("# Host Environment");
@@ -157,6 +161,7 @@ export function formatEnvironmentContext(
   lines.push(`- Node: ${env.nodeVersion}`);
   if (env.packageManager)
     lines.push(`- Package manager: ${env.packageManager}`);
+  if (projectRoot) lines.push(`- Project root (absolute): ${projectRoot}`);
   if (env.installedTools.length > 0) {
     lines.push(`- Installed CLIs on PATH: ${env.installedTools.join(", ")}`);
   }
@@ -179,6 +184,19 @@ export function formatEnvironmentContext(
       `unless it is listed above. If you need to do something a listed tool can't, ` +
       `state that in your output rather than inventing a tool.`,
   );
+
+  const hasPathTool = toolNames.some((t) =>
+    ["read_file", "write_file", "edit_file", "glob", "grep"].includes(t),
+  );
+  if (hasPathTool) {
+    lines.push(
+      "",
+      "For file/path tool arguments, pass paths RELATIVE to the project root " +
+        "(e.g. `src`, `src/index.ts`, `src/**/*.ts`). Do NOT construct absolute " +
+        "paths — you do not know the real home directory and a wrong guess is " +
+        "rejected by the path sandbox.",
+    );
+  }
 
   return lines.join("\n");
 }

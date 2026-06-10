@@ -37,7 +37,7 @@ export const readFileTool: ToolDef = {
       file_path: {
         type: "string",
         description:
-          "Path to the file, relative to the project root or absolute.",
+          "Path to the file, relative to the project root (e.g. `src/index.ts`). Pass a relative path, not an absolute one.",
       },
       offset: {
         type: "number",
@@ -62,7 +62,7 @@ export const writeFileTool: ToolDef = {
       file_path: {
         type: "string",
         description:
-          "Path to the file, relative to the project root or absolute.",
+          "Path to the file, relative to the project root (e.g. `src/index.ts`). Pass a relative path, not an absolute one.",
       },
       content: {
         type: "string",
@@ -83,7 +83,7 @@ export const editFileTool: ToolDef = {
       file_path: {
         type: "string",
         description:
-          "Path to the file, relative to the project root or absolute.",
+          "Path to the file, relative to the project root (e.g. `src/index.ts`). Pass a relative path, not an absolute one.",
       },
       old_text: {
         type: "string",
@@ -113,7 +113,7 @@ export const globTool: ToolDef = {
       path: {
         type: "string",
         description:
-          "Directory to search in, relative to project root. Defaults to project root.",
+          "Directory to search in, relative to project root (e.g. `src`). Pass a relative path, not an absolute one. Defaults to project root.",
       },
     },
     required: ["pattern"],
@@ -134,7 +134,7 @@ export const grepTool: ToolDef = {
       path: {
         type: "string",
         description:
-          "File or directory to search in, relative to project root. Defaults to project root.",
+          "File or directory to search in, relative to project root (e.g. `src`). Pass a relative path, not an absolute one. Defaults to project root.",
       },
       glob: {
         type: "string",

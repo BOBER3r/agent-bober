@@ -210,7 +210,7 @@ export async function assembleSystemPrompt(
     const env = await detectEnvironment(projectRoot);
     const toolNames =
       ROLE_TOOLS[role as keyof typeof ROLE_TOOLS] ?? [];
-    return `${decorated}\n\n${formatEnvironmentContext(env, [...toolNames])}`;
+    return `${decorated}\n\n${formatEnvironmentContext(env, [...toolNames], projectRoot)}`;
   } catch {
     // Environment detection is best-effort — never block agent spawn.
     return decorated;
