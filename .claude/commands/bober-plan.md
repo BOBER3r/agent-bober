@@ -77,6 +77,12 @@ Read the following files if they exist (skip those that do not):
 3. `package.json` — dependencies, scripts, project metadata
 4. `tsconfig.json` — TypeScript configuration
 5. Any files listed in `planner.contextFiles` from the config
+6. **Learn from past sprint outcomes (bounded memory):** Load the distilled lessons index via
+   `retrieveRelevantLessons(projectRoot, keywords, { topK })`, deriving `keywords` from the feature
+   title/description. This reads ONLY the bounded `.bober/memory/INDEX.md` and returns at most
+   `topK` deterministically-ranked lessons. **Do NOT read `.bober/history.jsonl` directly** — the raw
+   history is unbounded and is intentionally off-limits to the planner. Use the returned lessons to
+   avoid repeating past failure patterns when shaping sprints.
 
 Survey the project structure:
 - Use Glob with patterns appropriate to the stack to understand the file layout (e.g., `src/**/*.ts`, `contracts/**/*.sol`, `programs/**/*.rs`, `app/**/*`, `pages/**/*`)

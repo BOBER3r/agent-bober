@@ -514,8 +514,10 @@ agent-bober run "Build a complete dashboard with auth, CRUD, and charts" --provi
 
 Both the **evaluator** and the **architect** can run as a *lens panel* -- fanning a single decision out across several independent perspectives, then reconciling them into one verdict. Panels are **opt-in and off by default**; when disabled, behavior is byte-identical to the single-pass path.
 
-- **Evaluator panel** (`evaluator.panel`): runs each sprint evaluation through the built-in lenses **correctness**, **security**, **regression**, and **quality**, with bounded fan-out and a reconcile step, recording per-lens verdicts as telemetry.
-- **Architect panel** (`architect.panel`): gates the architecture approach-selection and review checkpoints through the built-in lenses **scalability**, **security**, **cost**, **operability**, **maintainability**, and **reversibility**, with a fail-closed reconcile.
+- **Evaluator panel** (`evaluator.panel`): runs each sprint evaluation through the built-in lenses **correctness**, **security**, **regression**, **quality**, and **simplicity**, with bounded fan-out and a reconcile step, recording per-lens verdicts as telemetry.
+- **Architect panel** (`architect.panel`): gates the architecture approach-selection and review checkpoints through the built-in lenses **scalability**, **security**, **cost**, **operability**, **maintainability**, **reversibility**, and **simplicity**, with a fail-closed reconcile.
+
+The **simplicity** lens is a complexity-only perspective (YAGNI): it hunts code that reinvents the standard library, dependencies doing what a native platform feature already does, single-implementation abstractions, dead flexibility, and logic that could be materially shorter — while being explicitly forbidden from ever recommending the removal of a test, a validation at a trust boundary, error handling, security, or accessibility. It pairs with a generator convention: deliberate simplifications with a known ceiling are marked with a `bober:` comment naming the ceiling **and** the upgrade path (e.g. `// bober: global lock, per-account locks if throughput matters`), so a shortcut reads as an auditable choice rather than an oversight — and the code-reviewer treats a marked shortcut as intent, an unmarked one with an obvious ceiling as a finding.
 
 Enable a panel and (optionally) restrict or override the lenses:
 
@@ -600,16 +602,26 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "plugins": [],                        // Custom evaluator plugin paths
     "panel": {                            // Multi-lens evaluation (opt-in, off by default)
       "enabled": false,                   // Run the evaluator across multiple lenses
-      "lenses": [],                       // [] = built-ins: correctness, security, regression, quality
+      "lenses": [],                       // [] = built-ins: correctness, security, regression, quality, simplicity
       "maxConcurrent": 4                  // Max lenses evaluated in parallel
     }
+  },
+
+  // -- Documenter (per-sprint docs, on by default) -----
+  "documenter": {
+    "enabled": true,                      // Spawn a doc subagent after each sprint passes; set false to skip
+    "model": "sonnet",                    // Model for the documentation pass
+    "maxTurns": 20,                       // Max tool-use turns for the doc pass
+    "timeoutMs": 300000,                  // Advisory: a documenter timeout never downgrades the passed sprint
+    "provider": "anthropic",              // Optional provider override
+    "endpoint": null                      // Custom base URL (for openai-compat)
   },
 
   // -- Architect (lens panel, opt-in) ------------------
   "architect": {
     "panel": {
       "enabled": false,                   // Multi-lens architecture review (off by default)
-      "lenses": [],                       // [] = built-ins: scalability, security, cost, operability, maintainability, reversibility
+      "lenses": [],                       // [] = built-ins: scalability, security, cost, operability, maintainability, reversibility, simplicity
       "maxConcurrent": 4
     }
   },
@@ -878,7 +890,11 @@ To debug failing E2E tests:
                                     |
                           pass? ----+---- fail?
                             |              |
-                      [Next Sprint]   [Rework Loop]
+                      [Documenter]   [Rework Loop]
+                       (writes/updates
+                        docs; advisory)
+                            |
+                      [Next Sprint]
                             |
                             v
                     All sprints done
@@ -900,6 +916,7 @@ Each agent runs as a **multi-turn agentic loop** with tool access via the unifie
 - **Curator** (default: Claude Opus): Read-only codebase analysis scoped to a single sprint. For each sprint contract, reads the target files, extracts relevant code sections, inventories existing utilities the generator must reuse, identifies affected files and tests, gathers testing patterns, and produces a structured Sprint Briefing saved to `.bober/briefings/`. Runs once per sprint before the generator. Configurable via `curator` section in config.
 - **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Receives the Sprint Briefing (curated patterns, utils, impact analysis) plus the sprint contract and principles -- no research, design, or outline artifacts (context distillation). Starts coding immediately instead of exploring the codebase.
 - **Evaluator** (default: Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` -- deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs -- only report them with precise feedback.
+- **Documenter** (default: Claude Sonnet): Spawned after a sprint's evaluator returns PASS, while the change is fresh. Writes a concise record of what the sprint built and finds & updates the existing docs that are now stale (README, ADRs, CLAUDE.md, module docs). Documentation only -- never touches application code or tests, and its result is **advisory**: a documenter failure or timeout never downgrades the already-passed sprint. On by default; configurable via the `documenter` section (set `enabled: false` to skip).
 
 The separation ensures that:
 1. The Generator cannot "mark its own homework" -- an independent evaluation step with its own tool access catches issues through actual runtime verification, not just reading the generator's self-report.
