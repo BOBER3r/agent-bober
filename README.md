@@ -92,6 +92,15 @@ npm install -g agent-bober
 npx agent-bober init
 ```
 
+**Updating later:** upgrade the package, then refresh each project's installed commands/agents:
+
+```bash
+npm i -g agent-bober@latest      # upgrade the global CLI/engine
+agent-bober update               # in each project: refresh .claude/ commands + agents (config untouched)
+```
+
+`update` re-emits `.claude/commands/` and `.claude/agents/` from the new package version without touching your `bober.config.json` or `.bober/` state. Claude Code **plugin** users update separately with `/plugin update bober` (the plugin tracks the GitHub repo, not npm).
+
 This is required to use the DeepSeek / claude-code providers, run bober headlessly or in CI, or expose the MCP server. A few plugin skills (`bober.plan`, `bober.sprint`, `bober.impact`, `bober.onboard`, `bober.graph`) also shell out to the `agent-bober` CLI, so installing it unlocks their full behavior. Graph features additionally require the separate [`tokensave`](#graph-tokensave-integration) binary.
 
 agent-bober works in multiple environments:
@@ -427,6 +436,7 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 
 ```bash
 npx agent-bober init [preset]                            # Initialize project (with provider selection)
+npx agent-bober update                                   # Refresh .claude/ commands + agents after upgrading the package
 npx agent-bober plan "feature"                           # Run the planner
 npx agent-bober plan answer <specId>                     # Resolve clarification questions interactively
 npx agent-bober plan answer <specId> <questionId> "..."  # Resolve a single clarification question

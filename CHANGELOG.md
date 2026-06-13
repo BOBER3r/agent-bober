@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-06-13
+
+### Added
+
+- **`agent-bober update` command**: refreshes a project's installed Claude Code slash commands (`.claude/commands/`) and agent definitions (`.claude/agents/`) from the currently-installed package — the end-user upgrade path after `npm i -g agent-bober@latest`. It respects the project's recorded `mode`/`preset` so the installed command set matches what `init` chose, and it is **non-destructive**: `bober.config.json`, `.bober/` state, and `.gitignore` are never touched. Errors out (exit 1) if no `bober.config.json` is present.
+
+### Fixed
+
+- **Plugin manifest version drift**: `.claude-plugin/plugin.json` was pinned at `0.15.0` and the marketplace/README advertised "10 subagents"; both now track the real release (`0.17.x`, 11 subagents) so `/plugin update bober` advertises the correct version.
+
 ## [0.17.0] — 2026-06-13
 
 ### Added

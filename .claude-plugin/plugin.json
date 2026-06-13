@@ -1,7 +1,7 @@
 {
   "name": "bober",
   "description": "Generator-Evaluator multi-agent harness for building applications autonomously with Claude",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "author": { "name": "BOBER3r" },
   "homepage": "https://agentbober.com",
   "repository": "https://github.com/BOBER3r/agent-bober",

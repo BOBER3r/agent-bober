@@ -35,6 +35,26 @@ Brownfield auto-discovers your tech stack, commit message format, test patterns,
 
 ---
 
+### `bober update`
+
+Refresh the project's installed Claude Code slash commands (`.claude/commands/`) and agent
+definitions (`.claude/agents/`) from the currently-installed `agent-bober` package. Run it after
+upgrading the package so a project picks up new/changed commands and agents.
+
+```bash
+npm i -g agent-bober@latest    # upgrade the CLI/engine first
+bober update                   # then, inside the project, refresh .claude/
+```
+
+Non-destructive: it re-emits only `.claude/commands/` and `.claude/agents/`, respecting the
+project's recorded `mode`/`preset`. It never touches `bober.config.json`, `.bober/` state, or
+`.gitignore`. Errors (exit 1) if no `bober.config.json` exists — run `bober init` first.
+
+> Claude Code **plugin** users (installed via `/plugin marketplace add`) update with
+> `/plugin update bober` instead — the plugin tracks the GitHub repo, not the npm package.
+
+---
+
 ### `bober plan "feature"`
 
 Run the planner. Produces a PlanSpec with sprint contracts.

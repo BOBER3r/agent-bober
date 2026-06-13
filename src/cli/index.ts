@@ -9,6 +9,7 @@ import chalk from "chalk";
 import { findProjectRoot } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
 import { runInitCommand } from "./commands/init.js";
+import { registerUpdateCommand } from "./commands/update.js";
 import {
   runPlanCommand,
   runPlanAnswerCommand,
@@ -101,6 +102,9 @@ async function main(): Promise<void> {
       const projectRoot = process.cwd();
       await runInitCommand(projectRoot, { preset });
     });
+
+  // ── update ──────────────────────────────────────────────────────
+  registerUpdateCommand(program);
 
   // ── plan ────────────────────────────────────────────────────────
   const planCmd = program

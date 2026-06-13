@@ -991,7 +991,7 @@ const STACK_SPECIFIC_COMMANDS: Record<string, string[]> = {
  *
  * Also copies agent definitions into .claude/agents/.
  */
-async function installClaudeCommands(
+export async function installClaudeCommands(
   projectRoot: string,
   mode: ProjectMode,
   preset?: string,
