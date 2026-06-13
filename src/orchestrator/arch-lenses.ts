@@ -14,6 +14,8 @@ const ARCH_LENS_CATALOG: Record<string, string> = {
     "Focus on how easy it will be to change and extend this architecture over time. Evaluate coupling between components, clarity of boundaries, documentation needs, onboarding friction for new contributors, and the risk of accruing technical debt.",
   reversibility:
     "Focus on how difficult or costly it would be to undo or replace this architectural decision. Evaluate lock-in to vendors or proprietary technologies, data migration complexity, and whether a strangler-fig or incremental migration path exists if the approach needs to change.",
+  simplicity:
+    "Focus on whether this is the simplest architecture that satisfies the Checkpoint 1 constraints. Challenge whether each component needs to exist, whether a native platform feature or an already-present dependency removes a proposed custom layer, whether two components should collapse into one, and whether any abstraction is speculative — added for a use case absent from the problem statement. Reward the smallest design that honours every hard constraint; penalise layers introduced for unproven future flexibility, but never at the expense of a stated constraint.",
 };
 
 // ── Resolver ────────────────────────────────────────────────────────

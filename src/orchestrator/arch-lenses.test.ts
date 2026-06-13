@@ -11,6 +11,7 @@ describe("resolveArchLensFocus — built-in lenses (C2)", () => {
     "operability",
     "maintainability",
     "reversibility",
+    "simplicity",
   ] as const;
 
   it("each built-in lens resolves to a non-empty string", () => {
@@ -20,10 +21,10 @@ describe("resolveArchLensFocus — built-in lenses (C2)", () => {
     }
   });
 
-  it("all six built-in fragments are mutually distinct", () => {
+  it("all seven built-in fragments are mutually distinct", () => {
     const fragments = BUILT_INS.map((lens) => resolveArchLensFocus(lens));
     const unique = new Set(fragments);
-    expect(unique.size).toBe(6);
+    expect(unique.size).toBe(7);
   });
 });
 
@@ -52,6 +53,7 @@ describe("resolveArchLensFocus — unknown lens fallback (C2)", () => {
       "operability",
       "maintainability",
       "reversibility",
+      "simplicity",
     ] as const;
     for (const lens of BUILT_INS) {
       expect(resolveArchLensFocus(lens)).not.toBe(unknownResult);

@@ -696,6 +696,15 @@ Beyond functional correctness, evaluate code quality ruthlessly:
    - Unused imports or variables
    - TODO/FIXME comments in delivered code
 
+   **Ceiling comments are not smells.** A deliberate simplification marked with a `bober:` comment
+   that names its ceiling and an upgrade path (e.g. `// bober: global lock, per-account locks if
+   throughput matters`) is an auditable engineering choice — do NOT report it as a code smell or a
+   quality failure. This carve-out applies ONLY to code-smell/quality judgments. It NEVER softens a
+   success-criterion verification, a required strategy, the test mandate, or a nonGoal check — those
+   remain governed by the IRON LAW. A `bober:` comment can never excuse a missing test, an unhandled
+   error path, a validation gap at a trust boundary, or a security/accessibility shortfall; if the
+   simplification crosses into any of those, it is still a failure.
+
 ## Red Flags - STOP
 
 - About to mark a criterion `pass` based on the generator's `criteriaResults` claim without re-running the verification command

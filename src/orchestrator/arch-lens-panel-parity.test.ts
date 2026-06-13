@@ -11,6 +11,7 @@ const BUILT_IN_ARCH_LENSES = [
   "operability",
   "maintainability",
   "reversibility",
+  "simplicity",
 ] as const;
 
 describe("arch-lens-panel.md drift gate", () => {

@@ -438,7 +438,7 @@ The skill (this document) is the coordinator. Subagents produce; the skill assem
 # Arch Lens Panel — Canonical Protocol Reference
 
 This document is the single source of truth for native architect panel orchestration in agent-bober.
-It embeds the six canonical arch lens focus fragments verbatim from
+It embeds the seven canonical arch lens focus fragments verbatim from
 `src/orchestrator/arch-lenses.ts` (the `ARCH_LENS_CATALOG` literal) and documents the
 CP2 synthesis panel and CP5 reconcile panel protocols.
 The drift gate (`src/orchestrator/arch-lens-panel-parity.test.ts`) enforces byte-exact parity.
@@ -487,6 +487,19 @@ Focus on how easy it will be to change and extend this architecture over time. E
 Focus on how difficult or costly it would be to undo or replace this architectural decision. Evaluate lock-in to vendors or proprietary technologies, data migration complexity, and whether a strangler-fig or incremental migration path exists if the approach needs to change.
 ```
 
+### simplicity
+
+```
+Focus on whether this is the simplest architecture that satisfies the Checkpoint 1 constraints. Challenge whether each component needs to exist, whether a native platform feature or an already-present dependency removes a proposed custom layer, whether two components should collapse into one, and whether any abstraction is speculative — added for a use case absent from the problem statement. Reward the smallest design that honours every hard constraint; penalise layers introduced for unproven future flexibility, but never at the expense of a stated constraint.
+```
+
+> The `simplicity` lens enforces the top rung of the YAGNI ladder at design time: "does this
+> component need to exist at all?". It is constraint-bounded by construction — it may never
+> recommend dropping a layer that a Checkpoint 1 hard constraint requires. This keeps it
+> consistent with the architect's IRON LAW (every decision must cite the constraint that
+> eliminates the rejected alternative): a simplification that violates a constraint is not simpler,
+> it is wrong.
+
 ---
 
 ## Native Architect Panel Protocol
@@ -499,8 +512,8 @@ At Checkpoint 2 (candidate generation + scoring), the orchestrator runs the synt
    Checkpoint 1 constraints.
 
 2. **Lens scorer fan-out (one per lens):** The orchestrator spawns one scorer subagent per
-   configured arch lens (scalability, security, cost, operability, maintainability, reversibility),
-   bounded by `maxConcurrent`. Each scorer receives the same candidate set and is instructed to
+   configured arch lens (scalability, security, cost, operability, maintainability, reversibility,
+   simplicity), bounded by `maxConcurrent`. Each scorer receives the same candidate set and is instructed to
    score the candidates exclusively through its lens focus fragment (the exact string returned by
    `resolveArchLensFocus(lens)` from `src/orchestrator/arch-lenses.ts`).
 
@@ -540,7 +553,7 @@ The array shape is:
 
 ```ts
 lensVerdicts: Array<{
-  lens: string;    // e.g. "scalability", "security", "cost", "operability", "maintainability", "reversibility"
+  lens: string;    // e.g. "scalability", "security", "cost", "operability", "maintainability", "reversibility", "simplicity"
   passed: boolean; // individual lens verdict
   summary: string; // per-lens summary from the scorer or reviewer subagent
 }>

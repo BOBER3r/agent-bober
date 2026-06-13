@@ -4,7 +4,7 @@ import { resolveLensFocus } from "./eval-lenses.js";
 // ── Tests ────────────────────────────────────────────────────────────
 
 describe("resolveLensFocus — built-in lenses (C1)", () => {
-  const BUILT_INS = ["correctness", "security", "regression", "quality"] as const;
+  const BUILT_INS = ["correctness", "security", "regression", "quality", "simplicity"] as const;
 
   it("each built-in lens resolves to a non-empty string", () => {
     for (const lens of BUILT_INS) {
@@ -13,10 +13,10 @@ describe("resolveLensFocus — built-in lenses (C1)", () => {
     }
   });
 
-  it("all four built-in fragments are mutually distinct", () => {
+  it("all five built-in fragments are mutually distinct", () => {
     const fragments = BUILT_INS.map((lens) => resolveLensFocus(lens));
     const unique = new Set(fragments);
-    expect(unique.size).toBe(4);
+    expect(unique.size).toBe(5);
   });
 });
 

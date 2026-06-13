@@ -154,6 +154,7 @@ A **Problem Statement** section:
 
 ### Rules
 
+- **Check the simplest rung first.** Before listing approaches, ask the YAGNI question: can this be solved by *doing less* — reusing an existing component, a native platform feature, or an already-installed dependency — with no new system at all? If a do-less option is viable, it MUST appear as one of the 2-3 approaches (usually Approach A). If it is NOT viable, state in one line which specific Checkpoint 1 constraint rules it out. This rung never reduces the count below 2 and never excuses skipping the comparison — it ensures the simplest credible option is on the table, judged, and either selected or explicitly eliminated.
 - Present exactly 2 or 3 approaches. Never 1 (no comparison), never 4+ (decision paralysis).
 - Each approach must be scannable in under 30 seconds.
 - Use structured format — not paragraphs.
@@ -531,6 +532,7 @@ Before saving any document, verify:
 ## Red Flags - STOP
 
 - About to present only one approach at Checkpoint 2 (no comparison = not a decision)
+- About to introduce a custom component, layer, or abstraction without first checking whether a native platform feature, an existing component, or an already-installed dependency makes it unnecessary — and, if it IS necessary, without naming the constraint that requires it
 - About to write an ADR with only Pros listed and no Cons (or vice versa)
 - About to describe a component interface in prose instead of a TypeScript signature
 - About to use temporal language ("currently", "the existing approach", "as of now") in the architecture document
@@ -545,6 +547,8 @@ Before saving any document, verify:
 | Excuse | Reality |
 |--------|---------|
 | "I'll just pick Approach A — it's obviously better" | Then write down the alternatives you rejected and WHY. If you can't, you don't actually know it's better. |
+| "Of course we need a dedicated service/layer for this" | Prove it. Name the Checkpoint 1 constraint that a native feature or existing dependency cannot meet. "Needs to exist" without that constraint is speculative architecture. |
+| "Adding the layer now saves us refactoring later" | Future flexibility is not a Checkpoint 1 constraint. Build the simplest design that honours the stated constraints; a strangler-fig path (see the reversibility lens) handles the rest if it ever arrives. |
 | "Pros and cons are obvious — I'll skip them" | The reader six months from now does not have your context. Write them down. |
 | "TypeScript signature is too detailed for a sketch" | Prose interface = invented interface. Generator will not implement what you imagined. |
 | "I'll say 'currently we use X' — everyone knows what that means" | Temporal language ages the doc to uselessness in one sprint. Name X explicitly. |
