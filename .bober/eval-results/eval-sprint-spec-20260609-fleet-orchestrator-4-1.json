@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260609-fleet-orchestrator-4-1",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-4",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T02:26:30Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {"criteriaTotal":10,"criteriaPassed":10,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":10,"requiredFailed":0,"requiredTotal":10},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass"},
+    {"strategy":"lint","required":true,"result":"pass","details":"0 errors on fleet files."},
+    {"strategy":"build","required":true,"result":"pass"},
+    {"strategy":"unit-test","required":true,"result":"pass","details":"1831 pass; only pre-existing skill-bundles failure. 53 fleet tests pass."}
+  ],
+  "regressions": [],
+  "summary": "All 10 criteria pass. Atomic report write verified (temp+rename, throws on unwritable, no leftover tmp); credential fail-fast proven to throw BEFORE coordinator.execute (unit + live CLI); registerFleetCommand wired into cli/index.ts, exit 0 on per-child failures; run.ts/pipeline.ts confirmed untouched via git diff."
+}

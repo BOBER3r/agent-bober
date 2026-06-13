@@ -1,0 +1,55 @@
+{
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-1",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "sprintNumber": 1,
+  "title": "Fleet manifest schema, loader, and child config builder",
+  "description": "Create the src/fleet/ module with a Zod-validated FleetManifest schema, a FleetManifestLoader.load() that reads and validates a manifest JSON file, and a buildChildConfig() that produces a Zod-valid DeepSeek (openai-compat) BoberConfig per child via createDefaultConfig() plus a shallow override merge. This is the deterministic foundation every later sprint builds on, and it tackles the ADR-2 config-validity risk first.",
+  "status": "completed",
+  "createdAt": "2026-06-08T22:17:46Z",
+  "updatedAt": "2026-06-09T01:37:00Z",
+  "completedAt": "2026-06-09T01:37:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "sc-1-1", "description": "The project builds successfully (tsc) with zero errors after the change.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-1-2", "description": "TypeScript compilation produces zero type errors.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-1-3", "description": "ESLint reports zero errors on all new/modified files (consistent-type-imports, no unused, ESM .js import extensions).", "verificationMethod": "lint", "required": true },
+    { "criterionId": "sc-1-4", "description": "A Zod FleetManifestSchema exists with rootDir (default '.'), concurrency (int >= 1, default 3), and children (non-empty array of {folder, task, config?}); FleetManifestLoader.load(path) reads the file, JSON-parses, and schema-parses it, returning a typed FleetManifest.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-5", "description": "load() throws a clear error (naming the failing field/path) when the file is missing (ENOENT), not valid JSON, has an empty children array, or has concurrency < 1.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-6", "description": "buildChildConfig(child) returns an object that passes BoberConfigSchema validation and sets the openai-compat/DeepSeek provider on planner, generator, and evaluator sections.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-7", "description": "When a child supplies a `config` override, buildChildConfig shallow-merges its top-level keys over the base config (child top-level keys replace base keys), and the merged result still passes BoberConfigSchema.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-8", "description": "All existing tests continue to pass with zero failures.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "No folder scaffolding, git init, or subprocess spawning (Sprint 2)",
+    "No mapBounded fan-out or outcome aggregation (Sprint 3)",
+    "No CLI command registration or runFleet entrypoint (Sprint 4)",
+    "No deep/recursive config merge — shallow only",
+    "No LLM decomposition / --expand"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass programmatic or manual verification",
+    "load() round-trips a valid example manifest and buildChildConfig() output validates against BoberConfigSchema for both the no-override and with-override cases"
+  ],
+  "definitionOfDone": "src/fleet/manifest.ts exports FleetManifestSchema, FleetManifest/ChildSpec types, and a FleetManifestLoader (or load function); src/fleet/child-config.ts (or manifest.ts) exports buildChildConfig(child): BoberConfig built from createDefaultConfig() + DeepSeek overrides + shallow child.config merge. Collocated *.test.ts cover valid load, each invalid-load path, base config validity, and the shallow-merge case. Build, typecheck, and lint are clean and all tests pass.",
+  "assumptions": [
+    "createDefaultConfig() and BoberConfigSchema in src/config/schema.ts are the source of schema-correct defaults and the validation gate (ADR-2).",
+    "DeepSeek is wired as the openai-compat provider; the exact provider string/endpoint/providerConfig shape follows src/providers/factory.ts and openai-compat.ts.",
+    "Per-child config override is a shallow top-level merge (resolved clarification Q1-config-merge)."
+  ],
+  "outOfScope": [
+    "Scaffolding, git, subprocess, fan-out, aggregation, reporting, CLI (later sprints)",
+    "Deep config merge",
+    "Validating that DEEPSEEK_API_KEY is set (Sprint 4 fail-fast check)"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create the new module under src/fleet/.\n\n1. READ FIRST: src/config/schema.ts (createDefaultConfig + BoberConfigSchema, the exact role sections planner/generator/evaluator and their provider/endpoint/providerConfig fields), src/providers/factory.ts (how openai-compat/DeepSeek is dispatched — provider string, endpoint, providerConfig.apiKey, DEEPSEEK_API_KEY env), src/providers/openai-compat.ts, and an existing Zod schema in src/config/schema.ts for the .default()/.optional() conventions.\n\n2. manifest.ts: define FleetChildSchema = z.object({ folder: z.string().min(1), task: z.string().min(1), config: z.record(z.string(), z.unknown()).optional() }) and FleetManifestSchema = z.object({ rootDir: z.string().default('.'), concurrency: z.number().int().min(1).default(3), children: z.array(FleetChildSchema).min(1) }). Export inferred types. load(manifestPath) uses node:fs/promises readFile (async only — no sync fs), JSON.parse, then FleetManifestSchema.parse(); let Zod/JSON errors propagate with a helpful message (wrap to name the manifest path).\n\n3. buildChildConfig(child): start from createDefaultConfig() (pass whatever args it requires — check its signature), then set the DeepSeek/openai-compat provider on planner, generator, and evaluator (mirror exactly how factory.ts expects provider+endpoint+providerConfig). Then shallow-merge child.config: { ...base, ...(child.config ?? {}) } at the TOP level only. Return the object; optionally BoberConfigSchema.parse() it to guarantee validity by construction.\n\n4. Use import type { ... } for type-only imports. ESM: every relative import ends in .js. No `any` — use unknown + narrowing.\n\n5. Collocate manifest.test.ts (and child-config.test.ts if separate). Tests create temp manifest files in a temp dir (node:fs/promises mkdtemp) and clean up — do NOT mock fs (principles).",
+  "evaluatorNotes": "Independently verify each criterion.\nsc-1-4/sc-1-5: Inspect the Zod schema for the exact defaults and constraints; run the unit tests covering valid load + each invalid path (missing file, bad JSON, empty children, concurrency 0/negative). Confirm errors are thrown, not swallowed, and mention the failing field.\nsc-1-6: Confirm buildChildConfig output BoberConfigSchema.parse()-es without throwing and that planner/generator/evaluator each carry the openai-compat/DeepSeek provider exactly as factory.ts expects (check the provider string + endpoint + providerConfig shape against src/providers/factory.ts).\nsc-1-7: Confirm a child with a `config` override produces a merged config where the overridden top-level key is the child's value and untouched keys retain the base, and the result still validates.\nsc-1-8: Run the full test suite; zero failures.\nAlso check: no synchronous fs calls, all relative imports use .js extensions, import type used for types.",
+  "estimatedFiles": [
+    "src/fleet/manifest.ts",
+    "src/fleet/manifest.test.ts",
+    "src/fleet/child-config.ts",
+    "src/fleet/child-config.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

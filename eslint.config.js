@@ -68,6 +68,20 @@ export default [
     },
   },
   {
+    // Node.js globals for plain .js fixtures (e.g. src/fleet/__fixtures__/stub-child.js)
+    files: ["src/**/*.js"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+      },
+    },
+  },
+  {
     ignores: ["dist/", "node_modules/", "templates/"],
   },
 ];

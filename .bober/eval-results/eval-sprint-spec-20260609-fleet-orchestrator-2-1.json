@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260609-fleet-orchestrator-2-1",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-2",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T02:00:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "fail",
+  "score": {"criteriaTotal":10,"criteriaPassed":7,"criteriaFailed":3,"criteriaSkipped":0,"requiredPassed":7,"requiredFailed":3,"requiredTotal":10},
+  "failedCriteria": ["sc-2-3","sc-2-7","sc-2-8"],
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass"},
+    {"strategy":"lint","required":true,"result":"fail","details":"10 no-undef errors in src/fleet/__fixtures__/stub-child.js (process/setTimeout). ESLint config declares Node globals only for src/**/*.ts; .js fixture gets no node globals."},
+    {"strategy":"build","required":true,"result":"pass"},
+    {"strategy":"unit-test","required":false,"result":"pass","details":"1802 pass, only pre-existing skill-bundles failure. 24 fleet tests pass but do not exercise ChildRunner.run()."}
+  ],
+  "regressions": [{"description":"stub-child.js introduces 10 ESLint no-undef errors","severity":"major"}],
+  "summary": "Fails sc-2-3 (lint errors from stub fixture), sc-2-7 (ChildRunner.run never directly called; spawn-failure test is tautological), sc-2-8 (timeout tested via raw execa not run()). Implementation structurally correct; test coverage insufficient for the contract."
+}

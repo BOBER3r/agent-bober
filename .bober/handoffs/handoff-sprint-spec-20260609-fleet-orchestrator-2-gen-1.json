@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260609-fleet-orchestrator-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-2",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T01:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Fleet Orchestrator Sprint 2: ChildScaffolder.scaffold() (mkdir + write Zod-valid config via Sprint 1's buildChildConfig + git init, failures captured as data, non-empty folders skipped untouched) and ChildRunner.run() (spawn one `agent-bober run` child via execa reject:false with default timeout and dist/cli/index.js entry resolution via import.meta.url).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260609-fleet-orchestrator-1",
+        "title": "Fleet manifest schema, loader, and child config builder",
+        "summary": "Created src/fleet/manifest.ts (FleetManifestSchema, FleetChild/FleetManifest types, async load()) and src/fleet/child-config.ts (buildChildConfig(child) -> BoberConfigSchema-valid DeepSeek config via createDefaultConfig + shallow merge). DeepSeek provider string is 'openai-compat', endpoint 'https://api.deepseek.com'."
+      }
+    ],
+    "currentBranch": "bober/fleet-orchestrator",
+    "relevantFiles": [
+      "src/fleet/manifest.ts",
+      "src/fleet/child-config.ts",
+      "src/utils/git.ts",
+      "src/providers/factory.ts",
+      "src/cli/index.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260609-fleet-orchestrator-2.json",
+  "specRef": ".bober/specs/spec-20260609-fleet-orchestrator.json",
+  "architectureRef": ".bober/architecture/arch-20260609-fleet-orchestrator-tech-lead-architecture.md",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test -- --run"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

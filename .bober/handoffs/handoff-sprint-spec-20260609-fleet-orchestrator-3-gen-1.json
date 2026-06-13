@@ -1,0 +1,44 @@
+{
+  "handoffId": "handoff-sprint-spec-20260609-fleet-orchestrator-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-3",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T02:05:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Fleet Orchestrator Sprint 3 (critical isolation + concurrency): FleetCoordinator.execute() fans children through the existing mapBounded() at the configured cap via a never-reject per-child thunk (scaffold -> run, all errors captured as data); OutcomeAggregator.aggregate() resolves each child's status disk-primary from its newest .bober/runs/<runId>/state.json with an exit-code fallback.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260609-fleet-orchestrator-1",
+        "title": "Manifest schema, loader, child config builder",
+        "summary": "src/fleet/manifest.ts (FleetManifest{rootDir,concurrency,children}), src/fleet/child-config.ts (buildChildConfig)."
+      },
+      {
+        "contractId": "sprint-spec-20260609-fleet-orchestrator-2",
+        "title": "Scaffolder + runner",
+        "summary": "src/fleet/scaffolder.ts ChildScaffolder.scaffold(rootDir, child): Promise<ScaffoldResult{folder,absPath,configWritten,gitInitialized,error?}> (never throws, non-empty folders skipped). src/fleet/runner.ts ChildRunner (constructor accepts {cliEntry?,nodeBin?} test seam).run(spec{cwd,task,timeoutMs?}): Promise<ChildSpawnResult{cwd,exitCode,stdout,stderr,timedOut?,spawnError?}> (never throws). resolveCliEntry(), probeCliVersion()."
+      }
+    ],
+    "currentBranch": "bober/fleet-orchestrator",
+    "relevantFiles": [
+      "src/orchestrator/workflow/scheduler.ts",
+      "src/state/run-state.ts",
+      "src/mcp/run-manager.ts",
+      "src/fleet/scaffolder.ts",
+      "src/fleet/runner.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260609-fleet-orchestrator-3.json",
+  "specRef": ".bober/specs/spec-20260609-fleet-orchestrator.json",
+  "architectureRef": ".bober/architecture/arch-20260609-fleet-orchestrator-tech-lead-architecture.md",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test -- --run"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

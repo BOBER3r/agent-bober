@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260609-fleet-orchestrator-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-4",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T02:15:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Fleet Orchestrator Sprint 4 (makes the feature user-visible end-to-end): PortfolioReporter (build counts + atomic write of .bober/fleet-report.json), runFleet() entrypoint (load -> credential fail-fast -> coordinator.execute -> aggregate -> reporter.build -> reporter.write, always exits 0 on per-child failures), and registerFleetCommand(program) wired into src/cli/index.ts. The `run` command and runPipeline stay UNTOUCHED.",
+    "completedSprints": [
+      {"contractId":"sprint-spec-20260609-fleet-orchestrator-1","title":"Manifest + config","summary":"src/fleet/manifest.ts (load, FleetManifest{rootDir,concurrency,children}), src/fleet/child-config.ts (buildChildConfig -> DeepSeek openai-compat config)."},
+      {"contractId":"sprint-spec-20260609-fleet-orchestrator-2","title":"Scaffolder + runner","summary":"src/fleet/scaffolder.ts, src/fleet/runner.ts (ChildRunner + resolveCliEntry() + probeCliVersion())."},
+      {"contractId":"sprint-spec-20260609-fleet-orchestrator-3","title":"Coordinator + aggregator","summary":"src/fleet/coordinator.ts (FleetCoordinator.execute(manifest) via mapBounded, never-reject thunk, DI for scaffolder/runner), src/fleet/aggregator.ts (OutcomeAggregator.aggregate(execution) -> ChildOutcome disk-primary + exit-code fallback), src/fleet/types.ts (ChildExecution, ChildOutcome{folder,status:'completed'|'failed'|'other',source,exitCode?,runId?,runState?})."}
+    ],
+    "currentBranch": "bober/fleet-orchestrator",
+    "relevantFiles": [
+      "src/state/run-state.ts",
+      "src/cli/index.ts",
+      "src/cli/commands/run.ts",
+      "src/providers/factory.ts",
+      "src/fleet/coordinator.ts",
+      "src/fleet/aggregator.ts",
+      "src/fleet/reporter.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260609-fleet-orchestrator-4.json",
+  "specRef": ".bober/specs/spec-20260609-fleet-orchestrator.json",
+  "architectureRef": ".bober/architecture/arch-20260609-fleet-orchestrator-tech-lead-architecture.md",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test -- --run"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

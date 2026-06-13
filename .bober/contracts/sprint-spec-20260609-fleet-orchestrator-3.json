@@ -1,0 +1,54 @@
+{
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-3",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "sprintNumber": 3,
+  "title": "Bounded fan-out coordinator and outcome aggregator",
+  "description": "Implement FleetCoordinator.execute() that fans children through the existing mapBounded() at the configured cap using a never-reject per-child thunk (scaffold → run, all errors captured as data), and OutcomeAggregator.aggregate() that resolves each child's status disk-primary from its newest .bober/runs/<runId>/state.json with an exit-code fallback. This is the critical isolation + concurrency sprint.",
+  "status": "completed",
+  "createdAt": "2026-06-08T22:17:46Z",
+  "updatedAt": "2026-06-09T02:13:00Z",
+  "completedAt": "2026-06-09T02:13:00Z",
+  "dependsOn": ["sprint-spec-20260609-fleet-orchestrator-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    { "criterionId": "sc-3-1", "description": "The project builds successfully (tsc) with zero errors.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-3-2", "description": "TypeScript compilation produces zero type errors.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-3-3", "description": "ESLint reports zero errors on all new/modified files.", "verificationMethod": "lint", "required": true },
+    { "criterionId": "sc-3-4", "description": "execute(manifest) drives children exclusively through mapBounded(children, manifest.concurrency, thunk) from src/orchestrator/workflow/scheduler.ts (no hand-rolled pool, no pre-spawn for-loop) and returns ChildExecution[] aligned to input order.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-5", "description": "Peak concurrent in-flight children never exceeds the configured cap — verified by an instrumented thunk that tracks live count and asserts observed peak <= cap.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-6", "description": "When one child's scaffold or run throws or rejects, every sibling still resolves to a ChildExecution and the batch is NOT aborted (the per-child thunk always resolves; errors captured as data). Verified by a sibling-survival test.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-7", "description": "aggregate(execution) reads the child's RunState files; when one or more exist it returns ChildOutcome with status from the newest-by-startedAt RunState and source 'disk' (including the discovered runId).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-8", "description": "When no RunState exists, aggregate() falls back to exitCode === 0 ? 'completed' : 'failed' with source 'exit-code'; when scaffold failed and no spawn occurred it returns 'failed'/'exit-code'. aggregate() never throws.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-9", "description": "All existing tests continue to pass with zero failures.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "No report building/writing, runFleet entrypoint, or CLI command (Sprint 4)",
+    "No DEEPSEEK_API_KEY fail-fast (Sprint 4)",
+    "Do not modify mapBounded/Semaphore, runPipeline, or the `run` command",
+    "No live progress streaming"
+  ],
+  "stopConditions": [
+    "All nine success criteria pass programmatic or manual verification",
+    "The sibling-survival test and the peak-concurrency-<=-cap test both pass deterministically"
+  ],
+  "definitionOfDone": "src/fleet/coordinator.ts exports FleetCoordinator with execute(manifest): Promise<ChildExecution[]> wrapping mapBounded with a per-child thunk that try/catches scaffold+run and ALWAYS resolves to a ChildExecution{folder, scaffold, spawn?}. src/fleet/aggregator.ts exports OutcomeAggregator with aggregate(execution): Promise<ChildOutcome> using readRunStatesFromDisk (newest by startedAt) with exit-code fallback. Collocated tests cover mapBounded usage, peak<=cap, sibling-survival, disk-primary status, exit-code fallback, and scaffold-failed cases. Build/typecheck/lint clean; all tests pass.",
+  "assumptions": [
+    "mapBounded(items, cap, fn) in src/orchestrator/workflow/scheduler.ts wraps a single shared Semaphore and resolves via Promise.all — therefore the per-child thunk MUST NEVER reject (errors as data), or one rejection aborts the batch. This is the load-bearing isolation invariant.",
+    "readRunStatesFromDisk (src/state/run-state.ts) returns RunState entries for a given project root and already swallows IO/JSON errors, returning empty when none exist; RunState carries a startedAt usable for newest-selection.",
+    "Children write to their own isolated cwd/.bober/runs/; the parent reads strictly post-exit, so there is no reader/writer race."
+  ],
+  "outOfScope": [
+    "Reporting, entrypoint, CLI, credential checks (Sprint 4)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "READ FIRST: src/orchestrator/workflow/scheduler.ts (EXACT mapBounded signature + Semaphore behavior + the Promise.all at the rejection-sensitive line; confirm how a thrown thunk propagates), src/state/run-state.ts (readRunStatesFromDisk signature + RunState shape + startedAt field; how run dirs are enumerated), src/mcp/run-manager.ts (RunState.status enum values), and Sprint 2's scaffolder.ts/runner.ts.\n\ncoordinator.ts:\n- execute(manifest): build perChildThunk = (child) => async () => { try { const scaffold = await scaffolder.scaffold(manifest.rootDir, child); if (scaffold.error) return { folder: child.folder, scaffold, spawn: undefined }; const spawn = await runner.run({ cwd: scaffold.absPath, task: child.task, timeoutMs: <from child.config?> }); return { folder: child.folder, scaffold, spawn }; } catch (e) { return { folder: child.folder, scaffold: { folder: child.folder, absPath: '', configWritten:false, gitInitialized:false, error: String(e) }, spawn: undefined }; } }. CRITICAL: the thunk body is fully wrapped so it can NEVER reject. Then return mapBounded(manifest.children, manifest.concurrency, (child) => perChildThunk(child)()). Match mapBounded's actual (items, cap, fn) calling convention from scheduler.ts.\n- Allow dependency injection of scaffolder + runner (constructor params or factory) so tests can substitute fakes that throw / track concurrency.\n\naggregator.ts:\n- aggregate(execution): if execution.scaffold.error and no spawn → return { folder, status:'failed', source:'exit-code', exitCode: execution.spawn?.exitCode ?? -1 }. Else read RunStates: const states = await readRunStatesFromDisk(execution.scaffold.absPath); if states.length: pick newest by startedAt (string ISO compare desc), map RunState.status to ChildOutcome.status ('completed'|'failed'|'other' — map the RunState enum: completed→completed, failed/aborted→failed, running/other→other) and return source:'disk' with runId + runState. Else fallback to exitCode===0?'completed':'failed', source:'exit-code'. NEVER throw (readRunStatesFromDisk already swallows IO errors; guard anyway).\n\nTesting: inject fake scaffolder/runner. For peak<=cap: the fake runner increments a shared counter on entry, records max, decrements on exit, with a small await tick to force overlap; assert max <= cap with cap < children.length. For sibling-survival: make one fake throw; assert all others present. For aggregator: create temp .bober/runs/<id>/state.json fixtures via run-state helpers (or write the files directly) and assert disk-primary selection + fallback.\n\nESM .js imports; import type; no `any`.",
+  "evaluatorNotes": "sc-3-4: Confirm execute() calls mapBounded with (children, concurrency, fn) and does NOT spawn in a plain for/Promise.all-of-all loop. Confirm input-order alignment.\nsc-3-5: Run the instrumented peak-concurrency test with e.g. 6 children, cap 2; assert observed peak is exactly <= cap and that more than `cap` children DID run (not serialized by accident). Make it deterministic (counter + max), not timing-flaky.\nsc-3-6: This is the most important check. Force one child's thunk path to throw (scaffold or run) and assert execute() still resolves with a ChildExecution for EVERY child and never rejects. Inspect the thunk to confirm the try/catch wraps everything.\nsc-3-7/sc-3-8: With RunState fixtures, confirm newest-by-startedAt selection and the enum→status mapping; remove the state files and confirm exit-code fallback with source 'exit-code'; confirm scaffold-error path → failed; confirm aggregate never throws on a missing/garbage run dir.\nsc-3-9: full suite green.",
+  "estimatedFiles": [
+    "src/fleet/coordinator.ts",
+    "src/fleet/coordinator.test.ts",
+    "src/fleet/aggregator.ts",
+    "src/fleet/aggregator.test.ts",
+    "src/fleet/types.ts"
+  ],
+  "estimatedDuration": "large"
+}

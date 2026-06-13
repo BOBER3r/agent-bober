@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260609-fleet-orchestrator-3-1",
+  "contractId": "sprint-spec-20260609-fleet-orchestrator-3",
+  "specId": "spec-20260609-fleet-orchestrator",
+  "timestamp": "2026-06-09T02:13:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {"criteriaTotal":9,"criteriaPassed":9,"criteriaFailed":0,"criteriaSkipped":0,"requiredPassed":9,"requiredFailed":0,"requiredTotal":9},
+  "strategyResults": [
+    {"strategy":"typecheck","required":true,"result":"pass"},
+    {"strategy":"lint","required":true,"result":"pass","details":"0 errors on fleet files."},
+    {"strategy":"build","required":true,"result":"pass"},
+    {"strategy":"unit-test","required":true,"result":"pass","details":"1816 pass; only pre-existing skill-bundles failure. 38 fleet tests pass (coordinator 5, aggregator 9 + others)."}
+  ],
+  "regressions": [],
+  "summary": "All 9 criteria pass. mapBounded delegation correct; never-reject invariant verified (try/catch wraps both awaits + return); peak-concurrency test deterministic and non-vacuous (peak>1 AND peak<=cap); aggregator newest-by-startedAt + enum mapping + exit-code fallback correct; aggregate never throws. scheduler.ts unmodified."
+}
