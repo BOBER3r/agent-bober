@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-sprint documenter** ([#41](https://github.com/BOBER3r/agent-bober/pull/41)): a new `documenter` agent spawned after a sprint's evaluator returns PASS — it writes a concise record of what the sprint built and finds & updates the existing docs (README, ADRs, CLAUDE.md, module docs) while the change is fresh, instead of batching all docs into a final sprint. Documentation only (never touches application code or tests) and **advisory** — a documenter failure or timeout never downgrades the already-passed sprint. On by default; configure via the `documenter` config section (`enabled`, `model`, `maxTurns`, `timeoutMs`).
+- **`simplicity` lens** ([#39](https://github.com/BOBER3r/agent-bober/pull/39)): a complexity-only (YAGNI) lens added to both the evaluator (`evaluator.panel`) and architect (`architect.panel`) lens panels. It surfaces reinvented standard-library code, dependencies doing what a native platform feature already does, single-implementation abstractions, dead flexibility, and logic that could be materially shorter — and is explicitly forbidden from ever flagging a test, a validation at a trust boundary, error handling, security, or accessibility as deletable. Mirrored in `skills/shared/{lens-panel,arch-lens-panel}.md` with the existing drift/parity gates.
+- **`bober:` ceiling-comment convention** ([#39](https://github.com/BOBER3r/agent-bober/pull/39)): the generator marks a deliberate simplification that has a known ceiling with a `bober:` comment naming the ceiling **and** the upgrade path (e.g. `// bober: global lock, per-account locks if throughput matters`). The code-reviewer treats a marked shortcut as intent and an unmarked shortcut with an obvious ceiling as a finding; the evaluator treats a marked simplification as not-a-smell (scoped strictly to code-quality, never to the test/verification discipline).
+
+### Fixed
+
+- **Stale plugin `.claude/` copies**: regenerated the `bober-planner` agent + `bober-plan` command and the `bober-documenter` agent copies that had drifted from their canonical `agents/` / `skills/` sources (the planner's bounded-lessons-index step and the new documenter agent were missing from the plugin surface). Run `npm run update-all` to keep these in sync.
+- **Untracked plugin agent/command copies now committed**: the `bober-diagnoser`, `bober-deployer`, and `bober-postmortemer` incident agents and the `bober-graph` / `bober-impact` / `bober-onboard` commands existed on disk but were never tracked, so they did not ship on the plugin surface for everyone. They are now committed (canonical sources were already tracked); all six are provider-agnostic and honour the configured provider (Anthropic / DeepSeek / OpenAI-compatible).
+
 ## [0.16.0] — 2026-06-04
 
 ### Added

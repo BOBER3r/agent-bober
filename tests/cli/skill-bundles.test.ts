@@ -158,11 +158,11 @@ describe("init.ts — UNIVERSAL_COMMANDS includes all 3 new skills", () => {
 // ── Version bump ──────────────────────────────────────────────────────────────
 
 describe("package.json version", () => {
-  it("is 0.14.0", async () => {
+  it("is 0.16.0", async () => {
     const pkg = JSON.parse(
       await readFile(join(repoRoot, "package.json"), "utf-8"),
     ) as { version: string };
-    expect(pkg.version).toBe("0.15.0");
+    expect(pkg.version).toBe("0.16.0");
   });
 });
 
