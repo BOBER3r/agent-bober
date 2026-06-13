@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "agent-bober",
-  "description": "Marketplace for the Bober multi-agent harness — installs the bober plugin (24 skills + 10 subagents) so updates propagate via `/plugin update` instead of per-project copies.",
+  "description": "Marketplace for the Bober multi-agent harness — installs the bober plugin (24 skills + 11 subagents) so updates propagate via `/plugin update` instead of per-project copies.",
   "owner": {
     "name": "BOBER3r"
   },

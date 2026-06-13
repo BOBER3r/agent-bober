@@ -80,7 +80,7 @@ Install the plugin from its marketplace, then install `bober`:
 /plugin install bober@agent-bober
 ```
 
-This installs 24 skills + 10 subagents. Update later with `/plugin update bober`. The plugin runs the Researcher → Planner → Curator → Generator → Evaluator pipeline as Claude Code subagents on your Claude subscription — provider selection (the [Capability Matrix](#capability-matrix)) does **not** apply in this mode.
+This installs 24 skills + 11 subagents. Update later with `/plugin update bober`. The plugin runs the Researcher → Planner → Curator → Generator → Evaluator pipeline as Claude Code subagents on your Claude subscription — provider selection (the [Capability Matrix](#capability-matrix)) does **not** apply in this mode.
 
 ### npm CLI / MCP Server
 
