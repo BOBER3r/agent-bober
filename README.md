@@ -223,6 +223,7 @@ Shorthands resolve to the latest model version automatically. You can also pass 
 | generator              | yes                  | yes (tools)              | no (runs own loop)         |
 | evaluator              | yes                  | yes (tools)              | no (runs own loop)         |
 | code-reviewer          | yes                  | yes (tools)              | no (runs own loop)         |
+| documenter             | yes                  | yes (tools)              | no (runs own loop)         |
 
 **DeepSeek prerequisites:** `npm install openai` (optional peer dep) and set `DEEPSEEK_API_KEY` in
 your environment. DeepSeek supports all roles including tool-calling roles (curator, generator,
@@ -917,6 +918,12 @@ Each agent runs as a **multi-turn agentic loop** with tool access via the unifie
 - **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Receives the Sprint Briefing (curated patterns, utils, impact analysis) plus the sprint contract and principles -- no research, design, or outline artifacts (context distillation). Starts coding immediately instead of exploring the codebase.
 - **Evaluator** (default: Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` -- deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs -- only report them with precise feedback.
 - **Documenter** (default: Claude Sonnet): Spawned after a sprint's evaluator returns PASS, while the change is fresh. Writes a concise record of what the sprint built and finds & updates the existing docs that are now stale (README, ADRs, CLAUDE.md, module docs). Documentation only -- never touches application code or tests, and its result is **advisory**: a documenter failure or timeout never downgrades the already-passed sprint. On by default; configurable via the `documenter` section (set `enabled: false` to skip).
+
+Beyond the build pipeline, agent-bober ships a set of **operations subagents** for the incident lifecycle (invoked via `/bober-incident`, `/bober-diagnose`, `/bober-deploy`, `/bober-runbook`, and `/bober-postmortem`). Like every pipeline agent they run through the same provider-agnostic `LLMClient` layer, so they honour whatever provider you configure (Anthropic, DeepSeek, or any OpenAI-compatible endpoint):
+
+- **Diagnoser** (default: Claude Sonnet): Read-only incident investigator. Gathers evidence at component boundaries and forms hypotheses with both supporting AND contradicting evidence, emitting a structured DiagnosisResult -- never writes code, never deploys.
+- **Deployer** (default: Claude Sonnet): Executes a remediation action classified by blast radius. Risky actions are gated behind a Tier 2 checkpoint, and a ChangeEntry with a required inverse is recorded BEFORE execution.
+- **Postmortemer** (default: Claude Sonnet): Read-only synthesizer that turns the incident's recorded artifacts into an evidence-cited postmortem -- chronological timeline, 5-Whys, contributing factors, and action items. Pure offline synthesis, no live observability access.
 
 The separation ensures that:
 1. The Generator cannot "mark its own homework" -- an independent evaluation step with its own tool access catches issues through actual runtime verification, not just reading the generator's self-report.

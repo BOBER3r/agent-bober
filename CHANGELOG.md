@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **Stale plugin `.claude/` copies**: regenerated the `bober-planner` agent + `bober-plan` command and the `bober-documenter` agent copies that had drifted from their canonical `agents/` / `skills/` sources (the planner's bounded-lessons-index step and the new documenter agent were missing from the plugin surface). Run `npm run update-all` to keep these in sync.
+- **Untracked plugin agent/command copies now committed**: the `bober-diagnoser`, `bober-deployer`, and `bober-postmortemer` incident agents and the `bober-graph` / `bober-impact` / `bober-onboard` commands existed on disk but were never tracked, so they did not ship on the plugin surface for everyone. They are now committed (canonical sources were already tracked); all six are provider-agnostic and honour the configured provider (Anthropic / DeepSeek / OpenAI-compatible).
 
 ## [0.16.0] — 2026-06-04
 
