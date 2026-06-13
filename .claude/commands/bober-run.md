@@ -756,7 +756,7 @@ And keep `.bober/history.jsonl` updated with events:
 # Lens Panel — Canonical Protocol Reference
 
 This document is the single source of truth for native panel orchestration in agent-bober.
-It embeds the four canonical lens focus fragments verbatim from
+It embeds the five canonical lens focus fragments verbatim from
 `src/orchestrator/eval-lenses.ts` (the `LENS_CATALOG` literal) and documents the
 split fan-out, majority-vote/fail-closed reconciliation, and the `lensVerdicts` output shape.
 
@@ -791,6 +791,18 @@ Focus on whether previously working behaviour still works after the changes. Ver
 ```
 Focus on principles violations, dead code, misleading naming, smells, duplicated logic, and whether the implementation follows the project's established patterns and conventions.
 ```
+
+### simplicity
+
+```
+Focus exclusively on over-engineering in the production code: logic that reinvents the standard library, dependencies or hand-rolled code doing what a native platform feature already provides, abstractions with a single implementation, configuration nobody reads, dead flexibility, and code expressible in materially fewer lines. For each, name the location, what to cut, and what replaces it. Never flag tests, assertion-based self-checks, input validation at trust boundaries, error handling, security measures, or accessibility as deletable — minimalism governs production code, never the verification or safety discipline.
+```
+
+> The `simplicity` lens is the complexity-only counterpart to `quality`. `quality` asks
+> "does this follow our patterns and is it free of smells?"; `simplicity` asks "what can be
+> deleted, replaced by stdlib/native, or shrunk?" — and is forbidden from ever recommending the
+> removal of a test, a validation, or a safety measure. It pairs cleanly with the evaluator's
+> test/verification Iron Law: minimalism governs what is built, never what is verified.
 
 ---
 
@@ -848,7 +860,7 @@ After reconciliation the orchestrator writes a `lensVerdicts` array into the sav
 
 ```ts
 lensVerdicts: Array<{
-  lens: string;    // e.g. "correctness", "security", "regression", "quality"
+  lens: string;    // e.g. "correctness", "security", "regression", "quality", "simplicity"
   passed: boolean; // individual lens verdict
   summary: string; // per-lens summary from the qualitative evaluator
 }>

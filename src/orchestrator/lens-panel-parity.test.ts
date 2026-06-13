@@ -4,7 +4,7 @@ import { resolveLensFocus } from "./eval-lenses.js";
 
 // ── Lens-panel drift gate ──────────────────────────────────────────
 
-const BUILT_IN_LENSES = ["correctness", "security", "regression", "quality"] as const;
+const BUILT_IN_LENSES = ["correctness", "security", "regression", "quality", "simplicity"] as const;
 
 describe("lens-panel.md drift gate", () => {
   it("embeds every resolveLensFocus fragment verbatim", async () => {
