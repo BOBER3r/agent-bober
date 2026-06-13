@@ -158,11 +158,13 @@ describe("init.ts — UNIVERSAL_COMMANDS includes all 3 new skills", () => {
 // ── Version bump ──────────────────────────────────────────────────────────────
 
 describe("package.json version", () => {
-  it("is 0.16.0", async () => {
+  it("is a valid semver string", async () => {
     const pkg = JSON.parse(
       await readFile(join(repoRoot, "package.json"), "utf-8"),
     ) as { version: string };
-    expect(pkg.version).toBe("0.16.0");
+    // Shape check, not a hardcoded pin — a pinned value turns every release
+    // bump into a test failure (it broke at 0.14.0 → 0.15.0 → 0.16.0 → 0.17.0).
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);
   });
 });
 

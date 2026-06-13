@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-06-13
+
 ### Added
 
 - **Per-sprint documenter** ([#41](https://github.com/BOBER3r/agent-bober/pull/41)): a new `documenter` agent spawned after a sprint's evaluator returns PASS — it writes a concise record of what the sprint built and finds & updates the existing docs (README, ADRs, CLAUDE.md, module docs) while the change is fresh, instead of batching all docs into a final sprint. Documentation only (never touches application code or tests) and **advisory** — a documenter failure or timeout never downgrades the already-passed sprint. On by default; configure via the `documenter` config section (`enabled`, `model`, `maxTurns`, `timeoutMs`).
