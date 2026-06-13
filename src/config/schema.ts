@@ -156,6 +156,22 @@ export const CodeReviewSectionSchema = z.object({
 });
 export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
 
+/**
+ * Per-sprint documenter — writes docs immediately after a sprint's evaluator
+ * passes (instead of batching all docs into a final sprint). Advisory: a
+ * documenter failure never downgrades the already-passed sprint.
+ */
+export const DocumenterSectionSchema = z.object({
+  timeoutMs: z.number().int().positive().default(300_000),
+  enabled: z.boolean().default(true),
+  model: ModelChoiceSchema.default("sonnet"),
+  maxTurns: z.number().int().min(1).default(20),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+});
+export type DocumenterSection = z.infer<typeof DocumenterSectionSchema>;
+
 /** Well-known checkpoint mechanism names. */
 export const CheckpointMechanismSchema = z.enum(["noop", "cli", "disk", "pr"]);
 export type CheckpointMechanismName = z.infer<typeof CheckpointMechanismSchema>;
@@ -342,6 +358,7 @@ export const BoberConfigSchema = z.object({
   commands: CommandsSectionSchema,
   graph: GraphSectionSchema.optional(),
   codeReview: CodeReviewSectionSchema.optional(),
+  documenter: DocumenterSectionSchema.optional(),
   // ── Sprint 16: observability MCP plugin slots ──
   observability: ObservabilitySectionSchema.optional(),
   // ── Sprint 23: incident postmortem automation ──

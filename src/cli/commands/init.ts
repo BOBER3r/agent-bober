@@ -1088,6 +1088,7 @@ async function installClaudeCommands(
     "bober-researcher.md",
     "bober-architect.md",
     "bober-curator.md",
+    "bober-documenter.md",
     "bober-code-reviewer.md",
     "bober-diagnoser.md",
     "bober-deployer.md",

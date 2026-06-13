@@ -35,6 +35,7 @@ import { runGenerator } from "./generator-agent.js";
 import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
 import { runCodeReviewer } from "./code-reviewer-agent.js";
+import { runDocumenter } from "./documenter-agent.js";
 import { getCheckpointMechanismFor } from "./checkpoints/index.js";
 // NOTE (Sprint 12): The feedback-router (src/orchestrator/checkpoints/feedback-router.ts)
 // provides runCheckpointWithFeedback() for full iteration + abort semantics.
@@ -454,6 +455,45 @@ export async function runSprintCycle(
             details: { error: err instanceof Error ? err.message : String(err) },
           });
           // Advisory only — sprint completion proceeds regardless.
+        }
+      }
+
+      // Per-sprint documentation (config-gated, time-boxed, never blocks).
+      // Runs AFTER the sprint is marked passed/committed so docs are written
+      // while the change is fresh — instead of batched into a final sprint.
+      const documenterEnabled = config.documenter?.enabled !== false;
+      if (documenterEnabled) {
+        const documenterTimeoutMs = config.documenter?.timeoutMs ?? 300_000;
+        try {
+          const documentation = await Promise.race([
+            runDocumenter(currentContract, evaluation, lastGeneratorResult, projectRoot, config),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("documenter timeout")), documenterTimeoutMs),
+            ),
+          ]);
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "sprint-docs-complete",
+            phase: "complete",
+            sprintId: currentContract.contractId,
+            details: {
+              sprintDocPath: documentation.sprintDocPath,
+              relatedDocsUpdated: documentation.relatedDocsUpdated.length,
+              concerns: documentation.concerns.length,
+            },
+          });
+        } catch (err) {
+          logger.warn(
+            `Documentation skipped: ${err instanceof Error ? err.message : String(err)}`,
+          );
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "sprint-docs-failed",
+            phase: "complete",
+            sprintId: currentContract.contractId,
+            details: { error: err instanceof Error ? err.message : String(err) },
+          });
+          // Advisory only — the sprint already passed; docs can be regenerated later.
         }
       }
 

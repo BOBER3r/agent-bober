@@ -52,7 +52,7 @@ ORCHESTRATOR (you — this session)
   │     │       └─ Add evaluator feedback to handoff
   │     │       └─ Go to 4b (spawn FRESH generator with feedback)
   │     │
-  │     └─ 4e. If PASSED: update contract status, log, next sprint
+  │     └─ 4e. If PASSED: update contract status, log, spawn documenter (per-sprint docs), next sprint
   │
   └─ 5. Final summary
 ```
@@ -556,20 +556,30 @@ When done, respond with EXACTLY this JSON structure (no other text):
    ```json
    {"event":"sprint-completed","contractId":"...","specId":"...","iteration":N,"timestamp":"..."}
    ```
-4. **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total sprint count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
+4. **Spawn the Documenter subagent — write docs now, per-sprint, while the change is fresh.** Do NOT defer documentation to a final sprint. Use the Agent tool with `subagent_type: bober-documenter` and `mode: auto`:
+   ```
+   You are the Bober Documenter subagent. Sprint <N> just PASSED evaluation and was marked complete. Write its documentation and update related docs while the change is fresh.
+
+   Read from disk: .bober/contracts/<contractId>.json, .bober/handoffs/gen-report-<contractId>-<iteration>.json, .bober/eval-results/eval-<contractId>-<iteration>.json, and .bober/principles.md if it exists.
+
+   Follow your agent instructions: determine what was built from the committed diff, write the sprint record to docs/sprints/<contractId>.md, find & update related existing docs (README, ADRs, CLAUDE.md, module docs) made stale by the change, and commit ONLY the doc files separately. Do NOT modify application code or tests. Respond with the JSON structure defined in your agent spec.
+   ```
+   After it returns: parse the JSON. If it crashed, do NOT fail the sprint (it already passed) — log `{"event":"sprint-docs-failed","contractId":"...","timestamp":"..."}` and continue. Carry any non-empty `concerns` into the milestone print.
+5. **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total sprint count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
    - Update the PlanSpec: set `status` to `"completed"` and `completedAt` to current ISO-8601 timestamp. Save to `.bober/specs/<specId>.json`. **The `status` field MUST remain in the first 10 lines of the JSON** so future runs can skip it with a partial read.
    - Update `.bober/progress.md` — change the plan's status line to `completed (N/N sprints)`.
    - Log event: `{"event":"plan-completed","specId":"...","sprintsCompleted":N,"timestamp":"..."}`
-5. Print milestone:
+6. Print milestone:
    ```
    === Sprint <N>/<total> PASSED ===
    Title: <title>
    Iteration: <M>
    Progress: [=====>    ] <N>/<total> sprints complete
+   Docs: <sprintDocPath> (+ <count> related docs updated)
    Next: <next sprint title>
    ```
    If all sprints are done, print `=== PLAN COMPLETE ===` instead of "Next:".
-6. Move to next sprint.
+7. Move to next sprint.
 
 **On FAIL with retries remaining:**
 1. Check if iteration < `evaluator.maxIterations` (default: 3).
