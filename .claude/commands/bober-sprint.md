@@ -377,12 +377,44 @@ Respond with EXACTLY this JSON structure (no other text):
    {"event":"sprint-completed","contractId":"...","specId":"...","iteration":N,"timestamp":"..."}
    ```
 
-4. **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
+4. **Spawn the Documenter subagent — write docs now, while the change is fresh.** The sprint is committed and marked complete; document it per-sprint instead of batching all docs into a final sprint (which goes stale and error-prone). Use the Agent tool:
+
+   ```
+   Agent tool call:
+     description: "Docs for sprint <N>: <sprint title>"
+     subagent_type: bober-documenter
+     mode: auto
+     prompt: <the prompt below>
+   ```
+
+   IMPORTANT: Use `mode: auto` or `mode: bypassPermissions` — the documenter needs write access to create/edit docs and commit them.
+
+   **Documenter prompt:**
+   ```
+   You are the Bober Documenter subagent. Sprint <N> just PASSED evaluation and was marked complete. Write its documentation and update related docs while the change is fresh.
+
+   Read these from disk:
+   - SprintContract: .bober/contracts/<contractId>.json
+   - Generator report: .bober/handoffs/gen-report-<contractId>-<iteration>.json
+   - Eval result: .bober/eval-results/eval-<contractId>-<iteration>.json
+   - .bober/principles.md if it exists
+
+   Then follow your agent instructions: determine what was built from the committed diff, write the sprint record to docs/sprints/<contractId>.md, find & update related existing docs (README, ADRs, CLAUDE.md, module docs) that the change made stale, and commit ONLY the doc files separately. Do NOT modify application code or tests.
+
+   Respond with the JSON structure defined in your agent spec.
+   ```
+
+   **After the Documenter returns:**
+   - Parse its JSON response. Note `sprintDocPath`, `relatedDocsUpdated`, and any `concerns`.
+   - If the documenter crashed or returned an error, do NOT fail the sprint — it already passed. Log `{"event":"sprint-docs-failed","contractId":"...","timestamp":"..."}` and continue. Docs can be regenerated later.
+   - If `concerns` is non-empty, surface them in the success report so the user can decide whether to act.
+
+5. **Check if the plan is now fully complete.** Read the PlanSpec's `sprints` array to get the total count. Count how many of those contracts now have `status: "completed"`. If ALL sprints are completed (N/N):
    - Update the PlanSpec: set `status` to `"completed"` and `completedAt` to current ISO-8601 timestamp. Save to `.bober/specs/<specId>.json`. **The `status` field MUST remain in the first 10 lines of the JSON** so future runs can skip it with a partial read.
    - Update `.bober/progress.md` — change the plan's status line to `completed (N/N sprints)`.
    - Log event: `{"event":"plan-completed","specId":"...","sprintsCompleted":N,"timestamp":"..."}`
 
-5. **Report success to the user:**
+6. **Report success to the user:**
    ```
    === Sprint <N> PASSED on iteration <M> ===
 
@@ -392,6 +424,7 @@ Respond with EXACTLY this JSON structure (no other text):
    - <criterion 2>: PASS
    ...
 
+   Docs: <sprintDocPath> (+ <count> related docs updated)
    Next sprint: <next sprint title> (run /bober-sprint to continue)
    ```
    If all sprints are done, report `=== PLAN COMPLETE (N/N sprints) ===` instead of "Next sprint".

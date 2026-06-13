@@ -350,7 +350,7 @@ Decompose the PlanSpec into ordered sprints. This is the most critical part of y
 3. **Dependencies flow forward.** Sprint N+1 can depend on Sprint N's output, but Sprint N must be fully self-contained.
 4. **Clear boundaries.** A sprint contract must make it unambiguous what is included and what is NOT included. When in doubt, make the boundary narrower.
 5. **Front-load the risky parts.** Architecture decisions, complex integrations, and unknown-unknowns should come early. Polish and edge cases come later.
-6. **Include a testing sprint if needed.** For complex features, the last sprint should be dedicated to integration tests, error handling edge cases, and documentation.
+6. **Include a testing sprint if needed.** For complex features, the last sprint should be dedicated to integration tests and error handling edge cases. Do NOT create a dedicated final "documentation" sprint — documentation is written per-sprint by the Documenter subagent immediately after each sprint's evaluator passes (while the change is fresh), so it does not need to be planned as separate sprint work. Each sprint's contract may still mention doc-comments or inline docs as part of its own deliverable where appropriate.
 
 **SprintContract structure within the PlanSpec:**
 
