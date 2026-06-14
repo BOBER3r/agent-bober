@@ -150,16 +150,26 @@ bober chat                # start an interactive session
 Inside the session:
 
 ```
-> what runs are active?   # answered using roster + memory context
-> /runs                   # list active/recent runs (deterministic, no LLM call)
-> /help                   # show slash commands
-> /exit                   # end the session
+> build a settings page        # spawns a detached `bober run`, returns immediately
+> what runs are active?         # answered using roster + memory context
+> /runs                         # list active/recent runs (deterministic, no LLM call)
+> /help                         # show slash commands
+> /exit                         # end the session (detached runs keep going)
 ```
+
+Asking the session to build something **spawns a detached `bober run`** keyed on a
+session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as
+`running` the same turn. When such a run finishes, the **next** chat turn weaves a
+`[run <id> finished: <phase>]` notice into its reply. Completion notices surface on the
+next turn only (no live between-turn push); they are deduped by `runId` and that dedupe
+state persists across a REPL restart via `.bober/chat/<sessionId>.cursor.json`, so a run is
+announced exactly once. The notice is rotation-safe — it still fires correctly if
+`.bober/history.jsonl` was rotated or truncated between turns.
 
 The `[team]` argument is accepted but ignored in Phase 1. The provider/model is
 resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 `anthropic`; override with e.g. `{ "chat": { "provider": "deepseek", "model": "deepseek-chat" } }`).
-Spawn and steer actions are acknowledged but not yet executed in this version.
+The `steer` action is acknowledged but not yet executed in this version.
 
 ---
 
