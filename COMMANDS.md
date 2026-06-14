@@ -131,6 +131,32 @@ bober mcp
 
 ---
 
+### `bober chat [team]`
+
+Start an interactive chat REPL. Each turn is answered with awareness of the
+on-disk run roster and the `.bober/memory/` lesson distill. Conversation persists
+to `.bober/chat/default.jsonl` and resumes on the next launch.
+
+```bash
+bober chat                # start an interactive session
+```
+
+Inside the session:
+
+```
+> what runs are active?   # answered using roster + memory context
+> /runs                   # list active/recent runs (deterministic, no LLM call)
+> /help                   # show slash commands
+> /exit                   # end the session
+```
+
+The `[team]` argument is accepted but ignored in Phase 1. The provider/model is
+resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
+`anthropic`; override with e.g. `{ "chat": { "provider": "deepseek", "model": "deepseek-chat" } }`).
+Spawn and steer actions are acknowledged but not yet executed in this version.
+
+---
+
 ## Approval & Checkpoint Commands
 
 These commands manage checkpoint approval in careful-flow mode. Checkpoints appear as
