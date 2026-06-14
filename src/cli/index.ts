@@ -35,6 +35,7 @@ import { registerTelemetryCommand } from "./commands/telemetry.js";
 import { registerWorktreeCommand } from "./commands/worktree.js";
 import { registerMemoryCommand } from "./commands/memory.js";
 import { registerFleetCommand } from "../fleet/index.js";
+import { registerChatCommand } from "./commands/chat.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -292,6 +293,9 @@ async function main(): Promise<void> {
 
   // ── fleet ─────────────────────────────────────────────────────────
   registerFleetCommand(program);
+
+  // ── chat ──────────────────────────────────────────────────────────
+  registerChatCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

@@ -184,6 +184,10 @@ const greenfieldBase: Partial<BoberConfig> = {
     maxClarifications: 5,
     model: "opus",
   },
+  chat: {
+    model: "opus",
+    provider: "anthropic",
+  },
   generator: {
     model: "sonnet",
     maxTurnsPerSprint: 100,
@@ -225,6 +229,10 @@ const brownfieldBase: Partial<BoberConfig> = {
   planner: {
     maxClarifications: 5,
     model: "opus",
+  },
+  chat: {
+    model: "opus",
+    provider: "anthropic",
   },
   generator: {
     model: "sonnet",

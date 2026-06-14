@@ -13,7 +13,8 @@ export type RoleName =
   | "curator"
   | "generator"
   | "evaluator"
-  | "codeReview";
+  | "codeReview"
+  | "chat";
 
 export type RoleProviderMap = Record<RoleName, string>;
 
@@ -27,7 +28,7 @@ const TOOL_ROLES: RoleName[] = ["curator", "generator", "evaluator", "codeReview
  * Roles that are prompt-only — claude-code is always allowed.
  * Researcher has no dedicated config section; it shares planner's config.
  */
-const PROMPT_ROLES: RoleName[] = ["planner", "researcher"];
+const PROMPT_ROLES: RoleName[] = ["planner", "researcher", "chat"];
 
 /**
  * Stable iteration order over ALL roles (prompt first, then tool).
@@ -57,6 +58,10 @@ function effectiveProvider(role: RoleName, config: BoberConfig): string {
     // codeReview is optional — mirror code-reviewer-agent.ts:63/75 fallback to evaluator
     model = config.codeReview?.model ?? config.evaluator?.model;
     provider = config.codeReview?.provider ?? config.evaluator?.provider;
+  } else if (role === "chat") {
+    // chat is a prompt-only role with its own optional config section
+    model = config.chat?.model;
+    provider = config.chat?.provider;
   } else {
     const section = config[role];
     model = section?.model;
