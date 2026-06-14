@@ -12,6 +12,7 @@ import { RosterReader } from "./roster-reader.js";
 import { TurnClassifier } from "./turn-classifier.js";
 import { Answerer } from "./answerer.js";
 import { dispatch } from "./slash-commands.js";
+import { RunSpawner } from "./run-spawner.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -21,6 +22,10 @@ export interface ChatSessionOptions {
   sessionId?: string;
   /** Override readline interface for testing (omit to use stdin/stdout). */
   rl?: readline.Interface;
+  /** Injected RunSpawner for testing (omit to use a real instance). */
+  spawner?: RunSpawner;
+  /** Injected clock for deterministic runId generation in tests. */
+  now?: () => number;
 }
 
 // ── Memory distill helper ─────────────────────────────────────────────
@@ -59,6 +64,8 @@ export class ChatSession {
   private readonly roster: RosterReader;
   private readonly classifier: TurnClassifier;
   private readonly answerer: Answerer;
+  private readonly spawner: RunSpawner;
+  private readonly nowFn: () => number;
   // bober: using "opus" as default model; the CLI wires in config.chat?.model via createClient
   private readonly model: string = "opus";
 
@@ -70,6 +77,18 @@ export class ChatSession {
     this.roster = new RosterReader(this.projectRoot);
     this.classifier = new TurnClassifier(this.llm, this.model);
     this.answerer = new Answerer(this.llm, this.model);
+    this.nowFn = opts.now ?? (() => Date.now());
+    this.spawner =
+      opts.spawner ??
+      new RunSpawner({
+        projectRoot: this.projectRoot,
+        sessionId: this.sessionId,
+      });
+  }
+
+  /** Generate a session-scoped runId using the injected clock. */
+  private nextRunId(): string {
+    return `run-${this.nowFn()}`;
   }
 
   /**
@@ -103,8 +122,14 @@ export class ChatSession {
 
     if (action.action === "answer") {
       reply = await this.answerer.answer(input, rosterSummary, memoryDistill, recentHistory);
+    } else if (action.action === "spawn") {
+      const runId = this.nextRunId();
+      const ack = await this.spawner.spawn(action.task, runId);
+      reply = ack.spawnError
+        ? `Failed to launch run ${runId}: ${ack.spawnError}`
+        : `Launched run ${runId} for: ${action.task}. Use /runs to track it.`;
     } else {
-      // spawn and steer arrive in later sprints
+      // steer (inspect/stop) arrives in Sprint 3/4
       reply =
         `The "${action.action}" action is not yet available in this version of bober chat ` +
         `(it arrives in a later sprint). For now, I can answer questions, show /runs, or /help.`;

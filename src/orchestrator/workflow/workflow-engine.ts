@@ -46,13 +46,14 @@ export class WorkflowEngine implements PipelineEngine {
     userPrompt: string,
     projectRoot: string,
     config: BoberConfig,
+    opts?: { runId?: string },
   ): Promise<PipelineResult> {
     // ── STEP 1: Eligibility check FIRST (avoids MissingKnobError on downgrade path) ──
     if (!isWorkflowEligible(config)) {
       logger.info(
         "workflow runtime unavailable — re-dispatching TS engine",
       );
-      return this.tsEngineFactory().run(userPrompt, projectRoot, config);
+      return this.tsEngineFactory().run(userPrompt, projectRoot, config, opts);
     }
 
     // ── STEP 2: Reconstruct cursor (read-only — writes nothing) ────────────────
@@ -76,7 +77,7 @@ export class WorkflowEngine implements PipelineEngine {
         logger.info(
           "workflow runtime unavailable — re-dispatching TS engine",
         );
-        return this.tsEngineFactory().run(userPrompt, projectRoot, config);
+        return this.tsEngineFactory().run(userPrompt, projectRoot, config, opts);
       }
       throw e;
     }

@@ -574,13 +574,15 @@ export async function runTsPipeline(
   userPrompt: string,
   projectRoot: string,
   config: BoberConfig,
+  opts?: { runId?: string },
 ): Promise<PipelineResult> {
   const startTime = Date.now();
   const cleanup = setupInterruptHandler();
 
   // Create a stable runId at the start of the pipeline so all audit entries
   // (including pre-spec pipeline checkpoints) share the same run identifier.
-  const pipelineRunId = `run-${Date.now()}`;
+  // Honor a caller-supplied runId (e.g. from chat spawn) or self-generate.
+  const pipelineRunId = opts?.runId ?? `run-${Date.now()}`;
 
   // Resolve mechanism name from config for audit records.
   // Sprint 14: checkpointMechanism is now a real typed field in PipelineSection.
@@ -970,6 +972,7 @@ export async function runPipeline(
   userPrompt: string,
   projectRoot: string,
   config: BoberConfig,
+  opts?: { runId?: string },
 ): Promise<PipelineResult> {
-  return selectPipelineEngine(config).run(userPrompt, projectRoot, config);
+  return selectPipelineEngine(config).run(userPrompt, projectRoot, config, opts);
 }
