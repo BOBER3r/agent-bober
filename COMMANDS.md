@@ -114,7 +114,13 @@ bober run "feature" --checkpoint cli                # stdin confirmation
 bober run "feature" --checkpoint noop               # No checkpoints (explicit)
 bober run "feature" --checkpoint-all                # Apply mechanism to ALL checkpoints
 bober run "feature" --provider openai               # Override provider for all agents
+bober run "feature" --run-id my-run-123             # Use a caller-supplied run identifier
 ```
+
+`--run-id <id>` makes the pipeline use the supplied identifier instead of self-generating
+`run-<timestamp>` — the roster state and completion marker (`.bober/runs/<id>.completed.json`)
+are keyed on it. Additive and optional; omitting it preserves the default behavior. This is
+how `bober chat` launches detached runs with a session-chosen id.
 
 `--mode` and `--checkpoint` flags override `bober.config.json` for the duration of the run.
 See [VISION.md](./VISION.md) for a full explanation of modes.

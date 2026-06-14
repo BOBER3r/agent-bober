@@ -52,7 +52,9 @@ DeepSeek instead of Anthropic, override the role in config:
 
 - This is a **walking skeleton**. By design the classifier's `spawn` and `steer`
   outputs are acknowledged but not executed — spawn is Sprint 2, completion
-  weaving is Sprint 3, steer-stop is Sprint 4.
+  weaving is Sprint 3, steer-stop is Sprint 4. (Sprint 2 has since wired the
+  `spawn` action to a real detached run via `RunSpawner` — see
+  [sprint-spec-20260614-bober-chat-session-layer-2.md](./sprint-spec-20260614-bober-chat-session-layer-2.md).)
 - No provider SDK types leak into `src/chat` — all LLM access goes through
   `src/providers` (verified: no `@anthropic-ai/sdk` or `openai` imports under
   `src/chat`).
