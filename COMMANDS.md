@@ -152,10 +152,15 @@ Inside the session:
 ```
 > build a settings page        # spawns a detached `bober run`, returns immediately
 > what runs are active?         # answered using roster + memory context
+> stop the settings page run    # natural language → stops the matching running run
 > /runs                         # list active/recent runs (deterministic, no LLM call)
+> /stop <runId>                 # stop a running run by id (deterministic, no LLM call)
 > /help                         # show slash commands
 > /exit                         # end the session (detached runs keep going)
 ```
+
+The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/help`, and `/exit`
+— none of them call the LLM.
 
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as
@@ -166,10 +171,19 @@ state persists across a REPL restart via `.bober/chat/<sessionId>.cursor.json`, 
 announced exactly once. The notice is rotation-safe — it still fires correctly if
 `.bober/history.jsonl` was rotated or truncated between turns.
 
+**Steering runs.** You can stop a run two ways, both deterministic (no LLM call):
+the `/stop <runId>` slash command, or natural language ("stop the settings page run")
+which the classifier routes to the same handler. Stop is a real hard-stop — it resolves
+the child PID recorded for this session, sends it `SIGTERM`, and flips the run's roster
+`state.json` to `aborted` on disk. The runId is resolved against the **current disk roster
+at stop-time**, so an id that is not a `running` run replies `No such running run: <id>`
+and nothing is killed; chat can only ever kill a PID it spawned this session. If the run is
+on disk but its PID is unknown, it is marked `aborted` without a kill. Asking to inspect runs
+in natural language returns the same roster summary as `/runs`.
+
 The `[team]` argument is accepted but ignored in Phase 1. The provider/model is
 resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 `anthropic`; override with e.g. `{ "chat": { "provider": "deepseek", "model": "deepseek-chat" } }`).
-The `steer` action is acknowledged but not yet executed in this version.
 
 ---
 
