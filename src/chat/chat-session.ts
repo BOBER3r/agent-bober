@@ -13,6 +13,8 @@ import { TurnClassifier } from "./turn-classifier.js";
 import { Answerer } from "./answerer.js";
 import { dispatch } from "./slash-commands.js";
 import { RunSpawner } from "./run-spawner.js";
+import { CompletionTailer } from "./completion-tailer.js";
+import type { CompletionEvent } from "./completion-tailer.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -26,6 +28,8 @@ export interface ChatSessionOptions {
   spawner?: RunSpawner;
   /** Injected clock for deterministic runId generation in tests. */
   now?: () => number;
+  /** Injected CompletionTailer for testing (omit to use a real instance). */
+  tailer?: CompletionTailer;
 }
 
 // ── Memory distill helper ─────────────────────────────────────────────
@@ -65,6 +69,7 @@ export class ChatSession {
   private readonly classifier: TurnClassifier;
   private readonly answerer: Answerer;
   private readonly spawner: RunSpawner;
+  private readonly tailer: CompletionTailer;
   private readonly nowFn: () => number;
   // bober: using "opus" as default model; the CLI wires in config.chat?.model via createClient
   private readonly model: string = "opus";
@@ -84,6 +89,9 @@ export class ChatSession {
         projectRoot: this.projectRoot,
         sessionId: this.sessionId,
       });
+    this.tailer =
+      opts.tailer ??
+      new CompletionTailer(this.projectRoot, this.sessionId);
   }
 
   /** Generate a session-scoped runId using the injected clock. */
@@ -96,11 +104,26 @@ export class ChatSession {
    * Returns the assistant reply string, or null for /exit.
    */
   async handleTurn(input: string): Promise<string | null> {
+    // ── Poll for run completions (prelude — runs before slash or LLM path) ─
+    let completions: CompletionEvent[] = [];
+    try {
+      completions = await this.tailer.poll();
+    } catch {
+      // Poll errors must never break the turn
+    }
+
     // ── Slash commands (deterministic, no LLM) ─────────────────────────
     const slashResult = await dispatch(input, this.roster);
     if (slashResult.handled) {
       if (slashResult.exit) return null;
-      const output = slashResult.output ?? "";
+      let output = slashResult.output ?? "";
+      // Weave completion notices into slash-command reply as well
+      if (completions.length > 0) {
+        const notices = completions
+          .map((c) => `[run ${c.runId ?? "unknown"} finished: ${c.phase}]`)
+          .join("\n");
+        output = `${notices}\n\n${output}`;
+      }
       // Persist slash command turns for transparency
       await this.store.append({ role: "user", content: input, ts: new Date().toISOString() });
       await this.store.append({ role: "assistant", content: output, ts: new Date().toISOString() });
@@ -133,6 +156,14 @@ export class ChatSession {
       reply =
         `The "${action.action}" action is not yet available in this version of bober chat ` +
         `(it arrives in a later sprint). For now, I can answer questions, show /runs, or /help.`;
+    }
+
+    // ── Weave completion notices ───────────────────────────────────────
+    if (completions.length > 0) {
+      const notices = completions
+        .map((c) => `[run ${c.runId ?? "unknown"} finished: ${c.phase}]`)
+        .join("\n");
+      reply = `${notices}\n\n${reply}`;
     }
 
     // ── Persist ───────────────────────────────────────────────────────
