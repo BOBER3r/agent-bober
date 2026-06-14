@@ -113,7 +113,11 @@ export class ChatSession {
     }
 
     // ── Slash commands (deterministic, no LLM) ─────────────────────────
-    const slashResult = await dispatch(input, this.roster);
+    const slashResult = await dispatch(
+      input,
+      this.roster,
+      (runId) => this.handleStop(runId),
+    );
     if (slashResult.handled) {
       if (slashResult.exit) return null;
       let output = slashResult.output ?? "";
@@ -151,11 +155,16 @@ export class ChatSession {
       reply = ack.spawnError
         ? `Failed to launch run ${runId}: ${ack.spawnError}`
         : `Launched run ${runId} for: ${action.task}. Use /runs to track it.`;
+    } else if (action.action === "steer") {
+      if (action.op === "inspect") {
+        reply = this.roster.summarize(states);
+      } else {
+        // op === "stop", action.runId: string
+        reply = await this.handleStop(action.runId);
+      }
     } else {
-      // steer (inspect/stop) arrives in Sprint 3/4
-      reply =
-        `The "${action.action}" action is not yet available in this version of bober chat ` +
-        `(it arrives in a later sprint). For now, I can answer questions, show /runs, or /help.`;
+      // Unknown action — should not happen given the classifier union
+      reply = `Unrecognised action. For now, try /help for available commands.`;
     }
 
     // ── Weave completion notices ───────────────────────────────────────
@@ -172,6 +181,23 @@ export class ChatSession {
     await this.store.append({ role: "assistant", content: reply, ts: now });
 
     return reply;
+  }
+
+  /**
+   * Stop a run by resolving it against the current disk roster, then calling
+   * RunSpawner.stop. Shared by /stop <runId> (deterministic slash path) and
+   * classifier steer:stop (natural-language path). Never reaches the LLM.
+   */
+  private async handleStop(runId: string): Promise<string> {
+    // Resolve against disk roster at stop-time (sc-4-7 — not from spawn-time memory)
+    const states = await this.roster.read();
+    const target = states.find((s) => s.runId === runId && s.status === "running");
+    if (!target) return `No such running run: ${runId}`;
+
+    const result = await this.spawner.stop(runId, "Stopped via chat");
+    return result.killedPid !== undefined
+      ? `Stopped run ${runId} (killed pid ${result.killedPid}).`
+      : `Stopped run ${runId} (no live process found; marked aborted).`;
   }
 
   /**

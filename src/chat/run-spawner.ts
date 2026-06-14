@@ -6,12 +6,19 @@
 
 import { execa } from "execa";
 
-import { writeRunState } from "../state/run-state.js";
+import { writeRunState, readRunState } from "../state/run-state.js";
 import type { RunState } from "../mcp/run-manager.js";
 import { resolveCliEntry } from "../fleet/runner.js";
 import { PidSidecar } from "./pid-sidecar.js";
 
 // ── Types ──────────────────────────────────────────────────────────────
+
+export interface StopResult {
+  stopped: boolean;
+  runId: string;
+  killedPid?: number;
+  fallbackFlagOnly?: boolean;
+}
 
 export interface SpawnAck {
   runId: string;
@@ -31,6 +38,9 @@ export type SpawnFn = (
   options: { cwd: string; detached: boolean; stdio: "ignore" },
 ) => { pid?: number; unref: () => void };
 
+/** Injected kill function. Defaults to process.kill. Tests pass a fake. */
+export type KillFn = (pid: number, signal?: string | number) => void;
+
 export interface RunSpawnerOptions {
   projectRoot: string;
   sessionId: string;
@@ -42,6 +52,8 @@ export interface RunSpawnerOptions {
   nodeBin?: string;
   /** Injected clock returning ISO string. Defaults to () => new Date().toISOString(). */
   now?: () => string;
+  /** Injected kill function. Defaults to process.kill. Tests pass a fake. */
+  kill?: KillFn;
 }
 
 // ── RunSpawner ─────────────────────────────────────────────────────────
@@ -50,6 +62,7 @@ export class RunSpawner {
   private readonly projectRoot: string;
   private readonly sessionId: string;
   private readonly spawnFn: SpawnFn;
+  private readonly killFn: KillFn;
   private readonly cliEntry: string;
   private readonly nodeBin: string;
   private readonly now: () => string;
@@ -63,6 +76,10 @@ export class RunSpawner {
       // bober: thin execa wrapper; execa returns a ChildProcess-like w/ .pid and .unref
       ((file, args, options) =>
         execa(file, args, options) as unknown as { pid?: number; unref: () => void });
+    this.killFn =
+      opts.kill ??
+      // bober: default delegates to process.kill; swap for a fake in tests (sc-4-9)
+      ((pid, signal) => { process.kill(pid, signal); });
     this.cliEntry = opts.cliEntry ?? resolveCliEntry();
     this.nodeBin = opts.nodeBin ?? process.execPath;
     this.now = opts.now ?? (() => new Date().toISOString());
@@ -112,5 +129,49 @@ export class RunSpawner {
         spawnError: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  /**
+   * Stop a running run by its runId.
+   * Resolves the PID from the session sidecar and sends SIGTERM.
+   * If no sidecar entry is found, flips state to 'aborted' on disk only.
+   * Tolerates ESRCH (already-dead pid) — treat as already stopped.
+   */
+  async stop(runId: string, reason: string): Promise<StopResult> {
+    const all = await this.sidecar.readAll();
+    const entry = all[runId];
+
+    if (entry?.pid !== undefined) {
+      // Try to kill the process; tolerate ESRCH (already dead)
+      try {
+        this.killFn(entry.pid, "SIGTERM");
+      } catch {
+        // Already gone — not an error (mirrors pipeline-lifecycle.ts:316-320)
+      }
+
+      // Flip disk state to aborted
+      const s = await readRunState(this.projectRoot, runId);
+      if (s) {
+        s.status = "aborted";
+        s.abortedAt = this.now();
+        s.abortReason = reason;
+        await writeRunState(this.projectRoot, s);
+      }
+
+      return { stopped: true, runId, killedPid: entry.pid };
+    }
+
+    // No sidecar entry — fall back to disk-only aborted flip
+    const s = await readRunState(this.projectRoot, runId);
+    if (s) {
+      s.status = "aborted";
+      s.abortedAt = this.now();
+      s.abortReason = reason;
+      await writeRunState(this.projectRoot, s);
+      return { stopped: true, runId, fallbackFlagOnly: true };
+    }
+
+    // Run not found at all
+    return { stopped: false, runId };
   }
 }
