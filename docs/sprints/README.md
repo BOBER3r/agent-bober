@@ -134,12 +134,18 @@ confidence + source-run provenance and four temporal columns; invalidation is a
 soft-delete (`t_invalidated`) so nothing is ever destroyed. The store is **pure** (every
 timestamp is a caller parameter — no wall-clock read inside the store), ids are a
 deterministic content hash, and the DB file (`.bober/memory/facts.db`) is namespaced by the
-active team exactly like the lessons `INDEX.md`. Not yet wired into planning — producers and
-a reconcile/retrieval path are later sprints.
+active team exactly like the lessons `INDEX.md`. Sprint 2 adds **reconcile-on-write**: fact
+writes flow through `reconcileFact` / `writeFact` so a changed value **supersedes** the prior
+fact (`supersedeFact` closes both `t_invalidated` and `t_invalid`), an identical value is a
+`noop`, and only a deterministic *normalized-key* ambiguity consults an injected LLM
+`FactJudge` (with an `add` fallback) — the exact-match path stays LLM-free, and `bober facts
+add` now dedupes/supersedes instead of duplicating. Still not wired into planning — producers
+and a retrieval path are later sprints.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-memory-self-improve-p0-1.md](./sprint-spec-20260615-memory-self-improve-p0-1.md) | Bi-temporal SQLite `FactStore` (`insertFact`/`getActiveFacts`/`getFact`/`invalidateFact`/`close`, deterministic `factId`, namespaced `facts.db`) + `bober facts add\|list\|show\|invalidate` CLI; `better-sqlite3` is the first relational dependency |
+| 2 | [sprint-spec-20260615-memory-self-improve-p0-2.md](./sprint-spec-20260615-memory-self-improve-p0-2.md) | Reconcile-on-write: pure `reconcileFact`/`writeFact` (`add`/`update`/`delete`/`noop`) — deterministic exact-match supersede (`FactStore.supersedeFact` sets both bi-temporal fields) + NOOP, with an injected `FactJudge`/`createLLMFactJudge()` consulted **only** on normalized-key ambiguity and an `add` fallback; `bober facts add` routes through `writeFact` with action-aware output |
 
 The facts store is documented alongside the lessons store in
 [`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Semantic Facts Store").

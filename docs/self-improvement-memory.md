@@ -12,9 +12,9 @@ namespaced per team by the same `memoryDir` rule:
    described in the bulk of this guide. This is the store the planner reads today.
 2. **Semantic facts** — a bi-temporal SQLite store (`facts.db`) of structured
    `(scope, subject, predicate, value)` assertions, introduced by
-   `spec-20260615-memory-self-improve-p0` (Sprint 1). See
-   [Semantic Facts Store](#semantic-facts-store) below. **Not yet wired into planning** —
-   it is the storage foundation for later sprints.
+   `spec-20260615-memory-self-improve-p0` (Sprint 1) and given **reconcile-on-write**
+   (dedupe + supersede) in Sprint 2. See [Semantic Facts Store](#semantic-facts-store)
+   below. **Not yet wired into planning** — it is the storage foundation for later sprints.
 
 **Scope:** This guide describes the three-stage lessons pipeline from raw history to planner
 context, explains the explicit prohibition on reading raw history directly, provides a
@@ -254,8 +254,14 @@ back into planning. This sprint lands only the store and a manual CLI; **nothing
 - **Bi-temporal, never destructive.** Invalidation is a **soft-delete** that stamps
   `t_invalidated` — rows are never deleted. An *active* fact is `t_invalidated IS NULL`;
   `getActiveFacts` returns only those, while `getFact(id)` returns a fact regardless of
-  invalidation status (so history stays inspectable). `t_invalid` is reserved as the
-  valid-time upper bound and is currently always `NULL`.
+  invalidation status (so history stays inspectable). The two ways a row gets closed
+  differ in which temporal fields they set: the `bober facts invalidate` CLI calls
+  `invalidateFact(id, tInvalidated)`, which stamps **only** `t_invalidated` (record-time)
+  and leaves `t_invalid` `NULL`; a Sprint-2 **supersede** (see
+  [Reconcile-on-write](#reconcile-on-write-dedupe--supersede) below) calls
+  `supersedeFact(id, tInvalidated, tInvalid)`, which stamps **both** `t_invalidated` and
+  `t_invalid` (the valid-time / world-time upper bound = the superseding fact's `tValid`).
+  So a superseded row carries a non-`NULL` `t_invalid`; a hand-invalidated row does not.
 - **Deterministic ids.** A fact id is `sha256(\`${scope}|${subject}|${predicate}|${value}|${tCreated}\`).slice(0,16)`
   (`factId`, mirroring `lessonIdFromSignature`). `insertFact` is an upsert
   (`INSERT OR REPLACE`), so re-inserting an identical fact with the same `tCreated`
@@ -269,6 +275,54 @@ back into planning. This sprint lands only the store and a manual CLI; **nothing
   `INDEX.md` mapping in [Per-Team Namespacing](#per-team-namespacing) above. Within a DB,
   the `scope` column is the per-team isolation axis for queries.
 
+### Reconcile-on-write (dedupe + supersede)
+
+Sprint 2 routes every fact write through a **reconcile** step — `reconcileFact` and its thin
+`writeFact` wrapper (`src/orchestrator/memory/reconcile.ts`, re-exported from
+`src/state/facts.ts`) — instead of a raw `insertFact`. Reconcile decides, deterministically
+where it can, what to do with an incoming fact and returns a `ReconcileAction`
+(`'add' | 'update' | 'delete' | 'noop'`):
+
+```
+incoming fact ──▶ getActiveFacts(scope, subject, predicate)   ← exact key, active only
+        │
+        ├─ exact match, SAME value          → NOOP   (no write, no second row)
+        ├─ exact match, DIFFERENT value     → UPDATE (supersedeFact(old) + insertFact(incoming))
+        └─ NO exact match
+              │
+              ├─ normalized (subject,predicate) collides with an active fact?
+              │       ├─ collision + judge provided → judge.resolve(incoming, candidate)
+              │       │                                 → add | update | delete | noop
+              │       └─ collision + NO judge        → deterministic ADD fallback
+              └─ no collision                        → ADD
+```
+
+Key properties:
+
+- **The exact-match path has NO LLM.** `noop` (identical value), `update` (changed value →
+  supersede), and a fresh `add` all run with no judge and no network. The clock is **injected**
+  (`{ now }`) — `reconcileFact` never reads it, mirroring the store's purity discipline. This is
+  why `bober facts add` is reproducible.
+- **Supersession is invalidate-then-insert.** On a changed value, reconcile calls
+  `supersedeFact(old.id, now, incoming.tValid)` — closing **both** `t_invalidated`
+  (record-time) and `t_invalid` (world-time end) on the old row — then `insertFact(incoming)`.
+  Exactly one active fact remains; the old row persists with both closure fields set so history
+  stays inspectable. The new row carries the **incoming** fact's confidence.
+- **NOOP writes nothing.** A second write of an identical `(scope, subject, predicate, value)`
+  returns `'noop'` and creates no second row.
+- **The LLM `FactJudge` is consulted ONLY on a deterministic ambiguity** — a *normalized*
+  subject+predicate collision (lowercased, non-alphanumerics stripped) with an active fact when
+  no exact match exists. The judge (`src/orchestrator/memory/fact-judge.ts`,
+  `createLLMFactJudge()` via `createClient`) is the **only** LLM surface in the reconcile layer
+  and is **injected** — it is never wired into `bober facts add`.
+- **`'add'` is the safe fallback everywhere.** A collision with no judge falls back to `add`;
+  the `LLMFactJudge` returns `'add'` on any thrown error, parse failure, or unrecognized action
+  (and under `BOBER_TEST_DETERMINISTIC=1`). The judge can merge or drop a fact but can never
+  silently corrupt the store — the worst case is a duplicate active fact.
+- **Reconciliation gates on *active* facts only.** An incoming value equal to an already-
+  invalidated prior fact still `add`s; `getActiveFacts` is the only thing reconcile reads.
+  A judge `'delete'` supersedes the candidate and inserts nothing.
+
 ### `bober facts` CLI
 
 The CLI (`src/cli/commands/facts.ts`, registered as `registerFactsCommand` in
@@ -276,9 +330,18 @@ The CLI (`src/cli/commands/facts.ts`, registered as `registerFactsCommand` in
 the active team via a non-fatal `loadConfig` + `loadTeam(config).memoryNamespace`, prints
 with `chalk`, and **never throws** — on error it sets `process.exitCode = 1` and returns.
 
+`bober facts add` routes through `writeFact` (Sprint 2) — with **no judge** wired, so only the
+deterministic `add` / `update` / `noop` branches run — and prints **action-aware** output:
+green `Added fact` on a fresh add, yellow `Superseded — prior fact invalidated.` when a changed
+value replaces an active one, and gray `Fact unchanged (identical value already active).` on a
+NOOP. So re-adding a changed value now supersedes rather than duplicating.
+
 ```bash
-# Add a fact (t_created / t_valid stamped at the handler boundary, not in the store)
+# Add a fact (t_created / t_valid stamped at the handler boundary, not in the store).
+# Routed through writeFact → dedupe/supersede reconciliation runs (no judge).
 bober facts add --scope programming --subject project --predicate testCommand --value vitest
+bober facts add --scope programming --subject project --predicate testCommand --value jest    # Superseded — prior fact invalidated.
+bober facts add --scope programming --subject project --predicate testCommand --value jest    # Fact unchanged (identical value already active).
 
 # List active (non-invalidated) facts, optionally filtered by --subject / --predicate
 bober facts list
