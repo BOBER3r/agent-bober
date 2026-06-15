@@ -22,7 +22,7 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
-## Chat Interrupt / Approve / Steer — in progress (5 of 6)
+## Chat Interrupt / Approve / Steer — complete (6 of 6)
 
 `spec-20260615-chat-interrupt-approve-steer` — Phase 2 of the chattable platform: mid-flight
 human-in-the-loop control of chat-launched runs (surface pending approvals, approve/reject,
@@ -67,7 +67,18 @@ it and flips `RunState` back to `running`. The poll loop takes an injected clock
 bounded timeout (7-day cap, resolve-on-timeout) so a forgotten marker can't hang a run and
 tests never sleep; with no marker the gate is a single existence check (provably additive).
 `pause.ts` reuses Sprint 4's exported `safeSegment` guard and leaves `guidance.ts` untouched.
-The hygiene + consolidated docs + e2e (Sprint 6) path is not built yet.
+Sprint 6 closes the plan with **hygiene + e2e + consolidated docs**: a best-effort, never-throw,
+ENOENT-tolerant, run-isolated `cleanupTerminalRun` sweeps a completed/aborted run's stale steer
+artifacts (correlated pending marker(s), `guidance.jsonl`, `paused.json`) and clears the
+chat-owned `RunState` pending/paused fields **while preserving the terminal status** — hooked into
+`handleTurn` *after* the completion poll and *before* the approval prelude so a completed run's
+stale marker can't re-surface as a zombie `input-required` notice. A full-loop e2e test
+(`chat-steer-e2e.test.ts`) drives the whole Sprint 1–5 loop offline against a stubbed pipeline
+(careful → spawn → surface → tell → approve → pause → resume → completion → cleanup) with
+disk-artifact + RunState assertions at every step — the integration proof. The consolidated
+user-facing feature docs ([`docs/chat-steer.md`](../chat-steer.md) + README "Chat Steer Commands
+(Phase 2)" section) ship with it, including an explicit single-careful-run-at-a-time limitation +
+runId-scoped-marker follow-up. **The plan is complete (6 of 6).**
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -76,8 +87,9 @@ The hygiene + consolidated docs + e2e (Sprint 6) path is not built yet.
 | 3 | [sprint-spec-20260615-chat-interrupt-approve-steer-3.md](./sprint-spec-20260615-chat-interrupt-approve-steer-3.md) | Resolve approvals from chat (write path): `/approve <id>` + `/reject <id> [feedback]` slash commands + NL approve/reject classifier intent, reusing `saveApproved`/`saveRejected` behind the `pendingExists` guard + `resolveApprover`; never-guess ambiguity rule; `RunState` cleared back to `running`; `DiskCheckpointMechanism` round-trip proof |
 | 4 | [sprint-spec-20260615-chat-interrupt-approve-steer-4.md](./sprint-spec-20260615-chat-interrupt-approve-steer-4.md) | Free-text guidance/steer path: `runId`-keyed `guidance.jsonl` channel (`safeSegment` path-traversal guard + atomic drain-consume), `/tell <runId> <text>` slash command + NL `tell` classifier action, and a single additive `pipeline.ts` read point draining guidance into the generator handoff (`Human guidance: <text>`); reference-identity no-op when none queued |
 | 5 | [sprint-spec-20260615-chat-interrupt-approve-steer-5.md](./sprint-spec-20260615-chat-interrupt-approve-steer-5.md) | Soft pause/resume: `runId`-keyed `paused.json` marker (`setPaused`/`clearPaused`/`isPaused`, reusing Sprint 4's `safeSegment`) + injected-clock bounded `waitWhilePaused` cooperative gate (**+8 / -0** additive in `pipeline.ts`); `/pause <runId>` + `/resume <runId>` slash commands + NL `pause`/`resume` actions; **no kill signal** (`killCalls === 0`, vs `/stop === 1`), `RunState` `paused`↔`running`, `/help` distinguishes soft `/pause` from hard `/stop` |
+| 6 | [sprint-spec-20260615-chat-interrupt-approve-steer-6.md](./sprint-spec-20260615-chat-interrupt-approve-steer-6.md) | **Finale** — hygiene + e2e + docs: best-effort never-throw `cleanupTerminalRun` sweeps a terminal run's correlated pending marker(s) + `guidance.jsonl` + `paused.json` and clears `RunState` pending/paused (terminal status preserved), hooked into `handleTurn` *before* the approval prelude (prevents zombie `input-required` re-surface); full-loop offline e2e (`chat-steer-e2e.test.ts`) as the integration proof; `/help` full-set test; consolidated feature docs ([`docs/chat-steer.md`](../chat-steer.md) + README) with explicit single-careful-run limitation + runId-scoped-marker follow-up |
 
-User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`, `/approve`, `/reject`, `/tell`, `/pause`, `/resume`).
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`, `/approve`, `/reject`, `/tell`, `/pause`, `/resume`). The consolidated feature guide is [`docs/chat-steer.md`](../chat-steer.md).
 
 ## Domain-Agnostic Team Abstraction — complete (4 of 4)
 
