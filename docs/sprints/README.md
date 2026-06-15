@@ -178,7 +178,7 @@ lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Pru
 and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
 under "Distilling Lessons from History".
 
-## Self-Improvement P1/P2 (Phase 5) — in progress (3 of 4)
+## Self-Improvement P1/P2 (Phase 5) — complete (4 of 4)
 
 `spec-20260615-self-improve-p1-p2` — Phase 5 of the self-improvement effort: make
 self-improvement **safe to enable** before it is allowed to act. Sprint 1 lands the **storage
@@ -214,13 +214,28 @@ that cites no `file`/test/command to a passing `info` so it can't block the spri
 stay `.default(false)`**, and the `sc-3-7` `loopSpy` invariant proves byte-identity off-path: judge
 still runs when `selfImprove` is absent/all-false, skipped only when `deterministicGate:true`. Full
 suite 2290 tests, **zero regressions** (this sprint touched live `evaluator-agent.ts` + `pipeline.ts`).
-Only the GEPA evolve loop (Sprint 4) remains.
+Sprint 4 **closes the plan** with the **keystone**: the offline `bober evolve --role
+generator|evaluator [--seed n] [--dry-run]` verb (GEPA-style prompt evolution). It reads
+`agents/bober-<role>.md` via `loadAgentDefinition`, proposes deterministic `mulberry32`-seeded variants
+(PURE `proposeVariants`, **no `Math.random`**), keeps a Pareto frontier (PURE `paretoSet` over
+`replayPassCount` max / `promptLength` min), and scores each variant **only** through the Sprint 2
+`runReplayHarness` gate — no live LLM run, no provider SDK. A promoted prompt is written to
+`.bober/evolve/<runId>/promoted/<role>.md` **only** when a variant beats the baseline with **zero
+regressions AND strictly more improvements** (a tie does **not** promote); `report.json` is **always**
+written. **The two safety invariants** — it **never** writes `agents/<role>.md`, and it is **never**
+imported or called by `runPipeline` — are proven by the `sc-4-7` source-text guard test **and**
+independent grep (and the `git show 46e96f7` diff touches no `agents/` file). Promotion into the live
+`agents/` is a **deliberate manual human copy**, out of scope. This is the keystone of the cross-cutting
+Phase 5 invariant: the system can propose self-improvements to its own prompts, but **only** through the
+deterministic replay gate, and **never edits itself live**. Full suite **2309 tests, zero regressions**.
+**The plan is complete (4 of 4).**
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-self-improve-p1-p2-1.md](./sprint-spec-20260615-self-improve-p1-p2-1.md) | Pure SQLite `ReplayStore` (`putCase`/`getCase`/`listCases`/`getBaselineVerdict`/`close`, deterministic `caseId` = `sha256(contractId\|iteration\|diffDigest).slice(0,16)`, `:memory:`-testable, no clock read in class) + immutable `.bober/replay/cases/*.json` fixtures + `replay_cases` baseline DB; off-by-default `SelfImproveSectionSchema` (`deterministicGate`/`rubricIsolation`/`requireCitedArtifact` `.default(false)` + `replayDir`) wired `.optional()` into `BoberConfigSchema`; `bober replay capture\|list\|show` CLI ingesting `.bober/eval-results/eval-*.json`; reuses existing `better-sqlite3` (no new dep), no pipeline/LLM touch |
 | 2 | [sprint-spec-20260615-self-improve-p1-p2-2.md](./sprint-spec-20260615-self-improve-p1-p2-2.md) | The replay **gate**: PURE `compareToBaseline(baseline, fresh)` → `{ regressions (baseline pass→fresh fail), improvements (fail→pass), unchanged }` (sorted, no clock/fs/LLM) + async `runReplayHarness(projectRoot, config)` re-deriving fresh verdicts **deterministically from frozen `eval_details_json`** (NO LLM — zero `runGeneratorAgent`/`runEvaluatorAgent`/`createClient`) → `{ …, total, baseline, fresh }`; `bober replay run` per-case delta table, **exit 1 on regression** / 0 clean / `no cases captured` empty; tolerant `loadConfig`, never-throws. `runReplayHarness` is **Sprint 4's GEPA promotion gate**; ReplayStore schema + pipeline/agents untouched |
 | 3 | [sprint-spec-20260615-self-improve-p1-p2-3.md](./sprint-spec-20260615-self-improve-p1-p2-3.md) | Three **PURE** evaluator anti-degeneration guards (`eval-guards.ts`; no clock/fs/LLM/mutation), each gated behind a `config.selfImprove?.<flag>` and wired into the **live** evaluator/pipeline: `shouldShortCircuitJudge` (`deterministicGate` → required programmatic FAIL skips the LLM judge, returns FAIL); `redactRubric` (`rubricIsolation` → strips `successCriteria`/`evaluatorNotes` from the **generator-bound** handoff only, evaluator keeps the rubric, input not mutated); `enforceCitedArtifacts` (`requireCitedArtifact` → uncited FAIL detail downgraded to `info`/`passed`, cited FAIL survives, `passed` recomputed). **All flags `.default(false)`**; `sc-3-7` `loopSpy` invariant proves off-path byte-identity (judge runs when absent/all-false, skipped only on `deterministicGate:true`). 2290 tests, zero regressions |
+| 4 | [sprint-spec-20260615-self-improve-p1-p2-4.md](./sprint-spec-20260615-self-improve-p1-p2-4.md) | **Finale / keystone** — offline GEPA `bober evolve --role generator\|evaluator [--seed n] [--dry-run]`: PURE `proposeVariants` (deterministic `mulberry32`, no `Math.random`) + PURE `paretoSet` (frontier over `replayPassCount` max / `promptLength` min) + async `evolve` (reads `agents/bober-<role>.md` via `loadAgentDefinition`, DI-seam `runReplayHarness` as the **sole** scorer — no live LLM, no provider SDK). Strict promotion predicate (`regressions === 0` AND `improvements > baseline` — **tie does NOT promote**); `report.json` always, `promoted/<role>.md` only on a win & `!dryRun`, **all writes under `.bober/evolve/<runId>/`**. **Two safety invariants proven by `sc-4-7` guard + grep**: never writes `agents/<role>.md`; never imported/called by `runPipeline`. Adoption into `agents/` is a **manual human copy** (out of scope). 2309 tests, zero regressions. **Plan complete (4 of 4)** |
 
 The replay harness is documented in
 [`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Replay Regression Harness
@@ -229,4 +244,10 @@ the [replay gate](../self-improvement-memory.md#the-replay-gate-sprint-2) (`repl
 `runReplayHarness` / `compareToBaseline` semantics + the deterministic no-LLM fresh-verdict rule),
 the [evaluator anti-degeneration guards](../self-improvement-memory.md#evaluator-anti-degeneration-guards-sprint-3)
 (the three `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` guards + the `sc-3-7`
-off-path byte-identity proof), the `selfImprove` config section, and the Sprints 2–4 roadmap.
+off-path byte-identity proof), the
+[offline `bober evolve` prompt-evolution verb](../self-improvement-memory.md#offline-prompt-evolution--bober-evolve-sprint-4)
+(deterministic variants + Pareto frontier + the replay gate as sole scorer + the two
+never-writes-`agents/` / never-in-`runPipeline` safety invariants + the manual-promotion workflow),
+the `selfImprove` config section, and the
+[Phase 5 complete capstone](../self-improvement-memory.md#phase-5-complete-the-safe-self-improvement-loop)
+(capture → replay gate → guards → evolve, all offline/gated/off-by-default).

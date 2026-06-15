@@ -31,8 +31,9 @@ namespaced per team by the same `memoryDir` rule:
 context, explains the explicit prohibition on reading raw history directly, provides a
 manual A/B procedure for measuring whether the memory system produces tighter sprint
 contracts, documents the semantic facts store (storage, reconcile, auto-production, and
-retrieval into planning), and — for **Phase 5** — the off-by-default replay regression
-harness that makes self-improvement safe to enable (see
+retrieval into planning), and — for **Phase 5 (now complete)** — the off-by-default replay
+regression harness and the offline replay-gated `bober evolve` prompt-evolution verb that together
+make self-improvement safe to enable without ever editing the live prompts (see
 [Replay Regression Harness](#replay-regression-harness-phase-5)).
 
 ---
@@ -547,8 +548,12 @@ landed the **storage foundation** (a frozen replay corpus plus an off-by-default
 `runReplayHarness` / `compareToBaseline` API (see [The replay gate](#the-replay-gate-sprint-2)
 below). **Sprint 3** landed the three **evaluator anti-degeneration guards** that the `selfImprove`
 flags now drive — `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` (see
-[Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3) below). The GEPA
-evolve loop is **deferred to Sprint 4** (see [Roadmap](#replay-roadmap-sprints-2-4) below).
+[Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3) below).
+**Sprint 4** lands the **keystone**: the offline, replay-gated `bober evolve` prompt-evolution verb
+that can *propose* an improved generator/evaluator prompt but never writes the live `agents/` files
+and is never reachable from `runPipeline` (see
+[Offline prompt evolution — `bober evolve`](#offline-prompt-evolution--bober-evolve-sprint-4) below).
+**Phase 5 is complete (4 of 4)** — see [Phase 5 complete](#phase-5-complete-the-safe-self-improvement-loop).
 
 > **Off by default.** Every `selfImprove` flag still defaults to `false`. The Sprint 3 guards are
 > wired into the **live** evaluator and pipeline but are gated behind `config.selfImprove?.<flag>`,
@@ -697,12 +702,12 @@ that omits `selfImprove` loads without throwing. **All four fields default**, so
 | `deterministicGate` | `boolean`, `false` | When `true` and a **required** programmatic strategy fails, the evaluator returns FAIL **without** invoking the LLM judge (see [Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3)). |
 | `rubricIsolation` | `boolean`, `false` | When `true`, the **generator-bound** handoff is stripped of `successCriteria` / `evaluatorNotes` so the generator can't teach to the test. The evaluator still keeps the full rubric. |
 | `requireCitedArtifact` | `boolean`, `false` | When `true`, a FAIL detail that cites **no** artifact (no `file`, no failing-test / command signal) is downgraded to a passing `info` detail so it cannot block the sprint. |
-| `replayDir` | `string`, `".bober/replay"` | Locates the replay corpus (`replay.db` + `cases/`) for `bober replay`. |
+| `replayDir` | `string`, `".bober/replay"` | Locates the replay corpus (`replay.db` + `cases/`) for `bober replay` **and** for the `bober evolve` promotion gate (Sprint 4 reads it via `runReplayHarness`). |
 
 As of Sprint 3, the three boolean guards are **live** — each is read in `evaluator-agent.ts` /
 `pipeline.ts` behind `config.selfImprove?.<flag>` (see the next section). They remain
 `.default(false)`, so the pipeline is unchanged until a maintainer opts in. `replayDir` locates
-the corpus.
+the corpus read by both `bober replay run` and the Sprint 4 `bober evolve` gate.
 
 <a id="evaluator-anti-degeneration-guards-sprint-3"></a>
 ### Evaluator anti-degeneration guards (Sprint 3)
@@ -748,11 +753,120 @@ with `deterministicGate: false`, same; (c) with `deterministicGate: true`, the j
 evaluation flow and the generator handoff are byte-identical to the pre-Sprint-3 pipeline. Full
 suite after this sprint: 2290 tests, zero regressions.
 
+<a id="offline-prompt-evolution--bober-evolve-sprint-4"></a>
+### Offline prompt evolution — `bober evolve` (Sprint 4)
+
+Sprint 4 lands the **keystone** of Phase 5: an offline, opt-in `bober evolve` verb that can
+*propose* an improved generator/evaluator prompt — scored **only** through the Sprint 2 replay gate,
+written **only** under `.bober/evolve/<runId>/`, and **never** into the live `agents/` directory or
+the pipeline. The full record is
+[`docs/sprints/sprint-spec-20260615-self-improve-p1-p2-4.md`](sprints/sprint-spec-20260615-self-improve-p1-p2-4.md).
+
+`src/orchestrator/selfimprove/gepa.ts` exports two PURE primitives and one orchestration entry point:
+
+- **`proposeVariants(basePrompt, seed)`** — a deterministic, bounded set of small textual mutations.
+  A fixed `seed` yields **byte-identical** variants (hand-rolled `mulberry32` PRNG, **no
+  `Math.random`**). Three operator classes in order: append a clarifying constraint, paraphrase the
+  first markdown heading, reorder two adjacent guidance bullets — each with a deterministic fallback.
+- **`paretoSet(scored)`** — the non-dominated frontier over `replayPassCount` (max) and
+  `promptLength` (min); a doubly-dominated variant is excluded. Input is not mutated.
+- **`evolve(projectRoot, config, { role, seed, dryRun?, runId? }, { harness? }?)`** — reads the base
+  prompt via `loadAgentDefinition("bober-<role>")` (the `.md` body after the frontmatter is the
+  `systemPrompt`), computes a baseline by running `runReplayHarness` once, scores each proposed
+  variant through the **same harness** (a DI seam — tests inject a stub; production uses the real
+  one), keeps the Pareto frontier, and returns
+  `{ promoted, winnerPath, baselineRegressions, variantsTried }`.
+
+```bash
+# Score generator-prompt variants against the frozen replay corpus, writing NOTHING.
+bober evolve --role generator --dry-run
+
+# Score evaluator-prompt variants; write a promoted prompt ONLY if a variant wins.
+bober evolve --role evaluator --seed 7
+```
+
+The CLI (`src/cli/commands/evolve.ts`, `registerEvolveCommand` in `src/cli/index.ts` next to
+`registerReplayCommand`) follows the `bober replay` / `bober facts` conventions: `--role
+<generator|evaluator>` (required), `--seed <n>` (default `0`), `--dry-run`; a **tolerant**
+`loadConfig` (a missing `bober.config.json` is non-fatal); `chalk` output; and a handler that
+**never throws** — on error it sets `process.exitCode = 1` and returns.
+
+**Promotion predicate (strict — a tie does NOT promote):**
+
+```
+eligible  ⟺  result.regressions.length === 0
+        AND  result.improvements.length > baseline.improvements.length
+```
+
+Among eligible frontier variants the winner is the one with the most improvements, then the
+shortest prompt as a deterministic tiebreak.
+
+**Writes — the load-bearing safety boundary.** Everything lands under `.bober/evolve/<runId>/`
+(`runId` defaults to `evolve-<Date.now()>`, injectable for deterministic tests):
+
+| Output | When written |
+|--------|--------------|
+| `report.json` (Pareto record + per-variant scores + baseline counts) | **always** |
+| `promoted/<role>.md` (the winning prompt text) | **only** when a winner exists **AND** `!dryRun` |
+
+**The two safety invariants (both independently proven).**
+
+1. **It never writes the live agent prompts.** No code path in `gepa.ts` or `evolve.ts` constructs a
+   write path under `agents/` — all writes are joined under `.bober/evolve/<runId>/`.
+2. **It is never reachable from `runPipeline`.** `pipeline.ts` contains no import of or call to
+   `evolve`/`gepa` — the verb is **CLI-only**.
+
+Both are asserted by the `sc-4-7` source-text guard test (it reads `gepa.ts`, `evolve.ts`, and
+`pipeline.ts` as text and asserts the forbidden patterns are absent) **and** independently confirmed
+by grep at evaluation time (`grep "agents" gepa.ts evolve.ts` → none; `grep "evolve\|gepa"
+pipeline.ts` → none); the `git show 46e96f7` diff touches no file under `agents/`.
+
+**The replay gate is the sole scorer — there is no live LLM run.** `evolve` imports no
+`runGeneratorAgent` / `runEvaluatorAgent` and no provider SDK; variants are scored only through
+`runReplayHarness`, which re-derives verdicts from the frozen `eval_details_json` and does not vary
+by prompt text. The variant prompt is passed for bookkeeping only — **the gate, not the mutation
+operator, is load-bearing**. Any LLM used in a future sprint to *generate* variants must still go
+through `src/providers/factory.ts` `createClient`.
+
+**Adopting a winning prompt is a deliberate manual human copy** — promotion into `agents/` is
+intentionally **out of scope**. A maintainer runs `bober evolve --role generator`, diffs the printed
+`.bober/evolve/<runId>/promoted/generator.md` against the live `agents/bober-generator.md`, reviews
+`report.json`, and — only if satisfied — manually copies the promoted file over the live one and
+commits it. No code performs that step.
+
 <a id="replay-roadmap-sprints-2-4"></a>
-### Roadmap (Sprints 2–4)
+### Roadmap (Sprints 2–4) — Phase 5 complete
 
 | Sprint | Status | Adds |
 |--------|--------|------|
 | 2 | **done** | `replay run` — re-derive captured cases' verdicts deterministically and **compare to baseline** (the regression gate); public `runReplayHarness` / `compareToBaseline` API — see [The replay gate](#the-replay-gate-sprint-2) |
 | 3 | **done** | Evaluator guards behind `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` — see [Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3) (all `.default(false)`; off-path byte-identity proven by `sc-3-7`) |
-| 4 | pending | GEPA evolve loop (imports `runReplayHarness` as its promotion gate) |
+| 4 | **done** | GEPA `bober evolve` offline prompt-evolution verb — imports `runReplayHarness` as its promotion gate, writes only under `.bober/evolve/<runId>/`, never `agents/` and never reachable from `runPipeline` — see [Offline prompt evolution — `bober evolve`](#offline-prompt-evolution--bober-evolve-sprint-4) |
+
+<a id="phase-5-complete-the-safe-self-improvement-loop"></a>
+### Phase 5 complete — the safe-self-improvement loop
+
+With Sprint 4 landed, **`spec-20260615-self-improve-p1-p2` is complete (4 of 4)** and the
+safe-self-improvement loop is closed end to end:
+
+```
+capture ──▶ replay gate ──▶ guards ──▶ evolve
+```
+
+- **capture** (Sprints 1–2): freeze a corpus of golden eval outcomes into `.bober/replay/`
+  (`ReplayStore` + immutable per-case fixtures) and re-derive each case's verdict deterministically
+  from the frozen `eval_details_json` — **no LLM**.
+- **replay gate** (Sprint 2): `runReplayHarness` / `compareToBaseline` classify each case as a
+  regression (`pass → fail`), improvement (`fail → pass`), or unchanged; `bober replay run` **exits 1
+  on any regression**.
+- **guards** (Sprint 3): three PURE evaluator anti-degeneration guards
+  (`deterministicGate` / `rubricIsolation` / `requireCitedArtifact`), each wired into the **live**
+  evaluator/pipeline but gated behind a `config.selfImprove?.<flag>`.
+- **evolve** (Sprint 4): `bober evolve` *proposes* prompt improvements, scored **only** by the replay
+  gate, written **only** under `.bober/evolve/<runId>/`.
+
+Every stage is **offline, replay-gated, and off by default**: each `selfImprove` flag defaults to
+`false`, the replay/evolve verbs are explicit manual CLI invocations that run **no LLM** on the gate
+path, and **the system never edits its own live prompts** — `bober evolve` proposes, a human
+promotes. That is the cross-cutting Phase 5 invariant: the harness can propose self-improvements to
+its own prompts, but only through the deterministic replay gate, and never edits itself live.
