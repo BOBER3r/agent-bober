@@ -117,6 +117,16 @@ export const EvaluatorSectionSchema = z.object({
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 
+// ── Self-Improve Section (Phase 5 — off by default) ──────────────────
+
+export const SelfImproveSectionSchema = z.object({
+  deterministicGate: z.boolean().default(false),
+  rubricIsolation: z.boolean().default(false),
+  requireCitedArtifact: z.boolean().default(false),
+  replayDir: z.string().default(".bober/replay"),
+});
+export type SelfImproveSection = z.infer<typeof SelfImproveSectionSchema>;
+
 // ── Architect Section ────────────────────────────────────────────────
 
 export const ArchitectSectionSchema = z.object({
@@ -400,6 +410,8 @@ export const BoberConfigSchema = z.object({
   // ── Phase 4: domain-agnostic team abstraction ──
   teams: z.record(z.string(), TeamConfigSchema).optional(),
   defaultTeam: z.string().optional(),
+  // ── Phase 5: self-improvement (off by default) ──
+  selfImprove: SelfImproveSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

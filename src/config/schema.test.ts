@@ -5,6 +5,7 @@ import {
   ArchitectSectionSchema,
   BoberConfigSchema,
   HistorySectionSchema,
+  SelfImproveSectionSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -119,6 +120,68 @@ describe("HistorySectionSchema", () => {
 
   it("accepts a positive integer maxActiveLines", () => {
     expect(HistorySectionSchema.parse({ maxActiveLines: 500 }).maxActiveLines).toBe(500);
+  });
+});
+
+describe("SelfImproveSectionSchema defaults (sc-1-5)", () => {
+  it("all boolean flags default to false and replayDir defaults to .bober/replay when section is empty", () => {
+    const parsed = SelfImproveSectionSchema.parse({});
+    expect(parsed).toEqual({
+      deterministicGate: false,
+      rubricIsolation: false,
+      requireCitedArtifact: false,
+      replayDir: ".bober/replay",
+    });
+  });
+
+  it("accepts explicit true values for all boolean flags", () => {
+    const parsed = SelfImproveSectionSchema.parse({
+      deterministicGate: true,
+      rubricIsolation: true,
+      requireCitedArtifact: true,
+      replayDir: ".bober/custom-replay",
+    });
+    expect(parsed.deterministicGate).toBe(true);
+    expect(parsed.rubricIsolation).toBe(true);
+    expect(parsed.requireCitedArtifact).toBe(true);
+    expect(parsed.replayDir).toBe(".bober/custom-replay");
+  });
+});
+
+describe("BoberConfigSchema — selfImprove is optional (sc-1-5)", () => {
+  it("parses a valid config that omits the selfImprove section entirely", () => {
+    const result = BoberConfigSchema.safeParse({
+      project: { name: "test-project", mode: "greenfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.selfImprove).toBeUndefined();
+    }
+  });
+
+  it("parses a config with selfImprove section present", () => {
+    const result = BoberConfigSchema.safeParse({
+      project: { name: "test-project", mode: "greenfield" },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      selfImprove: { deterministicGate: true, replayDir: ".bober/replay" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.selfImprove?.deterministicGate).toBe(true);
+      expect(result.data.selfImprove?.rubricIsolation).toBe(false);
+      expect(result.data.selfImprove?.requireCitedArtifact).toBe(false);
+    }
   });
 });
 
