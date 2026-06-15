@@ -12,14 +12,26 @@ namespaced per team by the same `memoryDir` rule:
    described in the bulk of this guide. This is the store the planner reads today.
 2. **Semantic facts** — a bi-temporal SQLite store (`facts.db`) of structured
    `(scope, subject, predicate, value)` assertions, introduced by
-   `spec-20260615-memory-self-improve-p0` (Sprint 1) and given **reconcile-on-write**
-   (dedupe + supersede) in Sprint 2. See [Semantic Facts Store](#semantic-facts-store)
-   below. **Not yet wired into planning** — it is the storage foundation for later sprints.
+   `spec-20260615-memory-self-improve-p0` (Sprint 1), given **reconcile-on-write**
+   (dedupe + supersede) in Sprint 2, and — as of **Sprint 5** — **auto-produced** from the
+   project's manifests at run/chat startup and **retrieved into the planner's context**. See
+   [Semantic Facts Store](#semantic-facts-store) below. Both stores now feed planning.
+
+> **Phase 3 complete.** As of `spec-20260615-memory-self-improve-p0` (all 5 sprints landed,
+> 2026-06-15), the memory layer has **two complementary stores, both feeding the planner**:
+> **durable bi-temporal facts** (structured `(scope, subject, predicate, value)` assertions —
+> auto-produced from the project's manifests at run/chat startup, reconciled idempotently on
+> write, retrieved into planner context scope-isolated and char-budgeted) and **hygienic
+> distilled lessons** (synthesized failure-pattern snippets — distilled from history,
+> occurrence-weighted on retrieval, pruned/quarantined to fight monotonic growth). Producing
+> facts uses **no LLM**; the only LLM in the facts layer is reconcile's normalized-key ambiguity
+> branch.
 
 **Scope:** This guide describes the three-stage lessons pipeline from raw history to planner
 context, explains the explicit prohibition on reading raw history directly, provides a
 manual A/B procedure for measuring whether the memory system produces tighter sprint
-contracts, and documents the semantic facts store.
+contracts, and documents the semantic facts store (storage, reconcile, auto-production, and
+retrieval into planning).
 
 ---
 
@@ -319,9 +331,10 @@ Alongside the distilled lessons index, the memory layer has a **bi-temporal SQLi
 semantic-facts store** (`spec-20260615-memory-self-improve-p0`, Sprint 1). Where lessons
 are synthesized prose snippets, facts are **structured assertions** —
 `(scope, subject, predicate, value)` rows with a confidence score, optional source-run
-provenance, and temporal columns — that later sprints will produce, reconcile, and feed
-back into planning. This sprint lands only the store and a manual CLI; **nothing reads
-`facts.db` automatically yet.**
+provenance, and temporal columns. As of **Sprint 5** the store is no longer write-only: facts
+are **auto-produced** from the project's manifests at run/chat startup (see
+[Auto-producing project facts](#auto-producing-project-facts-sprint-5)) and **retrieved into the
+planner's context** (see [Retrieving facts into planner context](#retrieving-facts-into-planner-context-sprint-5)).
 
 ```
 .bober/memory/facts.db        ← bi-temporal SQLite store (default / programming scope)
@@ -410,6 +423,73 @@ Key properties:
 - **Reconciliation gates on *active* facts only.** An incoming value equal to an already-
   invalidated prior fact still `add`s; `getActiveFacts` is the only thing reconcile reads.
   A judge `'delete'` supersedes the candidate and inserts nothing.
+
+### Auto-producing project facts (Sprint 5)
+
+Sprint 5 makes facts populate themselves — no manual `bober facts add` needed. A **pure,
+deterministic detector** reads the project's manifests/config and emits project facts, and a
+thin IO caller writes them through the reconcile path at the start of every run and chat
+session.
+
+- **The pure detector** is `detectProjectFacts(inputs, scope="")`
+  (`src/orchestrator/memory/fact-detector.ts`). It takes **already-parsed** inputs
+  (`{ packageJson, boberConfig?, lockfiles? }`) and returns `FactDraft[]` — **no fs read, no
+  `Date`, no LLM**, mirroring `distill.ts`. `FactDraft` is `Omit<FactInput, "tValid" | "tCreated">`
+  (the caller stamps the clock). Detection rules are fixed-order and deterministic:
+
+  | Source | Fact |
+  |--------|------|
+  | `package.json` `scripts.test` (if a string) | `project/testCommand` |
+  | `package.json` `scripts.build` (if a string) | `project/buildCommand` |
+  | first lockfile present, order `npm > yarn > pnpm` (`package-lock.json` / `yarn.lock` / `pnpm-lock.yaml`) | `project/packageManager` (`npm`/`yarn`/`pnpm`) |
+  | first dep/devDep found, order `next > react > vue` | `project/framework` (`next`/`react`/`vue`) |
+
+  Drafts carry `confidence: 1`, `sourceRunId: null`, and `scope=""` (default/programming team).
+  Nothing detectable → `[]`.
+
+- **The thin IO caller** is `seedProjectFacts(projectRoot, namespace?)` — the **only** function
+  in the module that touches the filesystem or the clock. It reads `package.json` +
+  `bober.config.json` (missing/unparseable → `null`, which is normal) and lockfile presence,
+  calls the pure detector, stamps a single `new Date().toISOString()` at the boundary, then
+  writes each draft via `writeFact` (so reconcile dedupes/supersedes — re-running is idempotent,
+  one active row per predicate). It never throws for missing files.
+
+- **Wiring is additive and guarded.** `seedProjectFacts` is invoked near the start of
+  `runPipeline` (`src/orchestrator/pipeline.ts`, after `loadTeam`, before `engine.run`) inside a
+  `try/catch` that `logger.warn`s and continues, and in `ChatSession.start()`
+  (`src/chat/chat-session.ts`, after the banner, before the input loop) inside a silent
+  `try/catch`. **A facts failure can never abort a run or a chat session.** The namespace is
+  derived from the active team (`team.memoryNamespace`), so facts land in the same per-team
+  `facts.db` the lessons `INDEX.md` uses.
+
+- **No LLM on the produce path.** `seedProjectFacts` runs only the deterministic
+  `add`/`update`/`noop` reconcile branches — the LLM `FactJudge` is **not** wired in. The only
+  LLM surface in the whole facts layer remains the reconcile ambiguity branch from Sprint 2.
+
+### Retrieving facts into planner context (Sprint 5)
+
+Facts feed planning through a retrieval pair that mirrors the lessons path
+(`src/orchestrator/memory/fact-retrieve.ts`):
+
+- `retrieveRelevantFacts(projectRoot, scope, keywords, { topK?, namespace? })` opens the store
+  **once**, reads scope-isolated active facts, then ranks them purely in memory. **Scope
+  isolation is enforced at the SQL layer** by `FactStore.getActiveFacts(scope)`
+  (`WHERE scope = ? AND t_invalidated IS NULL`) — facts in scope A **never** surface when
+  querying scope B, and only active (non-invalidated) rows are considered. Ranking is
+  deterministic token-overlap between the lowercased keyword tokens and each record's
+  subject + predicate + value (score DESC, then `id` ASC byte-stable tiebreak). When `keywords`
+  is empty or nothing overlaps, the result is **empty** (same behaviour as the lessons retriever).
+- `serializeFactsForContext(records, { charBudget? })` renders a compact block — a
+  `## Project facts (durable semantic memory)` header plus one `- subject/predicate: value` line
+  per fact — and applies a **hard `charBudget` slice** so the output length is guaranteed
+  `≤ charBudget` (`charBudget: 0 →` `""`, empty input → `""`). Defaults: `DEFAULT_TOP_K = 5`,
+  `DEFAULT_CHAR_BUDGET = 1200`.
+- **Injection into the planner** happens in `runPlanner`
+  (`src/orchestrator/planner-agent.ts`): it derives keywords from the user prompt, calls
+  `retrieveRelevantFacts(projectRoot, "", keywords, { topK: 5 })`, and appends
+  `serializeFactsForContext(facts, { charBudget: 1200 })` to the planner `userMessage` alongside
+  the existing Project Context / research / architecture sections — all inside a `try/catch`, so
+  a retrieval failure never blocks planning.
 
 ### `bober facts` CLI
 

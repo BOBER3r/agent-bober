@@ -1024,7 +1024,10 @@ All bober state lives in the `.bober/` directory:
   briefings/       Sprint Briefings (curated codebase context per sprint)
   eval-results/    Evaluation result logs
   handoffs/        Context handoff documents
-  memory/          Self-improvement memory — lessons INDEX.md + facts.db (semantic facts store)
+  memory/          Self-improvement memory (per-team namespaced)
+    INDEX.md         Distilled lessons index (planner-read)
+    QUARANTINE.md    Pruned/contradictory lessons (moved, never deleted)
+    facts.db         Bi-temporal SQLite semantic-facts store (auto-produced, planner-read)
   progress.md      Human-readable progress tracker
   history.jsonl    Machine-readable event log
 ```
