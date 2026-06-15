@@ -521,3 +521,30 @@ describe("/resume slash command dispatch (sc-5-6)", () => {
     }
   });
 });
+
+// ── sc-6-6: /help lists the full steer command set ─────────────────────
+
+describe("sc-6-6: /help lists the full steer command set", () => {
+  it("HELP_TEXT contains every command in the required set", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+
+    expect(result.handled).toBe(true);
+    if (!result.handled || result.exit) return;
+
+    const helpText = result.output ?? "";
+
+    // Full required set (sc-6-6): /careful, /approve, /reject, /tell,
+    // /pause, /resume, /stop, /runs, /help, /exit
+    expect(helpText).toContain("/careful");
+    expect(helpText).toContain("/approve");
+    expect(helpText).toContain("/reject");
+    expect(helpText).toContain("/tell");
+    expect(helpText).toContain("/pause");
+    expect(helpText).toContain("/resume");
+    expect(helpText).toContain("/stop");
+    expect(helpText).toContain("/runs");
+    expect(helpText).toContain("/help");
+    expect(helpText).toContain("/exit");
+  });
+});

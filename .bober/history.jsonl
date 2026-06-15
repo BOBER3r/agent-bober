@@ -309,3 +309,65 @@
 {"event":"sprint-completed","contractId":"sprint-spec-20260609-fleet-orchestrator-4","specId":"spec-20260609-fleet-orchestrator","iteration":1,"timestamp":"2026-06-08T23:28:59Z"}
 {"event":"plan-completed","specId":"spec-20260609-fleet-orchestrator","sprintsCompleted":4,"timestamp":"2026-06-08T23:28:59Z"}
 {"event":"pipeline-completed","specId":"spec-20260609-fleet-orchestrator","sprintsCompleted":4,"totalIterations":5,"timestamp":"2026-06-08T23:28:59Z"}
+{"event":"architecture-completed","architectureId":"arch-20260614-bober-chat-session-layer","feature":"Phase 1 chattable-team: bober chat session layer","componentCount":7,"decisionCount":6,"timestamp":"2026-06-14T00:00:00Z"}
+{"event":"plan-created","specId":"spec-20260614-bober-chat-session-layer","title":"Bober Chat Session Layer (Chattable-Team Phase 1)","sprintCount":4,"timestamp":"2026-06-14T00:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-14T13:20:18Z","task":"resume spec-20260614-bober-chat-session-layer (no task provided, most recent actionable spec)","specId":"spec-20260614-bober-chat-session-layer"}
+{"event":"sprint-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-1","specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T13:20:32Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-1","iteration":1,"timestamp":"2026-06-14T13:24:19Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-1","iteration":1,"phase":"generated","timestamp":"2026-06-14T13:33:31Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260614-bober-chat-session-layer-1","specId":"spec-20260614-bober-chat-session-layer","iteration":1,"timestamp":"2026-06-14T13:37:03Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-2","specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T13:40:06Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-2","iteration":1,"timestamp":"2026-06-14T13:44:39Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260614-bober-chat-session-layer-2","specId":"spec-20260614-bober-chat-session-layer","iteration":1,"timestamp":"2026-06-14T13:55:58Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-3","specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T13:58:26Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-3","iteration":1,"timestamp":"2026-06-14T14:02:54Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260614-bober-chat-session-layer-3","iteration":1,"failedCriteria":["sc-3-3"],"timestamp":"2026-06-14T14:14:51Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-3","iteration":2,"timestamp":"2026-06-14T14:15:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260614-bober-chat-session-layer-3","specId":"spec-20260614-bober-chat-session-layer","iteration":2,"timestamp":"2026-06-14T17:21:55Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-4","specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T17:24:42Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260614-bober-chat-session-layer-4","iteration":1,"timestamp":"2026-06-14T17:27:55Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260614-bober-chat-session-layer-4","specId":"spec-20260614-bober-chat-session-layer","iteration":1,"timestamp":"2026-06-14T17:37:45Z"}
+{"event":"plan-completed","specId":"spec-20260614-bober-chat-session-layer","sprintsCompleted":4,"timestamp":"2026-06-14T17:37:54Z"}
+{"event":"plan-created","specId":"spec-20260615-team-abstraction","title":"Domain-Agnostic Team Abstraction (Chattable-Team Phase 4)","sprintCount":4,"timestamp":"2026-06-15T11:44:46Z"}
+{"event":"pipeline-started","timestamp":"2026-06-15T11:51:14Z","task":"Resume spec-20260615-team-abstraction (Domain-Agnostic Team Abstraction, 4 sprints) from Sprint 1","specId":"spec-20260615-team-abstraction","branch":"bober/team-abstraction"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-team-abstraction-1","specId":"spec-20260615-team-abstraction","timestamp":"2026-06-15T11:51:14Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-team-abstraction-1","timestamp":"2026-06-15T11:55:05Z","briefingLines":428}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-team-abstraction-1","iteration":1,"timestamp":"2026-06-15T11:59:03Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-team-abstraction-1","specId":"spec-20260615-team-abstraction","iteration":1,"criteriaPassed":8,"timestamp":"2026-06-15T12:03:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-team-abstraction-2","specId":"spec-20260615-team-abstraction","timestamp":"2026-06-15T12:03:53Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260615-team-abstraction-1","docsCommit":"194a188","timestamp":"2026-06-15T12:05:41Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-team-abstraction-2","timestamp":"2026-06-15T12:08:09Z","note":"distill.ts is pure; real persist is cli/commands/memory.ts:68 — do not touch distill.ts"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-team-abstraction-2","iteration":1,"timestamp":"2026-06-15T12:15:44Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-team-abstraction-2","specId":"spec-20260615-team-abstraction","iteration":1,"criteriaPassed":8,"timestamp":"2026-06-15T12:21:23Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-team-abstraction-3","specId":"spec-20260615-team-abstraction","timestamp":"2026-06-15T12:21:54Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260615-team-abstraction-2","docsCommit":"f76a157","timestamp":"2026-06-15T12:24:07Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-team-abstraction-3","timestamp":"2026-06-15T12:25:42Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-team-abstraction-3","iteration":1,"timestamp":"2026-06-15T12:32:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-team-abstraction-3","specId":"spec-20260615-team-abstraction","iteration":1,"criteriaPassed":6,"timestamp":"2026-06-15T12:36:12Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-team-abstraction-4","specId":"spec-20260615-team-abstraction","timestamp":"2026-06-15T12:36:51Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260615-team-abstraction-3","docsCommit":"5f36223","timestamp":"2026-06-15T12:38:47Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-team-abstraction-4","timestamp":"2026-06-15T12:41:38Z","note":"run.test.ts/chat.test.ts must be created; --team registered in src/cli/index.ts (not in estimatedFiles); example team flows through loadTeam, zero code branches"}
+{"event":"sprint-generator-crashed","contractId":"sprint-spec-20260615-team-abstraction-4","iteration":1,"reason":"API socket closed mid-run; partial uncommitted run.ts change reverted; no commit made","timestamp":"2026-06-15T12:44:19Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-team-abstraction-4","iteration":1,"timestamp":"2026-06-15T12:51:05Z","note":"fresh generator after infra-crash recovery"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-team-abstraction-4","specId":"spec-20260615-team-abstraction","iteration":1,"criteriaPassed":8,"timestamp":"2026-06-15T12:55:01Z"}
+{"event":"plan-completed","specId":"spec-20260615-team-abstraction","sprintsCompleted":4,"timestamp":"2026-06-15T12:55:01Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260615-team-abstraction-4","docsCommit":"7baf8c0","timestamp":"2026-06-15T12:57:16Z"}
+{"event":"pipeline-completed","specId":"spec-20260615-team-abstraction","sprintsPassed":4,"totalIterations":4,"timestamp":"2026-06-15T12:57:16Z"}
+{"event":"plan-created","specId":"spec-20260615-chat-interrupt-approve-steer","title":"Chat Interrupt / Approve / Steer (Chattable-Team research Phase 2)","sprintCount":6,"timestamp":"2026-06-15T13:23:32.804Z"}
+{"event":"pipeline-started","timestamp":"2026-06-15T13:27:05Z","specId":"spec-20260615-chat-interrupt-approve-steer","task":"Chat Interrupt / Approve / Steer (Chattable-Team research Phase 2)","sprintCount":6,"branch":"bober/chat-interrupt-approve-steer","baseline":{"tests":1977,"typecheck":"clean","build":"clean"}}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-1","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":1,"timestamp":"2026-06-15T13:27:47Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-1","iteration":1,"timestamp":"2026-06-15T13:41:47Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-1","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T13:46:26Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-2","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":2,"timestamp":"2026-06-15T13:47:21Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-2","iteration":1,"timestamp":"2026-06-15T13:58:54Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-2","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T14:04:25Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-3","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":3,"timestamp":"2026-06-15T14:04:57Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-3","iteration":1,"timestamp":"2026-06-15T14:17:43Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-3","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T14:21:31Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-4","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":4,"timestamp":"2026-06-15T14:22:15Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-4","iteration":1,"timestamp":"2026-06-15T14:37:03Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-4","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T14:43:09Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":5,"timestamp":"2026-06-15T14:43:45Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","iteration":1,"timestamp":"2026-06-15T14:57:52Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T15:05:19Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-6","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":6,"timestamp":"2026-06-15T15:06:30Z"}

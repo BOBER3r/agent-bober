@@ -28,6 +28,7 @@ import { appendGuidance, hasRunDir } from "../state/guidance.js";
 import { setPaused, clearPaused } from "../state/pause.js";
 import type { ApprovedMarker, RejectedMarker } from "../state/approval-state.js";
 import { resolveApprover } from "../cli/commands/approve.js";
+import { cleanupTerminalRun } from "./steer-cleanup.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -143,6 +144,17 @@ export class ChatSession {
       completions = await this.tailer.poll();
     } catch {
       // Poll errors must never break the turn
+    }
+
+    // ── Cleanup hygiene for runs that just went terminal (Sprint 6) ────────
+    for (const c of completions) {
+      if (c.runId) {
+        try {
+          await cleanupTerminalRun(this.projectRoot, c.runId);
+        } catch {
+          // best-effort — a cleanup failure must never break the turn
+        }
+      }
     }
 
     // ── Poll for pending approvals (prelude) ──────────────────────────────
