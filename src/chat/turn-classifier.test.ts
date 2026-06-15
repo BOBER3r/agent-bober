@@ -77,3 +77,57 @@ describe("TurnClassifier", () => {
     }
   });
 });
+
+// ── Approve / Reject classifier actions (sc-3-6) ──────────────────────
+
+describe("TurnClassifier — approve/reject actions (sc-3-6)", () => {
+  it("parses approve action with checkpointId", async () => {
+    const client = new ScriptedClient(['{"action":"approve","checkpointId":"post-plan"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("approve post-plan");
+    expect(result).toEqual({ action: "approve", checkpointId: "post-plan" });
+  });
+
+  it("parses approve action without checkpointId (implicit single pending)", async () => {
+    const client = new ScriptedClient(['{"action":"approve"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("approve it");
+    expect(result).toEqual({ action: "approve", checkpointId: undefined });
+  });
+
+  it("parses reject action with checkpointId and feedback", async () => {
+    const client = new ScriptedClient([
+      '{"action":"reject","checkpointId":"post-plan","feedback":"split sprint 2"}',
+    ]);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("reject post-plan split sprint 2");
+    expect(result).toEqual({
+      action: "reject",
+      checkpointId: "post-plan",
+      feedback: "split sprint 2",
+    });
+  });
+
+  it("parses reject action without checkpointId (implicit single pending)", async () => {
+    const client = new ScriptedClient(['{"action":"reject","feedback":"needs more detail"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("reject it, needs more detail");
+    expect(result).toEqual({
+      action: "reject",
+      checkpointId: undefined,
+      feedback: "needs more detail",
+    });
+  });
+
+  it("returns FALLBACK for garbage approve JSON", async () => {
+    const client = new ScriptedClient(["not valid json"]);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("approve something");
+    expect(result).toEqual({ action: "answer" });
+  });
+});

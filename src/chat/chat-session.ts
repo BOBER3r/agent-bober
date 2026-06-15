@@ -19,6 +19,13 @@ import type { CompletionEvent } from "./completion-tailer.js";
 import { ApprovalReader } from "./approval-reader.js";
 import { ApprovalCursor } from "./approval-cursor.js";
 import { writeRunState } from "../state/run-state.js";
+import {
+  saveApproved,
+  saveRejected,
+  pendingExists,
+} from "../state/approval-state.js";
+import type { ApprovedMarker, RejectedMarker } from "../state/approval-state.js";
+import { resolveApprover } from "../cli/commands/approve.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -181,6 +188,8 @@ export class ChatSession {
       this.roster,
       (runId) => this.handleStop(runId),
       (arg) => this.handleCareful(arg),
+      (id) => this.handleApprove(id),
+      (id, fb) => this.handleReject(id, fb),
     );
     if (slashResult.handled) {
       if (slashResult.exit) return null;
@@ -230,6 +239,15 @@ export class ChatSession {
       } else {
         // op === "stop", action.runId: string
         reply = await this.handleStop(action.runId);
+      }
+    } else if (action.action === "approve" || action.action === "reject") {
+      const target = await this.resolveCheckpoint(action.checkpointId);
+      if (target.kind === "ambiguous") {
+        reply = target.message;
+      } else if (action.action === "approve") {
+        reply = await this.handleApprove(target.id);
+      } else {
+        reply = await this.handleReject(target.id, action.feedback ?? "");
       }
     } else {
       // Unknown action — should not happen given the classifier union
@@ -290,6 +308,88 @@ export class ChatSession {
       const current = await this.carefulSidecar.isCareful();
       return `Careful mode is currently ${current ? "ON" : "OFF"}. Use /careful on or /careful off to toggle.`;
     }
+  }
+
+  /**
+   * Approve a pending checkpoint: guard with pendingExists, write the marker,
+   * clear the correlated RunState pending fields, and return an ack string.
+   * Returns a "no pending checkpoint" message and writes nothing if the pending
+   * file does not exist (sc-3-4).
+   */
+  private async handleApprove(checkpointId: string): Promise<string> {
+    if (!(await pendingExists(this.projectRoot, checkpointId))) {
+      return `No pending checkpoint found: ${checkpointId}`;
+    }
+    const marker: ApprovedMarker = {
+      approvedAt: new Date().toISOString(),
+      approverId: resolveApprover(),
+    };
+    await saveApproved(this.projectRoot, checkpointId, marker);
+    await this.clearPending(checkpointId);
+    return `Approved checkpoint ${checkpointId}. The run will resume.`;
+  }
+
+  /**
+   * Reject a pending checkpoint: guard with pendingExists, write the marker
+   * carrying the feedback string, clear the correlated RunState, and return ack.
+   * Returns a "no pending checkpoint" message and writes nothing if absent (sc-3-4).
+   */
+  private async handleReject(checkpointId: string, feedback: string): Promise<string> {
+    if (!(await pendingExists(this.projectRoot, checkpointId))) {
+      return `No pending checkpoint found: ${checkpointId}`;
+    }
+    const marker: RejectedMarker = {
+      rejectedAt: new Date().toISOString(),
+      rejecterId: resolveApprover(),
+      feedback,
+    };
+    await saveRejected(this.projectRoot, checkpointId, marker);
+    await this.clearPending(checkpointId);
+    return `Rejected checkpoint ${checkpointId}. Feedback sent for rework.`;
+  }
+
+  /**
+   * Clear pending fields from the RunState correlated to this checkpoint.
+   * Inverse of the Sprint 2 reflection block: finds the input-required RunState
+   * matching this checkpointId, drops the three pending fields, and sets
+   * status back to "running". Idempotent — no-op if no correlated state exists.
+   */
+  private async clearPending(checkpointId: string): Promise<void> {
+    const states = await this.roster.read();
+    const state = states.find(
+      (s) => s.status === "input-required" && s.pendingCheckpointId === checkpointId,
+    );
+    if (!state) return;
+    // Destructure out the optional pending fields so they are NOT serialized.
+    const { pendingCheckpointId, pendingPrompt, pendingSince, ...rest } = state;
+    // Suppress unused-variable warnings — these are intentionally destructured out.
+    void pendingCheckpointId;
+    void pendingPrompt;
+    void pendingSince;
+    await writeRunState(this.projectRoot, { ...rest, status: "running" });
+  }
+
+  /**
+   * Resolve a checkpoint id for NL approve/reject paths.
+   * - If an id is provided, use it directly.
+   * - If exactly one pending marker exists, use it.
+   * - If zero or multiple pending markers exist (without a named id), return
+   *   an ambiguous result so the caller can ask the user instead of guessing.
+   */
+  private async resolveCheckpoint(
+    id?: string,
+  ): Promise<{ kind: "id"; id: string } | { kind: "ambiguous"; message: string }> {
+    if (id) return { kind: "id", id };
+    const pending = await this.approvalReader.read();
+    if (pending.length === 1) return { kind: "id", id: pending[0]!.checkpointId };
+    if (pending.length === 0) {
+      return { kind: "ambiguous", message: "No pending checkpoints to act on." };
+    }
+    const ids = pending.map((p) => p.checkpointId).join(", ");
+    return {
+      kind: "ambiguous",
+      message: `Multiple pending checkpoints — which one? ${ids}`,
+    };
   }
 
   /**

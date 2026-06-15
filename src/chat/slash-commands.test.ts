@@ -174,3 +174,132 @@ describe("/careful slash command dispatch (sc-1-6)", () => {
     }
   });
 });
+
+// ── /approve slash command tests (sc-3-4, sc-3-7) ─────────────────────
+
+describe("/approve slash command dispatch (sc-3-4)", () => {
+  it("/approve without checkpointId returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/approve", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /approve");
+    }
+  });
+
+  it("/approve without approveHandler returns 'unavailable' message (back-compat)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/approve post-plan", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Approve is unavailable.");
+    }
+  });
+
+  it("/approve calls approveHandler with checkpointId", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedId = "";
+    const approveHandler = async (id: string) => {
+      receivedId = id;
+      return `Approved checkpoint ${id}. The run will resume.`;
+    };
+
+    const result = await dispatch(
+      "/approve post-plan",
+      roster,
+      undefined,
+      undefined,
+      approveHandler,
+    );
+    expect(result.handled).toBe(true);
+    expect(receivedId).toBe("post-plan");
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("post-plan");
+    }
+  });
+
+  it("/help includes /approve and /reject in the help text (sc-3-7)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("/approve");
+      expect(result.output).toContain("/reject");
+    }
+  });
+});
+
+// ── /reject slash command tests (sc-3-5) ──────────────────────────────
+
+describe("/reject slash command dispatch (sc-3-5)", () => {
+  it("/reject without checkpointId returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/reject", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /reject");
+    }
+  });
+
+  it("/reject without rejectHandler returns 'unavailable' message (back-compat)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/reject post-plan split sprint 2", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Reject is unavailable.");
+    }
+  });
+
+  it("/reject calls rejectHandler with checkpointId and full feedback remainder", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedId = "";
+    let receivedFeedback = "";
+    const rejectHandler = async (id: string, feedback: string) => {
+      receivedId = id;
+      receivedFeedback = feedback;
+      return `Rejected checkpoint ${id}. Feedback sent for rework.`;
+    };
+
+    const result = await dispatch(
+      "/reject post-plan split sprint 2",
+      roster,
+      undefined,
+      undefined,
+      undefined,
+      rejectHandler,
+    );
+    expect(result.handled).toBe(true);
+    expect(receivedId).toBe("post-plan");
+    expect(receivedFeedback).toBe("split sprint 2");
+  });
+
+  it("/reject with multi-word feedback collects all words after the id", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedFeedback = "";
+    const rejectHandler = async (_id: string, feedback: string) => {
+      receivedFeedback = feedback;
+      return "ok";
+    };
+
+    await dispatch(
+      "/reject cp-1 needs more detail please",
+      roster,
+      undefined,
+      undefined,
+      undefined,
+      rejectHandler,
+    );
+    expect(receivedFeedback).toBe("needs more detail please");
+  });
+
+  it("existing 4-arg callers still work with /approve returning unavailable", async () => {
+    const roster = new RosterReader(tmpDir);
+    const stopHandler = async (_runId: string) => "stopped";
+    const carefulHandler = async (_arg: string | undefined) => "careful";
+    const result = await dispatch("/approve post-plan", roster, stopHandler, carefulHandler);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Approve is unavailable.");
+    }
+  });
+});

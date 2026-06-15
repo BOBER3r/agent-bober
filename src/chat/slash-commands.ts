@@ -19,6 +19,8 @@ const HELP_TEXT = [
   "  /runs              — List all active and recent runs",
   "  /stop <runId>      — Stop a running run by ID",
   "  /careful [on|off]  — Toggle approval gates for new runs",
+  "  /approve <id>      — Approve a pending checkpoint (resume the run)",
+  "  /reject <id> [why] — Reject a pending checkpoint with optional feedback",
   "  /help              — Show this help message",
   "  /exit              — Exit the chat session",
   "",
@@ -38,12 +40,18 @@ const HELP_TEXT = [
  * @param carefulHandler - Optional handler for /careful [on|off]. When omitted,
  *   /careful returns an "unavailable" message. Kept optional so existing 2-/3-arg
  *   callers are not broken.
+ * @param approveHandler - Optional handler for /approve <id>. When omitted, /approve
+ *   returns an "unavailable" message. Kept optional so existing callers are not broken.
+ * @param rejectHandler - Optional handler for /reject <id> [feedback]. When omitted,
+ *   /reject returns an "unavailable" message. Kept optional so existing callers are not broken.
  */
 export async function dispatch(
   input: string,
   roster: RosterReader,
   stopHandler?: (runId: string) => Promise<string>,
   carefulHandler?: (arg: string | undefined) => Promise<string>,
+  approveHandler?: (id: string) => Promise<string>,
+  rejectHandler?: (id: string, feedback: string) => Promise<string>,
 ): Promise<SlashResult> {
   const trimmed = input.trimStart();
   if (!trimmed.startsWith("/")) {
@@ -77,6 +85,27 @@ export async function dispatch(
       const output = carefulHandler
         ? await carefulHandler(arg)
         : "Careful mode is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/approve": {
+      const arg = trimmed.split(/\s+/)[1];
+      if (!arg) return { handled: true, output: "Usage: /approve <checkpointId>" };
+      const output = approveHandler
+        ? await approveHandler(arg)
+        : "Approve is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/reject": {
+      const parts = trimmed.split(/\s+/);
+      const id = parts[1];
+      if (!id) return { handled: true, output: "Usage: /reject <checkpointId> [feedback]" };
+      // Everything after the id is feedback (preserve spacing of the remainder)
+      const feedback = trimmed.replace(/^\/reject\s+\S+\s*/, "");
+      const output = rejectHandler
+        ? await rejectHandler(id, feedback)
+        : "Reject is unavailable.";
       return { handled: true, output };
     }
 

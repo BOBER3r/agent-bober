@@ -12,7 +12,9 @@ export type ClassifierAction =
   | { action: "answer" }
   | { action: "spawn"; task: string }
   | { action: "steer"; op: "inspect" }
-  | { action: "steer"; op: "stop"; runId: string };
+  | { action: "steer"; op: "stop"; runId: string }
+  | { action: "approve"; checkpointId?: string }
+  | { action: "reject"; checkpointId?: string; feedback?: string };
 
 // ── Zod discriminated union ───────────────────────────────────────────
 
@@ -26,6 +28,12 @@ const ClassifierActionSchema = z.discriminatedUnion("action", [
       z.object({ op: z.literal("stop"), runId: z.string() }).shape.op,
     ]),
     runId: z.string().optional(),
+  }),
+  z.object({ action: z.literal("approve"), checkpointId: z.string().optional() }),
+  z.object({
+    action: z.literal("reject"),
+    checkpointId: z.string().optional(),
+    feedback: z.string().optional(),
   }),
 ]);
 
@@ -81,6 +89,16 @@ function parseClassifierAction(text: string): ClassifierAction {
         }
         return { action: "steer", op: "inspect" };
       }
+      if (data.action === "approve") {
+        return { action: "approve", checkpointId: data.checkpointId };
+      }
+      if (data.action === "reject") {
+        return {
+          action: "reject",
+          checkpointId: data.checkpointId,
+          feedback: data.feedback,
+        };
+      }
     }
     return FALLBACK;
   } catch {
@@ -114,6 +132,8 @@ export class TurnClassifier {
       '  {"action":"spawn","task":"<task description>"}  — spawn a new agent run',
       '  {"action":"steer","op":"inspect"}  — inspect running agents',
       '  {"action":"steer","op":"stop","runId":"<id>"}  — stop a specific run',
+      '  {"action":"approve","checkpointId":"<id?>"}  — approve a pending checkpoint',
+      '  {"action":"reject","checkpointId":"<id?>","feedback":"<why?>"}  — reject a checkpoint',
       "Return ONLY the JSON object, no other text.",
     ].join("\n");
 
