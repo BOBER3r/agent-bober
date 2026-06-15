@@ -34,6 +34,7 @@ import { registerConfigCommand } from "./commands/config.js";
 import { registerTelemetryCommand } from "./commands/telemetry.js";
 import { registerWorktreeCommand } from "./commands/worktree.js";
 import { registerMemoryCommand } from "./commands/memory.js";
+import { registerFactsCommand } from "./commands/facts.js";
 import { registerFleetCommand } from "../fleet/index.js";
 import { registerChatCommand } from "./commands/chat.js";
 
@@ -308,6 +309,9 @@ async function main(): Promise<void> {
 
   // ── memory ────────────────────────────────────────────────────────
   registerMemoryCommand(program);
+
+  // ── facts ─────────────────────────────────────────────────────────
+  registerFactsCommand(program);
 
   // ── fleet ─────────────────────────────────────────────────────────
   registerFleetCommand(program);
