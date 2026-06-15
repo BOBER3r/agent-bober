@@ -67,8 +67,9 @@ function scoreRecord(
  * to the given `keywords`.
  *
  * Scoring is deterministic token-overlap between the lowercased keyword tokens
- * and each record's tags + category + summarySnippet. Ties break by lessonId
- * (ASC lexicographic) for byte-stable output.
+ * and each record's tags + category + summarySnippet. When overlap scores tie,
+ * records with higher occurrences rank above lower-occurrence records.
+ * Final tiebreak is by lessonId ASC (lexicographic) for byte-stable output.
  *
  * A non-matching keyword set (no overlap with any record) yields an empty result.
  *
@@ -94,9 +95,12 @@ export async function retrieveRelevantLessons(
     .map((r) => ({ r, score: scoreRecord(r, keywordTokens) }))
     .filter((x) => x.score > 0); // C1: non-matching keyword -> empty
 
-  // Sort: score DESC, then lessonId ASC for stable tiebreak
+  // Sort: score DESC, then occurrences DESC (tiebreak booster), then lessonId ASC (byte-stable)
   scored.sort(
-    (a, b) => b.score - a.score || a.r.lessonId.localeCompare(b.r.lessonId),
+    (a, b) =>
+      b.score - a.score ||                          // 1. token overlap (DOMINANT)
+      b.r.occurrences - a.r.occurrences ||           // 2. higher occurrences win on ties (sc-3-2)
+      a.r.lessonId.localeCompare(b.r.lessonId),     // 3. byte-stable final tiebreak
   );
 
   return scored.slice(0, topK).map((x) => x.r);

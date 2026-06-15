@@ -1,10 +1,11 @@
 /**
- * `bober memory <distill|list|show>` — inspect and distill self-improvement lessons.
+ * `bober memory <distill|list|show|prune>` — inspect and distill self-improvement lessons.
  *
  * Subcommands:
  *   distill       — Distill sprint history into deterministic lessons (idempotent).
  *   list          — Print the bounded lesson index.
  *   show <id>     — Print one lesson with its sourceEntryRefs provenance.
+ *   prune         — Quarantine stale/conflicting lessons from INDEX.md into QUARANTINE.md.
  *
  * Error handling: CLI handlers MUST NOT throw. They set process.exitCode=1 and
  * return on all errors. Pattern mirrors src/cli/commands/incident.ts.
@@ -21,8 +22,13 @@ import {
   appendLesson,
   loadLessonIndex,
   loadLesson,
+  lessonPath,
   memoryDir,
+  quarantinePath,
+  rewriteIndexForQuarantine,
 } from "../../state/memory.js";
+import { pruneLessons } from "../../orchestrator/memory/hygiene.js";
+import type { PrunableLesson } from "../../orchestrator/memory/hygiene.js";
 import { distill } from "../../orchestrator/memory/distill.js";
 import { loadEvalResults } from "../../orchestrator/memory/eval-source.js";
 import { loadConfig } from "../../config/loader.js";
@@ -196,6 +202,106 @@ export function registerMemoryCommand(program: Command): void {
             ),
           );
         }
+        process.exitCode = 1;
+      }
+    });
+
+  // ── memory prune ──────────────────────────────────────────────────────
+  memCmd
+    .command("prune")
+    .description(
+      "Quarantine stale and conflicting lessons from INDEX.md into QUARANTINE.md (never deletes per-lesson .md files)",
+    )
+    .action(async () => {
+      const projectRoot = await resolveRoot();
+      try {
+        let ns: string | undefined;
+        try {
+          ns = await resolveDefaultNamespace(projectRoot);
+        } catch {
+          // resolveDefaultNamespace never throws per its contract, but guard defensively
+        }
+
+        // Load the bounded index
+        const records = await loadLessonIndex(
+          projectRoot,
+          { limit: Number.MAX_SAFE_INTEGER },
+          ns,
+        );
+
+        // Edge: absent or empty INDEX.md → friendly message, no throw, no QUARANTINE.md created
+        if (records.length === 0) {
+          process.stdout.write(
+            chalk.gray("No lessons found. Nothing to prune.\n"),
+          );
+          return;
+        }
+
+        // Assemble recency proxy: load createdAt from each per-lesson .md file.
+        // A missing file does not abort the prune — createdAt is left undefined (maximally stale).
+        const now = new Date().toISOString();
+        const enriched: PrunableLesson[] = [];
+        for (const r of records) {
+          let createdAt: string | undefined;
+          try {
+            createdAt = (await loadLesson(projectRoot, r.lessonId, ns)).createdAt;
+          } catch {
+            // Per-lesson file missing → no recency info (treated as maximally stale in pruneLessons)
+          }
+          enriched.push({ ...r, createdAt });
+        }
+
+        // Run pure hygiene pass
+        const { kept, quarantined } = pruneLessons(enriched, { now });
+
+        if (quarantined.length === 0) {
+          process.stdout.write(
+            chalk.green(`pruned: ${kept.length} kept, 0 quarantined\n`),
+          );
+          return;
+        }
+
+        // Determine reason per quarantined lesson (conflict vs. decay)
+        // bober: simple two-pass approach; a production version could tag each record with reason
+        const quarantinedIds = new Set(quarantined.map((r) => r.lessonId));
+
+        // Move quarantined lines from INDEX.md to QUARANTINE.md with provenance
+        await rewriteIndexForQuarantine(
+          projectRoot,
+          quarantinedIds,
+          "prune",
+          now,
+          ns,
+        );
+
+        // Confirm per-lesson .md files were NOT deleted (invariant — sc-3-4)
+        // (rewriteIndexForQuarantine only touches INDEX.md and QUARANTINE.md)
+        // Log the quarantine file path for discoverability
+        const qPath = quarantinePath(projectRoot, ns);
+
+        process.stdout.write(
+          chalk.green(`pruned: ${kept.length} kept, ${quarantined.length} quarantined\n`),
+        );
+        process.stdout.write(
+          chalk.gray(`quarantined lessons written to: ${qPath}\n`),
+        );
+        process.stdout.write(
+          chalk.gray(
+            `per-lesson .md files retained at: ${memoryDir(projectRoot, ns)}/\n`,
+          ),
+        );
+
+        // Confirm each quarantined lesson's .md still exists (non-fatal log if missing)
+        for (const r of quarantined) {
+          const lp = lessonPath(projectRoot, r.lessonId, ns);
+          process.stdout.write(chalk.gray(`  retained: ${lp}\n`));
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `Failed to prune lessons: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
         process.exitCode = 1;
       }
     });

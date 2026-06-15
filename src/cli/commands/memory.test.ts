@@ -217,7 +217,7 @@ async function invokeShow(lessonId: string): Promise<string> {
 // ── C4: Command registration ──────────────────────────────────────────
 
 describe("C4 — command registration", () => {
-  it("registers memory command with distill, list, show subcommands", async () => {
+  it("registers memory command with distill, list, show, prune subcommands", async () => {
     const { Command } = await import("commander");
     const { registerMemoryCommand } = await import("./memory.js");
     const program = new Command();
@@ -228,7 +228,7 @@ describe("C4 — command registration", () => {
     expect(memCmd).toBeDefined();
 
     const subNames = memCmd!.commands.map((c) => c.name());
-    expect(subNames).toEqual(expect.arrayContaining(["distill", "list", "show"]));
+    expect(subNames).toEqual(expect.arrayContaining(["distill", "list", "show", "prune"]));
   });
 });
 
@@ -460,5 +460,158 @@ describe("C4 — show handler", () => {
 
     const stderrOutput = stderrWrites.join("");
     expect(stderrOutput).toContain("nonexistent-id");
+  });
+});
+
+// ── C4: prune handler ─────────────────────────────────────────────────
+
+describe("C4 — prune handler (sc-3-4)", () => {
+  async function invokePrune(): Promise<{ stdout: string; stderr: string }> {
+    const stdoutWrites: string[] = [];
+    const stderrWrites: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdoutWrites.push(String(chunk));
+      return true;
+    });
+    const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
+
+    const fsUtils = await import("../../utils/fs.js");
+    const rootSpy = vi.spyOn(fsUtils, "findProjectRoot").mockResolvedValue(tmpDir);
+
+    try {
+      const { Command } = await import("commander");
+      const { registerMemoryCommand } = await import("./memory.js");
+      const program = new Command();
+      program.exitOverride();
+      registerMemoryCommand(program);
+      await program.parseAsync(["node", "bober", "memory", "prune"]);
+    } finally {
+      stdoutSpy.mockRestore();
+      stderrSpy.mockRestore();
+      rootSpy.mockRestore();
+    }
+
+    return { stdout: stdoutWrites.join(""), stderr: stderrWrites.join("") };
+  }
+
+  it("prints a friendly no-lessons message when INDEX.md is absent (no throw)", async () => {
+    // Reset exitCode before this test (other tests may have set it via error paths)
+    process.exitCode = 0;
+    // tmpDir has no lessons — INDEX.md absent
+    const { stdout, stderr } = await invokePrune();
+    expect(stdout).toContain("No lessons found");
+    // No error should be written to stderr for the empty-index case
+    expect(stderr).toBe("");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("prints kept/quarantined counts after pruning stale lessons", async () => {
+    const { appendLesson: append } = await import("../../state/memory.js");
+
+    // Seed one kept (high occurrence) and one stale (low occurrence, very old)
+    const nowStr = new Date().toISOString();
+    const oldDate = "2024-01-01T00:00:00.000Z";
+
+    await mkdir(join(tmpDir, ".bober"), { recursive: true });
+    await append(tmpDir, {
+      lessonId: "l-kept-cli",
+      createdAt: nowStr,
+      category: "sprint-rework",
+      tags: ["phase:rework", "sprintId:cli-s1"],
+      summary: "High occurrence, should be kept",
+      occurrences: 5,
+      severity: "warn",
+      sourceEntryRefs: ["history.jsonl#1"],
+    });
+    await append(tmpDir, {
+      lessonId: "l-stale-cli",
+      createdAt: oldDate,
+      category: "sprint-rework",
+      tags: ["phase:rework", "sprintId:cli-s2"],
+      summary: "Low occurrence stale, should be quarantined",
+      occurrences: 1,
+      severity: "info",
+      sourceEntryRefs: ["history.jsonl#2"],
+    });
+
+    const { stdout } = await invokePrune();
+
+    // Summary must contain kept/quarantined counts
+    expect(stdout).toMatch(/pruned:.*kept.*quarantined/);
+    expect(stdout).toContain("1 kept");
+    expect(stdout).toContain("1 quarantined");
+  });
+
+  it("retains per-lesson .md files after pruning (sc-3-4)", async () => {
+    const { appendLesson: append, lessonPath: lp } = await import("../../state/memory.js");
+    const oldDate = "2024-01-01T00:00:00.000Z";
+
+    await mkdir(join(tmpDir, ".bober"), { recursive: true });
+    await append(tmpDir, {
+      lessonId: "l-retained-md",
+      createdAt: oldDate,
+      category: "sprint-rework",
+      tags: ["phase:rework", "sprintId:cli-s3"],
+      summary: "Should be quarantined but .md file must remain",
+      occurrences: 1,
+      severity: "info",
+      sourceEntryRefs: ["history.jsonl#3"],
+    });
+
+    await invokePrune();
+
+    // The per-lesson .md file must still exist
+    const mdPath = lp(tmpDir, "l-retained-md");
+    const content = await readFile(mdPath, "utf-8");
+    expect(content).toContain("l-retained-md");
+  });
+
+  it("INDEX.md shrinks and QUARANTINE.md gains provenance lines", async () => {
+    const { appendLesson: append, indexPath: ip, quarantinePath: qp } = await import("../../state/memory.js");
+    const oldDate = "2024-01-01T00:00:00.000Z";
+    const nowStr = new Date().toISOString();
+
+    await mkdir(join(tmpDir, ".bober"), { recursive: true });
+    await append(tmpDir, {
+      lessonId: "l-idx-kept",
+      createdAt: nowStr,
+      category: "sprint-rework",
+      tags: ["phase:rework", "sprintId:idx-s1"],
+      summary: "Kept in index",
+      occurrences: 5,
+      severity: "warn",
+      sourceEntryRefs: ["history.jsonl#10"],
+    });
+    await append(tmpDir, {
+      lessonId: "l-idx-quarantine",
+      createdAt: oldDate,
+      category: "sprint-rework",
+      tags: ["phase:rework", "sprintId:idx-s2"],
+      summary: "Quarantined from index",
+      occurrences: 1,
+      severity: "info",
+      sourceEntryRefs: ["history.jsonl#11"],
+    });
+
+    const beforeLines = (await readFile(ip(tmpDir), "utf-8"))
+      .split("\n")
+      .filter((l) => l.trim().length > 0);
+    expect(beforeLines).toHaveLength(2);
+
+    await invokePrune();
+
+    const afterLines = (await readFile(ip(tmpDir), "utf-8"))
+      .split("\n")
+      .filter((l) => l.trim().length > 0);
+    expect(afterLines).toHaveLength(1);
+    expect(afterLines[0]).toContain("l-idx-kept");
+
+    const qContent = await readFile(qp(tmpDir), "utf-8");
+    expect(qContent).toContain("l-idx-quarantine");
+    // Must have provenance marker
+    expect(qContent).toMatch(/<!-- quarantined: .+ @ .+ -->/);
   });
 });
