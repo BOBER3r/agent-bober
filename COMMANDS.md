@@ -163,7 +163,9 @@ Inside the session:
 > what runs are active?         # answered using roster + memory context
 > stop the settings page run    # natural language → stops the matching running run
 > /runs                         # list active/recent runs (deterministic, no LLM call)
-> /stop <runId>                 # stop a running run by id (deterministic, no LLM call)
+> /stop <runId>                 # HARD stop: kill the run's process by id (deterministic, no LLM call)
+> /pause <runId>                # SOFT pause: hold at next boundary, process stays alive (deterministic)
+> /resume <runId>               # resume a soft-paused run (deterministic, no LLM call)
 > /careful [on|off]             # toggle approval gates for new runs (deterministic, no LLM call)
 > /approve <id>                 # approve a pending checkpoint, resume the run (deterministic)
 > /reject <id> [feedback]       # reject a pending checkpoint with optional feedback (deterministic)
@@ -172,9 +174,9 @@ Inside the session:
 > /exit                         # end the session (detached runs keep going)
 ```
 
-The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/careful [on|off]`,
-`/approve <id>`, `/reject <id> [feedback]`, `/tell <runId> <text>`, `/help`, and `/exit` —
-none of them call the LLM.
+The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/pause <runId>`,
+`/resume <runId>`, `/careful [on|off]`, `/approve <id>`, `/reject <id> [feedback]`,
+`/tell <runId> <text>`, `/help`, and `/exit` — none of them call the LLM.
 
 `/careful on` makes runs you launch from chat pause at curated gates; `/careful off` (the
 default) launches them in autopilot. With careful **on**, the detached run is launched with
@@ -216,6 +218,18 @@ read point) and injects each line into the generator's handoff as a `Human guida
 entry; it never interrupts an in-flight agent call, never edits files or overrides the
 contract, and does **not** require careful mode. Each queued line is consumed exactly once.
 
+**Soft-pausing a run.** `/pause <runId>` is a **soft** suspend, distinct from the hard
+`/stop` below: it sends **no kill signal** — the run's process stays alive. It writes a
+`runId`-keyed marker at `.bober/runs/<runId>/paused.json` and flips the chat-owned
+`RunState` to `paused`; the detached run's pipeline holds at its **next** checkpoint boundary
+(the same boundary cluster as guidance) while the marker is present, rather than freezing any
+in-flight agent call. `/resume <runId>` removes the marker and flips `RunState` back to
+`running`, and the run advances. Natural language works too ("pause that run" / "resume run
+X"). `/pause` on an unknown or non-`running` run replies `No such running run: <runId>` and
+**writes nothing**. The pause poll is bounded (a forgotten marker resolves after a timeout
+rather than hanging the run forever). Contrast with `/stop`, which **kills** the process and
+ends the run — use `/pause` when you want to hold and continue, `/stop` when you want to abort.
+
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as
 `running` the same turn. When such a run finishes, the **next** chat turn weaves a
@@ -227,9 +241,10 @@ announced exactly once. The notice is rotation-safe — it still fires correctly
 
 **Steering runs.** You can stop a run two ways, both deterministic (no LLM call):
 the `/stop <runId>` slash command, or natural language ("stop the settings page run")
-which the classifier routes to the same handler. Stop is a real hard-stop — it resolves
-the child PID recorded for this session, sends it `SIGTERM`, and flips the run's roster
-`state.json` to `aborted` on disk. The runId is resolved against the **current disk roster
+which the classifier routes to the same handler. Stop is a real **hard** stop — distinct
+from the soft `/pause` above — it resolves the child PID recorded for this session, sends it
+`SIGTERM`, and flips the run's roster `state.json` to `aborted` on disk (the run ends; use
+`/pause` instead if you only want to hold and resume later). The runId is resolved against the **current disk roster
 at stop-time**, so an id that is not a `running` run replies `No such running run: <id>`
 and nothing is killed; chat can only ever kill a PID it spawned this session. If the run is
 on disk but its PID is unknown, it is marked `aborted` without a kill. Asking to inspect runs
