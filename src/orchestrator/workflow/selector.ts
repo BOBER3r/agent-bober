@@ -4,6 +4,7 @@ import type { PipelineEngine, PipelineEngineName } from "./engine.js";
 import { isWorkflowEligible } from "./eligibility.js";
 import { TsPipelineEngine } from "./ts-engine.js";
 import { WorkflowEngine } from "./workflow-engine.js";
+import type { Team } from "../../teams/types.js";
 
 // ── Resolver ───────────────────────────────────────────────────────
 
@@ -58,6 +59,60 @@ export function selectPipelineEngine(config: BoberConfig): PipelineEngine {
     case "workflow":
       // Reachable only when resolveEngineName returns 'workflow' (eligible + not careful).
       // WorkflowEngine.run has a belt-and-suspenders catch for WorkflowUnavailableError.
+      return new WorkflowEngine();
+  }
+}
+
+// ── Team-aware selection ───────────────────────────────────────────
+
+/**
+ * Pure resolver — returns the engine name for a team, using team.pipelineShape
+ * as the requested engine, then applying the SAME downgrade pipeline as
+ * resolveEngineName (ineligible or mode='careful' → 'ts').
+ *
+ * The downgrade log line is byte-identical to resolveEngineName's (selector.ts:29-31).
+ */
+export function resolveEngineNameForTeam(
+  team: Team,
+  config: BoberConfig,
+): PipelineEngineName {
+  const requested = team.pipelineShape;
+
+  if (requested === "workflow") {
+    const eligible = isWorkflowEligible(config);
+    const careful = config.pipeline?.mode === "careful";
+    if (!eligible || careful) {
+      logger.info(
+        `Workflow engine requested but ${!eligible ? "ineligible" : "mode='careful'"}; downgrading to 'ts'.`,
+      );
+      return "ts";
+    }
+  }
+
+  return requested;
+}
+
+/**
+ * Resolve a Team's pipelineShape to a PipelineEngine instance.
+ *
+ * Applies the same downgrade rules as selectPipelineEngine (via resolveEngineNameForTeam),
+ * and uses the same exhaustive switch over PipelineEngineName. The programming team's
+ * pipelineShape === resolveEngineName(config) by construction (registry.ts:68), so this
+ * is byte-for-byte identical to selectPipelineEngine(config) for the programming team.
+ */
+export function selectPipelineEngineForTeam(
+  team: Team,
+  config: BoberConfig,
+): PipelineEngine {
+  const name = resolveEngineNameForTeam(team, config);
+  switch (name) {
+    case "ts":
+      return new TsPipelineEngine();
+    case "skill":
+      // Skill engine deferred (non-goal); falls through to TS.
+      return new TsPipelineEngine();
+    case "workflow":
+      // Reachable only when resolveEngineNameForTeam returns 'workflow' (eligible + not careful).
       return new WorkflowEngine();
   }
 }

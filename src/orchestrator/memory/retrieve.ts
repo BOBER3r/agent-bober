@@ -83,9 +83,10 @@ export async function retrieveRelevantLessons(
   {
     topK = DEFAULT_TOP_K,
     charBudget: _charBudget,
-  }: { topK?: number; charBudget?: number } = {},
+    namespace,
+  }: { topK?: number; charBudget?: number; namespace?: string } = {},
 ): Promise<LessonIndexRecord[]> {
-  const records = await loadLessonIndex(projectRoot, { limit: INDEX_LOAD_LIMIT });
+  const records = await loadLessonIndex(projectRoot, { limit: INDEX_LOAD_LIMIT }, namespace);
 
   const keywordTokens = new Set(keywords.flatMap(tokenize));
 

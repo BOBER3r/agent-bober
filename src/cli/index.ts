@@ -218,12 +218,17 @@ async function main(): Promise<void> {
       "--run-id <id>",
       "Use a caller-supplied run identifier instead of self-generating run-<timestamp>.",
     )
+    .option(
+      "--team <id>",
+      "Select the active team for this run; absent => config.defaultTeam then 'programming'.",
+    )
     .action(async (task?: string, cmdOpts?: {
       provider?: string;
       mode?: "autopilot" | "careful";
       checkpoint?: string;
       checkpointAll?: boolean;
       runId?: string;
+      team?: string;
     }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
@@ -235,6 +240,7 @@ async function main(): Promise<void> {
         checkpoint: cmdOpts?.checkpoint,
         checkpointAll: cmdOpts?.checkpointAll,
         runId: cmdOpts?.runId,
+        team: cmdOpts?.team,
       });
     });
 

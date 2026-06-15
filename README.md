@@ -443,7 +443,9 @@ npx agent-bober plan answer <specId> <questionId> "..."  # Resolve a single clar
 npx agent-bober sprint                                   # Execute next sprint
 npx agent-bober eval                                     # Evaluate current sprint
 npx agent-bober run "feature"                            # Full autonomous loop
+npx agent-bober run "feature" --team example             # Full autonomous loop using the 'example' team
 npx agent-bober chat                                     # Interactive chat REPL (roster + memory aware)
+npx agent-bober chat example                             # Interactive chat REPL using the 'example' team
 npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
 ```
 
@@ -545,6 +547,38 @@ Enable a panel and (optionally) restrict or override the lenses:
 ```
 
 Leave `lenses` empty to use the full built-in set; `maxConcurrent` bounds how many lenses run in parallel (default 4). The same panels are available on the Claude Code plugin surface via the lens-aware evaluator/architect agents.
+
+---
+
+## Teams
+
+agent-bober supports domain-agnostic **teams** — named configurations that route each run or chat session to a distinct set of providers, a separate memory namespace, and a chosen pipeline shape. **Adding a team is data, not code**: declare it in `bober.config.json`, no source changes required.
+
+```jsonc
+{
+  "defaultTeam": "programming",   // Active team when --team / chat <team> is omitted
+  "teams": {
+    "example": {
+      "displayName": "Example research team",
+      "memoryNamespace": "example",   // Lessons land in .bober/memory/example/
+      "pipelineShape": "ts",
+      "providers": { "chat": "openai" }
+    }
+  }
+}
+```
+
+```bash
+npx agent-bober run "summarise research" --team example
+npx agent-bober chat example
+```
+
+The built-in **programming** team is always available (no config entry needed) and uses
+the default `.bober/memory/` path and the project's configured providers.
+
+For full documentation on the three differentiation axes (provider routing / memory
+namespace / pipeline shape), the built-in programming team, and the deferred
+`.bober/teams/*.json` file registry, see [docs/teams.md](./docs/teams.md).
 
 ---
 
@@ -663,6 +697,17 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "lint":      "npm run lint",
     "dev":       "npm run dev",
     "typecheck": "npx tsc --noEmit"
+  },
+
+  // -- Teams (NEW: adding a team is data, not code) ----
+  "defaultTeam": "programming",           // Optional. Active team when --team / chat <team> is omitted.
+  "teams": {                              // Optional. Each entry is a team defined purely as DATA.
+    "example": {
+      "displayName": "Example research team",
+      "memoryNamespace": "example",       // Lessons land in .bober/memory/example/
+      "pipelineShape": "ts",              // "ts" | "skill" | "workflow"
+      "providers": { "chat": "openai" }   // Partial role->provider override; unset roles keep defaults
+    }
   }
 }
 ```

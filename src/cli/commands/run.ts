@@ -25,6 +25,8 @@ export interface RunCommandOptions {
   checkpointAll?: boolean;
   /** When set, the pipeline honors this runId instead of self-generating run-<timestamp>. */
   runId?: string;
+  /** When set, selects the active team; absent => config.defaultTeam then 'programming'. */
+  team?: string;
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────
@@ -145,7 +147,14 @@ export async function runRunCommand(
   try {
     spinner.stop();
 
-    const result = await runPipeline(task, projectRoot, config, { runId: options.runId });
+    if (options.team) {
+      logger.info(`Team: ${options.team}`);
+    }
+
+    const result = await runPipeline(task, projectRoot, config, {
+      runId: options.runId,
+      teamId: options.team,
+    });
 
     // Display final summary
     console.log();

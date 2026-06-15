@@ -355,6 +355,22 @@ export const ChatSectionSchema = z.object({
 });
 export type ChatSection = z.infer<typeof ChatSectionSchema>;
 
+// ── Team Section (Phase 4 — domain-agnostic team abstraction) ────────
+
+/** Schema for a single team entry declared under config.teams. All fields optional. */
+export const TeamConfigSchema = z.object({
+  displayName: z.string().optional(),
+  /** Memory namespace segment — restricted to a safe path segment. */
+  memoryNamespace: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
+  /** Orchestration engine shape for this team. Mirrors the z.enum in PipelineSectionSchema. */
+  pipelineShape: z.enum(["ts", "skill", "workflow"]).optional(),
+  /** Partial role -> provider override. Keys SHOULD be RoleName values. */
+  providers: z.record(z.string(), z.string()).optional(),
+  roles: z.array(z.object({ name: z.string(), displayName: z.string() })).optional(),
+  guardrails: z.unknown().optional(),
+});
+export type TeamConfig = z.infer<typeof TeamConfigSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -381,6 +397,9 @@ export const BoberConfigSchema = z.object({
   history: HistorySectionSchema.optional(),
   // ── Sprint 1: bober chat session layer ──
   chat: ChatSectionSchema.optional(),
+  // ── Phase 4: domain-agnostic team abstraction ──
+  teams: z.record(z.string(), TeamConfigSchema).optional(),
+  defaultTeam: z.string().optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
