@@ -30,8 +30,10 @@ namespaced per team by the same `memoryDir` rule:
 **Scope:** This guide describes the three-stage lessons pipeline from raw history to planner
 context, explains the explicit prohibition on reading raw history directly, provides a
 manual A/B procedure for measuring whether the memory system produces tighter sprint
-contracts, and documents the semantic facts store (storage, reconcile, auto-production, and
-retrieval into planning).
+contracts, documents the semantic facts store (storage, reconcile, auto-production, and
+retrieval into planning), and — for **Phase 5** — the off-by-default replay regression
+harness that makes self-improvement safe to enable (see
+[Replay Regression Harness](#replay-regression-harness-phase-5)).
 
 ---
 
@@ -533,3 +535,92 @@ runtime dependency. The store is synchronous by design (a transactional DB drive
 `node:fs` bulk read), which is not the case the "no synchronous filesystem ops" principle
 targets. These principles likely warrant a caveat acknowledging the facts store; that edit
 is left for a maintainer to make deliberately rather than rewritten here.
+
+---
+
+## Replay Regression Harness (Phase 5)
+
+Phase 5 (`spec-20260615-self-improve-p1-p2`) makes self-improvement **safe to enable** by
+freezing a corpus of golden eval outcomes that future changes can be diffed against. As of
+**Sprint 1** only the **storage foundation** has landed: a frozen replay corpus plus an
+off-by-default config section. The regression gate that *acts* on the corpus, the evaluator
+guards, and the GEPA evolve loop are **deferred to Sprints 2–4** (see
+[Roadmap](#replay-roadmap-sprints-2-4) below).
+
+> **Off by default.** Everything in this section is inert until later sprints wire the gates
+> that read the `selfImprove` flags. Capturing and inspecting the corpus today has **zero**
+> effect on a pipeline run.
+
+### The replay corpus
+
+```
+.bober/replay/replay.db          ← SQLite baseline index (table replay_cases)
+.bober/replay/cases/<caseId>.json ← immutable per-case fixture (one per captured eval result)
+```
+
+`ReplayStore` (`src/orchestrator/selfimprove/replay-store.ts`) clones the `FactStore`
+discipline exactly: `better-sqlite3` behind a swappable class, `CREATE TABLE IF NOT EXISTS`
+in the constructor, every statement parameterized with `?` (no string interpolation), and
+**no clock read inside the class** — every timestamp is a caller parameter, so the store is
+`:memory:`-testable and deterministic. The `replay_cases` row is
+`(case_id, contract_id, iteration, baseline_verdict, diff_digest, eval_details_json, t_captured)`
+with `case_id` as the primary key.
+
+`caseId` is a deterministic content hash —
+`sha256(`${contractId}|${iteration}|${diffDigest}`).slice(0,16)`, mirroring `factId`
+(`src/state/facts.ts:58`). `tCaptured` is intentionally **excluded** from the hash, so the id
+is stable across recaptures and only changes when `diffDigest` changes.
+
+### `bober replay` CLI
+
+The CLI (`src/cli/commands/replay.ts`, registered as `registerReplayCommand` in
+`src/cli/index.ts`) follows the `bober facts` / `bober memory` conventions: `chalk` output and
+handlers that **never throw** — on error they set `process.exitCode = 1` and return. All three
+subcommands accept `--replay-dir <dir>` (default `.bober/replay`).
+
+```bash
+# Ingest every .bober/eval-results/eval-*.json into immutable fixtures + the baseline DB.
+# Per file: baselineVerdict = passed ? 'pass' : 'fail',
+#           diffDigest = sha256(JSON.stringify(results)).slice(0,32)  (real git diff not re-derivable post-hoc),
+#           tCaptured stamped at the handler boundary (NEVER inside the store).
+# Invalid-JSON or field-missing files are skipped with a warning, not crashed.
+bober replay capture
+
+# Print one row per captured case (id, contract, iteration, verdict, captured-at)
+bober replay list
+
+# Print one case with provenance (contractId, iteration, baselineVerdict, diffDigest,
+# tCaptured, source fixture path). Unknown id → friendly message + exitCode 1.
+bober replay show <caseId>
+```
+
+`replay show` prints the fixture path (`.bober/replay/cases/<id>.json`); the fixture's JSON
+body additionally carries `sourceFile` (the original eval-result path) for full provenance.
+
+### `selfImprove` config section (off by default)
+
+`SelfImproveSectionSchema` (`src/config/schema.ts`) is wired into `BoberConfigSchema` as
+`selfImprove: SelfImproveSectionSchema.optional()`, mirroring the evaluator section. A config
+that omits `selfImprove` loads without throwing.
+
+```jsonc
+// bober.config.json — all flags default to false; the section is optional.
+"selfImprove": {
+  "deterministicGate":    false,  // Sprint 3 — evaluator guard (not yet wired)
+  "rubricIsolation":      false,  // Sprint 3 — evaluator guard (not yet wired)
+  "requireCitedArtifact": false,  // Sprint 3 — evaluator guard (not yet wired)
+  "replayDir":            ".bober/replay"
+}
+```
+
+Only `replayDir` has any effect today (it locates the corpus). The three boolean guards exist
+so the schema is forward-stable, but nothing reads them until Sprint 3 lands.
+
+<a id="replay-roadmap-sprints-2-4"></a>
+### Roadmap (Sprints 2–4)
+
+| Sprint | Adds |
+|--------|------|
+| 2 | `replay run` — re-evaluate captured cases and **compare to baseline** (the actual regression gate) |
+| 3 | Evaluator guards behind `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` |
+| 4 | GEPA evolve loop |
