@@ -22,12 +22,13 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
-## Domain-Agnostic Team Abstraction — in progress (3 of 4)
+## Domain-Agnostic Team Abstraction — complete (4 of 4)
 
 `spec-20260615-team-abstraction` — Phase 4 of the chattable multi-agent platform: make a
 "team" (the providers, pipeline shape, memory namespace, and role set the pipeline runs
 with) a **resolvable data object** rather than hard-coded behavior, with the existing
-programming flow as the first instance. Sprint 1 lands the data model, the
+programming flow as the first instance. **The plan is complete and the abstraction is
+proven end-to-end: adding a team is data, not code.** Sprint 1 lands the data model, the
 `loadTeam(config, teamId?)` resolver, the built-in `programming` team (zero behavior
 change), and the optional `teams` / `defaultTeam` config fields. Sprint 2 threads an
 optional per-team **namespace** through the lessons store and retriever so two teams'
@@ -35,11 +36,19 @@ lessons are isolated, with the default team keeping the existing `.bober/memory/
 Sprint 3 wires the active team's **`pipelineShape`** into runtime engine selection:
 `runPipeline` resolves the team via `loadTeam` and a new `selectPipelineEngineForTeam`
 seam picks the engine, reusing the existing eligibility + `'careful'`-mode downgrade
-(byte-identical log line) — the programming / no-team path is unchanged. CLI wiring + an
-example team + user-facing docs (Sprint 4) are deferred.
+(byte-identical log line) — the programming / no-team path is unchanged. Sprint 4 proves
+the claim: a minimal `example` team declared purely as a `teams` config entry (**no code
+branch**) flows through `loadTeam`; `bober run --team <id>` (additive, mirroring
+`--run-id`) threads to `runPipeline`, `bober chat [team]` resolves the once-ignored team
+arg and routes its memory namespace into `ChatSession`, so a lesson under the example team
+lands in `.bober/memory/example/`. User-facing docs ([`docs/teams.md`](../teams.md) +
+README Teams section) ship with it.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-team-abstraction-1.md](./sprint-spec-20260615-team-abstraction-1.md) | `Team` type + `loadTeam` registry + `programming` team + optional `teams`/`defaultTeam` config schema |
 | 2 | [sprint-spec-20260615-team-abstraction-2.md](./sprint-spec-20260615-team-abstraction-2.md) | Per-team memory namespace threaded through `memoryDir`/`appendLesson`/`loadLessonIndex`/`loadLesson`/`retrieveRelevantLessons`; default team unchanged |
 | 3 | [sprint-spec-20260615-team-abstraction-3.md](./sprint-spec-20260615-team-abstraction-3.md) | Team-aware pipeline-shape selection: `resolveEngineNameForTeam`/`selectPipelineEngineForTeam` + `runPipeline` `opts.teamId` (default `programming`); eligibility + `careful` downgrade preserved |
+| 4 | [sprint-spec-20260615-team-abstraction-4.md](./sprint-spec-20260615-team-abstraction-4.md) | Example team as pure config data + `bober run --team <id>` + `bober chat [team]` routing → `.bober/memory/example/`; user-facing [`docs/teams.md`](../teams.md) + README Teams section (the platform proof) |
+
+User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
