@@ -44,8 +44,9 @@ Planner context              ← topK-capped, charBudget-truncated lessons block
 ### Key invariants
 
 - **Index-only access.** `retrieveRelevantLessons` calls `loadLessonIndex` from
-  `src/state/memory.ts`, which opens exclusively `.bober/memory/INDEX.md`. It never
-  opens `history.jsonl`, `history.archive.jsonl`, or per-lesson `.md` files.
+  `src/state/memory.ts`, which opens exclusively the namespace's `INDEX.md` (the default
+  `.bober/memory/INDEX.md`; see [Per-Team Namespacing](#per-team-namespacing) below). It
+  never opens `history.jsonl`, `history.archive.jsonl`, or per-lesson `.md` files.
 - **Explicit distill step.** The planner consumes whatever `bober memory distill` last
   wrote. There is no auto-distill at plan time — this is a deliberate safety boundary.
 - **Deterministic ranking.** Lessons are ranked by lowercased token overlap between
@@ -171,6 +172,35 @@ and writes more specific success criteria, reducing banned-phrase violations.
 
 A single data point is not conclusive. Run the procedure across three or more
 independent features and average the issue counts before drawing conclusions.
+
+---
+
+## Per-Team Namespacing
+
+The lessons store is **namespaced per team** (`spec-20260615-team-abstraction`, Sprint 2).
+Each persistence function — `memoryDir`, `lessonPath`, `indexPath`, `appendLesson`,
+`loadLessonIndex`, `loadLesson` (`src/state/memory.ts`), and `retrieveRelevantLessons`
+(`src/orchestrator/memory/retrieve.ts`) — accepts an optional trailing `namespace`
+argument. The mapping rule is centralized in `memoryDir(projectRoot, namespace?)`:
+
+| `namespace` value | resolved directory |
+|-------------------|--------------------|
+| `undefined`, `""`, or `"programming"` | `.bober/memory/` (the default path, no subdir) |
+| any other value (e.g. `"teamA"`) | `.bober/memory/<namespace>/` |
+
+Each namespace has its **own bounded `INDEX.md`** (`.bober/memory/<ns>/INDEX.md`), so
+teams' lessons are fully isolated in both directions. The default / `programming` team
+keeps the existing `.bober/memory/` path — pre-existing lessons stay visible and there is
+**no migration** into a `programming/` subdir. Namespace values are constrained to
+`^[a-z0-9_-]+$` by the team config schema, so the path helpers do no traversal
+sanitization of their own.
+
+Callers derive the namespace from the active team rather than passing it by hand: the
+`bober memory` CLI resolves it via a non-fatal `loadConfig` + `loadTeam(config).memoryNamespace`
+helper, and the chat session threads `ChatSessionOptions.memoryNamespace` into
+`buildMemoryDistill`. Both default to the current `.bober/memory/` path when no team /
+config is present. Selecting a non-default team from the command line (`--team`) is not yet
+wired — memory commands operate on the default team's namespace only.
 
 ---
 
