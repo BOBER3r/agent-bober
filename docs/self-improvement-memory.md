@@ -541,15 +541,17 @@ is left for a maintainer to make deliberately rather than rewritten here.
 ## Replay Regression Harness (Phase 5)
 
 Phase 5 (`spec-20260615-self-improve-p1-p2`) makes self-improvement **safe to enable** by
-freezing a corpus of golden eval outcomes that future changes can be diffed against. As of
-**Sprint 1** only the **storage foundation** has landed: a frozen replay corpus plus an
-off-by-default config section. The regression gate that *acts* on the corpus, the evaluator
-guards, and the GEPA evolve loop are **deferred to Sprints 2–4** (see
+freezing a corpus of golden eval outcomes that future changes can be diffed against. **Sprint 1**
+landed the **storage foundation** (a frozen replay corpus plus an off-by-default config section);
+**Sprint 2** landed the **regression gate** that *acts* on it — `bober replay run` plus the public
+`runReplayHarness` / `compareToBaseline` API (see [The replay gate](#the-replay-gate-sprint-2)
+below). The evaluator guards and the GEPA evolve loop are **deferred to Sprints 3–4** (see
 [Roadmap](#replay-roadmap-sprints-2-4) below).
 
-> **Off by default.** Everything in this section is inert until later sprints wire the gates
-> that read the `selfImprove` flags. Capturing and inspecting the corpus today has **zero**
-> effect on a pipeline run.
+> **Off by default.** The `selfImprove` flags are inert until later sprints wire the evaluator
+> guards that read them. Capturing and inspecting the corpus has **zero** effect on a pipeline run;
+> `replay run` is an **explicit, manually-invoked** gate that re-derives verdicts from the frozen
+> corpus and **never runs any LLM**, so it never touches a live pipeline either.
 
 ### The replay corpus
 
@@ -575,7 +577,7 @@ is stable across recaptures and only changes when `diffDigest` changes.
 
 The CLI (`src/cli/commands/replay.ts`, registered as `registerReplayCommand` in
 `src/cli/index.ts`) follows the `bober facts` / `bober memory` conventions: `chalk` output and
-handlers that **never throw** — on error they set `process.exitCode = 1` and return. All three
+handlers that **never throw** — on error they set `process.exitCode = 1` and return. All four
 subcommands accept `--replay-dir <dir>` (default `.bober/replay`).
 
 ```bash
@@ -592,10 +594,82 @@ bober replay list
 # Print one case with provenance (contractId, iteration, baselineVerdict, diffDigest,
 # tCaptured, source fixture path). Unknown id → friendly message + exitCode 1.
 bober replay show <caseId>
+
+# Re-derive each captured case's fresh verdict deterministically and diff vs baseline.
+# Prints a CASE ID | BASELINE | FRESH | DELTA table; exits 1 on any regression,
+# 0 on a clean / improvement-only corpus, and 'no cases captured' + 0 on an empty one.
+bober replay run
 ```
 
 `replay show` prints the fixture path (`.bober/replay/cases/<id>.json`); the fixture's JSON
 body additionally carries `sourceFile` (the original eval-result path) for full provenance.
+
+<a id="the-replay-gate-sprint-2"></a>
+### The replay gate (Sprint 2)
+
+Sprint 2 makes the corpus *act*: `bober replay run` re-derives each captured case's verdict and
+fails the moment any case regresses versus its recorded baseline. The whole gate is a pure,
+deterministic function of the frozen fixtures — **it never re-runs the generator or evaluator
+LLM** (grep-verified: zero `runGeneratorAgent` / `runEvaluatorAgent` / `createClient` refs in
+`replay-harness.ts` or the `run` handler). This is the load-bearing invariant that lets Sprint 4
+use the harness as a cheap promotion gate.
+
+```
+replay.db (baseline_verdict per case)
+      │
+      ├─ runReplayHarness(projectRoot, config)         ← src/orchestrator/selfimprove/replay-harness.ts
+      │     listCases() → for each: deriveFreshVerdict(eval_details_json)   (NO LLM)
+      │           │
+      │           ▼
+      │     compareToBaseline(baseline, fresh)          ← PURE: no clock, no fs, no LLM
+      │           │
+      │           ▼
+      │     { regressions, improvements, unchanged, total, baseline, fresh }
+      │
+      ▼
+bober replay run   → CASE ID | BASELINE | FRESH | DELTA table; exitCode = 1 iff regressions.length > 0
+```
+
+**Classification semantics** (`compareToBaseline`, `src/orchestrator/selfimprove/replay-harness.ts:71`)
+— each caseId **present in the baseline corpus** is classified by its verdict transition:
+
+| Baseline | Fresh | Class | Fails the gate? |
+|----------|-------|-------|-----------------|
+| `pass`   | `fail` | **regression** | **yes** (exit 1) |
+| `fail`   | `pass` | improvement   | no |
+| same verdict (or fresh missing) | — | unchanged | no |
+
+A regression is **strictly** `pass → fail`. CaseIds present only in `fresh` are not classified (the
+baseline corpus defines the gate); a caseId absent from `fresh` falls back to its baseline verdict
+(→ unchanged). All three output arrays are sorted (`localeCompare`) for byte-stable output.
+
+**The deterministic fresh-verdict rule (NO LLM).** Because replay must not re-run any LLM, the
+"fresh" verdict is a stable, reproducible function of the frozen fixture.
+`deriveFreshVerdict(evalDetailsJson)` parses the captured `eval_details_json` array and returns
+`fail` **iff** any element's `failures[]` contains an entry with `passed === false` **and**
+`severity === 'error'`; otherwise `pass`. Malformed JSON, a non-array payload, or any missing field
+is treated permissively → `pass`. So re-running `replay run` over an unchanged corpus always yields
+zero regressions.
+
+**`runReplayHarness(projectRoot, config)`** (`src/orchestrator/selfimprove/replay-harness.ts:154`) is
+the **single public entry point** Sprint 4's GEPA `evolve` verb imports as its promotion gate. It
+opens the Sprint 1 `ReplayStore` at `<replayDir>/replay.db` (`config.selfImprove?.replayDir ??
+'.bober/replay'`; the section is optional), re-derives fresh verdicts, and returns
+`{ regressions, improvements, unchanged, total, baseline, fresh }` via `compareToBaseline` (the
+`baseline`/`fresh` maps power the CLI table). It always `close()`s the store in a `finally`.
+
+**`bober replay run` exit codes:**
+
+| Corpus state | stdout | `process.exitCode` |
+|--------------|--------|--------------------|
+| Empty (`total === 0`) | `no cases captured` | `0` |
+| One or more regressions | delta table + red `Regressions (N):` list | `1` |
+| Clean (improvements / unchanged only) | delta table | `0` (unset) |
+
+The handler does a **tolerant** `loadConfig` — config absence is non-fatal; it falls back to a stub
+config that still honours `--replay-dir`, so the gate works even in a project without a
+`bober.config.json`. Like every other `replay` subcommand it never throws (sets `exitCode = 1` and
+returns on error).
 
 ### `selfImprove` config section (off by default)
 
@@ -619,8 +693,8 @@ so the schema is forward-stable, but nothing reads them until Sprint 3 lands.
 <a id="replay-roadmap-sprints-2-4"></a>
 ### Roadmap (Sprints 2–4)
 
-| Sprint | Adds |
-|--------|------|
-| 2 | `replay run` — re-evaluate captured cases and **compare to baseline** (the actual regression gate) |
-| 3 | Evaluator guards behind `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` |
-| 4 | GEPA evolve loop |
+| Sprint | Status | Adds |
+|--------|--------|------|
+| 2 | **done** | `replay run` — re-derive captured cases' verdicts deterministically and **compare to baseline** (the regression gate); public `runReplayHarness` / `compareToBaseline` API — see [The replay gate](#the-replay-gate-sprint-2) |
+| 3 | pending | Evaluator guards behind `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` |
+| 4 | pending | GEPA evolve loop (imports `runReplayHarness` as its promotion gate) |

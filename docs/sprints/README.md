@@ -178,7 +178,7 @@ lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Pru
 and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
 under "Distilling Lessons from History".
 
-## Self-Improvement P1/P2 (Phase 5) — in progress (1 of 4)
+## Self-Improvement P1/P2 (Phase 5) — in progress (2 of 4)
 
 `spec-20260615-self-improve-p1-p2` — Phase 5 of the self-improvement effort: make
 self-improvement **safe to enable** before it is allowed to act. Sprint 1 lands the **storage
@@ -191,15 +191,29 @@ JSON fixtures under `.bober/replay/cases/`, a `replay_cases` baseline index in
 (`deterministicGate` / `rubricIsolation` / `requireCitedArtifact` each `.default(false)` +
 `replayDir`, wired `.optional()` into `BoberConfigSchema`), and a `bober replay
 capture|list|show` CLI that ingests existing `.bober/eval-results/eval-*.json` into the frozen
-corpus. **No live pipeline file is touched and no LLM call is made.** The actual regression gate
-(`replay run`, Sprint 2), the evaluator guards (Sprint 3), and the GEPA evolve loop (Sprint 4)
-are still to come — which is exactly why every `selfImprove` flag defaults to `false`.
+corpus. **No live pipeline file is touched and no LLM call is made.** Sprint 2 lands the
+**regression gate** that *acts* on that corpus: a PURE `compareToBaseline(baseline, fresh)`
+comparator (no clock/fs/LLM) that classifies each baseline caseId as a **regression** (baseline
+`pass` → fresh `fail`), an **improvement** (`fail` → `pass`), or **unchanged**; an async
+`runReplayHarness(projectRoot, config)` that opens the Sprint 1 `ReplayStore` and re-derives each
+fresh verdict **deterministically from the frozen `eval_details_json`** (`fail` iff any captured
+failure has `passed === false` AND `severity === 'error'`) — **never** re-running the generator or
+evaluator LLM (grep-verified: zero `runGeneratorAgent`/`runEvaluatorAgent`/`createClient` refs);
+and a `bober replay run` verb that prints a `CASE ID | BASELINE | FRESH | DELTA` table and **exits
+1 on any regression** (0 on a clean/improvement-only corpus, `no cases captured` + 0 on an empty
+one). `runReplayHarness` is the public function **Sprint 4's GEPA `evolve` verb imports as its
+promotion gate**. Still no pipeline/LLM touch and the Sprint 1 `ReplayStore` schema is unchanged.
+The evaluator guards (Sprint 3) and the GEPA evolve loop (Sprint 4) are still to come — which is
+why every `selfImprove` flag defaults to `false`.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-self-improve-p1-p2-1.md](./sprint-spec-20260615-self-improve-p1-p2-1.md) | Pure SQLite `ReplayStore` (`putCase`/`getCase`/`listCases`/`getBaselineVerdict`/`close`, deterministic `caseId` = `sha256(contractId\|iteration\|diffDigest).slice(0,16)`, `:memory:`-testable, no clock read in class) + immutable `.bober/replay/cases/*.json` fixtures + `replay_cases` baseline DB; off-by-default `SelfImproveSectionSchema` (`deterministicGate`/`rubricIsolation`/`requireCitedArtifact` `.default(false)` + `replayDir`) wired `.optional()` into `BoberConfigSchema`; `bober replay capture\|list\|show` CLI ingesting `.bober/eval-results/eval-*.json`; reuses existing `better-sqlite3` (no new dep), no pipeline/LLM touch |
+| 2 | [sprint-spec-20260615-self-improve-p1-p2-2.md](./sprint-spec-20260615-self-improve-p1-p2-2.md) | The replay **gate**: PURE `compareToBaseline(baseline, fresh)` → `{ regressions (baseline pass→fresh fail), improvements (fail→pass), unchanged }` (sorted, no clock/fs/LLM) + async `runReplayHarness(projectRoot, config)` re-deriving fresh verdicts **deterministically from frozen `eval_details_json`** (NO LLM — zero `runGeneratorAgent`/`runEvaluatorAgent`/`createClient`) → `{ …, total, baseline, fresh }`; `bober replay run` per-case delta table, **exit 1 on regression** / 0 clean / `no cases captured` empty; tolerant `loadConfig`, never-throws. `runReplayHarness` is **Sprint 4's GEPA promotion gate**; ReplayStore schema + pipeline/agents untouched |
 
 The replay harness is documented in
 [`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Replay Regression Harness
-(Phase 5)"), including the off-by-default invariant, the `bober replay` CLI, the `selfImprove`
-config section, and the Sprints 2–4 roadmap.
+(Phase 5)"), including the off-by-default invariant, the `bober replay` CLI (now `capture|list|show|run`),
+the [replay gate](../self-improvement-memory.md#the-replay-gate-sprint-2) (`replay run` /
+`runReplayHarness` / `compareToBaseline` semantics + the deterministic no-LLM fresh-verdict rule),
+the `selfImprove` config section, and the Sprints 2–4 roadmap.
