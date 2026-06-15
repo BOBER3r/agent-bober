@@ -13,6 +13,7 @@ import { assembleSystemPrompt } from "./agent-loader.js";
 import { buildToolSet } from "./tools/index.js";
 import { runAgenticLoop, coerceJsonOutput } from "./agentic-loop.js";
 import type { ResearchDoc } from "./research-agent.js";
+import { retrieveRelevantFacts, serializeFactsForContext } from "./memory/fact-retrieve.js";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -196,6 +197,20 @@ export async function runPlanner(
     ? `\n\n## Architecture\n${truncateArchitecture(architectDoc)}`
     : "";
 
+  // ── Sprint 5: inject scope-keyed project facts (best-effort) ──────────
+  // Retrieval failure must NEVER block planning. Scope "" = default/programming team.
+  let factsSection = "";
+  try {
+    const factKeywords = userPrompt.split(/\s+/).filter((w) => w.length > 2);
+    const facts = await retrieveRelevantFacts(projectRoot, "", factKeywords, { topK: 5 });
+    const serialized = serializeFactsForContext(facts, { charBudget: 1200 });
+    if (serialized) {
+      factsSection = `\n\n${serialized}`;
+    }
+  } catch {
+    // Retrieval failure is non-fatal — planning proceeds without facts
+  }
+
   const userMessage = `# Task Description
 ${userPrompt}
 
@@ -203,7 +218,7 @@ ${userPrompt}
 ${projectRoot}
 
 # Project Context
-${context}${researchSection}${architectSection}
+${context}${researchSection}${architectSection}${factsSection}
 
 Explore the codebase using your tools if you need more context, then produce a PlanSpec JSON.
 Your final response must contain ONLY valid JSON matching the PlanSpec schema (no markdown fences, no explanation).`;

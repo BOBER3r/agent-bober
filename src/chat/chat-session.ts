@@ -29,6 +29,7 @@ import { setPaused, clearPaused } from "../state/pause.js";
 import type { ApprovedMarker, RejectedMarker } from "../state/approval-state.js";
 import { resolveApprover } from "../cli/commands/approve.js";
 import { cleanupTerminalRun } from "./steer-cleanup.js";
+import { seedProjectFacts } from "../orchestrator/memory/fact-detector.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -496,6 +497,14 @@ export class ChatSession {
     process.stdout.write(
       "bober chat — type a question, /help for commands, /exit to quit\n> ",
     );
+
+    // ── Sprint 5: seed project facts at chat startup (best-effort) ──
+    // A facts failure must NEVER break chat startup.
+    try {
+      await seedProjectFacts(this.projectRoot, this.memoryNamespace);
+    } catch {
+      // Swallow silently — facts failure must never abort chat
+    }
 
     for await (const line of rl) {
       const input = line.trim();

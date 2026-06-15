@@ -1005,6 +1005,7 @@ export async function runTsPipeline(
 
 import { selectPipelineEngineForTeam } from "./workflow/selector.js";
 import { loadTeam } from "../teams/registry.js";
+import { seedProjectFacts } from "./memory/fact-detector.js";
 
 /**
  * Public entry point. Resolves the configured pipeline engine and delegates.
@@ -1022,5 +1023,16 @@ export async function runPipeline(
 ): Promise<PipelineResult> {
   const teamId = opts?.teamId ?? config.defaultTeam;
   const team = loadTeam(config, teamId);
+
+  // ── Sprint 5: deterministic project-fact auto-producer (best-effort) ──
+  // A facts failure must NEVER abort a pipeline run.
+  try {
+    await seedProjectFacts(projectRoot, team.memoryNamespace || undefined);
+  } catch (err) {
+    logger.warn(
+      `Project-fact seeding skipped: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   return selectPipelineEngineForTeam(team, config).run(userPrompt, projectRoot, config, opts);
 }
