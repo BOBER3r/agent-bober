@@ -115,12 +115,21 @@ bober run "feature" --checkpoint noop               # No checkpoints (explicit)
 bober run "feature" --checkpoint-all                # Apply mechanism to ALL checkpoints
 bober run "feature" --provider openai               # Override provider for all agents
 bober run "feature" --run-id my-run-123             # Use a caller-supplied run identifier
+bober run "feature" --approve-gates post-research,post-plan,post-sprint   # Gate only these checkpoints (disk)
 ```
 
 `--run-id <id>` makes the pipeline use the supplied identifier instead of self-generating
 `run-<timestamp>` — the roster state and completion marker (`.bober/runs/<id>.completed.json`)
 are keyed on it. Additive and optional; omitting it preserves the default behavior. This is
 how `bober chat` launches detached runs with a session-chosen id.
+
+`--approve-gates <comma-list>` turns on **disk** checkpoints for only the named gates for
+that run — it merges `{ gate -> 'disk' }` into `checkpointOverrides` without setting
+`--mode careful`, so just the listed sites pause. Valid gate names are the declared
+checkpoint sites: `post-research`, `post-plan`, `post-sprint-contract`, `pre-curator`,
+`pre-generator`, `pre-evaluator`, `pre-code-reviewer`, `post-sprint`, `end-of-pipeline`.
+An unknown gate name is rejected with a clear error and no partial merge. Additive and
+optional; this is how `bober chat`'s careful mode launches a gated run.
 
 `--mode` and `--checkpoint` flags override `bober.config.json` for the duration of the run.
 See [VISION.md](./VISION.md) for a full explanation of modes.
@@ -155,12 +164,21 @@ Inside the session:
 > stop the settings page run    # natural language → stops the matching running run
 > /runs                         # list active/recent runs (deterministic, no LLM call)
 > /stop <runId>                 # stop a running run by id (deterministic, no LLM call)
+> /careful [on|off]             # toggle approval gates for new runs (deterministic, no LLM call)
 > /help                         # show slash commands
 > /exit                         # end the session (detached runs keep going)
 ```
 
-The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/help`, and `/exit`
-— none of them call the LLM.
+The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/careful [on|off]`,
+`/help`, and `/exit` — none of them call the LLM.
+
+`/careful on` makes runs you launch from chat pause at curated gates; `/careful off` (the
+default) launches them in autopilot. With careful **on**, the detached run is launched with
+`--approve-gates post-research,post-plan,post-sprint`, so those checkpoints write pending
+markers under `.bober/approvals/`. With careful **off**, the spawn is byte-for-byte
+identical to autopilot. The flag is persisted per session at
+`.bober/chat/<sessionId>.careful.json` and takes effect on the next run you launch;
+`/careful` with no argument reports the current state.
 
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as

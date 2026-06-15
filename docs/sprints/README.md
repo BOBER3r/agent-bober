@@ -22,6 +22,27 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
+## Chat Interrupt / Approve / Steer — in progress (1 of 6)
+
+`spec-20260615-chat-interrupt-approve-steer` — Phase 2 of the chattable platform: mid-flight
+human-in-the-loop control of chat-launched runs (surface pending approvals, approve/reject,
+inject guidance, pause/resume). Sprint 1 lays the spine — all additive, default-off, autopilot
+unchanged: the `RunState` status grammar gains `input-required` / `paused` plus four optional
+pending/pause fields; `bober run` gains an additive `--approve-gates <comma-list>` flag that
+disk-gates only the named checkpoint sites (validated against `CHECKPOINT_SITES`, unknown gate
+rejected with no partial merge); and a session-persisted `/careful on|off` chat toggle makes
+`RunSpawner` launch the detached child with the curated
+`--approve-gates post-research,post-plan,post-sprint`. With careful off, a chat spawn is
+byte-for-byte identical to Phase 1. The read/surface (Sprint 2), write/resolve (Sprint 3),
+guidance (Sprint 4), pause/resume (Sprint 5), and hygiene+docs+e2e (Sprint 6) paths are not
+built yet.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260615-chat-interrupt-approve-steer-1.md](./sprint-spec-20260615-chat-interrupt-approve-steer-1.md) | Additive `RunState` grammar (`input-required`/`paused` + pending/pause fields) + `bober run --approve-gates` + `CarefulSidecar` + `/careful [on\|off]` + careful-aware `RunSpawner.spawn` |
+
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`).
+
 ## Domain-Agnostic Team Abstraction — complete (4 of 4)
 
 `spec-20260615-team-abstraction` — Phase 4 of the chattable multi-agent platform: make a
