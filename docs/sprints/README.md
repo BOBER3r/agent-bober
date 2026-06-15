@@ -22,7 +22,7 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
-## Chat Interrupt / Approve / Steer — in progress (3 of 6)
+## Chat Interrupt / Approve / Steer — in progress (4 of 6)
 
 `spec-20260615-chat-interrupt-approve-steer` — Phase 2 of the chattable platform: mid-flight
 human-in-the-loop control of chat-launched runs (surface pending approvals, approve/reject,
@@ -47,16 +47,27 @@ to write the `.approved.json` / `.rejected.json` markers. The detached child's e
 `runCheckpointWithFeedback` rework path (proven by a real-mechanism round-trip test), and the
 chat-owned `RunState` clears its pending fields back to `running` — the inverse of Sprint 2's
 reflection. NL resolution never guesses a load-bearing target: it auto-picks only the single
-outstanding marker and otherwise asks which. The guidance (Sprint 4), pause/resume (Sprint 5),
-and hygiene+docs+e2e (Sprint 6) paths are not built yet.
+outstanding marker and otherwise asks which. Sprint 4 adds the **steer/guidance** path: a
+`runId`-keyed guidance channel at `.bober/runs/<id>/guidance.jsonl` written by a
+`/tell <runId> <text>` slash command (and an NL `tell run X to …` classifier action), plus
+a single **additive** pipeline read point that drains pending guidance at each sprint
+boundary and injects it into the generator's handoff as `Human guidance: <text>` entries.
+`appendGuidance` validates the runId via a `safeSegment` path-traversal guard *before* any
+write, `drainGuidance` atomically marks entries consumed so a redrain returns nothing, and
+`injectGuidanceIntoHandoff` returns the **same handoff reference** when no guidance is
+queued — so with no guidance the pipeline is byte-for-byte unchanged (`runTsPipeline` and
+the `:571` invariant untouched). Guidance is advisory-only, applies at the next boundary,
+and does not require careful mode. The pause/resume (Sprint 5) and hygiene+docs+e2e
+(Sprint 6) paths are not built yet.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-chat-interrupt-approve-steer-1.md](./sprint-spec-20260615-chat-interrupt-approve-steer-1.md) | Additive `RunState` grammar (`input-required`/`paused` + pending/pause fields) + `bober run --approve-gates` + `CarefulSidecar` + `/careful [on\|off]` + careful-aware `RunSpawner.spawn` |
 | 2 | [sprint-spec-20260615-chat-interrupt-approve-steer-2.md](./sprint-spec-20260615-chat-interrupt-approve-steer-2.md) | Read-only approval surfacing in chat: `ApprovalReader` + announce-once `ApprovalCursor` + `handleTurn` poll-prelude notice + idempotent `RunState` reflection + roster `[INPUT-REQUIRED]` / `waiting=<gate>` |
 | 3 | [sprint-spec-20260615-chat-interrupt-approve-steer-3.md](./sprint-spec-20260615-chat-interrupt-approve-steer-3.md) | Resolve approvals from chat (write path): `/approve <id>` + `/reject <id> [feedback]` slash commands + NL approve/reject classifier intent, reusing `saveApproved`/`saveRejected` behind the `pendingExists` guard + `resolveApprover`; never-guess ambiguity rule; `RunState` cleared back to `running`; `DiskCheckpointMechanism` round-trip proof |
+| 4 | [sprint-spec-20260615-chat-interrupt-approve-steer-4.md](./sprint-spec-20260615-chat-interrupt-approve-steer-4.md) | Free-text guidance/steer path: `runId`-keyed `guidance.jsonl` channel (`safeSegment` path-traversal guard + atomic drain-consume), `/tell <runId> <text>` slash command + NL `tell` classifier action, and a single additive `pipeline.ts` read point draining guidance into the generator handoff (`Human guidance: <text>`); reference-identity no-op when none queued |
 
-User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`, `/approve`, `/reject`).
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`, `/approve`, `/reject`, `/tell`).
 
 ## Domain-Agnostic Team Abstraction — complete (4 of 4)
 

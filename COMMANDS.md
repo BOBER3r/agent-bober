@@ -167,12 +167,14 @@ Inside the session:
 > /careful [on|off]             # toggle approval gates for new runs (deterministic, no LLM call)
 > /approve <id>                 # approve a pending checkpoint, resume the run (deterministic)
 > /reject <id> [feedback]       # reject a pending checkpoint with optional feedback (deterministic)
+> /tell <runId> <text>          # queue free-text guidance for a run, applied at its next boundary (deterministic)
 > /help                         # show slash commands
 > /exit                         # end the session (detached runs keep going)
 ```
 
 The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/careful [on|off]`,
-`/approve <id>`, `/reject <id> [feedback]`, `/help`, and `/exit` — none of them call the LLM.
+`/approve <id>`, `/reject <id> [feedback]`, `/tell <runId> <text>`, `/help`, and `/exit` —
+none of them call the LLM.
 
 `/careful on` makes runs you launch from chat pause at curated gates; `/careful off` (the
 default) launches them in autopilot. With careful **on**, the detached run is launched with
@@ -202,6 +204,17 @@ guessing. Resolution writes the same `.approved.json` / `.rejected.json` markers
 detached run resumes via its existing disk poll and the chat-owned `RunState` flips back to
 `running` on the next turn. The CLI commands remain available for resolving runs from outside a
 chat session.
+
+**Steering a run with free-text guidance.** Beyond approve/reject, you can feed a run
+advisory guidance without leaving the REPL. `/tell <runId> <text>` queues the text
+(everything after the runId, spacing preserved) onto that run's guidance channel at
+`.bober/runs/<runId>/guidance.jsonl`; natural language works too ("tell run X to prefer
+Zod"). An unknown runId replies `No such run: <runId>` and **writes nothing**, and a runId
+containing path separators or `..` is rejected before any write. Guidance is **queued, not
+pushed** — the detached run drains it at its **next** sprint boundary (the pre-generator
+read point) and injects each line into the generator's handoff as a `Human guidance: <text>`
+entry; it never interrupts an in-flight agent call, never edits files or overrides the
+contract, and does **not** require careful mode. Each queued line is consumed exactly once.
 
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as
