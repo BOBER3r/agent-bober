@@ -1,0 +1,175 @@
+{
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "version": 1,
+  "createdAt": "2026-06-15T18:33:10Z",
+  "updatedAt": "2026-06-15T18:33:10Z",
+  "title": "Self-improvement P1/P2 (offline, gated): replay harness, evaluator anti-degeneration guards, GEPA prompt evolution",
+  "description": "Harden self-improvement so it is safe to turn on. Add a frozen replay regression harness (the gate), three off-by-default evaluator anti-degeneration guards, and an offline replay-gated GEPA prompt-evolution CLI. The cross-cutting invariant: the system never edits its own prompts/lessons without a deterministic, replay-gated check, and live pipeline behavior is byte-identical until a new selfImprove flag is explicitly enabled.",
+  "status": "completed",
+  "completedAt": "2026-06-15T23:00:00Z",
+  "mode": "greenfield",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "tech-constraints",
+      "question": "Where does the replay corpus live and what stores the baseline index?",
+      "options": [
+        { "label": "A", "description": "Files under .bober/replay/cases/*.json (immutable) + SQLite index replay.db, reusing the FactStore adapter pattern." },
+        { "label": "B", "description": "A single monolithic JSON manifest with all cases inline." }
+      ],
+      "recommendation": "A — principles.md mandates filesystem state, SQLite is already used (src/state/facts.ts:3 better-sqlite3), and standalone JSON cases stay git-diffable + immutable.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q2",
+      "category": "tech-constraints",
+      "question": "How does the deterministic-first gate short-circuit the LLM judge without changing default behavior?",
+      "options": [
+        { "label": "A", "description": "A pure guard after runEvaluation in runEvaluatorAgent that skips runAgentEvaluation when a required programmatic strategy failed AND config.selfImprove.deterministicGate is true; default false keeps both calls running." },
+        { "label": "B", "description": "Always short-circuit unconditionally." }
+      ],
+      "recommendation": "A — runEvaluation already exposes per-strategy passed+required (registry.ts:181-203); off-by-default preserves the existing programmaticEval.passed && agentResult.passed combine (evaluator-agent.ts:116).",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q3",
+      "category": "scope",
+      "question": "What does rubric isolation strip from the generator-bound handoff, and from where?",
+      "options": [
+        { "label": "A", "description": "A pure redactRubric(handoff) removing successCriteria, evaluatorNotes, and verificationMethod from currentContract, applied at createHandoff in pipeline.ts only when config.selfImprove.rubricIsolation is true." },
+        { "label": "B", "description": "Strip the entire contract from the handoff." }
+      ],
+      "recommendation": "A — the handoff carries the full currentContract (context-handoff.ts:47) including the rubric; the generator needs title/description/definitionOfDone/generatorNotes but not the evaluator's scoring criteria. Off-by-default.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q4",
+      "category": "error-handling",
+      "question": "What makes a FAIL detail uncited and what happens to it under the cite-artifact guard?",
+      "options": [
+        { "label": "A", "description": "A FAIL EvalDetail with no file (optionally line) AND no failing-test/command-output substring in message is downgraded to passed:true severity:info when config.selfImprove.requireCitedArtifact is true, so an uncited FAIL cannot fail the sprint." },
+        { "label": "B", "description": "Reject the whole evaluation if any FAIL is uncited." }
+      ],
+      "recommendation": "A — EvalDetail.file/line are optional (eval-result.ts:14-15) and the judge prompt already asks for file:line evidence (evaluator-agent.ts:289); a pure downgrade is conservative and deterministic.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q5",
+      "category": "scope",
+      "question": "Does GEPA ever mutate the live agent .md files or the live pipeline?",
+      "options": [
+        { "label": "A", "description": "No. bober evolve reads agents/<role>.md, writes variants + the replay-gated winner only under .bober/evolve/<runId>/, never to agents/ and never invoked by runPipeline; promotion to agents/ is a manual human copy, out of scope here." },
+        { "label": "B", "description": "evolve writes the winning prompt directly back to agents/<role>.md." }
+      ],
+      "recommendation": "A — research §5 P2 + §7 risk #3 demand replay-gated, offline-only self-edits; keeping writes inside .bober/evolve/ makes Phase 5 fully reversible.",
+      "ambiguityWeight": 1
+    }
+  ],
+  "resolvedClarifications": [
+    { "questionId": "Q1", "answer": "A — files under .bober/replay/cases/*.json + SQLite replay.db via the FactStore adapter pattern.", "resolvedAt": "2026-06-15T18:33:10Z", "resolvedBy": "planner" },
+    { "questionId": "Q2", "answer": "A — pure guard after runEvaluation, gated by config.selfImprove.deterministicGate (default false).", "resolvedAt": "2026-06-15T18:33:10Z", "resolvedBy": "planner" },
+    { "questionId": "Q3", "answer": "A — pure redactRubric stripping successCriteria/evaluatorNotes/verificationMethod, gated by config.selfImprove.rubricIsolation (default false).", "resolvedAt": "2026-06-15T18:33:10Z", "resolvedBy": "planner" },
+    { "questionId": "Q4", "answer": "A — downgrade uncited FAIL details to passed:true info, gated by config.selfImprove.requireCitedArtifact (default false).", "resolvedAt": "2026-06-15T18:33:10Z", "resolvedBy": "planner" },
+    { "questionId": "Q5", "answer": "A — evolve writes only under .bober/evolve/, never to agents/ and never into runPipeline.", "resolvedAt": "2026-06-15T18:33:10Z", "resolvedBy": "planner" }
+  ],
+  "assumptions": [
+    "Replay fixtures live at .bober/replay/cases/<caseId>.json (immutable) with a SQLite baseline index .bober/replay/replay.db, built with the FactStore adapter pattern (src/state/facts.ts:136): deterministic content-hash id, timestamps injected as params, :memory:-testable, CREATE TABLE IF NOT EXISTS in ctor.",
+    "All new behavior is gated by a new config.selfImprove section (Zod, added to BoberConfigSchema as optional, every flag default false), mirroring EvaluatorSectionSchema (src/config/schema.ts:104). With the section absent or all-false, runPipeline / runEvaluatorAgent behavior is byte-identical to today.",
+    "The deterministic-first gate is inserted in runEvaluatorAgent after runEvaluation (src/orchestrator/evaluator-agent.ts:81) as a pure predicate over the programmatic results' passed+required fields; it skips runAgentEvaluation only when a required strategy failed AND the flag is on.",
+    "Rubric isolation is a pure redactRubric(handoff) applied at createHandoff in pipeline.ts (:276); the generator keeps title/description/definitionOfDone/generatorNotes/nonGoals and loses successCriteria/evaluatorNotes/verificationMethod.",
+    "The cite-artifact guard is a pure fn over EvalResult.details (src/contracts/eval-result.ts:10) that downgrades uncited FAIL details; an EvalDetail is cited if it has a file (optionally line) or a failing-test-name / command-output substring in message.",
+    "GEPA reads/writes agent prompt text via the agents/<role>.md contract (src/orchestrator/agent-loader.ts loadAgentDefinition: body after frontmatter is the systemPrompt); evolve writes only under .bober/evolve/<runId>/, scores variants ONLY via runReplayHarness, and never writes agents/ or touches runPipeline.",
+    "GEPA mutation operators are a small deterministic-seeded set (paraphrase / add-constraint / reorder); the precise operator choice is the generator's call — the replay gate, not the operator, is the load-bearing constraint.",
+    "CLI verbs replay and evolve follow the register<X>Command(program) pattern (src/cli/commands/facts.ts), resolve root via findProjectRoot, use chalk, and never throw (set process.exitCode=1 and return).",
+    "Runs identically on Anthropic or DeepSeek: replay/guards do no LLM calls except GEPA variant generation, which goes through the existing provider-agnostic createClient (src/providers/factory.ts) — no SDK import outside providers/."
+  ],
+  "outOfScope": [
+    "Auto-promoting an evolved prompt into agents/<role>.md (writes stay under .bober/evolve/; promotion is a manual human copy)",
+    "Wiring any new gate or verb into runPipeline by default (all flags off-by-default; deterministicGate/rubricIsolation/requireCitedArtifact are opt-in)",
+    "GEPA on-line / in-the-loop evolution during a live run (offline CLI only)",
+    "Evolving lesson text or semantic_facts (Phase 5 targets generator/evaluator prompt instruction text only)",
+    "Re-running the actual generator LLM during replay (replay re-derives verdicts from captured programmatic strategies + frozen diff digests, not by re-generating code)",
+    "A vector/semantic similarity layer over the replay corpus (deterministic exact comparison only)",
+    "Medical team work (Phase 6)"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Replay regression corpus + store",
+      "description": "An immutable golden corpus of past (contract, diff digest, eval verdict) tuples under .bober/replay/, with a pure SQLite-backed baseline index and a capture/list/show CLI, plus a new off-by-default selfImprove config section.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A ReplayStore adapter persists immutable cases to .bober/replay/cases/*.json + a baseline index .bober/replay/replay.db, with deterministic caseIds and injected timestamps, testable against an in-memory DB.",
+        "AC2: `bober replay capture` ingests existing .bober/eval-results/*.json into the corpus; `replay list` and `replay show <id>` print the corpus and per-case provenance; handlers never throw."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Deterministic replay gate",
+      "description": "A pure comparator and a `bober replay run` verb that re-derives each case's verdict deterministically, diffs vs the recorded baseline, reports pass/fail deltas, and exits non-zero on any regression. Exposes runReplayHarness() for GEPA to import as its gate.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober replay run` prints a per-case delta table and sets exit code 1 iff at least one case regressed vs baseline (exit 0 with a no-regression message otherwise).",
+        "AC2: A public runReplayHarness(projectRoot, config) returns {regressions, improvements, unchanged} for programmatic reuse by the evolve verb."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Evaluator anti-degeneration guards",
+      "description": "Three pure, off-by-default guards on the generator↔evaluator loop: deterministic-first short-circuit of the LLM judge, rubric isolation from the generator prompt, and rejection of uncited FAIL details.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When config.selfImprove.deterministicGate is true and a required programmatic strategy failed, runEvaluatorAgent returns a FAIL without invoking runAgentEvaluation; with the flag false the LLM judge still runs (byte-identical to today).",
+        "AC2: When rubricIsolation is true the generator-bound handoff omits successCriteria/evaluatorNotes; when requireCitedArtifact is true an uncited FAIL detail is downgraded so it cannot fail the sprint; both default false and are no-ops when unset."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "GEPA offline prompt evolution",
+      "description": "An offline `bober evolve` verb that mutates generator/evaluator prompt variants, keeps a Pareto set, scores variants ONLY against the replay harness, and writes a promoted prompt under .bober/evolve/ only if it beats the baseline with zero regressions — never writing agents/ and never invoked by runPipeline.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober evolve --role generator|evaluator` reads agents/<role>.md, generates variants, scores each via runReplayHarness, and writes the winner to .bober/evolve/<runId>/promoted/<role>.md only when it strictly beats baseline with zero regressions.",
+        "AC2: No code path in the evolve feature writes to agents/ and evolve is not referenced by runPipeline; a regressing or non-improving variant produces a 'no promotion' report and no promoted/ file."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "techStack": ["TypeScript (strict, ESM/NodeNext)", "better-sqlite3", "commander", "zod", "vitest", "chalk"],
+  "techNotes": {
+    "integrationPoints": [
+      "src/orchestrator/evaluator-agent.ts (deterministic-first gate insertion after runEvaluation)",
+      "src/orchestrator/pipeline.ts (rubric isolation at createHandoff)",
+      "src/config/schema.ts (new optional selfImprove section)",
+      "src/cli/index.ts (register replay + evolve verbs)",
+      "src/orchestrator/agent-loader.ts (read agents/<role>.md for GEPA)",
+      ".bober/eval-results/ (replay capture source)"
+    ],
+    "dataModel": "ReplayCase {caseId(hash), contractId, iteration, baselineVerdict(pass|fail), diffDigest, evalDetails[]} persisted as .bober/replay/cases/<caseId>.json + a baseline row in .bober/replay/replay.db. GEPA variants under .bober/evolve/<runId>/ with a report.json Pareto record.",
+    "securityConsiderations": [
+      "GEPA must never write to agents/ or the live pipeline — enforced by tests that grep for forbidden write targets",
+      "All new flags default off so an accidental config omission cannot change live behavior",
+      "No SDK import outside providers/; GEPA variant generation goes through the provider-agnostic createClient"
+    ]
+  },
+  "nonFunctionalRequirements": [
+    { "category": "reliability", "requirement": "With config.selfImprove absent or all flags false, runPipeline and runEvaluatorAgent are byte-identical to pre-Phase-5 behavior.", "verificationMethod": "A vitest invariant test asserts handoff and evaluation outputs are unchanged when all selfImprove flags are false." },
+    { "category": "maintainability", "requirement": "TypeScript strict zero errors and tsc clean build across all new modules.", "verificationMethod": "npm run typecheck and npm run build exit 0." },
+    { "category": "security", "requirement": "GEPA never writes to agents/ and is never invoked by runPipeline.", "verificationMethod": "A vitest test greps the evolve source + runPipeline for any write to agents/ or call to evolve and asserts none exist." }
+  ],
+  "constraints": [
+    "ESM everywhere (.js import specifiers, NodeNext); import type syntax; _-prefixed unused params",
+    "Zod for all config validation; new selfImprove section is optional with every flag .default(false)",
+    "Filesystem state in .bober/ (JSON files); SQLite only via the existing better-sqlite3 adapter pattern",
+    "Provider-agnostic: no @anthropic-ai/sdk or openai import outside providers/; runs on Anthropic or DeepSeek",
+    "Additive + reversible: no live pipeline behavior change by default; every new gate/verb opt-in or off-by-default"
+  ]
+}

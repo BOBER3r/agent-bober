@@ -1,0 +1,22 @@
+{
+  "evalId": "eval-sprint-spec-20260615-self-improve-p1-p2-1-1",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-1",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T21:20:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "passed": true,
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "results": [
+    { "evaluator": "build", "required": true, "passed": true },
+    { "evaluator": "typecheck", "required": true, "passed": true },
+    { "evaluator": "lint", "required": false, "passed": true },
+    { "evaluator": "unit-test", "required": false, "passed": true }
+  ],
+  "regressions": [],
+  "concerns": [
+    "low: `replay show` prints the fixture path (.bober/replay/cases/<id>.json) rather than the original eval-result path; fixture JSON contains sourceFile. UX-only, tests accept it.",
+    "low: generator's 'scanner.test.ts pre-existing failure' claim was false — scanner tests pass on both parent and sprint commit."
+  ],
+  "summary": "All 8 success criteria pass, independently verified. Build/typecheck clean, ReplayStore pure (no clock reads in class), all SQL parameterized, SelfImproveSectionSchema wired optional+defaults, CLI capture/list/show works e2e in temp dir. NonGoals respected (no new dep; evaluator-agent.ts/pipeline.ts/agents untouched). Full suite 2236 tests pass — no regressions."
+}

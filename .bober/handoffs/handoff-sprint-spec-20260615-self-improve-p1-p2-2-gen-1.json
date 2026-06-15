@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-self-improve-p1-p2-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-2",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T21:35:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 5 — make self-improvement safe. Sprint 2 builds the replay GATE: a pure compareToBaseline comparator + a `bober replay run` verb that re-derives each frozen case's verdict deterministically (NOT by re-running any LLM), diffs vs baseline, prints a per-case delta table, and exits non-zero on any regression. Exposes runReplayHarness(projectRoot, config) for Sprint 4's evolve verb to import as its promotion gate.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-self-improve-p1-p2-1", "title": "Replay store + selfImprove config + replay capture|list|show", "summary": "ffd6e8a — ReplayStore (putCase/getCase/listCases/getBaselineVerdict/close, :memory:-testable, content-hash caseId), ReplayCaseRecord (eval_details_json/diff_digest/baseline_verdict), off-by-default selfImprove config (replayDir default '.bober/replay'), replay.ts CLI (capture|list|show, no-throw + process.exitCode). Sprint 2 EXTENDS replay.ts with `run` and ADDS replay-harness.ts." }
+    ],
+    "currentBranch": "bober/self-improve-p1-p2",
+    "relevantFiles": [
+      "src/orchestrator/selfimprove/replay-store.ts (Sprint 1 — load cases via listCases(); ReplayCaseRecord shape)",
+      "src/orchestrator/selfimprove/replay-types.ts (Sprint 1 — record/eval-detail shape for deterministic re-derivation)",
+      "src/orchestrator/memory/distill.ts (pure, fs-free, clock-free exemplar for compareToBaseline)",
+      "src/cli/commands/replay.ts (Sprint 1 — extend with `run`; no-throw + process.exitCode=1 pattern)",
+      "src/cli/commands/replay.test.ts (Sprint 1 — exit-code capture/restore test pattern)",
+      "src/config/schema.ts + src/config/loader.ts (read config.selfImprove.replayDir; tolerate missing section)"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-self-improve-p1-p2-2.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260615-self-improve-p1-p2-2-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

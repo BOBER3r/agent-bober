@@ -1,0 +1,16 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-4",
+  "status": "complete",
+  "iteration": 1,
+  "commit": "46e96f7",
+  "filesChanged": [
+    "src/orchestrator/selfimprove/gepa.ts (created — mulberry32 PRNG, proposeVariants, paretoSet, evolve with DI seam, strict promotion, writes only under .bober/evolve/)",
+    "src/orchestrator/selfimprove/gepa.test.ts (created — determinism, Pareto, DI-stub promotion cases, sc-4-7 source-text guards)",
+    "src/cli/commands/evolve.ts (created — registerEvolveCommand --role/--seed/--dry-run, no-throw)",
+    "src/cli/commands/evolve.test.ts (created)",
+    "src/cli/index.ts (modified — register registerEvolveCommand)"
+  ],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "lint": "exit 0 (2 pre-existing warnings)", "fullSuite": "2309 passed | 3 skipped, 0 failures" },
+  "safetyInvariants": "ORCHESTRATOR INDEPENDENTLY CONFIRMED: (1) no 'agents' reference in gepa.ts/evolve.ts; (2) no evolve/gepa reference in pipeline.ts; (3) agents/ untouched in commit. Promotion predicate strict: regressions===0 AND improvements > baseline.improvements (tie does NOT promote).",
+  "note": "Self-report shows gepa.test.ts test count as both 15 (npm output) and 19 (filesChanged) — evaluator should confirm the actual count by running it."
+}

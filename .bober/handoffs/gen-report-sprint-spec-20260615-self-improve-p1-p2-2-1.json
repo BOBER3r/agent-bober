@@ -1,0 +1,14 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-2",
+  "status": "complete",
+  "iteration": 1,
+  "commit": "5b804d1",
+  "filesChanged": [
+    "src/orchestrator/selfimprove/replay-harness.ts (created — compareToBaseline + runReplayHarness + deriveFreshVerdict)",
+    "src/orchestrator/selfimprove/replay-harness.test.ts (created, 14 tests)",
+    "src/cli/commands/replay.ts (modified — `run` subcommand, no-throw, exit-1-on-regression)",
+    "src/cli/commands/replay.test.ts (modified — `run` exit-code tests)"
+  ],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "lint": "exit 0 (2 pre-existing warnings in eval-persist.test.ts)", "tests": "40 passed across replay-store/replay-harness/replay" },
+  "notes": "compareToBaseline is pure (no fs/clock/network). runReplayHarness re-derives fresh verdict from frozen eval_details_json (fail iff any detail passed===false AND severity==='error'); zero runGeneratorAgent/runEvaluatorAgent/createClient refs. Smoke: empty→'no cases captured' exit0; clean→table exit0; seeded regression→REGRESSION row exit1. evaluator-agent.ts/pipeline.ts/agents untouched; ReplayStore schema unchanged."
+}

@@ -1,0 +1,55 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-3",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "sprintNumber": 3,
+  "title": "Evaluator anti-degeneration guards (deterministic-first, rubric isolation, cite-artifact) — off-by-default",
+  "description": "Add three pure, off-by-default guards on the generator↔evaluator loop. (1) Deterministic-first: when a required programmatic strategy fails, short-circuit and return a FAIL without invoking the LLM judge. (2) Rubric isolation: strip the evaluator's scoring rubric from the generator-bound handoff. (3) Cite-artifact: downgrade any FAIL detail that cites no concrete artifact so it cannot fail the sprint. All three are gated by the selfImprove flags from Sprint 1 and are no-ops when those flags are false.",
+  "status": "completed",
+  "createdAt": "2026-06-15T18:33:10Z",
+  "updatedAt": "2026-06-15T22:25:00Z",
+  "completedAt": "2026-06-15T22:25:00Z",
+  "dependsOn": ["sprint-spec-20260615-self-improve-p1-p2-1"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    { "criterionId": "sc-3-1", "description": "The project builds successfully with `npm run build` (tsc) and exits with code 0.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-3-2", "description": "TypeScript compilation produces zero type errors (`npm run typecheck`).", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-3-3", "description": "src/orchestrator/selfimprove/eval-guards.ts exports a pure shouldShortCircuitJudge(programmaticResults: EvalResult[]) that returns true iff at least one result with a required strategy has passed===false; runEvaluatorAgent in src/orchestrator/evaluator-agent.ts, when config.selfImprove.deterministicGate===true and the predicate is true, returns a FAIL EvaluationRunResult WITHOUT calling runAgentEvaluation. When the flag is false the LLM judge still runs (existing behavior).", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-3-4", "description": "src/orchestrator/selfimprove/eval-guards.ts exports a pure redactRubric(handoff: ContextHandoff) that returns a new handoff whose currentContract omits successCriteria and evaluatorNotes (and successCriteria[].verificationMethod) while preserving title, description, definitionOfDone, generatorNotes, and nonGoals; pipeline.ts applies it to the generator-bound handoff only when config.selfImprove.rubricIsolation===true. The original handoff object is not mutated.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-3-5", "description": "src/orchestrator/selfimprove/eval-guards.ts exports a pure enforceCitedArtifacts(result: EvalResult) that returns a new EvalResult in which every detail with passed===false and no citation (no `file`, and no failing-test-name or command-output substring in `message`) is rewritten to passed:true, severity:'info', with a note appended to message; cited FAIL details are unchanged. The function reads no clock and does not mutate its input.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-3-6", "description": "A vitest suite in src/orchestrator/selfimprove/eval-guards.test.ts asserts: shouldShortCircuitJudge is true on a failed required result and false on a failed optional-only result; redactRubric removes successCriteria/evaluatorNotes and keeps definitionOfDone without mutating the input; enforceCitedArtifacts downgrades an uncited FAIL but leaves a file:line-cited FAIL intact.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-7", "description": "An invariant vitest case asserts that with config.selfImprove all flags false (or the section absent), redactRubric is not applied and shouldShortCircuitJudge has no effect — i.e. the handoff passed to the generator and the evaluation flow are byte-identical to the pre-Sprint-3 path (assert deep-equality of the handoff and that runAgentEvaluation is still reached on a programmatic failure when the flag is off).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-3-8", "description": "ESLint reports zero errors on new and modified files (`npm run lint`).", "verificationMethod": "lint", "required": false }
+  ],
+  "nonGoals": [
+    "Do not enable any guard by default — all three flags stay .default(false); the live pipeline is byte-identical when unset",
+    "Do not remove or alter the existing programmaticEval.passed && agentResult.passed combine logic when the deterministicGate flag is off",
+    "Do not change the evaluator JSON output schema or the bober-evaluator.md agent prompt",
+    "Do not mutate the input handoff or EvalResult objects in any guard (return new objects)",
+    "Do not touch the replay store/harness from Sprints 1-2 or agents/<role>.md"
+  ],
+  "stopConditions": [
+    "`npm run build`, `npm run typecheck`, and `npm test -- eval-guards` all exit 0 with the new tests included",
+    "The all-flags-false invariant test (sc-3-7) passes, proving the live evaluation/handoff path is unchanged when selfImprove is off"
+  ],
+  "definitionOfDone": "When a maintainer sets config.selfImprove.deterministicGate, a sprint whose required build/typecheck strategy fails is marked FAIL without spending an LLM judge call; with rubricIsolation set, the generator no longer receives the evaluator's success criteria; with requireCitedArtifact set, a FAIL detail that names no file:line, failing test, or command output is downgraded so it cannot block the sprint. With all three flags off (or absent), the evaluation and the generator-bound handoff are byte-identical to the pre-Sprint-3 pipeline.",
+  "assumptions": [
+    "Q2: deterministic-first gate is inserted after runEvaluation (src/orchestrator/evaluator-agent.ts:81) as a pure predicate over the programmatic results' passed+required fields.",
+    "Q3: rubric isolation strips successCriteria/evaluatorNotes/verificationMethod from the generator-bound handoff at createHandoff (pipeline.ts:276); the generator keeps title/description/definitionOfDone/generatorNotes/nonGoals.",
+    "Q4: cite-artifact guard downgrades uncited FAIL details (no file, no test/command substring) to passed:true info; EvalDetail.file/line are already optional (src/contracts/eval-result.ts:14-15)."
+  ],
+  "outOfScope": [
+    "Replay store/harness (Sprints 1-2)",
+    "GEPA evolve (Sprint 4)",
+    "Editing the bober-evaluator.md / bober-generator.md prompt text"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "GUARDS: Create src/orchestrator/selfimprove/eval-guards.ts with three PURE exports (no clock, no fs, no mutation of inputs — model the purity on src/orchestrator/memory/distill.ts). (1) shouldShortCircuitJudge(programmaticResults: EvalResult[]): boolean — true iff some result has passed===false AND that result corresponds to a REQUIRED strategy. Note: EvalResult does not carry `required`; pass the required-ness alongside, e.g. accept (results: EvalResult[], requiredEvaluators: Set<string>) or thread it from config.evaluator.strategies (each has .type and .required, schema.ts:56). Prefer mapping by result.evaluator===strategy.type. (2) redactRubric(handoff: ContextHandoff): ContextHandoff — return a deep-cloned handoff whose currentContract drops successCriteria + evaluatorNotes and clears each successCriteria[].verificationMethod (simplest: omit successCriteria entirely) while keeping title/description/definitionOfDone/generatorNotes/nonGoals. Do NOT mutate the input (structuredClone or explicit spread). (3) enforceCitedArtifacts(result: EvalResult): EvalResult — return a new EvalResult; for each detail with passed===false, treat it as cited iff detail.file is a non-empty string OR detail.message matches a failing-test/command signal (e.g. contains '.test.', 'FAIL ', 'npm run', 'tsc', 'exit code', or a path-like token with ':'); uncited FAIL → rewrite to passed:true, severity:'info', message + ' [downgraded: no cited artifact]'. Recompute result.passed = details.every(d=>d.passed) only if the original was false purely due to downgraded items (keep it simple: passed = details.every(d=>d.passed)). WIRING (deterministic gate): in src/orchestrator/evaluator-agent.ts runEvaluatorAgent, after `const programmaticEval = await runEvaluation(...)` (around :81), if config.selfImprove?.deterministicGate && shouldShortCircuitJudge(programmaticEval.results, requiredSet) then SKIP runAgentEvaluation and build the EvaluationRunResult from programmaticEval alone with passed:false and a clear summary ('deterministic gate: required check failed — LLM judge skipped'); otherwise the existing code path runs unchanged. WIRING (rubric isolation): in src/orchestrator/pipeline.ts, where the generator-bound handoff is created (createHandoff at :276 / compactedHandoff), if config.selfImprove?.rubricIsolation then pass the handoff through redactRubric before it reaches the generator. WIRING (cite-artifact): apply enforceCitedArtifacts to the agent EvalResult inside runEvaluatorAgent (or runAgentEvaluation) only when config.selfImprove?.requireCitedArtifact. GATING: use optional chaining config.selfImprove?.<flag> so an absent section is falsy — the off path must be byte-identical (sc-3-7). TESTS: eval-guards.test.ts unit-tests all three pure fns; add the sc-3-7 invariant test asserting deep-equality of the handoff and that the judge still runs on a programmatic failure when the flag is off.",
+  "evaluatorNotes": "Run `npm run build`, `npm run typecheck`, then `npm test -- eval-guards`. For sc-3-3: read eval-guards.ts + the evaluator-agent.ts wiring; confirm the short-circuit only triggers under the flag AND a required failure, and that runAgentEvaluation is genuinely skipped (not called) on that path. For sc-3-4: confirm redactRubric returns a new object (input unchanged — assert via a test that the original still has successCriteria) and drops successCriteria + evaluatorNotes. For sc-3-5: confirm a file:line-cited FAIL survives and an uncited FAIL is downgraded to info/passed. For sc-3-6: run the unit tests. For sc-3-7 (CRITICAL invariant): confirm that with selfImprove absent/all-false, the handoff passed to the generator is deep-equal to the un-redacted handoff and the LLM judge is still reached on a programmatic failure — this proves the additive/off-by-default guarantee. Grep pipeline.ts + evaluator-agent.ts to confirm every new branch is guarded by config.selfImprove?.<flag>. Confirm agents/ is unchanged (git diff) and the replay modules from Sprints 1-2 are untouched.",
+  "estimatedFiles": [
+    "src/orchestrator/selfimprove/eval-guards.ts",
+    "src/orchestrator/selfimprove/eval-guards.test.ts",
+    "src/orchestrator/evaluator-agent.ts",
+    "src/orchestrator/pipeline.ts"
+  ],
+  "estimatedDuration": "medium"
+}

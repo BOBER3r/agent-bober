@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-self-improve-p1-p2-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-3",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T22:05:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 5 — make self-improvement safe. Sprint 3 adds THREE pure, off-by-default guards on the generator↔evaluator loop, each gated by a Sprint 1 selfImprove flag. THE LOAD-BEARING REQUIREMENT: with all flags off (or the section absent), behavior is BYTE-IDENTICAL to today (invariant test sc-3-7). This sprint touches the LIVE files evaluator-agent.ts and pipeline.ts — every new branch must be guarded by config.selfImprove?.<flag> (optional chaining) and the off path must run the existing code unchanged.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-self-improve-p1-p2-1", "title": "Replay store + selfImprove config", "summary": "ffd6e8a — off-by-default selfImprove config section (deterministicGate/rubricIsolation/requireCitedArtifact/replayDir, all default false)." },
+      { "contractId": "sprint-spec-20260615-self-improve-p1-p2-2", "title": "Replay run gate", "summary": "5b804d1 — replay-harness.ts + `replay run`. Sprint 3 does NOT touch the replay modules." }
+    ],
+    "currentBranch": "bober/self-improve-p1-p2",
+    "relevantFiles": [
+      "src/orchestrator/evaluator-agent.ts (deterministic-gate short-circuit after runEvaluation ~:81, before runAgentEvaluation; cite-artifact wrap on agentResult)",
+      "src/orchestrator/pipeline.ts (rubric isolation on the GENERATOR-bound injectedHandoff — NOT the evalHandoff)",
+      "src/orchestrator/context-handoff.ts (ContextHandoff shape — currentContract carries successCriteria/evaluatorNotes/verificationMethod)",
+      "src/contracts/eval-result.ts (EvalResult + EvalDetail; file/line optional ~:14-15; passed/severity/message)",
+      "src/evaluators/registry.ts + src/config/schema.ts (evaluator.strategies .type/.required ~:56 → build requiredEvaluators set; map by result.evaluator===strategy.type)",
+      "src/orchestrator/memory/distill.ts (pure-fn discipline — no clock/fs/mutation — model eval-guards.ts on it)",
+      "src/orchestrator/evaluator-agent.test.ts (existing loopSpy harness — reuse for the sc-3-7 byte-identical off-path proof)"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-self-improve-p1-p2-3.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260615-self-improve-p1-p2-3-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

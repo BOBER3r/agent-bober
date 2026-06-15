@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-self-improve-p1-p2-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-4",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T22:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 5 final sprint — offline GEPA `bober evolve`. Closes the self-improvement loop SAFELY: prompt variants are scored ONLY via the Sprint 2 runReplayHarness gate, and the verb NEVER writes agents/<role>.md and is NEVER invoked by runPipeline (writes stay under .bober/evolve/<runId>/). A guard test (sc-4-7) reads gepa.ts/evolve.ts/pipeline.ts as text and asserts both invariants.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-self-improve-p1-p2-1", "title": "Replay store + config", "summary": "ffd6e8a" },
+      { "contractId": "sprint-spec-20260615-self-improve-p1-p2-2", "title": "Replay run gate", "summary": "5b804d1 — runReplayHarness(projectRoot, config) → { regressions, improvements, unchanged, total }. THE gate Sprint 4 imports." },
+      { "contractId": "sprint-spec-20260615-self-improve-p1-p2-3", "title": "Evaluator guards", "summary": "91ddf8e — does not affect Sprint 4." }
+    ],
+    "currentBranch": "bober/self-improve-p1-p2",
+    "relevantFiles": [
+      "src/orchestrator/selfimprove/replay-harness.ts (runReplayHarness — the sole scoring gate; import it; add a DI seam so the test injects a stub harness)",
+      "src/orchestrator/agent-loader.ts (loadAgentDefinition — reads agents/bober-<role>.md; systemPrompt = body after frontmatter)",
+      "src/providers/factory.ts (createClient — provider-agnostic; NO @anthropic-ai/sdk or openai import in gepa.ts)",
+      "src/cli/commands/replay.ts + facts.ts (register<X>Command pattern, no-throw + process.exitCode=1)",
+      "src/state/helpers.ts (ensureDir for .bober/evolve/<runId>/)",
+      "src/orchestrator/lens-panel-parity.test.ts (read-source-as-text precedent for the sc-4-7 guard test)",
+      "src/cli/index.ts (register registerEvolveCommand next to registerReplayCommand)"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-self-improve-p1-p2-4.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260615-self-improve-p1-p2-4-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

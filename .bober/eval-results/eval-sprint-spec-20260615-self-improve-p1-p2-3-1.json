@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260615-self-improve-p1-p2-3-1",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-3",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T22:25:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "passed": true,
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "results": [
+    { "evaluator": "build", "required": true, "passed": true },
+    { "evaluator": "typecheck", "required": true, "passed": true },
+    { "evaluator": "lint", "required": false, "passed": true },
+    { "evaluator": "unit-test", "required": false, "passed": true }
+  ],
+  "regressions": [],
+  "concerns": [],
+  "summary": "All 8 criteria pass, 7/7 required. Full suite 2290 tests pass — ZERO regressions (this sprint touched live evaluator-agent.ts + pipeline.ts). sc-3-7 off-path invariant independently verified: loopSpy proves the LLM judge still runs when selfImprove is absent/all-false; gate ON skips it with passed===false. All three new branches use config.selfImprove?. optional chaining (grep-confirmed). redactRubric wraps the generator-bound injectedHandoff only (not evalHandoff), returns new object (input non-mutation tested). enforceCitedArtifacts downgrades uncited FAILs, preserves file/test-cited ones. agents/ + replay modules untouched."
+}

@@ -371,3 +371,43 @@
 {"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","iteration":1,"timestamp":"2026-06-15T14:57:52Z"}
 {"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T15:05:19Z"}
 {"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-6","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":6,"timestamp":"2026-06-15T15:06:30Z"}
+{"event":"plan-created","specId":"spec-20260615-memory-self-improve-p0","title":"Durable Semantic Facts + Memory Hygiene (Phase 3)","sprintCount":5,"timestamp":"2026-06-15T16:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-15T16:09:02Z","task":"Resume spec-20260615-memory-self-improve-p0 (Phase 3: Durable Semantic Facts + Memory Hygiene)","specId":"spec-20260615-memory-self-improve-p0"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-1","specId":"spec-20260615-memory-self-improve-p0","timestamp":"2026-06-15T16:09:39Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-memory-self-improve-p0-1","timestamp":"2026-06-15T16:13:46Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-1","iteration":1,"timestamp":"2026-06-15T16:20:17Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-memory-self-improve-p0-1","specId":"spec-20260615-memory-self-improve-p0","iteration":1,"timestamp":"2026-06-15T16:25:04Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-2","specId":"spec-20260615-memory-self-improve-p0","timestamp":"2026-06-15T16:25:27Z"}
+{"event":"sprint-docs-written","contractId":"sprint-spec-20260615-memory-self-improve-p0-1","docsCommit":"104f16a","concern":"principles.md tension: better-sqlite3 = first relational store + native dep + sync I/O vs No-database/No-sync-fs principles; user-approved Q1=B; defer to maintainer","timestamp":"2026-06-15T16:30:13Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-memory-self-improve-p0-2","timestamp":"2026-06-15T16:30:26Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-2","iteration":1,"timestamp":"2026-06-15T16:30:26Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-memory-self-improve-p0-2","specId":"spec-20260615-memory-self-improve-p0","iteration":1,"timestamp":"2026-06-15T16:43:07Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-3","specId":"spec-20260615-memory-self-improve-p0","timestamp":"2026-06-15T16:43:07Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-memory-self-improve-p0-3","timestamp":"2026-06-15T16:47:32Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-3","iteration":1,"timestamp":"2026-06-15T16:47:32Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-memory-self-improve-p0-3","specId":"spec-20260615-memory-self-improve-p0","iteration":1,"timestamp":"2026-06-15T17:06:24Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-4","specId":"spec-20260615-memory-self-improve-p0","timestamp":"2026-06-15T17:06:24Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-memory-self-improve-p0-4","timestamp":"2026-06-15T17:10:54Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-4","iteration":1,"timestamp":"2026-06-15T17:10:54Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-memory-self-improve-p0-4","specId":"spec-20260615-memory-self-improve-p0","iteration":1,"timestamp":"2026-06-15T17:24:47Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-5","specId":"spec-20260615-memory-self-improve-p0","timestamp":"2026-06-15T17:24:47Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260615-memory-self-improve-p0-5","timestamp":"2026-06-15T17:31:16Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-memory-self-improve-p0-5","iteration":1,"timestamp":"2026-06-15T17:31:16Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-memory-self-improve-p0-5","specId":"spec-20260615-memory-self-improve-p0","iteration":1,"timestamp":"2026-06-15T17:45:14Z"}
+{"event":"plan-completed","specId":"spec-20260615-memory-self-improve-p0","sprintsCompleted":5,"timestamp":"2026-06-15T17:45:14Z"}
+{"event":"pipeline-completed","specId":"spec-20260615-memory-self-improve-p0","sprintsCompleted":5,"totalIterations":5,"reworks":0,"testSuite":"2210 passed / 3 skipped","timestamp":"2026-06-15T17:50:26Z"}
+{"event":"pipeline-started","timestamp":"2026-06-15T21:00:00Z","task":"Phase 5 — Self-improvement P1/P2 (offline, gated): replay regression harness, evaluator anti-degeneration guards, GEPA offline prompt evolution"}
+{"event":"plan-created","specId":"spec-20260615-self-improve-p1-p2","timestamp":"2026-06-15T18:33:10Z","status":"ready","sprintCount":4}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-self-improve-p1-p2-1","specId":"spec-20260615-self-improve-p1-p2","timestamp":"2026-06-15T21:05:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-1","iteration":1,"result":"pass","timestamp":"2026-06-15T21:20:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-1","specId":"spec-20260615-self-improve-p1-p2","iteration":1,"timestamp":"2026-06-15T21:20:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-self-improve-p1-p2-2","specId":"spec-20260615-self-improve-p1-p2","timestamp":"2026-06-15T21:35:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-2","iteration":1,"result":"pass","timestamp":"2026-06-15T21:50:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-2","specId":"spec-20260615-self-improve-p1-p2","iteration":1,"timestamp":"2026-06-15T21:50:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-self-improve-p1-p2-3","specId":"spec-20260615-self-improve-p1-p2","timestamp":"2026-06-15T22:05:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-3","iteration":1,"result":"pass","timestamp":"2026-06-15T22:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-3","specId":"spec-20260615-self-improve-p1-p2","iteration":1,"timestamp":"2026-06-15T22:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260615-self-improve-p1-p2-4","specId":"spec-20260615-self-improve-p1-p2","timestamp":"2026-06-15T22:40:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-4","iteration":1,"result":"pass","timestamp":"2026-06-15T23:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260615-self-improve-p1-p2-4","specId":"spec-20260615-self-improve-p1-p2","iteration":1,"timestamp":"2026-06-15T23:00:00Z"}
+{"event":"plan-completed","specId":"spec-20260615-self-improve-p1-p2","sprintsCompleted":4,"timestamp":"2026-06-15T23:00:00Z"}

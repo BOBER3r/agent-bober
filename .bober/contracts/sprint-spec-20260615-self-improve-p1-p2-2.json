@@ -1,0 +1,54 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-2",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "sprintNumber": 2,
+  "title": "`bober replay run` deterministic regression gate + runReplayHarness API",
+  "description": "Build the replay GATE: a pure compareToBaseline comparator and a `bober replay run` verb that re-derives each frozen case's verdict deterministically, diffs it against the recorded baseline, prints a per-case delta table, and sets a non-zero exit code on any regression. Export a public runReplayHarness(projectRoot, config) so Sprint 4's evolve verb can call it as its promotion gate.",
+  "status": "completed",
+  "createdAt": "2026-06-15T18:33:10Z",
+  "updatedAt": "2026-06-15T21:50:00Z",
+  "completedAt": "2026-06-15T21:50:00Z",
+  "dependsOn": ["sprint-spec-20260615-self-improve-p1-p2-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "sc-2-1", "description": "The project builds successfully with `npm run build` (tsc) and exits with code 0.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-2-2", "description": "TypeScript compilation produces zero type errors (`npm run typecheck`).", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-2-3", "description": "src/orchestrator/selfimprove/replay-harness.ts exports a pure compareToBaseline(baselineCases, freshVerdicts) returning { regressions: string[], improvements: string[], unchanged: string[] }, where a regression is a caseId whose baseline_verdict==='pass' but fresh verdict==='fail'. The function reads no clock and touches no filesystem (all inputs are parameters).", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-2-4", "description": "src/orchestrator/selfimprove/replay-harness.ts exports an async runReplayHarness(projectRoot, config) that loads cases from the ReplayStore, re-derives each fresh verdict deterministically from the frozen eval_details_json + diff_digest (NOT by re-running the generator LLM), and returns { regressions, improvements, unchanged } plus the case count.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-2-5", "description": "A vitest suite in src/orchestrator/selfimprove/replay-harness.test.ts asserts: an identical rerun yields zero regressions; a case whose fresh verdict flips pass→fail appears in regressions exactly once; a fail→pass flip appears in improvements; an empty corpus yields all-empty arrays. Each assertion uses an in-memory ReplayStore.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-6", "description": "Running `node dist/cli/index.js replay run` over a captured corpus prints a per-case delta table (caseId, baseline, fresh, delta) and exits with code 0 when there are zero regressions; when at least one case regresses it prints the regressed caseIds and sets process.exitCode=1. An empty corpus prints 'no cases captured' and exits 0. A vitest case in src/cli/commands/replay.test.ts asserts the exit-code-1-on-regression behavior via a seeded in-memory corpus.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-7", "description": "ESLint reports zero errors on new and modified files (`npm run lint`).", "verificationMethod": "lint", "required": false }
+  ],
+  "nonGoals": [
+    "Do not re-run the generator or evaluator LLM during replay — verdicts are re-derived from the frozen captured eval_details_json and diff_digest only",
+    "Do not modify src/orchestrator/evaluator-agent.ts or src/orchestrator/pipeline.ts in this sprint",
+    "Do not implement GEPA / evolve in this sprint (Sprint 4)",
+    "Do not change the ReplayStore schema added in Sprint 1 (additive read methods only if needed)",
+    "Do not read or write agents/<role>.md in this sprint"
+  ],
+  "stopConditions": [
+    "`npm run build`, `npm run typecheck`, and `npm test -- replay-harness replay` all exit 0 with the new tests included",
+    "`replay run` exits 0 on a clean corpus and exits 1 when a seeded case regresses, as asserted by the new vitest cases"
+  ],
+  "definitionOfDone": "A maintainer can run `bober replay run` against the frozen corpus and see a deterministic per-case pass/fail delta table; the command exits non-zero the moment any case regresses versus its recorded baseline, and exits zero otherwise. A public runReplayHarness function returns the same regression/improvement breakdown for Sprint 4 to consume as its promotion gate. No live pipeline file is touched and no generator/evaluator LLM is invoked.",
+  "assumptions": [
+    "Replay re-derives verdicts deterministically from the captured eval_details_json + diff_digest, never by re-running the generator (out of scope per spec).",
+    "A regression is strictly baseline pass → fresh fail for the same caseId; an improvement is fail → pass; everything else is unchanged.",
+    "runReplayHarness(projectRoot, config) is the single public entry point Sprint 4 imports as its gate; it loads cases via the Sprint 1 ReplayStore."
+  ],
+  "outOfScope": [
+    "Evaluator anti-degeneration guards (Sprint 3)",
+    "GEPA prompt evolution (Sprint 4)",
+    "Re-generating code during replay"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "HARNESS: Create src/orchestrator/selfimprove/replay-harness.ts. Two exports: (1) pure compareToBaseline(baselineCases, freshVerdicts) — both are Map<caseId, 'pass'|'fail'> or arrays of {caseId, verdict}; classify each caseId into regressions (baseline pass, fresh fail), improvements (baseline fail, fresh pass), unchanged (same). No clock, no fs — keep it pure and unit-tested like src/orchestrator/memory/distill.ts. (2) async runReplayHarness(projectRoot, config) — open the ReplayStore at config.selfImprove.replayDir (default '.bober/replay') / 'replay.db', listCases(), and re-derive each fresh verdict DETERMINISTICALLY: since we are NOT re-running the LLM, the 'fresh' verdict is computed from the frozen eval_details_json (e.g. fresh verdict = 'fail' iff any captured detail with passed===false AND severity==='error' exists, else 'pass') — this makes replay a stable, reproducible function of the frozen fixtures. Return { regressions, improvements, unchanged, total } via compareToBaseline(baseline, fresh). Resolve config via loadConfig; tolerate a missing selfImprove section (defaults). CLI: extend src/cli/commands/replay.ts with a `run` subcommand that calls runReplayHarness, prints a chalk table (caseId | baseline | fresh | delta), and on regressions.length>0 sets process.exitCode=1 and prints the regressed ids; on empty corpus prints 'no cases captured' and exits 0. Handler MUST NOT throw (set process.exitCode=1 and return on error). TESTING: replay-harness.test.ts uses an in-memory ReplayStore (':memory:') seeded with putCase rows of known verdicts; replay.test.ts drives the `run` handler against a seeded corpus and asserts process.exitCode transitions (capture and restore process.exitCode around each case, mirroring src/cli/commands/facts.test.ts / replay.test.ts from Sprint 1).",
+  "evaluatorNotes": "Run `npm run build`, `npm run typecheck`, then `npm test -- replay-harness replay`. For sc-2-3: read replay-harness.ts, confirm compareToBaseline takes only parameters (grep its body for fs / Date — none) and the regression definition is baseline-pass→fresh-fail. For sc-2-4: confirm runReplayHarness loads via the Sprint 1 ReplayStore and derives fresh verdicts from frozen eval_details_json, NOT by spawning a generator/evaluator (grep for runGeneratorAgent / runEvaluatorAgent / createClient in the file — there must be NONE). For sc-2-5: run the harness test and confirm all four cases (identical / regression-once / improvement / empty). For sc-2-6: run the replay CLI test asserting exit code 1 on a seeded regression and 0 on a clean corpus; also manually capture a temp corpus and run `node dist/cli/index.js replay run` to confirm the table prints. Confirm evaluator-agent.ts, pipeline.ts, and agents/ are unchanged (git diff).",
+  "estimatedFiles": [
+    "src/orchestrator/selfimprove/replay-harness.ts",
+    "src/orchestrator/selfimprove/replay-harness.test.ts",
+    "src/cli/commands/replay.ts",
+    "src/cli/commands/replay.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

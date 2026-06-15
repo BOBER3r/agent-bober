@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-1",
+  "status": "complete",
+  "iteration": 1,
+  "commit": "ffd6e8a",
+  "filesChanged": [
+    "src/orchestrator/selfimprove/replay-types.ts (created)",
+    "src/orchestrator/selfimprove/replay-store.ts (created)",
+    "src/orchestrator/selfimprove/replay-store.test.ts (created, 12 tests)",
+    "src/config/schema.ts (modified — SelfImproveSectionSchema + optional wiring)",
+    "src/config/schema.test.ts (modified — all-false default assertions)",
+    "src/cli/commands/replay.ts (created — capture|list|show)",
+    "src/cli/commands/replay.test.ts (created, 10 tests)",
+    "src/cli/index.ts (modified — registerReplayCommand)"
+  ],
+  "selfVerify": {
+    "build": "exit 0",
+    "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings in eval-persist.test.ts only)",
+    "tests": "64 passed across replay-store/schema/replay"
+  },
+  "knownPreExisting": "src/discovery/scanner.test.ts has a failure that detects the 'bober(' prefix in commit messages — generator confirmed it pre-dates this sprint by stashing and re-running. NOT caused by this work.",
+  "notes": "All 8 contract files delivered. package.json unchanged (no new dep). evaluator-agent.ts / pipeline.ts / agents/ untouched."
+}

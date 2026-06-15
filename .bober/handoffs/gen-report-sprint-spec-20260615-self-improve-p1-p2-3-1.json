@@ -1,0 +1,16 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-3",
+  "status": "complete",
+  "iteration": 1,
+  "commit": "91ddf8e",
+  "filesChanged": [
+    "src/orchestrator/selfimprove/eval-guards.ts (created — shouldShortCircuitJudge, redactRubric, enforceCitedArtifacts; all pure)",
+    "src/orchestrator/selfimprove/eval-guards.test.ts (created, 33 tests)",
+    "src/orchestrator/evaluator-agent.ts (modified +36/-2 — deterministic gate after runEvaluation behind config.selfImprove?.deterministicGate; cite-artifact wrap behind requireCitedArtifact)",
+    "src/orchestrator/evaluator-agent.test.ts (modified — sc-3-7 invariant tests via loopSpy)",
+    "src/orchestrator/pipeline.ts (modified +12 — rubric isolation on injectedHandoff behind rubricIsolation; evalHandoff untouched)"
+  ],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "lint": "exit 0 (2 pre-existing warnings)", "fullSuite": "2290 passed | 3 skipped, 0 failures" },
+  "invariantProof": "sc-3-7: evaluator-agent.test.ts proves (a) selfImprove absent + required programmatic FAIL → loopSpy called 1x (judge runs); (b) all flags false → loopSpy 1x; (c) deterministicGate:true → loopSpy 0x + passed===false. Orchestrator confirmed all new branches in both live files use config.selfImprove?. optional chaining.",
+  "notes": "agents/ and replay modules untouched. Live-file changes additive and fully flag-gated. Full suite green — no regressions."
+}

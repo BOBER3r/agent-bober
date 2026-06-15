@@ -1,0 +1,59 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-1",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "sprintNumber": 1,
+  "title": "Replay store + selfImprove config section + `bober replay capture|list|show`",
+  "description": "Introduce the frozen replay corpus: a pure SQLite-backed ReplayStore over better-sqlite3 holding a baseline index, plus immutable per-case JSON fixtures under .bober/replay/cases/. Add an off-by-default selfImprove config section (Zod). Add a `bober replay capture|list|show` CLI that ingests existing .bober/eval-results/*.json into immutable fixtures and baseline rows. Timestamps and the DB path are injected so the store stays pure and :memory:-testable.",
+  "status": "completed",
+  "createdAt": "2026-06-15T18:33:10Z",
+  "updatedAt": "2026-06-15T21:20:00Z",
+  "completedAt": "2026-06-15T21:20:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "sc-1-1", "description": "The project builds successfully with `npm run build` (tsc) and exits with code 0, including all new selfimprove modules.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-1-2", "description": "TypeScript compilation produces zero type errors (`npm run typecheck`).", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-1-3", "description": "src/orchestrator/selfimprove/replay-store.ts exports a ReplayStore whose constructor accepts a db path (works with ':memory:'), exposes putCase(caseInput), getCase(caseId), listCases(), and getBaselineVerdict(caseId); no Date.now()/new Date() is called inside the store (every timestamp is a parameter). A grep of the file for `Date.now`/`new Date(` returns zero matches inside the store class.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-1-4", "description": "The replay_cases table is created idempotently (CREATE TABLE IF NOT EXISTS) with columns (case_id, contract_id, iteration, baseline_verdict, diff_digest, eval_details_json, t_captured) and a primary key on case_id; every SQL statement is parameterized with ? placeholders (no string-interpolated values into SQL). caseId is a deterministic content hash of (contract_id|iteration|diff_digest), mirroring factId in src/state/facts.ts:58.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-1-5", "description": "A new optional `selfImprove` section is added to BoberConfigSchema in src/config/schema.ts as a Zod object with boolean flags deterministicGate, rubricIsolation, requireCitedArtifact each `.default(false)`, plus replayDir `.default('.bober/replay')`; loadConfig on a config that omits selfImprove returns the section with all flags false (no throw). A vitest case in src/config/schema.test.ts asserts the defaults.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-6", "description": "A vitest suite in src/orchestrator/selfimprove/replay-store.test.ts uses an in-memory DB and asserts: putCase then getCase returns the row; listCases returns inserted cases; caseId is identical for identical (contract_id|iteration|diff_digest) and differs when diff_digest changes; getBaselineVerdict returns the stored pass/fail.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-7", "description": "Running `node dist/cli/index.js replay capture` in a temp project that contains .bober/eval-results/eval-*.json creates .bober/replay/cases/<caseId>.json files plus .bober/replay/replay.db; `replay list` prints a row per case; `replay show <caseId>` prints contractId, iteration, baselineVerdict and the source eval-result path; the handler sets process.exitCode=1 on error and never throws (pattern from src/cli/commands/facts.ts).", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-1-8", "description": "ESLint reports zero errors on new and modified files (`npm run lint`).", "verificationMethod": "lint", "required": false }
+  ],
+  "nonGoals": [
+    "Do not implement `replay run` or any verdict comparison in this sprint (deferred to Sprint 2)",
+    "Do not add any new runtime dependency — reuse the already-present better-sqlite3 from src/state/facts.ts",
+    "Do not modify src/orchestrator/evaluator-agent.ts or src/orchestrator/pipeline.ts in this sprint",
+    "Do not call Date.now()/new Date() inside the ReplayStore class — stamp timestamps at the CLI handler boundary only",
+    "Do not write to or read from agents/<role>.md in this sprint"
+  ],
+  "stopConditions": [
+    "`npm run build`, `npm run typecheck`, and `npm test -- replay-store schema` all exit 0 with the new tests included",
+    "Capturing in a temp dir produces .bober/replay/cases/*.json + replay.db and the three replay subcommands print/exit as specified in sc-1-7"
+  ],
+  "definitionOfDone": "A maintainer can run `bober replay capture` in a project that has eval-results and obtain an immutable corpus of golden cases under .bober/replay/cases/ plus a baseline SQLite index, then inspect it with `replay list` and `replay show <id>`. The selfImprove config section exists with all flags defaulting to false. No live pipeline file is touched and no LLM call is made.",
+  "assumptions": [
+    "Q1: replay corpus is .bober/replay/cases/*.json (immutable) + SQLite baseline index .bober/replay/replay.db, built with the FactStore adapter pattern (src/state/facts.ts:136).",
+    "ReplayStore mirrors FactStore: deterministic content-hash id (src/state/facts.ts:58 factId), injected timestamps, CREATE TABLE IF NOT EXISTS in ctor, hidden behind an interface, :memory:-testable.",
+    "selfImprove is an optional top-level section on BoberConfigSchema (src/config/schema.ts:376) with every flag .default(false), mirroring EvaluatorSectionSchema (:104)."
+  ],
+  "outOfScope": [
+    "replay run / compareToBaseline (Sprint 2)",
+    "evaluator guards (Sprint 3)",
+    "GEPA evolve (Sprint 4)"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "STORE: Create src/orchestrator/selfimprove/replay-store.ts and replay-types.ts. Copy the discipline in src/state/facts.ts EXACTLY: import Database from 'better-sqlite3' (already a dependency — do NOT add a new one), wrap it behind a ReplayStore class, CREATE TABLE IF NOT EXISTS replay_cases (case_id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, iteration INTEGER NOT NULL, baseline_verdict TEXT NOT NULL, diff_digest TEXT NOT NULL, eval_details_json TEXT NOT NULL, t_captured TEXT NOT NULL) in the constructor, plus a close(). Methods: putCase(input) (validate with a co-located Zod ReplayCaseSchema mirroring FactSchema at facts.ts:22), getCase(caseId), listCases(), getBaselineVerdict(caseId). PURITY: never call Date.now()/new Date() inside the store; t_captured is a parameter stamped by the CLI handler. caseId = sha256(`${contractId}|${iteration}|${diffDigest}`).slice(0,16) — mirror factId (facts.ts:58). Use INSERT OR REPLACE with bound ? params (no interpolation). Resolve the dir via a replayDir helper (default '.bober/replay') and ensureDir from src/state/helpers.js before opening the file DB; immutable per-case fixtures go to .bober/replay/cases/<caseId>.json (write via node:fs/promises writeFile). CONFIG: add SelfImproveSectionSchema = z.object({ deterministicGate: z.boolean().default(false), rubricIsolation: z.boolean().default(false), requireCitedArtifact: z.boolean().default(false), replayDir: z.string().default('.bober/replay') }) near EvaluatorSectionSchema (schema.ts:104), and add `selfImprove: SelfImproveSectionSchema.optional()` to BoberConfigSchema (schema.ts:376). Add a schema.test.ts case asserting the all-false defaults. CAPTURE SOURCE: read .bober/eval-results/eval-*.json (the persistEvalResult payload shape, src/orchestrator/eval-persist.ts:45 — fields evalId, contractId, iteration, passed, results[]). Map each to a ReplayCase: baseline_verdict = passed ? 'pass' : 'fail'; diff_digest = a sha256 of JSON.stringify(results) (deterministic) since the real git diff is not re-derivable post-hoc; eval_details_json = JSON.stringify(results). CLI: create src/cli/commands/replay.ts following src/cli/commands/facts.ts EXACTLY — registerReplayCommand(program) with subcommands capture/list/show, resolveRoot via findProjectRoot, chalk output, handlers MUST NOT throw (set process.exitCode=1 and return). Register registerReplayCommand(program) in src/cli/index.ts next to registerFactsCommand (index.ts:314). Stamp tCaptured=new Date().toISOString() at the handler boundary, NOT in the store.",
+  "evaluatorNotes": "Run `npm run build`, `npm run typecheck`, then `npm test -- replay-store schema`. For sc-1-3: read replay-store.ts, confirm the four methods + ctor-takes-path + ':memory:' work, and grep the store class body for `Date.now`/`new Date(` — there must be NONE. For sc-1-4: confirm CREATE TABLE has all 7 columns + PRIMARY KEY(case_id), every statement uses ? placeholders, and caseId is the sha256(...).slice(0,16) of (contract_id|iteration|diff_digest). For sc-1-5: read schema.ts, confirm SelfImproveSectionSchema with the three boolean .default(false) flags + replayDir default, confirm it's wired into BoberConfigSchema as .optional(), and run the schema.test.ts default assertion. For sc-1-6: run the store test and confirm determinism + getBaselineVerdict. For sc-1-7: in a temp dir, hand-write a .bober/eval-results/eval-c1-1.json with {contractId:'c1', iteration:1, passed:true, results:[]}, run `node dist/cli/index.js replay capture` (expect .bober/replay/cases/*.json + replay.db), `replay list` (one row), `replay show <id>` (prints provenance). Confirm an unknown id to `show` prints a friendly message and sets exitCode=1, not throws. Confirm no new dependency was added to package.json and that evaluator-agent.ts / pipeline.ts / agents/ are unchanged (git diff).",
+  "estimatedFiles": [
+    "src/orchestrator/selfimprove/replay-store.ts",
+    "src/orchestrator/selfimprove/replay-store.test.ts",
+    "src/orchestrator/selfimprove/replay-types.ts",
+    "src/cli/commands/replay.ts",
+    "src/cli/commands/replay.test.ts",
+    "src/cli/index.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

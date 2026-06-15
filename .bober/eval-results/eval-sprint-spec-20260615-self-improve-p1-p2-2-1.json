@@ -1,0 +1,21 @@
+{
+  "evalId": "eval-sprint-spec-20260615-self-improve-p1-p2-2-1",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-2",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T21:50:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "passed": true,
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "results": [
+    { "evaluator": "build", "required": true, "passed": true },
+    { "evaluator": "typecheck", "required": true, "passed": true },
+    { "evaluator": "lint", "required": false, "passed": true },
+    { "evaluator": "unit-test", "required": false, "passed": true }
+  ],
+  "regressions": [],
+  "concerns": [
+    "minor: runReplayHarness tests use temp file-backed stores rather than ':memory:' (the harness opens its own DB by path); all four required behaviors are still verified — not a defect."
+  ],
+  "summary": "All 7 criteria pass. compareToBaseline verifiably pure (no fs/clock/network); runReplayHarness has zero runGeneratorAgent/runEvaluatorAgent/createClient refs — the load-bearing no-LLM-during-replay invariant holds. Live CLI smoke tests confirm exit-0 on empty/clean corpus and exit-1 on a seeded regression with correct delta table. NonGoals respected (only 4 files; ReplayStore schema unchanged; evaluator-agent.ts/pipeline.ts/agents untouched). Full suite 2254 tests pass — no regressions."
+}

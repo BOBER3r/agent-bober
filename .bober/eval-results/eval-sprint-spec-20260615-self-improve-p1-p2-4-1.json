@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260615-self-improve-p1-p2-4-1",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-4",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T23:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "passed": true,
+  "score": { "criteriaTotal": 9, "criteriaPassed": 9, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "results": [
+    { "evaluator": "build", "required": true, "passed": true },
+    { "evaluator": "typecheck", "required": true, "passed": true },
+    { "evaluator": "lint", "required": false, "passed": true },
+    { "evaluator": "unit-test", "required": false, "passed": true }
+  ],
+  "regressions": [],
+  "concerns": [],
+  "summary": "All 9 criteria pass, 8/8 required. Full suite 2309 tests pass — zero regressions. Both safety invariants independently verified (grep + guard test): gepa.ts/evolve.ts never write agents/; pipeline.ts never imports/calls evolve|gepa. proposeVariants deterministic (mulberry32, no Math.random); paretoSet drops dominated variants; strict promotion predicate (regressions===0 AND improvements > baseline — tie does NOT promote); report.json always written, promoted/<role>.md only on win & !dryRun. No SDK imports in gepa.ts/evolve.ts. The 15-vs-19 test count is the gepa(15)+evolve(4) file split, not a defect."
+}

@@ -1,0 +1,28 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-self-improve-p1-p2-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-1",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "timestamp": "2026-06-15T21:05:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — multi-agent autonomous build harness (plan→research→architect→sprint with generator↔evaluator retry). Phase 5 hardens self-improvement so it is SAFE to enable: a frozen replay regression harness (the gate), off-by-default evaluator anti-degeneration guards, and an offline replay-gated GEPA prompt-evolution CLI. Cross-cutting invariant: the system never edits its own prompts/lessons without passing a deterministic, replay-gated check, and live pipeline behavior is byte-identical until a new selfImprove flag is explicitly enabled.",
+    "completedSprints": [],
+    "currentBranch": "bober/self-improve-p1-p2",
+    "relevantFiles": [
+      "src/state/facts.ts (FactStore SQLite adapter pattern — COPY this discipline exactly: better-sqlite3, content-hash id at :58, CREATE TABLE IF NOT EXISTS in ctor, injected timestamps, :memory:-testable)",
+      "src/config/schema.ts (BoberConfigSchema :376, EvaluatorSectionSchema :104 — add optional selfImprove section here)",
+      "src/cli/commands/facts.ts (registerFactsCommand pattern — COPY: subcommands, findProjectRoot, chalk, handlers never throw, set process.exitCode=1)",
+      "src/cli/index.ts (:314 registerFactsCommand — register registerReplayCommand next to it)",
+      "src/orchestrator/eval-persist.ts (:45 persistEvalResult payload shape — the capture source: .bober/eval-results/eval-*.json with evalId, contractId, iteration, passed, results[])",
+      "src/state/helpers.ts (ensureDir)"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-self-improve-p1-p2-1.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

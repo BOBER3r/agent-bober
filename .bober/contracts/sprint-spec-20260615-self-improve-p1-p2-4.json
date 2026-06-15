@@ -1,0 +1,58 @@
+{
+  "contractId": "sprint-spec-20260615-self-improve-p1-p2-4",
+  "specId": "spec-20260615-self-improve-p1-p2",
+  "sprintNumber": 4,
+  "title": "GEPA offline prompt evolution `bober evolve` — replay-gated, Pareto-set, never live",
+  "description": "Add an explicit offline `bober evolve` verb that reflectively mutates the instruction text of the generator/evaluator agent prompts, keeps a Pareto set, scores every variant ONLY against the Sprint 2 replay harness, and writes a promoted prompt under .bober/evolve/<runId>/ only if it beats the recorded baseline with zero regressions. It never writes agents/<role>.md and is never invoked by runPipeline.",
+  "status": "completed",
+  "createdAt": "2026-06-15T18:33:10Z",
+  "updatedAt": "2026-06-15T23:00:00Z",
+  "completedAt": "2026-06-15T23:00:00Z",
+  "dependsOn": ["sprint-spec-20260615-self-improve-p1-p2-2"],
+  "features": ["feat-4"],
+  "successCriteria": [
+    { "criterionId": "sc-4-1", "description": "The project builds successfully with `npm run build` (tsc) and exits with code 0.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-4-2", "description": "TypeScript compilation produces zero type errors (`npm run typecheck`).", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-4-3", "description": "src/orchestrator/selfimprove/gepa.ts exports a pure proposeVariants(basePrompt: string, seed: number): string[] (deterministic for a fixed seed — identical inputs yield identical variant text) and a pure paretoSet(scored: VariantScore[]): VariantScore[] selecting the non-dominated frontier over (replayPassCount desc, promptLength asc). A vitest suite asserts determinism of proposeVariants and that paretoSet excludes a strictly-dominated variant.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-4", "description": "src/orchestrator/selfimprove/gepa.ts exports an async evolve(projectRoot, config, { role, seed }) that reads agents/<role>.md via loadAgentDefinition, generates variants, scores EACH variant ONLY via runReplayHarness from replay-harness.ts (Sprint 2), and returns a GepaResult { promoted: boolean, winnerPath: string | null, baselineRegressions, variantsTried }. A variant is eligible for promotion ONLY if its runReplayHarness result has zero regressions AND strictly more improvements than the baseline.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-4-5", "description": "When a winning variant exists, evolve writes it to .bober/evolve/<runId>/promoted/<role>.md plus a report.json (Pareto record + per-variant scores); when no variant beats the baseline with zero regressions, evolve writes report.json with promoted:false and writes NO file under promoted/. No code path in gepa.ts or evolve.ts writes to the agents/ directory.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-4-6", "description": "A vitest suite in src/orchestrator/selfimprove/gepa.test.ts asserts, with a stubbed/seeded replay harness: (a) a variant that introduces a regression is NOT promoted and no promoted/<role>.md is written; (b) a variant with zero regressions and strictly more improvements IS written under .bober/evolve/<runId>/promoted/; (c) the writer never targets a path containing '/agents/'.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-7", "description": "A vitest guard test reads the source of src/orchestrator/selfimprove/gepa.ts, src/cli/commands/evolve.ts, and src/orchestrator/pipeline.ts and asserts: gepa/evolve contain no write to a path joined with 'agents', and pipeline.ts contains no import of or call to evolve/gepa (the evolve verb is never reachable from runPipeline).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-8", "description": "`bober evolve` is registered in src/cli/index.ts; running `node dist/cli/index.js evolve --role generator --dry-run` over a captured corpus prints the variants tried and the promotion decision and exits 0 without writing any promoted/<role>.md (dry-run). The handler sets process.exitCode=1 on error and never throws.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-4-9", "description": "ESLint reports zero errors on new and modified files (`npm run lint`).", "verificationMethod": "lint", "required": false }
+  ],
+  "nonGoals": [
+    "Do not write the evolved prompt back to agents/<role>.md — writes stay under .bober/evolve/<runId>/ only",
+    "Do not call evolve/gepa from runPipeline or any live pipeline code path",
+    "Do not score variants against anything except runReplayHarness (no live generator/evaluator runs)",
+    "Do not promote a variant that has any regression or that merely ties the baseline — strict improvement with zero regressions only",
+    "Do not import @anthropic-ai/sdk or openai directly — variant LLM calls (if any) go through src/providers/factory.ts createClient"
+  ],
+  "stopConditions": [
+    "`npm run build`, `npm run typecheck`, and `npm test -- gepa evolve` all exit 0 with the new tests included",
+    "The forbidden-write guard test (sc-4-7) passes, proving evolve never writes agents/ and is never called by runPipeline"
+  ],
+  "definitionOfDone": "A maintainer can run `bober evolve --role generator` offline; it reads the generator agent prompt, proposes deterministic variants, scores each only against the frozen replay corpus, keeps the Pareto frontier, and writes a promoted prompt under .bober/evolve/<runId>/promoted/ only when a variant beats the baseline with zero regressions. The live agents/ prompts and runPipeline are never modified by this command, and tests prove both invariants.",
+  "assumptions": [
+    "Q5: evolve writes variants and the replay-gated winner ONLY under .bober/evolve/<runId>/, never to agents/ and never from runPipeline; promotion into agents/ is a manual human copy (out of scope).",
+    "GEPA reads/writes prompt text via the agents/<role>.md contract (loadAgentDefinition, src/orchestrator/agent-loader.ts: body after frontmatter is the systemPrompt).",
+    "Variant scoring uses runReplayHarness (Sprint 2) as the sole gate; mutation operators are a small deterministic-seeded set (paraphrase/add-constraint/reorder) — the gate, not the operator, is load-bearing.",
+    "Any LLM call used to generate variants goes through the provider-agnostic createClient (src/providers/factory.ts), so evolve runs identically on Anthropic or DeepSeek."
+  ],
+  "outOfScope": [
+    "Auto-promoting into agents/ (manual human step)",
+    "On-line / in-loop evolution during a live run",
+    "Evolving lesson text or semantic_facts"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "GEPA: Create src/orchestrator/selfimprove/gepa.ts. PURE pieces first: proposeVariants(basePrompt, seed) — a deterministic, seeded set of small mutation operators (e.g. append a clarifying constraint sentence, paraphrase one heading, reorder two adjacent guidance bullets); a fixed seed MUST yield byte-identical variants (use a simple seeded PRNG, e.g. mulberry32, no Math.random). paretoSet(scored) — non-dominated frontier over (replayPassCount desc, promptLength asc); a variant dominated on both axes is excluded. ORCHESTRATION: async evolve(projectRoot, config, { role, seed, dryRun }) — load the base prompt via loadAgentDefinition(role-agent-name, projectRoot) (agent-loader.ts; the systemPrompt is the .md body). Compute the BASELINE by running runReplayHarness once. For each variant, score it via runReplayHarness — IMPORTANT: since this sprint does not re-run live agents, scoring a prompt variant means measuring its effect through the replay harness's deterministic re-derivation; if the harness cannot vary by prompt, treat the variant's score as the harness result and require zero regressions + strictly-more improvements vs baseline as the promotion predicate (this keeps the GATE meaningful and the test deterministic via a stubbed harness). PROMOTION: eligible iff result.regressions.length===0 AND result.improvements.length > baseline.improvements.length. Keep the Pareto set; pick the top non-dominated eligible variant. WRITES (the load-bearing safety boundary): create .bober/evolve/<runId>/ (runId = `evolve-<timestamp>` or injected) via ensureDir; write report.json always; write promoted/<role>.md ONLY when a winner exists AND !dryRun. NEVER construct a write path under agents/ — there must be no join(projectRoot, 'agents', ...) write in gepa.ts/evolve.ts. PROVIDER: if you generate variants with an LLM, use createClient from src/providers/factory.ts (no SDK import). CLI: src/cli/commands/evolve.ts following src/cli/commands/facts.ts — registerEvolveCommand(program) with --role <generator|evaluator>, --seed <n>, --dry-run; resolveRoot via findProjectRoot; chalk output; handler MUST NOT throw (process.exitCode=1 + return). Register in src/cli/index.ts next to registerReplayCommand. TESTS: gepa.test.ts injects a stub harness (pass a runReplayHarness-shaped fn into evolve via a parameter or a small DI seam) to deterministically simulate (a) a regressing variant (not promoted, no promoted file) and (b) a strictly-improving variant (promoted file under a temp .bober/evolve/). sc-4-7 reads the three source files as text and asserts the forbidden patterns are absent.",
+  "evaluatorNotes": "Run `npm run build`, `npm run typecheck`, then `npm test -- gepa evolve`. For sc-4-3: confirm proposeVariants is deterministic (call twice with the same seed, assert equal) and paretoSet drops a doubly-dominated variant. For sc-4-4/sc-4-5: read gepa.ts and confirm variants are scored ONLY via runReplayHarness (grep for runGeneratorAgent/runEvaluatorAgent — none) and that the promotion predicate is zero-regressions AND strictly-more-improvements; confirm promoted/<role>.md is written only on a win and report.json always. For sc-4-6: run the gepa tests; confirm the regressing-variant case writes NO promoted file and the winning case writes one under a temp .bober/evolve/. For sc-4-7 (CRITICAL): run the guard test and independently grep gepa.ts + evolve.ts for any write path containing 'agents' and grep pipeline.ts for 'evolve'/'gepa' imports/calls — both must be absent. For sc-4-8: in a temp dir with a captured corpus, run `node dist/cli/index.js evolve --role generator --dry-run` and confirm it prints the decision, exits 0, and writes no promoted file. Confirm no @anthropic-ai/sdk or openai import appears in gepa.ts/evolve.ts.",
+  "estimatedFiles": [
+    "src/orchestrator/selfimprove/gepa.ts",
+    "src/orchestrator/selfimprove/gepa.test.ts",
+    "src/cli/commands/evolve.ts",
+    "src/cli/commands/evolve.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium"
+}
