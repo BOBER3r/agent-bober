@@ -21,6 +21,7 @@ const HELP_TEXT = [
   "  /careful [on|off]  — Toggle approval gates for new runs",
   "  /approve <id>      — Approve a pending checkpoint (resume the run)",
   "  /reject <id> [why] — Reject a pending checkpoint with optional feedback",
+  "  /tell <runId> <text> — Queue free-text guidance for a run (applied at next boundary)",
   "  /help              — Show this help message",
   "  /exit              — Exit the chat session",
   "",
@@ -44,6 +45,8 @@ const HELP_TEXT = [
  *   returns an "unavailable" message. Kept optional so existing callers are not broken.
  * @param rejectHandler - Optional handler for /reject <id> [feedback]. When omitted,
  *   /reject returns an "unavailable" message. Kept optional so existing callers are not broken.
+ * @param tellHandler - Optional handler for /tell <runId> <text>. When omitted,
+ *   /tell returns an "unavailable" message. Last optional param preserves back-compat.
  */
 export async function dispatch(
   input: string,
@@ -52,6 +55,7 @@ export async function dispatch(
   carefulHandler?: (arg: string | undefined) => Promise<string>,
   approveHandler?: (id: string) => Promise<string>,
   rejectHandler?: (id: string, feedback: string) => Promise<string>,
+  tellHandler?: (runId: string, text: string) => Promise<string>,
 ): Promise<SlashResult> {
   const trimmed = input.trimStart();
   if (!trimmed.startsWith("/")) {
@@ -106,6 +110,19 @@ export async function dispatch(
       const output = rejectHandler
         ? await rejectHandler(id, feedback)
         : "Reject is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/tell": {
+      const parts = trimmed.split(/\s+/);
+      const runId = parts[1];
+      if (!runId) return { handled: true, output: "Usage: /tell <runId> <text>" };
+      // Capture everything after the runId as the guidance text (preserve spacing)
+      const text = trimmed.replace(/^\/tell\s+\S+\s*/, "");
+      if (!text) return { handled: true, output: "Usage: /tell <runId> <text>" };
+      const output = tellHandler
+        ? await tellHandler(runId, text)
+        : "Tell is unavailable.";
       return { handled: true, output };
     }
 

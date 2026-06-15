@@ -3,7 +3,7 @@
 // Tests for sprint 4: steer actions (inspect + stop) and /stop slash command.
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -279,5 +279,121 @@ describe("RunSpawner stub interface remains compatible (regression)", () => {
     expect(stopRunId).toBe("run-stub");
     expect(reply).toContain("run-stub");
     expect(reply).toContain("1234");
+  });
+});
+
+// ── sc-4-8: NL 'tell run X to ...' classifier route + /tell slash ─────
+
+/** LLMClient that always classifies as tell {runId, text}. */
+function makeTellLLM(runId: string, text: string): LLMClient {
+  return {
+    chat: async () => ({
+      text: JSON.stringify({ action: "tell", runId, text }),
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    }),
+  } as unknown as LLMClient;
+}
+
+describe("sc-4-8: NL 'tell run X to ...' routes to handleTell and writes guidance entry", () => {
+  it("classified tell action writes guidance entry to guidance.jsonl", async () => {
+    const runId = "run-tell-test";
+    // Seed the run dir so hasRunDir returns true
+    await mkdir(join(tmpDir, ".bober", "runs", runId), { recursive: true });
+
+    const llm = makeTellLLM(runId, "prefer Zod");
+    const session = new ChatSession({
+      llm,
+      projectRoot: tmpDir,
+      sessionId: "sess-tell",
+    });
+
+    const reply = await session.handleTurn("tell run run-tell-test to prefer Zod");
+
+    expect(reply).not.toBeNull();
+    expect(reply).toContain(runId);
+    expect(reply).toContain("Queued");
+
+    // Verify guidance.jsonl was written
+    const raw = await readFile(
+      join(tmpDir, ".bober", "runs", runId, "guidance.jsonl"),
+      "utf-8",
+    );
+    const entry = JSON.parse(raw.trim()) as { text: string; consumed: boolean };
+    expect(entry.text).toBe("prefer Zod");
+    expect(entry.consumed).toBe(false);
+  });
+
+  it("tell for an unknown run returns clear error and writes nothing", async () => {
+    const llm = makeTellLLM("run-does-not-exist", "some text");
+    const session = new ChatSession({
+      llm,
+      projectRoot: tmpDir,
+      sessionId: "sess-tell-unknown",
+    });
+
+    const reply = await session.handleTurn("tell run run-does-not-exist to do something");
+    expect(reply).toContain("No such run");
+    expect(reply).not.toContain("Queued");
+  });
+
+  it("/tell slash command writes guidance for a known run", async () => {
+    const runId = "run-slash-tell";
+    await mkdir(join(tmpDir, ".bober", "runs", runId), { recursive: true });
+
+    const session = new ChatSession({
+      llm: new ThrowingClient(),  // LLM must NOT be called for slash commands
+      projectRoot: tmpDir,
+      sessionId: "sess-slash-tell",
+    });
+
+    const reply = await session.handleTurn(`/tell ${runId} use strict mode`);
+
+    expect(reply).toContain("Queued");
+    expect(reply).toContain(runId);
+
+    const raw = await readFile(
+      join(tmpDir, ".bober", "runs", runId, "guidance.jsonl"),
+      "utf-8",
+    );
+    const entry = JSON.parse(raw.trim()) as { text: string };
+    expect(entry.text).toBe("use strict mode");
+  });
+
+  it("/tell slash command for unknown run returns clear error", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-slash-tell-unknown",
+    });
+
+    const reply = await session.handleTurn("/tell run-unknown some guidance");
+    expect(reply).toContain("No such run");
+  });
+});
+
+// ── sc-4-8: /help lists /tell ─────────────────────────────────────────
+
+describe("sc-4-8: /help lists /tell", () => {
+  it("/help output includes /tell", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-help-tell",
+    });
+
+    const reply = await session.handleTurn("/help");
+    expect(reply).toContain("/tell");
+  });
+
+  it("/help output describes /tell guidance purpose", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-help-tell-2",
+    });
+
+    const reply = await session.handleTurn("/help");
+    // The help text should mention guidance context
+    expect(reply).toContain("guidance");
   });
 });

@@ -303,3 +303,83 @@ describe("/reject slash command dispatch (sc-3-5)", () => {
     }
   });
 });
+
+// ── /tell slash command tests (sc-4-4, sc-4-8) ────────────────────────
+
+describe("/tell slash command dispatch (sc-4-4, sc-4-8)", () => {
+  it("/tell without runId returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/tell", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /tell");
+    }
+  });
+
+  it("/tell with runId but no text returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/tell run-abc", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /tell");
+    }
+  });
+
+  it("/tell without tellHandler returns 'Tell is unavailable.'", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/tell run-abc prefer Zod", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Tell is unavailable.");
+    }
+  });
+
+  it("/tell calls tellHandler with runId and full text remainder", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedRunId = "";
+    let receivedText = "";
+    const tellHandler = async (runId: string, text: string) => {
+      receivedRunId = runId;
+      receivedText = text;
+      return "Queued.";
+    };
+
+    await dispatch(
+      "/tell run-abc prefer Zod over yup",
+      roster,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      tellHandler,
+    );
+    expect(receivedRunId).toBe("run-abc");
+    expect(receivedText).toBe("prefer Zod over yup");
+  });
+
+  it("/help includes /tell in the help text (sc-4-8)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("/tell");
+    }
+  });
+
+  it("back-compat: existing 6-arg callers still compile and /tell returns unavailable", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch(
+      "/tell run-x some text",
+      roster,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      // no tellHandler — 6-arg back-compat call
+    );
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Tell is unavailable.");
+    }
+  });
+});

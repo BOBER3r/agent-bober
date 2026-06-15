@@ -24,6 +24,7 @@ import {
   saveRejected,
   pendingExists,
 } from "../state/approval-state.js";
+import { appendGuidance, hasRunDir } from "../state/guidance.js";
 import type { ApprovedMarker, RejectedMarker } from "../state/approval-state.js";
 import { resolveApprover } from "../cli/commands/approve.js";
 
@@ -190,6 +191,7 @@ export class ChatSession {
       (arg) => this.handleCareful(arg),
       (id) => this.handleApprove(id),
       (id, fb) => this.handleReject(id, fb),
+      (runId, text) => this.handleTell(runId, text),
     );
     if (slashResult.handled) {
       if (slashResult.exit) return null;
@@ -249,6 +251,8 @@ export class ChatSession {
       } else {
         reply = await this.handleReject(target.id, action.feedback ?? "");
       }
+    } else if (action.action === "tell") {
+      reply = await this.handleTell(action.runId, action.text);
     } else {
       // Unknown action — should not happen given the classifier union
       reply = `Unrecognised action. For now, try /help for available commands.`;
@@ -346,6 +350,30 @@ export class ChatSession {
     await saveRejected(this.projectRoot, checkpointId, marker);
     await this.clearPending(checkpointId);
     return `Rejected checkpoint ${checkpointId}. Feedback sent for rework.`;
+  }
+
+  /**
+   * Queue free-text guidance for a run at the next pipeline boundary.
+   * Shared by /tell <runId> <text> (deterministic slash path) and
+   * classifier tell (natural-language path). Never reaches the LLM.
+   *
+   * Guards: unknown run (not in roster) → clear error, writes nothing.
+   * Path-traversal: appendGuidance validates runId via safeSegment first.
+   * Does NOT require careful mode; guidance can be queued for any known run.
+   */
+  private async handleTell(runId: string, text: string): Promise<string> {
+    // Guard: check run exists in the roster (any status — not just running)
+    const exists = await hasRunDir(this.projectRoot, runId);
+    if (!exists) {
+      return `No such run: ${runId}`;
+    }
+    try {
+      await appendGuidance(this.projectRoot, runId, text);
+    } catch (err) {
+      // Surface path-traversal or other appendGuidance errors clearly
+      return `Failed to queue guidance: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    return `Queued guidance for run ${runId}.`;
   }
 
   /**
