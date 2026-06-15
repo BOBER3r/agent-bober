@@ -128,7 +128,7 @@ describe("WorkflowEngine (C1 — eligible path, invoke dormant)", () => {
     // Returns the sentinel from the injected fake TS engine
     expect(result).toBe(sentinel);
     expect(fakeTsRun).toHaveBeenCalledTimes(1);
-    expect(fakeTsRun).toHaveBeenCalledWith("build a feature", tmpDir, config);
+    expect(fakeTsRun).toHaveBeenCalledWith("build a feature", tmpDir, config, undefined);
   });
 
   it("emits exactly one info log line on WorkflowUnavailableError re-dispatch", async () => {

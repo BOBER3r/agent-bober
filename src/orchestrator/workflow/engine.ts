@@ -13,5 +13,6 @@ export interface PipelineEngine {
     userPrompt: string,
     projectRoot: string,
     config: BoberConfig,
+    opts?: { runId?: string },
   ): Promise<PipelineResult>;
 }

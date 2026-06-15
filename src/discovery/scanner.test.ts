@@ -374,10 +374,10 @@ describe("scanCodeConventions()", () => {
     expect(report).not.toBeNull();
   });
 
-  it("detects camelCase as dominant file naming style", async () => {
+  it("detects kebab-case as dominant file naming style", async () => {
     const report = await scanCodeConventions(PROJECT_ROOT);
-    // agent-bober uses camelCase file names (init.ts, schema.ts, loader.ts, etc.)
-    expect(report?.fileNaming.dominant).toBe("camelCase");
+    // agent-bober uses kebab-case file names; src/chat module (chat-session.ts, completion-tailer.ts, etc.) pushed kebab-case to dominant
+    expect(report?.fileNaming.dominant).toBe("kebab-case");
   });
 
   it("detects relative imports (TypeScript ESM project)", async () => {

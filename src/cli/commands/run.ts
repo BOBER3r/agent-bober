@@ -23,6 +23,8 @@ export interface RunCommandOptions {
    *  Without this flag, --checkpoint only overrides the global default; per-checkpoint
    *  overrides in config still win. With this flag, --checkpoint wins everywhere. */
   checkpointAll?: boolean;
+  /** When set, the pipeline honors this runId instead of self-generating run-<timestamp>. */
+  runId?: string;
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────
@@ -143,7 +145,7 @@ export async function runRunCommand(
   try {
     spinner.stop();
 
-    const result = await runPipeline(task, projectRoot, config);
+    const result = await runPipeline(task, projectRoot, config, { runId: options.runId });
 
     // Display final summary
     console.log();

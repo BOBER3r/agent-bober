@@ -39,7 +39,7 @@ describe("sc-5-1: tool role with per-role non-claude-code override resolves corr
 
   it("evaluator with claude-code and generator with openai: evaluator falls back to openai (when planner also on claude-code)", () => {
     // All roles on claude-code except generator which is openai.
-    // Fallback scan order: planner (claude-code), researcher (claude-code),
+    // Fallback scan order: planner (claude-code), researcher (claude-code), chat (claude-code),
     // curator (absent → resolves to anthropic by default — but wait, we force curator to claude-code).
     // Let's make curator also claude-code so the first non-claude-code is generator (openai).
     const config = {
@@ -48,6 +48,7 @@ describe("sc-5-1: tool role with per-role non-claude-code override resolves corr
       evaluator: { model: "sonnet", provider: "claude-code", strategies: [] },
       curator: { model: "opus", provider: "claude-code" },
       codeReview: { model: "sonnet", provider: "claude-code" },
+      chat: { model: "opus", provider: "claude-code" },
     } as BoberConfig;
 
     const result = resolveRoleProviders(config);
@@ -63,12 +64,15 @@ describe("sc-5-1: tool role with per-role non-claude-code override resolves corr
 
 describe("sc-5-2: tool role stuck on claude-code with no alternative throws naming the role", () => {
   it("throws when every role uses claude-code and names the first offending tool role", () => {
+    // Must include chat (prompt role) as claude-code too; otherwise absent chat defaults
+    // to anthropic and becomes the fallback, preventing the throw.
     const config = {
       planner: { model: "opus", provider: "claude-code" },
       generator: { model: "sonnet", provider: "claude-code" },
       evaluator: { model: "sonnet", provider: "claude-code", strategies: [] },
       curator: { model: "opus", provider: "claude-code" },
       codeReview: { model: "sonnet", provider: "claude-code" },
+      chat: { model: "opus", provider: "claude-code" },
     } as BoberConfig;
 
     // The first tool role iterated is "curator"; the error must name it (or any tool role)
@@ -76,7 +80,7 @@ describe("sc-5-2: tool role stuck on claude-code with no alternative throws nami
   });
 
   it("throw message states claude-code cannot drive tools", () => {
-    // Must set ALL roles (including optional curator/codeReview) to claude-code,
+    // Must set ALL roles (including optional curator/codeReview and chat) to claude-code,
     // otherwise an absent optional section resolves to "anthropic" via the model default
     // and becomes the fallback, preventing the throw.
     const config = {
@@ -85,6 +89,7 @@ describe("sc-5-2: tool role stuck on claude-code with no alternative throws nami
       evaluator: { model: "sonnet", provider: "claude-code", strategies: [] },
       curator: { model: "opus", provider: "claude-code" },
       codeReview: { model: "sonnet", provider: "claude-code" },
+      chat: { model: "opus", provider: "claude-code" },
     } as BoberConfig;
 
     expect(() => resolveRoleProviders(config)).toThrow(/claude-code/);
@@ -99,6 +104,7 @@ describe("sc-5-2: tool role stuck on claude-code with no alternative throws nami
       evaluator: { model: "sonnet", provider: "claude-code", strategies: [] },
       curator: { model: "opus", provider: "claude-code" },
       codeReview: { model: "sonnet", provider: "claude-code" },
+      chat: { model: "opus", provider: "claude-code" },
     } as BoberConfig;
 
     expect(() => resolveRoleProviders(config)).toThrow(/curator/);
@@ -148,7 +154,7 @@ describe("sc-5-3: planner and researcher on claude-code are allowed (no throw)",
 // ── sc-5-4: logger called once per role with role name + resolved provider ────
 
 describe("sc-5-4: logger.info called once per role with role name and resolved provider", () => {
-  it("calls logger.info 6 times (once per role)", () => {
+  it("calls logger.info 7 times (once per role, including chat)", () => {
     const config = {
       planner: { model: "opus" },
       generator: { model: "sonnet" },
@@ -157,7 +163,7 @@ describe("sc-5-4: logger.info called once per role with role name and resolved p
 
     resolveRoleProviders(config);
 
-    expect(vi.mocked(logger.info).mock.calls).toHaveLength(6);
+    expect(vi.mocked(logger.info).mock.calls).toHaveLength(7);
   });
 
   it("logs the role name in each call", () => {
@@ -176,6 +182,7 @@ describe("sc-5-4: logger.info called once per role with role name and resolved p
     expect(calls.some((msg) => msg.includes("generator"))).toBe(true);
     expect(calls.some((msg) => msg.includes("evaluator"))).toBe(true);
     expect(calls.some((msg) => msg.includes("codeReview"))).toBe(true);
+    expect(calls.some((msg) => msg.includes("chat"))).toBe(true);
   });
 
   it("logs the finally-resolved provider (not the raw pre-fallback provider)", () => {

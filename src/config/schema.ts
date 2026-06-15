@@ -345,6 +345,16 @@ export const HistorySectionSchema = z.object({
 });
 export type HistorySection = z.infer<typeof HistorySectionSchema>;
 
+// ── Chat Section ─────────────────────────────────────────────────────
+
+export const ChatSectionSchema = z.object({
+  model: ModelChoiceSchema.default("opus"),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+});
+export type ChatSection = z.infer<typeof ChatSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -369,6 +379,8 @@ export const BoberConfigSchema = z.object({
   architect: ArchitectSectionSchema.optional(),
   // ── Sprint 1: scale-safe history rotation ──
   history: HistorySectionSchema.optional(),
+  // ── Sprint 1: bober chat session layer ──
+  chat: ChatSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

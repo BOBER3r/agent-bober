@@ -35,6 +35,7 @@ import { registerTelemetryCommand } from "./commands/telemetry.js";
 import { registerWorktreeCommand } from "./commands/worktree.js";
 import { registerMemoryCommand } from "./commands/memory.js";
 import { registerFleetCommand } from "../fleet/index.js";
+import { registerChatCommand } from "./commands/chat.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -213,11 +214,16 @@ async function main(): Promise<void> {
       "Apply --checkpoint to ALL checkpoints, overriding per-checkpoint config overrides. " +
       "Requires --checkpoint to also be set. Without this flag, per-checkpoint overrides in config still win.",
     )
+    .option(
+      "--run-id <id>",
+      "Use a caller-supplied run identifier instead of self-generating run-<timestamp>.",
+    )
     .action(async (task?: string, cmdOpts?: {
       provider?: string;
       mode?: "autopilot" | "careful";
       checkpoint?: string;
       checkpointAll?: boolean;
+      runId?: string;
     }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
@@ -228,6 +234,7 @@ async function main(): Promise<void> {
         mode: cmdOpts?.mode,
         checkpoint: cmdOpts?.checkpoint,
         checkpointAll: cmdOpts?.checkpointAll,
+        runId: cmdOpts?.runId,
       });
     });
 
@@ -292,6 +299,9 @@ async function main(): Promise<void> {
 
   // ── fleet ─────────────────────────────────────────────────────────
   registerFleetCommand(program);
+
+  // ── chat ──────────────────────────────────────────────────────────
+  registerChatCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);

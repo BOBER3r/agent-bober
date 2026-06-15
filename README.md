@@ -443,6 +443,7 @@ npx agent-bober plan answer <specId> <questionId> "..."  # Resolve a single clar
 npx agent-bober sprint                                   # Execute next sprint
 npx agent-bober eval                                     # Evaluate current sprint
 npx agent-bober run "feature"                            # Full autonomous loop
+npx agent-bober chat                                     # Interactive chat REPL (roster + memory aware)
 npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
 ```
 

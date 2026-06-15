@@ -36,6 +36,8 @@ afterEach(async () => {
 
 describe("sc-5-5: loadConfig rejects when a tool role is stuck on claude-code", () => {
   it("rejects with a message naming the offending tool role when all roles use claude-code", async () => {
+    // Must include chat (prompt role) as claude-code too; otherwise absent chat defaults
+    // to anthropic and becomes the fallback, preventing the throw.
     const config = {
       project: { name: "p", mode: "brownfield" },
       planner: { provider: "claude-code" },
@@ -43,6 +45,7 @@ describe("sc-5-5: loadConfig rejects when a tool role is stuck on claude-code", 
       evaluator: { strategies: [], provider: "claude-code" },
       curator: { provider: "claude-code" },
       codeReview: { provider: "claude-code" },
+      chat: { provider: "claude-code" },
     };
 
     await writeFile(join(tmpDir, "bober.config.json"), JSON.stringify(config), "utf-8");
@@ -53,7 +56,7 @@ describe("sc-5-5: loadConfig rejects when a tool role is stuck on claude-code", 
   });
 
   it("rejects because the error message explains claude-code cannot drive tools", async () => {
-    // Must set ALL roles including optional curator/codeReview; otherwise an absent
+    // Must set ALL roles including optional curator/codeReview and chat; otherwise an absent
     // optional section resolves to "anthropic" (via model default) and becomes the
     // fallback, preventing the throw.
     const config = {
@@ -63,6 +66,7 @@ describe("sc-5-5: loadConfig rejects when a tool role is stuck on claude-code", 
       evaluator: { strategies: [], provider: "claude-code" },
       curator: { provider: "claude-code" },
       codeReview: { provider: "claude-code" },
+      chat: { provider: "claude-code" },
     };
 
     await writeFile(join(tmpDir, "bober.config.json"), JSON.stringify(config), "utf-8");

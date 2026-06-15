@@ -17,7 +17,8 @@ export class TsPipelineEngine implements PipelineEngine {
     userPrompt: string,
     projectRoot: string,
     config: BoberConfig,
+    opts?: { runId?: string },
   ): Promise<PipelineResult> {
-    return runTsPipeline(userPrompt, projectRoot, config);
+    return runTsPipeline(userPrompt, projectRoot, config, opts);
   }
 }
