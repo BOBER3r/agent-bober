@@ -121,3 +121,59 @@ README Teams section) ship with it.
 | 4 | [sprint-spec-20260615-team-abstraction-4.md](./sprint-spec-20260615-team-abstraction-4.md) | Example team as pure config data + `bober run --team <id>` + `bober chat [team]` routing → `.bober/memory/example/`; user-facing [`docs/teams.md`](../teams.md) + README Teams section (the platform proof) |
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
+
+## Memory Self-Improvement (P0) — complete (5 of 5)
+
+`spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled
+**lessons** index into a queryable **facts** layer that is now produced and reconciled
+automatically and fed back into planning. **The plan is complete (5 of 5).** Sprint 1 lands
+the storage foundation: the project's **first
+relational store** — a bi-temporal SQLite **semantic-facts** store (`src/state/facts.ts`,
+`better-sqlite3` behind a swappable `FactStore` class) plus a `bober facts
+add|list|show|invalidate` CLI. Facts are `(scope, subject, predicate, value)` rows with
+confidence + source-run provenance and four temporal columns; invalidation is a
+soft-delete (`t_invalidated`) so nothing is ever destroyed. The store is **pure** (every
+timestamp is a caller parameter — no wall-clock read inside the store), ids are a
+deterministic content hash, and the DB file (`.bober/memory/facts.db`) is namespaced by the
+active team exactly like the lessons `INDEX.md`. Sprint 2 adds **reconcile-on-write**: fact
+writes flow through `reconcileFact` / `writeFact` so a changed value **supersedes** the prior
+fact (`supersedeFact` closes both `t_invalidated` and `t_invalid`), an identical value is a
+`noop`, and only a deterministic *normalized-key* ambiguity consults an injected LLM
+`FactJudge` (with an `add` fallback) — the exact-match path stays LLM-free, and `bober facts
+add` now dedupes/supersedes instead of duplicating. Still not wired into planning — producers
+and a retrieval path are later sprints. Sprint 3 turns to the **lessons** store and closes its
+monotonic-growth gap: ranking in `retrieveRelevantLessons` becomes **occurrence-weighted** (a
+more-often-seen lesson wins on equal token overlap; overlap stays dominant), and a new **pure
+hygiene pass** (`pruneLessons`) plus `bober memory prune` quarantine stale/low-occurrence and
+deterministically-contradictory lessons into a `QUARANTINE.md` sidecar — moving the literal
+`INDEX.md` line with provenance and **never deleting** the per-lesson `.md`. Sprint 4 mines a
+signal the generator↔evaluator retry loop previously discarded: the pure `distill()` gains a
+fourth signal **(d) fail→pass contrast** that detects a contract whose `iterationHistory` shows
+one or more fails **followed by** a pass and emits a `fix-contrast:<contractId>` lesson (tags
+`phase:fix-contrast` + `sprintId:<id>`, refs citing the failing iterations and the passing one).
+First-iteration passes, all-fail histories, and pass-before-fail are not transitions; the signal
+is additive (a reworked-then-passed sprint also keeps its `sprint-rework` lesson) and stays
+byte-stable and pure. Sprint 5 **closes the plan** with the **auto-producer + retrieval**: a pure
+`detectProjectFacts({ packageJson, boberConfig, lockfiles })` maps manifests/config into project-fact
+drafts (`testCommand`, `buildCommand`, `packageManager`, `framework`), and a thin `seedProjectFacts()`
+IO caller writes them through Sprint 2's idempotent `writeFact` near the start of `runPipeline` and at
+chat-session startup — both **guarded** so a facts failure never aborts a run. A new
+`retrieveRelevantFacts` + `serializeFactsForContext` pair injects scope-isolated active facts (SQL
+`WHERE scope=? AND t_invalidated IS NULL`, deterministic token-overlap rank, hard `charBudget` slice)
+into the planner's context alongside the lessons path. No LLM runs on the produce path (the only LLM
+remains Sprint 2's reconcile ambiguity branch). With this, the memory layer now has **two stores fed
+back into planning**: durable bi-temporal facts and hygienic distilled lessons.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260615-memory-self-improve-p0-1.md](./sprint-spec-20260615-memory-self-improve-p0-1.md) | Bi-temporal SQLite `FactStore` (`insertFact`/`getActiveFacts`/`getFact`/`invalidateFact`/`close`, deterministic `factId`, namespaced `facts.db`) + `bober facts add\|list\|show\|invalidate` CLI; `better-sqlite3` is the first relational dependency |
+| 2 | [sprint-spec-20260615-memory-self-improve-p0-2.md](./sprint-spec-20260615-memory-self-improve-p0-2.md) | Reconcile-on-write: pure `reconcileFact`/`writeFact` (`add`/`update`/`delete`/`noop`) — deterministic exact-match supersede (`FactStore.supersedeFact` sets both bi-temporal fields) + NOOP, with an injected `FactJudge`/`createLLMFactJudge()` consulted **only** on normalized-key ambiguity and an `add` fallback; `bober facts add` routes through `writeFact` with action-aware output |
+| 3 | [sprint-spec-20260615-memory-self-improve-p0-3.md](./sprint-spec-20260615-memory-self-improve-p0-3.md) | Lessons-store hygiene: occurrence-weighted `retrieveRelevantLessons` ranking (overlap DESC → occurrences DESC → lessonId ASC, C1 preserved) + pure `pruneLessons(records,{now,...}) → {kept,quarantined}` (deterministic decay + conflict-quarantine) + `quarantinePath`/`rewriteIndexForQuarantine` (moves literal `INDEX.md` lines → `QUARANTINE.md` with provenance, never deletes `.md`) + `bober memory prune` CLI |
+| 4 | [sprint-spec-20260615-memory-self-improve-p0-4.md](./sprint-spec-20260615-memory-self-improve-p0-4.md) | Fail→pass contrast extractor: pure `distill()` gains signal **(d)** — detects a contract whose `iterationHistory` shows fail(s) **followed by** a pass and emits a `fix-contrast:<contractId>` lesson (tags `phase:fix-contrast` + `sprintId:<id>`, refs citing the failing iterations + the passing one); first-iteration-pass / all-fail / pass-before-fail are not transitions; additive (reworked-then-passed sprint also keeps its `sprint-rework` lesson), byte-stable, no LLM/clock/fs |
+| 5 | [sprint-spec-20260615-memory-self-improve-p0-5.md](./sprint-spec-20260615-memory-self-improve-p0-5.md) | **Finale** — auto-producer + retrieval: pure `detectProjectFacts({packageJson,boberConfig,lockfiles})` → project-fact drafts (`testCommand`/`buildCommand`/`packageManager`/`framework`) + thin `seedProjectFacts()` IO caller (one clock stamp, idempotent `writeFact`) wired **guarded** into `runPipeline` (`pipeline.ts:1030`) and `ChatSession.start()` (`chat-session.ts:504`) so a facts failure never aborts a run; `retrieveRelevantFacts` (scope-isolated `getActiveFacts(scope)` SQL + deterministic token-overlap rank) + `serializeFactsForContext` (hard `charBudget` slice) injected into the planner `userMessage` (`planner-agent.ts`, guarded); no LLM on the produce path |
+
+The facts store is documented alongside the lessons store in
+[`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Semantic Facts Store"); the
+lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Prune & Quarantine"),
+and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
+under "Distilling Lessons from History".

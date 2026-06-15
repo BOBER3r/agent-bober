@@ -97,13 +97,23 @@ describe("C1 — retrieveRelevantLessons topK and keyword matching", () => {
   });
 
   it("applies stable tiebreak by lessonId ASC when scores are equal", async () => {
-    // Three lessons all with the same tag overlap
+    // Three lessons all with the same tag overlap and equal occurrences (default 1)
     await appendLesson(tmpDir, makeLesson("l-z", { tags: ["auth"] }));
     await appendLesson(tmpDir, makeLesson("l-a", { tags: ["auth"] }));
     await appendLesson(tmpDir, makeLesson("l-m", { tags: ["auth"] }));
 
     const out = await retrieveRelevantLessons(tmpDir, ["auth"], { topK: 5 });
     expect(out.map((r) => r.lessonId)).toEqual(["l-a", "l-m", "l-z"]);
+  });
+
+  it("ranks higher-occurrence lesson above equal-overlap lower-occurrence lesson", async () => {
+    // Both lessons share the same tag (equal overlap score = 1); l-hi has more occurrences
+    await appendLesson(tmpDir, makeLesson("l-lo", { tags: ["auth"], occurrences: 1 }));
+    await appendLesson(tmpDir, makeLesson("l-hi", { tags: ["auth"], occurrences: 7 }));
+    const out = await retrieveRelevantLessons(tmpDir, ["auth"], { topK: 5 });
+    // l-hi must rank first despite "l-hi" < "l-lo" lexicographically anyway,
+    // but the key point: occurrences beat the lessonId tiebreak
+    expect(out.map((r) => r.lessonId)).toEqual(["l-hi", "l-lo"]);
   });
 });
 

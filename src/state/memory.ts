@@ -9,6 +9,7 @@ import { ensureDir } from "./helpers.js";
 const BOBER_DIR = ".bober";
 const MEMORY_DIR = "memory";
 const INDEX_FILE = "INDEX.md";
+const QUARANTINE_FILE = "QUARANTINE.md";
 
 // ── Namespace ────────────────────────────────────────────────────────
 
@@ -38,6 +39,88 @@ export function lessonPath(projectRoot: string, lessonId: string, namespace?: st
 
 export function indexPath(projectRoot: string, namespace?: string): string {
   return join(memoryDir(projectRoot, namespace), INDEX_FILE);
+}
+
+export function quarantinePath(projectRoot: string, namespace?: string): string {
+  return join(memoryDir(projectRoot, namespace), QUARANTINE_FILE);
+}
+
+// ── Quarantine helpers ───────────────────────────────────────────────
+
+/**
+ * Move lessonId lines from INDEX.md to QUARANTINE.md (line-level rewrite).
+ *
+ * - Reads INDEX.md and partitions non-blank lines: those whose second token
+ *   (the lessonId) is in `quarantinedIds` are moved; the rest stay.
+ * - Rewrites INDEX.md with the kept lines.
+ * - Appends the moved lines to QUARANTINE.md (creating it if absent) with a
+ *   deterministic provenance block: `<!-- quarantined: <reason> @ <now> -->`.
+ * - NEVER touches per-lesson <lessonId>.md files.
+ *
+ * @param projectRoot - Absolute project root containing .bober/
+ * @param quarantinedIds - Set of lessonIds to move out of INDEX.md
+ * @param reason - Human-readable reason (e.g. "decay" | "conflict")
+ * @param now - ISO 8601 wall-clock, injected by the CLI handler
+ * @param namespace - Optional memory namespace
+ */
+export async function rewriteIndexForQuarantine(
+  projectRoot: string,
+  quarantinedIds: Set<string>,
+  reason: string,
+  now: string,
+  namespace?: string,
+): Promise<void> {
+  const idxPath = indexPath(projectRoot, namespace);
+  const qPath = quarantinePath(projectRoot, namespace);
+
+  let indexContent: string;
+  try {
+    indexContent = await readFile(idxPath, "utf-8");
+  } catch {
+    // INDEX.md absent — nothing to rewrite
+    return;
+  }
+
+  const allLines = indexContent.split("\n").filter((l) => l.trim().length > 0);
+
+  const keptLines: string[] = [];
+  const movedLines: string[] = [];
+
+  for (const line of allLines) {
+    const parts = line.split(" ");
+    // parts[0] = "-", parts[1] = lessonId
+    if (parts[0] === "-" && quarantinedIds.has(parts[1] ?? "")) {
+      movedLines.push(line);
+    } else {
+      keptLines.push(line);
+    }
+  }
+
+  if (movedLines.length === 0) {
+    return;
+  }
+
+  // Rewrite INDEX.md with only the kept lines
+  await writeFile(
+    idxPath,
+    keptLines.length > 0 ? keptLines.join("\n") + "\n" : "",
+    "utf-8",
+  );
+
+  // Append moved lines to QUARANTINE.md with provenance
+  await ensureDir(memoryDir(projectRoot, namespace));
+
+  let quarantineContent = "";
+  try {
+    quarantineContent = await readFile(qPath, "utf-8");
+  } catch {
+    // QUARANTINE.md does not exist yet — start fresh
+  }
+
+  const provenance = `<!-- quarantined: ${reason} @ ${now} -->`;
+  const appendBlock = [provenance, ...movedLines].join("\n") + "\n";
+
+  await writeFile(qPath, quarantineContent + appendBlock, "utf-8");
 }
 
 // ── Schema ───────────────────────────────────────────────────────────

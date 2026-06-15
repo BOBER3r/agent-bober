@@ -62,6 +62,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
     "@modelcontextprotocol/sdk": "^1.28.0",
+    "better-sqlite3": "^11.9.1",
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
     "execa": "^9.5.2",
@@ -86,6 +87,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.13.0",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",

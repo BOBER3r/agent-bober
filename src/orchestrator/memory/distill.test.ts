@@ -10,6 +10,7 @@
  *   (a) failed-criterion categories — eval criteriaResults[].result==="fail", grouped by verificationMethod
  *   (b) failing eval strategies     — eval strategyResults[].result==="fail", grouped by strategy
  *   (c) sprint rework               — contract.iterationHistory[].result==="fail" (+ history rework fallback)
+ *   (d) fail→pass contrast          — contract.iterationHistory with fail(s) followed by a pass
  *   determinism, idempotency, and purity (no LLM / no clock).
  */
 
@@ -120,12 +121,13 @@ function categories(lessons: { category: string }[]): string[] {
 // ── Real-vocabulary extraction ────────────────────────────────────────
 
 describe("distill extracts lessons from the real pipeline data shapes", () => {
-  it("produces exactly the four expected lessons from the fixture", () => {
+  it("produces exactly the five expected lessons from the fixture", () => {
     const lessons = distill(historyFixture, contractsFixture, evalResultsFixture);
-    expect(lessons).toHaveLength(4);
+    expect(lessons).toHaveLength(5);
     expect(categories(lessons)).toEqual([
       "eval-strategy-failure:unit-test",
       "failed-criterion:unit-test",
+      "fix-contrast:sprint-real-1",
       "sprint-rework",
       "sprint-rework",
     ]);
@@ -180,6 +182,61 @@ describe("distill extracts lessons from the real pipeline data shapes", () => {
     expect(reworkForReal1).toHaveLength(1);
     // Counted once (from iterationHistory), not twice.
     expect(reworkForReal1[0]!.occurrences).toBe(1);
+  });
+});
+
+// ── Signal (d): fail→pass contrast ───────────────────────────────────
+
+describe("distill signal (d): fail→pass contrast extractor", () => {
+  it("(d) emits a fix-contrast lesson for a fail→fail→pass transition", () => {
+    const c = [
+      contract("flip-1", [
+        { iteration: 1, evalId: "e1", result: "fail", timestamp: TS },
+        { iteration: 2, evalId: "e2", result: "fail", timestamp: TS },
+        { iteration: 3, evalId: "e3", result: "pass", timestamp: TS },
+      ]),
+    ];
+    const lessons = distill([], c, []);
+    const fix = lessons.filter((l) => l.category.startsWith("fix-contrast:"));
+    expect(fix).toHaveLength(1);
+    expect(fix[0]!.category).toBe("fix-contrast:flip-1");
+    expect(fix[0]!.tags).toContain("phase:fix-contrast");
+    expect(fix[0]!.tags).toContain("sprintId:flip-1");
+    expect(fix[0]!.sourceEntryRefs).toContain("flip-1:iteration-1");
+    expect(fix[0]!.sourceEntryRefs).toContain("flip-1:iteration-2");
+    expect(fix[0]!.sourceEntryRefs).toContain("flip-1:iteration-3"); // the pass
+  });
+
+  it("(d) does not emit fix-contrast when the sprint passed on its first iteration", () => {
+    const c = [
+      contract("clean-1", [
+        { iteration: 1, evalId: "e1", result: "pass", timestamp: TS },
+      ]),
+    ];
+    const lessons = distill([], c, []);
+    expect(lessons.filter((l) => l.category.startsWith("fix-contrast:"))).toHaveLength(0);
+  });
+
+  it("(d) does not emit fix-contrast when the sprint never passed", () => {
+    const c = [
+      contract("stuck-1", [
+        { iteration: 1, evalId: "e1", result: "fail", timestamp: TS },
+        { iteration: 2, evalId: "e2", result: "fail", timestamp: TS },
+      ]),
+    ];
+    const lessons = distill([], c, []);
+    expect(lessons.filter((l) => l.category.startsWith("fix-contrast:"))).toHaveLength(0);
+  });
+
+  it("(d) does not emit fix-contrast when pass precedes fail with no later pass", () => {
+    const c = [
+      contract("reverse-1", [
+        { iteration: 1, evalId: "e1", result: "pass", timestamp: TS },
+        { iteration: 2, evalId: "e2", result: "fail", timestamp: TS },
+      ]),
+    ];
+    const lessons = distill([], c, []);
+    expect(lessons.filter((l) => l.category.startsWith("fix-contrast:"))).toHaveLength(0);
   });
 });
 
@@ -239,8 +296,12 @@ describe("distill is deterministic (pure function)", () => {
 
   it("evalResults defaults to [] when omitted (backward-compatible 2-arg call)", () => {
     const lessons = distill(historyFixture, contractsFixture);
-    // Only the (c) signals fire without eval results: rework for real-1 + real-2.
-    expect(categories(lessons)).toEqual(["sprint-rework", "sprint-rework"]);
+    // Signals (c) and (d) fire without eval results: rework for real-1 + real-2, plus fix-contrast for real-1.
+    expect(categories(lessons)).toEqual([
+      "fix-contrast:sprint-real-1",
+      "sprint-rework",
+      "sprint-rework",
+    ]);
   });
 });
 
