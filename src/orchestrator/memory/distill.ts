@@ -6,7 +6,7 @@
  * lessonId is a sha256 content-hash of category+tags+sourceEntryRefs — never derived from time.
  *
  * IMPORTANT — this distills from the data shapes the REAL pipeline actually produces, NOT
- * an invented vocabulary. The three signals are:
+ * an invented vocabulary. The four signals are:
  *   (a) recurring failed-criterion categories  — from eval results' criteriaResults[].result==="fail",
  *       grouped by the criterion's verificationMethod (resolved from the owning contract).
  *   (b) repeated failing eval strategies        — from eval results' strategyResults[].result==="fail",
@@ -14,6 +14,9 @@
  *   (c) sprints that needed rework              — from contract.iterationHistory entries whose
  *       result==="fail" (real shape: { iteration, evalId, result }), reinforced by history
  *       entries with phase==="rework" && event==="evaluation-failed".
+ *   (d) fail→pass contrast                     — from contract.iterationHistory where at least one
+ *       result==="fail" is FOLLOWED (in iteration order) by a result==="pass", capturing the
+ *       sprint provenance and which iterations flipped.
  *
  * The eval-result inputs are read LENIENTLY (see DistillableEval) because the on-disk
  * .bober/eval-results/*.json files and the compiled EvalResultSchema use different shapes;
@@ -201,6 +204,42 @@ export function distill(
       for (const ref of failedRefs) {
         upsertGroup("sprint-rework", tags, summary, ref);
       }
+    }
+  }
+
+  // ── (d) fail→pass contrast (per contract iterationHistory) ─────────────
+  // Detects sprints that initially failed but eventually passed, capturing the
+  // transition as a 'fix-contrast' lesson. A transition requires at least one
+  // result==='fail' FOLLOWED (in array/iteration order) by a result==='pass'.
+  // A first-iteration pass, an all-fail history, or a pass-before-any-fail are NOT transitions.
+  for (const contract of contracts) {
+    const iters = Array.isArray(contract.iterationHistory)
+      ? contract.iterationHistory
+      : [];
+    let sawFail = false;
+    let flipped = false;
+    const failedRefs: string[] = [];
+    let passRef: string | undefined;
+    for (const it of iters) {
+      if (!isRecord(it)) continue;
+      const n = typeof it["iteration"] === "number" ? it["iteration"] : "?";
+      if (it["result"] === "fail") {
+        sawFail = true;
+        failedRefs.push(`${contract.contractId}:iteration-${n}`);
+      } else if (it["result"] === "pass" && sawFail) {
+        flipped = true;
+        passRef = `${contract.contractId}:iteration-${n}`;
+        break; // first pass after a fail is the flip point
+      }
+    }
+    if (flipped && passRef !== undefined) {
+      const category = `fix-contrast:${contract.contractId}`;
+      const tags = ["phase:fix-contrast", `sprintId:${contract.contractId}`];
+      const summary = `Sprint '${contract.contractId}' flipped from fail to pass after ${failedRefs.length} iteration(s)`;
+      for (const ref of failedRefs) {
+        upsertGroup(category, tags, summary, ref);
+      }
+      upsertGroup(category, tags, summary, passRef);
     }
   }
 
