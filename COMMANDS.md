@@ -180,6 +180,15 @@ identical to autopilot. The flag is persisted per session at
 `.bober/chat/<sessionId>.careful.json` and takes effect on the next run you launch;
 `/careful` with no argument reports the current state.
 
+When a careful run pauses at a gate (writing a `.bober/approvals/<checkpointId>.pending.json`
+marker), the **next** chat turn weaves a one-time `[run <id> waiting at <gate>: <prompt>]`
+notice into its reply, and `/runs` shows that run as `[INPUT-REQUIRED]` with a
+`waiting=<checkpointId>` segment. The notice is deduped per marker (keyed by
+`checkpointId@requestedAt`), so a still-pending run is announced once, not on every turn; the
+dedupe state persists across a REPL restart via `.bober/chat/<sessionId>.approvals-cursor.json`.
+Chat only **reads** these markers — to actually approve or reject a paused gate, use the
+`bober approve` / `bober reject` CLI below.
+
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as
 `running` the same turn. When such a run finishes, the **next** chat turn weaves a

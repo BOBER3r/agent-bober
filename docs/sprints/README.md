@@ -22,7 +22,7 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
-## Chat Interrupt / Approve / Steer — in progress (1 of 6)
+## Chat Interrupt / Approve / Steer — in progress (2 of 6)
 
 `spec-20260615-chat-interrupt-approve-steer` — Phase 2 of the chattable platform: mid-flight
 human-in-the-loop control of chat-launched runs (surface pending approvals, approve/reject,
@@ -33,15 +33,20 @@ disk-gates only the named checkpoint sites (validated against `CHECKPOINT_SITES`
 rejected with no partial merge); and a session-persisted `/careful on|off` chat toggle makes
 `RunSpawner` launch the detached child with the curated
 `--approve-gates post-research,post-plan,post-sprint`. With careful off, a chat spawn is
-byte-for-byte identical to Phase 1. The read/surface (Sprint 2), write/resolve (Sprint 3),
-guidance (Sprint 4), pause/resume (Sprint 5), and hygiene+docs+e2e (Sprint 6) paths are not
-built yet.
+byte-for-byte identical to Phase 1. Sprint 2 adds the **read/surface** path: an `ApprovalReader`
+over `.bober/approvals/*.pending.json`, an announce-once dedupe `ApprovalCursor`, and a
+poll-prelude in `handleTurn` that weaves a one-time `[run <id> waiting at <gate>: <prompt>]`
+notice into the reply and flips the correlated chat-owned `RunState` to `input-required` so
+`/runs` shows `[INPUT-REQUIRED]` + `waiting=<gate>`. Read-only — no markers are written, and
+with no pending markers behavior matches Phase 1. The write/resolve (Sprint 3), guidance
+(Sprint 4), pause/resume (Sprint 5), and hygiene+docs+e2e (Sprint 6) paths are not built yet.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-chat-interrupt-approve-steer-1.md](./sprint-spec-20260615-chat-interrupt-approve-steer-1.md) | Additive `RunState` grammar (`input-required`/`paused` + pending/pause fields) + `bober run --approve-gates` + `CarefulSidecar` + `/careful [on\|off]` + careful-aware `RunSpawner.spawn` |
+| 2 | [sprint-spec-20260615-chat-interrupt-approve-steer-2.md](./sprint-spec-20260615-chat-interrupt-approve-steer-2.md) | Read-only approval surfacing in chat: `ApprovalReader` + announce-once `ApprovalCursor` + `handleTurn` poll-prelude notice + idempotent `RunState` reflection + roster `[INPUT-REQUIRED]` / `waiting=<gate>` |
 
-User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`).
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`).
 
 ## Domain-Agnostic Team Abstraction — complete (4 of 4)
 
