@@ -15,7 +15,7 @@ import type { SprintContract } from "../contracts/sprint-contract.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import type { ContextHandoff } from "./context-handoff.js";
 import { createDefaultConfig } from "../config/schema.js";
-import type { BoberConfig } from "../config/schema.js";
+import type { BoberConfig, SelfImproveSection } from "../config/schema.js";
 
 // ── Mock heavy dependencies ───────────────────────────────────────────
 
@@ -372,5 +372,127 @@ describe("evaluator panel — C3 per-lens verdict telemetry", () => {
     );
 
     expect(verdictCalls).toHaveLength(0);
+  });
+});
+
+// ── sc-3-7 INVARIANT — gate OFF: judge still runs on programmatic failure ────
+//
+// These tests prove the additive / off-by-default guarantee (sc-3-7):
+//   (a) With config.selfImprove ABSENT: even when a required programmatic strategy fails,
+//       the LLM judge (runAgenticLoop / loopSpy) is STILL called exactly once.
+//   (b) With config.selfImprove present but deterministicGate:false: same invariant.
+//   (c) With config.selfImprove.deterministicGate:true: loopSpy is SKIPPED (gate ON, sc-3-3).
+//
+// Mechanism: we call `vi.mocked(runEvaluation).mockResolvedValueOnce(...)` to inject
+// a required-strategy FAIL for the duration of a single test, without changing the
+// module-scope default (passed:true, results:[]).
+
+describe("sc-3-7 invariant — deterministic gate off-path proof", () => {
+  it("(a) selfImprove ABSENT: required programmatic failure does NOT skip the judge", async () => {
+    // Import the mocked registry to override for one call
+    const { runEvaluation } = await import("../evaluators/registry.js");
+    // Override: return a required "build" failure
+    vi.mocked(runEvaluation).mockResolvedValueOnce({
+      passed: false,
+      score: 0,
+      results: [
+        {
+          evaluator: "build",
+          passed: false,
+          details: [],
+          summary: "build failed",
+          feedback: "",
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      summary: "build failed",
+      timestamp: new Date().toISOString(),
+    });
+
+    // createDefaultConfig produces NO selfImprove section
+    const config = createDefaultConfig("test-project", "brownfield");
+    // Ensure "build" would be in requiredSet if the gate were on
+    config.evaluator.strategies = [{ type: "build", required: true }];
+
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    // Judge MUST still run — gate was off
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("(b) selfImprove present but deterministicGate:false: required failure does NOT skip the judge", async () => {
+    const { runEvaluation } = await import("../evaluators/registry.js");
+    vi.mocked(runEvaluation).mockResolvedValueOnce({
+      passed: false,
+      score: 0,
+      results: [
+        {
+          evaluator: "build",
+          passed: false,
+          details: [],
+          summary: "build failed",
+          feedback: "",
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      summary: "build failed",
+      timestamp: new Date().toISOString(),
+    });
+
+    const config = createDefaultConfig("test-project", "brownfield");
+    config.evaluator.strategies = [{ type: "build", required: true }];
+    // Explicitly set selfImprove with all flags false
+    (config as BoberConfig & { selfImprove: SelfImproveSection }).selfImprove = {
+      deterministicGate: false,
+      rubricIsolation: false,
+      requireCitedArtifact: false,
+      replayDir: ".bober/replay",
+    };
+
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    // Judge MUST still run
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("(c) deterministicGate:true + required failure → judge is SKIPPED, result is FAIL (sc-3-3)", async () => {
+    const { runEvaluation } = await import("../evaluators/registry.js");
+    vi.mocked(runEvaluation).mockResolvedValueOnce({
+      passed: false,
+      score: 0,
+      results: [
+        {
+          evaluator: "build",
+          passed: false,
+          details: [],
+          summary: "build failed",
+          feedback: "",
+          timestamp: new Date().toISOString(),
+        },
+      ],
+      summary: "build failed",
+      timestamp: new Date().toISOString(),
+    });
+
+    const config = createDefaultConfig("test-project", "brownfield");
+    config.evaluator.strategies = [{ type: "build", required: true }];
+    // Enable the gate
+    (config as BoberConfig & { selfImprove: SelfImproveSection }).selfImprove = {
+      deterministicGate: true,
+      rubricIsolation: false,
+      requireCitedArtifact: false,
+      replayDir: ".bober/replay",
+    };
+
+    const { runEvaluatorAgent } = await import("./evaluator-agent.js");
+    const out = await runEvaluatorAgent(handoff, "/tmp/test-proj", config);
+
+    // Judge MUST be skipped
+    expect(loopSpy).toHaveBeenCalledTimes(0);
+    // Result MUST be a FAIL
+    expect(out.passed).toBe(false);
+    expect(out.summary).toContain("deterministic gate");
   });
 });

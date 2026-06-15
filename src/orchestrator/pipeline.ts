@@ -24,6 +24,7 @@ import {
   createHandoff,
   summarizeOlderSprints,
 } from "./context-handoff.js";
+import { redactRubric } from "./selfimprove/eval-guards.js";
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
 import { runPlanner, generateContractPrecision } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
@@ -296,6 +297,17 @@ export async function runSprintCycle(
     if (pipelineRunId) {
       const guidance = await drainGuidance(projectRoot, pipelineRunId);
       injectedHandoff = injectGuidanceIntoHandoff(compactedHandoff, guidance);
+    }
+
+    // ── Rubric isolation (off by default) ──────────────────────────────
+    // When config.selfImprove?.rubricIsolation is true, strip successCriteria
+    // and evaluatorNotes from the generator-bound handoff so the generator
+    // cannot overfit to the rubric. Applied AFTER guidance injection so that
+    // human guidance (in handoff.issues) is preserved.
+    // Off path: injectedHandoff is unchanged — byte-identical to pre-Sprint-3 (sc-3-7).
+    // NOTE: Do NOT apply this to evalHandoff — the evaluator MUST keep the rubric.
+    if (config.selfImprove?.rubricIsolation) {
+      injectedHandoff = redactRubric(injectedHandoff);
     }
 
     // ── Phase 2 cooperative pause gate (additive) ──────────────────────

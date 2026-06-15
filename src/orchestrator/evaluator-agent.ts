@@ -1,5 +1,6 @@
 import type { BoberConfig } from "../config/schema.js";
 import type { ContextHandoff } from "./context-handoff.js";
+import { shouldShortCircuitJudge, enforceCitedArtifacts } from "./selfimprove/eval-guards.js";
 import { serializeHandoff } from "./context-handoff.js";
 import type { EvalResult } from "../contracts/eval-result.js";
 import {
@@ -85,14 +86,47 @@ export async function runEvaluatorAgent(
     logger.debug(`  [${icon}] ${result.evaluator}: ${result.summary}`);
   }
 
+  // ── Deterministic-first gate (off by default) ──────────────────────
+  // When config.selfImprove?.deterministicGate is true AND a required programmatic
+  // strategy has already failed, skip the LLM judge and return FAIL immediately.
+  // With the flag off (or selfImprove absent), this block is never entered — the
+  // existing path runs byte-identical to pre-Sprint-3 behavior (sc-3-7).
+  if (config.selfImprove?.deterministicGate) {
+    const requiredSet = new Set(
+      config.evaluator.strategies
+        .filter((s) => s.required)
+        .map((s) => s.type),
+    );
+    if (shouldShortCircuitJudge(programmaticEval.results, requiredSet)) {
+      const evaluation: EvaluationRunResult = {
+        passed: false,
+        score: programmaticEval.score,
+        results: programmaticEval.results,
+        summary:
+          "deterministic gate: required check failed — LLM judge skipped",
+        timestamp: new Date().toISOString(),
+      };
+      logger.sprint(sprintId, "Evaluation FAILED");
+      return evaluation;
+    }
+  }
+
   // 2. Agent evaluation — qualitative assessment via agentic loop with tools
   logger.info("Running agent evaluation...");
-  const agentResult = await runAgentEvaluation(
+  let agentResult = await runAgentEvaluation(
     handoff,
     programmaticEval.results,
     projectRoot,
     config,
   );
+
+  // ── Cite-artifact enforcement (off by default) ──────────────────────
+  // When config.selfImprove?.requireCitedArtifact is true, downgrade any FAIL
+  // detail that carries no cited artifact (no file, no test/command signal).
+  // Off path: agentResult is used unchanged.
+  if (config.selfImprove?.requireCitedArtifact) {
+    agentResult = enforceCitedArtifacts(agentResult);
+  }
 
   // 3. Combine results
   const allResults = [...programmaticEval.results, agentResult];
