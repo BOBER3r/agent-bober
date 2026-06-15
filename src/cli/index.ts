@@ -36,6 +36,7 @@ import { registerWorktreeCommand } from "./commands/worktree.js";
 import { registerMemoryCommand } from "./commands/memory.js";
 import { registerFactsCommand } from "./commands/facts.js";
 import { registerReplayCommand } from "./commands/replay.js";
+import { registerEvolveCommand } from "./commands/evolve.js";
 import { registerFleetCommand } from "../fleet/index.js";
 import { registerChatCommand } from "./commands/chat.js";
 
@@ -316,6 +317,9 @@ async function main(): Promise<void> {
 
   // ── replay ────────────────────────────────────────────────────────
   registerReplayCommand(program);
+
+  // ── evolve ────────────────────────────────────────────────
+  registerEvolveCommand(program);
 
   // ── fleet ─────────────────────────────────────────────────────────
   registerFleetCommand(program);
