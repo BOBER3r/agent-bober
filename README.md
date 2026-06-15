@@ -449,6 +449,27 @@ npx agent-bober chat example                             # Interactive chat REPL
 npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
 ```
 
+#### Chat Steer Commands (Phase 2 — mid-flight HITL)
+
+Inside the `bober chat` REPL you can steer in-flight runs with these commands:
+
+| Command | Description |
+|---|---|
+| `/careful [on\|off]` | Toggle approval gates for new runs. When ON, new runs spawn with `--approve-gates post-research,post-plan,post-sprint` and pause at each curated gate waiting for human input. |
+| `/approve <checkpointId>` | Approve a pending checkpoint (e.g. `post-plan`, `post-sprint`) and resume the run. |
+| `/reject <checkpointId> [feedback]` | Reject a pending checkpoint with optional feedback for the run to use on retry. |
+| `/tell <runId> <text>` | Queue free-text guidance for a run — applied at the next pipeline boundary. |
+| `/pause <runId>` | Soft-pause a run at the next cooperative boundary. The process stays alive. |
+| `/resume <runId>` | Resume a soft-paused run. |
+| `/stop <runId>` | Hard-stop a run by killing its process (contrast with `/pause` which is cooperative). |
+| `/runs` | List all active and recent runs. |
+| `/help` | Show the full command list. |
+| `/exit` | Exit the chat session. |
+
+**Curated gates** (triggered by `--approve-gates`): `post-research`, `post-plan`, `post-sprint`. Each gate pauses the run and surfaces a notice in the next chat turn. Use `/approve` or `/reject` to resolve.
+
+**Limitation:** Only one careful run at a time is fully supported. Pending markers are checkpointId-keyed in a shared `.bober/approvals/` directory, so two concurrent careful runs that hit the same gate id would collide. The non-chat equivalents (`list-approvals`, `approve`, `reject`) remain available as fallback. See `docs/chat-steer.md` for the full model and the documented limitations.
+
 #### New Commands (Sprints 9–25)
 
 The following commands were added after the initial release. Full reference in [COMMANDS.md](./COMMANDS.md).

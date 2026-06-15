@@ -12,7 +12,12 @@ export type ClassifierAction =
   | { action: "answer" }
   | { action: "spawn"; task: string }
   | { action: "steer"; op: "inspect" }
-  | { action: "steer"; op: "stop"; runId: string };
+  | { action: "steer"; op: "stop"; runId: string }
+  | { action: "approve"; checkpointId?: string }
+  | { action: "reject"; checkpointId?: string; feedback?: string }
+  | { action: "tell"; runId: string; text: string }
+  | { action: "pause"; runId: string }
+  | { action: "resume"; runId: string };
 
 // ── Zod discriminated union ───────────────────────────────────────────
 
@@ -27,6 +32,15 @@ const ClassifierActionSchema = z.discriminatedUnion("action", [
     ]),
     runId: z.string().optional(),
   }),
+  z.object({ action: z.literal("approve"), checkpointId: z.string().optional() }),
+  z.object({
+    action: z.literal("reject"),
+    checkpointId: z.string().optional(),
+    feedback: z.string().optional(),
+  }),
+  z.object({ action: z.literal("tell"), runId: z.string(), text: z.string() }),
+  z.object({ action: z.literal("pause"), runId: z.string() }),
+  z.object({ action: z.literal("resume"), runId: z.string() }),
 ]);
 
 const FALLBACK: ClassifierAction = { action: "answer" };
@@ -81,6 +95,25 @@ function parseClassifierAction(text: string): ClassifierAction {
         }
         return { action: "steer", op: "inspect" };
       }
+      if (data.action === "approve") {
+        return { action: "approve", checkpointId: data.checkpointId };
+      }
+      if (data.action === "reject") {
+        return {
+          action: "reject",
+          checkpointId: data.checkpointId,
+          feedback: data.feedback,
+        };
+      }
+      if (data.action === "tell") {
+        return { action: "tell", runId: data.runId, text: data.text };
+      }
+      if (data.action === "pause") {
+        return { action: "pause", runId: data.runId };
+      }
+      if (data.action === "resume") {
+        return { action: "resume", runId: data.runId };
+      }
     }
     return FALLBACK;
   } catch {
@@ -114,6 +147,11 @@ export class TurnClassifier {
       '  {"action":"spawn","task":"<task description>"}  — spawn a new agent run',
       '  {"action":"steer","op":"inspect"}  — inspect running agents',
       '  {"action":"steer","op":"stop","runId":"<id>"}  — stop a specific run',
+      '  {"action":"approve","checkpointId":"<id?>"}  — approve a pending checkpoint',
+      '  {"action":"reject","checkpointId":"<id?>","feedback":"<why?>"}  — reject a checkpoint',
+      '  {"action":"tell","runId":"<id>","text":"<instruction>"}  — queue free-text guidance for a run',
+      '  {"action":"pause","runId":"<id>"}  — soft-pause a run (process stays alive)',
+      '  {"action":"resume","runId":"<id>"}  — resume a soft-paused run',
       "Return ONLY the JSON object, no other text.",
     ].join("\n");
 

@@ -162,6 +162,68 @@ describe("listRunStateFiles", () => {
   });
 });
 
+// ── Phase 2 RunState grammar round-trip tests (sc-1-4) ───────────────
+
+describe("RunState grammar extension — Phase 2 (sc-1-4)", () => {
+  it("round-trips an 'input-required' state with all pending fields", async () => {
+    const state = makeState({
+      runId: "ir-run",
+      status: "input-required",
+      pendingCheckpointId: "post-plan",
+      pendingPrompt: "approve the plan?",
+      pendingSince: "2026-06-15T00:00:00.000Z",
+      pausedAt: "2026-06-15T00:00:01.000Z",
+    });
+    await writeRunState(tmpDir, state);
+    const read = await readRunState(tmpDir, "ir-run");
+    expect(read).toEqual(state);
+  });
+
+  it("round-trips a 'paused' state with pausedAt field", async () => {
+    const state = makeState({
+      runId: "paused-run",
+      status: "paused",
+      pausedAt: "2026-06-15T12:00:00.000Z",
+    });
+    await writeRunState(tmpDir, state);
+    const read = await readRunState(tmpDir, "paused-run");
+    expect(read).toEqual(state);
+  });
+
+  it("round-trips a legacy 'running' state unchanged (no pending fields)", async () => {
+    const state = makeState({ runId: "legacy-run", status: "running" });
+    await writeRunState(tmpDir, state);
+    const read = await readRunState(tmpDir, "legacy-run");
+    expect(read).toEqual(state);
+    expect(read?.pendingCheckpointId).toBeUndefined();
+    expect(read?.pendingPrompt).toBeUndefined();
+    expect(read?.pendingSince).toBeUndefined();
+    expect(read?.pausedAt).toBeUndefined();
+  });
+
+  it("round-trips a 'completed' state (existing status — no regression)", async () => {
+    const state = makeState({
+      runId: "done-run",
+      status: "completed",
+      completedAt: "2026-06-15T01:00:00.000Z",
+    });
+    await writeRunState(tmpDir, state);
+    const read = await readRunState(tmpDir, "done-run");
+    expect(read).toEqual(state);
+  });
+
+  it("round-trips an 'input-required' state without optional pending fields", async () => {
+    const state = makeState({
+      runId: "ir-minimal",
+      status: "input-required",
+    });
+    await writeRunState(tmpDir, state);
+    const read = await readRunState(tmpDir, "ir-minimal");
+    expect(read).toEqual(state);
+    expect(read?.pendingCheckpointId).toBeUndefined();
+  });
+});
+
 describe("readRunStatesFromDisk", () => {
   it("returns [] when the runs/ directory does not exist", async () => {
     const result = await readRunStatesFromDisk(tmpDir);

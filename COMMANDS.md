@@ -115,12 +115,21 @@ bober run "feature" --checkpoint noop               # No checkpoints (explicit)
 bober run "feature" --checkpoint-all                # Apply mechanism to ALL checkpoints
 bober run "feature" --provider openai               # Override provider for all agents
 bober run "feature" --run-id my-run-123             # Use a caller-supplied run identifier
+bober run "feature" --approve-gates post-research,post-plan,post-sprint   # Gate only these checkpoints (disk)
 ```
 
 `--run-id <id>` makes the pipeline use the supplied identifier instead of self-generating
 `run-<timestamp>` — the roster state and completion marker (`.bober/runs/<id>.completed.json`)
 are keyed on it. Additive and optional; omitting it preserves the default behavior. This is
 how `bober chat` launches detached runs with a session-chosen id.
+
+`--approve-gates <comma-list>` turns on **disk** checkpoints for only the named gates for
+that run — it merges `{ gate -> 'disk' }` into `checkpointOverrides` without setting
+`--mode careful`, so just the listed sites pause. Valid gate names are the declared
+checkpoint sites: `post-research`, `post-plan`, `post-sprint-contract`, `pre-curator`,
+`pre-generator`, `pre-evaluator`, `pre-code-reviewer`, `post-sprint`, `end-of-pipeline`.
+An unknown gate name is rejected with a clear error and no partial merge. Additive and
+optional; this is how `bober chat`'s careful mode launches a gated run.
 
 `--mode` and `--checkpoint` flags override `bober.config.json` for the duration of the run.
 See [VISION.md](./VISION.md) for a full explanation of modes.
@@ -154,13 +163,72 @@ Inside the session:
 > what runs are active?         # answered using roster + memory context
 > stop the settings page run    # natural language → stops the matching running run
 > /runs                         # list active/recent runs (deterministic, no LLM call)
-> /stop <runId>                 # stop a running run by id (deterministic, no LLM call)
+> /stop <runId>                 # HARD stop: kill the run's process by id (deterministic, no LLM call)
+> /pause <runId>                # SOFT pause: hold at next boundary, process stays alive (deterministic)
+> /resume <runId>               # resume a soft-paused run (deterministic, no LLM call)
+> /careful [on|off]             # toggle approval gates for new runs (deterministic, no LLM call)
+> /approve <id>                 # approve a pending checkpoint, resume the run (deterministic)
+> /reject <id> [feedback]       # reject a pending checkpoint with optional feedback (deterministic)
+> /tell <runId> <text>          # queue free-text guidance for a run, applied at its next boundary (deterministic)
 > /help                         # show slash commands
 > /exit                         # end the session (detached runs keep going)
 ```
 
-The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/help`, and `/exit`
-— none of them call the LLM.
+The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/pause <runId>`,
+`/resume <runId>`, `/careful [on|off]`, `/approve <id>`, `/reject <id> [feedback]`,
+`/tell <runId> <text>`, `/help`, and `/exit` — none of them call the LLM.
+
+`/careful on` makes runs you launch from chat pause at curated gates; `/careful off` (the
+default) launches them in autopilot. With careful **on**, the detached run is launched with
+`--approve-gates post-research,post-plan,post-sprint`, so those checkpoints write pending
+markers under `.bober/approvals/`. With careful **off**, the spawn is byte-for-byte
+identical to autopilot. The flag is persisted per session at
+`.bober/chat/<sessionId>.careful.json` and takes effect on the next run you launch;
+`/careful` with no argument reports the current state.
+
+When a careful run pauses at a gate (writing a `.bober/approvals/<checkpointId>.pending.json`
+marker), the **next** chat turn weaves a one-time `[run <id> waiting at <gate>: <prompt>]`
+notice into its reply, and `/runs` shows that run as `[INPUT-REQUIRED]` with a
+`waiting=<checkpointId>` segment. The notice is deduped per marker (keyed by
+`checkpointId@requestedAt`), so a still-pending run is announced once, not on every turn; the
+dedupe state persists across a REPL restart via `.bober/chat/<sessionId>.approvals-cursor.json`.
+
+**Resolving a paused gate from chat.** You can approve or reject a surfaced checkpoint without
+leaving the REPL. `/approve <checkpointId>` writes the `.approved.json` marker and acks
+resumption; `/reject <checkpointId> [feedback]` writes the `.rejected.json` marker, where
+**everything after the id is the feedback string** (it flows into the pipeline's rework round).
+Natural language works too — "approve it" / "reject the plan, too broad" is classified to the
+same handlers. If a paused checkpoint id does not actually exist, chat replies
+`No pending checkpoint found: <id>` and **writes nothing** (the `pendingExists` guard); when an
+NL approve/reject names no checkpoint and several are pending, chat asks which one rather than
+guessing. Resolution writes the same `.approved.json` / `.rejected.json` markers as the
+`bober approve` / `bober reject` CLI below (the same store, not a separate one), so the
+detached run resumes via its existing disk poll and the chat-owned `RunState` flips back to
+`running` on the next turn. The CLI commands remain available for resolving runs from outside a
+chat session.
+
+**Steering a run with free-text guidance.** Beyond approve/reject, you can feed a run
+advisory guidance without leaving the REPL. `/tell <runId> <text>` queues the text
+(everything after the runId, spacing preserved) onto that run's guidance channel at
+`.bober/runs/<runId>/guidance.jsonl`; natural language works too ("tell run X to prefer
+Zod"). An unknown runId replies `No such run: <runId>` and **writes nothing**, and a runId
+containing path separators or `..` is rejected before any write. Guidance is **queued, not
+pushed** — the detached run drains it at its **next** sprint boundary (the pre-generator
+read point) and injects each line into the generator's handoff as a `Human guidance: <text>`
+entry; it never interrupts an in-flight agent call, never edits files or overrides the
+contract, and does **not** require careful mode. Each queued line is consumed exactly once.
+
+**Soft-pausing a run.** `/pause <runId>` is a **soft** suspend, distinct from the hard
+`/stop` below: it sends **no kill signal** — the run's process stays alive. It writes a
+`runId`-keyed marker at `.bober/runs/<runId>/paused.json` and flips the chat-owned
+`RunState` to `paused`; the detached run's pipeline holds at its **next** checkpoint boundary
+(the same boundary cluster as guidance) while the marker is present, rather than freezing any
+in-flight agent call. `/resume <runId>` removes the marker and flips `RunState` back to
+`running`, and the run advances. Natural language works too ("pause that run" / "resume run
+X"). `/pause` on an unknown or non-`running` run replies `No such running run: <runId>` and
+**writes nothing**. The pause poll is bounded (a forgotten marker resolves after a timeout
+rather than hanging the run forever). Contrast with `/stop`, which **kills** the process and
+ends the run — use `/pause` when you want to hold and continue, `/stop` when you want to abort.
 
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as
@@ -173,9 +241,10 @@ announced exactly once. The notice is rotation-safe — it still fires correctly
 
 **Steering runs.** You can stop a run two ways, both deterministic (no LLM call):
 the `/stop <runId>` slash command, or natural language ("stop the settings page run")
-which the classifier routes to the same handler. Stop is a real hard-stop — it resolves
-the child PID recorded for this session, sends it `SIGTERM`, and flips the run's roster
-`state.json` to `aborted` on disk. The runId is resolved against the **current disk roster
+which the classifier routes to the same handler. Stop is a real **hard** stop — distinct
+from the soft `/pause` above — it resolves the child PID recorded for this session, sends it
+`SIGTERM`, and flips the run's roster `state.json` to `aborted` on disk (the run ends; use
+`/pause` instead if you only want to hold and resume later). The runId is resolved against the **current disk roster
 at stop-time**, so an id that is not a `running` run replies `No such running run: <id>`
 and nothing is killed; chat can only ever kill a PID it spawned this session. If the run is
 on disk but its PID is unknown, it is marked `aborted` without a kill. Asking to inspect runs

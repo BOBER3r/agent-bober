@@ -77,3 +77,113 @@ describe("TurnClassifier", () => {
     }
   });
 });
+
+// ── Approve / Reject classifier actions (sc-3-6) ──────────────────────
+
+describe("TurnClassifier — approve/reject actions (sc-3-6)", () => {
+  it("parses approve action with checkpointId", async () => {
+    const client = new ScriptedClient(['{"action":"approve","checkpointId":"post-plan"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("approve post-plan");
+    expect(result).toEqual({ action: "approve", checkpointId: "post-plan" });
+  });
+
+  it("parses approve action without checkpointId (implicit single pending)", async () => {
+    const client = new ScriptedClient(['{"action":"approve"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("approve it");
+    expect(result).toEqual({ action: "approve", checkpointId: undefined });
+  });
+
+  it("parses reject action with checkpointId and feedback", async () => {
+    const client = new ScriptedClient([
+      '{"action":"reject","checkpointId":"post-plan","feedback":"split sprint 2"}',
+    ]);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("reject post-plan split sprint 2");
+    expect(result).toEqual({
+      action: "reject",
+      checkpointId: "post-plan",
+      feedback: "split sprint 2",
+    });
+  });
+
+  it("parses reject action without checkpointId (implicit single pending)", async () => {
+    const client = new ScriptedClient(['{"action":"reject","feedback":"needs more detail"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("reject it, needs more detail");
+    expect(result).toEqual({
+      action: "reject",
+      checkpointId: undefined,
+      feedback: "needs more detail",
+    });
+  });
+
+  it("returns FALLBACK for garbage approve JSON", async () => {
+    const client = new ScriptedClient(["not valid json"]);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("approve something");
+    expect(result).toEqual({ action: "answer" });
+  });
+});
+
+// ── Pause / Resume classifier actions (sc-5-7) ───────────────────────
+
+describe("TurnClassifier — pause/resume actions (sc-5-7)", () => {
+  it("parses pause action with runId", async () => {
+    const client = new ScriptedClient(['{"action":"pause","runId":"run-abc"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("pause run-abc");
+    expect(result).toEqual({ action: "pause", runId: "run-abc" });
+  });
+
+  it("parses resume action with runId", async () => {
+    const client = new ScriptedClient(['{"action":"resume","runId":"run-xyz"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("resume run-xyz");
+    expect(result).toEqual({ action: "resume", runId: "run-xyz" });
+  });
+
+  it("parses pause action from fenced JSON", async () => {
+    const client = new ScriptedClient(['```json\n{"action":"pause","runId":"run-fenced"}\n```']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("pause run-fenced please");
+    expect(result).toEqual({ action: "pause", runId: "run-fenced" });
+  });
+
+  it("returns FALLBACK for pause action missing runId", async () => {
+    const client = new ScriptedClient(['{"action":"pause"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("pause something");
+    // Missing required runId field → FALLBACK
+    expect(result).toEqual({ action: "answer" });
+  });
+
+  it("returns FALLBACK for resume action missing runId", async () => {
+    const client = new ScriptedClient(['{"action":"resume"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("resume");
+    expect(result).toEqual({ action: "answer" });
+  });
+
+  it("system prompt includes pause and resume options", async () => {
+    const client = new ScriptedClient(['{"action":"answer"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    await classifier.classify("test");
+    expect(client.calls).toHaveLength(1);
+    const system = client.calls[0]?.system ?? "";
+    expect(system).toContain("pause");
+    expect(system).toContain("resume");
+  });
+});

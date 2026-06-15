@@ -59,6 +59,8 @@ import {
 } from "../state/index.js";
 import { commitAll, getCurrentBranch, getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
+import { drainGuidance } from "../state/guidance.js";
+import { waitWhilePaused } from "../state/pause.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -126,6 +128,28 @@ async function buildProjectContext(
     techStack: [],
     entryPoints: [],
     currentBranch,
+  };
+}
+
+// ── Phase 2 guidance helper ────────────────────────────────────────
+
+/**
+ * Pure helper: inject queued guidance texts into a ContextHandoff by
+ * appending them to `issues`. When guidanceTexts is empty, returns the
+ * SAME handoff reference unchanged (deep-equal no-op for sc-4-7).
+ * Exported for direct unit testing (sc-4-6/sc-4-7).
+ */
+export function injectGuidanceIntoHandoff(
+  handoff: ContextHandoff,
+  guidanceTexts: string[],
+): ContextHandoff {
+  if (guidanceTexts.length === 0) return handoff;
+  return {
+    ...handoff,
+    issues: [
+      ...handoff.issues,
+      ...guidanceTexts.map((g) => `Human guidance: ${g}`),
+    ],
   };
 }
 
@@ -264,6 +288,23 @@ export async function runSprintCycle(
     // Compact older sprint history if needed
     const compactedHandoff = summarizeOlderSprints(completedSummaryHandoff, 3);
 
+    // ── Phase 2 guidance injection (additive) ──────────────────────────
+    // Drain any queued free-text guidance for the active run and inject it
+    // into the handoff. With no guidance (or no runId) this is a no-op and
+    // the handoff is byte-for-byte unchanged (sc-4-7 invariant).
+    let injectedHandoff = compactedHandoff;
+    if (pipelineRunId) {
+      const guidance = await drainGuidance(projectRoot, pipelineRunId);
+      injectedHandoff = injectGuidanceIntoHandoff(compactedHandoff, guidance);
+    }
+
+    // ── Phase 2 cooperative pause gate (additive) ──────────────────────
+    // With no runId or no paused.json marker, this is a single existence
+    // check (isPaused) then continue — provably additive (sc-5-7).
+    if (pipelineRunId) {
+      await waitWhilePaused(projectRoot, pipelineRunId);
+    }
+
     // ── Generate ───────────────────────────────────────────────
     await runWithAudit({
       projectRoot,
@@ -284,7 +325,7 @@ export async function runSprintCycle(
     });
 
     const generatorResult = await runGenerator(
-      compactedHandoff,
+      injectedHandoff,
       projectRoot,
       config,
     );

@@ -127,6 +127,81 @@ describe("RunSpawner", () => {
     expect(ack.spawnError).toBe("ENOENT: no such file");
     expect(ack.pid).toBeUndefined();
   });
+
+  // ── sc-1-7: careful mode arg vector ──────────────────────────────────
+
+  it("sc-1-7: careful-off (default) — args equal Phase 1 vector exactly", async () => {
+    const { calls } = makeFakeSpawn(4242);
+
+    const spawner = new RunSpawner({
+      projectRoot: tmpDir,
+      sessionId: "s1",
+      spawn: (file, args, options) => {
+        calls.push({ file, args, options });
+        return { pid: 4242, unref: () => {} };
+      },
+      cliEntry: "/fake/cli/index.js",
+      nodeBin: "/fake/node",
+      now: () => "2026-06-14T00:00:00.000Z",
+    });
+
+    // No opts arg at all — default careful=false
+    await spawner.spawn("build X", "test-run-123");
+
+    expect(calls[0].args).toEqual(["/fake/cli/index.js", "run", "build X", "--run-id", "test-run-123"]);
+  });
+
+  it("sc-1-7: careful-on — args include --approve-gates with curated list", async () => {
+    const { calls } = makeFakeSpawn(4242);
+
+    const spawner = new RunSpawner({
+      projectRoot: tmpDir,
+      sessionId: "s1",
+      spawn: (file, args, options) => {
+        calls.push({ file, args, options });
+        return { pid: 4242, unref: () => {} };
+      },
+      cliEntry: "/fake/cli/index.js",
+      nodeBin: "/fake/node",
+      now: () => "2026-06-14T00:00:00.000Z",
+    });
+
+    await spawner.spawn("build X", "test-run-123", { careful: true });
+
+    expect(calls[0].args).toContain("--approve-gates");
+    expect(calls[0].args).toContain("post-research,post-plan,post-sprint");
+    // Full expected vector
+    expect(calls[0].args).toEqual([
+      "/fake/cli/index.js",
+      "run",
+      "build X",
+      "--run-id",
+      "test-run-123",
+      "--approve-gates",
+      "post-research,post-plan,post-sprint",
+    ]);
+  });
+
+  it("sc-1-7: explicit careful:false — args equal Phase 1 vector exactly (no gates)", async () => {
+    const { calls } = makeFakeSpawn(4242);
+
+    const spawner = new RunSpawner({
+      projectRoot: tmpDir,
+      sessionId: "s1",
+      spawn: (file, args, options) => {
+        calls.push({ file, args, options });
+        return { pid: 4242, unref: () => {} };
+      },
+      cliEntry: "/fake/cli/index.js",
+      nodeBin: "/fake/node",
+      now: () => "2026-06-14T00:00:00.000Z",
+    });
+
+    await spawner.spawn("build X", "test-run-123", { careful: false });
+
+    expect(calls[0].args).toEqual(["/fake/cli/index.js", "run", "build X", "--run-id", "test-run-123"]);
+    expect(calls[0].args).not.toContain("--approve-gates");
+  });
 });
 
 // ── RunSpawner.stop tests ──────────────────────────────────────────────
