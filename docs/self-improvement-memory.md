@@ -5,10 +5,21 @@ planning decisions. Past failures are distilled into a bounded lessons index tha
 planner reads at plan time — so recurring failure patterns inform new sprint contracts
 without exposing the planner to unbounded raw history.
 
-**Scope:** This guide describes the three-stage pipeline from raw history to planner
-context, explains the explicit prohibition on reading raw history directly, and provides
-a manual A/B procedure for measuring whether the memory system produces tighter sprint
-contracts.
+The memory substrate has **two stores**, both living under `.bober/memory/` and both
+namespaced per team by the same `memoryDir` rule:
+
+1. **Lessons** — a distilled, file-based index (`INDEX.md` + per-lesson `.md` files),
+   described in the bulk of this guide. This is the store the planner reads today.
+2. **Semantic facts** — a bi-temporal SQLite store (`facts.db`) of structured
+   `(scope, subject, predicate, value)` assertions, introduced by
+   `spec-20260615-memory-self-improve-p0` (Sprint 1). See
+   [Semantic Facts Store](#semantic-facts-store) below. **Not yet wired into planning** —
+   it is the storage foundation for later sprints.
+
+**Scope:** This guide describes the three-stage lessons pipeline from raw history to planner
+context, explains the explicit prohibition on reading raw history directly, provides a
+manual A/B procedure for measuring whether the memory system produces tighter sprint
+contracts, and documents the semantic facts store.
 
 ---
 
@@ -211,3 +222,83 @@ fields. Sensible defaults (`DEFAULT_TOP_K = 5`, `DEFAULT_CHAR_BUDGET = 1200`) ar
 defined as constants in `src/orchestrator/memory/retrieve.ts`. If a future project
 needs different defaults, a `memory: { charBudget }` section in `bober.config.json`
 can be added — this is intentionally deferred until the need is demonstrated.
+
+---
+
+## Semantic Facts Store
+
+Alongside the distilled lessons index, the memory layer has a **bi-temporal SQLite
+semantic-facts store** (`spec-20260615-memory-self-improve-p0`, Sprint 1). Where lessons
+are synthesized prose snippets, facts are **structured assertions** —
+`(scope, subject, predicate, value)` rows with a confidence score, optional source-run
+provenance, and temporal columns — that later sprints will produce, reconcile, and feed
+back into planning. This sprint lands only the store and a manual CLI; **nothing reads
+`facts.db` automatically yet.**
+
+```
+.bober/memory/facts.db        ← bi-temporal SQLite store (default / programming scope)
+.bober/memory/<ns>/facts.db   ← per-team namespace (same memoryDir rule as INDEX.md)
+        │
+        ├─ table semantic_facts(id, scope, subject, predicate, value, confidence,
+        │                        source_run_id, t_valid, t_invalid, t_created, t_invalidated)
+        ├─ idx_facts_sp(scope, subject, predicate)
+        └─ idx_facts_active(scope, t_invalidated)
+```
+
+### Storage model
+
+- **The store is `src/state/facts.ts`** — a `FactStore` class wrapping `better-sqlite3`.
+  The driver is hidden behind the class so it can be swapped for the built-in
+  `node:sqlite` once `engines.node` is raised to `>=22.5`; callers must depend on the
+  `FactStore` method shape, not the driver.
+- **Bi-temporal, never destructive.** Invalidation is a **soft-delete** that stamps
+  `t_invalidated` — rows are never deleted. An *active* fact is `t_invalidated IS NULL`;
+  `getActiveFacts` returns only those, while `getFact(id)` returns a fact regardless of
+  invalidation status (so history stays inspectable). `t_invalid` is reserved as the
+  valid-time upper bound and is currently always `NULL`.
+- **Deterministic ids.** A fact id is `sha256(\`${scope}|${subject}|${predicate}|${value}|${tCreated}\`).slice(0,16)`
+  (`factId`, mirroring `lessonIdFromSignature`). `insertFact` is an upsert
+  (`INSERT OR REPLACE`), so re-inserting an identical fact with the same `tCreated`
+  overwrites the same row instead of duplicating — built for idempotent producers.
+- **The store never reads the clock.** Every timestamp (`tValid`, `tCreated`,
+  `tInvalidated`) is a caller parameter; the CLI stamps `new Date().toISOString()` at the
+  handler boundary. This is the same purity discipline as `distill.ts`.
+- **Per-team namespacing** reuses `memoryDir(projectRoot, namespace)`: the DB lives at
+  `.bober/memory/facts.db` for the default / `programming` scope and
+  `.bober/memory/<ns>/facts.db` for any other namespace — identical to the lessons
+  `INDEX.md` mapping in [Per-Team Namespacing](#per-team-namespacing) above. Within a DB,
+  the `scope` column is the per-team isolation axis for queries.
+
+### `bober facts` CLI
+
+The CLI (`src/cli/commands/facts.ts`, registered as `registerFactsCommand` in
+`src/cli/index.ts`) follows the `bober memory` conventions: it resolves the namespace from
+the active team via a non-fatal `loadConfig` + `loadTeam(config).memoryNamespace`, prints
+with `chalk`, and **never throws** — on error it sets `process.exitCode = 1` and returns.
+
+```bash
+# Add a fact (t_created / t_valid stamped at the handler boundary, not in the store)
+bober facts add --scope programming --subject project --predicate testCommand --value vitest
+
+# List active (non-invalidated) facts, optionally filtered by --subject / --predicate
+bober facts list
+
+# Inspect one fact with full provenance + temporal fields (works after invalidation)
+bober facts show <id>
+
+# Soft-delete: drops from `list`, but `show` still returns it
+bober facts invalidate <id>
+```
+
+As with `bober memory`, selecting a non-default team from the command line is not yet
+wired — the facts commands operate on the default team's namespace.
+
+### Note on project principles
+
+`.bober/principles.md` currently states "**No database**" and "All mutable state … is
+stored as JSON files in `.bober/`". The facts store is a **deliberate, scoped exception**:
+it is the project's first relational store, and `better-sqlite3` is the first native
+runtime dependency. The store is synchronous by design (a transactional DB driver, not a
+`node:fs` bulk read), which is not the case the "no synchronous filesystem ops" principle
+targets. These principles likely warrant a caveat acknowledging the facts store; that edit
+is left for a maintainer to make deliberately rather than rewritten here.

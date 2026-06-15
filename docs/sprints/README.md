@@ -121,3 +121,25 @@ README Teams section) ship with it.
 | 4 | [sprint-spec-20260615-team-abstraction-4.md](./sprint-spec-20260615-team-abstraction-4.md) | Example team as pure config data + `bober run --team <id>` + `bober chat [team]` routing → `.bober/memory/example/`; user-facing [`docs/teams.md`](../teams.md) + README Teams section (the platform proof) |
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
+
+## Memory Self-Improvement (P0) — in progress
+
+`spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled
+**lessons** index into a queryable **facts** layer that future sprints will produce and
+reconcile automatically. Sprint 1 lands the storage foundation: the project's **first
+relational store** — a bi-temporal SQLite **semantic-facts** store (`src/state/facts.ts`,
+`better-sqlite3` behind a swappable `FactStore` class) plus a `bober facts
+add|list|show|invalidate` CLI. Facts are `(scope, subject, predicate, value)` rows with
+confidence + source-run provenance and four temporal columns; invalidation is a
+soft-delete (`t_invalidated`) so nothing is ever destroyed. The store is **pure** (every
+timestamp is a caller parameter — no wall-clock read inside the store), ids are a
+deterministic content hash, and the DB file (`.bober/memory/facts.db`) is namespaced by the
+active team exactly like the lessons `INDEX.md`. Not yet wired into planning — producers and
+a reconcile/retrieval path are later sprints.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260615-memory-self-improve-p0-1.md](./sprint-spec-20260615-memory-self-improve-p0-1.md) | Bi-temporal SQLite `FactStore` (`insertFact`/`getActiveFacts`/`getFact`/`invalidateFact`/`close`, deterministic `factId`, namespaced `facts.db`) + `bober facts add\|list\|show\|invalidate` CLI; `better-sqlite3` is the first relational dependency |
+
+The facts store is documented alongside the lessons store in
+[`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Semantic Facts Store").
