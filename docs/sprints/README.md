@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Memory Self-Improvement (P0) — in progress
+## Memory Self-Improvement (P0) — in progress (3 sprints landed)
 
 `spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled
 **lessons** index into a queryable **facts** layer that future sprints will produce and
@@ -140,12 +140,19 @@ fact (`supersedeFact` closes both `t_invalidated` and `t_invalid`), an identical
 `noop`, and only a deterministic *normalized-key* ambiguity consults an injected LLM
 `FactJudge` (with an `add` fallback) — the exact-match path stays LLM-free, and `bober facts
 add` now dedupes/supersedes instead of duplicating. Still not wired into planning — producers
-and a retrieval path are later sprints.
+and a retrieval path are later sprints. Sprint 3 turns to the **lessons** store and closes its
+monotonic-growth gap: ranking in `retrieveRelevantLessons` becomes **occurrence-weighted** (a
+more-often-seen lesson wins on equal token overlap; overlap stays dominant), and a new **pure
+hygiene pass** (`pruneLessons`) plus `bober memory prune` quarantine stale/low-occurrence and
+deterministically-contradictory lessons into a `QUARANTINE.md` sidecar — moving the literal
+`INDEX.md` line with provenance and **never deleting** the per-lesson `.md`.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-memory-self-improve-p0-1.md](./sprint-spec-20260615-memory-self-improve-p0-1.md) | Bi-temporal SQLite `FactStore` (`insertFact`/`getActiveFacts`/`getFact`/`invalidateFact`/`close`, deterministic `factId`, namespaced `facts.db`) + `bober facts add\|list\|show\|invalidate` CLI; `better-sqlite3` is the first relational dependency |
 | 2 | [sprint-spec-20260615-memory-self-improve-p0-2.md](./sprint-spec-20260615-memory-self-improve-p0-2.md) | Reconcile-on-write: pure `reconcileFact`/`writeFact` (`add`/`update`/`delete`/`noop`) — deterministic exact-match supersede (`FactStore.supersedeFact` sets both bi-temporal fields) + NOOP, with an injected `FactJudge`/`createLLMFactJudge()` consulted **only** on normalized-key ambiguity and an `add` fallback; `bober facts add` routes through `writeFact` with action-aware output |
+| 3 | [sprint-spec-20260615-memory-self-improve-p0-3.md](./sprint-spec-20260615-memory-self-improve-p0-3.md) | Lessons-store hygiene: occurrence-weighted `retrieveRelevantLessons` ranking (overlap DESC → occurrences DESC → lessonId ASC, C1 preserved) + pure `pruneLessons(records,{now,...}) → {kept,quarantined}` (deterministic decay + conflict-quarantine) + `quarantinePath`/`rewriteIndexForQuarantine` (moves literal `INDEX.md` lines → `QUARANTINE.md` with provenance, never deletes `.md`) + `bober memory prune` CLI |
 
 The facts store is documented alongside the lessons store in
-[`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Semantic Facts Store").
+[`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Semantic Facts Store"); the
+lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Prune & Quarantine").

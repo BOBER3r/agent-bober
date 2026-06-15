@@ -60,9 +60,13 @@ Planner context              ← topK-capped, charBudget-truncated lessons block
   never opens `history.jsonl`, `history.archive.jsonl`, or per-lesson `.md` files.
 - **Explicit distill step.** The planner consumes whatever `bober memory distill` last
   wrote. There is no auto-distill at plan time — this is a deliberate safety boundary.
-- **Deterministic ranking.** Lessons are ranked by lowercased token overlap between
-  the feature keywords and each record's `tags`, `category`, and `summarySnippet`.
-  Ties break on `lessonId` (ASC lexicographic) for byte-stable output.
+- **Deterministic, occurrence-weighted ranking.** Lessons are ranked by lowercased token
+  overlap between the feature keywords and each record's `tags`, `category`, and
+  `summarySnippet` (the **dominant** key). When overlap scores tie, the lesson with **higher
+  `occurrences`** ranks first — a more-often-seen failure pattern outweighs an equally-relevant
+  rarer one (`spec-20260615-memory-self-improve-p0`, Sprint 3). The final tiebreak is `lessonId`
+  (ASC lexicographic) for byte-stable output. Token overlap stays dominant, so a non-matching
+  keyword set still yields an empty result (C1).
 - **Hard caps.** The caller passes `{ topK }` to bound the number of returned lessons
   and an optional `charBudget` (default: 1200 characters) to the serializer. Both are
   enforced before the block reaches the planner.
@@ -84,11 +88,73 @@ Inspect the current index with:
 ```bash
 bober memory list        # list all lessons in INDEX.md
 bober memory show <id>   # show a full lesson file
+bober memory prune       # quarantine stale/conflicting lessons (see Lesson Hygiene below)
 ```
 
 The distiller (`src/orchestrator/memory/distill.ts`) groups history entries by failure
 signature (phase=failed events, repeated eval-fail strategies, high-churn sprints) and
 writes one `<lessonId>.md` file per lesson group plus a compact `INDEX.md` line.
+
+---
+
+## Lesson Hygiene: Prune & Quarantine
+
+`bober memory distill` only ever **adds** to `INDEX.md` — without a counterweight the index
+grows monotonically and accumulates stale, low-signal, or contradictory lessons. `bober memory
+prune` (`spec-20260615-memory-self-improve-p0`, Sprint 3) is that counterweight: a manual,
+explicit hygiene pass that moves low-value and conflicting lessons out of `INDEX.md` into a
+`QUARANTINE.md` sidecar — **never deleting** anything.
+
+```bash
+bober memory prune
+# pruned: 1 kept, 3 quarantined
+# quarantined lessons written to: .bober/memory/QUARANTINE.md
+# per-lesson .md files retained at: .bober/memory/
+```
+
+### What gets quarantined
+
+The decision is made by a **pure** function — `pruneLessons(records, { now, minOccurrences?,
+maxAgeMs? })` in `src/orchestrator/memory/hygiene.ts` — that partitions records into
+`{ kept, quarantined }` in two deterministic phases:
+
+1. **Conflict detection (first).** Two lessons that share the same **contradiction key**
+   (`categoryRoot` + a discriminator tag such as `sprintId:` / `strategy:` /
+   `verificationMethod:`) but carry **opposing polarity** markers — one `keep`-marked
+   (`keep`/`stable`/`pass`/`trusted`), one `avoid`-marked (`avoid`/`fragile`/`fail`/`untrusted`)
+   — are **BOTH** quarantined. This is deterministic; there is no LLM. Conflict-quarantine does
+   **not** depend on age or occurrences (a high-occurrence lesson is still quarantined if it
+   contradicts another).
+2. **Decay (second, for the survivors).** A lesson with `occurrences` strictly below
+   `minOccurrences` (default 2) that is **also stale** — older than `maxAgeMs` (default 30 days),
+   or with no recoverable `createdAt` — is quarantined. A missing `createdAt` is treated as
+   *maximally stale*: a low-occurrence lesson whose per-lesson file can't be read decays
+   immediately. This is a conservative, documented choice — prefer quarantining an
+   unknown-age, low-occurrence lesson over keeping it forever.
+
+### Lifecycle: never delete
+
+Quarantine is a **move, not a delete**, and is reversible:
+
+- `rewriteIndexForQuarantine(projectRoot, quarantinedIds, reason, now, namespace?)`
+  (`src/state/memory.ts`) reads `INDEX.md`, moves the **literal** lines whose lessonId is
+  quarantined into `QUARANTINE.md` (resolved by `quarantinePath`, the `QUARANTINE.md` sibling of
+  `indexPath`), and rewrites `INDEX.md` without them. The moved block is prefixed with a
+  deterministic provenance comment: `<!-- quarantined: <reason> @ <now> -->`.
+- The per-lesson `<lessonId>.md` files are **never touched** — `bober memory show <id>` still
+  works after a prune, and a mistaken quarantine can be undone by moving the `INDEX.md` line back.
+- `retrieveRelevantLessons` reads only `INDEX.md`, so quarantined lessons immediately stop
+  reaching the planner — but the record itself is preserved for inspection.
+
+### Purity and the clock
+
+Like `distill.ts` and the facts `reconcile.ts`, `hygiene.ts` **never reads the wall-clock**:
+`now` is a required, injected parameter and only `now`/`createdAt` strings are `Date.parse`d.
+The CLI handler is the only place that reads the clock (`new Date().toISOString()` at the
+boundary) and the only place that reads the per-lesson `.md` files to assemble each record's
+`createdAt` recency proxy. The handler follows the same no-throw discipline as the other
+`bober memory` subcommands (sets `process.exitCode = 1` on error); an empty or absent `INDEX.md`
+prints a friendly `No lessons found. Nothing to prune.` and creates no `QUARANTINE.md`.
 
 ---
 
