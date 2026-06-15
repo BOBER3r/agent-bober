@@ -178,7 +178,7 @@ lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Pru
 and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
 under "Distilling Lessons from History".
 
-## Self-Improvement P1/P2 (Phase 5) — in progress (2 of 4)
+## Self-Improvement P1/P2 (Phase 5) — in progress (3 of 4)
 
 `spec-20260615-self-improve-p1-p2` — Phase 5 of the self-improvement effort: make
 self-improvement **safe to enable** before it is allowed to act. Sprint 1 lands the **storage
@@ -203,17 +203,30 @@ and a `bober replay run` verb that prints a `CASE ID | BASELINE | FRESH | DELTA`
 1 on any regression** (0 on a clean/improvement-only corpus, `no cases captured` + 0 on an empty
 one). `runReplayHarness` is the public function **Sprint 4's GEPA `evolve` verb imports as its
 promotion gate**. Still no pipeline/LLM touch and the Sprint 1 `ReplayStore` schema is unchanged.
-The evaluator guards (Sprint 3) and the GEPA evolve loop (Sprint 4) are still to come — which is
-why every `selfImprove` flag defaults to `false`.
+Sprint 3 lands the three **evaluator anti-degeneration guards** the `selfImprove` flags reserve —
+three PURE functions in `src/orchestrator/selfimprove/eval-guards.ts` (`shouldShortCircuitJudge` /
+`redactRubric` / `enforceCitedArtifacts`; no clock/fs/LLM/mutation), each wired into the **live**
+evaluator/pipeline behind `config.selfImprove?.<flag>`. `deterministicGate` short-circuits the LLM
+judge to FAIL when a **required** programmatic strategy fails (saving the judge call); `rubricIsolation`
+strips `successCriteria`/`evaluatorNotes` from the **generator-bound** handoff (the evaluator keeps
+the rubric) so the generator can't teach to the test; `requireCitedArtifact` downgrades a FAIL detail
+that cites no `file`/test/command to a passing `info` so it can't block the sprint. **All three flags
+stay `.default(false)`**, and the `sc-3-7` `loopSpy` invariant proves byte-identity off-path: judge
+still runs when `selfImprove` is absent/all-false, skipped only when `deterministicGate:true`. Full
+suite 2290 tests, **zero regressions** (this sprint touched live `evaluator-agent.ts` + `pipeline.ts`).
+Only the GEPA evolve loop (Sprint 4) remains.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-self-improve-p1-p2-1.md](./sprint-spec-20260615-self-improve-p1-p2-1.md) | Pure SQLite `ReplayStore` (`putCase`/`getCase`/`listCases`/`getBaselineVerdict`/`close`, deterministic `caseId` = `sha256(contractId\|iteration\|diffDigest).slice(0,16)`, `:memory:`-testable, no clock read in class) + immutable `.bober/replay/cases/*.json` fixtures + `replay_cases` baseline DB; off-by-default `SelfImproveSectionSchema` (`deterministicGate`/`rubricIsolation`/`requireCitedArtifact` `.default(false)` + `replayDir`) wired `.optional()` into `BoberConfigSchema`; `bober replay capture\|list\|show` CLI ingesting `.bober/eval-results/eval-*.json`; reuses existing `better-sqlite3` (no new dep), no pipeline/LLM touch |
 | 2 | [sprint-spec-20260615-self-improve-p1-p2-2.md](./sprint-spec-20260615-self-improve-p1-p2-2.md) | The replay **gate**: PURE `compareToBaseline(baseline, fresh)` → `{ regressions (baseline pass→fresh fail), improvements (fail→pass), unchanged }` (sorted, no clock/fs/LLM) + async `runReplayHarness(projectRoot, config)` re-deriving fresh verdicts **deterministically from frozen `eval_details_json`** (NO LLM — zero `runGeneratorAgent`/`runEvaluatorAgent`/`createClient`) → `{ …, total, baseline, fresh }`; `bober replay run` per-case delta table, **exit 1 on regression** / 0 clean / `no cases captured` empty; tolerant `loadConfig`, never-throws. `runReplayHarness` is **Sprint 4's GEPA promotion gate**; ReplayStore schema + pipeline/agents untouched |
+| 3 | [sprint-spec-20260615-self-improve-p1-p2-3.md](./sprint-spec-20260615-self-improve-p1-p2-3.md) | Three **PURE** evaluator anti-degeneration guards (`eval-guards.ts`; no clock/fs/LLM/mutation), each gated behind a `config.selfImprove?.<flag>` and wired into the **live** evaluator/pipeline: `shouldShortCircuitJudge` (`deterministicGate` → required programmatic FAIL skips the LLM judge, returns FAIL); `redactRubric` (`rubricIsolation` → strips `successCriteria`/`evaluatorNotes` from the **generator-bound** handoff only, evaluator keeps the rubric, input not mutated); `enforceCitedArtifacts` (`requireCitedArtifact` → uncited FAIL detail downgraded to `info`/`passed`, cited FAIL survives, `passed` recomputed). **All flags `.default(false)`**; `sc-3-7` `loopSpy` invariant proves off-path byte-identity (judge runs when absent/all-false, skipped only on `deterministicGate:true`). 2290 tests, zero regressions |
 
 The replay harness is documented in
 [`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Replay Regression Harness
 (Phase 5)"), including the off-by-default invariant, the `bober replay` CLI (now `capture|list|show|run`),
 the [replay gate](../self-improvement-memory.md#the-replay-gate-sprint-2) (`replay run` /
 `runReplayHarness` / `compareToBaseline` semantics + the deterministic no-LLM fresh-verdict rule),
-the `selfImprove` config section, and the Sprints 2–4 roadmap.
+the [evaluator anti-degeneration guards](../self-improvement-memory.md#evaluator-anti-degeneration-guards-sprint-3)
+(the three `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` guards + the `sc-3-7`
+off-path byte-identity proof), the `selfImprove` config section, and the Sprints 2–4 roadmap.

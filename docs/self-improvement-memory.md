@@ -545,13 +545,17 @@ freezing a corpus of golden eval outcomes that future changes can be diffed agai
 landed the **storage foundation** (a frozen replay corpus plus an off-by-default config section);
 **Sprint 2** landed the **regression gate** that *acts* on it — `bober replay run` plus the public
 `runReplayHarness` / `compareToBaseline` API (see [The replay gate](#the-replay-gate-sprint-2)
-below). The evaluator guards and the GEPA evolve loop are **deferred to Sprints 3–4** (see
-[Roadmap](#replay-roadmap-sprints-2-4) below).
+below). **Sprint 3** landed the three **evaluator anti-degeneration guards** that the `selfImprove`
+flags now drive — `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` (see
+[Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3) below). The GEPA
+evolve loop is **deferred to Sprint 4** (see [Roadmap](#replay-roadmap-sprints-2-4) below).
 
-> **Off by default.** The `selfImprove` flags are inert until later sprints wire the evaluator
-> guards that read them. Capturing and inspecting the corpus has **zero** effect on a pipeline run;
-> `replay run` is an **explicit, manually-invoked** gate that re-derives verdicts from the frozen
-> corpus and **never runs any LLM**, so it never touches a live pipeline either.
+> **Off by default.** Every `selfImprove` flag still defaults to `false`. The Sprint 3 guards are
+> wired into the **live** evaluator and pipeline but are gated behind `config.selfImprove?.<flag>`,
+> so with the flags off (or the section absent) the evaluation flow and the generator-bound handoff
+> are **byte-identical** to the pre-Sprint-3 path. Capturing/inspecting the corpus has **zero**
+> effect on a pipeline run, and `replay run` is an **explicit, manually-invoked** gate that
+> re-derives verdicts from the frozen corpus and **never runs any LLM**.
 
 ### The replay corpus
 
@@ -675,20 +679,74 @@ returns on error).
 
 `SelfImproveSectionSchema` (`src/config/schema.ts`) is wired into `BoberConfigSchema` as
 `selfImprove: SelfImproveSectionSchema.optional()`, mirroring the evaluator section. A config
-that omits `selfImprove` loads without throwing.
+that omits `selfImprove` loads without throwing. **All four fields default**, so an empty
+`"selfImprove": {}` (or an absent section) is equivalent to all guards off.
 
 ```jsonc
-// bober.config.json — all flags default to false; the section is optional.
+// bober.config.json — every flag defaults to false; the section is optional.
 "selfImprove": {
-  "deterministicGate":    false,  // Sprint 3 — evaluator guard (not yet wired)
-  "rubricIsolation":      false,  // Sprint 3 — evaluator guard (not yet wired)
-  "requireCitedArtifact": false,  // Sprint 3 — evaluator guard (not yet wired)
-  "replayDir":            ".bober/replay"
+  "deterministicGate":    false,  // Sprint 3 — required programmatic FAIL → skip the LLM judge
+  "rubricIsolation":      false,  // Sprint 3 — strip the rubric from the generator-bound handoff
+  "requireCitedArtifact": false,  // Sprint 3 — downgrade uncited FAIL details to info/passed
+  "replayDir":            ".bober/replay"  // Sprints 1–2 — locates the replay corpus
 }
 ```
 
-Only `replayDir` has any effect today (it locates the corpus). The three boolean guards exist
-so the schema is forward-stable, but nothing reads them until Sprint 3 lands.
+| Field | Type / default | Effect |
+|-------|----------------|--------|
+| `deterministicGate` | `boolean`, `false` | When `true` and a **required** programmatic strategy fails, the evaluator returns FAIL **without** invoking the LLM judge (see [Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3)). |
+| `rubricIsolation` | `boolean`, `false` | When `true`, the **generator-bound** handoff is stripped of `successCriteria` / `evaluatorNotes` so the generator can't teach to the test. The evaluator still keeps the full rubric. |
+| `requireCitedArtifact` | `boolean`, `false` | When `true`, a FAIL detail that cites **no** artifact (no `file`, no failing-test / command signal) is downgraded to a passing `info` detail so it cannot block the sprint. |
+| `replayDir` | `string`, `".bober/replay"` | Locates the replay corpus (`replay.db` + `cases/`) for `bober replay`. |
+
+As of Sprint 3, the three boolean guards are **live** — each is read in `evaluator-agent.ts` /
+`pipeline.ts` behind `config.selfImprove?.<flag>` (see the next section). They remain
+`.default(false)`, so the pipeline is unchanged until a maintainer opts in. `replayDir` locates
+the corpus.
+
+<a id="evaluator-anti-degeneration-guards-sprint-3"></a>
+### Evaluator anti-degeneration guards (Sprint 3)
+
+Sprint 3 adds three **PURE** guards in `src/orchestrator/selfimprove/eval-guards.ts` (no clock, no
+fs, no LLM, no mutation of inputs — same discipline as `distill.ts` / `reconcile.ts` /
+`replay-harness.ts`) that defend the generator↔evaluator loop against three distinct degeneration
+modes. Each is wired into the **live** evaluator/pipeline but is gated behind one of the
+`config.selfImprove` flags, all of which stay `.default(false)`.
+
+| Flag (`config.selfImprove.*`) | Guard fn | Wired in | Defends against |
+|-------------------------------|----------|----------|-----------------|
+| `deterministicGate` | `shouldShortCircuitJudge` | `evaluator-agent.ts` (after `runEvaluation`) | The LLM judge **rubber-stamping** a build/typecheck failure — and spending a judge call to do it |
+| `rubricIsolation` | `redactRubric` | `pipeline.ts` (generator-bound handoff only) | The generator **teaching to the test** by overfitting to the literal success criteria |
+| `requireCitedArtifact` | `enforceCitedArtifacts` | `evaluator-agent.ts` (wraps the agent `EvalResult`) | An **uncited FAIL** (a vibe-based reject with no file/test/command) blocking an otherwise-passing sprint |
+
+- **Deterministic-first gate.** `shouldShortCircuitJudge(programmaticResults, requiredEvaluators)`
+  returns `true` iff some programmatic `EvalResult` has `passed === false` **and** its `evaluator`
+  (strategy type) is in the required set (built from
+  `config.evaluator.strategies.filter(s => s.required).map(s => s.type)`). When set and the predicate
+  is `true`, `runEvaluatorAgent` builds a FAIL `EvaluationRunResult` from the programmatic results
+  (summary `"deterministic gate: required check failed — LLM judge skipped"`) and **returns without
+  calling `runAgentEvaluation`**. With the flag off, the judge runs exactly as before.
+- **Rubric isolation.** `redactRubric(handoff)` returns a **new** `ContextHandoff` whose
+  `currentContract` drops `successCriteria` + `evaluatorNotes` while keeping `title` / `description`
+  / `definitionOfDone` / `generatorNotes` / `nonGoals` (a neutral `rubric-redacted` placeholder
+  criterion keeps `SprintContractSchema.min(1)` satisfied on re-validation). In `runSprintCycle` it
+  is applied **after guidance injection** to the **generator-bound `injectedHandoff` only** — the
+  `evalHandoff` is deliberately untouched because the evaluator must keep the rubric. The input
+  handoff is never mutated.
+- **Cite-artifact enforcement.** `enforceCitedArtifacts(result)` returns a **new** `EvalResult` in
+  which every `detail` with `passed === false` and **no citation** is rewritten to `passed: true`,
+  `severity: "info"`, with `" [downgraded: no cited artifact]"` appended; `result.passed` is then
+  recomputed (`details.every(d => d.passed)`). A detail is **cited** iff `detail.file` is a non-empty
+  string **or** `detail.message` contains a command/test signal (`.test.`, `FAIL `, `npm run`,
+  `tsc`, `exit code`, or a path-like `:`). Cited FAILs survive unchanged.
+
+**Off-by-default byte-identity is independently proven.** The `sc-3-7` invariant suite in
+`src/orchestrator/evaluator-agent.test.ts` uses a `loopSpy` over `runAgenticLoop` to assert: (a)
+with `selfImprove` **absent** + a required programmatic FAIL, the judge **still runs** (1 call); (b)
+with `deterministicGate: false`, same; (c) with `deterministicGate: true`, the judge is **skipped**
+(0 calls) and the result is `passed === false`. So with the flags off (or section absent), the
+evaluation flow and the generator handoff are byte-identical to the pre-Sprint-3 pipeline. Full
+suite after this sprint: 2290 tests, zero regressions.
 
 <a id="replay-roadmap-sprints-2-4"></a>
 ### Roadmap (Sprints 2–4)
@@ -696,5 +754,5 @@ so the schema is forward-stable, but nothing reads them until Sprint 3 lands.
 | Sprint | Status | Adds |
 |--------|--------|------|
 | 2 | **done** | `replay run` — re-derive captured cases' verdicts deterministically and **compare to baseline** (the regression gate); public `runReplayHarness` / `compareToBaseline` API — see [The replay gate](#the-replay-gate-sprint-2) |
-| 3 | pending | Evaluator guards behind `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` |
+| 3 | **done** | Evaluator guards behind `deterministicGate` / `rubricIsolation` / `requireCitedArtifact` — see [Evaluator anti-degeneration guards](#evaluator-anti-degeneration-guards-sprint-3) (all `.default(false)`; off-path byte-identity proven by `sc-3-7`) |
 | 4 | pending | GEPA evolve loop (imports `runReplayHarness` as its promotion gate) |
