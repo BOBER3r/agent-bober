@@ -260,8 +260,141 @@ describe("replay show (sc-1-7)", () => {
   });
 });
 
+// ── invokeRun helper ──────────────────────────────────────────────────
+
+async function invokeRun(replayDir = ".bober/replay"): Promise<{ stdout: string; stderr: string }> {
+  const stdoutWrites: string[] = [];
+  const stderrWrites: string[] = [];
+  const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+    stdoutWrites.push(String(chunk));
+    return true;
+  });
+  const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+    stderrWrites.push(String(chunk));
+    return true;
+  });
+
+  const fsUtils = await import("../../utils/fs.js");
+  const rootSpy = vi.spyOn(fsUtils, "findProjectRoot").mockResolvedValue(tmpDir);
+
+  try {
+    const { Command } = await import("commander");
+    const { registerReplayCommand } = await import("./replay.js");
+    const program = new Command();
+    program.exitOverride();
+    registerReplayCommand(program);
+    await program.parseAsync(["node", "bober", "replay", "run", "--replay-dir", replayDir]);
+  } finally {
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+    rootSpy.mockRestore();
+  }
+
+  return { stdout: stdoutWrites.join(""), stderr: stderrWrites.join("") };
+}
+
+// ── evalDetailsJson fixtures for run tests ────────────────────────────
+
+/** Fresh verdict → 'fail': one error-severity failure. */
+const FAIL_DETAILS = JSON.stringify([
+  {
+    evaluator: "test",
+    passed: false,
+    failures: [{ passed: false, severity: "error", message: "boom" }],
+  },
+]);
+
+/** Fresh verdict → 'pass': no error-severity failures. */
+const PASS_DETAILS = JSON.stringify([
+  { evaluator: "test", passed: true, failures: [] },
+]);
+
+// ── replay run (sc-2-6) ───────────────────────────────────────────────
+
+describe("replay run (sc-2-6)", () => {
+  it("prints 'no cases captured' and exits 0 on an empty corpus", async () => {
+    // Create empty replay directory (no DB yet)
+    await mkdir(join(tmpDir, ".bober", "replay"), { recursive: true });
+    // Create empty store so replay.db exists
+    const { ReplayStore } = await import("../../orchestrator/selfimprove/replay-store.js");
+    const store = new ReplayStore(join(tmpDir, ".bober", "replay", "replay.db"));
+    store.close();
+
+    process.exitCode = 0;
+    const { stdout } = await invokeRun();
+    expect(stdout).toContain("no cases captured");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("exits 0 and prints delta table on a clean corpus (pass→pass)", async () => {
+    await mkdir(join(tmpDir, ".bober", "replay"), { recursive: true });
+    const { ReplayStore } = await import("../../orchestrator/selfimprove/replay-store.js");
+    const store = new ReplayStore(join(tmpDir, ".bober", "replay", "replay.db"));
+    store.putCase({
+      contractId: "sprint-clean",
+      iteration: 1,
+      baselineVerdict: "pass",
+      diffDigest: "aabbccddeeff00112233445566778899",
+      evalDetailsJson: PASS_DETAILS,
+      tCaptured: new Date().toISOString(),
+    });
+    store.close();
+
+    process.exitCode = 0;
+    const { stdout } = await invokeRun();
+    // Should print table header and a row
+    expect(stdout).toContain("CASE ID");
+    expect(stdout).toContain("BASELINE");
+    // No regressions → exit 0
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("exits 1 and prints regressed caseId when a case regresses (pass→fail)", async () => {
+    await mkdir(join(tmpDir, ".bober", "replay"), { recursive: true });
+    const { ReplayStore } = await import("../../orchestrator/selfimprove/replay-store.js");
+    const store = new ReplayStore(join(tmpDir, ".bober", "replay", "replay.db"));
+    store.putCase({
+      contractId: "sprint-regress",
+      iteration: 1,
+      baselineVerdict: "pass",         // baseline: pass
+      diffDigest: "aabbccddeeff00112233445566778899",
+      evalDetailsJson: FAIL_DETAILS,   // fresh: fail → regression
+      tCaptured: new Date().toISOString(),
+    });
+    store.close();
+
+    process.exitCode = 0;
+    const { stdout } = await invokeRun();
+    expect(process.exitCode).toBe(1);
+    // Should mention REGRESSION in the table row or the summary
+    expect(stdout).toMatch(/REGRESSION/i);
+  });
+
+  it("exits 0 when only a fail→pass improvement exists (no regressions)", async () => {
+    await mkdir(join(tmpDir, ".bober", "replay"), { recursive: true });
+    const { ReplayStore } = await import("../../orchestrator/selfimprove/replay-store.js");
+    const store = new ReplayStore(join(tmpDir, ".bober", "replay", "replay.db"));
+    store.putCase({
+      contractId: "sprint-improve",
+      iteration: 1,
+      baselineVerdict: "fail",        // baseline: fail
+      diffDigest: "aabbccddeeff00112233445566778899",
+      evalDetailsJson: PASS_DETAILS,  // fresh: pass → improvement
+      tCaptured: new Date().toISOString(),
+    });
+    store.close();
+
+    process.exitCode = 0;
+    const { stdout } = await invokeRun();
+    expect(process.exitCode).toBe(0);
+    expect(stdout).toContain("improvement");
+  });
+});
+
+// ── replay command registration ───────────────────────────────────────
+
 describe("replay command registration", () => {
-  it("registers replay command with capture, list, show subcommands", async () => {
+  it("registers replay command with capture, list, show, run subcommands", async () => {
     const { Command } = await import("commander");
     const { registerReplayCommand } = await import("./replay.js");
     const program = new Command();
@@ -275,5 +408,6 @@ describe("replay command registration", () => {
     expect(subNames).toContain("capture");
     expect(subNames).toContain("list");
     expect(subNames).toContain("show");
+    expect(subNames).toContain("run");
   });
 });

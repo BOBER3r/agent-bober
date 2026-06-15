@@ -1,11 +1,13 @@
 /**
- * `bober replay <capture|list|show>` — manage the frozen replay corpus.
+ * `bober replay <capture|list|show|run>` — manage the frozen replay corpus.
  *
  * Subcommands:
  *   capture   — Ingest .bober/eval-results/eval-*.json into immutable fixtures
  *               and baseline rows in .bober/replay/replay.db.
  *   list      — Print all captured replay cases.
  *   show <id> — Print one case with provenance (contractId, iteration, verdict, path).
+ *   run       — Re-derive each case's fresh verdict deterministically and diff vs
+ *               baseline; prints a per-case delta table; exits 1 on any regression.
  *
  * Error handling: CLI handlers MUST NOT throw. They set process.exitCode=1 and
  * return on all errors. Pattern mirrors src/cli/commands/facts.ts.
@@ -20,6 +22,8 @@ import { createHash } from "node:crypto";
 import { findProjectRoot } from "../../utils/fs.js";
 import { ensureDir } from "../../state/helpers.js";
 import { ReplayStore } from "../../orchestrator/selfimprove/replay-store.js";
+import { loadConfig } from "../../config/loader.js";
+import { runReplayHarness } from "../../orchestrator/selfimprove/replay-harness.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -255,6 +259,90 @@ export function registerReplayCommand(program: Command): void {
         process.stderr.write(
           chalk.red(
             `Failed to show replay case: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  // ── replay run ───────────────────────────────────────────────────
+  replayCmd
+    .command("run")
+    .description(
+      "Re-derive each captured case's fresh verdict deterministically and diff vs baseline",
+    )
+    .option("--replay-dir <dir>", "Replay directory (default: .bober/replay)", ".bober/replay")
+    .action(async (opts: { replayDir: string }) => {
+      const projectRoot = await resolveRoot();
+      try {
+        // Tolerant config load — config absence is not fatal for replay run.
+        // On failure, build a stub config so --replay-dir is still honoured.
+        let config: Awaited<ReturnType<typeof loadConfig>>;
+        try {
+          config = await loadConfig(projectRoot);
+        } catch {
+          config = {
+            project: { name: "replay", mode: "greenfield" },
+            selfImprove: {
+              deterministicGate: false,
+              rubricIsolation: false,
+              requireCitedArtifact: false,
+              replayDir: opts.replayDir,
+            },
+          } as unknown as Awaited<ReturnType<typeof loadConfig>>;
+        }
+
+        const result = await runReplayHarness(projectRoot, config);
+
+        if (result.total === 0) {
+          process.stdout.write(chalk.gray("no cases captured\n"));
+          return;
+        }
+
+        // ── Print per-case delta table (mirrors list table at replay.ts:196-207) ──
+        process.stdout.write(
+          chalk.bold(
+            `${"CASE ID".padEnd(18)} ${"BASELINE".padEnd(10)} ${"FRESH".padEnd(10)} DELTA\n`,
+          ),
+        );
+        process.stdout.write(`${"-".repeat(60)}\n`);
+
+        // Iterate baseline to keep insertion/sort order (listCases returns ASC)
+        for (const [caseId, baselineVerdict] of result.baseline) {
+          const freshVerdict = result.fresh.get(caseId) ?? baselineVerdict;
+          const isRegression = baselineVerdict === "pass" && freshVerdict === "fail";
+          const isImprovement = baselineVerdict === "fail" && freshVerdict === "pass";
+
+          const deltaLabel = isRegression
+            ? "REGRESSION"
+            : isImprovement
+              ? "improvement"
+              : "ok";
+
+          const deltaFormatted = isRegression
+            ? chalk.red(deltaLabel)
+            : isImprovement
+              ? chalk.green(deltaLabel)
+              : deltaLabel;
+
+          process.stdout.write(
+            `${caseId.padEnd(18)} ${baselineVerdict.padEnd(10)} ${freshVerdict.padEnd(10)} ${deltaFormatted}\n`,
+          );
+        }
+
+        if (result.regressions.length > 0) {
+          process.stdout.write(
+            chalk.red(`\nRegressions (${result.regressions.length}):\n`),
+          );
+          for (const id of result.regressions) {
+            process.stdout.write(chalk.red(`  ${id}\n`));
+          }
+          process.exitCode = 1;
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `Failed to run replay harness: ${err instanceof Error ? err.message : String(err)}\n`,
           ),
         );
         process.exitCode = 1;
