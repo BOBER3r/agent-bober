@@ -165,12 +165,14 @@ Inside the session:
 > /runs                         # list active/recent runs (deterministic, no LLM call)
 > /stop <runId>                 # stop a running run by id (deterministic, no LLM call)
 > /careful [on|off]             # toggle approval gates for new runs (deterministic, no LLM call)
+> /approve <id>                 # approve a pending checkpoint, resume the run (deterministic)
+> /reject <id> [feedback]       # reject a pending checkpoint with optional feedback (deterministic)
 > /help                         # show slash commands
 > /exit                         # end the session (detached runs keep going)
 ```
 
 The full deterministic slash-command set is `/runs`, `/stop <runId>`, `/careful [on|off]`,
-`/help`, and `/exit` — none of them call the LLM.
+`/approve <id>`, `/reject <id> [feedback]`, `/help`, and `/exit` — none of them call the LLM.
 
 `/careful on` makes runs you launch from chat pause at curated gates; `/careful off` (the
 default) launches them in autopilot. With careful **on**, the detached run is launched with
@@ -186,8 +188,20 @@ notice into its reply, and `/runs` shows that run as `[INPUT-REQUIRED]` with a
 `waiting=<checkpointId>` segment. The notice is deduped per marker (keyed by
 `checkpointId@requestedAt`), so a still-pending run is announced once, not on every turn; the
 dedupe state persists across a REPL restart via `.bober/chat/<sessionId>.approvals-cursor.json`.
-Chat only **reads** these markers — to actually approve or reject a paused gate, use the
-`bober approve` / `bober reject` CLI below.
+
+**Resolving a paused gate from chat.** You can approve or reject a surfaced checkpoint without
+leaving the REPL. `/approve <checkpointId>` writes the `.approved.json` marker and acks
+resumption; `/reject <checkpointId> [feedback]` writes the `.rejected.json` marker, where
+**everything after the id is the feedback string** (it flows into the pipeline's rework round).
+Natural language works too — "approve it" / "reject the plan, too broad" is classified to the
+same handlers. If a paused checkpoint id does not actually exist, chat replies
+`No pending checkpoint found: <id>` and **writes nothing** (the `pendingExists` guard); when an
+NL approve/reject names no checkpoint and several are pending, chat asks which one rather than
+guessing. Resolution writes the same `.approved.json` / `.rejected.json` markers as the
+`bober approve` / `bober reject` CLI below (the same store, not a separate one), so the
+detached run resumes via its existing disk poll and the chat-owned `RunState` flips back to
+`running` on the next turn. The CLI commands remain available for resolving runs from outside a
+chat session.
 
 Asking the session to build something **spawns a detached `bober run`** keyed on a
 session-chosen `--run-id`; it survives the REPL exiting and shows up under `/runs` as

@@ -22,7 +22,7 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
-## Chat Interrupt / Approve / Steer — in progress (2 of 6)
+## Chat Interrupt / Approve / Steer — in progress (3 of 6)
 
 `spec-20260615-chat-interrupt-approve-steer` — Phase 2 of the chattable platform: mid-flight
 human-in-the-loop control of chat-launched runs (surface pending approvals, approve/reject,
@@ -38,15 +38,25 @@ over `.bober/approvals/*.pending.json`, an announce-once dedupe `ApprovalCursor`
 poll-prelude in `handleTurn` that weaves a one-time `[run <id> waiting at <gate>: <prompt>]`
 notice into the reply and flips the correlated chat-owned `RunState` to `input-required` so
 `/runs` shows `[INPUT-REQUIRED]` + `waiting=<gate>`. Read-only — no markers are written, and
-with no pending markers behavior matches Phase 1. The write/resolve (Sprint 3), guidance
-(Sprint 4), pause/resume (Sprint 5), and hygiene+docs+e2e (Sprint 6) paths are not built yet.
+with no pending markers behavior matches Phase 1. Sprint 3 closes the loop with the
+**write/resolve** path: `/approve <id>` and `/reject <id> [feedback]` slash commands plus
+natural-language approve/reject intent, all reusing the existing approval store
+(`saveApproved` / `saveRejected` behind the `pendingExists` guard + imported `resolveApprover`)
+to write the `.approved.json` / `.rejected.json` markers. The detached child's existing
+`DiskCheckpointMechanism` poll then resumes the run, reject feedback reaches the unchanged
+`runCheckpointWithFeedback` rework path (proven by a real-mechanism round-trip test), and the
+chat-owned `RunState` clears its pending fields back to `running` — the inverse of Sprint 2's
+reflection. NL resolution never guesses a load-bearing target: it auto-picks only the single
+outstanding marker and otherwise asks which. The guidance (Sprint 4), pause/resume (Sprint 5),
+and hygiene+docs+e2e (Sprint 6) paths are not built yet.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-chat-interrupt-approve-steer-1.md](./sprint-spec-20260615-chat-interrupt-approve-steer-1.md) | Additive `RunState` grammar (`input-required`/`paused` + pending/pause fields) + `bober run --approve-gates` + `CarefulSidecar` + `/careful [on\|off]` + careful-aware `RunSpawner.spawn` |
 | 2 | [sprint-spec-20260615-chat-interrupt-approve-steer-2.md](./sprint-spec-20260615-chat-interrupt-approve-steer-2.md) | Read-only approval surfacing in chat: `ApprovalReader` + announce-once `ApprovalCursor` + `handleTurn` poll-prelude notice + idempotent `RunState` reflection + roster `[INPUT-REQUIRED]` / `waiting=<gate>` |
+| 3 | [sprint-spec-20260615-chat-interrupt-approve-steer-3.md](./sprint-spec-20260615-chat-interrupt-approve-steer-3.md) | Resolve approvals from chat (write path): `/approve <id>` + `/reject <id> [feedback]` slash commands + NL approve/reject classifier intent, reusing `saveApproved`/`saveRejected` behind the `pendingExists` guard + `resolveApprover`; never-guess ambiguity rule; `RunState` cleared back to `running`; `DiskCheckpointMechanism` round-trip proof |
 
-User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`).
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober run` (`--approve-gates`) and `bober chat` (`/careful`, `/runs`, `/approve`, `/reject`).
 
 ## Domain-Agnostic Team Abstraction — complete (4 of 4)
 
