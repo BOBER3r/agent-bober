@@ -35,7 +35,7 @@ export interface RunResult {
 export interface RunState {
   runId: string;
   task: string;
-  status: "running" | "completed" | "failed" | "aborted";
+  status: "running" | "completed" | "failed" | "aborted" | "input-required" | "paused";
   startedAt: string;
   completedAt?: string;
   abortedAt?: string;
@@ -52,6 +52,15 @@ export interface RunState {
   /** Sprint 4: the git branch the worktree was created on. Undefined for
    *  in-place runs. */
   branch?: string;
+  // ── Phase 2 (chat interrupt/approve/steer) ──
+  /** Checkpoint id the run is paused at, awaiting human input. */
+  pendingCheckpointId?: string;
+  /** Human-readable prompt surfaced for the pending checkpoint. */
+  pendingPrompt?: string;
+  /** ISO timestamp the run entered 'input-required'. */
+  pendingSince?: string;
+  /** ISO timestamp the run was soft-paused. */
+  pausedAt?: string;
 }
 
 // ── StartRunOptions ───────────────────────────────────────────────────

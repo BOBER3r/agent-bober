@@ -16,10 +16,11 @@ export type SlashResult =
 
 const HELP_TEXT = [
   "Available slash commands:",
-  "  /runs          — List all active and recent runs",
-  "  /stop <runId>  — Stop a running run by ID",
-  "  /help          — Show this help message",
-  "  /exit          — Exit the chat session",
+  "  /runs              — List all active and recent runs",
+  "  /stop <runId>      — Stop a running run by ID",
+  "  /careful [on|off]  — Toggle approval gates for new runs",
+  "  /help              — Show this help message",
+  "  /exit              — Exit the chat session",
   "",
   "Any other input is sent to the AI assistant.",
 ].join("\n");
@@ -34,11 +35,15 @@ const HELP_TEXT = [
  * @param stopHandler - Optional handler for /stop <runId>. When omitted, /stop
  *   returns an "unavailable" message. Kept optional so existing 2-arg callers
  *   are not broken (sc-4-6).
+ * @param carefulHandler - Optional handler for /careful [on|off]. When omitted,
+ *   /careful returns an "unavailable" message. Kept optional so existing 2-/3-arg
+ *   callers are not broken.
  */
 export async function dispatch(
   input: string,
   roster: RosterReader,
   stopHandler?: (runId: string) => Promise<string>,
+  carefulHandler?: (arg: string | undefined) => Promise<string>,
 ): Promise<SlashResult> {
   const trimmed = input.trimStart();
   if (!trimmed.startsWith("/")) {
@@ -64,6 +69,14 @@ export async function dispatch(
       const output = stopHandler
         ? await stopHandler(arg)
         : "Stop is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/careful": {
+      const arg = trimmed.split(/\s+/)[1]?.toLowerCase();
+      const output = carefulHandler
+        ? await carefulHandler(arg)
+        : "Careful mode is unavailable.";
       return { handled: true, output };
     }
 

@@ -13,6 +13,7 @@ import { TurnClassifier } from "./turn-classifier.js";
 import { Answerer } from "./answerer.js";
 import { dispatch } from "./slash-commands.js";
 import { RunSpawner } from "./run-spawner.js";
+import { CarefulSidecar } from "./careful-sidecar.js";
 import { CompletionTailer } from "./completion-tailer.js";
 import type { CompletionEvent } from "./completion-tailer.js";
 
@@ -82,6 +83,8 @@ export class ChatSession {
   private readonly model: string = "opus";
   /** Memory namespace for the active team; undefined means the default .bober/memory/ path. */
   private readonly memoryNamespace: string | undefined;
+  /** Phase 2: persists the per-session careful-mode toggle. */
+  private readonly carefulSidecar: CarefulSidecar;
 
   constructor(opts: ChatSessionOptions) {
     this.llm = opts.llm;
@@ -102,6 +105,7 @@ export class ChatSession {
     this.tailer =
       opts.tailer ??
       new CompletionTailer(this.projectRoot, this.sessionId);
+    this.carefulSidecar = new CarefulSidecar(this.projectRoot, this.sessionId);
   }
 
   /** Generate a session-scoped runId using the injected clock. */
@@ -127,6 +131,7 @@ export class ChatSession {
       input,
       this.roster,
       (runId) => this.handleStop(runId),
+      (arg) => this.handleCareful(arg),
     );
     if (slashResult.handled) {
       if (slashResult.exit) return null;
@@ -161,7 +166,8 @@ export class ChatSession {
       reply = await this.answerer.answer(input, rosterSummary, memoryDistill, recentHistory);
     } else if (action.action === "spawn") {
       const runId = this.nextRunId();
-      const ack = await this.spawner.spawn(action.task, runId);
+      const careful = await this.carefulSidecar.isCareful();
+      const ack = await this.spawner.spawn(action.task, runId, { careful });
       reply = ack.spawnError
         ? `Failed to launch run ${runId}: ${ack.spawnError}`
         : `Launched run ${runId} for: ${action.task}. Use /runs to track it.`;
@@ -208,6 +214,25 @@ export class ChatSession {
     return result.killedPid !== undefined
       ? `Stopped run ${runId} (killed pid ${result.killedPid}).`
       : `Stopped run ${runId} (no live process found; marked aborted).`;
+  }
+
+  /**
+   * Handle /careful [on|off].
+   * - "on"  → set careful true, return confirmation
+   * - "off" → set careful false, return confirmation
+   * - undefined/other → report current state
+   */
+  private async handleCareful(arg: string | undefined): Promise<string> {
+    if (arg === "on") {
+      await this.carefulSidecar.setCareful(true);
+      return "Careful mode ON — new runs will pause at curated gates.";
+    } else if (arg === "off") {
+      await this.carefulSidecar.setCareful(false);
+      return "Careful mode OFF — new runs will run in autopilot.";
+    } else {
+      const current = await this.carefulSidecar.isCareful();
+      return `Careful mode is currently ${current ? "ON" : "OFF"}. Use /careful on or /careful off to toggle.`;
+    }
   }
 
   /**

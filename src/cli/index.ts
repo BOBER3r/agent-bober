@@ -222,6 +222,10 @@ async function main(): Promise<void> {
       "--team <id>",
       "Select the active team for this run; absent => config.defaultTeam then 'programming'.",
     )
+    .option(
+      "--approve-gates <gates>",
+      "Comma-separated checkpoint ids to gate via the 'disk' mechanism for this run only (e.g. post-research,post-plan,post-sprint).",
+    )
     .action(async (task?: string, cmdOpts?: {
       provider?: string;
       mode?: "autopilot" | "careful";
@@ -229,6 +233,7 @@ async function main(): Promise<void> {
       checkpointAll?: boolean;
       runId?: string;
       team?: string;
+      approveGates?: string;
     }) => {
       const opts = program.opts<{ verbose?: boolean; config?: string }>();
 
@@ -241,6 +246,7 @@ async function main(): Promise<void> {
         checkpointAll: cmdOpts?.checkpointAll,
         runId: cmdOpts?.runId,
         team: cmdOpts?.team,
+        approveGates: cmdOpts?.approveGates,
       });
     });
 

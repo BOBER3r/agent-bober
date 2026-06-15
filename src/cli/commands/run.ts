@@ -7,6 +7,13 @@ import { configExists } from "../../config/loader.js";
 import { runPipeline } from "../../orchestrator/pipeline.js";
 import { ensureBoberDir } from "../../state/index.js";
 import { logger } from "../../utils/logger.js";
+import { CHECKPOINT_SITES } from "../../orchestrator/checkpoints/sites.js";
+import type { CheckpointId } from "../../orchestrator/checkpoints/types.js";
+
+// ── Valid approve-gate ids — sourced from the declared checkpoint sites ──
+/** Valid --approve-gates names — sourced from the declared checkpoint sites. */
+export const KNOWN_CHECKPOINT_IDS: readonly CheckpointId[] =
+  CHECKPOINT_SITES.map((s) => s.id);
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -27,6 +34,8 @@ export interface RunCommandOptions {
   runId?: string;
   /** When set, selects the active team; absent => config.defaultTeam then 'programming'. */
   team?: string;
+  /** Comma-separated checkpoint ids to gate via the 'disk' mechanism for this run only. */
+  approveGates?: string;
 }
 
 // ── Formatting helpers ─────────────────────────────────────────────
@@ -129,6 +138,24 @@ export async function runRunCommand(
       },
     };
     logger.info(`Checkpoint override: ${options.checkpoint}`);
+  }
+
+  // Apply --approve-gates: merge { gate -> 'disk' } into checkpointOverrides for this run only.
+  if (options.approveGates) {
+    const gates = options.approveGates.split(",").map((g) => g.trim()).filter(Boolean);
+    const unknown = gates.filter((g) => !KNOWN_CHECKPOINT_IDS.includes(g as CheckpointId));
+    if (unknown.length > 0) {
+      logger.error(
+        `Unknown approve-gate(s): ${unknown.join(", ")}. ` +
+        `Valid gates: ${KNOWN_CHECKPOINT_IDS.join(", ")}.`,
+      );
+      process.exitCode = 1;
+      return; // do not apply a partial merge
+    }
+    const merged = { ...config.pipeline.checkpointOverrides };
+    for (const g of gates) merged[g] = "disk";
+    config = { ...config, pipeline: { ...config.pipeline, checkpointOverrides: merged } };
+    logger.info(`Approve-gates: ${gates.join(", ")} -> disk`);
   }
 
   // Ensure .bober directory

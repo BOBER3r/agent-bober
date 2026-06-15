@@ -86,3 +86,91 @@ describe("slash-commands dispatch (sc-1-9)", () => {
     expect(runsResult.handled).toBe(true);
   });
 });
+
+// ── /careful slash command tests (sc-1-6) ─────────────────────────────
+
+describe("/careful slash command dispatch (sc-1-6)", () => {
+  it("/careful without carefulHandler returns 'unavailable' message", async () => {
+    const roster = new RosterReader(tmpDir);
+    // 2-arg call — no carefulHandler
+    const result = await dispatch("/careful", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("unavailable");
+    }
+  });
+
+  it("/careful with no arg calls carefulHandler with undefined", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedArg: string | undefined = "sentinel";
+    const carefulHandler = async (arg: string | undefined) => {
+      receivedArg = arg;
+      return "current state: off";
+    };
+
+    const result = await dispatch("/careful", roster, undefined, carefulHandler);
+    expect(result.handled).toBe(true);
+    expect(receivedArg).toBeUndefined();
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("current state: off");
+    }
+  });
+
+  it("/careful on calls carefulHandler with 'on'", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedArg: string | undefined;
+    const carefulHandler = async (arg: string | undefined) => {
+      receivedArg = arg;
+      return "Careful mode ON — new runs will pause at curated gates.";
+    };
+
+    const result = await dispatch("/careful on", roster, undefined, carefulHandler);
+    expect(result.handled).toBe(true);
+    expect(receivedArg).toBe("on");
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("ON");
+    }
+  });
+
+  it("/careful off calls carefulHandler with 'off'", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedArg: string | undefined;
+    const carefulHandler = async (arg: string | undefined) => {
+      receivedArg = arg;
+      return "Careful mode OFF — new runs will run in autopilot.";
+    };
+
+    const result = await dispatch("/careful off", roster, undefined, carefulHandler);
+    expect(result.handled).toBe(true);
+    expect(receivedArg).toBe("off");
+  });
+
+  it("/help includes /careful in the help text", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("/careful");
+    }
+  });
+
+  it("existing 2-arg dispatch callers still work with /careful returning unavailable", async () => {
+    // Verifies back-compat: 2-arg callers get the fallback message
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/careful on", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Careful mode is unavailable.");
+    }
+  });
+
+  it("existing 3-arg dispatch callers still work (stopHandler provided, no carefulHandler)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const stopHandler = async (_runId: string) => "stopped";
+    const result = await dispatch("/careful on", roster, stopHandler);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Careful mode is unavailable.");
+    }
+  });
+});

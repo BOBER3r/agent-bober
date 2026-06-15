@@ -1,8 +1,10 @@
 /**
- * Unit tests for `bober run --team <id>` CLI flag threading.
+ * Unit tests for `bober run --team <id>` CLI flag threading and
+ * `bober run --approve-gates` merge + validation (sc-1-5).
  *
  * sc-4-4: loadTeam(config, 'example') returns declared namespace/shape/providers.
  * sc-4-5: --team <id> threads teamId into runPipeline opts; absent --team => undefined.
+ * sc-1-5: --approve-gates merges {gate:'disk'} into checkpointOverrides; unknown gate rejected.
  *
  * Pattern: vi.mock runPipeline and loadConfig, call runRunCommand directly.
  * No network, no real LLM calls. Uses temp dirs for configExists checks.
@@ -25,6 +27,15 @@ const minimalConfig = {
       pipelineShape: "ts" as const,
       providers: { chat: "openai" },
     },
+  },
+};
+
+// Config with a pipeline section for approve-gates tests (simulates post-Zod-defaults shape)
+const minimalConfigWithPipeline = {
+  ...minimalConfig,
+  pipeline: {
+    checkpointOverrides: {} as Record<string, "noop" | "cli" | "disk" | "pr">,
+    mode: "autopilot" as const,
   },
 };
 
@@ -141,6 +152,89 @@ describe("sc-4-5 — --team flag propagation through runRunCommand", () => {
       tmpDir,
       expect.anything(),
       expect.objectContaining({ teamId: "example", runId: "run-fixed-001" }),
+    );
+  });
+});
+
+// ── sc-1-5: --approve-gates merge + unknown-gate rejection ───────────
+
+describe("sc-1-5 — --approve-gates flag", () => {
+  beforeEach(async () => {
+    // Override loadConfig to return config WITH pipeline section for these tests
+    const loaderMod = await import("../../config/loader.js");
+    vi.mocked(loaderMod.loadConfig).mockResolvedValue(minimalConfigWithPipeline as never);
+  });
+
+  it("merges named gates into checkpointOverrides as 'disk'", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {
+      approveGates: "post-research,post-plan,post-sprint",
+    });
+
+    expect(runPipeline).toHaveBeenCalledWith(
+      "do something",
+      tmpDir,
+      expect.objectContaining({
+        pipeline: expect.objectContaining({
+          checkpointOverrides: {
+            "post-research": "disk",
+            "post-plan": "disk",
+            "post-sprint": "disk",
+          },
+        }),
+      }),
+      expect.anything(),
+    );
+  });
+
+  it("rejects an unknown gate name with a non-zero exit code and does not call runPipeline", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    const { runRunCommand } = await import("./run.js");
+
+    const originalExitCode = process.exitCode;
+    await runRunCommand("do something", tmpDir, {
+      approveGates: "bogus-gate",
+    });
+
+    // process.exitCode should be set to 1
+    expect(process.exitCode).toBe(1);
+    // runPipeline must NOT be called when an unknown gate is supplied
+    expect(runPipeline).not.toHaveBeenCalled();
+    // Restore exitCode for subsequent tests
+    process.exitCode = originalExitCode as number | undefined;
+  });
+
+  it("rejects mix of valid and unknown gates — no partial merge applied", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    const { runRunCommand } = await import("./run.js");
+
+    const originalExitCode = process.exitCode;
+    await runRunCommand("do something", tmpDir, {
+      approveGates: "post-research,totally-bogus",
+    });
+
+    expect(process.exitCode).toBe(1);
+    expect(runPipeline).not.toHaveBeenCalled();
+    process.exitCode = originalExitCode as number | undefined;
+  });
+
+  it("without --approve-gates leaves checkpointOverrides unchanged", async () => {
+    const { runPipeline } = await import("../../orchestrator/pipeline.js");
+    const { runRunCommand } = await import("./run.js");
+
+    await runRunCommand("do something", tmpDir, {});
+
+    expect(runPipeline).toHaveBeenCalledWith(
+      "do something",
+      tmpDir,
+      expect.objectContaining({
+        pipeline: expect.objectContaining({
+          checkpointOverrides: {},
+        }),
+      }),
+      expect.anything(),
     );
   });
 });

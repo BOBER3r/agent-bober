@@ -89,8 +89,12 @@ export class RunSpawner {
   /**
    * Write the roster state.json, launch a detached child, record the pid,
    * and return an immediate SpawnAck without waiting for the child to finish.
+   *
+   * @param opts.careful - When true, appends --approve-gates with the curated
+   *   gate list to the child args. Default false (autopilot — byte-for-byte
+   *   identical to Phase 1 behavior).
    */
-  async spawn(task: string, runId: string): Promise<SpawnAck> {
+  async spawn(task: string, runId: string, opts: { careful?: boolean } = {}): Promise<SpawnAck> {
     const cwd = this.projectRoot;
 
     // 1. Write roster state.json BEFORE spawning so the run is visible immediately (sc-2-6)
@@ -106,9 +110,13 @@ export class RunSpawner {
 
     // 2. Launch detached child — do NOT await (sc-2-9, sc-2-6)
     try {
+      const args = [this.cliEntry, "run", task, "--run-id", runId];
+      if (opts.careful) {
+        args.push("--approve-gates", "post-research,post-plan,post-sprint");
+      }
       const child = this.spawnFn(
         this.nodeBin,
-        [this.cliEntry, "run", task, "--run-id", runId],
+        args,
         { cwd, detached: true, stdio: "ignore" },
       );
       child.unref();
