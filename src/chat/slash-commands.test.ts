@@ -383,3 +383,141 @@ describe("/tell slash command dispatch (sc-4-4, sc-4-8)", () => {
     }
   });
 });
+
+// ── /pause slash command tests (sc-5-4, sc-5-6) ──────────────────────
+
+describe("/pause slash command dispatch (sc-5-4)", () => {
+  it("/pause without runId returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/pause", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /pause");
+    }
+  });
+
+  it("/pause without pauseHandler returns 'Pause is unavailable.'", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/pause run-abc", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Pause is unavailable.");
+    }
+  });
+
+  it("/pause calls pauseHandler with runId", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedRunId = "";
+    const pauseHandler = async (runId: string) => {
+      receivedRunId = runId;
+      return `Paused run ${runId} at the next boundary — the process stays alive.`;
+    };
+
+    const result = await dispatch(
+      "/pause run-abc",
+      roster,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      pauseHandler,
+    );
+    expect(result.handled).toBe(true);
+    expect(receivedRunId).toBe("run-abc");
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("run-abc");
+    }
+  });
+
+  it("/help includes /pause in the help text (sc-5-6)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("/pause");
+    }
+  });
+});
+
+// ── /resume slash command tests (sc-5-6) ─────────────────────────────
+
+describe("/resume slash command dispatch (sc-5-6)", () => {
+  it("/resume without runId returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/resume", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /resume");
+    }
+  });
+
+  it("/resume without resumeHandler returns 'Resume is unavailable.'", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/resume run-abc", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Resume is unavailable.");
+    }
+  });
+
+  it("/resume calls resumeHandler with runId", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedRunId = "";
+    const resumeHandler = async (runId: string) => {
+      receivedRunId = runId;
+      return `Resumed run ${runId}.`;
+    };
+
+    const result = await dispatch(
+      "/resume run-abc",
+      roster,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      resumeHandler,
+    );
+    expect(result.handled).toBe(true);
+    expect(receivedRunId).toBe("run-abc");
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("run-abc");
+    }
+  });
+
+  it("/help includes /resume in the help text (sc-5-6)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("/resume");
+    }
+  });
+
+  it("back-compat: 7-arg callers (no pause/resumeHandler) — /pause + /resume return unavailable", async () => {
+    const roster = new RosterReader(tmpDir);
+    const pauseResult = await dispatch(
+      "/pause run-x",
+      roster,
+      undefined, undefined, undefined, undefined, undefined,
+      // no pauseHandler
+    );
+    expect(pauseResult.handled).toBe(true);
+    if (pauseResult.handled && !pauseResult.exit) {
+      expect(pauseResult.output).toBe("Pause is unavailable.");
+    }
+
+    const resumeResult = await dispatch(
+      "/resume run-x",
+      roster,
+      undefined, undefined, undefined, undefined, undefined,
+      // no resumeHandler
+    );
+    expect(resumeResult.handled).toBe(true);
+    if (resumeResult.handled && !resumeResult.exit) {
+      expect(resumeResult.output).toBe("Resume is unavailable.");
+    }
+  });
+});

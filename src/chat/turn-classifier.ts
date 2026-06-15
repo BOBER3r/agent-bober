@@ -15,7 +15,9 @@ export type ClassifierAction =
   | { action: "steer"; op: "stop"; runId: string }
   | { action: "approve"; checkpointId?: string }
   | { action: "reject"; checkpointId?: string; feedback?: string }
-  | { action: "tell"; runId: string; text: string };
+  | { action: "tell"; runId: string; text: string }
+  | { action: "pause"; runId: string }
+  | { action: "resume"; runId: string };
 
 // ── Zod discriminated union ───────────────────────────────────────────
 
@@ -37,6 +39,8 @@ const ClassifierActionSchema = z.discriminatedUnion("action", [
     feedback: z.string().optional(),
   }),
   z.object({ action: z.literal("tell"), runId: z.string(), text: z.string() }),
+  z.object({ action: z.literal("pause"), runId: z.string() }),
+  z.object({ action: z.literal("resume"), runId: z.string() }),
 ]);
 
 const FALLBACK: ClassifierAction = { action: "answer" };
@@ -104,6 +108,12 @@ function parseClassifierAction(text: string): ClassifierAction {
       if (data.action === "tell") {
         return { action: "tell", runId: data.runId, text: data.text };
       }
+      if (data.action === "pause") {
+        return { action: "pause", runId: data.runId };
+      }
+      if (data.action === "resume") {
+        return { action: "resume", runId: data.runId };
+      }
     }
     return FALLBACK;
   } catch {
@@ -140,6 +150,8 @@ export class TurnClassifier {
       '  {"action":"approve","checkpointId":"<id?>"}  — approve a pending checkpoint',
       '  {"action":"reject","checkpointId":"<id?>","feedback":"<why?>"}  — reject a checkpoint',
       '  {"action":"tell","runId":"<id>","text":"<instruction>"}  — queue free-text guidance for a run',
+      '  {"action":"pause","runId":"<id>"}  — soft-pause a run (process stays alive)',
+      '  {"action":"resume","runId":"<id>"}  — resume a soft-paused run',
       "Return ONLY the JSON object, no other text.",
     ].join("\n");
 

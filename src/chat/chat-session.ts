@@ -25,6 +25,7 @@ import {
   pendingExists,
 } from "../state/approval-state.js";
 import { appendGuidance, hasRunDir } from "../state/guidance.js";
+import { setPaused, clearPaused } from "../state/pause.js";
 import type { ApprovedMarker, RejectedMarker } from "../state/approval-state.js";
 import { resolveApprover } from "../cli/commands/approve.js";
 
@@ -192,6 +193,8 @@ export class ChatSession {
       (id) => this.handleApprove(id),
       (id, fb) => this.handleReject(id, fb),
       (runId, text) => this.handleTell(runId, text),
+      (runId) => this.handlePause(runId),
+      (runId) => this.handleResume(runId),
     );
     if (slashResult.handled) {
       if (slashResult.exit) return null;
@@ -253,6 +256,10 @@ export class ChatSession {
       }
     } else if (action.action === "tell") {
       reply = await this.handleTell(action.runId, action.text);
+    } else if (action.action === "pause") {
+      reply = await this.handlePause(action.runId);
+    } else if (action.action === "resume") {
+      reply = await this.handleResume(action.runId);
     } else {
       // Unknown action — should not happen given the classifier union
       reply = `Unrecognised action. For now, try /help for available commands.`;
@@ -374,6 +381,49 @@ export class ChatSession {
       return `Failed to queue guidance: ${err instanceof Error ? err.message : String(err)}`;
     }
     return `Queued guidance for run ${runId}.`;
+  }
+
+  /**
+   * Soft-pause a run at the next checkpoint boundary.
+   *
+   * Distinct from handleStop: this does NOT send a kill signal — the process
+   * stays alive and will hold at the next cooperative-pause gate in the pipeline.
+   *
+   * Guards: run must be found in the roster with status "running".
+   * Side effects: writes paused.json marker + flips chat-owned RunState to
+   * 'paused' (with pausedAt timestamp) via writeRunState.
+   */
+  private async handlePause(runId: string): Promise<string> {
+    const states = await this.roster.read();
+    const target = states.find((s) => s.runId === runId && s.status === "running");
+    if (!target) return `No such running run: ${runId}`;
+    await setPaused(this.projectRoot, runId);
+    await writeRunState(this.projectRoot, {
+      ...target,
+      status: "paused",
+      pausedAt: new Date().toISOString(),
+    });
+    return `Paused run ${runId} at the next boundary — the process stays alive (use /resume ${runId} to continue). This is NOT /stop.`;
+  }
+
+  /**
+   * Resume a soft-paused run.
+   *
+   * Clears the paused.json marker (best-effort) and flips RunState back
+   * to 'running' (dropping the pausedAt field). The pipeline's cooperative
+   * gate polls isPaused, so removing the marker allows the gate to advance.
+   */
+  private async handleResume(runId: string): Promise<string> {
+    await clearPaused(this.projectRoot, runId);
+    const states = await this.roster.read();
+    const target = states.find((s) => s.runId === runId && s.status === "paused");
+    if (target) {
+      // Destructure out pausedAt so it is NOT serialized back to disk.
+      const { pausedAt, ...rest } = target;
+      void pausedAt;
+      await writeRunState(this.projectRoot, { ...rest, status: "running" });
+    }
+    return `Resumed run ${runId}.`;
   }
 
   /**

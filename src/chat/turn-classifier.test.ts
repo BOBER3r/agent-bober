@@ -131,3 +131,59 @@ describe("TurnClassifier — approve/reject actions (sc-3-6)", () => {
     expect(result).toEqual({ action: "answer" });
   });
 });
+
+// ── Pause / Resume classifier actions (sc-5-7) ───────────────────────
+
+describe("TurnClassifier — pause/resume actions (sc-5-7)", () => {
+  it("parses pause action with runId", async () => {
+    const client = new ScriptedClient(['{"action":"pause","runId":"run-abc"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("pause run-abc");
+    expect(result).toEqual({ action: "pause", runId: "run-abc" });
+  });
+
+  it("parses resume action with runId", async () => {
+    const client = new ScriptedClient(['{"action":"resume","runId":"run-xyz"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("resume run-xyz");
+    expect(result).toEqual({ action: "resume", runId: "run-xyz" });
+  });
+
+  it("parses pause action from fenced JSON", async () => {
+    const client = new ScriptedClient(['```json\n{"action":"pause","runId":"run-fenced"}\n```']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("pause run-fenced please");
+    expect(result).toEqual({ action: "pause", runId: "run-fenced" });
+  });
+
+  it("returns FALLBACK for pause action missing runId", async () => {
+    const client = new ScriptedClient(['{"action":"pause"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("pause something");
+    // Missing required runId field → FALLBACK
+    expect(result).toEqual({ action: "answer" });
+  });
+
+  it("returns FALLBACK for resume action missing runId", async () => {
+    const client = new ScriptedClient(['{"action":"resume"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    const result = await classifier.classify("resume");
+    expect(result).toEqual({ action: "answer" });
+  });
+
+  it("system prompt includes pause and resume options", async () => {
+    const client = new ScriptedClient(['{"action":"answer"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+
+    await classifier.classify("test");
+    expect(client.calls).toHaveLength(1);
+    const system = client.calls[0]?.system ?? "";
+    expect(system).toContain("pause");
+    expect(system).toContain("resume");
+  });
+});

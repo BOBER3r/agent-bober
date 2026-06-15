@@ -17,7 +17,9 @@ export type SlashResult =
 const HELP_TEXT = [
   "Available slash commands:",
   "  /runs              — List all active and recent runs",
-  "  /stop <runId>      — Stop a running run by ID",
+  "  /stop <runId>      — Stop a run by killing its process (hard stop)",
+  "  /pause <runId>     — Soft-pause a run at the next boundary (process stays alive)",
+  "  /resume <runId>    — Resume a soft-paused run",
   "  /careful [on|off]  — Toggle approval gates for new runs",
   "  /approve <id>      — Approve a pending checkpoint (resume the run)",
   "  /reject <id> [why] — Reject a pending checkpoint with optional feedback",
@@ -46,7 +48,11 @@ const HELP_TEXT = [
  * @param rejectHandler - Optional handler for /reject <id> [feedback]. When omitted,
  *   /reject returns an "unavailable" message. Kept optional so existing callers are not broken.
  * @param tellHandler - Optional handler for /tell <runId> <text>. When omitted,
- *   /tell returns an "unavailable" message. Last optional param preserves back-compat.
+ *   /tell returns an "unavailable" message.
+ * @param pauseHandler - Optional handler for /pause <runId>. When omitted,
+ *   /pause returns an "unavailable" message. Kept optional for back-compat.
+ * @param resumeHandler - Optional handler for /resume <runId>. When omitted,
+ *   /resume returns an "unavailable" message. Last optional param preserves back-compat.
  */
 export async function dispatch(
   input: string,
@@ -56,6 +62,8 @@ export async function dispatch(
   approveHandler?: (id: string) => Promise<string>,
   rejectHandler?: (id: string, feedback: string) => Promise<string>,
   tellHandler?: (runId: string, text: string) => Promise<string>,
+  pauseHandler?: (runId: string) => Promise<string>,
+  resumeHandler?: (runId: string) => Promise<string>,
 ): Promise<SlashResult> {
   const trimmed = input.trimStart();
   if (!trimmed.startsWith("/")) {
@@ -123,6 +131,20 @@ export async function dispatch(
       const output = tellHandler
         ? await tellHandler(runId, text)
         : "Tell is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/pause": {
+      const arg = trimmed.split(/\s+/)[1];
+      if (!arg) return { handled: true, output: "Usage: /pause <runId>" };
+      const output = pauseHandler ? await pauseHandler(arg) : "Pause is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/resume": {
+      const arg = trimmed.split(/\s+/)[1];
+      if (!arg) return { handled: true, output: "Usage: /resume <runId>" };
+      const output = resumeHandler ? await resumeHandler(arg) : "Resume is unavailable.";
       return { handled: true, output };
     }
 

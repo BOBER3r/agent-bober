@@ -10,7 +10,8 @@ import { join } from "node:path";
 import { ChatSession } from "./chat-session.js";
 import { RunSpawner } from "./run-spawner.js";
 import { RosterReader } from "./roster-reader.js";
-import { writeRunState } from "../state/run-state.js";
+import { writeRunState, readRunState } from "../state/run-state.js";
+import { isPaused } from "../state/pause.js";
 import type { LLMClient } from "../providers/types.js";
 import type { ChatParams, ChatResponse } from "../providers/types.js";
 import type { SpawnAck, StopResult } from "./run-spawner.js";
@@ -395,5 +396,242 @@ describe("sc-4-8: /help lists /tell", () => {
     const reply = await session.handleTurn("/help");
     // The help text should mention guidance context
     expect(reply).toContain("guidance");
+  });
+});
+
+// ── LLM fakes for pause/resume ────────────────────────────────────────
+
+/** LLMClient that always classifies as pause for the given runId. */
+function makePauseLLM(runId: string): LLMClient {
+  return {
+    chat: async () => ({
+      text: JSON.stringify({ action: "pause", runId }),
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    }),
+  } as unknown as LLMClient;
+}
+
+/** LLMClient that always classifies as resume for the given runId. */
+function makeResumeLLM(runId: string): LLMClient {
+  return {
+    chat: async () => ({
+      text: JSON.stringify({ action: "resume", runId }),
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    }),
+  } as unknown as LLMClient;
+}
+
+// ── sc-5-4: /pause is distinct from /stop — NO kill signal ───────────
+
+describe("sc-5-4: /pause running run writes marker + RunState, does NOT kill", () => {
+  it("/pause on a running run writes paused.json, flips RunState to paused, does NOT kill", async () => {
+    const killCalls: Array<{ pid: number; signal?: string | number }> = [];
+    const spawner = makeStopCapturingSpawner(tmpDir, "sess-pause-5-4", killCalls);
+
+    // Seed a running state + sidecar pid via a real spawn
+    await spawner.spawn("task for pause test", "run-pause-target");
+
+    const session = new ChatSession({
+      llm: new ThrowingClient(), // LLM must NOT be called for slash commands
+      projectRoot: tmpDir,
+      sessionId: "sess-pause-5-4",
+      spawner,
+    });
+
+    const reply = await session.handleTurn("/pause run-pause-target");
+
+    // 1. Reply acknowledges the run and mentions process stays alive
+    expect(reply).not.toBeNull();
+    expect(reply).toContain("run-pause-target");
+    expect(reply).toContain("stays alive");
+
+    // 2. THE no-kill assertion (contrast with /stop which has killCalls.length === 1)
+    expect(killCalls).toHaveLength(0);
+
+    // 3. paused.json marker was written
+    expect(await isPaused(tmpDir, "run-pause-target")).toBe(true);
+
+    // 4. RunState was flipped to 'paused' with a pausedAt timestamp
+    const state = await readRunState(tmpDir, "run-pause-target");
+    expect(state).not.toBeNull();
+    expect(state?.status).toBe("paused");
+    expect(state?.pausedAt).toBeTruthy();
+    expect(typeof state?.pausedAt).toBe("string");
+  });
+
+  it("/pause on unknown run returns clear message, writes nothing", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-pause-unknown",
+    });
+
+    const reply = await session.handleTurn("/pause run-does-not-exist");
+    expect(reply).toContain("No such running run");
+    expect(await isPaused(tmpDir, "run-does-not-exist")).toBe(false);
+  });
+
+  it("/pause on non-running (completed) run returns clear message, writes nothing", async () => {
+    const completedState: RunState = {
+      runId: "run-completed-pause",
+      task: "done",
+      status: "completed",
+      startedAt: "2026-06-15T00:00:00.000Z",
+      completedAt: "2026-06-15T01:00:00.000Z",
+      progress: { completed: 1, total: 1 },
+      projectRoot: tmpDir,
+    };
+    await writeRunState(tmpDir, completedState);
+
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-pause-completed",
+    });
+
+    const reply = await session.handleTurn("/pause run-completed-pause");
+    expect(reply).toContain("No such running run");
+    expect(await isPaused(tmpDir, "run-completed-pause")).toBe(false);
+  });
+
+  it("NL pause intent is classified and routed to handlePause (no LLM restriction — uses stubbed classifier)", async () => {
+    const killCalls: Array<{ pid: number; signal?: string | number }> = [];
+    const spawner = makeStopCapturingSpawner(tmpDir, "sess-nl-pause", killCalls);
+    await spawner.spawn("nl pause task", "run-nl-pause");
+
+    const session = new ChatSession({
+      llm: makePauseLLM("run-nl-pause"),
+      projectRoot: tmpDir,
+      sessionId: "sess-nl-pause",
+      spawner,
+    });
+
+    const reply = await session.handleTurn("pause run-nl-pause please");
+    expect(reply).toContain("run-nl-pause");
+    // No kill via NL path either
+    expect(killCalls).toHaveLength(0);
+    expect(await isPaused(tmpDir, "run-nl-pause")).toBe(true);
+  });
+});
+
+// ── sc-5-6: /resume removes marker + RunState back to running ─────────
+
+describe("sc-5-6: /resume removes paused.json and flips RunState to running", () => {
+  it("/resume removes the paused.json marker", async () => {
+    const runId = "run-resume-marker";
+    // Seed a paused state
+    const pausedState: RunState = {
+      runId,
+      task: "pause me",
+      status: "paused",
+      pausedAt: "2026-06-15T00:00:00.000Z",
+      startedAt: "2026-06-15T00:00:00.000Z",
+      progress: { completed: 0, total: 1 },
+      projectRoot: tmpDir,
+    };
+    await writeRunState(tmpDir, pausedState);
+    // Write the marker manually (setPaused)
+    const { setPaused: sp } = await import("../state/pause.js");
+    await sp(tmpDir, runId);
+    expect(await isPaused(tmpDir, runId)).toBe(true);
+
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-resume",
+    });
+
+    const reply = await session.handleTurn(`/resume ${runId}`);
+    expect(reply).toContain(runId);
+    expect(await isPaused(tmpDir, runId)).toBe(false);
+  });
+
+  it("/resume flips RunState from paused to running", async () => {
+    const runId = "run-resume-state";
+    const pausedState: RunState = {
+      runId,
+      task: "resume me",
+      status: "paused",
+      pausedAt: "2026-06-15T00:00:00.000Z",
+      startedAt: "2026-06-15T00:00:00.000Z",
+      progress: { completed: 0, total: 1 },
+      projectRoot: tmpDir,
+    };
+    await writeRunState(tmpDir, pausedState);
+
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-resume-state",
+    });
+
+    await session.handleTurn(`/resume ${runId}`);
+
+    const state = await readRunState(tmpDir, runId);
+    expect(state?.status).toBe("running");
+    // pausedAt should be dropped from the resumed state
+    expect(state?.pausedAt).toBeUndefined();
+  });
+
+  it("NL resume intent is classified and routed to handleResume", async () => {
+    const runId = "run-nl-resume";
+    const pausedState: RunState = {
+      runId,
+      task: "nl resume task",
+      status: "paused",
+      pausedAt: "2026-06-15T00:00:00.000Z",
+      startedAt: "2026-06-15T00:00:00.000Z",
+      progress: { completed: 0, total: 1 },
+      projectRoot: tmpDir,
+    };
+    await writeRunState(tmpDir, pausedState);
+    const { setPaused: sp2 } = await import("../state/pause.js");
+    await sp2(tmpDir, runId);
+
+    const session = new ChatSession({
+      llm: makeResumeLLM(runId),
+      projectRoot: tmpDir,
+      sessionId: "sess-nl-resume",
+    });
+
+    const reply = await session.handleTurn("please resume run-nl-resume");
+    expect(reply).toContain(runId);
+    expect(await isPaused(tmpDir, runId)).toBe(false);
+  });
+});
+
+// ── sc-5-6: /help lists /pause and /resume ────────────────────────────
+
+describe("sc-5-6: /help lists /pause and /resume", () => {
+  it("/help output includes /pause", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-help-pause",
+    });
+    const reply = await session.handleTurn("/help");
+    expect(reply).toContain("/pause");
+  });
+
+  it("/help output includes /resume", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-help-resume",
+    });
+    const reply = await session.handleTurn("/help");
+    expect(reply).toContain("/resume");
+  });
+
+  it("/help distinguishes /pause (soft) from /stop (hard kill)", async () => {
+    const session = new ChatSession({
+      llm: new ThrowingClient(),
+      projectRoot: tmpDir,
+      sessionId: "sess-help-distinct",
+    });
+    const reply = await session.handleTurn("/help");
+    // /stop must clearly signal the kill; /pause must mention process stays alive
+    expect(reply).toContain("killing");
+    expect(reply).toContain("process stays alive");
   });
 });

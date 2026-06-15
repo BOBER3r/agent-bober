@@ -60,6 +60,7 @@ import {
 import { commitAll, getCurrentBranch, getChangedFiles } from "../utils/git.js";
 import { logger } from "../utils/logger.js";
 import { drainGuidance } from "../state/guidance.js";
+import { waitWhilePaused } from "../state/pause.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -295,6 +296,13 @@ export async function runSprintCycle(
     if (pipelineRunId) {
       const guidance = await drainGuidance(projectRoot, pipelineRunId);
       injectedHandoff = injectGuidanceIntoHandoff(compactedHandoff, guidance);
+    }
+
+    // ── Phase 2 cooperative pause gate (additive) ──────────────────────
+    // With no runId or no paused.json marker, this is a single existence
+    // check (isPaused) then continue — provably additive (sc-5-7).
+    if (pipelineRunId) {
+      await waitWhilePaused(projectRoot, pipelineRunId);
     }
 
     // ── Generate ───────────────────────────────────────────────
