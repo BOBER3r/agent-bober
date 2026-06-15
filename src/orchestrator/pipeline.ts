@@ -962,17 +962,24 @@ export async function runTsPipeline(
 
 // ── Engine-selection seam ──────────────────────────────────────────
 
-import { selectPipelineEngine } from "./workflow/selector.js";
+import { selectPipelineEngineForTeam } from "./workflow/selector.js";
+import { loadTeam } from "../teams/registry.js";
 
 /**
  * Public entry point. Resolves the configured pipeline engine and delegates.
  * Signature is frozen — callers must not be updated when the engine changes.
+ *
+ * opts.teamId selects the active team (Phase 4). With no teamId, resolves to
+ * 'programming', whose pipelineShape === resolveEngineName(config) — identical
+ * to today's selectPipelineEngine(config) behaviour.
  */
 export async function runPipeline(
   userPrompt: string,
   projectRoot: string,
   config: BoberConfig,
-  opts?: { runId?: string },
+  opts?: { runId?: string; teamId?: string },
 ): Promise<PipelineResult> {
-  return selectPipelineEngine(config).run(userPrompt, projectRoot, config, opts);
+  const teamId = opts?.teamId ?? config.defaultTeam;
+  const team = loadTeam(config, teamId);
+  return selectPipelineEngineForTeam(team, config).run(userPrompt, projectRoot, config, opts);
 }
