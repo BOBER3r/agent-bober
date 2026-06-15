@@ -16,6 +16,9 @@ import { RunSpawner } from "./run-spawner.js";
 import { CarefulSidecar } from "./careful-sidecar.js";
 import { CompletionTailer } from "./completion-tailer.js";
 import type { CompletionEvent } from "./completion-tailer.js";
+import { ApprovalReader } from "./approval-reader.js";
+import { ApprovalCursor } from "./approval-cursor.js";
+import { writeRunState } from "../state/run-state.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -31,6 +34,8 @@ export interface ChatSessionOptions {
   now?: () => number;
   /** Injected CompletionTailer for testing (omit to use a real instance). */
   tailer?: CompletionTailer;
+  /** Injected ApprovalReader for testing (omit to use a real instance). */
+  approvalReader?: ApprovalReader;
   /**
    * Memory namespace for the active team. Omit (or pass "") for the default
    * programming team, which resolves to the current .bober/memory/ path.
@@ -78,6 +83,8 @@ export class ChatSession {
   private readonly answerer: Answerer;
   private readonly spawner: RunSpawner;
   private readonly tailer: CompletionTailer;
+  private readonly approvalReader: ApprovalReader;
+  private readonly approvalCursor: ApprovalCursor;
   private readonly nowFn: () => number;
   // bober: using "opus" as default model; the CLI wires in config.chat?.model via createClient
   private readonly model: string = "opus";
@@ -105,6 +112,9 @@ export class ChatSession {
     this.tailer =
       opts.tailer ??
       new CompletionTailer(this.projectRoot, this.sessionId);
+    this.approvalReader =
+      opts.approvalReader ?? new ApprovalReader(this.projectRoot);
+    this.approvalCursor = new ApprovalCursor(this.projectRoot, this.sessionId);
     this.carefulSidecar = new CarefulSidecar(this.projectRoot, this.sessionId);
   }
 
@@ -126,6 +136,45 @@ export class ChatSession {
       // Poll errors must never break the turn
     }
 
+    // ── Poll for pending approvals (prelude) ──────────────────────────────
+    let approvalNotice = "";
+    try {
+      const pending = await this.approvalReader.read();
+      if (pending.length > 0) {
+        const fresh = await this.approvalCursor.filterNew(pending);
+        if (fresh.length > 0) {
+          // Reflect correlated markers onto running RunStates (idempotent)
+          const states = await this.roster.read();
+          for (const m of fresh) {
+            if (m.runId) {
+              const state = states.find(
+                (s) => s.runId === m.runId && s.status === "running",
+              );
+              if (state) {
+                await writeRunState(this.projectRoot, {
+                  ...state,
+                  status: "input-required",
+                  pendingCheckpointId: m.checkpointId,
+                  pendingPrompt: m.prompt,
+                  pendingSince: m.requestedAt,
+                });
+              }
+            }
+          }
+          // Build the notice string
+          const notices = fresh
+            .map(
+              (m) =>
+                `[run ${m.runId ?? "unknown"} waiting at ${m.checkpointId}: ${m.prompt}]`,
+            )
+            .join("\n");
+          approvalNotice = notices;
+        }
+      }
+    } catch {
+      // Approval read errors must never break the turn
+    }
+
     // ── Slash commands (deterministic, no LLM) ─────────────────────────
     const slashResult = await dispatch(
       input,
@@ -142,6 +191,10 @@ export class ChatSession {
           .map((c) => `[run ${c.runId ?? "unknown"} finished: ${c.phase}]`)
           .join("\n");
         output = `${notices}\n\n${output}`;
+      }
+      // Weave approval notices into slash-command reply
+      if (approvalNotice) {
+        output = `${approvalNotice}\n\n${output}`;
       }
       // Persist slash command turns for transparency
       await this.store.append({ role: "user", content: input, ts: new Date().toISOString() });
@@ -189,6 +242,10 @@ export class ChatSession {
         .map((c) => `[run ${c.runId ?? "unknown"} finished: ${c.phase}]`)
         .join("\n");
       reply = `${notices}\n\n${reply}`;
+    }
+    // Weave approval notices into LLM reply
+    if (approvalNotice) {
+      reply = `${approvalNotice}\n\n${reply}`;
     }
 
     // ── Persist ───────────────────────────────────────────────────────

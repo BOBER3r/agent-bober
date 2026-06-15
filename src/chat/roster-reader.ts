@@ -36,8 +36,12 @@ export class RosterReader {
     for (const s of states) {
       const completed = s.completedAt ? ` completed=${s.completedAt}` : "";
       const spec = s.specId ? ` spec=${s.specId}` : "";
+      const pending =
+        s.status === "input-required" && s.pendingCheckpointId
+          ? ` waiting=${s.pendingCheckpointId}`
+          : "";
       lines.push(
-        `  [${s.status.toUpperCase()}] ${s.runId}  task="${s.task}"${spec}  started=${s.startedAt}${completed}`,
+        `  [${s.status.toUpperCase()}] ${s.runId}  task="${s.task}"${spec}  started=${s.startedAt}${completed}${pending}`,
       );
     }
 
