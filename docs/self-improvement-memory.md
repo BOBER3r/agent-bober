@@ -92,8 +92,30 @@ bober memory prune       # quarantine stale/conflicting lessons (see Lesson Hygi
 ```
 
 The distiller (`src/orchestrator/memory/distill.ts`) groups history entries by failure
-signature (phase=failed events, repeated eval-fail strategies, high-churn sprints) and
-writes one `<lessonId>.md` file per lesson group plus a compact `INDEX.md` line.
+signature and writes one `<lessonId>.md` file per lesson group plus a compact `INDEX.md`
+line. It is a **pure** function (no LLM, no clock, no fs, no `../providers` import); the CLI
+stamps `createdAt` at persist time and output is sorted by `lessonId` for byte-stable runs.
+It derives lessons from **four signals**:
+
+- **(a) recurring failed-criterion categories** — from eval `criteriaResults[].result==="fail"`,
+  grouped by the criterion's `verificationMethod`.
+- **(b) repeated failing eval strategies** — from eval `strategyResults[].result==="fail"`,
+  grouped by strategy name.
+- **(c) sprints that needed rework** — from `contract.iterationHistory` entries whose
+  `result==="fail"` (reinforced by `phase==="rework"` history events).
+- **(d) fail→pass contrast** (`spec-20260615-memory-self-improve-p0`, Sprint 4) — mines the
+  signal the generator↔evaluator retry loop otherwise discards. For each contract it scans
+  `iterationHistory` for at least one `result==="fail"` **followed (in iteration order) by** a
+  `result==="pass"` and emits a `fix-contrast:<contractId>` lesson with tags
+  `["phase:fix-contrast", "sprintId:<contractId>"]` and a summary `Sprint '<id>' flipped from
+  fail to pass after N iteration(s)`. Its `sourceEntryRefs` cite each failing iteration
+  (`<contractId>:iteration-<n>`) **and** the first passing iteration after them. The rule is
+  strict and order-sensitive: a **first-iteration pass**, an **all-fail** history, and a
+  **pass-before-fail** (with no later pass) are **not** transitions and produce no lesson. The
+  scan stops at the first pass after a fail (the flip point). Like the other signals it is
+  deterministic and reuses the same content-hashed `upsertGroup` grouping. A sprint that
+  reworked then passed legitimately yields **both** a `(c) sprint-rework` and a `(d)
+  fix-contrast` lesson — different categories, different refs, not a double-count.
 
 ---
 

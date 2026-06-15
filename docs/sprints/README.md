@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Memory Self-Improvement (P0) — in progress (3 sprints landed)
+## Memory Self-Improvement (P0) — in progress (4 sprints landed)
 
 `spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled
 **lessons** index into a queryable **facts** layer that future sprints will produce and
@@ -145,14 +145,24 @@ monotonic-growth gap: ranking in `retrieveRelevantLessons` becomes **occurrence-
 more-often-seen lesson wins on equal token overlap; overlap stays dominant), and a new **pure
 hygiene pass** (`pruneLessons`) plus `bober memory prune` quarantine stale/low-occurrence and
 deterministically-contradictory lessons into a `QUARANTINE.md` sidecar — moving the literal
-`INDEX.md` line with provenance and **never deleting** the per-lesson `.md`.
+`INDEX.md` line with provenance and **never deleting** the per-lesson `.md`. Sprint 4 mines a
+signal the generator↔evaluator retry loop previously discarded: the pure `distill()` gains a
+fourth signal **(d) fail→pass contrast** that detects a contract whose `iterationHistory` shows
+one or more fails **followed by** a pass and emits a `fix-contrast:<contractId>` lesson (tags
+`phase:fix-contrast` + `sprintId:<id>`, refs citing the failing iterations and the passing one).
+First-iteration passes, all-fail histories, and pass-before-fail are not transitions; the signal
+is additive (a reworked-then-passed sprint also keeps its `sprint-rework` lesson) and stays
+byte-stable and pure.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-memory-self-improve-p0-1.md](./sprint-spec-20260615-memory-self-improve-p0-1.md) | Bi-temporal SQLite `FactStore` (`insertFact`/`getActiveFacts`/`getFact`/`invalidateFact`/`close`, deterministic `factId`, namespaced `facts.db`) + `bober facts add\|list\|show\|invalidate` CLI; `better-sqlite3` is the first relational dependency |
 | 2 | [sprint-spec-20260615-memory-self-improve-p0-2.md](./sprint-spec-20260615-memory-self-improve-p0-2.md) | Reconcile-on-write: pure `reconcileFact`/`writeFact` (`add`/`update`/`delete`/`noop`) — deterministic exact-match supersede (`FactStore.supersedeFact` sets both bi-temporal fields) + NOOP, with an injected `FactJudge`/`createLLMFactJudge()` consulted **only** on normalized-key ambiguity and an `add` fallback; `bober facts add` routes through `writeFact` with action-aware output |
 | 3 | [sprint-spec-20260615-memory-self-improve-p0-3.md](./sprint-spec-20260615-memory-self-improve-p0-3.md) | Lessons-store hygiene: occurrence-weighted `retrieveRelevantLessons` ranking (overlap DESC → occurrences DESC → lessonId ASC, C1 preserved) + pure `pruneLessons(records,{now,...}) → {kept,quarantined}` (deterministic decay + conflict-quarantine) + `quarantinePath`/`rewriteIndexForQuarantine` (moves literal `INDEX.md` lines → `QUARANTINE.md` with provenance, never deletes `.md`) + `bober memory prune` CLI |
+| 4 | [sprint-spec-20260615-memory-self-improve-p0-4.md](./sprint-spec-20260615-memory-self-improve-p0-4.md) | Fail→pass contrast extractor: pure `distill()` gains signal **(d)** — detects a contract whose `iterationHistory` shows fail(s) **followed by** a pass and emits a `fix-contrast:<contractId>` lesson (tags `phase:fix-contrast` + `sprintId:<id>`, refs citing the failing iterations + the passing one); first-iteration-pass / all-fail / pass-before-fail are not transitions; additive (reworked-then-passed sprint also keeps its `sprint-rework` lesson), byte-stable, no LLM/clock/fs |
 
 The facts store is documented alongside the lessons store in
 [`docs/self-improvement-memory.md`](../self-improvement-memory.md) ("Semantic Facts Store"); the
-lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Prune & Quarantine").
+lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Prune & Quarantine"),
+and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
+under "Distilling Lessons from History".
