@@ -21,6 +21,7 @@ import {
   FactStore,
   factsDbPath,
   ensureFactsDir,
+  writeFact,
 } from "../../state/facts.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
@@ -84,26 +85,50 @@ export function registerFactsCommand(program: Command): void {
           // Stamp wall-clock time at handler boundary — NEVER inside the store
           const now = new Date().toISOString();
 
+          const input = {
+            scope: opts.scope,
+            subject: opts.subject,
+            predicate: opts.predicate,
+            value: opts.value,
+            confidence: Math.max(0, Math.min(1, Number(opts.confidence) || 1)),
+            sourceRunId: opts.runId ?? null,
+            tValid: now,
+            tCreated: now,
+          };
+
           const store = new FactStore(factsDbPath(projectRoot, ns));
           try {
-            const rec = store.insertFact({
-              scope: opts.scope,
-              subject: opts.subject,
-              predicate: opts.predicate,
-              value: opts.value,
-              confidence: Math.max(0, Math.min(1, Number(opts.confidence) || 1)),
-              sourceRunId: opts.runId ?? null,
-              tValid: now,
-              tCreated: now,
-            });
-            process.stdout.write(
-              chalk.green(`Added fact ${chalk.bold(rec.id)}\n`),
-            );
-            process.stdout.write(`  scope:     ${rec.scope}\n`);
-            process.stdout.write(`  subject:   ${rec.subject}\n`);
-            process.stdout.write(`  predicate: ${rec.predicate}\n`);
-            process.stdout.write(`  value:     ${rec.value}\n`);
-            process.stdout.write(`  t_created: ${rec.tCreated}\n`);
+            // Route through writeFact so duplicate/supersede reconciliation runs.
+            // No judge wired here — deterministic ADD/UPDATE/NOOP only.
+            const action = await writeFact(store, input, { now });
+            if (action === "noop") {
+              process.stdout.write(
+                chalk.gray(`Fact unchanged (identical value already active).\n`),
+              );
+              process.stdout.write(`  scope:     ${input.scope}\n`);
+              process.stdout.write(`  subject:   ${input.subject}\n`);
+              process.stdout.write(`  predicate: ${input.predicate}\n`);
+              process.stdout.write(`  value:     ${input.value}\n`);
+            } else if (action === "update") {
+              process.stdout.write(
+                chalk.yellow(`Superseded — prior fact invalidated.\n`),
+              );
+              process.stdout.write(`  scope:     ${input.scope}\n`);
+              process.stdout.write(`  subject:   ${input.subject}\n`);
+              process.stdout.write(`  predicate: ${input.predicate}\n`);
+              process.stdout.write(`  value:     ${input.value}\n`);
+              process.stdout.write(`  t_created: ${input.tCreated}\n`);
+            } else {
+              // "add" (including deterministic fallback from ambiguity branch)
+              process.stdout.write(
+                chalk.green(`Added fact\n`),
+              );
+              process.stdout.write(`  scope:     ${input.scope}\n`);
+              process.stdout.write(`  subject:   ${input.subject}\n`);
+              process.stdout.write(`  predicate: ${input.predicate}\n`);
+              process.stdout.write(`  value:     ${input.value}\n`);
+              process.stdout.write(`  t_created: ${input.tCreated}\n`);
+            }
           } finally {
             store.close();
           }

@@ -7,6 +7,12 @@ import { z } from "zod";
 import { ensureDir } from "./helpers.js";
 import { memoryDir } from "./memory.js";
 
+// ── Re-exports from reconcile layer ──────────────────────────────────────
+// writeFact lives in reconcile.ts (to avoid a runtime import cycle) but is
+// re-exported here so consumers can import it from the facts module.
+export { writeFact } from "../orchestrator/memory/reconcile.js";
+export type { ReconcileAction } from "../orchestrator/memory/reconcile.js";
+
 // ── Schema ────────────────────────────────────────────────────────────
 
 /**
@@ -265,6 +271,22 @@ export class FactStore {
          WHERE id = ? AND t_invalidated IS NULL`,
       )
       .run(tInvalidated, id);
+    return info.changes > 0;
+  }
+
+  /**
+   * Supersede a fact: set BOTH t_invalidated (record-time) AND t_invalid (world-time end).
+   * Used by reconcile on UPDATE to carry both bi-temporal closure fields.
+   * Returns true if the row was updated; false if not found or already invalidated.
+   */
+  supersedeFact(id: string, tInvalidated: string, tInvalid: string): boolean {
+    const info = this.db
+      .prepare(
+        `UPDATE semantic_facts
+         SET t_invalidated = ?, t_invalid = ?
+         WHERE id = ? AND t_invalidated IS NULL`,
+      )
+      .run(tInvalidated, tInvalid, id);
     return info.changes > 0;
   }
 
