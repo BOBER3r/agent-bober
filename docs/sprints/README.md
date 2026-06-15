@@ -22,7 +22,7 @@ SDK leakage into `src/chat`.
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under `bober chat`.
 
-## Domain-Agnostic Team Abstraction — in progress (2 of 4)
+## Domain-Agnostic Team Abstraction — in progress (3 of 4)
 
 `spec-20260615-team-abstraction` — Phase 4 of the chattable multi-agent platform: make a
 "team" (the providers, pipeline shape, memory namespace, and role set the pipeline runs
@@ -32,10 +32,14 @@ programming flow as the first instance. Sprint 1 lands the data model, the
 change), and the optional `teams` / `defaultTeam` config fields. Sprint 2 threads an
 optional per-team **namespace** through the lessons store and retriever so two teams'
 lessons are isolated, with the default team keeping the existing `.bober/memory/` path.
-Runtime pipeline-shape selection (Sprint 3) and CLI wiring + an example team + user-facing
-docs (Sprint 4) are deferred.
+Sprint 3 wires the active team's **`pipelineShape`** into runtime engine selection:
+`runPipeline` resolves the team via `loadTeam` and a new `selectPipelineEngineForTeam`
+seam picks the engine, reusing the existing eligibility + `'careful'`-mode downgrade
+(byte-identical log line) — the programming / no-team path is unchanged. CLI wiring + an
+example team + user-facing docs (Sprint 4) are deferred.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260615-team-abstraction-1.md](./sprint-spec-20260615-team-abstraction-1.md) | `Team` type + `loadTeam` registry + `programming` team + optional `teams`/`defaultTeam` config schema |
 | 2 | [sprint-spec-20260615-team-abstraction-2.md](./sprint-spec-20260615-team-abstraction-2.md) | Per-team memory namespace threaded through `memoryDir`/`appendLesson`/`loadLessonIndex`/`loadLesson`/`retrieveRelevantLessons`; default team unchanged |
+| 3 | [sprint-spec-20260615-team-abstraction-3.md](./sprint-spec-20260615-team-abstraction-3.md) | Team-aware pipeline-shape selection: `resolveEngineNameForTeam`/`selectPipelineEngineForTeam` + `runPipeline` `opts.teamId` (default `programming`); eligibility + `careful` downgrade preserved |
