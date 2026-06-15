@@ -10,18 +10,34 @@ const BOBER_DIR = ".bober";
 const MEMORY_DIR = "memory";
 const INDEX_FILE = "INDEX.md";
 
+// ── Namespace ────────────────────────────────────────────────────────
+
+/**
+ * Resolve the memory directory path for the given namespace.
+ *
+ * Mapping rule (centralized here — do NOT duplicate in callers):
+ *   namespace undefined | "" | "programming"  →  .bober/memory/       (current path, no subdir)
+ *   any other value                            →  .bober/memory/<ns>/
+ *
+ * The programming sentinel ("") comes from Sprint 1's built-in team (registry.ts:66).
+ * Values are constrained to ^[a-z0-9_-]+$ by the Sprint 1 schema regex, so no
+ * path-traversal sanitization is needed here (schema already guards config inputs).
+ */
+export function memoryDir(projectRoot: string, namespace?: string): string {
+  const ns = namespace && namespace !== "programming" ? namespace : undefined;
+  return ns
+    ? join(projectRoot, BOBER_DIR, MEMORY_DIR, ns)
+    : join(projectRoot, BOBER_DIR, MEMORY_DIR);
+}
+
 // ── Path Helpers ─────────────────────────────────────────────────────
 
-function memoryDir(projectRoot: string): string {
-  return join(projectRoot, BOBER_DIR, MEMORY_DIR);
+export function lessonPath(projectRoot: string, lessonId: string, namespace?: string): string {
+  return join(memoryDir(projectRoot, namespace), `${lessonId}.md`);
 }
 
-function lessonPath(projectRoot: string, lessonId: string): string {
-  return join(memoryDir(projectRoot), `${lessonId}.md`);
-}
-
-function indexPath(projectRoot: string): string {
-  return join(memoryDir(projectRoot), INDEX_FILE);
+export function indexPath(projectRoot: string, namespace?: string): string {
+  return join(memoryDir(projectRoot, namespace), INDEX_FILE);
 }
 
 // ── Schema ───────────────────────────────────────────────────────────
@@ -196,6 +212,7 @@ function parseLessonFrontMatter(
 export async function appendLesson(
   projectRoot: string,
   lesson: LessonEntry,
+  namespace?: string,
 ): Promise<void> {
   const validation = LessonEntrySchema.safeParse(lesson);
   if (!validation.success) {
@@ -205,14 +222,14 @@ export async function appendLesson(
     throw new Error(`Invalid lesson entry:\n${issues}`);
   }
 
-  const dir = memoryDir(projectRoot);
+  const dir = memoryDir(projectRoot, namespace);
   await ensureDir(dir);
 
   // Write the lesson markdown file
-  await writeFile(lessonPath(projectRoot, lesson.lessonId), serializeLesson(lesson), "utf-8");
+  await writeFile(lessonPath(projectRoot, lesson.lessonId, namespace), serializeLesson(lesson), "utf-8");
 
   // Upsert one INDEX.md line for this lessonId
-  const idxPath = indexPath(projectRoot);
+  const idxPath = indexPath(projectRoot, namespace);
   let existingContent = "";
   try {
     existingContent = await readFile(idxPath, "utf-8");
@@ -242,10 +259,11 @@ export async function appendLesson(
 export async function loadLessonIndex(
   projectRoot: string,
   { limit }: { limit: number },
+  namespace?: string,
 ): Promise<LessonIndexRecord[]> {
   let content: string;
   try {
-    content = await readFile(indexPath(projectRoot), "utf-8");
+    content = await readFile(indexPath(projectRoot, namespace), "utf-8");
   } catch {
     // INDEX.md does not exist yet
     return [];
@@ -272,12 +290,13 @@ export async function loadLessonIndex(
 export async function loadLesson(
   projectRoot: string,
   lessonId: string,
+  namespace?: string,
 ): Promise<LessonEntry> {
   let raw: string;
   try {
-    raw = await readFile(lessonPath(projectRoot, lessonId), "utf-8");
+    raw = await readFile(lessonPath(projectRoot, lessonId, namespace), "utf-8");
   } catch {
-    throw new Error(`Lesson not found: ${lessonId} (path: ${lessonPath(projectRoot, lessonId)})`);
+    throw new Error(`Lesson not found: ${lessonId} (path: ${lessonPath(projectRoot, lessonId, namespace)})`);
   }
 
   const meta = parseLessonFrontMatter(raw);

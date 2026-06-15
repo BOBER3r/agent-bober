@@ -193,6 +193,39 @@ describe("C3 — serializeLessonsForPlanner respects topK and charBudget", () =>
   });
 });
 
+// ── C5: sc-2-7 namespace scoping ─────────────────────────────────────
+
+describe("C5 — retrieveRelevantLessons namespace scoping (sc-2-7)", () => {
+  it("returns only lessons from the specified namespace", async () => {
+    await appendLesson(tmpDir, makeLesson("ns-a", { tags: ["auth", "login"] }), "teamA");
+    await appendLesson(tmpDir, makeLesson("ns-b", { tags: ["auth", "login"] }), "teamB");
+
+    const results = await retrieveRelevantLessons(tmpDir, ["auth"], { namespace: "teamA" });
+
+    const ids = results.map((r) => r.lessonId);
+    expect(ids).toContain("ns-a");
+    expect(ids).not.toContain("ns-b");
+  });
+
+  it("default namespace (no namespace option) does not return lessons from named namespaces", async () => {
+    await appendLesson(tmpDir, makeLesson("ns-default", { tags: ["auth"] }));
+    await appendLesson(tmpDir, makeLesson("ns-teamA", { tags: ["auth"] }), "teamA");
+
+    const results = await retrieveRelevantLessons(tmpDir, ["auth"]);
+
+    const ids = results.map((r) => r.lessonId);
+    expect(ids).toContain("ns-default");
+    expect(ids).not.toContain("ns-teamA");
+  });
+
+  it("returns empty when the specified namespace has no matching lessons", async () => {
+    await appendLesson(tmpDir, makeLesson("ns-only-teamA", { tags: ["auth"] }), "teamA");
+
+    const results = await retrieveRelevantLessons(tmpDir, ["auth"], { namespace: "teamB" });
+    expect(results).toHaveLength(0);
+  });
+});
+
 // ── C4: skill + agent reference the memory index ─────────────────────
 
 describe("C4 — planner skill and agent reference retrieveRelevantLessons, topK, and prohibit history.jsonl", () => {

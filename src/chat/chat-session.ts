@@ -30,23 +30,30 @@ export interface ChatSessionOptions {
   now?: () => number;
   /** Injected CompletionTailer for testing (omit to use a real instance). */
   tailer?: CompletionTailer;
+  /**
+   * Memory namespace for the active team. Omit (or pass "") for the default
+   * programming team, which resolves to the current .bober/memory/ path.
+   * Sprint 2: threaded through buildMemoryDistill so a named team reads its own subdir.
+   */
+  memoryNamespace?: string;
 }
 
 // ── Memory distill helper ─────────────────────────────────────────────
 
 /**
- * Compose a compact memory distill string from .bober/memory/.
+ * Compose a compact memory distill string from the team's namespaced .bober/memory/ path.
  * Returns empty string if no lessons are recorded.
+ * namespace undefined or "" reads the default .bober/memory/ path (programming team / back-compat).
  */
-async function buildMemoryDistill(projectRoot: string): Promise<string> {
+async function buildMemoryDistill(projectRoot: string, namespace?: string): Promise<string> {
   try {
-    const index = await loadLessonIndex(projectRoot, { limit: 10 });
+    const index = await loadLessonIndex(projectRoot, { limit: 10 }, namespace);
     if (index.length === 0) return "";
 
     const lines: string[] = ["Recent lessons learned:"];
     for (const record of index) {
       try {
-        const lesson = await loadLesson(projectRoot, record.lessonId);
+        const lesson = await loadLesson(projectRoot, record.lessonId, namespace);
         lines.push(`- [${lesson.severity}] ${lesson.summary}`);
       } catch {
         lines.push(`- ${record.summarySnippet}`);
@@ -73,11 +80,14 @@ export class ChatSession {
   private readonly nowFn: () => number;
   // bober: using "opus" as default model; the CLI wires in config.chat?.model via createClient
   private readonly model: string = "opus";
+  /** Memory namespace for the active team; undefined means the default .bober/memory/ path. */
+  private readonly memoryNamespace: string | undefined;
 
   constructor(opts: ChatSessionOptions) {
     this.llm = opts.llm;
     this.projectRoot = opts.projectRoot;
     this.sessionId = opts.sessionId ?? "default";
+    this.memoryNamespace = opts.memoryNamespace || undefined;
     this.store = new ConversationStore(this.projectRoot, this.sessionId);
     this.roster = new RosterReader(this.projectRoot);
     this.classifier = new TurnClassifier(this.llm, this.model);
@@ -137,7 +147,7 @@ export class ChatSession {
     // ── LLM path: read context ────────────────────────────────────────
     const [states, memoryDistill, recentHistory] = await Promise.all([
       this.roster.read(),
-      buildMemoryDistill(this.projectRoot),
+      buildMemoryDistill(this.projectRoot, this.memoryNamespace),
       this.store.loadRecent(20),
     ]);
     const rosterSummary = this.roster.summarize(states);

@@ -21,15 +21,35 @@ import {
   appendLesson,
   loadLessonIndex,
   loadLesson,
+  memoryDir,
 } from "../../state/memory.js";
 import { distill } from "../../orchestrator/memory/distill.js";
 import { loadEvalResults } from "../../orchestrator/memory/eval-source.js";
+import { loadConfig } from "../../config/loader.js";
+import { loadTeam } from "../../teams/registry.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
 async function resolveRoot(): Promise<string> {
   const root = await findProjectRoot();
   return root ?? process.cwd();
+}
+
+// ── Namespace resolver ────────────────────────────────────────────────
+
+/**
+ * Resolve the active memory namespace from the default team.
+ * Falls back to undefined (current .bober/memory/ path) if config is missing.
+ * Never throws — config absence is not fatal for memory commands.
+ */
+async function resolveDefaultNamespace(projectRoot: string): Promise<string | undefined> {
+  try {
+    const config = await loadConfig(projectRoot);
+    return loadTeam(config, undefined).memoryNamespace || undefined;
+  } catch {
+    // No config file — default to current path (namespace undefined)
+    return undefined;
+  }
 }
 
 // ── registerMemoryCommand ─────────────────────────────────────────────
@@ -46,6 +66,7 @@ export function registerMemoryCommand(program: Command): void {
     .action(async () => {
       const projectRoot = await resolveRoot();
       try {
+        const ns = await resolveDefaultNamespace(projectRoot);
         const history = await loadHistory(projectRoot);
         const contracts = await listContracts(projectRoot);
         const evalResults = await loadEvalResults(projectRoot);
@@ -57,7 +78,7 @@ export function registerMemoryCommand(program: Command): void {
         // Count new lessons by comparing against the pre-existing index
         const beforeIndex = await loadLessonIndex(projectRoot, {
           limit: Number.MAX_SAFE_INTEGER,
-        });
+        }, ns);
         const seen = new Set(beforeIndex.map((r) => r.lessonId));
 
         let added = 0;
@@ -65,7 +86,7 @@ export function registerMemoryCommand(program: Command): void {
           const lesson = { ...draft, createdAt: now };
           if (!seen.has(lesson.lessonId)) added++;
           // appendLesson already UPSERTS — re-running same lessonId = no new index line
-          await appendLesson(projectRoot, lesson);
+          await appendLesson(projectRoot, lesson, ns);
         }
 
         process.stdout.write(
@@ -89,8 +110,9 @@ export function registerMemoryCommand(program: Command): void {
     .action(async (opts: { limit: string }) => {
       const projectRoot = await resolveRoot();
       try {
+        const ns = await resolveDefaultNamespace(projectRoot);
         const limit = Math.max(1, Number(opts.limit) || 50);
-        const records = await loadLessonIndex(projectRoot, { limit });
+        const records = await loadLessonIndex(projectRoot, { limit }, ns);
 
         if (records.length === 0) {
           process.stdout.write(chalk.gray("No lessons found. Run `bober memory distill` first.\n"));
@@ -136,7 +158,8 @@ export function registerMemoryCommand(program: Command): void {
     .action(async (lessonId: string) => {
       const projectRoot = await resolveRoot();
       try {
-        const lesson = await loadLesson(projectRoot, lessonId);
+        const ns = await resolveDefaultNamespace(projectRoot);
+        const lesson = await loadLesson(projectRoot, lessonId, ns);
 
         process.stdout.write(chalk.bold(`Lesson: ${lesson.lessonId}\n`));
         process.stdout.write(`Category:    ${lesson.category}\n`);
@@ -157,7 +180,7 @@ export function registerMemoryCommand(program: Command): void {
 
         // Re-export the lesson path for reference
         process.stdout.write(
-          chalk.gray(`\nLesson file: ${join(projectRoot, ".bober", "memory", `${lesson.lessonId}.md`)}\n`),
+          chalk.gray(`\nLesson file: ${join(memoryDir(projectRoot, ns), `${lesson.lessonId}.md`)}\n`),
         );
       } catch (err) {
         const isNotFound =

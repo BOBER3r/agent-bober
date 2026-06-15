@@ -8,6 +8,9 @@ import {
   appendLesson,
   loadLessonIndex,
   loadLesson,
+  memoryDir,
+  lessonPath,
+  indexPath,
 } from "./memory.js";
 import type { LessonEntry } from "./memory.js";
 
@@ -279,5 +282,122 @@ describe("C4: loadLesson — round-trip and provenance", () => {
     await appendLesson(tmpDir, lesson);
     const back = await loadLesson(tmpDir, lesson.lessonId);
     expect(back.createdAt).toBe(lesson.createdAt);
+  });
+});
+
+// ── C5: sc-2-4 path helper namespace resolution ───────────────────────
+
+describe("C5: path helpers — namespace resolution (sc-2-4)", () => {
+  it("memoryDir with no namespace resolves to .bober/memory", () => {
+    expect(memoryDir(tmpDir)).toBe(join(tmpDir, ".bober", "memory"));
+  });
+
+  it("memoryDir with empty string resolves to .bober/memory (back-compat sentinel)", () => {
+    expect(memoryDir(tmpDir, "")).toBe(join(tmpDir, ".bober", "memory"));
+  });
+
+  it("memoryDir with 'programming' resolves to .bober/memory (built-in team sentinel)", () => {
+    expect(memoryDir(tmpDir, "programming")).toBe(join(tmpDir, ".bober", "memory"));
+  });
+
+  it("memoryDir with 'teamA' resolves to .bober/memory/teamA", () => {
+    expect(memoryDir(tmpDir, "teamA")).toBe(join(tmpDir, ".bober", "memory", "teamA"));
+  });
+
+  it("lessonPath with no namespace resolves under .bober/memory", () => {
+    expect(lessonPath(tmpDir, "my-lesson")).toBe(
+      join(tmpDir, ".bober", "memory", "my-lesson.md"),
+    );
+  });
+
+  it("lessonPath with 'teamA' resolves under .bober/memory/teamA", () => {
+    expect(lessonPath(tmpDir, "my-lesson", "teamA")).toBe(
+      join(tmpDir, ".bober", "memory", "teamA", "my-lesson.md"),
+    );
+  });
+
+  it("indexPath with no namespace resolves under .bober/memory", () => {
+    expect(indexPath(tmpDir)).toBe(join(tmpDir, ".bober", "memory", "INDEX.md"));
+  });
+
+  it("indexPath with 'teamA' resolves under .bober/memory/teamA", () => {
+    expect(indexPath(tmpDir, "teamA")).toBe(
+      join(tmpDir, ".bober", "memory", "teamA", "INDEX.md"),
+    );
+  });
+});
+
+// ── C6: sc-2-5 namespace isolation ───────────────────────────────────
+
+describe("C6: namespace isolation (sc-2-5)", () => {
+  it("a lesson appended under 'teamA' is visible in teamA but NOT in the default namespace", async () => {
+    await appendLesson(tmpDir, makeLesson("lesson-teamA"), "teamA");
+
+    const teamAIndex = await loadLessonIndex(tmpDir, { limit: 10 }, "teamA");
+    expect(teamAIndex.map((r) => r.lessonId)).toContain("lesson-teamA");
+
+    const defaultIndex = await loadLessonIndex(tmpDir, { limit: 10 });
+    expect(defaultIndex.map((r) => r.lessonId)).not.toContain("lesson-teamA");
+  });
+
+  it("a lesson appended under the default namespace is NOT visible in 'teamA'", async () => {
+    await appendLesson(tmpDir, makeLesson("lesson-default"));
+
+    const defaultIndex = await loadLessonIndex(tmpDir, { limit: 10 });
+    expect(defaultIndex.map((r) => r.lessonId)).toContain("lesson-default");
+
+    const teamAIndex = await loadLessonIndex(tmpDir, { limit: 10 }, "teamA");
+    expect(teamAIndex.map((r) => r.lessonId)).not.toContain("lesson-default");
+  });
+
+  it("teamA and teamB are isolated from each other", async () => {
+    await appendLesson(tmpDir, makeLesson("lesson-a"), "teamA");
+    await appendLesson(tmpDir, makeLesson("lesson-b"), "teamB");
+
+    const teamAIndex = await loadLessonIndex(tmpDir, { limit: 10 }, "teamA");
+    expect(teamAIndex.map((r) => r.lessonId)).toContain("lesson-a");
+    expect(teamAIndex.map((r) => r.lessonId)).not.toContain("lesson-b");
+
+    const teamBIndex = await loadLessonIndex(tmpDir, { limit: 10 }, "teamB");
+    expect(teamBIndex.map((r) => r.lessonId)).toContain("lesson-b");
+    expect(teamBIndex.map((r) => r.lessonId)).not.toContain("lesson-a");
+  });
+});
+
+// ── C7: sc-2-6 back-compat / pre-existing fixture ────────────────────
+
+describe("C7: back-compat with pre-existing fixture (sc-2-6)", () => {
+  it("a lesson written via appendLesson with no namespace is loaded by no-namespace loadLessonIndex", async () => {
+    const lesson = makeLesson("lesson-backcompat");
+    await appendLesson(tmpDir, lesson);
+
+    // Confirm the file is in the DEFAULT (non-namespaced) directory
+    const raw = await readFile(join(tmpDir, ".bober", "memory", "lesson-backcompat.md"), "utf-8");
+    expect(raw).toContain("lesson-backcompat");
+
+    // Load via no-namespace loadLessonIndex and confirm it's returned
+    const records = await loadLessonIndex(tmpDir, { limit: 10 });
+    expect(records.map((r) => r.lessonId)).toContain("lesson-backcompat");
+  });
+
+  it("loadLesson with no namespace reads the lesson from the default path", async () => {
+    const lesson = makeLesson("lesson-rt-backcompat");
+    await appendLesson(tmpDir, lesson);
+
+    const back = await loadLesson(tmpDir, "lesson-rt-backcompat");
+    expect(back).toEqual(lesson);
+  });
+
+  it("'programming' namespace resolves identically to no namespace (round-trip)", async () => {
+    const lesson = makeLesson("lesson-programming");
+    await appendLesson(tmpDir, lesson, "programming");
+
+    // Must land in .bober/memory/ (no subdir)
+    const raw = await readFile(join(tmpDir, ".bober", "memory", "lesson-programming.md"), "utf-8");
+    expect(raw).toContain("lesson-programming");
+
+    // And be readable with no namespace
+    const back = await loadLesson(tmpDir, "lesson-programming");
+    expect(back).toEqual(lesson);
   });
 });
