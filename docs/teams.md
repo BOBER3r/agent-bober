@@ -109,15 +109,21 @@ Selects the orchestration engine for sprints driven by this team:
 > below and [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
 > ordered SOP is wired end-to-end** under a **code-enforced zero-egress default**:
 > consent → red-flag → numerics → medications (from `FactStore`) → an `EgressGuard`
-> literature gate → retrieval (`{disabled}` ⇒ abstain when off) → disclaimer footer →
-> audit. Both egress axes default **false**, so a fresh-config medical turn produces
-> **zero outbound bytes** (see "EgressGuard + full SOP wiring" below). Only the real
-> MedlinePlus networking + cited synthesis (S7) remains. See
+> literature gate → retrieval → disclaimer footer → audit. Both egress axes default
+> **false**, so a fresh-config medical turn produces **zero outbound bytes** (see
+> "EgressGuard + full SOP wiring" below). As of Phase 6 Sprint 7 the
+> `literature-retrieval` axis, when **opted in**, runs a **real MedlinePlus / NIH
+> (no-auth) grounded retrieval + cited LLM synthesis** that **abstains unless a
+> retrieved passage supports the claim** and otherwise cites ≥ 1 passage — retrieval is
+> now real behind the axis, not a stub (see "MedlinePlus grounded retrieval + cited
+> synthesis" below). **The medical team is engineering-complete (7 of 7); shipping is
+> gated on an external regulatory review (S6.5).** See
 > [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md),
+> [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md),
 > and
-> [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md).
+> [`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md).
 
 ---
 
@@ -405,9 +411,9 @@ runtime `EgressGuard`.
 checks `egress.isAllowed("literature-retrieval")` **before** touching the source: when
 off it returns `{ kind: "disabled" }` **synchronously** (no `MedlineSource` method
 called, no network attempt — the zero-egress proof); when on it delegates to
-`MedlineSource.fetchPassages`. `MedlineSource` (`retrieval/medline-source.ts`) is a stub
-returning `{ kind: "abstain", reason }` this sprint; its `RetrievalOutcome` union is
-`{disabled} | {abstain,reason} | {grounded,passages}` (the `grounded` arm is S7 only).
+`MedlineSource.fetchPassages`. `MedlineSource` (`retrieval/medline-source.ts`) was a stub
+in Sprint 6 and became the **real MedlinePlus fetch in Sprint 7** (see below); its
+`RetrievalOutcome` union is `{disabled} | {abstain,reason} | {grounded,passages}`.
 
 **Medications come from `FactStore`, not `HealthDataStore` (ADR-7).** The engine reads
 active medications via
@@ -423,7 +429,8 @@ state.
 3. **Numerics** — deterministic `NumericsQueryLayer.getMetric`, **no LLM**.
 4. **Medications** — `FactStore.getActiveFacts(...)` (ADR-7).
 5. **Gate 3 + retrieval** — `EgressGuard.isAllowed("literature-retrieval")`;
-   `LiteratureRetriever.retrieve` ⇒ `{disabled}` (abstain) when off.
+   `LiteratureRetriever.retrieve` ⇒ `{disabled}` (abstain) when off, or
+   `{grounded,passages}` → `synthesize` (cited synthesis, **S7**) when on.
 6. **Disclaimer footer**, then **audit** (`answer` / `abstain`, PHI-free), then
    return `PipelineResult & { medicalAnswer }`.
 
@@ -435,6 +442,91 @@ by a network spy recording **zero** calls. `MedicalSopDeps` gained `egress?` /
 `literature?` / `facts?` / `healthStore?` injection slots (the zero-arg constructor is
 preserved). Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md).
+
+---
+
+### MedlinePlus grounded retrieval + cited synthesis (Phase 6 Sprint 7)
+
+Sprint 7 is the **opt-in networked slice** and the **plan finale**: with the
+`literature-retrieval` axis turned **on**, the medical team performs a **real
+MedlinePlus / NIH (no-auth) grounded retrieval** and a **cited LLM synthesis** that
+**abstains unless a retrieved passage supports the claim**. Retrieval is now real
+behind the axis — **not a stub**. With the axis **off**, behavior is byte-identical to
+Sprint 6 (synchronous `{disabled}` ⇒ abstain, zero outbound bytes).
+
+**Opt in.** The axis is off by default; enable it explicitly (cloud inference stays off):
+
+```jsonc
+{
+  "medical": {
+    "egress": {
+      "cloudInference": false,        // independent axis — stays off
+      "literatureRetrieval": true     // permit the MedlinePlus fetch + grounded synthesis
+    }
+  }
+}
+```
+
+**The single network file (`src/medical/retrieval/medline-source.ts`).** The live
+`fetch` lives **only** here — the one file the S6 ESLint exception sanctions, still the
+**only** medical file touching `fetch`/`Response`. `MedlineSource.fetchPassages(query)`
+calls `EgressGuard.assertAllowed("literature-retrieval")` as its **first** statement
+(runtime defense-in-depth over the static lint boundary), queries the MedlinePlus Web
+Service (`wsearch.nlm.nih.gov/ws/query`, `db=healthTopics`, no auth), and parses the
+`nlmSearchResult` JSON into `Passage[]` (`{ title; url; text; source: "medlineplus" }`).
+It returns `grounded{passages}` | `abstain{no-passages}` (empty result) |
+`abstain{source-error}` (`!res.ok`, network throw, parse error, or the axis-off
+`assertAllowed` throw — all caught). It **never throws out and never fabricates
+content**.
+
+**Injectable transport ⇒ offline CI.** The constructor takes a `FetchLike` transport
+(`(url) => Promise<{ ok; status; json() }>`) defaulting to the global `fetch` (allowed
+**only** in this file). Tests inject a duck-typed fake returning the committed fixture
+`src/medical/retrieval/__fixtures__/medlineplus-sample.json`, so **no live network runs
+in CI**.
+
+**Cited synthesis (`synthesize`, `src/medical/retrieval/literature.ts`).** A **single**
+provider-agnostic `LLMClient.chat` call pins the model to the retrieved passages and
+instructs it to reply with the single word `ABSTAIN` if they do not support a specific
+answer. The default model is **local Ollama `llama3`**
+(`createClient("openai-compat", "http://localhost:11434/v1", …)`), injectable via
+`deps.llmClient`. Rules (enforced in code):
+
+- An empty response **or** `ABSTAIN` (case-insensitive) ⇒ an **abstained**
+  `MedicalAnswer` with `citations: []` and **no clinical assertion**.
+- A non-abstained answer attaches citations derived from the passages, so
+  `citations.length >= 1` is guaranteed. **No code path emits a non-abstained answer
+  with zero citations.**
+
+**Fail-closed at three independent layers (never fail-open, never an uncited claim):**
+
+1. **Axis off** — `assertAllowed` throws ⇒ `abstain{source-error}`; `synthesize` on a
+   `disabled`/`abstain` outcome returns an abstained answer **without calling the LLM**.
+2. **Source error** — `!res.ok` (e.g. 503), network throw, empty `document[]`, or
+   malformed response ⇒ `abstain` ⇒ LLM never called ⇒ abstained answer.
+3. **Model unavailable** — `llm.chat` throws (e.g. Ollama down) ⇒ caught ⇒ abstained
+   answer (*"model unavailable"*). **No cloud fallback.**
+
+**Cloud inference stays independently off.** The grounded path constructs **only** the
+local/Ollama `LLMClient` (or the injected one) — **never** a cloud provider — and never
+auto-falls-back to cloud. `EgressGuard(false, true)` keeps
+`isAllowed("cloud-inference") === false`: enabling literature retrieval does **not**
+enable cloud inference.
+
+**Wiring (`MedicalSopEngine.run`).** The grounded branch resolves the `LLMClient`
+**lazily, on that path only**, so numeric / disabled / red-flag / abstain turns
+construct **zero** LLM clients (preserving the S2/S3 never-called guarantees and
+sc-7-8). The audit event is `answer` for a non-abstained synthesis, `abstain`
+otherwise. Full details:
+[`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md).
+
+> **Shipping is gated on external regulatory review.** The medical team is
+> *engineering*-complete (7 of 7 sprints, 2393 tests, five code-enforced safety
+> guarantees). Both egress axes default `false` and consent is fail-closed, so it ships
+> nothing to cloud by default. **Enabling it in production remains gated on the external
+> S6.5 FFDCA §201(h) counsel + regulatory review** — not a buildable sprint. Red-flag
+> detection uses ADR-2 conservative matching with known false-negatives surfaced to that
+> review (not patched by widening matching here).
 
 ---
 

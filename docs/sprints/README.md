@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Medical Team — in progress (6 of 7)
+## Medical Team — complete (7 of 7)
 
 `spec-20260616-medical-team` — Phase 6 of the chattable multi-agent platform: a
 domain-specific **medical** team running a guardrailed Standard-Operating-Procedure
@@ -222,8 +222,29 @@ refuse/short-circuit reaches **zero** downstream calls. With both axes off, a nu
 answers from deterministic compute (spy `LLMClient` never called) and a literature question
 abstains (`MedlineSource.fetchPassages` never called) — **default outbound bytes = 0**. Both
 prior carry-forward test cleanups were folded in (real `llmSpy`/`numericsSpy` injection in the
-S2 `sc-2-4` test; `numerics.test.ts` `readFileSync` → async `readFile`). Only the real
-MedlinePlus networking + cited synthesis (S7) remains.
+S2 `sc-2-4` test; `numerics.test.ts` `readFileSync` → async `readFile`). Sprint 7 **closes
+the plan** with the **opt-in networked slice**: the real MedlinePlus / NIH (no-auth) grounded
+retrieval + cited LLM synthesis. The live `fetch` lands in the **one** ESLint-excepted file
+(`retrieval/medline-source.ts`) with `EgressGuard.assertAllowed("literature-retrieval")` as
+its **first** statement (runtime defense-in-depth over the static lint boundary); an injectable
+`FetchLike` transport (default global `fetch`, only here) lets CI run **fully offline** against a
+committed fixture (`__fixtures__/medlineplus-sample.json`) — no live network. `fetchPassages`
+parses the `nlmSearchResult` JSON into `Passage[]` and returns `grounded` | `abstain{no-passages}`
+| `abstain{source-error}`, **never throwing and never fabricating content**. `synthesize`
+(`retrieval/literature.ts`) makes a **single provider-agnostic `LLMClient.chat` call** (local
+Ollama `llama3` via `createClient("openai-compat", localhost:11434)` by default, injectable via
+`deps.llmClient`) pinned to the passages: it **abstains** unless a passage supports the claim
+(empty / `ABSTAIN` model output ⇒ abstained, `citations: []`) and otherwise emits **≥ 1
+citation** — there is **no** code path producing a non-abstained answer with zero citations.
+The path is **fail-closed at three independent layers** — axis off (`assertAllowed` throws),
+source error (`!res.ok` / network throw / empty / malformed), and model unavailable (`llm.chat`
+throws) — each ⇒ an abstained `MedicalAnswer` with no clinical assertion; **never fail-open, no
+uncited claim**. `cloud-inference` stays **independently off**: the grounded path constructs only
+the local/Ollama `LLMClient`, never a cloud provider, with **no** auto-fallback, and enabling
+literature retrieval does not enable cloud inference (`EgressGuard(false,true)` keeps
+`cloud-inference` false). Wired into `MedicalSopEngine.run`'s grounded branch, which resolves the
+`LLMClient` **lazily on that path only** so numeric / disabled / red-flag / abstain turns still
+construct **zero** LLM clients. **The plan is engineering-complete (7 of 7); 2393 tests pass.**
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -233,19 +254,37 @@ MedlinePlus networking + cited synthesis (S7) remains.
 | 4 | [sprint-spec-20260616-medical-team-4.md](./sprint-spec-20260616-medical-team-4.md) | **Data + numerics layer (keeps arithmetic out of the LLM, ADR-3):** sync `better-sqlite3` `HealthDataStore` (`health-store.ts`, mirrors `FactStore`; tables `health_observations`+`lab_results`+`kv_store`; deterministic `observationId`/`labResultId` SHA-256; `INSERT OR IGNORE`; `upsertObservations` returns **NEW-row count only**; `getObservations`/`getLabSeries`/`upsertLabResult`/`getBaseline`/`putBaseline`/`getPreference`/`close`) + `NumericsQueryLayer` (`numerics.ts`, `getMetric` over the **closed 8-primitive whitelist** via exhaustive `never`-guarded `switch` + `getLabTrend`); **no `eval`/`Function`/`vm`/`child_process`/`execa`**; empty-window **abstain** `{value:null,sampleCount:0}` vs. cross-unit **refusal** `{value:null,sampleCount:N>0}`, `zscore` n<2 / degenerate-slope abstain with `sampleCount:N`; numeric/lab types added additively to `types.ts`; 3-table design deviates from the "single generic events table" wording (generator-flagged, evaluator-accepted); store never reads the clock; medications NOT stored here (FactStore value-of-record, S6/ADR-7) |
 | 6 | [sprint-spec-20260616-medical-team-6.md](./sprint-spec-20260616-medical-team-6.md) | **EgressGuard + full SOP wiring (zero-egress end-to-end):** `EgressGuard` (`egress.ts`) — two **independent** axes `cloud-inference`/`literature-retrieval`, both default **false**, `isAllowed`/`assertAllowed` (throws off), `fromConfig` over new optional `medical.egress.{cloudInference,literatureRetrieval}` (`MedicalSectionSchema`, `schema.ts`); scoped `no-restricted-imports` ESLint block over `src/medical/**/*.ts` (forbids `undici`/`got`/`axios`/`node-fetch` + `http`/`https`/`net`/`tls`/`dgram`(+`node:`) + `fetch` global) with a **single exception** for `retrieval/medline-source.ts` (flat-config last-match-wins; **no** network import yet — reserved for S7); `LiteratureRetriever` (`retrieval/literature.ts`) checks axis **before** source ⇒ `{ disabled }` **synchronously** when off; medications via `FactStore.getActiveFacts("medical","patient","takes-medication")` (ADR-7, **never** `HealthDataStore`); `MedicalSopEngine.run` runs the **full ordered SOP** (consent → red-flag → numerics → meds → egress → retrieve(disabled⇒abstain) → footer → audit → `PipelineResult`) — gate-ordering **is** the safety guarantee (both gates before any downstream call); **default outbound bytes = 0** (spy `LLMClient` + network spy both zero); both carry-forward cleanups folded in (real `llmSpy`/`numericsSpy` in `sc-2-4`; `numerics.test.ts` async `readFile`) |
 | 5 | [sprint-spec-20260616-medical-team-5.md](./sprint-spec-20260616-medical-team-5.md) | **Streaming ingestion + `bober medical import`:** `IngestionNormalizer` (`ingestion.ts`, `register`/`importFile` over an `IngestionAdapter` **registry**; throws `No ingestion adapter can handle '<path>'` when none match) + async `StoreObservationSink` (`writeBatch` → S4 `upsertObservations`/`upsertLabResult`, accumulates `newRows`) + `AppleHealthAdapter` (`adapters/apple-health.ts`, `sax@1.6.0` **isolated to this file**; `createReadStream` as async iterable, never `readFile`; `<Record>` `type→metric`/`value→value` (`parseFloat`, non-numeric **skipped**)/`unit`/`startDate→tStart`/`endDate→tEnd`/const `source:"apple-health"`; `BATCH_CAP` 1000 with `await writeBatch` **as** backpressure; tail flush); `IngestionResult {recordsParsed,newRows}` + `ObservationSink`/`IngestionAdapter` types added additively to `types.ts`; **idempotent re-import** via S4 `INSERT OR IGNORE` (2nd run `newRows:0`); `bober medical import <file>` CLI (`commands/medical.ts`, registered `index.ts:318`, mirrors `registerFactsCommand`, opens `.bober/medical/health.db`, prints counts, always `close()`); Whoop/CSV adapters additive future (ADR-4, non-goals here); **recovery:** first generator attempt crashed on a transient API socket error post-impl, recovered via a focused lint-fix+commit (`aa7f9be`, no logic rework) |
+| 7 | [sprint-spec-20260616-medical-team-7.md](./sprint-spec-20260616-medical-team-7.md) | **Finale — opt-in MedlinePlus grounded retrieval + cited synthesis:** real MedlinePlus/NIH (no-auth) `fetch` in the **single** ESLint-excepted `retrieval/medline-source.ts` with `EgressGuard.assertAllowed("literature-retrieval")` **first** (runtime defense-in-depth); injectable `FetchLike` transport (default global `fetch` only here) ⇒ CI offline via committed `__fixtures__/medlineplus-sample.json`; `fetchPassages` parses `nlmSearchResult` → `Passage[]`, returns `grounded` \| `abstain{no-passages}` \| `abstain{source-error}` (never throws/fabricates); `synthesize` (`retrieval/literature.ts`) = **single** provider-agnostic `LLMClient.chat` (local Ollama `llama3` via `createClient("openai-compat",localhost:11434)`, injectable `deps.llmClient`) pinned to passages, **abstains** on empty/`ABSTAIN` (`citations:[]`) else **≥1 citation** (no uncited-claim path); **fail-closed at 3 layers** (axis off / source error / model unavailable ⇒ abstained, never fail-open); `cloud-inference` **independently off** (no cloud provider, no fallback); `Citation` real fields (`title`/`url`/`source:"medlineplus"`); wired into `MedicalSopEngine.run` grounded branch with **lazy** `LLMClient` (numeric/disabled/red-flag/abstain ⇒ 0 LLM clients); **plan engineering-complete (7/7), 2393 tests** |
 
 The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, the
 real `MedicalGuardrails` in its `GuardrailSet` slot, the deterministic
 `HealthDataStore` + `NumericsQueryLayer` data/numerics layer, the Sprint 5 streaming
-ingestion path, and the Sprint 6 `EgressGuard` + full SOP wiring + zero-egress posture are
-documented in
+ingestion path, the Sprint 6 `EgressGuard` + full SOP wiring + zero-egress posture, and
+the Sprint 7 MedlinePlus grounded retrieval + cited synthesis are documented in
 [`docs/teams.md`](../teams.md) (Pipeline Shape table, "Guardrails (Phase 6 — Gate 2 Live)",
 "Safety gates + audit substrate", the "Numerics + data store (Phase 6 Sprint 4)" data-model
 section, the "Ingestion (Phase 6 Sprint 5)" section, the "EgressGuard + full SOP wiring
-(Phase 6 Sprint 6)" section, and "How `loadTeam` Works"). The new
+(Phase 6 Sprint 6)" section, the "MedlinePlus grounded retrieval + cited synthesis (Phase 6
+Sprint 7)" section, and "How `loadTeam` Works"). The
 `medical.egress.{cloudInference,literatureRetrieval}` config keys (both default false) are in
 the README "Full Configuration Reference". User-facing usage for `bober medical import` lives
 in [`COMMANDS.md`](../../COMMANDS.md).
+
+### Plan close-out
+
+`spec-20260616-medical-team` is **engineering-complete on branch `bober/medical-team`** — 7
+of 7 sprints passed evaluation, **2393 tests** green, and the **five code-enforced safety
+guarantees** verified (fail-closed consent; deterministic 0-LLM red-flag short-circuit;
+arithmetic kept out of the LLM via the closed 8-primitive numerics whitelist; code-enforced
+zero-egress default via two independent axes + the scoped ESLint network boundary; and
+abstain-unless-supported, fail-closed cited retrieval). **Both egress axes default `false` and
+consent is fail-closed, so it ships nothing to cloud by default.** **Shipping / enabling the
+medical team remains gated on the EXTERNAL S6.5 FFDCA §201(h) counsel + regulatory review**,
+which is **not a buildable sprint** — the code is done, the regulatory gate is open. **Advisory
+carry-forward:** red-flag detection uses ADR-2 conservative phrase matching with **known
+false-negatives** (an intentional precision-over-recall choice) that are surfaced to the
+patternset revision / S6.5 counsel review rather than patched by widening matching here. See the
+finale record [`sprint-spec-20260616-medical-team-7.md`](./sprint-spec-20260616-medical-team-7.md).
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 

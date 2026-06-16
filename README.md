@@ -750,9 +750,14 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > question abstains, with no network module ever reached. The default is enforced two
 > ways: the runtime `EgressGuard` (whose `assertAllowed` throws when an axis is off) and
 > a scoped `no-restricted-imports` ESLint boundary over `src/medical/**/*.ts` that makes
-> any network import a lint error (with a single sanctioned exception reserved for the
-> literature-retrieval source file). See [docs/teams.md](./docs/teams.md) ("EgressGuard +
-> full SOP wiring").
+> any network import a lint error (with a single sanctioned exception for the
+> literature-retrieval source file `src/medical/retrieval/medline-source.ts`).
+> Opting `literatureRetrieval` **in** turns on a real MedlinePlus / NIH (no-auth)
+> grounded retrieval + cited synthesis that **abstains unless a retrieved passage
+> supports the claim**; it runs the synthesis on a **local** model (Ollama by default)
+> and does **not** enable `cloudInference` (the two axes are independent). See
+> [docs/teams.md](./docs/teams.md) ("EgressGuard + full SOP wiring" and "MedlinePlus
+> grounded retrieval + cited synthesis").
 
 ### Sprint Sizes
 
