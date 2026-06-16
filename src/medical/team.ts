@@ -8,7 +8,8 @@
 import type { BoberConfig } from "../config/schema.js";
 import { resolveRoleProviders } from "../config/role-providers.js";
 import type { Role, Team } from "../teams/types.js";
-import type { GuardrailContext, GuardrailSet, GuardrailVerdict } from "./types.js";
+import type { GuardrailSet } from "./types.js";
+import { MedicalGuardrails } from "./guardrails.js";
 
 // ── Role descriptors ────────────────────────────────────────────────
 
@@ -28,22 +29,15 @@ const MEDICAL_ROLES: Role[] = [
   { name: "codeReview", displayName: "Code Reviewer" },
 ];
 
-// ── Built-in medical guardrails (stub allow-all; real logic S3) ─────
-
-const MEDICAL_RULESET_VERSION = "0.0.0";
+// ── Built-in medical guardrails (real impl, Sprint 3) ───────────────
 
 /**
- * Builds a stub GuardrailSet that allows all prompts.
- * Real evaluate logic (red-flag detection, refusals, canned responses) lands in S3.
- * bober: stub allow-all; swap for real ruleset in S3 when red-flag detection is implemented.
+ * Builds the real medical GuardrailSet (Sprint 3 and beyond).
+ * Wraps RedFlagDetector for emergency escalation; allows benign prompts.
+ * The stub allow-all from Sprint 1–2 is replaced by MedicalGuardrails.
  */
 function buildMedicalGuardrails(): GuardrailSet {
-  return {
-    rulesetVersion: MEDICAL_RULESET_VERSION,
-    evaluate(_prompt: string, _ctx: GuardrailContext): GuardrailVerdict {
-      return { kind: "allow" };
-    },
-  };
+  return new MedicalGuardrails();
 }
 
 // ── buildMedicalTeam ────────────────────────────────────────────────

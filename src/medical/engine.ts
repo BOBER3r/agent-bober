@@ -15,7 +15,9 @@ import { createSpec } from "../contracts/spec.js";
 import { AuditLog } from "./audit.js";
 import { ConsentGate } from "./consent.js";
 import { DisclaimerComposer } from "./disclaimer.js";
-import type { MedicalAnswer } from "./types.js";
+import { MedicalGuardrails } from "./guardrails.js";
+import type { GuardrailSet, MedicalAnswer } from "./types.js";
+import type { LLMClient } from "../providers/types.js";
 
 // ── Dependency injection seam ───────────────────────────────────────
 
@@ -28,6 +30,12 @@ export interface MedicalSopDeps {
   auditLog?: AuditLog;
   consentGate?: ConsentGate;
   disclaimer?: DisclaimerComposer;
+  /** Inject the real MedicalGuardrails (or a test fake). Sprint 3. */
+  guardrails?: GuardrailSet;
+  /** Spy/fake LLMClient — asserted NEVER called on red-flag short-circuit (carry-forward S2 fix). */
+  llmClient?: LLMClient;
+  /** Spy/fake numerics layer — asserted NEVER called on red-flag short-circuit. */
+  numerics?: () => unknown;
 }
 
 // ── Canned messages ─────────────────────────────────────────────────
@@ -66,6 +74,7 @@ export class MedicalSopEngine implements PipelineEngine {
     const auditLog = this.deps?.auditLog ?? new AuditLog(projectRoot);
     const consentGate = this.deps?.consentGate ?? new ConsentGate(projectRoot, auditLog);
     const disclaimer = this.deps?.disclaimer ?? new DisclaimerComposer();
+    const guardrails = this.deps?.guardrails ?? new MedicalGuardrails();
 
     const footer = disclaimer.footer();
 
@@ -106,8 +115,50 @@ export class MedicalSopEngine implements PipelineEngine {
       } as PipelineResult & { medicalAnswer: MedicalAnswer };
     }
 
-    // ── Gate 2+ (stub): GuardrailSet.evaluate (allow-only this sprint) ──
-    // Real red-flag detection lands in S3. For now the guardrail always allows.
+    // ── Gate 2: Red-flag short-circuit (0 LLM, 0 numerics) ──────────
+    // Runs immediately after consent. A red-flag match returns a canned escalation
+    // and reaches NO downstream work (no numerics, no retrieval, no LLM).
+    const verdict = guardrails.evaluate(userPrompt, {});
+
+    if (verdict.kind === "short-circuit") {
+      await auditLog.append({
+        tIso: now,
+        event: "short-circuit",
+        ruleId: verdict.rule,
+        rulesetVersion: guardrails.rulesetVersion,
+        patternsetVersion:
+          "patternsetVersion" in guardrails
+            ? (guardrails as { patternsetVersion: string }).patternsetVersion
+            : undefined,
+      });
+
+      const scAnswer: MedicalAnswer = {
+        body: verdict.cannedResponse,
+        abstained: false,
+        citations: [],
+        disclaimerFooter: footer,
+        shortCircuit: true,
+      };
+
+      const scSpec = createSpec(
+        "Medical SOP — red-flag short-circuit",
+        "Red-flag gate escalated; no numerics/LLM reached.",
+        [],
+      );
+
+      return {
+        success: true,
+        spec: scSpec,
+        completedSprints: [],
+        failedSprints: [],
+        duration: 0,
+        medicalAnswer: scAnswer,
+      } as PipelineResult & { medicalAnswer: MedicalAnswer };
+    }
+
+    // verdict.kind === "allow" → proceed to normal path.
+
+    // ── Allow path (stub): placeholder answer ────────────────────────
     const consentRecord = await consentGate.current();
     const rulesetVersion = consentRecord?.rulesetVersion;
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +23,8 @@ import { AuditLog } from "./audit.js";
 import { ConsentGate } from "./consent.js";
 import { DisclaimerComposer } from "./disclaimer.js";
 import type { MedicalAnswer } from "./types.js";
+import type { LLMClient } from "../providers/types.js";
+import { PATTERNSET_VERSION } from "./red-flag.js";
 
 // ── sc-1-4: MedicalSopEngine.name ──────────────────────────────────
 
@@ -281,5 +283,188 @@ describe("MedicalSopEngine.run — deterministic timestamps (sc-2-8)", () => {
     );
     const entry = JSON.parse(bytes.split("\n").filter(Boolean)[0]!) as { tIso: string };
     expect(entry.tIso).toBe(injectedTs);
+  });
+});
+
+// ── sc-3-4: Parametrized 5-category short-circuit with zero spy calls ──
+
+/** Helper: record consent so Gate 1 passes. */
+async function recordTestConsent(dir: string): Promise<{ auditLog: AuditLog; gate: ConsentGate; disclaimer: DisclaimerComposer }> {
+  const auditLog = new AuditLog(dir);
+  const gate = new ConsentGate(dir, auditLog);
+  const disclaimer = new DisclaimerComposer();
+  await gate.recordConsent(
+    {
+      consentVersion: "1.0.0",
+      acceptedAtIso: "2026-06-16T10:00:00.000Z",
+      rulesetVersion: "0.0.0",
+      disclaimerVersion: disclaimer.disclaimerVersion,
+    },
+    "2026-06-16T10:00:00.000Z",
+  );
+  return { auditLog, gate, disclaimer };
+}
+
+const RED_FLAG_CASES: { cat: string; prompt: string; hotline: string }[] = [
+  {
+    cat: "cardiac",
+    prompt: "I have crushing chest pain radiating to my left arm",
+    hotline: "911",
+  },
+  {
+    cat: "stroke",
+    prompt: "sudden face droop and slurred speech",
+    hotline: "911",
+  },
+  {
+    cat: "anaphylaxis",
+    prompt: "my throat is closing after a bee sting",
+    hotline: "911",
+  },
+  {
+    cat: "self-harm",
+    prompt: "I want to kill myself",
+    hotline: "988",
+  },
+  {
+    cat: "overdose",
+    prompt: "I think I took too many pills, an overdose",
+    hotline: "988",
+  },
+];
+
+describe("MedicalSopEngine.run — Gate 2: red-flag short-circuit (sc-3-4, sc-3-7)", () => {
+  for (const { cat, prompt, hotline } of RED_FLAG_CASES) {
+    it(`short-circuits ${cat} with 0 LLM/numerics calls and correct hotline ${hotline} (sc-3-4)`, async () => {
+      const config = createDefaultConfig("test", "greenfield");
+      vi.clearAllMocks();
+
+      const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+      // INJECTED spies — these are REAL: the engine now has slots for them in MedicalSopDeps.
+      // If the engine ever calls llmSpy.chat or numericsSpy, the assertions below will FAIL.
+      const llmSpy: LLMClient = { chat: vi.fn() };
+      const numericsSpy = vi.fn();
+
+      const engine = new MedicalSopEngine({
+        auditLog,
+        consentGate: gate,
+        disclaimer,
+        llmClient: llmSpy,
+        numerics: numericsSpy,
+      });
+
+      const result = await engine.run(prompt, tmpDir2, config, {
+        now: "2026-06-16T10:00:00.000Z",
+      });
+
+      // sc-3-4: short-circuit must be true and body must contain the hotline
+      const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+      expect(answer.shortCircuit).toBe(true);
+      expect(answer.body).toContain(hotline);
+      expect(answer.disclaimerFooter).toBeTruthy();
+
+      // sc-3-4: ZERO calls to injected spies (now real, not hollow)
+      expect(llmSpy.chat).not.toHaveBeenCalled();
+      expect(numericsSpy).not.toHaveBeenCalled();
+
+      // sc-3-7: audit file must have a 'short-circuit' entry with ruleId + versions, no prompt text
+      const auditPath = join(tmpDir2, ".bober", "medical", `audit-2026-06-16.jsonl`);
+      const bytes = await readFile(auditPath, "utf-8");
+      const entries = bytes
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l) as Record<string, unknown>);
+      const scEntry = entries.find((e) => e["event"] === "short-circuit");
+
+      expect(scEntry).toBeDefined();
+      expect(scEntry?.["ruleId"]).toBeTruthy();
+      expect(scEntry?.["rulesetVersion"]).toBeTruthy();
+      expect(scEntry?.["patternsetVersion"]).toBe(PATTERNSET_VERSION);
+
+      // sc-3-7: no prompt text in the audit file
+      expect(bytes).not.toContain(prompt.slice(0, 8));
+    });
+  }
+});
+
+// ── sc-3-6: Benign prompt proceeds to allow path ─────────────────────
+
+describe("MedicalSopEngine.run — Gate 2: benign allow (sc-3-6)", () => {
+  it("non-emergency prompt passes Gate 2 and proceeds to allow path (success: true)", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    const llmSpy: LLMClient = { chat: vi.fn() };
+    const numericsSpy = vi.fn();
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      numerics: numericsSpy,
+    });
+
+    const result = await engine.run(
+      "what was my average resting heart rate last week",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T11:00:00.000Z" },
+    );
+
+    // allow path: success=true and shortCircuit=false on the answer
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.shortCircuit).toBe(false);
+    expect(answer.disclaimerFooter).toBeTruthy();
+  });
+});
+
+// ── Consent ordering: Gate 1 fires before Gate 2 ────────────────────
+
+describe("MedicalSopEngine.run — consent ordering invariant (sc-2-4 retroactive)", () => {
+  it("no-consent emergency prompt is refused by Gate 1 before reaching Gate 2", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    // No consent recorded → Gate 1 refuses.
+    const auditLog = new AuditLog(tmpDir2);
+    const consentGate = new ConsentGate(tmpDir2, auditLog);
+    const disclaimer = new DisclaimerComposer();
+
+    const llmSpy: LLMClient = { chat: vi.fn() };
+    const numericsSpy = vi.fn();
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate,
+      disclaimer,
+      llmClient: llmSpy,
+      numerics: numericsSpy,
+    });
+
+    // Emergency prompt — if Gate 2 were reached, it would short-circuit.
+    // Gate 1 must fire first, returning success:false.
+    const result = await engine.run(
+      "I want to kill myself",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T10:00:00.000Z" },
+    );
+
+    // Gate 1 refuses, not Gate 2 short-circuits — success must be false.
+    expect(result.success).toBe(false);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.shortCircuit).toBe(true);
+    // The body must be the consent message, not the 988 escalation.
+    expect(answer.body).toContain("Consent is required");
+    expect(answer.body).not.toContain("988");
+
+    // Spies never called even on Gate 1 refusal.
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+    expect(numericsSpy).not.toHaveBeenCalled();
   });
 });
