@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -341,10 +341,10 @@ describe("NumericsQueryLayer — slope degenerate (same timestamp)", () => {
 // ── No eval/codegen/subprocess in src/medical numerics files (sc-4-8) ─
 
 describe("sc-4-8: no eval/codegen/subprocess in numerics code", () => {
-  it("numerics.ts and health-store.ts contain no eval/Function/vm/child_process/execa", () => {
+  it("numerics.ts and health-store.ts contain no eval/Function/vm/child_process/execa", async () => {
     const dir = dirname(fileURLToPath(import.meta.url));
-    const numericsSrc = readFileSync(join(dir, "numerics.ts"), "utf8");
-    const storeSrc = readFileSync(join(dir, "health-store.ts"), "utf8");
+    const numericsSrc = await readFile(join(dir, "numerics.ts"), "utf8");
+    const storeSrc = await readFile(join(dir, "health-store.ts"), "utf8");
     const combined = numericsSrc + storeSrc;
 
     expect(combined).not.toMatch(/\beval\b/);

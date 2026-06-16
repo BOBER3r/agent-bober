@@ -68,6 +68,43 @@ export default [
     },
   },
   {
+    // Sprint 6 (ADR-6): code-enforced zero-egress for the medical tree.
+    // Any network/socket import inside src/medical/ is a lint error EXCEPT in the one
+    // sanctioned retrieval file (src/medical/retrieval/medline-source.ts) — see override below.
+    files: ["src/medical/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            { name: "undici",     message: "Network access forbidden in medical module (ADR-6 — zero-egress default)" },
+            { name: "got",        message: "Network access forbidden in medical module" },
+            { name: "axios",      message: "Network access forbidden in medical module" },
+            { name: "node-fetch", message: "Network access forbidden in medical module" },
+          ],
+          patterns: [
+            {
+              group: ["http", "https", "net", "tls", "dgram", "node:http", "node:https", "node:net", "node:tls", "node:dgram"],
+              message: "Network/socket imports forbidden in src/medical/ — ADR-6 egress only via the sanctioned retrieval file",
+            },
+          ],
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "Network access forbidden in medical module — egress only via the sanctioned retrieval file" },
+      ],
+    },
+  },
+  {
+    // ADR-6 single exception: the ONE designated retrieval network file. S7 puts the real MedlinePlus call here.
+    files: ["src/medical/retrieval/medline-source.ts"],
+    rules: {
+      "no-restricted-imports": "off",
+      "no-restricted-globals": "off",
+    },
+  },
+  {
     // Node.js globals for plain .js fixtures (e.g. src/fleet/__fixtures__/stub-child.js)
     files: ["src/**/*.js"],
     languageOptions: {

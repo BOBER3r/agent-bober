@@ -25,6 +25,11 @@ import { DisclaimerComposer } from "./disclaimer.js";
 import type { MedicalAnswer } from "./types.js";
 import type { LLMClient } from "../providers/types.js";
 import { PATTERNSET_VERSION } from "./red-flag.js";
+import { FactStore } from "../state/facts.js";
+import { EgressGuard } from "./egress.js";
+import { LiteratureRetriever } from "./retrieval/literature.js";
+import { MedlineSource } from "./retrieval/medline-source.js";
+import { HealthDataStore } from "./health-store.js";
 
 // ── sc-1-4: MedicalSopEngine.name ──────────────────────────────────
 
@@ -120,7 +125,7 @@ describe("MedicalSopEngine.run — fail-closed (no consent) (sc-2-4)", () => {
     vi.clearAllMocks();
 
     // Spy fakes for "downstream" work that MUST NOT be called.
-    const llmSpy = { chat: vi.fn() };
+    const llmSpy: LLMClient = { chat: vi.fn() };
     const numericsSpy = vi.fn();
 
     // No consent recorded in tmpDir2 → gate returns false.
@@ -128,7 +133,8 @@ describe("MedicalSopEngine.run — fail-closed (no consent) (sc-2-4)", () => {
     const consentGate = new ConsentGate(tmpDir2, auditLog);
     const disclaimer = new DisclaimerComposer();
 
-    const engine = new MedicalSopEngine({ auditLog, consentGate, disclaimer });
+    // Carry-forward A: inject spies so assertions are real (not hollow).
+    const engine = new MedicalSopEngine({ auditLog, consentGate, disclaimer, llmClient: llmSpy, numerics: numericsSpy });
 
     const result = await engine.run(
       "my blood pressure is 180",
@@ -466,5 +472,257 @@ describe("MedicalSopEngine.run — consent ordering invariant (sc-2-4 retroactiv
     // Spies never called even on Gate 1 refusal.
     expect(llmSpy.chat).not.toHaveBeenCalled();
     expect(numericsSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── sc-6-7: Medications read from FactStore (ADR-7) ─────────────────
+
+describe("MedicalSopEngine.run — medications via FactStore (sc-6-7)", () => {
+  it("reads active medications from FactStore and does NOT use HealthDataStore for meds", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    // Seed a FactStore (:memory:) with an active medication fact.
+    const facts = new FactStore(":memory:");
+    facts.insertFact({
+      scope: "medical",
+      subject: "patient",
+      predicate: "takes-medication",
+      value: "metformin 500mg",
+      confidence: 1,
+      sourceRunId: null,
+      tValid: "2026-06-16T10:00:00.000Z",
+      tCreated: "2026-06-16T10:00:00.000Z",
+    });
+
+    // Spy on getActiveFacts to confirm it's called.
+    const getActiveFactsSpy = vi.spyOn(facts, "getActiveFacts");
+
+    // Inject an in-memory HealthDataStore — spy on upsertObservations to prove
+    // no medication is ever written to it (ADR-7).
+    const healthStore = new HealthDataStore(":memory:");
+    const upsertSpy = vi.spyOn(healthStore, "upsertObservations");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      facts,
+      healthStore,
+    });
+
+    const result = await engine.run(
+      "what vitamins should I take?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T11:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.shortCircuit).toBe(false);
+
+    // FactStore.getActiveFacts must have been called (proves ADR-7 read path).
+    expect(getActiveFactsSpy).toHaveBeenCalledWith("medical", "patient", "takes-medication");
+
+    // The answer body must reference the active medication value.
+    expect(answer.body).toContain("metformin 500mg");
+
+    // HealthDataStore.upsertObservations must NEVER have been called for medication storage (ADR-7).
+    // (It may be called for numerics observations, but not for med-list rows.)
+    // Since the prompt is not numeric, upsertSpy should not be called at all.
+    const medUpsertCalls = upsertSpy.mock.calls.filter((call) =>
+      JSON.stringify(call).includes("metformin"),
+    );
+    expect(medUpsertCalls.length).toBe(0);
+
+    facts.close();
+    healthStore.close();
+  });
+});
+
+// ── sc-6-8: Full zero-egress SOP turn ───────────────────────────────
+
+describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
+  it("numeric question answered from deterministic compute with footer + answer audit entry", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    // Spy LLMClient — must remain uncalled on the numeric path (zero LLM).
+    const llmSpy: LLMClient = { chat: vi.fn() };
+
+    // Inject in-memory health store seeded with heart rate observations.
+    const healthStore = new HealthDataStore(":memory:");
+    healthStore.upsertObservations([
+      { metric: "heart_rate", value: 62, unit: "bpm", tStart: "2026-06-09T08:00:00.000Z", source: "apple-health" },
+      { metric: "heart_rate", value: 64, unit: "bpm", tStart: "2026-06-10T08:00:00.000Z", source: "apple-health" },
+      { metric: "heart_rate", value: 60, unit: "bpm", tStart: "2026-06-11T08:00:00.000Z", source: "apple-health" },
+    ]);
+
+    // Axes both off (default) — zero egress.
+    const egress = new EgressGuard(false, false);
+    const facts = new FactStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      egress,
+      facts,
+      healthStore,
+    });
+
+    const result = await engine.run(
+      "what was my average resting heart rate last week",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T11:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.shortCircuit).toBe(false);
+    // With data available, should have an answer (not necessarily abstained on numeric path).
+    expect(answer.disclaimerFooter).toBeTruthy();
+    expect(answer.body).toBeTruthy();
+
+    // LLM must NOT have been called (zero LLM on zero-egress numeric path).
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+
+    // Audit entry must be 'answer' or 'abstain' (with data: 'answer').
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"),
+      "utf-8",
+    );
+    const entries = bytes
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const sopEntry = entries.find((e) => e["event"] === "answer" || e["event"] === "abstain");
+    expect(sopEntry).toBeDefined();
+
+    facts.close();
+    healthStore.close();
+  });
+
+  it("literature question with axis off => retrieve returns {disabled} and engine abstains with abstain audit entry", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    // Spy LLMClient — must remain uncalled.
+    const llmSpy: LLMClient = { chat: vi.fn() };
+
+    // Spy on MedlineSource.fetchPassages — must NOT be called when axis is off.
+    const sourceStub = new MedlineSource();
+    const sourceSpy = vi.spyOn(sourceStub, "fetchPassages");
+
+    // Axes both off — literature-retrieval is OFF.
+    const egress = new EgressGuard(false, false);
+    const literature = new LiteratureRetriever(egress, sourceStub);
+
+    // Spy on retrieve to capture what it returns.
+    const retrieveSpy = vi.spyOn(literature, "retrieve");
+
+    const facts = new FactStore(":memory:");
+    const healthStore = new HealthDataStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      egress,
+      literature,
+      facts,
+      healthStore,
+    });
+
+    const result = await engine.run(
+      "what does the literature say about metformin side effects?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T11:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.shortCircuit).toBe(false);
+    expect(answer.abstained).toBe(true);
+    expect(answer.disclaimerFooter).toBeTruthy();
+
+    // LLM must NOT be called.
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+
+    // LiteratureRetriever.retrieve must have been called.
+    expect(retrieveSpy).toHaveBeenCalled();
+
+    // The retrieve call must have returned {kind: "disabled"} — no network.
+    const retrieveResult = await retrieveSpy.mock.results[0]?.value;
+    expect(retrieveResult).toEqual({ kind: "disabled" });
+
+    // MedlineSource.fetchPassages must NOT have been called (zero-egress proof).
+    expect(sourceSpy).not.toHaveBeenCalled();
+
+    // Audit entry must be 'abstain'.
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"),
+      "utf-8",
+    );
+    const entries = bytes
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const abstainEntry = entries.find((e) => e["event"] === "abstain");
+    expect(abstainEntry).toBeDefined();
+
+    facts.close();
+    healthStore.close();
+  });
+
+  it("with literature axis on, MedlineSource.fetchPassages IS called (axis independence check)", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    const sourceStub = new MedlineSource();
+    const sourceSpy = vi.spyOn(sourceStub, "fetchPassages");
+
+    // Literature-retrieval ON.
+    const egress = new EgressGuard(false, true);
+    const literature = new LiteratureRetriever(egress, sourceStub);
+
+    const facts = new FactStore(":memory:");
+    const healthStore = new HealthDataStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      egress,
+      literature,
+      facts,
+      healthStore,
+    });
+
+    await engine.run(
+      "what does literature say about aspirin?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T11:00:00.000Z" },
+    );
+
+    // When axis is on, MedlineSource should be consulted (returns abstain stub).
+    expect(sourceSpy).toHaveBeenCalled();
+
+    facts.close();
+    healthStore.close();
   });
 });

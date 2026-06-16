@@ -371,6 +371,21 @@ export const TeamConfigSchema = z.object({
 });
 export type TeamConfig = z.infer<typeof TeamConfigSchema>;
 
+// ── Medical Section (Phase 6, Sprint 6 — two egress axes default off) ──
+
+export const MedicalSectionSchema = z.object({
+  /** Egress opt-in axes (ADR-6). Both default false — zero outbound bytes by default. */
+  egress: z
+    .object({
+      /** When true, cloud inference synthesis is permitted. Default false. */
+      cloudInference: z.boolean().default(false),
+      /** When true, literature retrieval (MedlinePlus) is permitted. Default false. */
+      literatureRetrieval: z.boolean().default(false),
+    })
+    .optional(),
+});
+export type MedicalSection = z.infer<typeof MedicalSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -400,6 +415,8 @@ export const BoberConfigSchema = z.object({
   // ── Phase 4: domain-agnostic team abstraction ──
   teams: z.record(z.string(), TeamConfigSchema).optional(),
   defaultTeam: z.string().optional(),
+  // ── Phase 6: medical team egress config ──
+  medical: MedicalSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
