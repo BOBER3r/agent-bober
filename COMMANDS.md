@@ -538,6 +538,29 @@ bober onboard
 
 ---
 
+## Medical Team Commands
+
+Utilities for the built-in `medical` team (Phase 6). See
+[docs/teams.md](./docs/teams.md) for the medical SOP and data model.
+
+### `bober medical import <file>`
+
+Stream-import a health export file into the medical health store
+(`.bober/medical/health.db`).
+
+```bash
+bober medical import ~/apple_health_export/export.xml
+```
+
+Currently supports the Apple Health `export.xml` format, stream-parsed via SAX in
+bounded batches so the whole (potentially multi-GB) file is never loaded into
+memory. On completion it prints `records parsed` and `new rows`. Re-importing the
+same file is **idempotent** — the store dedups on a deterministic id, so the second
+run reports `new rows: 0`. An unsupported file type exits non-zero with a clear
+message naming the file.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |

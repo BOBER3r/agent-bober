@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Medical Team — in progress (4 of 7)
+## Medical Team — in progress (5 of 7)
 
 `spec-20260616-medical-team` — Phase 6 of the chattable multi-agent platform: a
 domain-specific **medical** team running a guardrailed Standard-Operating-Procedure
@@ -181,8 +181,26 @@ with `sampleCount:N`. The numeric/lab type surface was added additively to
 `src/medical/types.ts`. The 3-table shape deviates from the contract summary's "single
 generic events table" wording (each of labs/baselines/preferences has a distinct shape);
 the deviation was flagged by the generator and accepted by the evaluator since no
-`sc-4` criterion mandates a single table. The remaining ingestion (S5), egress +
-medications + full SOP wiring (S6), and literature retrieval (S7) are still ahead.
+`sc-4` criterion mandates a single table. Sprint 5 lands the **streaming
+ingestion** that fills that store: an `IngestionNormalizer` holds an `IngestionAdapter`
+**registry** and drives `importFile(path)` through the first adapter that `canHandle`s the
+file, into the store via an async `ObservationSink` (`StoreObservationSink` accumulates the
+NEW-row count across all batches). The first adapter, `AppleHealthAdapter`
+(`src/medical/adapters/apple-health.ts`), stream-parses Apple Health `export.xml` via **SAX**
+(`sax@1.6.0`, a pure-JS no-network dep **isolated to the adapter file**): the file is opened
+with `createReadStream` and consumed as an async iterable, each `<Record>` open tag maps to a
+`HealthObservation` (`type→metric`, `value→value` via `parseFloat` with non-numeric records
+**skipped**, `unit→unit`, `startDate→tStart`, `endDate→tEnd`, constant `source:"apple-health"`),
+and at `BATCH_CAP` (1000) the loop `await`s `sink.writeBatch` before pulling the next chunk —
+the `for-await` `await` **is** the backpressure, so rows never accumulate unbounded and the
+whole (~multi-GB) document is never read into memory. Re-import is **idempotent** via the S4
+`INSERT OR IGNORE` dedup (second run `newRows: 0`, row count unchanged); `importFile` throws
+`No ingestion adapter can handle '<path>'` for an unmatched file. A `bober medical import <file>`
+CLI command (`src/cli/commands/medical.ts`, registered in `src/cli/index.ts:318`, mirroring
+`registerFactsCommand`) opens `.bober/medical/health.db`, runs the import, prints
+`records parsed` / `new rows`, and always closes the store. Whoop/CSV adapters stay an
+additive future (a new class + `register()`, ADR-4) — explicit non-goals here. The remaining
+egress + medications + full SOP wiring (S6) and literature retrieval (S7) are still ahead.
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -190,13 +208,16 @@ medications + full SOP wiring (S6), and literature retrieval (S7) are still ahea
 | 2 | [sprint-spec-20260616-medical-team-2.md](./sprint-spec-20260616-medical-team-2.md) | First code-enforced safety gate + audit substrate: fail-closed `ConsentGate` (`.bober/medical/consent.json`) wired as **Gate 1** of `MedicalSopEngine.run` (no consent ⇒ refuse + **zero** downstream calls); append-only mode-0600 `AuditLog` → `.bober/medical/audit-<date>.jsonl`, IDs/enums-only (`AuditEntry`/`AuditEvent`), no PHI; versioned `DisclaimerComposer` footer on every answer; `MedicalSopDeps` DI seam (zero-arg ctor preserved); all timestamps injected via `opts.now` |
 | 3 | [sprint-spec-20260616-medical-team-3.md](./sprint-spec-20260616-medical-team-3.md) | **Gate 2 — deterministic red-flag emergency short-circuit (0 LLM/numerics):** pure/sync `RedFlagDetector` (`red-flag.ts`, zero imports, 5 categories + `PATTERNSET_VERSION`, self-harm/overdose first so 988 > 911) + real `MedicalGuardrails` (`guardrails.ts`) replacing the S1–S2 allow-only stub (`evaluate` throws on empty; canned 911/988 escalation never model-generated; `refuse` placeholder → S6); wired into `MedicalSopEngine.run` after consent and before any numerics/LLM (match ⇒ canned `MedicalAnswer` `shortCircuit:true` + PHI-free `short-circuit` audit `ruleId`/`rulesetVersion`/`patternsetVersion`, zero downstream calls); `MedicalSopDeps` += real `llmClient?:LLMClient`/`numerics?` slots (S2 carry-forward fix) so spies prove never-called; conservative matching per ADR-2 (advisory false-negatives surfaced to patternset revision / S6.5 counsel) |
 | 4 | [sprint-spec-20260616-medical-team-4.md](./sprint-spec-20260616-medical-team-4.md) | **Data + numerics layer (keeps arithmetic out of the LLM, ADR-3):** sync `better-sqlite3` `HealthDataStore` (`health-store.ts`, mirrors `FactStore`; tables `health_observations`+`lab_results`+`kv_store`; deterministic `observationId`/`labResultId` SHA-256; `INSERT OR IGNORE`; `upsertObservations` returns **NEW-row count only**; `getObservations`/`getLabSeries`/`upsertLabResult`/`getBaseline`/`putBaseline`/`getPreference`/`close`) + `NumericsQueryLayer` (`numerics.ts`, `getMetric` over the **closed 8-primitive whitelist** via exhaustive `never`-guarded `switch` + `getLabTrend`); **no `eval`/`Function`/`vm`/`child_process`/`execa`**; empty-window **abstain** `{value:null,sampleCount:0}` vs. cross-unit **refusal** `{value:null,sampleCount:N>0}`, `zscore` n<2 / degenerate-slope abstain with `sampleCount:N`; numeric/lab types added additively to `types.ts`; 3-table design deviates from the "single generic events table" wording (generator-flagged, evaluator-accepted); store never reads the clock; medications NOT stored here (FactStore value-of-record, S6/ADR-7) |
+| 5 | [sprint-spec-20260616-medical-team-5.md](./sprint-spec-20260616-medical-team-5.md) | **Streaming ingestion + `bober medical import`:** `IngestionNormalizer` (`ingestion.ts`, `register`/`importFile` over an `IngestionAdapter` **registry**; throws `No ingestion adapter can handle '<path>'` when none match) + async `StoreObservationSink` (`writeBatch` → S4 `upsertObservations`/`upsertLabResult`, accumulates `newRows`) + `AppleHealthAdapter` (`adapters/apple-health.ts`, `sax@1.6.0` **isolated to this file**; `createReadStream` as async iterable, never `readFile`; `<Record>` `type→metric`/`value→value` (`parseFloat`, non-numeric **skipped**)/`unit`/`startDate→tStart`/`endDate→tEnd`/const `source:"apple-health"`; `BATCH_CAP` 1000 with `await writeBatch` **as** backpressure; tail flush); `IngestionResult {recordsParsed,newRows}` + `ObservationSink`/`IngestionAdapter` types added additively to `types.ts`; **idempotent re-import** via S4 `INSERT OR IGNORE` (2nd run `newRows:0`); `bober medical import <file>` CLI (`commands/medical.ts`, registered `index.ts:318`, mirrors `registerFactsCommand`, opens `.bober/medical/health.db`, prints counts, always `close()`); Whoop/CSV adapters additive future (ADR-4, non-goals here); **recovery:** first generator attempt crashed on a transient API socket error post-impl, recovered via a focused lint-fix+commit (`aa7f9be`, no logic rework) |
 
 The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, the
-real `MedicalGuardrails` in its `GuardrailSet` slot, and the deterministic
-`HealthDataStore` + `NumericsQueryLayer` data/numerics layer are documented in
+real `MedicalGuardrails` in its `GuardrailSet` slot, the deterministic
+`HealthDataStore` + `NumericsQueryLayer` data/numerics layer, and the Sprint 5 streaming
+ingestion path are documented in
 [`docs/teams.md`](../teams.md) (Pipeline Shape table, "Guardrails (Phase 6 — Gate 2 Live)",
 "Safety gates + audit substrate", the "Numerics + data store (Phase 6 Sprint 4)" data-model
-section, and "How `loadTeam` Works").
+section, the "Ingestion (Phase 6 Sprint 5)" section, and "How `loadTeam` Works").
+User-facing usage for `bober medical import` lives in [`COMMANDS.md`](../../COMMANDS.md).
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 

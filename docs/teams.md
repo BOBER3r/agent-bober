@@ -104,11 +104,15 @@ Selects the orchestration engine for sprints driven by this team:
 > **deterministic data + numerics layer** (`HealthDataStore` +
 > `NumericsQueryLayer`) also exists — it keeps all arithmetic out of the LLM (see
 > "Numerics + data store" below) — though it is not yet wired into
-> `MedicalSopEngine.run` (S6). The remaining SOP steps (ingestion, egress,
-> retrieval, and the numerics wiring) land in later sprints. See
-> [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md)
+> `MedicalSopEngine.run` (S6). As of Phase 6 Sprint 5 the **streaming ingestion**
+> path that fills that store exists too — `bober medical import <file>`
+> stream-parses an Apple Health export into `HealthDataStore` (see "Ingestion"
+> below and [`COMMANDS.md`](../COMMANDS.md)). The remaining SOP steps (egress,
+> medications, retrieval, and the numerics wiring) land in later sprints. See
+> [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md),
+> [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md),
 > and
-> [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md).
+> [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md).
 
 ---
 
@@ -295,6 +299,55 @@ So `value === null && sampleCount === 0` means "nothing to compute," whereas
 `value === null && sampleCount > 0` means "data found but unsafe to aggregate
 as-is." Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md).
+
+### Ingestion (Phase 6 Sprint 5)
+
+The store above is filled by a **bounded, streaming ingestion** path —
+`src/medical/ingestion.ts` + `src/medical/adapters/`. It is **registry-driven**
+so new sources are additive (ADR-4): an adapter is a `new class` only.
+
+- **`IngestionNormalizer` (`src/medical/ingestion.ts`).** Holds an
+  `IngestionAdapter` registry. `register(adapter)` adds an adapter;
+  `importFile(filePath)` dispatches to the **first** adapter whose
+  `canHandle(filePath)` is true, runs `adapter.ingest(filePath, sink)`, and
+  returns its `IngestionResult` (`{ recordsParsed, newRows }`). When no adapter
+  matches it throws `Error("No ingestion adapter can handle '<path>'")` — the
+  path is named in the message.
+- **`StoreObservationSink` (`src/medical/ingestion.ts`).** The async
+  `ObservationSink` an adapter writes into. `writeBatch(obs, labs)` calls
+  `HealthDataStore.upsertObservations` / `upsertLabResult` (synchronous
+  `better-sqlite3`) and accumulates the public `newRows` counter across **all**
+  batches. Its **async signature is the backpressure seam** — the adapter awaits
+  it before pulling more data.
+- **`AppleHealthAdapter` (`src/medical/adapters/apple-health.ts`).** The first
+  adapter (`kind = "apple-health"`, `canHandle` = `.xml`). It stream-parses an
+  Apple Health `export.xml` via **SAX** without ever loading the
+  (potentially multi-GB) document into memory:
+  - The file is opened with `fs.createReadStream(..., { encoding: "utf8" })` and
+    consumed as an **async iterable** (`for await (const chunk of stream)`) —
+    **never** `readFile`/`readFileSync` of the whole file. Each chunk is fed to a
+    strict `sax.parser`.
+  - Each `<Record>` open tag maps to a `HealthObservation`: `type → metric`,
+    `value → value` (`parseFloat`; **non-numeric records are skipped**),
+    `unit → unit`, `startDate → tStart`, `endDate → tEnd` (optional), and a
+    constant `source: "apple-health"` (the file's `sourceName` is not propagated).
+  - Observations buffer until `BATCH_CAP` (1000); the adapter then `await`s
+    `sink.writeBatch(batch, [])` **before** the `for await` loop pulls the next
+    chunk. That `await` **is** the backpressure — rows cannot accumulate unbounded
+    behind a slow sink. A final flush drains the `< BATCH_CAP` tail after the
+    stream ends.
+- **Idempotent re-import.** The adapter does no dedup itself — re-import safety is
+  entirely the Sprint 4 `HealthDataStore` `INSERT OR IGNORE` on the deterministic
+  `observationId`. Importing the same file twice reports `newRows: 0` on the
+  second run with an unchanged row count.
+- **`sax@1.6.0` dependency.** A tiny, pure-JS SAX parser with **no native build
+  and no network surface**, **isolated to `apple-health.ts`** (no other file
+  imports it). Whoop / CSV adapters are an explicit non-goal of Sprint 5 — they
+  are additive later via the same registry.
+
+User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical
+import`. Full details:
+[`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md).
 
 ---
 

@@ -501,6 +501,9 @@ npx agent-bober postmortem show <incidentId>       # Print retrospective
 npx agent-bober playbook list                      # List all playbooks
 npx agent-bober playbook show <name>               # Show playbook content
 npx agent-bober playbook search '<symptom>'        # Search by symptom
+
+# Medical team (Phase 6)
+npx agent-bober medical import <file>              # Stream-import a health export (e.g. Apple Health export.xml)
 ```
 
 #### Clarification gating
