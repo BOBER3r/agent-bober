@@ -89,6 +89,15 @@ Selects the orchestration engine for sprints driven by this team:
 | `"ts"` (default) | TypeScript pipeline | Standard feature development |
 | `"skill"` | Skill-based engine | Skill-driven sub-tasks |
 | `"workflow"` | Workflow engine | Local-model dynamic workflow runtime |
+| `"medical-sop"` | Medical SOP engine | Built-in `medical` team only (Phase 6) — see note below |
+
+> **`"medical-sop"` is not a user config knob.** It is accepted by the
+> `pipelineShape` schema (so the Zod enum stays in lockstep with the
+> `PipelineEngineName` TS union), but the medical team is a **code-registered
+> built-in** reached via `loadTeam(config, "medical")`, not by hand-setting
+> `pipelineShape: "medical-sop"` on a config team. As of Phase 6 Sprint 1 the
+> `MedicalSopEngine` is a stub — the real medical SOP (consent/red-flag gates,
+> numerics, retrieval) lands in later sprints.
 
 ---
 
@@ -164,11 +173,18 @@ carry `--team <id>` in their argv — they run on the programming team by
 default. A future sprint will thread `teamId` through `RunSpawnerOptions` so
 spawned children inherit the active chat team.
 
-### Guardrails (Phase 6 — Deferred)
+### Guardrails (Phase 6 — In Progress)
 
-The `guardrails` field in `TeamConfig` is reserved for Phase 6 (medical team
-and guardrail enforcement). It is accepted by the schema but ignored by all
-current code paths.
+The `guardrails` field on a resolved `Team` (`src/teams/types.ts`) holds a
+`GuardrailSet` — a rule set that guards medical prompts before the LLM call.
+As of Phase 6 Sprint 1 the built-in `medical` team fills this slot with a
+**stub** allow-all `GuardrailSet` (`rulesetVersion "0.0.0"`,
+`evaluate(...) -> { kind: "allow" }`); the type surface lives in
+`src/medical/types.ts` (`GuardrailSet` / `GuardrailVerdict` /
+`GuardrailContext`). Real `evaluate` logic — red-flag detection, refusals,
+canned short-circuit responses — lands in Sprint 3. Every other team's
+`guardrails` slot remains `undefined`, and no current code path reads or
+enforces it.
 
 ---
 
@@ -178,13 +194,19 @@ current code paths.
 
 1. If `teamId` is `undefined` or `"programming"` — return the built-in
    programming team.
-2. If `teamId` is a key in `config.teams` — build a `Team` object from the
+2. If `teamId` is `"medical"` — return the built-in medical team
+   (`buildMedicalTeam(config)`, `pipelineShape "medical-sop"`, Phase 6). Like
+   `programming`, this is a code-registered built-in, not a config entry.
+3. If `teamId` is a key in `config.teams` — build a `Team` object from the
    config entry, merging partial `providers` over the resolved project defaults.
-3. Otherwise — throw `Unknown team '<id>'` (fast-fail at call site).
+4. Otherwise — throw `Unknown team '<id>'` (fast-fail at call site).
 
-There are NO code branches for specific team ids. The example team flows
-through `loadTeam` the same way any other declared team would. This is the
-"adding a team is data, not code" invariant.
+The two built-in teams (`programming`, `medical`) are the only id-specific
+branches. Any team you declare in `config.teams` flows through the config path
+the same way the example team does — that is the "adding a *config* team is
+data, not code" invariant. A built-in like `medical` carries code (its own
+engine + guardrails) because it ships a new pipeline shape, not just a
+data overlay.
 
 ---
 

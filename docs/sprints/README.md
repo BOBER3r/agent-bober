@@ -122,6 +122,37 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
+## Medical Team — in progress (1 of 7)
+
+`spec-20260616-medical-team` — Phase 6 of the chattable multi-agent platform: a
+domain-specific **medical** team running a guardrailed Standard-Operating-Procedure
+(SOP) pipeline (consent/red-flag gates, JS-native numerics, ingestion, egress guard,
+literature retrieval) on top of the team abstraction. Sprint 1 is the **risk-first
+integration linchpin** — additive plumbing + skeleton only. It threads a new
+`medical-sop` orchestration engine name through every place the engine union is
+mirrored (the `PipelineEngineName` TS union at `engine.ts:7`, the
+`PipelineSectionSchema.engine` Zod enum at `schema.ts:220`, the
+`TeamConfigSchema.pipelineShape` Zod enum at `schema.ts:366`, and **both** exhaustive
+`never`-guarded selector switches in `selector.ts`), and stands up a new `src/medical/`
+module with a **stub** `MedicalSopEngine` (`run` returns a trivial `PipelineResult`,
+no LLM/SDK), the `GuardrailSet`/`GuardrailVerdict`/`GuardrailContext`/`MedicalAnswer`
+type surface, and `buildMedicalTeam(config)`. `loadTeam(config, "medical")` now
+resolves to a **code-registered built-in** `medical` team (`pipelineShape "medical-sop"`,
+`memoryNamespace "medical"`, a concrete allow-all stub `GuardrailSet` in its `guardrails`
+slot). The `medical-sop` config-path selector case is a **defensive exhaustiveness branch**
+(falls through to `TsPipelineEngine`) because `config.pipeline.engine` is never legitimately
+`medical-sop` — so the `ts`/`skill`/`workflow` engines and the programming team stay
+**byte-identical** (regression-verified). Gates, store, numerics, ingestion, egress, and
+retrieval are S2–S7.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260616-medical-team-1.md](./sprint-spec-20260616-medical-team-1.md) | Additive `medical-sop` `PipelineEngineName` member + both mirrored Zod enums widened in lockstep + both exhaustive selector switches extended (team→`MedicalSopEngine`, config→defensive `TsPipelineEngine`); new `src/medical/` module (stub `MedicalSopEngine`, `GuardrailSet`/`GuardrailVerdict`/`GuardrailContext`/`MedicalAnswer` types, `buildMedicalTeam`); built-in `medical` team registered in `loadTeam`; `ts`/`skill`/`workflow` + programming team byte-identical, no SDK leakage in `src/medical/` |
+
+The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, and the
+`GuardrailSet` slot are documented in [`docs/teams.md`](../teams.md) (Pipeline Shape table,
+"Guardrails (Phase 6 — In Progress)", and "How `loadTeam` Works").
+
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 
 `spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled
