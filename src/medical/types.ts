@@ -43,3 +43,44 @@ export interface MedicalAnswer {
   disclaimerFooter: string;
   shortCircuit: boolean;
 }
+
+// ── Consent record ──────────────────────────────────────────────────
+
+/**
+ * Persisted consent record stored at .bober/medical/consent.json.
+ * All timestamps are injected ISO 8601 strings — never wall-clock reads.
+ */
+export interface ConsentRecord {
+  consentVersion: string;
+  /** ISO 8601; INJECTED parameter — never Date.now(). */
+  acceptedAtIso: string;
+  rulesetVersion: string;
+  disclaimerVersion: string;
+}
+
+// ── Audit log ───────────────────────────────────────────────────────
+
+/** Discriminated audit event type. IDs/enums only — no prompt text or health values. */
+export type AuditEvent =
+  | "consent"
+  | "short-circuit"
+  | "refuse"
+  | "answer"
+  | "abstain"
+  | "ingest";
+
+/**
+ * Audit entry appended to .bober/medical/audit-<date>.jsonl.
+ * ONLY IDs/enums allowed — NEVER prompt text or health values.
+ */
+export interface AuditEntry {
+  /** ISO 8601; INJECTED parameter — never Date.now(). */
+  tIso: string;
+  event: AuditEvent;
+  /** Optional ruleset version (populated when a guardrail runs). */
+  rulesetVersion?: string;
+  /** Optional patternset version (populated in S3 by RedFlagDetector). */
+  patternsetVersion?: string;
+  /** Optional rule ID triggering the event (IDs only — never text). */
+  ruleId?: string;
+}
