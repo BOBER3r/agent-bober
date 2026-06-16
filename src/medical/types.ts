@@ -29,10 +29,11 @@ export interface GuardrailSet {
 
 // ── Medical answer ──────────────────────────────────────────────────
 
-/** Placeholder for literature citation shape. Real fields land in S7. */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+/** Literature citation shape — source URL + title for a retrieved MedlinePlus passage (S7). */
 export interface Citation {
-  /* placeholder for S7 */
+  title: string;
+  url: string;
+  source: "medlineplus";
 }
 
 /** Shape of the medical engine answer. Real population lands in S2/S6. */

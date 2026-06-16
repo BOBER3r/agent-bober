@@ -619,12 +619,13 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
     // Spy LLMClient — must remain uncalled.
     const llmSpy: LLMClient = { chat: vi.fn() };
 
-    // Spy on MedlineSource.fetchPassages — must NOT be called when axis is off.
-    const sourceStub = new MedlineSource();
-    const sourceSpy = vi.spyOn(sourceStub, "fetchPassages");
-
     // Axes both off — literature-retrieval is OFF.
     const egress = new EgressGuard(false, false);
+
+    // Spy on MedlineSource.fetchPassages — must NOT be called when axis is off.
+    const sourceStub = new MedlineSource(egress);
+    const sourceSpy = vi.spyOn(sourceStub, "fetchPassages");
+
     const literature = new LiteratureRetriever(egress, sourceStub);
 
     // Spy on retrieve to capture what it returns.
@@ -692,11 +693,11 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
 
     const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
 
-    const sourceStub = new MedlineSource();
-    const sourceSpy = vi.spyOn(sourceStub, "fetchPassages");
-
     // Literature-retrieval ON.
     const egress = new EgressGuard(false, true);
+    const sourceStub = new MedlineSource(egress);
+    const sourceSpy = vi.spyOn(sourceStub, "fetchPassages");
+
     const literature = new LiteratureRetriever(egress, sourceStub);
 
     const facts = new FactStore(":memory:");
@@ -721,6 +722,94 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
 
     // When axis is on, MedlineSource should be consulted (returns abstain stub).
     expect(sourceSpy).toHaveBeenCalled();
+
+    facts.close();
+    healthStore.close();
+  });
+
+  it("axis ON + grounded source + supported LLM => cited answer, audit=answer (sc-7-6, sc-7-8)", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    // Literature-retrieval ON; cloud-inference stays OFF.
+    const egress = new EgressGuard(false, true);
+
+    // Fake source returning grounded passages (no network).
+    const sourceStub = new MedlineSource(egress);
+    vi.spyOn(sourceStub, "fetchPassages").mockResolvedValue({
+      kind: "grounded",
+      passages: [
+        {
+          title: "Metformin",
+          url: "https://medlineplus.gov/druginfo/meds/a696005.html",
+          text: "Metformin is used to treat type 2 diabetes. Common side effects include nausea and diarrhea.",
+          source: "medlineplus",
+        },
+      ],
+    });
+
+    const literature = new LiteratureRetriever(egress, sourceStub);
+
+    // Injected LLM spy returning a supported answer.
+    const llmSpy: LLMClient = {
+      chat: vi.fn().mockResolvedValue({
+        text: "Metformin commonly causes gastrointestinal side effects including nausea and diarrhea.",
+        toolCalls: [],
+        stopReason: "end",
+        usage: { inputTokens: 100, outputTokens: 50 },
+      }),
+    };
+
+    const facts = new FactStore(":memory:");
+    const healthStore = new HealthDataStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      egress,
+      literature,
+      facts,
+      healthStore,
+    });
+
+    const result = await engine.run(
+      "what are the side effects of metformin?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T12:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+
+    // Non-abstained cited answer.
+    expect(answer.shortCircuit).toBe(false);
+    expect(answer.abstained).toBe(false);
+    expect(answer.citations.length).toBeGreaterThanOrEqual(1);
+    expect(answer.citations[0]?.source).toBe("medlineplus");
+    expect(answer.disclaimerFooter).toBeTruthy();
+
+    // LLM was called once (synthesis).
+    expect(llmSpy.chat).toHaveBeenCalledTimes(1);
+
+    // Cloud-inference axis stays OFF.
+    expect(egress.isAllowed("cloud-inference")).toBe(false);
+
+    // Audit entry must be 'answer'.
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"),
+      "utf-8",
+    );
+    const entries = bytes
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    const answerEntry = entries.find((e) => e["event"] === "answer");
+    expect(answerEntry).toBeDefined();
 
     facts.close();
     healthStore.close();
