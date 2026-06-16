@@ -103,16 +103,21 @@ Selects the orchestration engine for sprints driven by this team:
 > match, again with zero downstream calls. As of Phase 6 Sprint 4 the
 > **deterministic data + numerics layer** (`HealthDataStore` +
 > `NumericsQueryLayer`) also exists — it keeps all arithmetic out of the LLM (see
-> "Numerics + data store" below) — though it is not yet wired into
-> `MedicalSopEngine.run` (S6). As of Phase 6 Sprint 5 the **streaming ingestion**
+> "Numerics + data store" below). As of Phase 6 Sprint 5 the **streaming ingestion**
 > path that fills that store exists too — `bober medical import <file>`
 > stream-parses an Apple Health export into `HealthDataStore` (see "Ingestion"
-> below and [`COMMANDS.md`](../COMMANDS.md)). The remaining SOP steps (egress,
-> medications, retrieval, and the numerics wiring) land in later sprints. See
+> below and [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
+> ordered SOP is wired end-to-end** under a **code-enforced zero-egress default**:
+> consent → red-flag → numerics → medications (from `FactStore`) → an `EgressGuard`
+> literature gate → retrieval (`{disabled}` ⇒ abstain when off) → disclaimer footer →
+> audit. Both egress axes default **false**, so a fresh-config medical turn produces
+> **zero outbound bytes** (see "EgressGuard + full SOP wiring" below). Only the real
+> MedlinePlus networking + cited synthesis (S7) remains. See
 > [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md),
+> [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md),
 > and
-> [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md).
+> [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md).
 
 ---
 
@@ -219,8 +224,10 @@ enforces it (see Gate 2 below).
 
 ### Safety gates + audit substrate (Phase 6 Sprints 2–3)
 
-Two **code-enforced** safety gates now run in order inside
-`MedicalSopEngine.run` (`src/medical/engine.ts`):
+**Code-enforced** safety gates run in fixed order inside
+`MedicalSopEngine.run` (`src/medical/engine.ts`). The first two are described here;
+**Gate 3 (the `EgressGuard` literature gate)** and the full SOP order they front were
+wired in Sprint 6 — see "EgressGuard + full SOP wiring" below.
 
 - **Gate 1 — consent (fail-closed, Sprint 2).** `ConsentGate`
   (`src/medical/consent.ts`) reads `.bober/medical/consent.json`. A missing or
@@ -259,9 +266,9 @@ and
 ### Numerics + data store (Phase 6 Sprint 4)
 
 The medical team **never lets the LLM perform arithmetic** (ADR-3). Two pure,
-synchronous building blocks provide the deterministic numeric substrate. They
-exist as of Sprint 4 but are not yet wired into `MedicalSopEngine.run` — that
-wiring is S6 (through the existing `MedicalSopDeps.numerics` injection slot).
+synchronous building blocks provide the deterministic numeric substrate. They exist
+as of Sprint 4 and are **wired into `MedicalSopEngine.run` as of Sprint 6** (the
+numerics step of the full SOP — see "EgressGuard + full SOP wiring" below).
 
 - **`HealthDataStore` (`src/medical/health-store.ts`).** A `better-sqlite3`
   **synchronous** store mirroring `FactStore` (`src/state/facts.ts`). It uses
@@ -348,6 +355,86 @@ so new sources are additive (ADR-4): an adapter is a `new class` only.
 User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical
 import`. Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md).
+
+### EgressGuard + full SOP wiring (Phase 6 Sprint 6)
+
+Sprint 6 is the integration linchpin: it wires the **full ordered SOP** inside
+`MedicalSopEngine.run` under a **code-enforced zero-egress default**. With a fresh
+config, a medical turn produces **zero outbound bytes**.
+
+**`EgressGuard` (`src/medical/egress.ts`) — two independent opt-in axes.** Both
+default **false**:
+
+- `EgressAxis` = `"cloud-inference" | "literature-retrieval"`.
+- `isAllowed(axis)` returns `true` **only** when that axis was explicitly opted in;
+  the two axes are read **independently** (enabling one does not enable the other).
+- `assertAllowed(axis)` **throws** `Error("Egress axis '<axis>' not enabled")` when
+  off, returns `void` when on — the hard barrier S7's network call will sit behind.
+- `EgressGuard.fromConfig(config)` reads `config.medical.egress`, defaulting each axis
+  to `false` when the section/field is absent.
+
+**Config keys (both default false).** A new optional top-level `medical` section
+(`MedicalSectionSchema`, `src/config/schema.ts`):
+
+```jsonc
+{
+  "medical": {
+    "egress": {
+      "cloudInference": false,        // permit cloud inference synthesis (default false)
+      "literatureRetrieval": false    // permit MedlinePlus literature retrieval (default false)
+    }
+  }
+}
+```
+
+Omitting the `medical` section leaves both axes off. (Also surfaced in the README
+"Full Configuration Reference".)
+
+**Scoped ESLint network boundary + single exception.** `eslint.config.js` gained a
+flat-config block over `files: ["src/medical/**/*.ts"]` that makes egress a **lint
+error**: `no-restricted-imports` forbids `undici` / `got` / `axios` / `node-fetch` and
+the patterns `http` / `https` / `net` / `tls` / `dgram` (and their `node:` forms), and
+`no-restricted-globals` forbids the `fetch` global. A **single** follow-up override on
+`files: ["src/medical/retrieval/medline-source.ts"]` turns both rules **off**
+(flat-config last-match-wins) — that one file is the sanctioned home for Sprint 7's
+real MedlinePlus call. It holds **no** network import today; a forbidden import added to
+any other medical file would fail `npm run lint`. This is defence in depth alongside the
+runtime `EgressGuard`.
+
+**`LiteratureRetriever` (`src/medical/retrieval/literature.ts`).** `retrieve(query)`
+checks `egress.isAllowed("literature-retrieval")` **before** touching the source: when
+off it returns `{ kind: "disabled" }` **synchronously** (no `MedlineSource` method
+called, no network attempt — the zero-egress proof); when on it delegates to
+`MedlineSource.fetchPassages`. `MedlineSource` (`retrieval/medline-source.ts`) is a stub
+returning `{ kind: "abstain", reason }` this sprint; its `RetrievalOutcome` union is
+`{disabled} | {abstain,reason} | {grounded,passages}` (the `grounded` arm is S7 only).
+
+**Medications come from `FactStore`, not `HealthDataStore` (ADR-7).** The engine reads
+active medications via
+`FactStore.getActiveFacts("medical", "patient", "takes-medication")` — the bi-temporal
+value-of-record. The `HealthDataStore` schema is untouched; it never stores medication
+state.
+
+**The full ordered SOP — the ordering *is* the safety guarantee.**
+`MedicalSopEngine.run` runs, in fixed order:
+
+1. **Gate 1 — consent** (fail-closed; refuse + zero downstream on no consent).
+2. **Gate 2 — red-flag short-circuit** (0-LLM canned 911/988 escalation on match).
+3. **Numerics** — deterministic `NumericsQueryLayer.getMetric`, **no LLM**.
+4. **Medications** — `FactStore.getActiveFacts(...)` (ADR-7).
+5. **Gate 3 + retrieval** — `EgressGuard.isAllowed("literature-retrieval")`;
+   `LiteratureRetriever.retrieve` ⇒ `{disabled}` (abstain) when off.
+6. **Disclaimer footer**, then **audit** (`answer` / `abstain`, PHI-free), then
+   return `PipelineResult & { medicalAnswer }`.
+
+Both gates run **before** any numerics, medications, egress, retrieval, or LLM work, so
+a refuse/short-circuit reaches **zero** downstream calls. With both axes off, a numeric
+question answers from deterministic compute (a spy `LLMClient` is never called) and a
+literature question abstains (`MedlineSource.fetchPassages` is never called) — verified
+by a network spy recording **zero** calls. `MedicalSopDeps` gained `egress?` /
+`literature?` / `facts?` / `healthStore?` injection slots (the zero-arg constructor is
+preserved). Full details:
+[`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md).
 
 ---
 

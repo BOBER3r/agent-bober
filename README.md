@@ -732,9 +732,27 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
       "pipelineShape": "ts",              // "ts" | "skill" | "workflow"
       "providers": { "chat": "openai" }   // Partial role->provider override; unset roles keep defaults
     }
+  },
+
+  // -- Medical team egress (Phase 6; both axes default false) --
+  "medical": {                            // Optional. Omit entirely => zero egress (both axes off).
+    "egress": {                           // Two INDEPENDENT opt-in axes; code-enforced zero-egress default.
+      "cloudInference": false,            // Permit cloud inference synthesis. Default false.
+      "literatureRetrieval": false        // Permit MedlinePlus literature retrieval. Default false.
+    }
   }
 }
 ```
+
+> **Zero-egress is code-enforced for the medical team.** Both `medical.egress` axes
+> default `false`, so a medical SOP turn makes **zero outbound calls** out of the box —
+> a numeric question is answered from deterministic local compute and a literature
+> question abstains, with no network module ever reached. The default is enforced two
+> ways: the runtime `EgressGuard` (whose `assertAllowed` throws when an axis is off) and
+> a scoped `no-restricted-imports` ESLint boundary over `src/medical/**/*.ts` that makes
+> any network import a lint error (with a single sanctioned exception reserved for the
+> literature-retrieval source file). See [docs/teams.md](./docs/teams.md) ("EgressGuard +
+> full SOP wiring").
 
 ### Sprint Sizes
 
