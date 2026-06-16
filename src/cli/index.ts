@@ -37,6 +37,7 @@ import { registerMemoryCommand } from "./commands/memory.js";
 import { registerFactsCommand } from "./commands/facts.js";
 import { registerFleetCommand } from "../fleet/index.js";
 import { registerChatCommand } from "./commands/chat.js";
+import { registerMedicalCommand } from "./commands/medical.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -312,6 +313,9 @@ async function main(): Promise<void> {
 
   // ── facts ─────────────────────────────────────────────────────────
   registerFactsCommand(program);
+
+  // ── medical ───────────────────────────────────────────────────────
+  registerMedicalCommand(program);
 
   // ── fleet ─────────────────────────────────────────────────────────
   registerFleetCommand(program);

@@ -179,3 +179,34 @@ export interface LabTrend {
   /** Simple least-squares slope over (t,value); null when sampleCount < 2. */
   slope: number | null;
 }
+
+// ── Ingestion (S5) ──────────────────────────────────────────────────
+
+/**
+ * Result returned by IngestionAdapter.ingest / IngestionNormalizer.importFile.
+ * recordsParsed: total numeric <Record> elements seen.
+ * newRows: NEW rows actually inserted (dedup-aware via INSERT OR IGNORE).
+ */
+export interface IngestionResult {
+  recordsParsed: number;
+  newRows: number;
+}
+
+/**
+ * Async sink that receives bounded observation batches from an adapter.
+ * writeBatch is awaited by the adapter to apply backpressure before the next batch.
+ */
+export interface ObservationSink {
+  writeBatch(obs: HealthObservation[], labs: LabResult[]): Promise<void>;
+}
+
+/**
+ * Interface for a streaming health data import adapter.
+ * canHandle selects the adapter; ingest streams the file into the sink.
+ * Adding a new adapter (Whoop, CSV, …) only requires a new class — ADR-4 registry.
+ */
+export interface IngestionAdapter {
+  readonly kind: string;
+  canHandle(filePath: string): boolean;
+  ingest(filePath: string, sink: ObservationSink): Promise<IngestionResult>;
+}
