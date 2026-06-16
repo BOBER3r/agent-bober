@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Medical Team — in progress (2 of 7)
+## Medical Team — in progress (3 of 7)
 
 `spec-20260616-medical-team` — Phase 6 of the chattable multi-agent platform: a
 domain-specific **medical** team running a guardrailed Standard-Operating-Procedure
@@ -147,17 +147,35 @@ and the audit substrate**: a fail-closed `ConsentGate` wired as Gate 1 of
 `MedicalSopEngine.run` (absent consent ⇒ refuse `MedicalAnswer` with **zero** downstream
 calls), an append-only mode-0600 `AuditLog` writing IDs/enums-only entries to
 `.bober/medical/audit-<date>.jsonl` (never prompt text or health values), and a versioned
-`DisclaimerComposer` footer attached to every answer — all on injected timestamps. The
-remaining red-flag gate, store, numerics, ingestion, egress, and retrieval are S3–S7.
+`DisclaimerComposer` footer attached to every answer — all on injected timestamps. Sprint 3
+lands the **headline safety guarantee — Gate 2, the deterministic red-flag emergency
+short-circuit**: a pure/synchronous `RedFlagDetector` (`src/medical/red-flag.ts`, zero
+imports) classifies a prompt into `cardiac` / `stroke` / `anaphylaxis` / `self-harm` /
+`overdose` / `none` over a versioned `PATTERNSET_VERSION` (conservative case-insensitive
+phrase matching, self-harm/overdose ordered first so 988 wins over 911), and the real
+`MedicalGuardrails` (`src/medical/guardrails.ts`) replaces the S1–S2 allow-only stub — its
+`evaluate` throws on an empty prompt and returns a `short-circuit` verdict with a **canned,
+never-model-generated** 911/988 escalation on any match. `MedicalSopEngine.run` runs this
+guardrail **immediately after the consent gate and before any numerics/LLM**: a match returns
+the canned escalation `MedicalAnswer` (`shortCircuit: true`) with the disclaimer footer + a
+PHI-free `short-circuit` audit entry (`ruleId` + `rulesetVersion` + `patternsetVersion`) and
+reaches **zero** downstream calls. `MedicalSopDeps` gained real `llmClient?: LLMClient` +
+`numerics?` injection slots (the Sprint 2 carry-forward fix) so spies prove the never-called
+guarantee. Detection is deliberately conservative (ADR-2): novel phrasing may miss and fall
+through to the normal path — advisory false-negative gaps are surfaced to the patternset
+revision / S6.5 counsel review. The remaining store, numerics, ingestion, egress, and
+retrieval are S4–S7.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260616-medical-team-1.md](./sprint-spec-20260616-medical-team-1.md) | Additive `medical-sop` `PipelineEngineName` member + both mirrored Zod enums widened in lockstep + both exhaustive selector switches extended (team→`MedicalSopEngine`, config→defensive `TsPipelineEngine`); new `src/medical/` module (stub `MedicalSopEngine`, `GuardrailSet`/`GuardrailVerdict`/`GuardrailContext`/`MedicalAnswer` types, `buildMedicalTeam`); built-in `medical` team registered in `loadTeam`; `ts`/`skill`/`workflow` + programming team byte-identical, no SDK leakage in `src/medical/` |
 | 2 | [sprint-spec-20260616-medical-team-2.md](./sprint-spec-20260616-medical-team-2.md) | First code-enforced safety gate + audit substrate: fail-closed `ConsentGate` (`.bober/medical/consent.json`) wired as **Gate 1** of `MedicalSopEngine.run` (no consent ⇒ refuse + **zero** downstream calls); append-only mode-0600 `AuditLog` → `.bober/medical/audit-<date>.jsonl`, IDs/enums-only (`AuditEntry`/`AuditEvent`), no PHI; versioned `DisclaimerComposer` footer on every answer; `MedicalSopDeps` DI seam (zero-arg ctor preserved); all timestamps injected via `opts.now` |
+| 3 | [sprint-spec-20260616-medical-team-3.md](./sprint-spec-20260616-medical-team-3.md) | **Gate 2 — deterministic red-flag emergency short-circuit (0 LLM/numerics):** pure/sync `RedFlagDetector` (`red-flag.ts`, zero imports, 5 categories + `PATTERNSET_VERSION`, self-harm/overdose first so 988 > 911) + real `MedicalGuardrails` (`guardrails.ts`) replacing the S1–S2 allow-only stub (`evaluate` throws on empty; canned 911/988 escalation never model-generated; `refuse` placeholder → S6); wired into `MedicalSopEngine.run` after consent and before any numerics/LLM (match ⇒ canned `MedicalAnswer` `shortCircuit:true` + PHI-free `short-circuit` audit `ruleId`/`rulesetVersion`/`patternsetVersion`, zero downstream calls); `MedicalSopDeps` += real `llmClient?:LLMClient`/`numerics?` slots (S2 carry-forward fix) so spies prove never-called; conservative matching per ADR-2 (advisory false-negatives surfaced to patternset revision / S6.5 counsel) |
 
 The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, and the
-`GuardrailSet` slot are documented in [`docs/teams.md`](../teams.md) (Pipeline Shape table,
-"Guardrails (Phase 6 — In Progress)", and "How `loadTeam` Works").
+real `MedicalGuardrails` in its `GuardrailSet` slot are documented in
+[`docs/teams.md`](../teams.md) (Pipeline Shape table, "Guardrails (Phase 6 — Gate 2 Live)",
+and "How `loadTeam` Works").
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 

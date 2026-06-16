@@ -95,11 +95,14 @@ Selects the orchestration engine for sprints driven by this team:
 > `pipelineShape` schema (so the Zod enum stays in lockstep with the
 > `PipelineEngineName` TS union), but the medical team is a **code-registered
 > built-in** reached via `loadTeam(config, "medical")`, not by hand-setting
-> `pipelineShape: "medical-sop"` on a config team. As of Phase 6 Sprint 2 the
-> `MedicalSopEngine` enforces **Gate 1 (consent)**: absent a valid
-> `ConsentRecord` it refuses with zero downstream calls and writes an audit
-> entry. The remaining SOP steps (red-flag gate, numerics, retrieval) land in
-> later sprints. See [`docs/sprints/sprint-spec-20260616-medical-team-2.md`](sprints/sprint-spec-20260616-medical-team-2.md).
+> `pipelineShape: "medical-sop"` on a config team. As of Phase 6 Sprint 3 the
+> `MedicalSopEngine` enforces two code-enforced gates: **Gate 1 (consent)** —
+> absent a valid `ConsentRecord` it refuses with zero downstream calls — and
+> **Gate 2 (red-flag emergency short-circuit)** — a deterministic, zero-LLM
+> `RedFlagDetector` that returns a canned 911/988 escalation on any emergency
+> match, again with zero downstream calls. The remaining SOP steps (numerics,
+> ingestion, egress, retrieval) land in later sprints. See
+> [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md).
 
 ---
 
@@ -175,29 +178,58 @@ carry `--team <id>` in their argv — they run on the programming team by
 default. A future sprint will thread `teamId` through `RunSpawnerOptions` so
 spawned children inherit the active chat team.
 
-### Guardrails (Phase 6 — In Progress)
+### Guardrails (Phase 6 — Gate 2 Live)
 
 The `guardrails` field on a resolved `Team` (`src/teams/types.ts`) holds a
 `GuardrailSet` — a rule set that guards medical prompts before the LLM call.
-The built-in `medical` team fills this slot with an allow-all `GuardrailSet`
-(`rulesetVersion "0.0.0"`, `evaluate(...) -> { kind: "allow" }`); the type
-surface lives in `src/medical/types.ts` (`GuardrailSet` / `GuardrailVerdict` /
-`GuardrailContext`). Real `evaluate` logic — red-flag detection, refusals,
-canned short-circuit responses — lands in Sprint 3. Every other team's
-`guardrails` slot remains `undefined`, and no current code path reads or
-enforces it.
+The type surface lives in `src/medical/types.ts` (`GuardrailSet` /
+`GuardrailVerdict` / `GuardrailContext`). As of Phase 6 Sprint 3 the built-in
+`medical` team fills this slot with the **real** `MedicalGuardrails`
+(`src/medical/guardrails.ts`, `rulesetVersion "guardrail-2026.06.16"`), which
+replaces the Sprint 1–2 allow-all stub. Its `evaluate(prompt, ctx)`:
 
-### Consent gate + audit substrate (Phase 6 Sprint 2)
+- **throws** on an empty/whitespace prompt;
+- runs a pure/synchronous `RedFlagDetector` (`src/medical/red-flag.ts`,
+  `PATTERNSET_VERSION "redflag-2026.06.16"`, zero imports / no I/O / no model)
+  that classifies the prompt into `cardiac` / `stroke` / `anaphylaxis` /
+  `self-harm` / `overdose` / `none` via conservative case-insensitive phrase
+  matching — self-harm/overdose are checked first so the 988 hotline wins over
+  911;
+- returns `{ kind: "short-circuit", rule, cannedResponse }` with a **fixed,
+  never-model-generated** 911 escalation (cardiac/stroke/anaphylaxis) or 988
+  escalation (self-harm/overdose) on any match, otherwise `{ kind: "allow" }`.
 
-The first **code-enforced** safety gate now runs inside
-`MedicalSopEngine.run` (`src/medical/engine.ts`), ahead of the guardrail:
+The `refuse` branch (non-emergency code-enforced refusals) is a documented
+placeholder deferred to Sprint 6. Detection is deliberately conservative per
+ADR-2: novel/indirect phrasing may return `none` and fall through to the normal
+(still-guardrailed) path — known advisory false-negative gaps are surfaced to a
+future patternset revision / external counsel review. Every other team's
+`guardrails` slot remains `undefined`, and only `MedicalSopEngine.run` reads and
+enforces it (see Gate 2 below).
 
-- **Gate 1 — consent (fail-closed).** `ConsentGate` (`src/medical/consent.ts`)
-  reads `.bober/medical/consent.json`. A missing or corrupt record means **no
-  consent**, and the engine returns a refuse `MedicalAnswer`
-  (`shortCircuit: true`) with **zero** downstream calls — no numerics, no LLM,
-  no retrieval. `recordConsent(record, nowIso)` persists the record mode-0600
-  and audits a `consent` event.
+### Safety gates + audit substrate (Phase 6 Sprints 2–3)
+
+Two **code-enforced** safety gates now run in order inside
+`MedicalSopEngine.run` (`src/medical/engine.ts`):
+
+- **Gate 1 — consent (fail-closed, Sprint 2).** `ConsentGate`
+  (`src/medical/consent.ts`) reads `.bober/medical/consent.json`. A missing or
+  corrupt record means **no consent**, and the engine returns a refuse
+  `MedicalAnswer` (`shortCircuit: true`) with **zero** downstream calls — no
+  numerics, no LLM, no retrieval. `recordConsent(record, nowIso)` persists the
+  record mode-0600 and audits a `consent` event.
+- **Gate 2 — red-flag emergency short-circuit (Sprint 3).** Immediately after
+  consent and **before any numerics or LLM call**, the engine runs
+  `guardrails.evaluate(userPrompt, {})`. On a `short-circuit` verdict it returns
+  a `MedicalAnswer` whose `body` is the canned 911/988 escalation
+  (`shortCircuit: true`, with the disclaimer footer) and reaches **zero**
+  downstream work, plus a `short-circuit` audit entry carrying `ruleId` +
+  `rulesetVersion` + `patternsetVersion` (IDs/enums only). On `allow` it falls
+  through to the normal path. The detector/guardrail are pure and need no
+  network or `LLMClient` — detection is deterministic and local only. See
+  "Guardrails (Phase 6 — Gate 2 Live)" above. The injectable
+  `MedicalSopDeps.llmClient` / `MedicalSopDeps.numerics` spy slots make the
+  "never called on short-circuit" guarantee enforceable by tests.
 - **Audit log (PHI-free, append-only).** `AuditLog` (`src/medical/audit.ts`)
   appends one JSON line per event to `.bober/medical/audit-<date>.jsonl`,
   opened `O_WRONLY|O_APPEND|O_CREAT` with file mode `0600`. Entries
@@ -206,11 +238,13 @@ The first **code-enforced** safety gate now runs inside
   values are never written.
 - **Disclaimer footer.** `DisclaimerComposer` (`src/medical/disclaimer.ts`)
   produces a versioned, non-diagnostic general-wellness footer attached to
-  **every** `MedicalAnswer` (refuse and answer paths alike).
+  **every** `MedicalAnswer` (refuse, short-circuit, and answer paths alike).
 
 All timestamps are injected via `MedicalSopEngine.run`'s `opts.now`, never read
 from the wall clock on any tested path. Full details:
-[`docs/sprints/sprint-spec-20260616-medical-team-2.md`](sprints/sprint-spec-20260616-medical-team-2.md).
+[`docs/sprints/sprint-spec-20260616-medical-team-2.md`](sprints/sprint-spec-20260616-medical-team-2.md)
+and
+[`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md).
 
 ---
 
