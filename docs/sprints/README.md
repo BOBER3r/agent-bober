@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Medical Team — in progress (1 of 7)
+## Medical Team — in progress (2 of 7)
 
 `spec-20260616-medical-team` — Phase 6 of the chattable multi-agent platform: a
 domain-specific **medical** team running a guardrailed Standard-Operating-Procedure
@@ -142,12 +142,18 @@ resolves to a **code-registered built-in** `medical` team (`pipelineShape "medic
 slot). The `medical-sop` config-path selector case is a **defensive exhaustiveness branch**
 (falls through to `TsPipelineEngine`) because `config.pipeline.engine` is never legitimately
 `medical-sop` — so the `ts`/`skill`/`workflow` engines and the programming team stay
-**byte-identical** (regression-verified). Gates, store, numerics, ingestion, egress, and
-retrieval are S2–S7.
+**byte-identical** (regression-verified). Sprint 2 lands the **first code-enforced gate
+and the audit substrate**: a fail-closed `ConsentGate` wired as Gate 1 of
+`MedicalSopEngine.run` (absent consent ⇒ refuse `MedicalAnswer` with **zero** downstream
+calls), an append-only mode-0600 `AuditLog` writing IDs/enums-only entries to
+`.bober/medical/audit-<date>.jsonl` (never prompt text or health values), and a versioned
+`DisclaimerComposer` footer attached to every answer — all on injected timestamps. The
+remaining red-flag gate, store, numerics, ingestion, egress, and retrieval are S3–S7.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260616-medical-team-1.md](./sprint-spec-20260616-medical-team-1.md) | Additive `medical-sop` `PipelineEngineName` member + both mirrored Zod enums widened in lockstep + both exhaustive selector switches extended (team→`MedicalSopEngine`, config→defensive `TsPipelineEngine`); new `src/medical/` module (stub `MedicalSopEngine`, `GuardrailSet`/`GuardrailVerdict`/`GuardrailContext`/`MedicalAnswer` types, `buildMedicalTeam`); built-in `medical` team registered in `loadTeam`; `ts`/`skill`/`workflow` + programming team byte-identical, no SDK leakage in `src/medical/` |
+| 2 | [sprint-spec-20260616-medical-team-2.md](./sprint-spec-20260616-medical-team-2.md) | First code-enforced safety gate + audit substrate: fail-closed `ConsentGate` (`.bober/medical/consent.json`) wired as **Gate 1** of `MedicalSopEngine.run` (no consent ⇒ refuse + **zero** downstream calls); append-only mode-0600 `AuditLog` → `.bober/medical/audit-<date>.jsonl`, IDs/enums-only (`AuditEntry`/`AuditEvent`), no PHI; versioned `DisclaimerComposer` footer on every answer; `MedicalSopDeps` DI seam (zero-arg ctor preserved); all timestamps injected via `opts.now` |
 
 The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, and the
 `GuardrailSet` slot are documented in [`docs/teams.md`](../teams.md) (Pipeline Shape table,

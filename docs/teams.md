@@ -95,9 +95,11 @@ Selects the orchestration engine for sprints driven by this team:
 > `pipelineShape` schema (so the Zod enum stays in lockstep with the
 > `PipelineEngineName` TS union), but the medical team is a **code-registered
 > built-in** reached via `loadTeam(config, "medical")`, not by hand-setting
-> `pipelineShape: "medical-sop"` on a config team. As of Phase 6 Sprint 1 the
-> `MedicalSopEngine` is a stub — the real medical SOP (consent/red-flag gates,
-> numerics, retrieval) lands in later sprints.
+> `pipelineShape: "medical-sop"` on a config team. As of Phase 6 Sprint 2 the
+> `MedicalSopEngine` enforces **Gate 1 (consent)**: absent a valid
+> `ConsentRecord` it refuses with zero downstream calls and writes an audit
+> entry. The remaining SOP steps (red-flag gate, numerics, retrieval) land in
+> later sprints. See [`docs/sprints/sprint-spec-20260616-medical-team-2.md`](sprints/sprint-spec-20260616-medical-team-2.md).
 
 ---
 
@@ -177,14 +179,38 @@ spawned children inherit the active chat team.
 
 The `guardrails` field on a resolved `Team` (`src/teams/types.ts`) holds a
 `GuardrailSet` — a rule set that guards medical prompts before the LLM call.
-As of Phase 6 Sprint 1 the built-in `medical` team fills this slot with a
-**stub** allow-all `GuardrailSet` (`rulesetVersion "0.0.0"`,
-`evaluate(...) -> { kind: "allow" }`); the type surface lives in
-`src/medical/types.ts` (`GuardrailSet` / `GuardrailVerdict` /
+The built-in `medical` team fills this slot with an allow-all `GuardrailSet`
+(`rulesetVersion "0.0.0"`, `evaluate(...) -> { kind: "allow" }`); the type
+surface lives in `src/medical/types.ts` (`GuardrailSet` / `GuardrailVerdict` /
 `GuardrailContext`). Real `evaluate` logic — red-flag detection, refusals,
 canned short-circuit responses — lands in Sprint 3. Every other team's
 `guardrails` slot remains `undefined`, and no current code path reads or
 enforces it.
+
+### Consent gate + audit substrate (Phase 6 Sprint 2)
+
+The first **code-enforced** safety gate now runs inside
+`MedicalSopEngine.run` (`src/medical/engine.ts`), ahead of the guardrail:
+
+- **Gate 1 — consent (fail-closed).** `ConsentGate` (`src/medical/consent.ts`)
+  reads `.bober/medical/consent.json`. A missing or corrupt record means **no
+  consent**, and the engine returns a refuse `MedicalAnswer`
+  (`shortCircuit: true`) with **zero** downstream calls — no numerics, no LLM,
+  no retrieval. `recordConsent(record, nowIso)` persists the record mode-0600
+  and audits a `consent` event.
+- **Audit log (PHI-free, append-only).** `AuditLog` (`src/medical/audit.ts`)
+  appends one JSON line per event to `.bober/medical/audit-<date>.jsonl`,
+  opened `O_WRONLY|O_APPEND|O_CREAT` with file mode `0600`. Entries
+  (`AuditEntry`) carry **IDs/enums only** — `tIso`, `event`, optional
+  `rulesetVersion` / `patternsetVersion` / `ruleId`. Prompt text and health
+  values are never written.
+- **Disclaimer footer.** `DisclaimerComposer` (`src/medical/disclaimer.ts`)
+  produces a versioned, non-diagnostic general-wellness footer attached to
+  **every** `MedicalAnswer` (refuse and answer paths alike).
+
+All timestamps are injected via `MedicalSopEngine.run`'s `opts.now`, never read
+from the wall clock on any tested path. Full details:
+[`docs/sprints/sprint-spec-20260616-medical-team-2.md`](sprints/sprint-spec-20260616-medical-team-2.md).
 
 ---
 
