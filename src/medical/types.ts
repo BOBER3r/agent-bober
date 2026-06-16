@@ -84,3 +84,98 @@ export interface AuditEntry {
   /** Optional rule ID triggering the event (IDs only — never text). */
   ruleId?: string;
 }
+
+// ── Health observations (S4) ────────────────────────────────────────
+
+/**
+ * A single time-stamped health metric observation.
+ * All timestamps are ISO 8601 INJECTED parameters — the store never reads the clock.
+ * id is derived deterministically from (metric|tStart|source|value) via SHA-256.
+ */
+export interface HealthObservation {
+  /** Deterministic SHA-256 of metric|tStart|source|value; derivable, so optional on input. */
+  id?: string;
+  metric: string;
+  value: number;
+  unit: string;
+  /** ISO 8601; INJECTED parameter — never Date.now(). */
+  tStart: string;
+  tEnd?: string;
+  /** e.g. "apple-health" | "whoop" */
+  source: string;
+}
+
+/**
+ * A laboratory test result with reference range.
+ * id is optional on input (derived from biomarker|collectedAtIso|value via SHA-256).
+ */
+export interface LabResult {
+  id?: string;
+  biomarker: string;
+  value: number;
+  unit: string;
+  /** ISO 8601; INJECTED parameter — never Date.now(). */
+  collectedAtIso: string;
+  referenceLow?: number;
+  referenceHigh?: number;
+}
+
+/** A stored baseline value for a metric used to compute delta/trend. */
+export interface Baseline {
+  metric: string;
+  value: number;
+  unit: string;
+}
+
+// ── Numerics (S4, ADR-3) ────────────────────────────────────────────
+
+/**
+ * Closed whitelist of numeric primitives (ADR-3).
+ * Adding a computation requires extending this union (a code review event), not a model decision.
+ */
+export type NumericPrimitive =
+  | "mean"
+  | "min"
+  | "max"
+  | "latest"
+  | "delta"
+  | "slope"
+  | "percentile"
+  | "zscore";
+
+/**
+ * Result of a NumericsQueryLayer.getMetric() call.
+ * value is null when sampleCount === 0 (empty window), cross-unit refusal, or zscore n<2.
+ * sampleCount === 0 signals upstream abstention.
+ */
+export interface NumericResult {
+  primitive: NumericPrimitive;
+  /** null when sampleCount === 0 OR cross-unit refusal OR zscore n<2 */
+  value: number | null;
+  unit: string;
+  /** 0 => upstream abstention */
+  sampleCount: number;
+}
+
+/** Time window for querying a metric. */
+export interface MetricWindow {
+  metric: string;
+  fromIso: string;
+  toIso: string;
+  /** Expected unit (used for abstain result labelling when window is empty). */
+  unit?: string;
+}
+
+/** Trend summary for a lab biomarker series. */
+export interface LabTrend {
+  biomarker: string;
+  sampleCount: number;
+  /** Latest value; null when sampleCount === 0 (abstain). */
+  latestValue: number | null;
+  /** Latest unit; empty string when sampleCount === 0. */
+  latestUnit: string;
+  /** ISO 8601 timestamp of the most recent result; null when sampleCount === 0. */
+  latestCollectedAt: string | null;
+  /** Simple least-squares slope over (t,value); null when sampleCount < 2. */
+  slope: number | null;
+}
