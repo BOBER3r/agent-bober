@@ -142,10 +142,10 @@ describe("selectPipelineEngineForTeam — declared team with pipelineShape 'work
     const base = createDefaultConfig("test", "greenfield");
     const config: BoberConfig = {
       ...base,
-      teams: { medical: { pipelineShape: "workflow" } },
+      teams: { ops: { pipelineShape: "workflow" } },
     };
     // Load team before clearing mocks — resolveRoleProviders logs info lines during team resolution.
-    const team = loadTeam(config, "medical");
+    const team = loadTeam(config, "ops");
     vi.clearAllMocks();
     vi.mocked(isWorkflowEligible).mockReturnValue(true);
 
@@ -162,10 +162,10 @@ describe("selectPipelineEngineForTeam — declared team with pipelineShape 'work
     const base = createDefaultConfig("test", "greenfield");
     const config: BoberConfig = {
       ...base,
-      teams: { medical: { pipelineShape: "workflow" } },
+      teams: { ops: { pipelineShape: "workflow" } },
     };
     // Load team before clearing mocks — resolveRoleProviders logs info lines during team resolution.
-    const team = loadTeam(config, "medical");
+    const team = loadTeam(config, "ops");
     vi.clearAllMocks();
     vi.mocked(isWorkflowEligible).mockReturnValue(false);
 
@@ -184,10 +184,10 @@ describe("selectPipelineEngineForTeam — declared team with pipelineShape 'work
     const config: BoberConfig = {
       ...base,
       pipeline: { ...base.pipeline, engine: "ts", mode: "careful" },
-      teams: { medical: { pipelineShape: "workflow" } },
+      teams: { ops: { pipelineShape: "workflow" } },
     };
     // Load team before clearing mocks — resolveRoleProviders logs info lines during team resolution.
-    const team = loadTeam(config, "medical");
+    const team = loadTeam(config, "ops");
     vi.clearAllMocks();
     vi.mocked(isWorkflowEligible).mockReturnValue(true);
 

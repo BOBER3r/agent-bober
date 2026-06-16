@@ -4,7 +4,7 @@ import type { PipelineResult } from "../pipeline.js";
 // ── Types ──────────────────────────────────────────────────────────
 
 /** Well-known orchestration engine names. Mirrors the z.enum in PipelineSectionSchema. */
-export type PipelineEngineName = "ts" | "skill" | "workflow";
+export type PipelineEngineName = "ts" | "skill" | "workflow" | "medical-sop";
 
 /** Interface every pipeline engine implementation must satisfy. */
 export interface PipelineEngine {

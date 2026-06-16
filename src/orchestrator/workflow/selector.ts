@@ -4,6 +4,7 @@ import type { PipelineEngine, PipelineEngineName } from "./engine.js";
 import { isWorkflowEligible } from "./eligibility.js";
 import { TsPipelineEngine } from "./ts-engine.js";
 import { WorkflowEngine } from "./workflow-engine.js";
+import { MedicalSopEngine } from "../../medical/engine.js";
 import type { Team } from "../../teams/types.js";
 
 // ── Resolver ───────────────────────────────────────────────────────
@@ -60,6 +61,12 @@ export function selectPipelineEngine(config: BoberConfig): PipelineEngine {
       // Reachable only when resolveEngineName returns 'workflow' (eligible + not careful).
       // WorkflowEngine.run has a belt-and-suspenders catch for WorkflowUnavailableError.
       return new WorkflowEngine();
+    case "medical-sop":
+      // Defensive exhaustiveness branch — config.pipeline.engine is never legitimately
+      // 'medical-sop' (medical team routes through selectPipelineEngineForTeam instead).
+      // Falls through to TsPipelineEngine so the switch stays exhaustive without altering
+      // any programming-path behaviour.
+      return new TsPipelineEngine();
   }
 }
 
@@ -114,5 +121,8 @@ export function selectPipelineEngineForTeam(
     case "workflow":
       // Reachable only when resolveEngineNameForTeam returns 'workflow' (eligible + not careful).
       return new WorkflowEngine();
+    case "medical-sop":
+      // Medical team path — returns a MedicalSopEngine stub (real SOP in S2/S3/S4/S6).
+      return new MedicalSopEngine();
   }
 }

@@ -217,7 +217,7 @@ export const PipelineSectionSchema = z.object({
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
   /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines (sprint 6+). Default: 'ts'. */
-  engine: z.enum(["ts", "skill", "workflow"]).default("ts"),
+  engine: z.enum(["ts", "skill", "workflow", "medical-sop"]).default("ts"),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -363,7 +363,7 @@ export const TeamConfigSchema = z.object({
   /** Memory namespace segment — restricted to a safe path segment. */
   memoryNamespace: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
   /** Orchestration engine shape for this team. Mirrors the z.enum in PipelineSectionSchema. */
-  pipelineShape: z.enum(["ts", "skill", "workflow"]).optional(),
+  pipelineShape: z.enum(["ts", "skill", "workflow", "medical-sop"]).optional(),
   /** Partial role -> provider override. Keys SHOULD be RoleName values. */
   providers: z.record(z.string(), z.string()).optional(),
   roles: z.array(z.object({ name: z.string(), displayName: z.string() })).optional(),
