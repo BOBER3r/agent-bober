@@ -100,9 +100,15 @@ Selects the orchestration engine for sprints driven by this team:
 > absent a valid `ConsentRecord` it refuses with zero downstream calls — and
 > **Gate 2 (red-flag emergency short-circuit)** — a deterministic, zero-LLM
 > `RedFlagDetector` that returns a canned 911/988 escalation on any emergency
-> match, again with zero downstream calls. The remaining SOP steps (numerics,
-> ingestion, egress, retrieval) land in later sprints. See
-> [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md).
+> match, again with zero downstream calls. As of Phase 6 Sprint 4 the
+> **deterministic data + numerics layer** (`HealthDataStore` +
+> `NumericsQueryLayer`) also exists — it keeps all arithmetic out of the LLM (see
+> "Numerics + data store" below) — though it is not yet wired into
+> `MedicalSopEngine.run` (S6). The remaining SOP steps (ingestion, egress,
+> retrieval, and the numerics wiring) land in later sprints. See
+> [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md)
+> and
+> [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md).
 
 ---
 
@@ -245,6 +251,50 @@ from the wall clock on any tested path. Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-2.md`](sprints/sprint-spec-20260616-medical-team-2.md)
 and
 [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md).
+
+### Numerics + data store (Phase 6 Sprint 4)
+
+The medical team **never lets the LLM perform arithmetic** (ADR-3). Two pure,
+synchronous building blocks provide the deterministic numeric substrate. They
+exist as of Sprint 4 but are not yet wired into `MedicalSopEngine.run` — that
+wiring is S6 (through the existing `MedicalSopDeps.numerics` injection slot).
+
+- **`HealthDataStore` (`src/medical/health-store.ts`).** A `better-sqlite3`
+  **synchronous** store mirroring `FactStore` (`src/state/facts.ts`). It uses
+  **three** tables: `health_observations` (the generic metric time-series),
+  `lab_results` (biomarkers with `ref_low`/`ref_high` reference ranges), and
+  `kv_store` (backing baselines + preferences). Rows are deduped via
+  `INSERT OR IGNORE` on a deterministic SHA-256 id
+  (`observationId(metric|tStart|source|value)`, mirroring `factId`), and
+  `upsertObservations` returns the count of **NEW rows only**. Accessors:
+  `getObservations(metric, fromIso, toIso)` (ordered `t_start` ASC),
+  `getLabSeries(biomarker)`, `upsertLabResult`, `getBaseline`/`putBaseline`,
+  `getPreference`, `close`. The store **never reads the clock** — every timestamp
+  is an injected ISO-8601 parameter. Medications are **not** stored here; they are
+  FactStore value-of-record (S6 / ADR-7).
+- **`NumericsQueryLayer` (`src/medical/numerics.ts`).** Computes a **closed
+  whitelist of 8 numeric primitives** — `mean | min | max | latest | delta |
+  slope | percentile | zscore` — over a metric window via
+  `getMetric(window, primitive, percentile = 50)`, plus `getLabTrend(biomarker)`.
+  Dispatch is an exhaustive `switch` with a `never` guard, so adding a primitive
+  is a compile-time **code-review event**, not a model decision. There is **no
+  `eval`, no `Function`, no `vm`, no `child_process`/`execa`** anywhere in the
+  layer (asserted by a source-grep guard test).
+
+`getMetric` **never throws**. It distinguishes a true **abstain** from a
+code-enforced **refusal** via `sampleCount`:
+
+| Situation | Result | Meaning |
+|---|---|---|
+| Empty window | `{ value: null, sampleCount: 0 }` | Abstain — no data. |
+| Mixed units for the metric | `{ value: null, sampleCount: N>0 }` | Cross-unit refusal — refuses to blend e.g. `kg` + `lb`. |
+| `zscore` with n<2 | `{ value: null, sampleCount: 1 }` | Partial abstain — stddev undefined. |
+| `slope` all at one timestamp | `{ value: null, sampleCount: N }` | Partial abstain — degenerate denominator. |
+
+So `value === null && sampleCount === 0` means "nothing to compute," whereas
+`value === null && sampleCount > 0` means "data found but unsafe to aggregate
+as-is." Full details:
+[`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md).
 
 ---
 

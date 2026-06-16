@@ -122,7 +122,7 @@ README Teams section) ship with it.
 
 User-facing "how to add a team" docs live in [`docs/teams.md`](../teams.md).
 
-## Medical Team — in progress (3 of 7)
+## Medical Team — in progress (4 of 7)
 
 `spec-20260616-medical-team` — Phase 6 of the chattable multi-agent platform: a
 domain-specific **medical** team running a guardrailed Standard-Operating-Procedure
@@ -163,19 +163,40 @@ reaches **zero** downstream calls. `MedicalSopDeps` gained real `llmClient?: LLM
 `numerics?` injection slots (the Sprint 2 carry-forward fix) so spies prove the never-called
 guarantee. Detection is deliberately conservative (ADR-2): novel phrasing may miss and fall
 through to the normal path — advisory false-negative gaps are surfaced to the patternset
-revision / S6.5 counsel review. The remaining store, numerics, ingestion, egress, and
-retrieval are S4–S7.
+revision / S6.5 counsel review. Sprint 4 lands the **data + numerics layer that keeps
+arithmetic out of the LLM (ADR-3)**: a synchronous `better-sqlite3` `HealthDataStore`
+(`src/medical/health-store.ts`) mirroring `FactStore` — three tables
+(`health_observations` + `lab_results` + `kv_store`), a deterministic SHA-256
+`observationId(metric|tStart|source|value)`, `INSERT OR IGNORE` dedup, and
+`upsertObservations` returning the **NEW-row count only** — plus a `NumericsQueryLayer`
+(`src/medical/numerics.ts`) exposing a **closed 8-primitive whitelist**
+(`mean | min | max | latest | delta | slope | percentile | zscore`) via an exhaustive
+`never`-guarded `switch`, plus `getLabTrend`. There is **no `eval` / `Function` / `vm` /
+`child_process` / `execa`** anywhere in the layer — the LLM never does arithmetic, and
+adding a computation requires extending `NumericPrimitive` (a code-review event).
+`getMetric` never throws; it distinguishes a true **abstain** (empty window ⇒
+`{value:null, sampleCount:0}`) from a code-enforced **cross-unit refusal** (mixed units ⇒
+`{value:null, sampleCount:N>0}`) — `zscore` n<2 and degenerate-slope similarly return null
+with `sampleCount:N`. The numeric/lab type surface was added additively to
+`src/medical/types.ts`. The 3-table shape deviates from the contract summary's "single
+generic events table" wording (each of labs/baselines/preferences has a distinct shape);
+the deviation was flagged by the generator and accepted by the evaluator since no
+`sc-4` criterion mandates a single table. The remaining ingestion (S5), egress +
+medications + full SOP wiring (S6), and literature retrieval (S7) are still ahead.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260616-medical-team-1.md](./sprint-spec-20260616-medical-team-1.md) | Additive `medical-sop` `PipelineEngineName` member + both mirrored Zod enums widened in lockstep + both exhaustive selector switches extended (team→`MedicalSopEngine`, config→defensive `TsPipelineEngine`); new `src/medical/` module (stub `MedicalSopEngine`, `GuardrailSet`/`GuardrailVerdict`/`GuardrailContext`/`MedicalAnswer` types, `buildMedicalTeam`); built-in `medical` team registered in `loadTeam`; `ts`/`skill`/`workflow` + programming team byte-identical, no SDK leakage in `src/medical/` |
 | 2 | [sprint-spec-20260616-medical-team-2.md](./sprint-spec-20260616-medical-team-2.md) | First code-enforced safety gate + audit substrate: fail-closed `ConsentGate` (`.bober/medical/consent.json`) wired as **Gate 1** of `MedicalSopEngine.run` (no consent ⇒ refuse + **zero** downstream calls); append-only mode-0600 `AuditLog` → `.bober/medical/audit-<date>.jsonl`, IDs/enums-only (`AuditEntry`/`AuditEvent`), no PHI; versioned `DisclaimerComposer` footer on every answer; `MedicalSopDeps` DI seam (zero-arg ctor preserved); all timestamps injected via `opts.now` |
 | 3 | [sprint-spec-20260616-medical-team-3.md](./sprint-spec-20260616-medical-team-3.md) | **Gate 2 — deterministic red-flag emergency short-circuit (0 LLM/numerics):** pure/sync `RedFlagDetector` (`red-flag.ts`, zero imports, 5 categories + `PATTERNSET_VERSION`, self-harm/overdose first so 988 > 911) + real `MedicalGuardrails` (`guardrails.ts`) replacing the S1–S2 allow-only stub (`evaluate` throws on empty; canned 911/988 escalation never model-generated; `refuse` placeholder → S6); wired into `MedicalSopEngine.run` after consent and before any numerics/LLM (match ⇒ canned `MedicalAnswer` `shortCircuit:true` + PHI-free `short-circuit` audit `ruleId`/`rulesetVersion`/`patternsetVersion`, zero downstream calls); `MedicalSopDeps` += real `llmClient?:LLMClient`/`numerics?` slots (S2 carry-forward fix) so spies prove never-called; conservative matching per ADR-2 (advisory false-negatives surfaced to patternset revision / S6.5 counsel) |
+| 4 | [sprint-spec-20260616-medical-team-4.md](./sprint-spec-20260616-medical-team-4.md) | **Data + numerics layer (keeps arithmetic out of the LLM, ADR-3):** sync `better-sqlite3` `HealthDataStore` (`health-store.ts`, mirrors `FactStore`; tables `health_observations`+`lab_results`+`kv_store`; deterministic `observationId`/`labResultId` SHA-256; `INSERT OR IGNORE`; `upsertObservations` returns **NEW-row count only**; `getObservations`/`getLabSeries`/`upsertLabResult`/`getBaseline`/`putBaseline`/`getPreference`/`close`) + `NumericsQueryLayer` (`numerics.ts`, `getMetric` over the **closed 8-primitive whitelist** via exhaustive `never`-guarded `switch` + `getLabTrend`); **no `eval`/`Function`/`vm`/`child_process`/`execa`**; empty-window **abstain** `{value:null,sampleCount:0}` vs. cross-unit **refusal** `{value:null,sampleCount:N>0}`, `zscore` n<2 / degenerate-slope abstain with `sampleCount:N`; numeric/lab types added additively to `types.ts`; 3-table design deviates from the "single generic events table" wording (generator-flagged, evaluator-accepted); store never reads the clock; medications NOT stored here (FactStore value-of-record, S6/ADR-7) |
 
-The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, and the
-real `MedicalGuardrails` in its `GuardrailSet` slot are documented in
+The medical team's `pipelineShape: "medical-sop"`, its built-in `loadTeam` branch, the
+real `MedicalGuardrails` in its `GuardrailSet` slot, and the deterministic
+`HealthDataStore` + `NumericsQueryLayer` data/numerics layer are documented in
 [`docs/teams.md`](../teams.md) (Pipeline Shape table, "Guardrails (Phase 6 — Gate 2 Live)",
-and "How `loadTeam` Works").
+"Safety gates + audit substrate", the "Numerics + data store (Phase 6 Sprint 4)" data-model
+section, and "How `loadTeam` Works").
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 
