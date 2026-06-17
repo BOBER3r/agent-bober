@@ -381,6 +381,8 @@ export const MedicalSectionSchema = z.object({
       cloudInference: z.boolean().default(false),
       /** When true, literature retrieval (MedlinePlus) is permitted. Default false. */
       literatureRetrieval: z.boolean().default(false),
+      /** When true, WHOOP device-connection egress is permitted (ADR-1). Default false. */
+      deviceConnection: z.boolean().default(false),
     })
     .optional(),
 });

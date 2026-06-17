@@ -97,8 +97,8 @@ export default [
     },
   },
   {
-    // ADR-6 single exception: the ONE designated retrieval network file. S7 puts the real MedlinePlus call here.
-    files: ["src/medical/retrieval/medline-source.ts"],
+    // ADR-6 exceptions: the TWO designated network files (medline-source.ts for MedlinePlus; whoop-client.ts for WHOOP).
+    files: ["src/medical/retrieval/medline-source.ts", "src/medical/whoop/whoop-client.ts"],
     rules: {
       "no-restricted-imports": "off",
       "no-restricted-globals": "off",
