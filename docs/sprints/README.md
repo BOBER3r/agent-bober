@@ -286,6 +286,39 @@ false-negatives** (an intentional precision-over-recall choice) that are surface
 patternset revision / S6.5 counsel review rather than patched by widening matching here. See the
 finale record [`sprint-spec-20260616-medical-team-7.md`](./sprint-spec-20260616-medical-team-7.md).
 
+## Medical Team — WHOOP + Guardrails — in progress
+
+`spec-20260617-medical-whoop-guardrails` — production-grade extensions to the medical team
+for a single self-responsible user: a code-enforced non-emergency refusal layer plus (later
+sprints) a WHOOP device-connection ingestion path behind a third `device-connection` egress
+axis. **Additive on top of base ADRs 1-7; programming-team behavior byte-unaffected.** Sprint 1
+closes the **non-emergency content-policy refusal gap**: the `{kind:"refuse"}` verdict (and the
+`refuse` audit event) already existed in the type surface but `MedicalGuardrails.evaluate` never
+emitted it — prescription / dosing / treatment-plan prompts fell through to `{kind:"allow"}` and
+were refused **prompt-only by the LLM**. A new pure/synchronous `RefusalDetector`
+(`src/medical/refusal.ts`, zero imports, `REFUSAL_PATTERNSET_VERSION "refusal-2026.06.17"`)
+classifies a prompt into `prescription` / `specific-dosing` / `individualized-treatment-plan` /
+`none` over a conservative ~4-rules-per-category phrase set (accepts false-negatives, **never**
+false-positives into advice — ADR-3). `evaluate` now runs the `RedFlagDetector` **first**
+(emergency short-circuit wins by early return) and **then** the `RefusalDetector`, returning
+`{ kind: "refuse", rule, reason }` with **fixed, never-model-generated** decline text from the
+exported `REFUSAL_REASONS` record (byte-asserted in tests, distinct from the 911/988 escalations).
+`MedicalSopEngine.run` gained a refuse-dispatch branch (Gate 2b, mirroring the consent-refuse
+path) that returns the canned `MedicalAnswer` (`shortCircuit: true`, `abstained: false`,
+`citations: []`), writes an IDs-only `refuse` audit entry (`ruleId` / `rulesetVersion` /
+`patternsetVersion`, no prompt text or health values), and reaches **zero** numerics / FactStore
+/ retrieval / LLM. Self-contained, no network, does not touch WHOOP. **+45 tests (2393 → 2438),
+all 8 criteria passed iteration 1.**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260617-medical-whoop-guardrails-1.md](./sprint-spec-20260617-medical-whoop-guardrails-1.md) | **Code-enforced non-emergency refusal layer (Gate 2b, 0-LLM):** pure/sync `RefusalDetector` (`refusal.ts`, zero imports, 3 refusal categories + `none`, `REFUSAL_PATTERNSET_VERSION`, fixed `REFUSAL_REASONS` decline strings) classifying prescription / specific-dosing / individualized-treatment-plan; `MedicalGuardrails.evaluate` runs red-flag **first** (emergency precedence) then refusal ⇒ `{ kind:"refuse", rule, reason }` with byte-fixed never-model-generated text + `refusalPatternsetVersion` getter; `MedicalSopEngine.run` refuse-dispatch branch (mirrors consent-refuse) ⇒ canned `MedicalAnswer` (`shortCircuit:true`/`abstained:false`/`citations:[]`) + IDs-only `refuse` audit entry + **zero** numerics/FactStore/retrieval/LLM; conservative patternset (false-negatives accepted, ADR-3; never an LLM filter); `GuardrailContext` unchanged; +45 tests, no regression |
+
+The live refuse gate (Gate 2b) is documented in [`docs/teams.md`](../teams.md) under "Guardrails
+(Phase 6 — Gates 2 + 2b Live)", "Safety gates + audit substrate", and the full ordered SOP list.
+WHOOP device-connection ingestion + the `device-connection` egress axis + `bober medical whoop sync`
+are later sprints of this spec.
+
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 
 `spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled

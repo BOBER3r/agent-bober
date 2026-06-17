@@ -116,14 +116,20 @@ Selects the orchestration engine for sprints driven by this team:
 > (no-auth) grounded retrieval + cited LLM synthesis** that **abstains unless a
 > retrieved passage supports the claim** and otherwise cites ≥ 1 passage — retrieval is
 > now real behind the axis, not a stub (see "MedlinePlus grounded retrieval + cited
-> synthesis" below). **The medical team is engineering-complete (7 of 7); shipping is
-> gated on an external regulatory review (S6.5).** See
+> synthesis" below). As of `spec-20260617-medical-whoop-guardrails` Sprint 1 the
+> guardrail set also emits a **code-enforced non-emergency `refuse` verdict** for
+> prescription / dosing / treatment-plan requests, deterministically and before any LLM
+> call, slotting in as **Gate 2b** between the red-flag short-circuit and `allow` (see
+> "Guardrails (Phase 6 — Gates 2 + 2b Live)" below). **The medical team is
+> engineering-complete (7 of 7); shipping is gated on an external regulatory review
+> (S6.5).** See
 > [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md),
+> [`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md),
 > and
-> [`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md).
+> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md).
 
 ---
 
@@ -199,7 +205,7 @@ carry `--team <id>` in their argv — they run on the programming team by
 default. A future sprint will thread `teamId` through `RunSpawnerOptions` so
 spawned children inherit the active chat team.
 
-### Guardrails (Phase 6 — Gate 2 Live)
+### Guardrails (Phase 6 — Gates 2 + 2b Live)
 
 The `guardrails` field on a resolved `Team` (`src/teams/types.ts`) holds a
 `GuardrailSet` — a rule set that guards medical prompts before the LLM call.
@@ -218,15 +224,29 @@ replaces the Sprint 1–2 allow-all stub. Its `evaluate(prompt, ctx)`:
   911;
 - returns `{ kind: "short-circuit", rule, cannedResponse }` with a **fixed,
   never-model-generated** 911 escalation (cardiac/stroke/anaphylaxis) or 988
-  escalation (self-harm/overdose) on any match, otherwise `{ kind: "allow" }`.
+  escalation (self-harm/overdose) on any match;
+- then — **emergency precedence preserved** — runs a pure/synchronous
+  `RefusalDetector` (`src/medical/refusal.ts`,
+  `REFUSAL_PATTERNSET_VERSION "refusal-2026.06.17"`, zero imports / no I/O / no
+  model) that classifies the prompt into `prescription` / `specific-dosing` /
+  `individualized-treatment-plan` / `none`, and returns
+  `{ kind: "refuse", rule, reason }` with a **fixed, never-model-generated**
+  decline-and-see-a-licensed-clinician message (from the exported
+  `REFUSAL_REASONS` record, byte-asserted in tests) on any match;
+- otherwise returns `{ kind: "allow" }`.
 
-The `refuse` branch (non-emergency code-enforced refusals) is a documented
-placeholder deferred to Sprint 6. Detection is deliberately conservative per
-ADR-2: novel/indirect phrasing may return `none` and fall through to the normal
-(still-guardrailed) path — known advisory false-negative gaps are surfaced to a
-future patternset revision / external counsel review. Every other team's
+As of `spec-20260617-medical-whoop-guardrails` Sprint 1 the `refuse` branch is
+**live and code-enforced** (previously a documented placeholder). It runs only
+**after** the red-flag check's early return, so an emergency prompt that also
+matches a refuse phrase still short-circuits to the 911/988 escalation rather
+than refusing. `refusalPatternsetVersion` is exposed on `MedicalGuardrails` for
+the engine's refuse audit entry; `GuardrailContext` stays empty (ADR-3).
+Detection is deliberately conservative: novel/indirect phrasing may return
+`none` and fall through to the normal (still-guardrailed) path — known advisory
+false-negative gaps are surfaced to a future patternset revision / external
+counsel review, never widened into an LLM filter. Every other team's
 `guardrails` slot remains `undefined`, and only `MedicalSopEngine.run` reads and
-enforces it (see Gate 2 below).
+enforces it (see Gates 2 / 2b below).
 
 ### Safety gates + audit substrate (Phase 6 Sprints 2–3)
 
@@ -250,9 +270,20 @@ wired in Sprint 6 — see "EgressGuard + full SOP wiring" below.
   `rulesetVersion` + `patternsetVersion` (IDs/enums only). On `allow` it falls
   through to the normal path. The detector/guardrail are pure and need no
   network or `LLMClient` — detection is deterministic and local only. See
-  "Guardrails (Phase 6 — Gate 2 Live)" above. The injectable
+  "Guardrails (Phase 6 — Gates 2 + 2b Live)" above. The injectable
   `MedicalSopDeps.llmClient` / `MedicalSopDeps.numerics` spy slots make the
   "never called on short-circuit" guarantee enforceable by tests.
+- **Gate 2b — non-emergency content-policy refuse (whoop-guardrails Sprint 1).**
+  Immediately after Gate 2 (and reached **only** when the red-flag verdict was
+  not a short-circuit, so emergency precedence holds), `evaluate` runs the
+  `RefusalDetector`. On a `refuse` verdict the engine returns a `MedicalAnswer`
+  whose `body` is the **fixed canned decline** (`shortCircuit: true`,
+  `abstained: false`, `citations: []`, with the disclaimer footer) and reaches
+  **zero** downstream work — no numerics, FactStore, retrieval, or LLM — plus a
+  `refuse` audit entry carrying `ruleId` + `rulesetVersion` +
+  `patternsetVersion` (IDs/enums only, no prompt text). It mirrors the
+  consent-refuse path. The same `llmClient` / `numerics` spy slots prove the
+  "never called on refuse" guarantee.
 - **Audit log (PHI-free, append-only).** `AuditLog` (`src/medical/audit.ts`)
   appends one JSON line per event to `.bober/medical/audit-<date>.jsonl`,
   opened `O_WRONLY|O_APPEND|O_CREAT` with file mode `0600`. Entries
@@ -426,16 +457,19 @@ state.
 
 1. **Gate 1 — consent** (fail-closed; refuse + zero downstream on no consent).
 2. **Gate 2 — red-flag short-circuit** (0-LLM canned 911/988 escalation on match).
-3. **Numerics** — deterministic `NumericsQueryLayer.getMetric`, **no LLM**.
-4. **Medications** — `FactStore.getActiveFacts(...)` (ADR-7).
-5. **Gate 3 + retrieval** — `EgressGuard.isAllowed("literature-retrieval")`;
+3. **Gate 2b — non-emergency refuse** (whoop-guardrails S1; 0-LLM canned decline
+   on a `prescription` / `specific-dosing` / `individualized-treatment-plan`
+   match; reached only when Gate 2 did not short-circuit, so emergency wins).
+4. **Numerics** — deterministic `NumericsQueryLayer.getMetric`, **no LLM**.
+5. **Medications** — `FactStore.getActiveFacts(...)` (ADR-7).
+6. **Gate 3 + retrieval** — `EgressGuard.isAllowed("literature-retrieval")`;
    `LiteratureRetriever.retrieve` ⇒ `{disabled}` (abstain) when off, or
    `{grounded,passages}` → `synthesize` (cited synthesis, **S7**) when on.
-6. **Disclaimer footer**, then **audit** (`answer` / `abstain`, PHI-free), then
+7. **Disclaimer footer**, then **audit** (`answer` / `abstain`, PHI-free), then
    return `PipelineResult & { medicalAnswer }`.
 
-Both gates run **before** any numerics, medications, egress, retrieval, or LLM work, so
-a refuse/short-circuit reaches **zero** downstream calls. With both axes off, a numeric
+The consent / red-flag / refuse gates run **before** any numerics, medications, egress,
+retrieval, or LLM work, so a refuse/short-circuit reaches **zero** downstream calls. With both axes off, a numeric
 question answers from deterministic compute (a spy `LLMClient` is never called) and a
 literature question abstains (`MedlineSource.fetchPassages` is never called) — verified
 by a network spy recording **zero** calls. `MedicalSopDeps` gained `egress?` /
