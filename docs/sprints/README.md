@@ -177,3 +177,29 @@ The facts store is documented alongside the lessons store in
 lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Prune & Quarantine"),
 and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
 under "Distilling Lessons from History".
+
+## Fleet Expand (decomposer) — in progress (1 of 2)
+
+`spec-20260617-fleet-expand-decomposer` — Phase 2 of the fleet orchestrator: let a single
+high-level **goal** string be decomposed into a multi-child `FleetManifest` (the manifest the
+merged Phase 1 `fleet <manifest>` runner already executes). Sprint 1 lands the **risk-first
+core** — a pure `src/fleet/decomposer.ts` module whose `decomposeGoal({ goal, client, model,
+maxRetries })` turns one goal into a children-only, Zod-valid `FleetManifest` via a single
+DeepSeek `LLMClient.chat` call (`jsonObjectMode: true`, **not** `responseSchema` — DeepSeek
+rejects strict `json_schema`) plus at most **one** bounded coercion re-prompt. A per-child
+guard rejects any child carrying a `config` key *beyond* `FleetManifestSchema.safeParse`
+(`FleetChildSchema.config` is optional, so the explicit `hasOwnProperty` check is what keeps
+decomposed children folder/task-only), and the JSON-extraction + coercion shape mirrors
+`parsePlanSpec` in `planner-agent.ts`. The module is **purely additive** — no CLI, no spawn,
+no network, no fs, no Phase 1 file touched — and is proven entirely against a fake `LLMClient`
+(22 collocated tests; ≤2 `chat` calls; bad-then-good = 2 calls, bad-then-bad throws with the
+formatted Zod issues). The user-facing `fleet expand` subcommand that consumes `decomposeGoal`
+(real `createClient` / `DEEPSEEK_API_KEY`, manifest writing, `runFleet` chaining) is **Sprint 2**.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260617-fleet-expand-decomposer-1.md](./sprint-spec-20260617-fleet-expand-decomposer-1.md) | Pure `decomposeGoal` (goal → Zod-valid children-only `FleetManifest`): one `jsonObjectMode:true` DeepSeek call + one bounded coercion re-prompt, `validateManifest` JSON-extract (`direct→`` ```json ``fence→first-brace`) + `safeParse` + post-parse `config`-key guard, `DECOMPOSE_SYSTEM_PROMPT` / `DECOMPOSE_COERCION_INSTRUCTION` / `DECOMPOSE_MAX_RETRIES=1`; no CLI/spawn/network/fs, no Phase 1 file touched |
+
+The fleet orchestrator's architecture is in `.bober/architecture/` under
+`arch-20260609-fleet-orchestrator-tech-lead-*` (Phase 1, the `fleet <manifest>` runner) and
+`arch-20260617-fleet-orchestrator-phase-2-expand-*` (this phase, goal → manifest).
