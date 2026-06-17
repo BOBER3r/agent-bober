@@ -256,6 +256,84 @@ resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 
 ---
 
+## Fleet Commands
+
+The fleet orchestrator runs **N isolated `agent-bober` child runs in bulk** from a manifest.
+A manifest is a JSON file describing a `rootDir`, a `concurrency`, and a list of `children`,
+each `{ "folder", "task" }` (children may carry an optional per-child `config`). These
+commands are invoked as `agent-bober …` (not `bober …`).
+
+### `agent-bober fleet <manifest>`
+
+Run a fleet of child agent-bober runs from a prepared manifest. Each child runs in its own
+`<rootDir>/<folder>` directory against its `task`. Per-child failures are **reported, not
+fatal** (the command still exits `0`); exit `1` is reserved for batch-setup errors (bad
+manifest, missing credentials, report IO failure). Prints a Fleet Summary (total / completed /
+failed / other) when done.
+
+```bash
+agent-bober fleet ./fleet.json
+agent-bober fleet ./fleet.json --concurrency 4    # Override manifest concurrency
+agent-bober fleet ./fleet.json --root ./projects  # Override manifest rootDir
+```
+
+A manifest looks like:
+
+```json
+{
+  "rootDir": ".",
+  "concurrency": 3,
+  "children": [
+    { "folder": "api-server", "task": "Build a REST API server with auth" },
+    { "folder": "web-frontend", "task": "Build a React frontend for the API" }
+  ]
+}
+```
+
+### `agent-bober fleet expand <goal>`
+
+Decompose a single high-level **goal** into a fleet manifest using a DeepSeek decomposer, then
+**write it and stop for review by default**. It builds the decomposer LLM client first (so a
+missing `DEEPSEEK_API_KEY` fails fast with exit `1` **before any file is written**), turns the
+goal into a children-only manifest, atomically writes it to `<root>/.bober/fleet-expand.json`
+(overwriting any existing file with a printed notice), prints the manifest, and prints a review
+hint. It does **not** run the fleet unless you pass `--yes`.
+
+```bash
+# Decompose → write manifest → STOP for review (default)
+agent-bober fleet expand "Build a todo app with an API server and a web frontend"
+
+#   …writes <root>/.bober/fleet-expand.json and prints:
+#   Review then run: agent-bober fleet "<root>/.bober/fleet-expand.json"
+
+# Review/edit the written manifest, then run it with the runner above:
+agent-bober fleet ".bober/fleet-expand.json"
+
+# …or decompose AND run immediately, skipping the review gate:
+agent-bober fleet expand "Build a todo app …" --yes
+```
+
+`--yes` is the **sole** spawn gate — without it, `fleet expand` writes the manifest and exits
+`0` without launching any child runs (no interactive prompt, no TTY check). With `--yes` it
+chains into `agent-bober fleet <writtenPath>` after the write and prints the same Fleet Summary.
+
+Options:
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `--count <n>` | — | Soft target for the number of sub-projects (folded into the decomposer prompt as a hint, not a hard cap) |
+| `--provider <p>` | `openai-compat` | Override the decomposer LLM provider |
+| `--model <m>` | `deepseek-v4-pro` | Override the decomposer LLM model **only** (not the children's per-run providers) |
+| `--root <dir>` | `.` | Manifest `rootDir` |
+| `--concurrency <c>` | `3` | Manifest concurrency |
+| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest |
+| `--yes` | off | Chain into the fleet run after writing the manifest |
+
+Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
+decomposition step calls DeepSeek via the `openai-compat` provider.
+
+---
+
 ## Approval & Checkpoint Commands
 
 These commands manage checkpoint approval in careful-flow mode. Checkpoints appear as
