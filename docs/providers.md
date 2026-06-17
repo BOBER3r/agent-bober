@@ -121,16 +121,21 @@ alternative to Anthropic.
 }
 ```
 
-Or use the shorthand `deepseek` / `deepseek-v4-pro` / `deepseek-v4-flash` to have the
-harness set the endpoint automatically:
+Or use the model shorthand `deepseek` / `deepseek-v4-pro` / `deepseek-v4-flash` with **no**
+`provider` field — the harness infers the `openai-compat` provider and sets the
+`https://api.deepseek.com` endpoint automatically:
 
 ```jsonc
-// bober.config.json — DeepSeek shorthand
+// bober.config.json — DeepSeek shorthand (provider + endpoint inferred from the model)
 {
-  "planner": { "provider": "deepseek", "model": "deepseek-v4-pro" },
-  "generator": { "provider": "deepseek", "model": "deepseek-v4-pro" }
+  "planner": { "model": "deepseek-v4-pro" },
+  "generator": { "model": "deepseek-v4-pro" }
 }
 ```
+
+> Write the shorthand as a **model**, not a provider. `"provider": "deepseek"` is rejected
+> ("unsupported provider") — `deepseek` is a model shorthand that resolves to the
+> `openai-compat` provider, not a provider name of its own.
 
 ---
 
