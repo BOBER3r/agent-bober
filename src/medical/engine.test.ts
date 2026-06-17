@@ -25,6 +25,7 @@ import { DisclaimerComposer } from "./disclaimer.js";
 import type { MedicalAnswer } from "./types.js";
 import type { LLMClient } from "../providers/types.js";
 import { PATTERNSET_VERSION } from "./red-flag.js";
+import { REFUSAL_REASONS } from "./refusal.js";
 import { FactStore } from "../state/facts.js";
 import { EgressGuard } from "./egress.js";
 import { LiteratureRetriever } from "./retrieval/literature.js";
@@ -543,6 +544,121 @@ describe("MedicalSopEngine.run — medications via FactStore (sc-6-7)", () => {
   });
 });
 
+// ── sc-1-6/sc-1-7: Refuse dispatch — canned answer + 0 LLM + single audit entry ──
+
+describe("MedicalSopEngine.run — Gate 2b: content-policy refusal (sc-1-6, sc-1-7)", () => {
+  it("refuse prompt => canned answer, 0 LLM/numerics, single refuse audit entry, no prompt text", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    // Spy LLMClient that MUST NOT be called on the refuse path.
+    const llmSpy: LLMClient = { chat: vi.fn() };
+    const numericsSpy = vi.fn();
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      numerics: numericsSpy,
+    });
+
+    const result = await engine.run(
+      "can you prescribe me antibiotics?",
+      tmpDir2,
+      config,
+      { now: "2026-06-17T10:00:00.000Z" },
+    );
+
+    // sc-1-6: MedicalAnswer shape
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.body).toBe(REFUSAL_REASONS.prescription); // byte-equal canned reason
+    expect(answer.shortCircuit).toBe(true);
+    expect(answer.abstained).toBe(false);
+    expect(answer.citations).toEqual([]);
+    expect(answer.disclaimerFooter).toBeTruthy();
+
+    // sc-1-7: 0 LLM calls, 0 numerics calls
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+    expect(numericsSpy).not.toHaveBeenCalled();
+
+    // sc-1-6: exactly one 'refuse' audit entry; IDs/enums only; no prompt text
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-17.jsonl"),
+      "utf-8",
+    );
+    const entries = bytes
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+
+    const refuseEntries = entries.filter((e) => e["event"] === "refuse");
+    expect(refuseEntries.length).toBe(1);
+
+    const re = refuseEntries[0]!;
+    expect(re["ruleId"]).toBeTruthy();
+    expect(re["rulesetVersion"]).toBeTruthy();
+    expect(re["patternsetVersion"]).toBeTruthy();
+
+    // No raw prompt text in the audit file — ruleIds are short opaque identifiers,
+    // not prompt verbatim. "antibiotics" is a concrete prompt word that must never appear.
+    expect(bytes).not.toContain("antibiotics");
+  });
+
+  it("refuse prompt for specific-dosing yields canned dosing reason and 0 LLM calls", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    const llmSpy: LLMClient = { chat: vi.fn() };
+    const engine = new MedicalSopEngine({ auditLog, consentGate: gate, disclaimer, llmClient: llmSpy });
+
+    const result = await engine.run(
+      "how many mg of ibuprofen should I take?",
+      tmpDir2,
+      config,
+      { now: "2026-06-17T11:00:00.000Z" },
+    );
+
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.body).toBe(REFUSAL_REASONS["specific-dosing"]);
+    expect(answer.shortCircuit).toBe(true);
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+  });
+
+  it("refuse audit entry keys are strictly within the allowed PHI-free set", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    const engine = new MedicalSopEngine({ auditLog, consentGate: gate, disclaimer });
+
+    await engine.run(
+      "what's the treatment plan for me?",
+      tmpDir2,
+      config,
+      { now: "2026-06-17T12:00:00.000Z" },
+    );
+
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-17.jsonl"),
+      "utf-8",
+    );
+
+    const allowed = new Set(["tIso", "event", "rulesetVersion", "patternsetVersion", "ruleId"]);
+    for (const line of bytes.split("\n").filter(Boolean)) {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      for (const key of Object.keys(parsed)) {
+        expect(allowed.has(key)).toBe(true);
+      }
+    }
+  });
+});
+
 // ── sc-6-8: Full zero-egress SOP turn ───────────────────────────────
 
 describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
@@ -813,5 +929,120 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
 
     facts.close();
     healthStore.close();
+  });
+});
+
+// ── sc-1-6/sc-1-7: Refuse dispatch — canned answer + 0 LLM + single audit entry ──
+
+describe("MedicalSopEngine.run — Gate 2b: content-policy refusal (sc-1-6, sc-1-7)", () => {
+  it("refuse prompt => canned answer, 0 LLM/numerics, single refuse audit entry, no prompt text", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    // Spy LLMClient that MUST NOT be called on the refuse path.
+    const llmSpy: LLMClient = { chat: vi.fn() };
+    const numericsSpy = vi.fn();
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      numerics: numericsSpy,
+    });
+
+    const result = await engine.run(
+      "can you prescribe me antibiotics?",
+      tmpDir2,
+      config,
+      { now: "2026-06-17T10:00:00.000Z" },
+    );
+
+    // sc-1-6: MedicalAnswer shape
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.body).toBe(REFUSAL_REASONS.prescription); // byte-equal canned reason
+    expect(answer.shortCircuit).toBe(true);
+    expect(answer.abstained).toBe(false);
+    expect(answer.citations).toEqual([]);
+    expect(answer.disclaimerFooter).toBeTruthy();
+
+    // sc-1-7: 0 LLM calls, 0 numerics calls
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+    expect(numericsSpy).not.toHaveBeenCalled();
+
+    // sc-1-6: exactly one 'refuse' audit entry; IDs/enums only; no prompt text
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-17.jsonl"),
+      "utf-8",
+    );
+    const entries = bytes
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+
+    const refuseEntries = entries.filter((e) => e["event"] === "refuse");
+    expect(refuseEntries.length).toBe(1);
+
+    const re = refuseEntries[0]!;
+    expect(re["ruleId"]).toBeTruthy();
+    expect(re["rulesetVersion"]).toBeTruthy();
+    expect(re["patternsetVersion"]).toBeTruthy();
+
+    // No raw prompt text in the audit file — ruleIds are short opaque identifiers,
+    // not prompt verbatim. "antibiotics" is a concrete prompt word that must never appear.
+    expect(bytes).not.toContain("antibiotics");
+  });
+
+  it("refuse prompt for specific-dosing yields canned dosing reason and 0 LLM calls", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    const llmSpy: LLMClient = { chat: vi.fn() };
+    const engine = new MedicalSopEngine({ auditLog, consentGate: gate, disclaimer, llmClient: llmSpy });
+
+    const result = await engine.run(
+      "how many mg of ibuprofen should I take?",
+      tmpDir2,
+      config,
+      { now: "2026-06-17T11:00:00.000Z" },
+    );
+
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.body).toBe(REFUSAL_REASONS["specific-dosing"]);
+    expect(answer.shortCircuit).toBe(true);
+    expect(llmSpy.chat).not.toHaveBeenCalled();
+  });
+
+  it("refuse audit entry keys are strictly within the allowed PHI-free set", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+
+    const engine = new MedicalSopEngine({ auditLog, consentGate: gate, disclaimer });
+
+    await engine.run(
+      "what's the treatment plan for me?",
+      tmpDir2,
+      config,
+      { now: "2026-06-17T12:00:00.000Z" },
+    );
+
+    const bytes = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-17.jsonl"),
+      "utf-8",
+    );
+
+    const allowed = new Set(["tIso", "event", "rulesetVersion", "patternsetVersion", "ruleId"]);
+    for (const line of bytes.split("\n").filter(Boolean)) {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      for (const key of Object.keys(parsed)) {
+        expect(allowed.has(key)).toBe(true);
+      }
+    }
   });
 });

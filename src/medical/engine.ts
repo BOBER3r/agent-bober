@@ -288,6 +288,44 @@ export class MedicalSopEngine implements PipelineEngine {
       } as PipelineResult & { medicalAnswer: MedicalAnswer };
     }
 
+    // Gate 2b: Content-policy refusal (prescription / dosing / treatment-plan).
+    // Only reached when verdict.kind !== "short-circuit" (red-flag wins by early return above).
+    if (verdict.kind === "refuse") {
+      await auditLog.append({
+        tIso: now,
+        event: "refuse",
+        ruleId: verdict.rule,
+        rulesetVersion: guardrails.rulesetVersion,
+        patternsetVersion:
+          "refusalPatternsetVersion" in guardrails
+            ? (guardrails as { refusalPatternsetVersion: string }).refusalPatternsetVersion
+            : undefined,
+      });
+
+      const refuseAnswer: MedicalAnswer = {
+        body: verdict.reason,
+        abstained: false,
+        citations: [],
+        disclaimerFooter: footer,
+        shortCircuit: true,
+      };
+
+      const refuseSpec = createSpec(
+        "Medical SOP — content-policy refusal",
+        "Refusal gate declined a prescription/dosing/treatment-plan request; no numerics/LLM reached.",
+        [],
+      );
+
+      return {
+        success: true,
+        spec: refuseSpec,
+        completedSprints: [],
+        failedSprints: [],
+        duration: 0,
+        medicalAnswer: refuseAnswer,
+      } as PipelineResult & { medicalAnswer: MedicalAnswer };
+    }
+
     // verdict.kind === "allow" → proceed to the full SOP (S6).
     const consentRecord = await consentGate.current();
     const rulesetVersion = consentRecord?.rulesetVersion;

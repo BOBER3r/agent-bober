@@ -1,20 +1,18 @@
 /**
- * MedicalGuardrails — real GuardrailSet wrapping RedFlagDetector (Phase 6, Sprint 3).
+ * MedicalGuardrails — real GuardrailSet wrapping RedFlagDetector + RefusalDetector
+ * (Phase 6, Sprint 3 + Sprint 1 of spec-20260617-medical-whoop-guardrails).
  *
  * evaluate(prompt, ctx) runs the red-flag detector first; a match returns a
- * short-circuit verdict with a canned 911/988 escalation. Non-emergency prompts
- * return { kind: "allow" }.
- *
- * bober: refuse branch for non-emergency code-enforced refusals is a documented
- *        placeholder this sprint. Real content-policy refusals (e.g. requests for
- *        treatment plans, prescriptions) land in S6. When added, follow the same
- *        "IDs/enums only in the audit" rule and add a dedicated ruleset.
+ * short-circuit verdict with a canned 911/988 escalation. Then runs the refusal
+ * detector; a match returns a refuse verdict with a fixed canned decline message.
+ * Non-emergency, non-refusal prompts return { kind: "allow" }.
  *
  * NO network. NO LLM import. No src/providers import.
  */
 import type { GuardrailContext, GuardrailSet, GuardrailVerdict } from "./types.js";
 import { RedFlagDetector, PATTERNSET_VERSION } from "./red-flag.js";
 import type { RedFlagCategory } from "./red-flag.js";
+import { RefusalDetector, REFUSAL_PATTERNSET_VERSION, REFUSAL_REASONS } from "./refusal.js";
 
 // ── Version constant ─────────────────────────────────────────────────
 
@@ -72,6 +70,12 @@ export class MedicalGuardrails implements GuardrailSet {
   readonly detector = new RedFlagDetector();
 
   /**
+   * Refusal detector for non-emergency content-policy refusals
+   * (prescription / specific-dosing / individualized-treatment-plan).
+   */
+  readonly refusal = new RefusalDetector();
+
+  /**
    * Evaluate the prompt against the medical guardrail ruleset.
    *
    * @throws {Error} if prompt is empty or whitespace-only (sc-3-8).
@@ -91,14 +95,28 @@ export class MedicalGuardrails implements GuardrailSet {
       };
     }
 
-    // bober: refuse branch for non-emergency refusals (treatment plans, prescriptions, etc.)
-    //        is a placeholder this sprint; real content-policy rules land in S6.
+    // Gate 2b: Content-policy refusal (prescription / dosing / treatment-plan).
+    // Only reached when red-flag is 'none' — emergency precedence is guaranteed by the
+    // early return above.
+    const r = this.refusal.detect(prompt);
+    if (r.category !== "none") {
+      return {
+        kind: "refuse",
+        rule: r.ruleId ?? r.category,
+        reason: REFUSAL_REASONS[r.category],
+      };
+    }
 
     return { kind: "allow" };
   }
 
-  /** Expose PATTERNSET_VERSION so callers don't need a separate import. */
+  /** Expose red-flag PATTERNSET_VERSION so callers don't need a separate import. */
   get patternsetVersion(): string {
     return PATTERNSET_VERSION;
+  }
+
+  /** Expose refusal REFUSAL_PATTERNSET_VERSION for the engine's refuse audit entry. */
+  get refusalPatternsetVersion(): string {
+    return REFUSAL_PATTERNSET_VERSION;
   }
 }
