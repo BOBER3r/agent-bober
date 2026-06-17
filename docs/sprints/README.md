@@ -308,16 +308,34 @@ path) that returns the canned `MedicalAnswer` (`shortCircuit: true`, `abstained:
 `citations: []`), writes an IDs-only `refuse` audit entry (`ruleId` / `rulesetVersion` /
 `patternsetVersion`, no prompt text or health values), and reaches **zero** numerics / FactStore
 / retrieval / LLM. Self-contained, no network, does not touch WHOOP. **+45 tests (2393 → 2438),
-all 8 criteria passed iteration 1.**
+all 8 criteria passed iteration 1.** Sprint 2 establishes **authenticated, egress-gated access to
+WHOOP without persisting data**: the `EgressGuard` gains a **third independent axis**,
+`device-connection` (default **false**; `EgressAxis` becomes a 3-value union, the constructor's 3rd
+param is **optional** so 2-arg call sites stay byte-identical, `isAllowed` becomes an exhaustive
+`switch` with a compile-time `never` guard, `fromConfig` reads new
+`medical.egress.deviceConnection`). A network-free `WhoopTokenStore` (`whoop/whoop-token.ts`) reads
+`WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` from env (clear throw if unset) and persists the rotating
+refresh token in a `0600` sidecar at `.bober/medical/whoop-token.json` (no keychain; corrupt/absent
+⇒ `undefined`). A `WhoopClient` (`whoop/whoop-client.ts`) — the **second** ESLint-excepted network
+file — does the OAuth2 `refresh_token` grant + paginated WHOOP **v2** fetch (cursor pagination,
+401-refresh-retry-once, 429-Reset-wait via an **injected** waiter), calling
+`assertAllowed("device-connection")` **before any HTTP**; transport/waiter/clock are all injectable
+so CI runs offline and sleepless. No sync adapter, record mapping, persistence, or CLI yet (Sprint
+3). **+35 tests (2438 → 2473), all 7 criteria passed iteration 1.**
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260617-medical-whoop-guardrails-1.md](./sprint-spec-20260617-medical-whoop-guardrails-1.md) | **Code-enforced non-emergency refusal layer (Gate 2b, 0-LLM):** pure/sync `RefusalDetector` (`refusal.ts`, zero imports, 3 refusal categories + `none`, `REFUSAL_PATTERNSET_VERSION`, fixed `REFUSAL_REASONS` decline strings) classifying prescription / specific-dosing / individualized-treatment-plan; `MedicalGuardrails.evaluate` runs red-flag **first** (emergency precedence) then refusal ⇒ `{ kind:"refuse", rule, reason }` with byte-fixed never-model-generated text + `refusalPatternsetVersion` getter; `MedicalSopEngine.run` refuse-dispatch branch (mirrors consent-refuse) ⇒ canned `MedicalAnswer` (`shortCircuit:true`/`abstained:false`/`citations:[]`) + IDs-only `refuse` audit entry + **zero** numerics/FactStore/retrieval/LLM; conservative patternset (false-negatives accepted, ADR-3; never an LLM filter); `GuardrailContext` unchanged; +45 tests, no regression |
+| 2 | [sprint-spec-20260617-medical-whoop-guardrails-2.md](./sprint-spec-20260617-medical-whoop-guardrails-2.md) | **WHOOP egress axis + authenticated transport (no persistence yet):** third **independent** `EgressAxis` `device-connection` (default **false**; optional 3rd `EgressGuard` ctor param ⇒ 2-arg sites byte-identical; ternary → exhaustive `switch` + compile-time `never` guard; `fromConfig` reads `medical.egress.deviceConnection`; new `deviceConnection: z.boolean().default(false)` in `MedicalSectionSchema`); network-free `WhoopTokenStore` (`whoop/whoop-token.ts`) — `WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` env creds (clear throw if unset, **no keychain** — ADR-2) + `0600` refresh-token sidecar `.bober/medical/whoop-token.json` (absent/corrupt ⇒ `undefined`, fail-closed); `WhoopClient` (`whoop/whoop-client.ts`) — the **second** ESLint-excepted network file — OAuth2 `refresh_token` grant (scope `offline`) + paginated WHOOP **v2** GET (`recovery`/`sleep`/`cycle`/`workout`, `nextToken` cursor, **401**→refresh+retry-**once** then throw, **429**→`X-RateLimit-Reset`×1000 via **injected** waiter), `assertAllowed("device-connection")` **first** in both methods (axis off ⇒ throws, 0 fetch calls); injectable `FetchLike`/waiter/`nowIso` (no `Date.now()`) ⇒ offline+sleepless CI; `eslint.config.js` exception list now `[medline-source.ts, whoop-client.ts]` only; **no** sync/mapping/persistence/CLI (Sprint 3); +35 tests (2438 → 2473), all 7 criteria iter-1, no regression |
 
 The live refuse gate (Gate 2b) is documented in [`docs/teams.md`](../teams.md) under "Guardrails
 (Phase 6 — Gates 2 + 2b Live)", "Safety gates + audit substrate", and the full ordered SOP list.
-WHOOP device-connection ingestion + the `device-connection` egress axis + `bober medical whoop sync`
-are later sprints of this spec.
+The third `device-connection` egress axis + the WHOOP transport (`WhoopTokenStore` + `WhoopClient`)
+are documented in [`docs/teams.md`](../teams.md) under "EgressGuard + full SOP wiring" (now three
+axes) and "WHOOP device-connection axis + authenticated transport"; the
+`medical.egress.deviceConnection` config key (default false) is in the README "Full Configuration
+Reference". WHOOP **data persistence + record mapping + the `bober medical whoop sync` CLI** are a
+later sprint of this spec.
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 

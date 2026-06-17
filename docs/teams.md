@@ -120,7 +120,12 @@ Selects the orchestration engine for sprints driven by this team:
 > guardrail set also emits a **code-enforced non-emergency `refuse` verdict** for
 > prescription / dosing / treatment-plan requests, deterministically and before any LLM
 > call, slotting in as **Gate 2b** between the red-flag short-circuit and `allow` (see
-> "Guardrails (Phase 6 — Gates 2 + 2b Live)" below). **The medical team is
+> "Guardrails (Phase 6 — Gates 2 + 2b Live)" below). As of
+> `spec-20260617-medical-whoop-guardrails` Sprint 2 the `EgressGuard` gained a **third
+> independent axis** (`device-connection`, default false) and the **authenticated WHOOP
+> transport** behind it (`WhoopTokenStore` + `WhoopClient`, the second sanctioned network
+> file) — egress-gated and offline-by-default, no data persistence yet (see "WHOOP
+> device-connection axis + authenticated transport" below). **The base medical team is
 > engineering-complete (7 of 7); shipping is gated on an external regulatory review
 > (S6.5).** See
 > [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md),
@@ -128,8 +133,9 @@ Selects the orchestration engine for sprints driven by this team:
 > [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md),
+> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md),
 > and
-> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md).
+> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md).
 
 ---
 
@@ -399,18 +405,23 @@ Sprint 6 is the integration linchpin: it wires the **full ordered SOP** inside
 `MedicalSopEngine.run` under a **code-enforced zero-egress default**. With a fresh
 config, a medical turn produces **zero outbound bytes**.
 
-**`EgressGuard` (`src/medical/egress.ts`) — two independent opt-in axes.** Both
-default **false**:
+**`EgressGuard` (`src/medical/egress.ts`) — three independent opt-in axes.** All
+default **false** (as of `spec-20260617-medical-whoop-guardrails` Sprint 2 a third
+`device-connection` axis joined the original two):
 
-- `EgressAxis` = `"cloud-inference" | "literature-retrieval"`.
+- `EgressAxis` = `"cloud-inference" | "literature-retrieval" | "device-connection"`.
 - `isAllowed(axis)` returns `true` **only** when that axis was explicitly opted in;
-  the two axes are read **independently** (enabling one does not enable the other).
+  the three axes are read **independently** (enabling one does not enable the others).
+  As of Sprint 2 `isAllowed` is an exhaustive `switch` with a compile-time `never`
+  guard, so an unhandled future axis is a build error.
 - `assertAllowed(axis)` **throws** `Error("Egress axis '<axis>' not enabled")` when
-  off, returns `void` when on — the hard barrier S7's network call will sit behind.
+  off, returns `void` when on — the hard barrier the literature (`medline-source.ts`)
+  and device (`whoop-client.ts`) network calls sit behind.
 - `EgressGuard.fromConfig(config)` reads `config.medical.egress`, defaulting each axis
-  to `false` when the section/field is absent.
+  to `false` when the section/field is absent. (The third constructor parameter is
+  **optional** and defaults `false`, so existing 2-arg call sites stay byte-identical.)
 
-**Config keys (both default false).** A new optional top-level `medical` section
+**Config keys (all three default false).** A new optional top-level `medical` section
 (`MedicalSectionSchema`, `src/config/schema.ts`):
 
 ```jsonc
@@ -418,24 +429,27 @@ default **false**:
   "medical": {
     "egress": {
       "cloudInference": false,        // permit cloud inference synthesis (default false)
-      "literatureRetrieval": false    // permit MedlinePlus literature retrieval (default false)
+      "literatureRetrieval": false,   // permit MedlinePlus literature retrieval (default false)
+      "deviceConnection": false       // permit WHOOP device-connection egress (default false)
     }
   }
 }
 ```
 
-Omitting the `medical` section leaves both axes off. (Also surfaced in the README
+Omitting the `medical` section leaves all three axes off. (Also surfaced in the README
 "Full Configuration Reference".)
 
 **Scoped ESLint network boundary + single exception.** `eslint.config.js` gained a
 flat-config block over `files: ["src/medical/**/*.ts"]` that makes egress a **lint
 error**: `no-restricted-imports` forbids `undici` / `got` / `axios` / `node-fetch` and
 the patterns `http` / `https` / `net` / `tls` / `dgram` (and their `node:` forms), and
-`no-restricted-globals` forbids the `fetch` global. A **single** follow-up override on
-`files: ["src/medical/retrieval/medline-source.ts"]` turns both rules **off**
-(flat-config last-match-wins) — that one file is the sanctioned home for Sprint 7's
-real MedlinePlus call. It holds **no** network import today; a forbidden import added to
-any other medical file would fail `npm run lint`. This is defence in depth alongside the
+`no-restricted-globals` forbids the `fetch` global. A follow-up override (flat-config
+last-match-wins) turns both rules **off** for exactly **two** sanctioned network files —
+`src/medical/retrieval/medline-source.ts` (the real MedlinePlus call, Sprint 7) and, as
+of whoop-guardrails Sprint 2, `src/medical/whoop/whoop-client.ts` (the WHOOP OAuth grant
++ v2 fetch). Those are the **only** two files under `src/medical` that may touch the
+network; a forbidden import added to any other medical file (including the network-free
+`whoop-token.ts`) would fail `npm run lint`. This is defence in depth alongside the
 runtime `EgressGuard`.
 
 **`LiteratureRetriever` (`src/medical/retrieval/literature.ts`).** `retrieve(query)`
@@ -553,6 +567,66 @@ construct **zero** LLM clients (preserving the S2/S3 never-called guarantees and
 sc-7-8). The audit event is `answer` for a non-abstained synthesis, `abstain`
 otherwise. Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md).
+
+---
+
+### WHOOP device-connection axis + authenticated transport (whoop-guardrails Sprint 2)
+
+`spec-20260617-medical-whoop-guardrails` Sprint 2 adds a **third** egress axis,
+`device-connection` (default **false**, independent of the other two), and the
+**authenticated WHOOP transport** behind it — without yet persisting any data (the sync
+adapter, record mapping, and `bober medical whoop sync` CLI land in Sprint 3). With the
+axis off (the default), the WHOOP path makes **zero outbound bytes**, exactly like the
+other two axes.
+
+**Opt in.** Enable the axis explicitly; the other two axes stay independently off:
+
+```jsonc
+{
+  "medical": {
+    "egress": {
+      "cloudInference": false,        // independent axis — stays off
+      "literatureRetrieval": false,   // independent axis — stays off
+      "deviceConnection": true        // permit the WHOOP OAuth grant + v2 fetch
+    }
+  }
+}
+```
+
+**Credentials: env vars + a `0600` sidecar (no keychain).**
+`WhoopTokenStore` (`src/medical/whoop/whoop-token.ts`) — a deliberately
+**network-free** file — reads `WHOOP_CLIENT_ID` / `WHOOP_CLIENT_SECRET` from
+`process.env` (throwing a clear "set …" error when unset) and keeps the rotating refresh
+token in a JSON sidecar at `.bober/medical/whoop-token.json` written with file mode
+**`0600`**. OS-keychain storage is an explicit non-goal (ADR-2); credentials are env-only.
+`readRefreshToken()` is fail-closed — an absent **or corrupt** sidecar ⇒ `undefined`
+(treated as "not yet authorised").
+
+**The second sanctioned network file (`src/medical/whoop/whoop-client.ts`).** All WHOOP
+HTTP lives **only** here — it is the second (and last) entry on the `eslint.config.js`
+medical network-exception list, sibling to `medline-source.ts`. `WhoopClient`:
+
+- `ensureAccessToken()` and `fetchPage(collection, window, cursor?)` both call
+  `EgressGuard.assertAllowed("device-connection")` as their **first** statement (runtime
+  defence-in-depth over the static lint boundary) — with the axis off, both **throw**
+  before any HTTP and the injected transport is never called.
+- `ensureAccessToken()` performs the OAuth2 `refresh_token` grant (scope `offline`),
+  caches the access token in memory, and persists the rotated tokens via
+  `WhoopTokenStore.writeTokens`.
+- `fetchPage` GETs the WHOOP **v2** endpoint for the collection (`recovery` →
+  `/v2/recovery`, `sleep` → `/v2/activity/sleep`, `cycle` → `/v2/cycle`, `workout` →
+  `/v2/activity/workout`), follows the `nextToken` cursor for pagination, retries **once**
+  on a `401` (refresh + retry; a second `401` throws — no loop), and on a `429` reads the
+  `X-RateLimit-Reset` header (seconds) and awaits an **injected** waiter before retrying.
+
+**Injectable transport / waiter / clock ⇒ offline, sleepless CI.** The constructor takes
+a `FetchLike` (defaulting to global `fetch`, allowed **only** in this file), a `waiter`
+(429 backoff; defaults to `setTimeout`), and a `nowIso` (token-expiry comparison;
+defaults to `new Date().toISOString()` — **no** `Date.now()` in the impl). Tests inject a
+fixture `FetchLike`, a recording no-wait waiter, and a fixed `nowIso`, so pagination,
+401-refresh-retry-once, and 429-Reset handling are all asserted without sleeping or
+touching the real network. Full details:
+[`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md).
 
 > **Shipping is gated on external regulatory review.** The medical team is
 > *engineering*-complete (7 of 7 sprints, 2393 tests, five code-enforced safety

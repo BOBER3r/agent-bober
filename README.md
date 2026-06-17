@@ -734,30 +734,35 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     }
   },
 
-  // -- Medical team egress (Phase 6; both axes default false) --
-  "medical": {                            // Optional. Omit entirely => zero egress (both axes off).
-    "egress": {                           // Two INDEPENDENT opt-in axes; code-enforced zero-egress default.
+  // -- Medical team egress (Phase 6; all three axes default false) --
+  "medical": {                            // Optional. Omit entirely => zero egress (all axes off).
+    "egress": {                           // Three INDEPENDENT opt-in axes; code-enforced zero-egress default.
       "cloudInference": false,            // Permit cloud inference synthesis. Default false.
-      "literatureRetrieval": false        // Permit MedlinePlus literature retrieval. Default false.
+      "literatureRetrieval": false,       // Permit MedlinePlus literature retrieval. Default false.
+      "deviceConnection": false           // Permit WHOOP device-connection egress. Default false.
     }
   }
 }
 ```
 
-> **Zero-egress is code-enforced for the medical team.** Both `medical.egress` axes
+> **Zero-egress is code-enforced for the medical team.** All three `medical.egress` axes
 > default `false`, so a medical SOP turn makes **zero outbound calls** out of the box —
 > a numeric question is answered from deterministic local compute and a literature
 > question abstains, with no network module ever reached. The default is enforced two
 > ways: the runtime `EgressGuard` (whose `assertAllowed` throws when an axis is off) and
 > a scoped `no-restricted-imports` ESLint boundary over `src/medical/**/*.ts` that makes
-> any network import a lint error (with a single sanctioned exception for the
-> literature-retrieval source file `src/medical/retrieval/medline-source.ts`).
-> Opting `literatureRetrieval` **in** turns on a real MedlinePlus / NIH (no-auth)
-> grounded retrieval + cited synthesis that **abstains unless a retrieved passage
-> supports the claim**; it runs the synthesis on a **local** model (Ollama by default)
-> and does **not** enable `cloudInference` (the two axes are independent). See
-> [docs/teams.md](./docs/teams.md) ("EgressGuard + full SOP wiring" and "MedlinePlus
-> grounded retrieval + cited synthesis").
+> any network import a lint error (with **two** sanctioned exceptions — the
+> literature-retrieval source `src/medical/retrieval/medline-source.ts` and the WHOOP
+> client `src/medical/whoop/whoop-client.ts`). Opting `literatureRetrieval` **in** turns
+> on a real MedlinePlus / NIH (no-auth) grounded retrieval + cited synthesis that
+> **abstains unless a retrieved passage supports the claim**; it runs the synthesis on a
+> **local** model (Ollama by default). Opting `deviceConnection` **in** turns on the
+> authenticated WHOOP transport (OAuth2 refresh + paginated v2 fetch; credentials from
+> `WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` env vars + a `0600` refresh-token sidecar, no
+> keychain). The three axes are **independent** — enabling one never enables another. See
+> [docs/teams.md](./docs/teams.md) ("EgressGuard + full SOP wiring", "MedlinePlus
+> grounded retrieval + cited synthesis", and "WHOOP device-connection axis +
+> authenticated transport").
 
 ### Sprint Sizes
 
