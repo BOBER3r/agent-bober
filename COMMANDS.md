@@ -559,6 +559,28 @@ same file is **idempotent** — the store dedups on a deterministic id, so the s
 run reports `new rows: 0`. An unsupported file type exits non-zero with a clear
 message naming the file.
 
+### `bober medical whoop sync [--since <iso>]`
+
+Pull WHOOP `recovery` / `sleep` / `cycle` / `workout` records over a window and write
+them into the same medical health store (`.bober/medical/health.db`). This is the
+**on-demand networked** device-connection path (no webhooks); `medical import` is the
+offline file-import path.
+
+```bash
+bober medical whoop sync                                  # last 7 days (default window)
+bober medical whoop sync --since 2026-06-01T00:00:00Z     # custom window start
+```
+
+Requires the `device-connection` egress axis to be enabled
+(`medical.egress.deviceConnection: true`, **default false**) plus `WHOOP_CLIENT_ID` /
+`WHOOP_CLIENT_SECRET` env vars and a stored refresh token in
+`.bober/medical/whoop-token.json`. With the axis off, or with credentials/token missing,
+it prints a clear message and exits non-zero **without** making any network call — it
+never throws. On success it prints `records parsed` and `new rows`. Syncing is
+**idempotent** (the store dedups on a content-derived id, so a re-run over an overlapping
+window reports `new rows: 0`) and **fail-closed** (a mid-sync failure leaves already-
+written rows intact and is recovered by re-running).
+
 ---
 
 ## Environment Variables

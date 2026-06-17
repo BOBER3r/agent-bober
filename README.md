@@ -504,6 +504,7 @@ npx agent-bober playbook search '<symptom>'        # Search by symptom
 
 # Medical team (Phase 6)
 npx agent-bober medical import <file>              # Stream-import a health export (e.g. Apple Health export.xml)
+npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
 ```
 
 #### Clarification gating
@@ -759,7 +760,10 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > **local** model (Ollama by default). Opting `deviceConnection` **in** turns on the
 > authenticated WHOOP transport (OAuth2 refresh + paginated v2 fetch; credentials from
 > `WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` env vars + a `0600` refresh-token sidecar, no
-> keychain). The three axes are **independent** — enabling one never enables another. See
+> keychain) used by the on-demand `bober medical whoop sync [--since <iso>]` command,
+> which persists WHOOP recovery/sleep/cycle/workout into the medical health store
+> (idempotent, fail-closed). The three axes are **independent** — enabling one never
+> enables another. See
 > [docs/teams.md](./docs/teams.md) ("EgressGuard + full SOP wiring", "MedlinePlus
 > grounded retrieval + cited synthesis", and "WHOOP device-connection axis +
 > authenticated transport").

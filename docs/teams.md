@@ -124,18 +124,25 @@ Selects the orchestration engine for sprints driven by this team:
 > `spec-20260617-medical-whoop-guardrails` Sprint 2 the `EgressGuard` gained a **third
 > independent axis** (`device-connection`, default false) and the **authenticated WHOOP
 > transport** behind it (`WhoopTokenStore` + `WhoopClient`, the second sanctioned network
-> file) — egress-gated and offline-by-default, no data persistence yet (see "WHOOP
-> device-connection axis + authenticated transport" below). **The base medical team is
-> engineering-complete (7 of 7); shipping is gated on an external regulatory review
-> (S6.5).** See
+> file) — egress-gated and offline-by-default, no data persistence yet. As of
+> `spec-20260617-medical-whoop-guardrails` Sprint 3 (the final sprint of that spec) the
+> **WHOOP path persists end-to-end**: a `WhoopSyncAdapter` maps paged WHOOP records into
+> `source:"whoop"` observations and `bober medical whoop sync [--since <iso>]` writes them
+> into the same `HealthDataStore` — on-demand (no webhooks), idempotent on re-run, and
+> fail-closed on partial failure, all still behind the off-by-default `device-connection`
+> axis (see "WHOOP device-connection axis + authenticated transport" below and
+> [`COMMANDS.md`](../COMMANDS.md)). **The base medical team is engineering-complete (7 of
+> 7) and the whoop-guardrails spec is complete (3 of 3); shipping is gated on an external
+> regulatory review (S6.5).** See
 > [`docs/sprints/sprint-spec-20260616-medical-team-3.md`](sprints/sprint-spec-20260616-medical-team-3.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-6.md`](sprints/sprint-spec-20260616-medical-team-6.md),
 > [`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md),
 > [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-1.md),
+> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md),
 > and
-> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md).
+> [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-3.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-3.md).
 
 ---
 
@@ -574,10 +581,10 @@ otherwise. Full details:
 
 `spec-20260617-medical-whoop-guardrails` Sprint 2 adds a **third** egress axis,
 `device-connection` (default **false**, independent of the other two), and the
-**authenticated WHOOP transport** behind it — without yet persisting any data (the sync
-adapter, record mapping, and `bober medical whoop sync` CLI land in Sprint 3). With the
-axis off (the default), the WHOOP path makes **zero outbound bytes**, exactly like the
-other two axes.
+**authenticated WHOOP transport** behind it; Sprint 3 adds the **sync adapter, record
+mapping, and the `bober medical whoop sync` CLI** that persist WHOOP data end-to-end (see
+"WHOOP sync adapter + CLI" below). With the axis off (the default), the WHOOP path makes
+**zero outbound bytes**, exactly like the other two axes.
 
 **Opt in.** Enable the axis explicitly; the other two axes stay independently off:
 
@@ -627,6 +634,49 @@ fixture `FetchLike`, a recording no-wait waiter, and a fixed `nowIso`, so pagina
 401-refresh-retry-once, and 429-Reset handling are all asserted without sleeping or
 touching the real network. Full details:
 [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-2.md).
+
+---
+
+### WHOOP sync adapter + CLI (whoop-guardrails Sprint 3 — final sprint)
+
+`spec-20260617-medical-whoop-guardrails` Sprint 3 (the spec's **final** sprint) turns the
+Sprint 2 transport into a working ingestion path and exposes it as a CLI command. It adds
+no schema, `ObservationSink`, or `IngestionAdapter` changes, and **no webhooks** — sync is
+**on-demand only**.
+
+**`bober medical whoop sync [--since <iso>]`** — pulls WHOOP `recovery` / `sleep` /
+`cycle` / `workout` over a window (default the last 7 days; `--since` overrides the start)
+and writes the records into the same `.bober/medical/health.db` the offline
+`bober medical import` path uses. WHOOP sync is the **on-demand networked** device path;
+`bober medical import <file>` remains the **offline** Apple Health SAX file-import path.
+The two are complementary — both write `source`-tagged observations into the same store
+and both are idempotent on re-run. User-facing usage is in
+[`COMMANDS.md`](../COMMANDS.md).
+
+- **Egress-gated before any HTTP.** The command checks the `device-connection` axis
+  **before** constructing any `WhoopClient`, so with the axis off (the default) it prints a
+  clear `"device-connection egress not enabled"` message, exits `1`, and makes **zero**
+  outbound bytes — never building a network client at all.
+- **Credentials and authorisation.** With the axis on but `WHOOP_CLIENT_ID` /
+  `WHOOP_CLIENT_SECRET` unset, or no stored refresh token in
+  `.bober/medical/whoop-token.json`, it prints a clear "set WHOOP_CLIENT_ID/SECRET" or
+  "authorise first" message and exits `1`. It **never throws** out of the action; the store
+  is always closed in `finally`.
+- **`WhoopSyncAdapter` (`src/medical/whoop/whoop-sync.ts`, no network import).** Pages
+  `WhoopClient.fetchPage` across the four collections following the `nextCursor`, maps each
+  record to `source:"whoop"` `HealthObservation`s via a fixed, reviewable
+  `WHOOP_FIELD_MAP` (unmapped fields are **skipped, never guessed**), and writes via the
+  **existing** `StoreObservationSink.writeBatch` in bounded per-batch transactions. It
+  returns `IngestionResult { recordsParsed, newRows }`. All HTTP stays inside the injected
+  `WhoopClient`.
+- **Idempotent + fail-closed.** The observation `id` is left unset so `HealthDataStore`
+  derives the content-derived SHA-256 dedup key (`INSERT OR IGNORE`) — **not** the WHOOP
+  UUID — so a repeat sync over an overlapping window reports `newRows: 0`. There is **no**
+  persisted sync cursor (ADR-4); re-run is the resume mechanism. A mid-pagination throw
+  **propagates** (no catch-and-continue): committed batches survive, and a clean re-run
+  reaches the same end-state. The `ingest` audit entry is **IDs/enums only** (no record
+  counts or values). Full details:
+  [`docs/sprints/sprint-spec-20260617-medical-whoop-guardrails-3.md`](sprints/sprint-spec-20260617-medical-whoop-guardrails-3.md).
 
 > **Shipping is gated on external regulatory review.** The medical team is
 > *engineering*-complete (7 of 7 sprints, 2393 tests, five code-enforced safety
