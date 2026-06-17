@@ -211,14 +211,26 @@ agent-bober is **provider-agnostic**. Use any LLM provider for any agent role. M
 
 ### Supported Providers
 
-| Provider | Shorthands | API Key |
+| Provider | Shorthands | API Key (env var) |
 |----------|-----------|---------|
 | **Anthropic** (default) | `opus`, `sonnet`, `haiku` | `ANTHROPIC_API_KEY` |
+| **DeepSeek** | `deepseek`, `deepseek-v4-pro`, `deepseek-v4-flash` | `DEEPSEEK_API_KEY` |
 | **OpenAI** | Any OpenAI model ID | `OPENAI_API_KEY` |
 | **Google Gemini** | `gemini-pro`, `gemini-flash` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
-| **OpenAI-Compatible** | Any model (Ollama, LM Studio, Groq, DeepSeek, etc.) | Optional |
+| **OpenAI-Compatible** | Any model (Ollama, LM Studio, Groq, custom endpoints) | Optional (none for local servers) |
 
 Shorthands resolve to the latest model version automatically. You can also pass any full model ID directly -- it will be sent to the provider as-is.
+
+> **Which API key do I need? (read this first)**
+>
+> **The default is Anthropic, so `ANTHROPIC_API_KEY` on its own means every role calls Claude — nothing else.** Setting `ANTHROPIC_API_KEY` does **not** turn on DeepSeek. Provider selection is **config-driven, not key-driven**: a key is only used if a role is actually pointed at that provider.
+>
+> To use **DeepSeek** you need **three** things together:
+> 1. `npm install openai` — the OpenAI SDK is the OpenAI-compatible client DeepSeek runs through (an optional peer dependency).
+> 2. `export DEEPSEEK_API_KEY=sk-...` — get a key at <https://platform.deepseek.com>. (`ANTHROPIC_API_KEY` is **not** needed if no role uses Anthropic.)
+> 3. Point one or more roles at DeepSeek in `bober.config.json` — see [DeepSeek setup (full example)](#deepseek-setup-full-example) below.
+>
+> DeepSeek is **not** reachable with the `--provider` CLI flag alone (that flag only swaps the provider name; DeepSeek also needs its model + endpoint) — configure it in `bober.config.json`.
 
 ### Capability Matrix
 
@@ -245,6 +257,65 @@ programmatic subscription use is metered (Agent-SDK credit, billed at API rates,
 Each `claude -p` call injects approximately **40,000 tokens of system-prompt overhead**.
 
 See [`docs/providers.md`](docs/providers.md) for copy-paste config snippets for each provider.
+
+### DeepSeek setup (full example)
+
+DeepSeek runs through the built-in OpenAI-compatible adapter pointed at `https://api.deepseek.com`. End-to-end:
+
+**1. Install the OpenAI-compatible client** (one-time):
+
+```bash
+npm install openai
+```
+
+**2. Export your DeepSeek key** (get one at <https://platform.deepseek.com>):
+
+```bash
+export DEEPSEEK_API_KEY=sk-...
+```
+
+**3a. Configure roles — shorthand (simplest).** Set only the `model`; the provider (`openai-compat`) and the `https://api.deepseek.com` endpoint are inferred automatically:
+
+```jsonc
+// bober.config.json — DeepSeek for every role
+{
+  "planner":    { "model": "deepseek-v4-pro" },
+  "researcher": { "model": "deepseek-v4-flash" },
+  "curator":    { "model": "deepseek-v4-pro" },
+  "generator":  { "model": "deepseek-v4-pro" },
+  "evaluator":  { "model": "deepseek-v4-flash" }
+}
+```
+
+**3b. Configure roles — explicit (equivalent).** Spell out the provider and endpoint if you prefer — also the form to use for a self-hosted DeepSeek-compatible gateway:
+
+```jsonc
+{
+  "generator": {
+    "provider": "openai-compat",
+    "model": "deepseek-v4-pro",
+    "endpoint": "https://api.deepseek.com"
+  }
+}
+```
+
+**4. Run:**
+
+```bash
+agent-bober run "Build a REST API with auth and CRUD"
+```
+
+> Use `"provider": "openai-compat"` (as in 3b), **not** `"provider": "deepseek"` — `deepseek` is a *model* shorthand, not a provider name, so `"provider": "deepseek"` is rejected as an unsupported provider.
+
+**Mix providers** — e.g. plan on Claude (highest quality) and generate/evaluate on DeepSeek (cheaper). You then need **both** `ANTHROPIC_API_KEY` and `DEEPSEEK_API_KEY` in your environment:
+
+```jsonc
+{
+  "planner":   { "model": "opus" },
+  "generator": { "model": "deepseek-v4-pro" },
+  "evaluator": { "model": "deepseek-v4-flash" }
+}
+```
 
 ### Configuration
 
@@ -541,6 +612,17 @@ export OPENAI_API_KEY=sk-...
 cd your-project
 agent-bober init nextjs
 agent-bober run "Build a complete dashboard with auth, CRUD, and charts" --provider openai
+```
+
+For **DeepSeek**, set `DEEPSEEK_API_KEY` and point your roles at the `deepseek` model in `bober.config.json` — the `--provider` flag alone is not enough, since DeepSeek also needs its model + endpoint (see [DeepSeek setup (full example)](#deepseek-setup-full-example)):
+
+```bash
+npm install openai
+export DEEPSEEK_API_KEY=sk-...
+cd your-project
+agent-bober init nextjs
+# in bober.config.json set "model": "deepseek-v4-pro" on the roles you want
+agent-bober run "Build a complete dashboard with auth, CRUD, and charts"
 ```
 
 ---
