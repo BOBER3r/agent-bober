@@ -260,8 +260,8 @@ resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 
 The fleet orchestrator runs **N isolated `agent-bober` child runs in bulk** from a manifest.
 A manifest is a JSON file describing a `rootDir`, a `concurrency`, and a list of `children`,
-each `{ "folder", "task" }` (children may carry an optional per-child `config`). These
-commands are invoked as `agent-bober …` (not `bober …`).
+each `{ "folder", "task" }` (children may carry an optional per-child `config` and an optional
+per-child `tier`). These commands are invoked as `agent-bober …` (not `bober …`).
 
 ### `agent-bober fleet <manifest>`
 
@@ -289,6 +289,48 @@ A manifest looks like:
   ]
 }
 ```
+
+#### Per-child difficulty tier (optional)
+
+Each child may carry an optional `tier` that routes its three roles (planner,
+generator, evaluator) onto a provider block. A child with **no `tier`** (or `tier:
+"default"`) runs exactly as before — the **DeepSeek default**, byte-for-byte unchanged:
+
+```json
+{
+  "rootDir": ".",
+  "concurrency": 3,
+  "children": [
+    { "folder": "api-server",  "task": "Build a REST API server with auth" },
+    { "folder": "web-frontend", "task": "Build a React frontend", "tier": "standard" },
+    { "folder": "billing",     "task": "Implement Stripe billing", "tier": "frontier" }
+  ]
+}
+```
+
+The `tier` value is a closed enum — anything outside it is rejected when the manifest
+is parsed:
+
+| `tier` | Provider | Model | Endpoint |
+|---|---|---|---|
+| `default` (or omitted) | — *(no overlay)* | — | DeepSeek default, unchanged |
+| `cheap` | `openai-compat` | `deepseek` | `https://api.deepseek.com` |
+| `standard` | `openai-compat` | `grok` | `https://api.x.ai/v1` *(Grok / xAI)* |
+| `hard` | `anthropic` | `sonnet` | *(default)* |
+| `frontier` | `anthropic` | `opus` | *(default)* |
+
+Notes:
+
+- All three roles of a tiered child get the **same** provider block.
+- A child's explicit `config` still **wins** over the tier — the tier is applied
+  first, then `config` shallow-merges over it. So `{ "tier": "standard", "config": {
+  "generator": { "provider": "anthropic", "model": "sonnet" } } }` puts the generator
+  on Anthropic and the planner/evaluator on Grok.
+- `claude-code` is **never** a tier — it is reserved for the head/orchestrator, never a
+  fleet child role. Tiers only name LLM providers.
+- The non-DeepSeek tiers need the matching key in the environment: `standard` needs
+  `XAI_API_KEY`, `hard` / `frontier` need `ANTHROPIC_API_KEY` (and `cheap` / default
+  need `DEEPSEEK_API_KEY`). The model ids are config-overridable per role.
 
 ### `agent-bober fleet expand <goal>`
 

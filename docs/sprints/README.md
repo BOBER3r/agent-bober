@@ -717,7 +717,7 @@ User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Comm
 provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
 under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
 
-## Fleet Tier / Provider Routing — in progress (1 of 3)
+## Fleet Tier / Provider Routing — in progress (2 of 3)
 
 `spec-20260618-fleet-tier-provider-routing` — Phase A of
 `arch-20260618-heterogeneous-multi-provider-agent-team`: let a fleet route different roles to
@@ -742,13 +742,37 @@ behavior and no tier logic** — tier mapping / `FleetChild.tier` (Sprint 2) and
 (Sprint 3) are out of scope. Full suite 2690 passed (fleet 203/203); the only failures are the 6
 pre-existing cockpit-integration MCP failures (unrelated). All 7 criteria passed iteration 1.
 
+Sprint 2 makes that wiring **routable per child**: a closed `DifficultyTier` enum
+(`default | cheap | standard | hard | frontier`) plus a `TierProviderPolicy` table in
+`src/fleet/tier-policy.ts` map a tier to a `TieredRoleBlock` (one `RoleProviderBlock`
+—`{provider,model,endpoint?}`— for each of planner / generator / evaluator). The table is
+`cheap → DeepSeek` (`openai-compat` `api.deepseek.com`), `standard → Grok` (`openai-compat`
+`https://api.x.ai/v1`, from Sprint 1), `hard → Anthropic Sonnet` (`endpoint:null`), and
+`frontier → Anthropic Opus` (`endpoint:null`); **`default` (and `undefined`) resolve to
+`undefined` = no overlay**, and **no block names `claude-code`** (children build with the tool
+roles; the *enforcing* `ToolRoleGuard` is Sprint 3). `FleetChild` gains an **optional** `tier`
+enum (`manifest.ts:10`; an out-of-enum value is a `ZodError`, absent leaves the shape unchanged),
+and `buildChildConfig` applies `tierPolicy.resolveTier(child.tier)` over
+`base.planner/generator/evaluator` **before** the unchanged
+`const merged = {...base, ...(child.config ?? {})}` shallow-merge (`child-config.ts:51`). Two
+guarantees fall out of that ordering: a **tier-less / `default` child is byte-identical to today's
+DeepSeek default** (proven by a `deepEqual` against an expected config built through
+`BoberConfigSchema.parse`), and an explicit `child.config` still **wins** over the tier block (a
+`tier:"standard"` child with `config.generator={provider:"anthropic",…}` gets that generator on
+Anthropic, planner/evaluator on Grok). No new SDK/network imports; `ProviderName` unchanged. +37
+fleet tests; full suite **2714 passed** (only the 6 pre-existing cockpit-integration MCP failures
+remain). All 8 criteria passed iteration 1.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-fleet-tier-provider-routing-1.md](./sprint-spec-20260618-fleet-tier-provider-routing-1.md) | **Grok/xAI wiring as the existing `openai-compat` provider (no new `ProviderName`/adapter):** `grok`/`grok-4`/`grok-4-fast` `SHORTHAND_MAP` entries → `{provider:"openai-compat",modelId}` + endpoint-attach branch selecting `https://api.x.ai/v1` for `grok*` (else `api.deepseek.com`); single shared `isXaiEndpoint(endpoint?)` (`factory.ts:83`, **sole** `api.x.ai` matcher, grep-asserted) reused by both factory sites — `validateApiKey` xAI arm (`apiKey ?? XAI_API_KEY`, clear throw when absent) + `createClient` parallel `XAI_API_KEY` injection into the **unchanged** `OpenAICompatAdapter`; `validateManifestCredentials` recognizes Grok with **zero edit** to `src/fleet/index.ts`; `ProviderName` union + DeepSeek/Ollama paths byte-unchanged; grok ids placeholder/config-overridable; **no fleet/tier behavior change** (Sprints 2–3); +17 collocated tests (resolution, key throw/no-throw, injection, single-predicate invariant, DeepSeek/Ollama non-regression) |
+| 2 | [sprint-spec-20260618-fleet-tier-provider-routing-2.md](./sprint-spec-20260618-fleet-tier-provider-routing-2.md) | **`TierProviderPolicy` + `buildChildConfig` tier overlay (per-child provider routing, additive):** new `src/fleet/tier-policy.ts` (`DifficultyTier` closed enum + `RoleProviderBlock`/`TieredRoleBlock`/`TierProviderPolicy` types + `TIER_POLICY` table `cheap→DeepSeek`/`standard→Grok api.x.ai/v1`/`hard→anthropic Sonnet null`/`frontier→anthropic Opus null`; `tierPolicy.resolveTier` ⇒ `undefined` for `default`/`undefined` = **no overlay**; **no `claude-code` in any block**); optional `FleetChild.tier` enum (`manifest.ts:10`, out-of-enum ⇒ `ZodError`); `buildChildConfig` overlays `resolveTier(child.tier)` over `base.planner/generator/evaluator` **before** the unchanged `const merged` shallow-merge (`child-config.ts:51`) ⇒ **tier-less/`default` child byte-identical to DeepSeek default** (`deepEqual` proof) + **`child.config` still wins** over the tier block; no new SDK/network imports, `ProviderName` unchanged; `ToolRoleGuard` deferred to Sprint 3; +37 fleet tests (2714 total), no regression |
 
 User-facing provider setup for Grok/xAI (the `openai-compat` adapter at `https://api.x.ai/v1`,
 `XAI_API_KEY`, and the `grok` / `grok-4` / `grok-4-fast` model shorthands) is documented in
-[`docs/providers.md`](../providers.md) under **Grok (xAI)** and the capability matrix.
+[`docs/providers.md`](../providers.md) under **Grok (xAI)** and the capability matrix. The
+optional per-child fleet `tier` field and the tier → provider table are documented in
+[`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands**.
 
 This phase's architecture is in `.bober/architecture/` under
 `arch-20260618-heterogeneous-multi-provider-agent-team-*`.
