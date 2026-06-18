@@ -327,7 +327,11 @@ Notes:
   "generator": { "provider": "anthropic", "model": "sonnet" } } }` puts the generator
   on Anthropic and the planner/evaluator on Grok.
 - `claude-code` is **never** a tier — it is reserved for the head/orchestrator, never a
-  fleet child role. Tiers only name LLM providers.
+  fleet child role. Tiers only name LLM providers. A builder child (`curator` /
+  `generator` / `evaluator` / `codeReview`) **must** use an api-key provider
+  (`anthropic` / `openai-compat`): if a child's `config` places `claude-code` on one of
+  those tool roles, `agent-bober fleet` **rejects the manifest at launch, before any
+  child is spawned**, naming the offending child and role.
 - The non-DeepSeek tiers need the matching key in the environment: `standard` needs
   `XAI_API_KEY`, `hard` / `frontier` need `ANTHROPIC_API_KEY` (and `cheap` / default
   need `DEEPSEEK_API_KEY`). The model ids are config-overridable per role.

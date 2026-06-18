@@ -717,7 +717,7 @@ User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Comm
 provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
 under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
 
-## Fleet Tier / Provider Routing — in progress (2 of 3)
+## Fleet Tier / Provider Routing — complete (3 of 3)
 
 `spec-20260618-fleet-tier-provider-routing` — Phase A of
 `arch-20260618-heterogeneous-multi-provider-agent-team`: let a fleet route different roles to
@@ -763,16 +763,56 @@ Anthropic, planner/evaluator on Grok). No new SDK/network imports; `ProviderName
 fleet tests; full suite **2714 passed** (only the 6 pre-existing cockpit-integration MCP failures
 remain). All 8 criteria passed iteration 1.
 
+Sprint 3 **closes Phase A** with a **build-time `ToolRoleGuard`** that rejects, **before any
+child is spawned**, any child whose resolved config would place `claude-code` on a **tool role**
+(`curator` / `generator` / `evaluator` / `codeReview`) — `claude-code` can drive a subscription
+chat but cannot drive tools, so a builder child must use an api-key provider. `role-providers.ts`
+gains an **exported** `isToolRole(role)` (derived from the authoritative `TOOL_ROLES`, **not** a
+re-declared literal) and **exports** the existing `effectiveProvider`. A new
+`src/fleet/tool-role-guard.ts` exposes a pure, never-throwing `check(child, resolved)` (returns a
+`ToolRoleViolation {childFolder, role, provider:"claude-code"}` or `null`) and a throwing
+`assertManifest(manifest)` (builds each child via `buildChildConfig`, throws a named `Error`
+identifying `child.folder` + role on the first violation). `runFleet` calls `assertManifest`
+in its fail-fast region **before** both `validateManifestCredentials` and `coordinator.execute`
+(`index.ts:110`), so a violation prevents any spawn (a DI test asserts `coordinator.execute` is
+**never called** on the throw path). The Sprint-2 tier table never emits a `claude-code` block, so
+the guard's real job is catching a **hand-authored `child.config`**; it inspects the **raw**
+effective provider, front-loading the same invariant the config loader already enforces per-process
+into an explicit, named fleet-level rejection. The never-throw `validateManifest` is **byte-identical**
+and a clean (incl. tiered) manifest passes with no throw — the no-flag fleet path is unchanged.
++39 tests; full suite **2734 passed** (only the 6 pre-existing cockpit-integration MCP failures
+remain). All 8 criteria passed iteration 1.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-fleet-tier-provider-routing-1.md](./sprint-spec-20260618-fleet-tier-provider-routing-1.md) | **Grok/xAI wiring as the existing `openai-compat` provider (no new `ProviderName`/adapter):** `grok`/`grok-4`/`grok-4-fast` `SHORTHAND_MAP` entries → `{provider:"openai-compat",modelId}` + endpoint-attach branch selecting `https://api.x.ai/v1` for `grok*` (else `api.deepseek.com`); single shared `isXaiEndpoint(endpoint?)` (`factory.ts:83`, **sole** `api.x.ai` matcher, grep-asserted) reused by both factory sites — `validateApiKey` xAI arm (`apiKey ?? XAI_API_KEY`, clear throw when absent) + `createClient` parallel `XAI_API_KEY` injection into the **unchanged** `OpenAICompatAdapter`; `validateManifestCredentials` recognizes Grok with **zero edit** to `src/fleet/index.ts`; `ProviderName` union + DeepSeek/Ollama paths byte-unchanged; grok ids placeholder/config-overridable; **no fleet/tier behavior change** (Sprints 2–3); +17 collocated tests (resolution, key throw/no-throw, injection, single-predicate invariant, DeepSeek/Ollama non-regression) |
 | 2 | [sprint-spec-20260618-fleet-tier-provider-routing-2.md](./sprint-spec-20260618-fleet-tier-provider-routing-2.md) | **`TierProviderPolicy` + `buildChildConfig` tier overlay (per-child provider routing, additive):** new `src/fleet/tier-policy.ts` (`DifficultyTier` closed enum + `RoleProviderBlock`/`TieredRoleBlock`/`TierProviderPolicy` types + `TIER_POLICY` table `cheap→DeepSeek`/`standard→Grok api.x.ai/v1`/`hard→anthropic Sonnet null`/`frontier→anthropic Opus null`; `tierPolicy.resolveTier` ⇒ `undefined` for `default`/`undefined` = **no overlay**; **no `claude-code` in any block**); optional `FleetChild.tier` enum (`manifest.ts:10`, out-of-enum ⇒ `ZodError`); `buildChildConfig` overlays `resolveTier(child.tier)` over `base.planner/generator/evaluator` **before** the unchanged `const merged` shallow-merge (`child-config.ts:51`) ⇒ **tier-less/`default` child byte-identical to DeepSeek default** (`deepEqual` proof) + **`child.config` still wins** over the tier block; no new SDK/network imports, `ProviderName` unchanged; `ToolRoleGuard` deferred to Sprint 3; +37 fleet tests (2714 total), no regression |
+| 3 | [sprint-spec-20260618-fleet-tier-provider-routing-3.md](./sprint-spec-20260618-fleet-tier-provider-routing-3.md) | **Build-time `ToolRoleGuard` (fail-fast claude-code-on-tool-role rejection):** **exported** `isToolRole(role)` (`role-providers.ts:44`, derived from `TOOL_ROLES`, no re-declared literal) + **exported** existing `effectiveProvider` (`role-providers.ts:57`); new `src/fleet/tool-role-guard.ts` — `type ToolRoleViolation {childFolder, role, provider:"claude-code"}`, pure never-throws `check(child, resolved)` (first tool-role on `claude-code` ⇒ violation, else `null`), and `assertManifest(manifest)` (builds each child via `buildChildConfig`, **throws** a named `Error` identifying `child.folder` + role on first violation); wired into `runFleet` (`index.ts:110`) **before** `validateManifestCredentials` **and** `coordinator.execute` ⇒ **no child spawned** on a violation (DI test: `coordinator.execute` never called); inspects the **raw** effective provider, front-loading the loader's per-process invariant to manifest-build time; tier table never emits `claude-code` so the guard catches hand-authored `child.config`; never-throw `validateManifest` **byte-identical**, clean/tiered manifest passes silently (no-flag path unchanged); no new SDK/network imports; +39 tests (2734 total), all 8 criteria iter-1, no regression |
 
 User-facing provider setup for Grok/xAI (the `openai-compat` adapter at `https://api.x.ai/v1`,
 `XAI_API_KEY`, and the `grok` / `grok-4` / `grok-4-fast` model shorthands) is documented in
 [`docs/providers.md`](../providers.md) under **Grok (xAI)** and the capability matrix. The
 optional per-child fleet `tier` field and the tier → provider table are documented in
-[`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands**.
+[`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands**. That the fleet now **rejects
+`claude-code` on a tool role** (a builder child must use an api-key provider) is noted there
+under the per-child tier table.
 
 This phase's architecture is in `.bober/architecture/` under
 `arch-20260618-heterogeneous-multi-provider-agent-team-*`.
+
+### Plan close-out
+
+`spec-20260618-fleet-tier-provider-routing` is **complete (3 of 3)** and **closes Phase A** of
+`arch-20260618-heterogeneous-multi-provider-agent-team` — all three sprints passed evaluation on
+iteration 1 (zero reworks), **2734 tests** green (only the 6 pre-existing cockpit-integration MCP
+failures remain). Phase A delivers heterogeneous multi-provider fleet routing as three additive
+layers: (1) **Grok / xAI wiring** as the existing `openai-compat` provider at `https://api.x.ai/v1`
+(no new `ProviderName`, no new adapter — Sprint 1); (2) a per-child **`DifficultyTier` →
+`TierProviderPolicy`** overlay (`cheap → DeepSeek`, `standard → Grok`, `hard → Sonnet`,
+`frontier → Opus`; `default`/absent = byte-identical DeepSeek default — Sprint 2); and (3) a
+**build-time `ToolRoleGuard`** that fails the fleet fast when a child would put `claude-code` on a
+tool role (Sprint 3). The tier-less / no-`tier` fleet path is byte-identical to the prior DeepSeek
+default throughout. The **shared-blackboard / cross-child coordination (Phase B)** is **deferred**
+per `arch-20260618-heterogeneous-multi-provider-agent-team` and was an explicit non-goal of every
+sprint here. See the finale record
+[`sprint-spec-20260618-fleet-tier-provider-routing-3.md`](./sprint-spec-20260618-fleet-tier-provider-routing-3.md).
