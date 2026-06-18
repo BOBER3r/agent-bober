@@ -1,4 +1,8 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import Database from "better-sqlite3";
 import { FactStore, factId } from "./facts.js";
 
 // ── FactStore (in-memory) ─────────────────────────────────────────────
@@ -101,5 +105,41 @@ describe("FactStore (in-memory)", () => {
     expect(store.invalidateFact(id, "2026-06-17T00:00:00.000Z")).toBe(false);
     // Unknown id → false
     expect(store.invalidateFact("nonexistent-id-1234", "2026-06-17T00:00:00.000Z")).toBe(false);
+  });
+});
+
+// ── FactStore (default journal mode regression — sc-1-7) ──────────────
+
+describe("FactStore (default journal mode regression)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-facts-jm-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("default FactStore (no opts) does NOT enable WAL mode", () => {
+    const dbPath = join(tmpDir, "default.db");
+    const store = new FactStore(dbPath);
+    // Read journal_mode via a second raw connection to avoid needing a getter
+    const raw = new Database(dbPath);
+    const mode = raw.pragma("journal_mode", { simple: true });
+    raw.close();
+    store.close();
+    // Default SQLite journal mode is 'delete'; must not be 'wal'
+    expect(mode).not.toBe("wal");
+  });
+
+  it("FactStore with journalModeWal:true reports WAL mode", () => {
+    const dbPath = join(tmpDir, "wal.db");
+    const store = new FactStore(dbPath, { journalModeWal: true });
+    const raw = new Database(dbPath);
+    const mode = raw.pragma("journal_mode", { simple: true });
+    raw.close();
+    store.close();
+    expect(mode).toBe("wal");
   });
 });

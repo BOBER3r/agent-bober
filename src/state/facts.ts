@@ -136,8 +136,17 @@ function rowToRecord(row: RawRow): FactRecord {
 export class FactStore {
   private db: DatabaseType;
 
-  constructor(dbPath: string) {
+  constructor(
+    dbPath: string,
+    opts?: { journalModeWal?: boolean; busyTimeoutMs?: number },
+  ) {
     this.db = new Database(dbPath);
+    if (opts?.journalModeWal) {
+      this.db.pragma("journal_mode = WAL");
+    }
+    if (opts?.busyTimeoutMs !== undefined) {
+      this.db.pragma(`busy_timeout = ${opts.busyTimeoutMs}`);
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS semantic_facts (
         id TEXT PRIMARY KEY,
