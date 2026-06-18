@@ -337,3 +337,35 @@ re-expand seam; ADR-5 critic after `validateManifest`, before the atomic write).
 `arch-20260609-fleet-orchestrator-tech-lead-*`, Phase 2
 `arch-20260617-fleet-orchestrator-phase-2-expand-*`, and Phase 3
 `arch-20260617-fleet-robust-decomposition-*`.
+
+## Fleet Manifest Provenance — complete (1 of 1)
+
+`spec-20260618-fleet-manifest-provenance` — an **ADR-4-preserving follow-up** to the fleet
+`expand` / `expand-deep` **shared-default-path clobber risk** surfaced by
+`research-20260618-fleet-branch-merge-readiness`. Both subcommands write the same default
+manifest path (`<root>/.bober/fleet-expand.json`), so a second decompose silently overwrote the
+first. Rather than split the path (which would re-open the ADR-4 single-shared-default-path
+decision), this single sprint makes the overwrite **recoverable and self-documenting**: a new
+shared helper `writeManifestWithProvenance` (`src/fleet/manifest-write.ts`) routes both
+subcommands' Step-4 writes through one path that (a) emits a provenance sidecar
+`<outPath>.meta.json` (`{ command, goal, critique, childCount, timestamp }`), (b) on overwrite
+**moves the prior manifest to `<outPath>.bak` before** atomically writing the new one (so the
+previous manifest is always recoverable), and (c) prints an **informative, non-blocking** notice
+(with a prior sidecar: which command/goal/childCount produced it and its relative age; without
+one: a generic notice that still states a `.bak` was kept). `sidecarPath`/`bakPath` derive from
+the actual `outPath`, so `--out <custom>` writes `<custom>.meta.json`/`<custom>.bak` and never
+touches the default. The on-disk manifest (`FleetManifestSchema`, children-only) is **unchanged**
+— provenance lives only in the sidecar — and the shared default path is **deliberately
+unchanged**. The clock is injectable for deterministic timestamps + relative-age strings (the tmp
+filename still uses the real `Date.now` to stay collision-free). The evaluator confirmed only 5
+files changed; `manifest.ts`, `decomposer*.ts`, `critic-deep.ts`, and `runFleet` are untouched,
+the `--yes` gate + write-and-stop default are unchanged, and the written manifest still parses
+`FleetManifestSchema`-valid with no provenance keys. **The plan is complete (1 of 1).**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-manifest-provenance-1.md](./sprint-spec-20260618-fleet-manifest-provenance-1.md) | Shared `writeManifestWithProvenance` (`src/fleet/manifest-write.ts`): provenance sidecar `<outPath>.meta.json` + recoverable overwrite (`rename` prior manifest → `<outPath>.bak` **before** atomic tmp+rename write) + informative non-blocking notice (`formatRelativeAge` buckets `just now`/`Nm`/`Nh`/`Nd`; missing/corrupt prior sidecar → generic notice, never throws); `sidecar`/`.bak` derived from `outPath`; injectable `now()` clock; both `fleet expand` (`critique:false`) and `fleet expand-deep` (`critique:opts.critique===true`) Step-4 blocks rewired through it with the **raw** `goal`; manifest schema + shared default path + `--yes` gate unchanged (ADR-4 preserved) |
+
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands** — the
+provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
+under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.

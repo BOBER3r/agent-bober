@@ -317,6 +317,19 @@ agent-bober fleet expand "Build a todo app …" --yes
 `0` without launching any child runs (no interactive prompt, no TTY check). With `--yes` it
 chains into `agent-bober fleet <writtenPath>` after the write and prints the same Fleet Summary.
 
+**Provenance sidecar + recoverable overwrite.** Alongside the manifest, `fleet expand` writes a
+provenance sidecar `<outPath>.meta.json` recording `{ command, goal, critique, childCount,
+timestamp }` for the manifest it just produced. If a manifest already exists at the output path,
+the **prior manifest is preserved as `<outPath>.bak`** (renamed before the new one is written, so
+it is fully recoverable) and an **informative, non-blocking notice** is printed — when the prior
+sidecar is present it reports which command/goal/childCount produced the old manifest and its
+relative age (e.g. `Replacing manifest from \`fleet expand\` for goal "…" (4 children, 12m ago) →
+kept as fleet-expand.json.bak`); otherwise a generic `Overwriting existing manifest … → kept as
+…bak` notice. The sidecar and `.bak` derive from the **actual** output path, so `--out <custom>`
+writes `<custom>.meta.json` / `<custom>.bak` and leaves the default path untouched. This applies
+to **both** `fleet expand` and `fleet expand-deep`, which share the same default output path
+(unchanged) — the overwrite is now recoverable rather than silently clobbering.
+
 Options:
 
 | Option | Default | Purpose |
@@ -326,7 +339,7 @@ Options:
 | `--model <m>` | `deepseek-v4-pro` | Override the decomposer LLM model **only** (not the children's per-run providers) |
 | `--root <dir>` | `.` | Manifest `rootDir` |
 | `--concurrency <c>` | `3` | Manifest concurrency |
-| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest |
+| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest (the `.meta.json` sidecar and `.bak` backup derive from this path) |
 | `--yes` | off | Chain into the fleet run after writing the manifest |
 
 Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
@@ -339,12 +352,15 @@ makes a single decomposer pass (and can yield one giant low-quality child on a s
 `fleet expand-deep` uses a **two-stage plan-then-expand** decomposer: it first plans a coarse
 outline of independent sub-project *areas*, then expands that outline into the children-only
 manifest. Everything else is identical to `fleet expand` — same options, same default output
-path, same atomic write, same **write-and-stop-by-default** review gate. It builds the decomposer
-LLM client first (so a missing `DEEPSEEK_API_KEY` fails fast with exit `1` **before any file is
-written**), atomically writes the manifest to `<root>/.bober/fleet-expand.json` (overwriting any
-existing file with a printed notice — note it **shares** the same default path as `fleet expand`,
-so use `--out` to keep both), prints the manifest, and prints a review hint. It does **not** run
-the fleet unless you pass `--yes`.
+path, same atomic write, same **write-and-stop-by-default** review gate, and the same
+**provenance sidecar + recoverable overwrite** (see `fleet expand` above). It builds the
+decomposer LLM client first (so a missing `DEEPSEEK_API_KEY` fails fast with exit `1` **before any
+file is written**), atomically writes the manifest to `<root>/.bober/fleet-expand.json` plus a
+`<outPath>.meta.json` provenance sidecar (here `command` is `"fleet expand-deep"` and `critique`
+reflects `--critique`). Because it **shares** the same default path as `fleet expand`, overwriting
+a manifest there preserves the **prior** file as `<outPath>.bak` and prints an informative notice
+(use `--out` to keep both manifests side by side instead). It prints the manifest, and prints a
+review hint. It does **not** run the fleet unless you pass `--yes`.
 
 ```bash
 # Robustly decompose a large/ambiguous goal → write manifest → STOP for review (default)
@@ -390,7 +406,7 @@ Options:
 | `--model <m>` | `deepseek-v4-pro` | Override the decomposer LLM model **only** (not the children's per-run providers) |
 | `--root <dir>` | `.` | Manifest `rootDir` |
 | `--concurrency <c>` | `3` | Manifest concurrency |
-| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest |
+| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest (the `.meta.json` sidecar and `.bak` backup derive from this path) |
 | `--yes` | off | Chain into the fleet run after writing the manifest |
 | `--critique` | off | Run a fresh-context critic gate that re-expands a degenerate/under-expanded manifest (one round, budget `DEEP_CRITIQUE_MAX_TOTAL_CALLS=8`, accept-best on exhaustion; write-and-stop unchanged). Default off is byte-identical to plain `expand-deep`. |
 
