@@ -91,5 +91,3 @@ User-facing usage is documented in [`COMMANDS.md`](../../COMMANDS.md) under **Fl
   `arch-20260617-fleet-robust-decomposition-*` (extends Phase 1
   `arch-20260609-fleet-orchestrator-tech-lead-*` and Phase 2
   `arch-20260617-fleet-orchestrator-phase-2-expand-*`).
-</content>
-</invoke>
