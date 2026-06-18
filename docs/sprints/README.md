@@ -177,3 +177,195 @@ The facts store is documented alongside the lessons store in
 lessons-store hygiene/prune lifecycle is in the same guide ("Lesson Hygiene: Prune & Quarantine"),
 and the four distill signals — including Sprint 4's fail→pass `fix-contrast` signal — are listed
 under "Distilling Lessons from History".
+
+## Fleet Expand (decomposer) — complete (2 of 2)
+
+`spec-20260617-fleet-expand-decomposer` — Phase 2 of the fleet orchestrator: let a single
+high-level **goal** string be decomposed into a multi-child `FleetManifest` (the manifest the
+merged Phase 1 `fleet <manifest>` runner already executes). **The plan is complete (2 of 2)
+and the feature is user-facing.** Sprint 1 lands the **risk-first
+core** — a pure `src/fleet/decomposer.ts` module whose `decomposeGoal({ goal, client, model,
+maxRetries })` turns one goal into a children-only, Zod-valid `FleetManifest` via a single
+DeepSeek `LLMClient.chat` call (`jsonObjectMode: true`, **not** `responseSchema` — DeepSeek
+rejects strict `json_schema`) plus at most **one** bounded coercion re-prompt. A per-child
+guard rejects any child carrying a `config` key *beyond* `FleetManifestSchema.safeParse`
+(`FleetChildSchema.config` is optional, so the explicit `hasOwnProperty` check is what keeps
+decomposed children folder/task-only), and the JSON-extraction + coercion shape mirrors
+`parsePlanSpec` in `planner-agent.ts`. The module is **purely additive** — no CLI, no spawn,
+no network, no fs, no Phase 1 file touched — and is proven entirely against a fake `LLMClient`
+(22 collocated tests; ≤2 `chat` calls; bad-then-good = 2 calls, bad-then-bad throws with the
+formatted Zod issues). Sprint 2 ships the **user-facing CLI** that consumes `decomposeGoal`:
+a new `agent-bober fleet expand <goal>` subcommand attached as a sibling of the locked
+`fleet <manifest>` runner (byte-identical registration). It builds the DeepSeek client with a
+**credential fail-fast before any IO** (missing `DEEPSEEK_API_KEY` → exit 1, no file written,
+`decomposeGoal` never reached), assembles `{ rootDir, concurrency, children }`, **atomically
+writes** it to `<root>/.bober/fleet-expand.json` (temp+rename, overwrite notice; `--out`
+redirects), prints the manifest + a `Review then run: agent-bober fleet "<outPath>"` hint, and
+**stops by default** (exit 0, no spawn). The only `runFleet(outPath)` call site sits inside
+`if (opts.yes)` — the write-and-stop review gate is the **sole** spawn gate (no TTY check, no
+interactive prompt). Options: `--count` (soft target), `--provider`, `--model` (decomposer LLM
+only), `--root`, `--concurrency`, `--out`, `--yes`. The action body is the exported testable
+seam `runFleetExpand(goal, opts, deps?)` with injectable `decompose` / `runFleet` / `createClient`
+(14 collocated tests, no network/spawn); `runFleet` / `FleetManifestSchema` / `buildChildConfig`
+are untouched.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260617-fleet-expand-decomposer-1.md](./sprint-spec-20260617-fleet-expand-decomposer-1.md) | Pure `decomposeGoal` (goal → Zod-valid children-only `FleetManifest`): one `jsonObjectMode:true` DeepSeek call + one bounded coercion re-prompt, `validateManifest` JSON-extract (`direct→`` ```json ``fence→first-brace`) + `safeParse` + post-parse `config`-key guard, `DECOMPOSE_SYSTEM_PROMPT` / `DECOMPOSE_COERCION_INSTRUCTION` / `DECOMPOSE_MAX_RETRIES=1`; no CLI/spawn/network/fs, no Phase 1 file touched |
+| 2 | [sprint-spec-20260617-fleet-expand-decomposer-2.md](./sprint-spec-20260617-fleet-expand-decomposer-2.md) | **Finale** — user-facing `agent-bober fleet expand <goal>` subcommand: credential fail-fast (no write) → `decomposeGoal` → assemble `{rootDir,concurrency,children}` → atomic temp+rename write to `<root>/.bober/fleet-expand.json` (overwrite notice, `--out` redirect) → print manifest + review hint → **write-and-stop by default**, `runFleet(outPath)` only inside `if (opts.yes)`; exported `runFleetExpand(goal,opts,deps?)` seam + `registerFleetExpandSubcommand`; `fleet <manifest>` registration byte-identical |
+
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands**
+(`agent-bober fleet <manifest>` and `agent-bober fleet expand <goal>`).
+
+The fleet orchestrator's architecture is in `.bober/architecture/` under
+`arch-20260609-fleet-orchestrator-tech-lead-*` (Phase 1, the `fleet <manifest>` runner) and
+`arch-20260617-fleet-orchestrator-phase-2-expand-*` (this phase, goal → manifest).
+
+## Fleet Expand Deep (robust two-stage decomposition) — complete (2 of 2)
+
+`spec-20260618-fleet-expand-deep` — Phase 3 of the fleet orchestrator: a **robust** goal
+decomposer for very large or ambiguous goals where Phase 2's single-shot `decomposeGoal` yields
+one giant low-quality child or fails validation. **The plan is complete (2 of 2) and the feature
+is user-facing.** Sprint 1 lands the **engine core** — a new
+sibling module `src/fleet/decomposer-deep.ts` whose `decomposeGoalDeep({ goal, client, model,
+count?, planMaxRetries?, expandMaxRetries? })` runs a bounded **PLAN → EXPAND** loop instead of a
+single pass: `runPlanStage` makes one bounded DeepSeek call (`jsonObjectMode: true`, **not**
+`responseSchema`) to produce a **transient, in-memory** `Outline` (`{ areas: [{ name, intent }] }`)
+gated by a never-throwing `validateOutline`, then `runExpandStage` makes one bounded call to turn
+that outline into a children-only `FleetManifest` validated through `validateManifest` **imported
+verbatim** from `decomposer.ts` (inheriting its JSON-extract + `FleetManifestSchema.safeParse` +
+per-child `config`-key guard). Both stages mirror Phase 2's `maxAttempts = 1 + maxRetries` loop and
+3-message `[user, assistant, user]` coercion shape, and the whole run is capped at a fixed
+`DEEP_MAX_TOTAL_CALLS = 4` (= `(1+DEEP_PLAN_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES)`, both `= 1`);
+a PLAN exhaustion stops at 2 calls and never reaches EXPAND. The module is **engine-only and
+additive** — no CLI, no disk IO, no network, and the byte-locked Phase-2
+decomposer/manifest/CLI (`decomposeGoal`, `FleetManifestSchema`, `fleet expand`, the `--yes` gate)
+are untouched — proven entirely against a fake `LLMClient` (both calls asserted
+`jsonObjectMode:true` + `responseSchema:undefined`; budget ≤4). Sprint 2 ships the **user-facing
+CLI** that wraps `decomposeGoalDeep`: a new `agent-bober fleet expand-deep <goal>` subcommand
+attached additively in `src/fleet/index.ts` as a sibling of the locked `fleet <manifest>` runner
+and Phase-2 `fleet expand`. It mirrors `runFleetExpand` step-for-step — **credential fail-fast
+before any IO** (missing `DEEPSEEK_API_KEY` → exit 1, no file written, decompose never reached),
+assemble `{ rootDir, concurrency, children }`, **atomic temp+rename write** to
+`<root>/.bober/fleet-expand.json` (overwrite notice, `--out` redirect), print the manifest + a
+`Review then run: agent-bober fleet "<outPath>"` hint, and **write-and-stop by default** — and
+differs in exactly one line: it calls `decomposeGoalDeep` instead of `decomposeGoal`. The only
+`runFleet(outPath)` call sits inside `if (opts.yes)` (the **sole** spawn gate; the write precedes
+it, so the manifest exists on disk before any spawn). Same seven options as `expand`
+(`--count`/`--provider`/`--model`/`--root`/`--concurrency`/`--out`/`--yes`); the exported testable
+seam is `runFleetExpandDeep(goal, opts, deps?)` with injectable `decomposeDeep`/`runFleet`/
+`createClient`. The evaluator confirmed the change is **purely additive** (only `src/fleet/index.ts`
++ a new test, zero deleted lines): `fleet <manifest>`, `fleet expand`/`runFleetExpand`,
+`FleetManifestSchema`, `buildChildConfig`, and `src/cli/index.ts` are byte-unchanged. Full suite:
+2294 passed.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-expand-deep-1.md](./sprint-spec-20260618-fleet-expand-deep-1.md) | Engine core `decomposeGoalDeep` (bounded **PLAN → EXPAND**, goal → Zod-valid children-only `FleetManifest`): `runPlanStage` → never-throwing `validateOutline` → transient in-memory `Outline`, then `runExpandStage` → **imported** `validateManifest`; both `jsonObjectMode:true`/no `responseSchema`, 3-message coercion, fixed `DEEP_MAX_TOTAL_CALLS=4` (`DEEP_PLAN_MAX_RETRIES`/`DEEP_EXPAND_MAX_RETRIES=1`); engine-only, no CLI/spawn/network/fs, Phase-2 path byte-locked |
+| 2 | [sprint-spec-20260618-fleet-expand-deep-2.md](./sprint-spec-20260618-fleet-expand-deep-2.md) | **Finale** — user-facing `agent-bober fleet expand-deep <goal>` subcommand wrapping `decomposeGoalDeep`: credential fail-fast (no write) → two-stage decompose → assemble `{rootDir,concurrency,children}` → atomic temp+rename write to `<root>/.bober/fleet-expand.json` (overwrite notice, `--out` redirect) → print manifest + review hint → **write-and-stop by default**, `runFleet(outPath)` only inside `if (opts.yes)`; exported `runFleetExpandDeep(goal,opts,deps?)` seam + `registerFleetExpandDeepSubcommand` (same 7 options as `expand`); differs from `runFleetExpand` in one line (`decomposeGoalDeep` vs `decomposeGoal`); `fleet <manifest>` + `fleet expand` registrations byte-identical |
+
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands**
+(`agent-bober fleet <manifest>`, `agent-bober fleet expand <goal>`, and
+`agent-bober fleet expand-deep <goal>`).
+
+This phase's architecture is in `.bober/architecture/` under
+`arch-20260617-fleet-robust-decomposition-*` (extends Phase 1
+`arch-20260609-fleet-orchestrator-tech-lead-*` and Phase 2
+`arch-20260617-fleet-orchestrator-phase-2-expand-*`).
+
+## Fleet Critique Loop (self-judged expand-deep gate) — complete (2 of 2)
+
+`spec-20260618-fleet-expand-deep-critique` — Phase 4 of the fleet orchestrator: add a
+**self-judged critique gate** to `fleet expand-deep` so a shape-valid-but-degenerate manifest
+(e.g. 2 children for a 12-area outline) is caught before it reaches the human write-and-stop
+review. A **fresh LLM critic** returns a boolean `approve | reject` verdict plus free-text
+feedback; on **reject** the manifest is re-expanded through a fresh `runExpandStage` seeded with
+that feedback, bounded by a single round and a closed-form budget `DEEP_CRITIQUE_MAX_TOTAL_CALLS =
+8`. On every failure mode the gate **fails open / accepts-best** and never throws, so behavior
+degrades to Phase 3 and never below it. **The plan is complete (2 of 2) and the feature is
+user-facing.**
+
+Sprint 1 (engine + opt-in threading) is the bounded fresh-critic loop in a new module
+`src/fleet/critic-deep.ts`: `validateVerdict` (tolerant JSON-extract + Zod `CritiqueVerdictSchema`,
+mirrors `validateOutline`, never throws) → `callCritic` (its **own** clean `CRITIQUE_SYSTEM_PROMPT`,
+manifest presented as a third-party "review this", `jsonObjectMode:true` / no `responseSchema`,
+3-message coercion) → `getCriticVerdict` (**fail-open** to `{verdict:"approve"}` after 2 unparseable
+responses) → `runCritiqueLoop` (`reject` → fresh `runExpandStage({ critiqueFeedback })` →
+**accept-best** on exhaustion, tiebreak most children then baseline, never throws, ≤8 calls). Three
+**additive** edits thread it into `src/fleet/decomposer-deep.ts`: `DecomposeDeepInput.critique?`,
+a `critiqueFeedback?` appended to the first EXPAND user turn only when present, and
+`decomposeGoalDeep` routing into `runCritiqueLoop` **only** when `critique===true`. With `critique`
+absent/false the chat sequence is **byte-identical to Phase 3** (zero critic calls, ≤4 chat). The
+evaluator confirmed the change is purely additive (`decomposer-deep.ts` 16 insertions, **0 deleted
+lines**): `decomposer.ts`, `manifest.ts` (`FleetManifestSchema`), `src/fleet/index.ts` (the
+`fleet`/`expand`/`expand-deep` CLI), and `providers/` are byte-unchanged. **Engine-only — no CLI
+this sprint.**
+
+Sprint 2 ships the **user-facing flag** that exposes the engine: a `--critique` boolean on the
+existing `agent-bober fleet expand-deep <goal>` subcommand. Three additive edits in
+`src/fleet/index.ts` thread it — `FleetExpandDeepOptions.critique?`, a
+`.option("--critique", …)` beside the existing seven options, and a guarded spread
+`...(opts.critique ? { critique: true } : {})` on the `decomposeGoalDeep` call in
+`runFleetExpandDeep`. With `--critique` the decomposition routes through Sprint 1's
+`runCritiqueLoop` (one bounded round, accept-best, budget 8) **after** the structural
+`validateManifest` gate and **before** the atomic write; without it the decompose argument object
+is **byte-identical to Phase 3** (the `critique` key is *absent*, not `undefined`) and emits zero
+extra chat calls. No sibling subcommand was added (LOCK2): `--critique` is a flag on the existing
+command, and the byte-locked tree (`fleet <manifest>` positional + `--concurrency`/`--root` and the
+`fleet expand` subcommand) is intact. Spawn-safety is unchanged on the `--critique` path —
+credential fail-fast (no file on missing key), write-before-spawn, and `--yes` as the sole spawn
+gate all hold. The evaluator confirmed the change is purely additive (`src/fleet/index.ts` +1 new
+test; the lone deleted line is the intended rewrite of the single-line decompose call into the
+multi-line guarded-spread form): `decomposer-deep.ts`, `critic-deep.ts`, `decomposer.ts`,
+`manifest.ts`, and `src/cli/index.ts` are byte-unchanged. All 14 fleet suites (188 tests) plus 9
+new `expand-deep-critique` tests are green.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-expand-deep-critique-1.md](./sprint-spec-20260618-fleet-expand-deep-critique-1.md) | Engine `src/fleet/critic-deep.ts` (bounded fresh-critic critique/refine loop): `validateVerdict` (never-throw, mirrors `validateOutline`) + `callCritic` (own `CRITIQUE_SYSTEM_PROMPT`, third-party framing, `jsonObjectMode:true`/no `responseSchema`, 3-message coercion) + `getCriticVerdict` (fail-open `approve` after 2 parse fails) + `runCritiqueLoop` (`reject`→fresh `runExpandStage({critiqueFeedback})`→accept-best, never throws, ≤`DEEP_CRITIQUE_MAX_TOTAL_CALLS=8`); constants `CRITIQUE_MAX_ROUNDS=1`/`CRITIQUE_PARSE_MAX_RETRIES=1` + closed-form budget audit test; additive `decomposer-deep.ts` threading (`critique?`, `critiqueFeedback?`, `decomposeGoalDeep` routing) byte-identical Phase 3 when absent; **engine-only, no CLI**, Phase-2/3 decomposer/manifest/CLI byte-locked |
+| 2 | [sprint-spec-20260618-fleet-expand-deep-critique-2.md](./sprint-spec-20260618-fleet-expand-deep-critique-2.md) | **Finale** — user-facing `--critique` flag on `agent-bober fleet expand-deep <goal>`: additive `FleetExpandDeepOptions.critique?` + `.option("--critique", …)` (beside the existing 7 options) + guarded spread `...(opts.critique ? { critique: true } : {})` on the `decomposeGoalDeep` call in `runFleetExpandDeep`, routing into Sprint 1's `runCritiqueLoop` (one round, accept-best, budget 8) **after** `validateManifest`, **before** the atomic write; **opt-in (default off = byte-identical to Phase 3** — `critique` key *absent*, zero extra chat calls); **no sibling subcommand (LOCK2)**, byte-locked command tree intact; spawn-safety (credential fail-fast, write-before-spawn, `--yes` sole gate) unchanged; the lone deleted line is the intended decompose-call rewrite, all other fleet modules + `src/cli/index.ts` byte-unchanged |
+
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands** — the
+`--critique` flag is documented under `agent-bober fleet expand-deep <goal>` (opt-in; default off
+is byte-identical to plain `expand-deep`).
+
+This phase's architecture is in `.bober/architecture/` under
+`arch-20260618-fleet-expand-deep-critique-*` (ADR-1 loop structure / boolean critic / accept-best;
+ADR-2 opt-in `critique` field preserves byte-identical Phase-3 default; ADR-3 verdict parse mirrors
+`validateOutline`, closed-form fail-open coercion budget; ADR-4 reuse `runExpandStage` as the
+re-expand seam; ADR-5 critic after `validateManifest`, before the atomic write). It extends Phase 1
+`arch-20260609-fleet-orchestrator-tech-lead-*`, Phase 2
+`arch-20260617-fleet-orchestrator-phase-2-expand-*`, and Phase 3
+`arch-20260617-fleet-robust-decomposition-*`.
+
+## Fleet Manifest Provenance — complete (1 of 1)
+
+`spec-20260618-fleet-manifest-provenance` — an **ADR-4-preserving follow-up** to the fleet
+`expand` / `expand-deep` **shared-default-path clobber risk** surfaced by
+`research-20260618-fleet-branch-merge-readiness`. Both subcommands write the same default
+manifest path (`<root>/.bober/fleet-expand.json`), so a second decompose silently overwrote the
+first. Rather than split the path (which would re-open the ADR-4 single-shared-default-path
+decision), this single sprint makes the overwrite **recoverable and self-documenting**: a new
+shared helper `writeManifestWithProvenance` (`src/fleet/manifest-write.ts`) routes both
+subcommands' Step-4 writes through one path that (a) emits a provenance sidecar
+`<outPath>.meta.json` (`{ command, goal, critique, childCount, timestamp }`), (b) on overwrite
+**moves the prior manifest to `<outPath>.bak` before** atomically writing the new one (so the
+previous manifest is always recoverable), and (c) prints an **informative, non-blocking** notice
+(with a prior sidecar: which command/goal/childCount produced it and its relative age; without
+one: a generic notice that still states a `.bak` was kept). `sidecarPath`/`bakPath` derive from
+the actual `outPath`, so `--out <custom>` writes `<custom>.meta.json`/`<custom>.bak` and never
+touches the default. The on-disk manifest (`FleetManifestSchema`, children-only) is **unchanged**
+— provenance lives only in the sidecar — and the shared default path is **deliberately
+unchanged**. The clock is injectable for deterministic timestamps + relative-age strings (the tmp
+filename still uses the real `Date.now` to stay collision-free). The evaluator confirmed only 5
+files changed; `manifest.ts`, `decomposer*.ts`, `critic-deep.ts`, and `runFleet` are untouched,
+the `--yes` gate + write-and-stop default are unchanged, and the written manifest still parses
+`FleetManifestSchema`-valid with no provenance keys. **The plan is complete (1 of 1).**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-manifest-provenance-1.md](./sprint-spec-20260618-fleet-manifest-provenance-1.md) | Shared `writeManifestWithProvenance` (`src/fleet/manifest-write.ts`): provenance sidecar `<outPath>.meta.json` + recoverable overwrite (`rename` prior manifest → `<outPath>.bak` **before** atomic tmp+rename write) + informative non-blocking notice (`formatRelativeAge` buckets `just now`/`Nm`/`Nh`/`Nd`; missing/corrupt prior sidecar → generic notice, never throws); `sidecar`/`.bak` derived from `outPath`; injectable `now()` clock; both `fleet expand` (`critique:false`) and `fleet expand-deep` (`critique:opts.critique===true`) Step-4 blocks rewired through it with the **raw** `goal`; manifest schema + shared default path + `--yes` gate unchanged (ADR-4 preserved) |
+
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands** — the
+provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
+under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
