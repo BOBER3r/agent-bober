@@ -56,7 +56,7 @@ export class FleetCoordinator {
     manifest: FleetManifest,
     blackboard: SharedBlackboard,
     opts: { maxRounds: number; dbPath: string },
-  ): Promise<ChildExecution[]> {
+  ): Promise<{ executions: ChildExecution[]; roundsRun: number }> {
     const scaffoldCfg = {
       dbPath: opts.dbPath,
       namespace: manifest.blackboard!.namespace,
@@ -65,8 +65,10 @@ export class FleetCoordinator {
 
     let prevCount = blackboard.readAll().length;
     let lastExecutions: ChildExecution[] = [];
+    let roundsRun = 0;
 
     for (let r = 1; r <= opts.maxRounds; r++) {
+      roundsRun = r;
       lastExecutions = await mapBounded(
         manifest.children,
         manifest.concurrency,
@@ -78,7 +80,7 @@ export class FleetCoordinator {
       prevCount = count;
     }
 
-    return lastExecutions;
+    return { executions: lastExecutions, roundsRun };
   }
 
   // ── runChildRound ─────────────────────────────────────────────────

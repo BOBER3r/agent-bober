@@ -178,14 +178,12 @@ export async function runFleet(
         namespace: effectiveManifest.blackboard!.namespace,
         maxRounds: effectiveManifest.blackboard!.maxRounds,
       });
-      // bober: round count sourced from manifest cap; executeRounds returns only
-      // the final-round executions with no explicit count — swapping to a
-      // returned-count shape would require touching the coordinator (non-goal #5).
-      roundsRun = effectiveManifest.blackboard!.maxRounds;
-      executions = await coordinator.executeRounds(effectiveManifest, bb, {
+      const { executions: roundExecutions, roundsRun: rr } = await coordinator.executeRounds(effectiveManifest, bb, {
         maxRounds: effectiveManifest.blackboard!.maxRounds,
         dbPath,
       });
+      executions = roundExecutions;
+      roundsRun = rr;
     } else {
       // No-blackboard path: single mapBounded pass, byte-identical to pre-Phase-B.
       executions = await coordinator.execute(effectiveManifest);
@@ -196,7 +194,7 @@ export async function runFleet(
     );
 
     // 5. Build + write report (UNCHANGED — always written on every run)
-    const report = reporter.build(outcomes);
+    const report = reporter.build(outcomes, bb ? { rounds: roundsRun } : undefined);
     await reporter.write(effectiveManifest.rootDir, report);
 
     // 6. Synthesis (ADDITIVE — only on a blackboard run; AFTER the report write)

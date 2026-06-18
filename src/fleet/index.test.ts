@@ -378,9 +378,9 @@ describe("runFleet no-blackboard single-pass (sc-3-5)", () => {
           },
         ];
       },
-      async executeRounds(_manifest: FleetManifest): Promise<ChildExecution[]> {
+      async executeRounds(_manifest: FleetManifest): Promise<{ executions: ChildExecution[]; roundsRun: number }> {
         executeRoundsCalled++;
-        return [];
+        return { executions: [], roundsRun: 0 };
       },
     } as unknown as FleetCoordinator;
 
@@ -583,6 +583,88 @@ describe("runFleet synthesis file written on blackboard run (sc-4-4)", () => {
   });
 });
 
+// ── sc-1-4/sc-1-5: blackboard early-stop run → synthesis.rounds and report.rounds are real count ──
+
+describe("runFleet blackboard early-stop → synthesis.rounds and report.rounds === executed count", () => {
+  let tmpDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-fleet-earlycount-"));
+    savedKey = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "fake-key-for-test";
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    if (savedKey !== undefined) {
+      process.env["DEEPSEEK_API_KEY"] = savedKey;
+    } else {
+      delete process.env["DEEPSEEK_API_KEY"];
+    }
+  });
+
+  it("early-stop at round 2 of maxRounds=3 → synthesis.rounds===2 AND report.rounds===2", async () => {
+    // A runner that never publishes findings causes the blackboard count to stay at 0.
+    // Early-stop condition: r > 1 && count === prevCount. prevCount starts at 0 (empty bb).
+    // Round 1 runs → count=0, prevCount set to 0.
+    // Round 2 runs → count=0 === prevCount=0 → break. roundsRun === 2 (NOT maxRounds=3).
+    const namespace = "earlycount-ns";
+    const manifestPath = join(tmpDir, "fleet.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        rootDir: tmpDir,
+        concurrency: 1,
+        children: [{ folder: "ec-child", task: "ec-task" }],
+        blackboard: { namespace, maxRounds: 3 },
+      }),
+      "utf-8",
+    );
+
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+        _bbArg?: { dbPath: string; namespace: string; maxRounds: number },
+      ): Promise<ScaffoldResult> {
+        return {
+          folder: child.folder,
+          absPath: join(tmpDir, child.folder),
+          configWritten: true,
+          gitInitialized: true,
+        };
+      },
+    };
+
+    // Runner never publishes to the blackboard → early-stop fires after round 2
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string; timeoutMs?: number }): Promise<ChildSpawnResult> {
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+    const aggr = {
+      async aggregate(exec: ChildExecution): Promise<ChildOutcome> {
+        return { folder: exec.folder, status: "completed", source: "exit-code" };
+      },
+    } as unknown as OutcomeAggregator;
+
+    await runFleet(manifestPath, {}, { coordinator: coord, aggregator: aggr });
+
+    // fleet-synthesis.json.rounds must equal the REAL early-stop round (2, not maxRounds=3)
+    const synRaw = await readFile(join(tmpDir, ".bober", "fleet-synthesis.json"), "utf-8");
+    const syn = JSON.parse(synRaw) as { rounds: number; childResults: unknown; findings: unknown };
+    expect(syn.rounds).toBe(2);
+
+    // fleet-report.json.rounds must also equal 2
+    const repRaw = await readFile(join(tmpDir, ".bober", "fleet-report.json"), "utf-8");
+    const rep = JSON.parse(repRaw) as { total: number; rounds: number };
+    expect(rep.rounds).toBe(2);
+  });
+});
+
 // ── sc-4-6: no-blackboard run → fleet-synthesis.json ABSENT (byte-identical) ──
 
 describe("runFleet synthesis file absent on no-blackboard run (sc-4-6 byte-identical)", () => {
@@ -634,7 +716,9 @@ describe("runFleet synthesis file absent on no-blackboard run (sc-4-6 byte-ident
 
     // fleet-report.json IS written (unchanged behavior)
     const repRaw = await readFile(join(tmpDir, ".bober", "fleet-report.json"), "utf-8");
-    const rep = JSON.parse(repRaw) as { total: number };
-    expect(rep.total).toBe(1);
+    const rep = JSON.parse(repRaw) as Record<string, unknown>;
+    expect(rep["total"]).toBe(1);
+    // byte-identical: no-blackboard report must NOT have a rounds key
+    expect("rounds" in rep).toBe(false);
   });
 });

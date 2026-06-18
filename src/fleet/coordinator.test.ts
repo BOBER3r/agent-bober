@@ -236,7 +236,7 @@ describe("FleetCoordinator.executeRounds", () => {
     ];
     const manifest = makeManifest(children, 2, { namespace: "ns-sc-3-3", maxRounds: 3 });
 
-    const results = await coord.executeRounds(manifest, bb, { maxRounds: 3, dbPath });
+    const { executions: results, roundsRun } = await coord.executeRounds(manifest, bb, { maxRounds: 3, dbPath });
     bb.close();
 
     // scaffold called ONCE per child (2 children × 1 = 2)
@@ -244,6 +244,8 @@ describe("FleetCoordinator.executeRounds", () => {
     // runner called once per child per round (2 children × 3 rounds = 6)
     expect(runCalls).toHaveLength(6);
     expect(results).toHaveLength(2);
+    // full run, no early-stop → roundsRun equals maxRounds
+    expect(roundsRun).toBe(3);
   });
 
   it("sc-3-4: early-stop — round 2 adds zero new findings → loop runs exactly 2 rounds", async () => {
@@ -289,7 +291,7 @@ describe("FleetCoordinator.executeRounds", () => {
     ];
     const manifest = makeManifest(children, 2, { namespace: "ns-early-stop", maxRounds: 3 });
 
-    await coord.executeRounds(manifest, bb, { maxRounds: 3, dbPath });
+    const { roundsRun } = await coord.executeRounds(manifest, bb, { maxRounds: 3, dbPath });
     bb.close();
 
     // Should have run exactly 2 rounds: round 1 added findings, round 2 added none → early-stop
@@ -297,6 +299,8 @@ describe("FleetCoordinator.executeRounds", () => {
     expect(runCalls).toHaveLength(4);
     // scaffold called once per child
     expect(scaffoldCalls).toHaveLength(2);
+    // early-stop fires after round 2, so roundsRun === 2 (NOT maxRounds=3)
+    expect(roundsRun).toBe(2);
   });
 
   it("sc-3-5: no-blackboard manifest → execute() runs ONE mapBounded pass, no blackboard opened", async () => {
@@ -364,10 +368,11 @@ describe("FleetCoordinator.executeRounds", () => {
     );
 
     // Must NOT reject
-    const results = await coord.executeRounds(manifest, bb, { maxRounds: 1, dbPath });
+    const { executions: results, roundsRun } = await coord.executeRounds(manifest, bb, { maxRounds: 1, dbPath });
     bb.close();
 
     expect(results).toHaveLength(2);
+    expect(roundsRun).toBe(1);
     // The failing child carries error as data, not a throw
     const failResult = results.find((r) => r.folder === "fail");
     expect(failResult?.spawn).toBeUndefined();
