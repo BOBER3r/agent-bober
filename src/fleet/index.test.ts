@@ -501,3 +501,140 @@ describe("runFleet blackboard path (sc-3-6)", () => {
     expect(scaffoldArgs[0]?.maxRounds).toBe(2);
   });
 });
+
+// ── sc-4-4: blackboard run → fleet-synthesis.json written + fleet-report.json unchanged ──
+
+describe("runFleet synthesis file written on blackboard run (sc-4-4)", () => {
+  let tmpDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-fleet-syn-"));
+    savedKey = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "fake-key-for-test";
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    if (savedKey !== undefined) {
+      process.env["DEEPSEEK_API_KEY"] = savedKey;
+    } else {
+      delete process.env["DEEPSEEK_API_KEY"];
+    }
+  });
+
+  it("blackboard run writes fleet-synthesis.json with rounds+childResults+findings AND fleet-report.json unchanged", async () => {
+    const namespace = "syn-ns";
+    const manifestPath = join(tmpDir, "fleet.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        rootDir: tmpDir,
+        concurrency: 1,
+        children: [{ folder: "syn-child", task: "syn-task" }],
+        blackboard: { namespace, maxRounds: 2 },
+      }),
+      "utf-8",
+    );
+
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+        _bbArg?: { dbPath: string; namespace: string; maxRounds: number },
+      ): Promise<ScaffoldResult> {
+        return {
+          folder: child.folder,
+          absPath: join(tmpDir, child.folder),
+          configWritten: true,
+          gitInitialized: true,
+        };
+      },
+    };
+
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string }): Promise<ChildSpawnResult> {
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+
+    const aggr = {
+      async aggregate(exec: ChildExecution): Promise<ChildOutcome> {
+        return { folder: exec.folder, status: "completed", source: "exit-code" };
+      },
+    } as unknown as OutcomeAggregator;
+
+    await runFleet(manifestPath, {}, { coordinator: coord, aggregator: aggr });
+
+    // fleet-synthesis.json must exist and have the expected shape
+    const synRaw = await readFile(join(tmpDir, ".bober", "fleet-synthesis.json"), "utf-8");
+    const syn = JSON.parse(synRaw) as { rounds: unknown; childResults: unknown; findings: unknown };
+    expect(syn).toHaveProperty("rounds");
+    expect(syn).toHaveProperty("childResults");
+    expect(Array.isArray(syn.findings)).toBe(true);
+    expect(typeof syn.rounds).toBe("number");
+
+    // fleet-report.json must still be written and shape unchanged
+    const repRaw = await readFile(join(tmpDir, ".bober", "fleet-report.json"), "utf-8");
+    const rep = JSON.parse(repRaw) as { total: number; completed: number };
+    expect(rep).toMatchObject({ total: 1, completed: 1 });
+  });
+});
+
+// ── sc-4-6: no-blackboard run → fleet-synthesis.json ABSENT (byte-identical) ──
+
+describe("runFleet synthesis file absent on no-blackboard run (sc-4-6 byte-identical)", () => {
+  let tmpDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-fleet-nobb-syn-"));
+    savedKey = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "fake-key-for-test";
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    if (savedKey !== undefined) {
+      process.env["DEEPSEEK_API_KEY"] = savedKey;
+    } else {
+      delete process.env["DEEPSEEK_API_KEY"];
+    }
+  });
+
+  it("no-blackboard run → fleet-synthesis.json NOT created; fleet-report.json IS written", async () => {
+    const manifestPath = join(tmpDir, "fleet.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        rootDir: tmpDir,
+        concurrency: 1,
+        children: [{ folder: "nobb-syn-child", task: "test-task" }],
+        // No blackboard field
+      }),
+      "utf-8",
+    );
+
+    const { coord } = makeFakeCoordinator([fakeExecution("nobb-syn-child")]);
+    const aggr = makeFakeAggregator([fakeOutcome("nobb-syn-child", "completed")]);
+
+    await runFleet(manifestPath, {}, { coordinator: coord, aggregator: aggr });
+
+    // fleet-synthesis.json must NOT exist
+    let synthExists = false;
+    try {
+      await access(join(tmpDir, ".bober", "fleet-synthesis.json"));
+      synthExists = true;
+    } catch {
+      // does not exist — expected
+    }
+    expect(synthExists).toBe(false);
+
+    // fleet-report.json IS written (unchanged behavior)
+    const repRaw = await readFile(join(tmpDir, ".bober", "fleet-report.json"), "utf-8");
+    const rep = JSON.parse(repRaw) as { total: number };
+    expect(rep.total).toBe(1);
+  });
+});

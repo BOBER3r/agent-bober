@@ -10,6 +10,8 @@
 import chalk from "chalk";
 import type { Command } from "commander";
 import { join, resolve, dirname } from "node:path";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 
 import { load } from "./manifest.js";
 import { buildChildConfig } from "./child-config.js";
@@ -18,6 +20,7 @@ import { FleetCoordinator } from "./coordinator.js";
 import { OutcomeAggregator } from "./aggregator.js";
 import { PortfolioReporter } from "./reporter.js";
 import { SharedBlackboard } from "./shared-blackboard.js";
+import { collect } from "./synthesis.js";
 import { validateApiKey, createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { decomposeGoal } from "./decomposer.js";
@@ -27,6 +30,7 @@ import { ensureDir } from "../state/helpers.js";
 import type { FleetManifest } from "./manifest.js";
 import type { ChildOutcome, ChildExecution } from "./types.js";
 import type { PortfolioReport } from "./reporter.js";
+import type { SynthesisBundle } from "./synthesis.js";
 import type { LLMClient } from "../providers/types.js";
 
 export type { PortfolioReport };
@@ -43,6 +47,32 @@ export type { PortfolioReport };
 export function resolveBlackboardPath(manifest: FleetManifest): string | undefined {
   if (!manifest.blackboard) return undefined;
   return join(resolve(manifest.rootDir), ".bober", "memory", manifest.blackboard.namespace, "facts.db");
+}
+
+// ── writeSynthesis ────────────────────────────────────────────────────
+
+/**
+ * Atomically write a SynthesisBundle to <rootDir>/.bober/fleet-synthesis.json.
+ * Mirrors PortfolioReporter.write (reporter.ts:76-91): tmp+rename with a
+ * randomBytes suffix, mode 0o600, and trailing newline.
+ *
+ * @returns The absolute path of the written file.
+ */
+async function writeSynthesis(rootDir: string, bundle: SynthesisBundle): Promise<string> {
+  const dir = resolve(join(rootDir, ".bober"));
+  await mkdir(dir, { recursive: true });
+
+  const filePath = join(dir, "fleet-synthesis.json");
+  const rnd = randomBytes(4).toString("hex");
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.${rnd}.tmp`;
+
+  await writeFile(tmp, JSON.stringify(bundle, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+  await rename(tmp, filePath);
+
+  return filePath;
 }
 
 // ── DI seam ───────────────────────────────────────────────────────────
@@ -134,38 +164,53 @@ export async function runFleet(
   // ── Blackboard-aware execution branch ────────────────────────────
   const dbPath = resolveBlackboardPath(effectiveManifest);
   let executions: ChildExecution[];
+  let bb: SharedBlackboard | null = null; // hoisted so it survives the if-block
+  let roundsRun = 0; // capture the configured round cap
 
-  if (dbPath) {
-    // Blackboard path: open a shared WAL facts.db, run bounded rounds,
-    // close in finally to guarantee WAL checkpoint on any error.
-    await ensureDir(dirname(dbPath));
-    const bb = await SharedBlackboard.open({
-      dbPath,
-      namespace: effectiveManifest.blackboard!.namespace,
-      maxRounds: effectiveManifest.blackboard!.maxRounds,
-    });
-    try {
+  try {
+    if (dbPath) {
+      // Blackboard path: open a shared WAL facts.db, run bounded rounds.
+      // bb is hoisted to the outer scope so collect() can call bb.readAll()
+      // BEFORE bb.close() (which moves to the outer finally below).
+      await ensureDir(dirname(dbPath));
+      bb = await SharedBlackboard.open({
+        dbPath,
+        namespace: effectiveManifest.blackboard!.namespace,
+        maxRounds: effectiveManifest.blackboard!.maxRounds,
+      });
+      // bober: round count sourced from manifest cap; executeRounds returns only
+      // the final-round executions with no explicit count — swapping to a
+      // returned-count shape would require touching the coordinator (non-goal #5).
+      roundsRun = effectiveManifest.blackboard!.maxRounds;
       executions = await coordinator.executeRounds(effectiveManifest, bb, {
         maxRounds: effectiveManifest.blackboard!.maxRounds,
         dbPath,
       });
-    } finally {
-      bb.close();
+    } else {
+      // No-blackboard path: single mapBounded pass, byte-identical to pre-Phase-B.
+      executions = await coordinator.execute(effectiveManifest);
     }
-  } else {
-    // No-blackboard path: single mapBounded pass, byte-identical to pre-Phase-B.
-    executions = await coordinator.execute(effectiveManifest);
+
+    const outcomes: ChildOutcome[] = await Promise.all(
+      executions.map((e) => aggregator.aggregate(e)),
+    );
+
+    // 5. Build + write report (UNCHANGED — always written on every run)
+    const report = reporter.build(outcomes);
+    await reporter.write(effectiveManifest.rootDir, report);
+
+    // 6. Synthesis (ADDITIVE — only on a blackboard run; AFTER the report write)
+    // bb is still OPEN here so collect() → bb.readAll() works correctly.
+    if (bb) {
+      const bundle = collect(bb, report, roundsRun);
+      await writeSynthesis(effectiveManifest.rootDir, bundle);
+    }
+
+    return report;
+  } finally {
+    // Close moved here: runs AFTER synthesis collect+write, and on any error path.
+    if (bb) bb.close();
   }
-
-  const outcomes: ChildOutcome[] = await Promise.all(
-    executions.map((e) => aggregator.aggregate(e)),
-  );
-
-  // 5. Build + write report
-  const report = reporter.build(outcomes);
-  await reporter.write(effectiveManifest.rootDir, report);
-
-  return report;
 }
 
 // ── runFleetExpand ────────────────────────────────────────────────────
