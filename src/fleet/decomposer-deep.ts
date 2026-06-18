@@ -2,6 +2,7 @@ import { z } from "zod";
 import { validateManifest } from "./decomposer.js";
 import type { FleetManifest } from "./manifest.js";
 import type { LLMClient, Message } from "../providers/types.js";
+import { runCritiqueLoop } from "./critic-deep.js";
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ export interface DecomposeDeepInput {
   count?: string;
   planMaxRetries?: number;
   expandMaxRetries?: number;
+  critique?: boolean; // NEW; undefined/false ⇒ Phase-3 path
 }
 
 type ValidateOutlineResult =
@@ -206,6 +208,7 @@ async function callExpand(input: {
   goal: string;
   priorText?: string;
   formattedError?: string;
+  critiqueFeedback?: string; // NEW; appended to first user turn only when present
 }): Promise<string> {
   const { client, model, outline, goal, priorText, formattedError } = input;
 
@@ -226,6 +229,12 @@ async function callExpand(input: {
   } else {
     // First turn: single user message
     messages = [{ role: "user", content: firstUserContent }];
+  }
+
+  // NEW: append critique feedback to the first user turn only when present
+  const { critiqueFeedback } = input;
+  if (critiqueFeedback && messages.length === 1) {
+    messages = [{ role: "user", content: firstUserContent + `\n\nPrior reviewer feedback to address:\n${critiqueFeedback}` }];
   }
 
   const response = await client.chat({
@@ -283,8 +292,10 @@ export async function runExpandStage(input: {
   outline: Outline;
   goal: string;
   maxRetries: number;
+  critiqueFeedback?: string; // NEW; threaded into first EXPAND user turn only
 }): Promise<FleetManifest> {
   const { client, model, outline, goal, maxRetries } = input;
+  const { critiqueFeedback } = input; // NEW
   const maxAttempts = 1 + maxRetries;
 
   let lastError = "Unknown error";
@@ -298,6 +309,7 @@ export async function runExpandStage(input: {
       goal,
       priorText: attempt > 0 ? priorText : undefined,
       formattedError: attempt > 0 ? lastError : undefined,
+      critiqueFeedback: attempt === 0 ? critiqueFeedback : undefined,
     });
 
     const validated = validateManifest(rawText);
@@ -344,6 +356,10 @@ export async function decomposeGoalDeep(
     goal,
     maxRetries: expandMaxRetries,
   });
+
+  if (input.critique === true) {
+    return runCritiqueLoop({ client, model, goal, outline, baseline: manifest, expandMaxRetries });
+  }
 
   return manifest;
 }
