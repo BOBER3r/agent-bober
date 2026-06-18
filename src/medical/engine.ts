@@ -31,9 +31,9 @@ import { NumericsQueryLayer } from "./numerics.js";
 import { HealthDataStore } from "./health-store.js";
 import { FactStore, factsDbPath } from "../state/facts.js";
 import type { FactRecord } from "../state/facts.js";
-import type { GuardrailSet, MedicalAnswer, MetricWindow, NumericResult, NumericPrimitive } from "./types.js";
+import type { GuardrailSet, MedicalAnswer, MetricWindow, NumericResult, NumericPrimitive, CriticVerdict } from "./types.js";
 import type { LLMClient } from "../providers/types.js";
-import { createClient } from "../providers/factory.js";
+import { buildMedicalInferenceClient } from "./inference.js";
 import type { RetrievalOutcome } from "./retrieval/medline-source.js";
 import { join } from "node:path";
 
@@ -393,14 +393,18 @@ export class MedicalSopEngine implements PipelineEngine {
     const hasNumericAnswer = numericResult !== null && numericResult.sampleCount > 0;
 
     let answer: MedicalAnswer;
+    let criticVerdict: CriticVerdict | undefined;
     if (outcome.kind === "grounded" && !hasNumericAnswer) {
       // ── Grounded synthesis path ────────────────────────────────────
       // Obtain the LLMClient lazily — only on this path (numeric/disabled/red-flag paths
       // get zero LLM construction, preserving sc-7-8 and existing engine.test.ts assertions).
-      // bober: local Ollama default via openai-compat (no cloud provider); if Ollama is
-      //        unavailable at runtime, synthesize catches the throw and abstains — no cloud fallback.
-      const llmClient: LLMClient = this.deps?.llmClient ?? createClient("openai-compat", "http://localhost:11434/v1", undefined, "llama3");
-      answer = await synthesizeGrounded(userPrompt, outcome, llmClient, footer);
+      // deps.llmClient wins for tests; production uses buildMedicalInferenceClient (fail-closed to local).
+      const { client: llmClient, model: synthModel } = this.deps?.llmClient
+        ? { client: this.deps.llmClient, model: "llama3" }
+        : buildMedicalInferenceClient(config, egress);
+      const groundedResult = await synthesizeGrounded(userPrompt, outcome, llmClient, footer, synthModel);
+      answer = groundedResult.answer;
+      criticVerdict = groundedResult.verdict;
     } else {
       // ── Numeric / disabled / abstain path ─────────────────────────
       // composeBody is pure text composition — no LLM, no network.
@@ -414,7 +418,12 @@ export class MedicalSopEngine implements PipelineEngine {
       };
     }
 
-    await auditLog.append({ tIso: now, event: answer.abstained ? "abstain" : "answer", rulesetVersion });
+    await auditLog.append({
+      tIso: now,
+      event: answer.abstained ? "abstain" : "answer",
+      rulesetVersion,
+      ...(criticVerdict ? { criticVerdict } : {}),
+    });
 
     const spec = createSpec("Medical SOP", "Full local SOP turn.", []);
     return {

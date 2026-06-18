@@ -925,7 +925,7 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
     // Cloud-inference axis stays OFF.
     expect(egress.isAllowed("cloud-inference")).toBe(false);
 
-    // Audit entry must be 'answer'.
+    // Audit entry must be 'answer' with criticVerdict 'approve'.
     const bytes = await readFile(
       join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"),
       "utf-8",
@@ -936,9 +936,217 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
       .map((l) => JSON.parse(l) as Record<string, unknown>);
     const answerEntry = entries.find((e) => e["event"] === "answer");
     expect(answerEntry).toBeDefined();
+    // Sprint 3: assert criticVerdict is 'approve' on the grounded answer path.
+    expect(answerEntry?.["criticVerdict"]).toBe("approve");
+    // PHI-free: audit line must not contain prompt text or health values.
+    const answerLine = bytes.split("\n").filter((l) => l.includes('"answer"'))[0] ?? "";
+    expect(answerLine).not.toContain("metformin");
+    expect(answerLine).not.toContain("side effects");
 
     facts.close();
     healthStore.close();
+  });
+
+  it("grounded turn with both critiques rejecting => abstain + criticVerdict=reject-abstained + PHI-free + 0600 (sc-3-6, sc-3-7)", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+    const egress = new EgressGuard(false, true);
+    const sourceStub = new MedlineSource(egress);
+    vi.spyOn(sourceStub, "fetchPassages").mockResolvedValue({
+      kind: "grounded",
+      passages: [
+        {
+          title: "Metformin",
+          url: "https://medlineplus.gov/druginfo/meds/a696005.html",
+          text: "Metformin is used to treat type 2 diabetes. Common side effects include nausea and diarrhea.",
+          source: "medlineplus",
+        },
+      ],
+    });
+    const literature = new LiteratureRetriever(egress, sourceStub);
+
+    // 4 calls: synth, critic-reject, re-synth, re-critic-reject => abstain, reject-abstained.
+    const llmSpy: LLMClient = {
+      chat: vi
+        .fn()
+        .mockResolvedValueOnce({ text: "body one", toolCalls: [], stopReason: "end", usage: { inputTokens: 100, outputTokens: 50 } })
+        .mockResolvedValueOnce({ text: '{"verdict":"reject","feedback":"not supported"}', toolCalls: [], stopReason: "end", usage: { inputTokens: 50, outputTokens: 10 } })
+        .mockResolvedValueOnce({ text: "body two revised", toolCalls: [], stopReason: "end", usage: { inputTokens: 100, outputTokens: 50 } })
+        .mockResolvedValueOnce({ text: '{"verdict":"reject","feedback":"still not supported"}', toolCalls: [], stopReason: "end", usage: { inputTokens: 50, outputTokens: 10 } }),
+    };
+
+    const facts2 = new FactStore(":memory:");
+    const healthStore2 = new HealthDataStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      egress,
+      literature,
+      facts: facts2,
+      healthStore: healthStore2,
+    });
+
+    const result = await engine.run(
+      "what are the side effects of metformin?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T13:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.abstained).toBe(true);
+
+    const bytes2 = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"),
+      "utf-8",
+    );
+    const entries2 = bytes2.split("\n").filter(Boolean).map((l) => JSON.parse(l) as Record<string, unknown>);
+    const abstainEntry = entries2.find((e) => e["event"] === "abstain" && e["criticVerdict"] === "reject-abstained");
+    expect(abstainEntry).toBeDefined();
+    expect(abstainEntry?.["criticVerdict"]).toBe("reject-abstained");
+    // PHI-free: no prompt text or health values.
+    const abstainLine = bytes2.split("\n").filter((l) => l.includes('"abstain"') && l.includes('"reject-abstained"'))[0] ?? "";
+    expect(abstainLine).not.toContain("metformin");
+    // 0600 mode.
+    const { stat } = await import("node:fs/promises");
+    const fileStat2 = await stat(join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"));
+    expect(fileStat2.mode & 0o777).toBe(0o600);
+
+    facts2.close();
+    healthStore2.close();
+  });
+
+  it("grounded turn with LLM throwing => abstain + criticVerdict=error-abstained + PHI-free + 0600 (sc-3-6, sc-3-7)", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+    const egress = new EgressGuard(false, true);
+    const sourceStub = new MedlineSource(egress);
+    vi.spyOn(sourceStub, "fetchPassages").mockResolvedValue({
+      kind: "grounded",
+      passages: [
+        {
+          title: "Metformin",
+          url: "https://medlineplus.gov/druginfo/meds/a696005.html",
+          text: "Metformin is used to treat type 2 diabetes. Common side effects include nausea and diarrhea.",
+          source: "medlineplus",
+        },
+      ],
+    });
+    const literature = new LiteratureRetriever(egress, sourceStub);
+
+    // First call throws => error-abstained.
+    const llmSpy: LLMClient = {
+      chat: vi.fn().mockRejectedValue(new Error("model down")),
+    };
+
+    const facts3 = new FactStore(":memory:");
+    const healthStore3 = new HealthDataStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      egress,
+      literature,
+      facts: facts3,
+      healthStore: healthStore3,
+    });
+
+    const result = await engine.run(
+      "what are the side effects of metformin?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T14:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.abstained).toBe(true);
+
+    const bytes3 = await readFile(
+      join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"),
+      "utf-8",
+    );
+    const entries3 = bytes3.split("\n").filter(Boolean).map((l) => JSON.parse(l) as Record<string, unknown>);
+    const errAbstainEntry = entries3.find((e) => e["event"] === "abstain" && e["criticVerdict"] === "error-abstained");
+    expect(errAbstainEntry).toBeDefined();
+    expect(errAbstainEntry?.["criticVerdict"]).toBe("error-abstained");
+    // PHI-free.
+    const errLine = bytes3.split("\n").filter((l) => l.includes('"abstain"') && l.includes('"error-abstained"'))[0] ?? "";
+    expect(errLine).not.toContain("metformin");
+    // 0600.
+    const { stat } = await import("node:fs/promises");
+    const fileStat3 = await stat(join(tmpDir2, ".bober", "medical", "audit-2026-06-16.jsonl"));
+    expect(fileStat3.mode & 0o777).toBe(0o600);
+
+    facts3.close();
+    healthStore3.close();
+  });
+
+  it("cloud-inference OFF: grounded turn does NOT use cloud provider, completes normally (sc-3-8)", async () => {
+    const config = createDefaultConfig("test", "greenfield");
+    vi.clearAllMocks();
+
+    const { auditLog, gate, disclaimer } = await recordTestConsent(tmpDir2);
+    // cloud-inference OFF (default).
+    const egress = new EgressGuard(false, true);
+
+    expect(egress.isAllowed("cloud-inference")).toBe(false);
+
+    // Injected llmSpy still handles the grounded calls (deps.llmClient wins in engine).
+    const sourceStub = new MedlineSource(egress);
+    vi.spyOn(sourceStub, "fetchPassages").mockResolvedValue({
+      kind: "grounded",
+      passages: [{ title: "Metformin", url: "https://medlineplus.gov/druginfo/meds/a696005.html", text: "Metformin treats type 2 diabetes.", source: "medlineplus" }],
+    });
+    const literature = new LiteratureRetriever(egress, sourceStub);
+
+    const llmSpy: LLMClient = {
+      chat: vi
+        .fn()
+        .mockResolvedValueOnce({ text: "Grounded synthesis body.", toolCalls: [], stopReason: "end", usage: { inputTokens: 100, outputTokens: 50 } })
+        .mockResolvedValueOnce({ text: '{"verdict":"approve","feedback":""}', toolCalls: [], stopReason: "end", usage: { inputTokens: 50, outputTokens: 10 } }),
+    };
+
+    const facts4 = new FactStore(":memory:");
+    const healthStore4 = new HealthDataStore(":memory:");
+
+    const engine = new MedicalSopEngine({
+      auditLog,
+      consentGate: gate,
+      disclaimer,
+      llmClient: llmSpy,
+      egress,
+      literature,
+      facts: facts4,
+      healthStore: healthStore4,
+    });
+
+    const result = await engine.run(
+      "what are the side effects of metformin?",
+      tmpDir2,
+      config,
+      { now: "2026-06-16T15:00:00.000Z" },
+    );
+
+    expect(result.success).toBe(true);
+    // cloud-inference must remain false throughout.
+    expect(egress.isAllowed("cloud-inference")).toBe(false);
+    // The turn must have completed with an answer (not thrown).
+    const answer = (result as PipelineResult & { medicalAnswer: MedicalAnswer }).medicalAnswer;
+    expect(answer.abstained).toBe(false);
+
+    facts4.close();
+    healthStore4.close();
   });
 });
 

@@ -2,7 +2,7 @@
 import type { EgressGuard } from "../egress.js";
 import { MedlineSource, type RetrievalOutcome, type Passage } from "./medline-source.js";
 import type { LLMClient } from "../../providers/types.js";
-import type { MedicalAnswer, Citation } from "../types.js";
+import type { MedicalAnswer, Citation, CriticVerdict } from "../types.js";
 import { getGroundingVerdict, GROUNDING_MAX_LLM_CALLS, type GroundingVerdict } from "./grounding-critic.js";
 
 // ── LiteratureRetriever ──────────────────────────────────────────────
@@ -45,6 +45,14 @@ export class LiteratureRetriever {
 // ── synthesize ───────────────────────────────────────────────────────
 
 const SYNTHESIS_MODEL = "ollama/llama3";
+
+// ── GroundedResult ───────────────────────────────────────────────────
+
+/** Return type for synthesizeGrounded — widens MedicalAnswer with the critic gate verdict (Sprint 3). */
+export interface GroundedResult {
+  answer: MedicalAnswer;
+  verdict: CriticVerdict;
+}
 const SYNTHESIS_MAX_TOKENS = 512;
 
 /**
@@ -95,12 +103,14 @@ function passagesToCitations(passages: Passage[]): Citation[] {
  * @param outcome - The RetrievalOutcome from LiteratureRetriever.retrieve.
  * @param llm - Injectable LLMClient (tests pass {chat: vi.fn()}).
  * @param footer - DisclaimerComposer footer string included in every answer.
+ * @param model - Model identifier to use for synthesis (default: SYNTHESIS_MODEL).
  */
 export async function synthesize(
   query: string,
   outcome: RetrievalOutcome,
   llm: LLMClient,
   footer: string,
+  model: string = SYNTHESIS_MODEL,
 ): Promise<MedicalAnswer> {
   // ── Abstain immediately on disabled / no-passages ────────────────
   if (outcome.kind === "disabled" || outcome.kind === "abstain") {
@@ -134,7 +144,7 @@ export async function synthesize(
   let responseText: string;
   try {
     const response = await llm.chat({
-      model: SYNTHESIS_MODEL,
+      model,
       system: buildSynthesisSystem(passages),
       messages: [{ role: "user", content: query }],
       maxTokens: SYNTHESIS_MAX_TOKENS,
@@ -214,6 +224,7 @@ async function synthesizeWithFeedback(
   llm: LLMClient,
   footer: string,
   feedback: string,
+  model: string = SYNTHESIS_MODEL,
 ): Promise<MedicalAnswer> {
   const passages = outcome.passages;
   if (passages.length === 0) return abstainAnswer(footer); // mirrors synthesize:120-130
@@ -223,7 +234,7 @@ async function synthesizeWithFeedback(
   let responseText: string;
   try {
     const response = await llm.chat({
-      model: SYNTHESIS_MODEL,
+      model,
       system,
       messages: [{ role: "user", content: query }],
       maxTokens: SYNTHESIS_MAX_TOKENS,
@@ -255,63 +266,75 @@ async function synthesizeWithFeedback(
  *
  * Any thrown error from synthesize or the critic maps to abstainAnswer (fail-closed).
  * Bounded by GROUNDED_GATE_MAX_LLM_CALLS (= 6 worst case today).
+ *
+ * Returns { answer, verdict } where verdict is one of:
+ *   'approve'          — gate returned an approved answer
+ *   'reject-abstained' — gate abstained after a critic reject (second reject)
+ *   'error-abstained'  — gate abstained due to a thrown error or model unavailable
+ *
+ * @param model - Model identifier to use (default: SYNTHESIS_MODEL for back-compat).
  */
 export async function synthesizeGrounded(
   query: string,
   outcome: RetrievalOutcome,
   llm: LLMClient,
   footer: string,
-): Promise<MedicalAnswer> {
+  model: string = SYNTHESIS_MODEL,
+): Promise<GroundedResult> {
   // Non-grounded outcomes are already handled by synthesize (disabled/abstain → abstained).
   if (outcome.kind !== "grounded") {
-    return synthesize(query, outcome, llm, footer);
+    const answer = await synthesize(query, outcome, llm, footer, model);
+    return { answer, verdict: "error-abstained" };
   }
 
   // 1) First synthesis.
   let answer: MedicalAnswer;
   try {
-    answer = await synthesize(query, outcome, llm, footer);
+    answer = await synthesize(query, outcome, llm, footer, model);
   } catch {
-    return abstainAnswer(footer);
+    return { answer: abstainAnswer(footer), verdict: "error-abstained" };
   }
-  if (answer.abstained) return answer; // synthesize abstained (empty/ABSTAIN/no-passages/model-unavailable)
+  if (answer.abstained) return { answer, verdict: "error-abstained" }; // synthesize abstained (empty/ABSTAIN/no-passages/model-unavailable)
 
   // 2) First critique. getGroundingVerdict PROPAGATES transport errors → wrap.
   let verdict: GroundingVerdict;
   try {
     verdict = await getGroundingVerdict({
       llm,
-      model: SYNTHESIS_MODEL,
+      model,
       question: query,
       answerBody: answer.body,
       passages: outcome.passages,
     });
   } catch {
-    return abstainAnswer(footer);
+    return { answer: abstainAnswer(footer), verdict: "error-abstained" };
   }
-  if (verdict.verdict === "approve") return answer;
+  if (verdict.verdict === "approve") return { answer, verdict: "approve" };
 
   // 3) ONE re-synthesis with critic feedback appended to the system prompt.
   let answer2: MedicalAnswer;
   try {
-    answer2 = await synthesizeWithFeedback(query, outcome, llm, footer, verdict.feedback);
+    answer2 = await synthesizeWithFeedback(query, outcome, llm, footer, verdict.feedback, model);
   } catch {
-    return abstainAnswer(footer);
+    return { answer: abstainAnswer(footer), verdict: "error-abstained" };
   }
-  if (answer2.abstained) return answer2;
+  if (answer2.abstained) return { answer: answer2, verdict: "error-abstained" };
 
   // 4) Re-critique.
   let verdict2: GroundingVerdict;
   try {
     verdict2 = await getGroundingVerdict({
       llm,
-      model: SYNTHESIS_MODEL,
+      model,
       question: query,
       answerBody: answer2.body,
       passages: outcome.passages,
     });
   } catch {
-    return abstainAnswer(footer);
+    return { answer: abstainAnswer(footer), verdict: "error-abstained" };
   }
-  return verdict2.verdict === "approve" ? answer2 : abstainAnswer(footer);
+  // Approved on re-critique => 'approve'. Not approved => 'reject-abstained' (critic ran and rejected).
+  return verdict2.verdict === "approve"
+    ? { answer: answer2, verdict: "approve" }
+    : { answer: abstainAnswer(footer), verdict: "reject-abstained" };
 }

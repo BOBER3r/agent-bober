@@ -91,7 +91,7 @@ describe("AuditLog.append — append-only semantics (sc-2-6)", () => {
       "utf-8",
     );
     const lines = raw.split("\n").filter(Boolean);
-    const allowed = new Set(["tIso", "event", "rulesetVersion", "patternsetVersion", "ruleId"]);
+    const allowed = new Set(["tIso", "event", "rulesetVersion", "patternsetVersion", "ruleId", "criticVerdict"]);
 
     for (const line of lines) {
       const parsed = JSON.parse(line) as Record<string, unknown>;

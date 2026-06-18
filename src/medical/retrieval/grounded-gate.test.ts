@@ -4,6 +4,9 @@
  *
  * Covers sc-2-3 (approve-first), sc-2-4 (reject→approve, reject→reject→abstain),
  * sc-2-5 (throw→abstain), sc-2-7 (call-cap <= GROUNDED_GATE_MAX_LLM_CALLS).
+ *
+ * Sprint 3 update: synthesizeGrounded now returns {answer, verdict} — all assertions
+ * below destructure `.answer` to remain semantically identical to the Sprint-2 baseline.
  */
 import { describe, it, expect, vi } from "vitest";
 import type { LLMClient, ChatParams, ChatResponse } from "../../providers/types.js";
@@ -55,13 +58,14 @@ describe("synthesizeGrounded — approve on first critique (sc-2-3)", () => {
       APPROVE_JSON,
     ]);
 
-    const answer = await synthesizeGrounded("what are the side effects of metformin?", GROUNDED_OUTCOME, client, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("what are the side effects of metformin?", GROUNDED_OUTCOME, client, FOOTER);
 
     expect(answer.abstained).toBe(false);
     expect(answer.body).toContain("Metformin");
     expect(answer.citations.length).toBeGreaterThanOrEqual(1);
     expect(answer.disclaimerFooter).toBe(FOOTER);
     expect(answer.shortCircuit).toBe(false);
+    expect(verdict).toBe("approve");
   });
 });
 
@@ -77,13 +81,14 @@ describe("synthesizeGrounded — reject then approve (sc-2-4a)", () => {
       APPROVE_JSON,
     ]);
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, client, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, client, FOOTER);
 
     expect(answer.abstained).toBe(false);
     expect(answer.body).toBe("body two (revised after feedback)");
     expect(answer.citations.length).toBeGreaterThanOrEqual(1);
     expect(answer.disclaimerFooter).toBe(FOOTER);
     expect(answer.shortCircuit).toBe(false);
+    expect(verdict).toBe("approve");
   });
 });
 
@@ -99,12 +104,13 @@ describe("synthesizeGrounded — reject both critiques → abstain (sc-2-4b)", (
       '{"verdict":"reject","feedback":"still not supported"}',
     ]);
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, client, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, client, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect(answer.citations).toEqual([]);
     expect(answer.disclaimerFooter).toBe(FOOTER);
     expect(answer.shortCircuit).toBe(false);
+    expect(verdict).toBe("reject-abstained");
   });
 });
 
@@ -114,11 +120,12 @@ describe("synthesizeGrounded — synth throws → abstain (sc-2-5a)", () => {
   it("returns abstained answer (no thrown exception) when the first synthesize call throws", async () => {
     const throwingLlm: LLMClient = { chat: vi.fn().mockRejectedValue(new Error("ECONNREFUSED")) };
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, throwingLlm, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, throwingLlm, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect(answer.citations).toEqual([]);
     expect(answer.disclaimerFooter).toBe(FOOTER);
+    expect(verdict).toBe("error-abstained");
   });
 });
 
@@ -139,11 +146,12 @@ describe("synthesizeGrounded — critic throws → abstain (sc-2-5b)", () => {
         .mockRejectedValueOnce(new Error("network timeout")),
     };
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, llm, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, llm, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect(answer.citations).toEqual([]);
     expect(answer.disclaimerFooter).toBe(FOOTER);
+    expect(verdict).toBe("error-abstained");
   });
 });
 
@@ -170,10 +178,11 @@ describe("synthesizeGrounded — re-synth throws → abstain (sc-2-5c)", () => {
         .mockRejectedValueOnce(new Error("model crashed")),
     };
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, llm, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, llm, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect(answer.citations).toEqual([]);
+    expect(verdict).toBe("error-abstained");
   });
 });
 
@@ -190,10 +199,11 @@ describe("synthesizeGrounded — re-critic throws → abstain (sc-2-5d)", () => 
         .mockRejectedValueOnce(new Error("second critic timeout")),
     };
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, llm, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, llm, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect(answer.citations).toEqual([]);
+    expect(verdict).toBe("error-abstained");
   });
 });
 
@@ -230,20 +240,22 @@ describe("synthesizeGrounded — non-grounded outcome delegates to synthesize", 
     // synthesize catches disabled and returns abstained without calling llm.chat.
     const llm: LLMClient = { chat: vi.fn() };
 
-    const answer = await synthesizeGrounded("q", disabledOutcome, llm, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", disabledOutcome, llm, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect((llm.chat as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+    expect(verdict).toBe("error-abstained");
   });
 
   it("returns abstained answer for abstain outcome without calling critic", async () => {
     const abstainOutcome: RetrievalOutcome = { kind: "abstain", reason: "source-error" };
     const llm: LLMClient = { chat: vi.fn() };
 
-    const answer = await synthesizeGrounded("q", abstainOutcome, llm, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", abstainOutcome, llm, FOOTER);
 
     expect(answer.abstained).toBe(true);
     expect((llm.chat as ReturnType<typeof vi.fn>).mock.calls.length).toBe(0);
+    expect(verdict).toBe("error-abstained");
   });
 });
 
@@ -254,10 +266,11 @@ describe("synthesizeGrounded — synthesize abstains → return unchanged (no cr
     // Synthesize returns ABSTAIN signal → gate returns that abstained answer immediately.
     const client = new ScriptedClient(["ABSTAIN"]);
 
-    const answer = await synthesizeGrounded("q", GROUNDED_OUTCOME, client, FOOTER);
+    const { answer, verdict } = await synthesizeGrounded("q", GROUNDED_OUTCOME, client, FOOTER);
 
     expect(answer.abstained).toBe(true);
     // Only 1 LLM call — the gate did NOT proceed to the critic.
     expect(client.calls.length).toBe(1);
+    expect(verdict).toBe("error-abstained");
   });
 });

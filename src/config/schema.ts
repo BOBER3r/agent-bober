@@ -385,6 +385,18 @@ export const MedicalSectionSchema = z.object({
       deviceConnection: z.boolean().default(false),
     })
     .optional(),
+  /**
+   * Optional synthesis/critic model override (Sprint 3 — grounding-critic).
+   * Absent => local Ollama default (openai-compat http://localhost:11434/v1, llama3).
+   * A CLOUD provider here is only honoured when egress.cloudInference is true (fail-closed otherwise).
+   */
+  inference: z
+    .object({
+      provider: z.string().optional(),
+      endpoint: z.string().optional(),
+      model: z.string().optional(),
+    })
+    .optional(),
 });
 export type MedicalSection = z.infer<typeof MedicalSectionSchema>;
 

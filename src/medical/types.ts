@@ -70,6 +70,9 @@ export type AuditEvent =
   | "abstain"
   | "ingest";
 
+/** Critic gate outcome on the grounded synthesis path. IDs/enums only — NEVER text. Sprint 3. */
+export type CriticVerdict = "approve" | "reject-abstained" | "error-abstained";
+
 /**
  * Audit entry appended to .bober/medical/audit-<date>.jsonl.
  * ONLY IDs/enums allowed — NEVER prompt text or health values.
@@ -84,6 +87,8 @@ export interface AuditEntry {
   patternsetVersion?: string;
   /** Optional rule ID triggering the event (IDs only — never text). */
   ruleId?: string;
+  /** Critic gate outcome on the grounded path. IDs/enums only — NEVER text. Sprint 3. */
+  criticVerdict?: CriticVerdict;
 }
 
 // ── Health observations (S4) ────────────────────────────────────────
