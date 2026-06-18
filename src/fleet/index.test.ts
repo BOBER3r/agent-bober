@@ -240,6 +240,64 @@ describe("runFleet credential fail-fast (sc-4-7)", () => {
   });
 });
 
+describe("runFleet ToolRoleGuard fail-fast (sc-3-6)", () => {
+  let tmpDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-fleet-guard-"));
+    // Set DEEPSEEK_API_KEY so credential check does NOT throw first —
+    // assertManifest runs BEFORE validateManifestCredentials, but set it for
+    // completeness and to keep test isolation clean.
+    savedKey = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "fake-key-for-guard-test";
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    if (savedKey !== undefined) {
+      process.env["DEEPSEEK_API_KEY"] = savedKey;
+    } else {
+      delete process.env["DEEPSEEK_API_KEY"];
+    }
+  });
+
+  it("throws before any spawn when a child sets claude-code on the generator tool role", async () => {
+    const manifestPath = await writeManifest(tmpDir, {
+      rootDir: tmpDir,
+      concurrency: 1,
+      children: [
+        {
+          folder: "bad-tool-role-child",
+          task: "build something",
+          config: { generator: { model: "sonnet", provider: "claude-code" } },
+        },
+      ],
+    });
+
+    const { coord, calls } = makeFakeCoordinator([]);
+
+    await expect(runFleet(manifestPath, {}, { coordinator: coord })).rejects.toThrow(/generator/);
+    // coordinator.execute must NOT have been called — guard fires pre-spawn
+    expect(calls).toHaveLength(0);
+  });
+
+  it("does not throw for a clean manifest (byte-identical no-flag path)", async () => {
+    const manifestPath = await writeManifest(tmpDir, {
+      rootDir: tmpDir,
+      concurrency: 1,
+      children: [{ folder: "clean-child", task: "clean task" }],
+    });
+
+    const { coord } = makeFakeCoordinator([fakeExecution("clean-child")]);
+    const aggr = makeFakeAggregator([fakeOutcome("clean-child", "completed")]);
+
+    await expect(
+      runFleet(manifestPath, {}, { coordinator: coord, aggregator: aggr }),
+    ).resolves.toBeDefined();
+  });
+});
+
 describe("registerFleetCommand (sc-4-8)", () => {
   it("registers a 'fleet' command with --concurrency and --root options", () => {
     const program = new Command();

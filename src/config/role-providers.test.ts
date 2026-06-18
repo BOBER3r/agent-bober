@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { resolveRoleProviders } from "./role-providers.js";
+import { resolveRoleProviders, isToolRole } from "./role-providers.js";
 import { logger } from "../utils/logger.js";
 import type { BoberConfig } from "./schema.js";
 
@@ -16,6 +16,54 @@ vi.mock("../utils/logger.js", () => ({
 
 afterEach(() => {
   vi.clearAllMocks();
+});
+
+// ── sc-3-3: isToolRole membership matches TOOL_ROLES ─────────────────────────
+
+describe("sc-3-3: isToolRole returns true for tool roles and false for prompt roles", () => {
+  it("returns true for curator", () => {
+    expect(isToolRole("curator")).toBe(true);
+  });
+
+  it("returns true for generator", () => {
+    expect(isToolRole("generator")).toBe(true);
+  });
+
+  it("returns true for evaluator", () => {
+    expect(isToolRole("evaluator")).toBe(true);
+  });
+
+  it("returns true for codeReview", () => {
+    expect(isToolRole("codeReview")).toBe(true);
+  });
+
+  it("returns false for planner", () => {
+    expect(isToolRole("planner")).toBe(false);
+  });
+
+  it("returns false for researcher", () => {
+    expect(isToolRole("researcher")).toBe(false);
+  });
+
+  it("returns false for chat", () => {
+    expect(isToolRole("chat")).toBe(false);
+  });
+
+  it("true-set equals TOOL_ROLES membership: all 7 roles classified correctly", () => {
+    const allRoles = [
+      "planner",
+      "researcher",
+      "curator",
+      "generator",
+      "evaluator",
+      "codeReview",
+      "chat",
+    ] as const;
+    const toolRoleSet = new Set(["curator", "generator", "evaluator", "codeReview"]);
+    for (const role of allRoles) {
+      expect(isToolRole(role)).toBe(toolRoleSet.has(role));
+    }
+  });
 });
 
 // ── sc-5-1: Tool role with per-role override is NOT redirected ───────────────

@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 import { load } from "./manifest.js";
 import { buildChildConfig } from "./child-config.js";
+import { assertManifest } from "./tool-role-guard.js";
 import { FleetCoordinator } from "./coordinator.js";
 import { OutcomeAggregator } from "./aggregator.js";
 import { PortfolioReporter } from "./reporter.js";
@@ -105,7 +106,8 @@ export async function runFleet(
     ...(options?.rootDir !== undefined ? { rootDir: options.rootDir } : {}),
   };
 
-  // 3. Credential fail-fast BEFORE any spawn
+  // 3. Build-time + credential fail-fast BEFORE any spawn
+  assertManifest(effectiveManifest);                // throws if claude-code on a tool role
   validateManifestCredentials(effectiveManifest);
 
   // 4. Execute → aggregate
