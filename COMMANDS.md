@@ -506,6 +506,23 @@ rounds, the run still exits `0` on per-child failures, and `fleet-report.json` i
 **final** round's outcomes. With **no** `blackboard` block the run is a single pass, byte-for-byte
 as before.
 
+**Synthesis artifact (`fleet-synthesis.json`).** On a blackboard run only, after the unchanged
+`fleet-report.json` write, the head also writes a second file `<rootDir>/.bober/fleet-synthesis.json`
+— a **pure data bundle** for the head / dynamic-workflow to synthesize over. `agent-bober` itself
+**does not synthesize**; it only collects the bundle. The file is the JSON serialization of:
+
+```jsonc
+{
+  "rounds": 3,                  // the configured maxRounds cap for the run
+  "childResults": { /* … */ },  // the same PortfolioReport written to fleet-report.json
+  "findings": [ /* … */ ]       // every finding on the blackboard (FactRecord[], from readAll())
+}
+```
+
+With **no** `blackboard` block, **no** `fleet-synthesis.json` is written and the run output is
+byte-for-byte identical to a non-blackboard fleet. (Note: `rounds` reports the configured
+`maxRounds` cap, not the number of rounds actually executed when a run early-stops.)
+
 #### `agent-bober blackboard publish <value> [--round N]`
 
 Publish a finding to the shared fleet blackboard. Run from inside a child's working directory (its
