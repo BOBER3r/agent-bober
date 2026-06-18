@@ -421,7 +421,7 @@ describe("runFleetExpandDeep overwrite notice and --out redirect (sc-2-8)", () =
     // An overwrite notice must have been printed naming the path
     const logCalls = consoleSpy.mock.calls.flat().join("\n");
     expect(logCalls).toContain(outPath);
-    expect(logCalls.toLowerCase()).toMatch(/overwrite|overwritten/);
+    expect(logCalls.toLowerCase()).toMatch(/overwrit|replacing|kept as/);
   });
 
   it("--out redirects the write away from the default path", async () => {

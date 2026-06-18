@@ -9,9 +9,7 @@
 
 import chalk from "chalk";
 import type { Command } from "commander";
-import { join, dirname } from "node:path";
-import { writeFile, rename, access } from "node:fs/promises";
-import { randomBytes } from "node:crypto";
+import { join } from "node:path";
 
 import { load } from "./manifest.js";
 import { buildChildConfig } from "./child-config.js";
@@ -22,7 +20,7 @@ import { validateApiKey, createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { decomposeGoal } from "./decomposer.js";
 import { decomposeGoalDeep } from "./decomposer-deep.js";
-import { ensureDir } from "../state/helpers.js";
+import { writeManifestWithProvenance } from "./manifest-write.js";
 import type { FleetManifest } from "./manifest.js";
 import type { ChildOutcome } from "./types.js";
 import type { PortfolioReport } from "./reporter.js";
@@ -204,24 +202,18 @@ export async function runFleetExpand(
     children: decomposed.children,
   };
 
-  // ── Step 4: atomic write ─────────────────────────────────────────
+  // ── Step 4: atomic write with provenance + recoverable overwrite ──
   const outPath = opts.out ?? join(root, ".bober", "fleet-expand.json");
-  await ensureDir(dirname(outPath));
-
-  // Check whether the file already exists (for overwrite notice)
-  const alreadyExisted = await access(outPath).then(
-    () => true,
-    () => false,
-  );
-
-  const rnd = randomBytes(4).toString("hex");
-  const tmp = `${outPath}.${process.pid}.${Date.now()}.${rnd}.tmp`;
-  await writeFile(tmp, JSON.stringify(manifest, null, 2), { encoding: "utf-8" });
-  await rename(tmp, outPath);
-
-  if (alreadyExisted) {
-    console.log(`[fleet expand] Overwritten existing manifest at: ${outPath}`);
-  }
+  await writeManifestWithProvenance({
+    outPath,
+    manifest,
+    provenance: {
+      command: "fleet expand",
+      goal,
+      critique: false,
+      childCount: manifest.children.length,
+    },
+  });
 
   // ── Step 5: print the manifest + review hint ──────────────────────
   console.log();
@@ -340,24 +332,18 @@ export async function runFleetExpandDeep(
     children: decomposed.children,
   };
 
-  // ── Step 4: atomic write ─────────────────────────────────────────
+  // ── Step 4: atomic write with provenance + recoverable overwrite ──
   const outPath = opts.out ?? join(root, ".bober", "fleet-expand.json");
-  await ensureDir(dirname(outPath));
-
-  // Check whether the file already exists (for overwrite notice)
-  const alreadyExisted = await access(outPath).then(
-    () => true,
-    () => false,
-  );
-
-  const rnd = randomBytes(4).toString("hex");
-  const tmp = `${outPath}.${process.pid}.${Date.now()}.${rnd}.tmp`;
-  await writeFile(tmp, JSON.stringify(manifest, null, 2), { encoding: "utf-8" });
-  await rename(tmp, outPath);
-
-  if (alreadyExisted) {
-    console.log(`[fleet expand-deep] Overwritten existing manifest at: ${outPath}`);
-  }
+  await writeManifestWithProvenance({
+    outPath,
+    manifest,
+    provenance: {
+      command: "fleet expand-deep",
+      goal,
+      critique: opts.critique === true,
+      childCount: manifest.children.length,
+    },
+  });
 
   // ── Step 5: print the manifest + review hint ──────────────────────
   console.log();
