@@ -21,14 +21,14 @@ agent-bober **never persists API keys**. Keys are read from the environment (or
 
 ### Capability Matrix
 
-| Role                   | anthropic (default)  | deepseek (openai-compat) | claude-code (subscription) |
-| ---------------------- | -------------------- | ------------------------ | -------------------------- |
-| planner                | yes                  | yes                      | yes (no tools needed)      |
-| researcher (phase 1/2) | yes                  | yes                      | yes (no tools needed)      |
-| curator                | yes                  | yes (tools)              | no (runs own loop)         |
-| generator              | yes                  | yes (tools)              | no (runs own loop)         |
-| evaluator              | yes                  | yes (tools)              | no (runs own loop)         |
-| code-reviewer          | yes                  | yes (tools)              | no (runs own loop)         |
+| Role                   | anthropic (default)  | deepseek (openai-compat) | grok / xAI (openai-compat) | claude-code (subscription) |
+| ---------------------- | -------------------- | ------------------------ | -------------------------- | -------------------------- |
+| planner                | yes                  | yes                      | yes                        | yes (no tools needed)      |
+| researcher (phase 1/2) | yes                  | yes                      | yes                        | yes (no tools needed)      |
+| curator                | yes                  | yes (tools)              | yes (tools)                | no (runs own loop)         |
+| generator              | yes                  | yes (tools)              | yes (tools)                | no (runs own loop)         |
+| evaluator              | yes                  | yes (tools)              | yes (tools)                | no (runs own loop)         |
+| code-reviewer          | yes                  | yes (tools)              | yes (tools)                | no (runs own loop)         |
 
 claude-code is valid only for roles that send no `tools`. For tool-using roles, if
 claude-code is configured alongside another provider, the other provider is used. If
@@ -139,6 +139,63 @@ Or use the model shorthand `deepseek` / `deepseek-v4-pro` / `deepseek-v4-flash` 
 
 ---
 
+## Grok (xAI)
+
+**Prerequisites:**
+
+- Install the OpenAI SDK (used as an OpenAI-compatible client): `npm install openai`
+- Set `XAI_API_KEY` in your environment (get a key at <https://console.x.ai>).
+
+Grok is **not a provider of its own** — like DeepSeek, it is routed through the built-in
+`openai-compat` adapter, pointed at `https://api.x.ai/v1`. xAI exposes an OpenAI-wire-compatible
+API, so the same adapter handles it unchanged, and Grok supports **all** agent roles including
+the tool-calling roles (curator, generator, evaluator, code-reviewer).
+
+```jsonc
+// bober.config.json — Grok via openai-compat
+{
+  "planner": {
+    "provider": "openai-compat",
+    "model": "grok-4",
+    "providerConfig": {
+      "endpoint": "https://api.x.ai/v1",
+      "apiKey": "env:XAI_API_KEY"
+    }
+  },
+  "generator": {
+    "provider": "openai-compat",
+    "model": "grok-4-fast",
+    "providerConfig": {
+      "endpoint": "https://api.x.ai/v1",
+      "apiKey": "env:XAI_API_KEY"
+    }
+  }
+}
+```
+
+Or use the model shorthand `grok` / `grok-4` / `grok-4-fast` with **no** `provider` field — the
+harness infers the `openai-compat` provider and sets the `https://api.x.ai/v1` endpoint
+automatically:
+
+```jsonc
+// bober.config.json — Grok shorthand (provider + endpoint inferred from the model)
+{
+  "planner": { "model": "grok-4" },
+  "generator": { "model": "grok-4-fast" }
+}
+```
+
+> Write the shorthand as a **model**, not a provider. Like `deepseek`, `grok` is a model
+> shorthand that resolves to the `openai-compat` provider — `"provider": "grok"` is rejected.
+> If `XAI_API_KEY` is unset and no `providerConfig.apiKey` is supplied for an `api.x.ai`
+> endpoint, the harness fails fast with a clear "configured to use Grok/xAI but `XAI_API_KEY`
+> is not set" error.
+
+> The `grok-4` / `grok-4-fast` model ids the shorthands resolve to are sensible defaults;
+> override the exact model id via the role's `model` field if xAI's catalog changes.
+
+---
+
 ## claude-code (Subscription)
 
 **Prerequisites:**
@@ -200,7 +257,7 @@ Or use the model shorthand `deepseek` / `deepseek-v4-pro` / `deepseek-v4-flash` 
 
 agent-bober **never writes API keys to disk**. Keys are read from:
 
-- The process environment (`ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, etc.).
+- The process environment (`ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `XAI_API_KEY`, etc.).
 - `providerConfig.apiKey` in `bober.config.json` at runtime (not persisted by the harness).
 
 `.env` is gitignored (`.gitignore` entries: `.env`, `.env.local`, `.env.*.local`). Never

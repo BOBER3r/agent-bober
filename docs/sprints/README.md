@@ -716,3 +716,39 @@ the `--yes` gate + write-and-stop default are unchanged, and the written manifes
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands** — the
 provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
 under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
+
+## Fleet Tier / Provider Routing — in progress (1 of 3)
+
+`spec-20260618-fleet-tier-provider-routing` — Phase A of
+`arch-20260618-heterogeneous-multi-provider-agent-team`: let a fleet route different roles to
+different provider tiers. Sprint 1 lays the **provider-wiring groundwork** by adding **Grok /
+xAI** as the **existing `openai-compat` provider** pointed at `https://api.x.ai/v1` — mirroring
+the DeepSeek wiring at its three resolution sites. xAI exposes an OpenAI-wire-compatible API, so
+`OpenAICompatAdapter` handles it **unchanged**: there is **no new `ProviderName` value and no new
+adapter class** (the union stays `anthropic|openai|google|openai-compat|claude-code`). The model
+resolver's `SHORTHAND_MAP` gains `grok` / `grok-4` / `grok-4-fast` shorthands resolving to
+`{ provider: "openai-compat", modelId }`, and the `openai-compat` endpoint-attach branch selects
+`https://api.x.ai/v1` when the resolved `modelId` starts with `grok` (else keeps
+`https://api.deepseek.com`). A single shared `isXaiEndpoint(endpoint?)` predicate
+(`factory.ts:83`) is the **sole** place the `api.x.ai` host substring is matched (grep-asserted),
+reused by both factory sites: `validateApiKey` gains an xAI arm requiring
+`apiKey ?? XAI_API_KEY` (clear throw naming Grok/xAI + `XAI_API_KEY` when absent), and
+`createClient` gains a parallel arm injecting `XAI_API_KEY` into the **unchanged**
+`OpenAICompatAdapter` ctor. Because `validateManifestCredentials` already forwards each child's
+`endpoint` into `validateApiKey`, the fleet pre-spawn credential check recognizes Grok with
+**zero edits to `src/fleet/index.ts`**. The grok model ids are placeholders, config-overridable;
+tests assert routing/endpoint/key wiring, not a live API call. **This sprint changes no fleet
+behavior and no tier logic** — tier mapping / `FleetChild.tier` (Sprint 2) and the `ToolRoleGuard`
+(Sprint 3) are out of scope. Full suite 2690 passed (fleet 203/203); the only failures are the 6
+pre-existing cockpit-integration MCP failures (unrelated). All 7 criteria passed iteration 1.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-tier-provider-routing-1.md](./sprint-spec-20260618-fleet-tier-provider-routing-1.md) | **Grok/xAI wiring as the existing `openai-compat` provider (no new `ProviderName`/adapter):** `grok`/`grok-4`/`grok-4-fast` `SHORTHAND_MAP` entries → `{provider:"openai-compat",modelId}` + endpoint-attach branch selecting `https://api.x.ai/v1` for `grok*` (else `api.deepseek.com`); single shared `isXaiEndpoint(endpoint?)` (`factory.ts:83`, **sole** `api.x.ai` matcher, grep-asserted) reused by both factory sites — `validateApiKey` xAI arm (`apiKey ?? XAI_API_KEY`, clear throw when absent) + `createClient` parallel `XAI_API_KEY` injection into the **unchanged** `OpenAICompatAdapter`; `validateManifestCredentials` recognizes Grok with **zero edit** to `src/fleet/index.ts`; `ProviderName` union + DeepSeek/Ollama paths byte-unchanged; grok ids placeholder/config-overridable; **no fleet/tier behavior change** (Sprints 2–3); +17 collocated tests (resolution, key throw/no-throw, injection, single-predicate invariant, DeepSeek/Ollama non-regression) |
+
+User-facing provider setup for Grok/xAI (the `openai-compat` adapter at `https://api.x.ai/v1`,
+`XAI_API_KEY`, and the `grok` / `grok-4` / `grok-4-fast` model shorthands) is documented in
+[`docs/providers.md`](../providers.md) under **Grok (xAI)** and the capability matrix.
+
+This phase's architecture is in `.bober/architecture/` under
+`arch-20260618-heterogeneous-multi-provider-agent-team-*`.
