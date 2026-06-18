@@ -549,9 +549,10 @@ in CI**.
 **Cited synthesis (`synthesize`, `src/medical/retrieval/literature.ts`).** A **single**
 provider-agnostic `LLMClient.chat` call pins the model to the retrieved passages and
 instructs it to reply with the single word `ABSTAIN` if they do not support a specific
-answer. The default model is **local Ollama `llama3`**
-(`createClient("openai-compat", "http://localhost:11434/v1", …)`), injectable via
-`deps.llmClient`. Rules (enforced in code):
+answer. The default model is **local Ollama `llama3`** — resolved (as of
+grounding-critic Sprint 3) by `buildMedicalInferenceClient` (see "Configurable model +
+cloud-inference gating" below), and still injectable via `deps.llmClient`. Rules (enforced
+in code):
 
 - An empty response **or** `ABSTAIN` (case-insensitive) ⇒ an **abstained**
   `MedicalAnswer` with `citations: []` and **no clinical assertion**.
@@ -571,9 +572,9 @@ canned abstain — an exception never escapes and an ungrounded answer is never 
 first approve the original cited answer passes through unchanged. The gate is bounded by the
 exported `GROUNDED_GATE_MAX_LLM_CALLS` (= 6 today, **computed** from the critic's
 `GROUNDING_MAX_LLM_CALLS` as `1 synth + critic + 1 re-synth + re-critic`). This is the **only**
-place in the SOP that makes more than one LLM call — every upstream gate stays zero-LLM. The
-critic verdict is **not yet** recorded in the audit (`AuditEntry.criticVerdict` is
-grounding-critic Sprint 3).
+place in the SOP that makes more than one LLM call — every upstream gate stays zero-LLM. As of
+grounding-critic Sprint 3 the critic outcome **is** now recorded in the audit as the
+IDs/enums-only `AuditEntry.criticVerdict` (see "Critic verdict in the audit" below).
 
 **Fail-closed at three independent layers (never fail-open, never an uncited claim):**
 
@@ -584,24 +585,79 @@ grounding-critic Sprint 3).
 3. **Model unavailable** — `llm.chat` throws (e.g. Ollama down) ⇒ caught ⇒ abstained
    answer (*"model unavailable"*). **No cloud fallback.**
 
-**Cloud inference stays independently off.** The grounded path constructs **only** the
-local/Ollama `LLMClient` (or the injected one) — **never** a cloud provider — and never
-auto-falls-back to cloud. `EgressGuard(false, true)` keeps
-`isAllowed("cloud-inference") === false`: enabling literature retrieval does **not**
-enable cloud inference.
+**Cloud inference stays independently off by default — and fails closed.** With a default
+config the grounded path constructs **only** the local/Ollama `LLMClient` (or the injected
+one) — **never** a cloud provider — and never auto-falls-back to cloud. `EgressGuard(false, true)`
+keeps `isAllowed("cloud-inference") === false`: enabling literature retrieval does **not**
+enable cloud inference. As of grounding-critic Sprint 3 the synthesis/critic model is
+*configurable* via `config.medical.inference`, but a **cloud** provider there is honoured
+**only** when the `cloud-inference` axis is opted in; otherwise the resolver **fails closed to
+the local default** (see "Configurable model + cloud-inference gating" below).
 
-**Wiring (`MedicalSopEngine.run`).** The grounded branch resolves the `LLMClient`
+**Wiring (`MedicalSopEngine.run`).** The grounded branch resolves the `LLMClient` + model
 **lazily, on that path only**, so numeric / disabled / red-flag / abstain turns
 construct **zero** LLM clients (preserving the S2/S3 never-called guarantees and
-sc-7-8). As of grounding-critic Sprint 2 that branch (`engine.ts:403`) calls
+sc-7-8). As of grounding-critic Sprint 2 that branch calls
 `synthesizeGrounded` (the fail-closed grounding gate above) instead of the bare
-`synthesize`, threading the same lazy `LLMClient` + footer; every non-grounded path
+`synthesize`; as of Sprint 3 it obtains its client + model from
+`buildMedicalInferenceClient(config, egress)` (an injected `deps.llmClient` still wins for
+tests) and threads the resolved model into `synthesizeGrounded`. Every non-grounded path
 (consent / red-flag / refuse / numeric-only / literature-disabled) remains zero-LLM. The
-audit event is still `answer` for a non-abstained synthesis, `abstain` otherwise. Full
+audit event is still `answer` for a non-abstained synthesis, `abstain` otherwise — now
+joined on the grounded path by the IDs/enums-only `criticVerdict` (see below). Full
 details:
-[`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md)
+[`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md),
+[`docs/sprints/sprint-spec-20260618-medical-grounding-critic-2.md`](sprints/sprint-spec-20260618-medical-grounding-critic-2.md),
 and
-[`docs/sprints/sprint-spec-20260618-medical-grounding-critic-2.md`](sprints/sprint-spec-20260618-medical-grounding-critic-2.md).
+[`docs/sprints/sprint-spec-20260618-medical-grounding-critic-3.md`](sprints/sprint-spec-20260618-medical-grounding-critic-3.md).
+
+**Configurable model + cloud-inference gating (grounding-critic Sprint 3).** The
+synthesis/critic model + provider are configurable via an optional `config.medical.inference`
+block; a **cloud** model is reachable **only** behind the existing `cloud-inference` egress
+axis (no new axis was added). `buildMedicalInferenceClient(config, egress)`
+(`src/medical/inference.ts`) returns `{ client, model }` and is the **single** place that
+decides local-vs-cloud — `createClient` (the providers factory) is the only
+client-construction seam, with an injectable `factory` param so tests spy without real
+network. "Local" = `provider: "openai-compat"` **and** an endpoint containing `localhost`;
+anything else is treated as cloud and gated:
+
+- **No `inference` block** ⇒ the exact local default (`openai-compat`,
+  `http://localhost:11434/v1`, `llama3`) — byte-identical to grounding-critic Sprint 2.
+- **`inference` points at a local provider/endpoint** ⇒ used as-is (non-egressing).
+- **`inference` names a cloud provider while `medical.egress.cloudInference` is `false`
+  (the default)** ⇒ **FAIL CLOSED**: the cloud config is ignored and the local default is
+  returned — **no cloud client is ever constructed** (a factory spy asserts it is never
+  called with a cloud provider when the axis is off).
+- **Cloud provider AND `medical.egress.cloudInference: true`** ⇒ the configured cloud client
+  + model is built, and that same model threads into the grounding critic.
+
+```jsonc
+// Cloud synthesis is reachable ONLY behind the cloud-inference opt-in (default false):
+{
+  "medical": {
+    "egress": { "cloudInference": true },          // required — default false fails closed to local
+    "inference": { "provider": "anthropic", "model": "claude-sonnet-4-5" }
+  }
+}
+```
+
+(Also surfaced in the README "Full Configuration Reference".)
+
+**Critic verdict in the audit (grounding-critic Sprint 3).** `synthesizeGrounded`'s return
+widened from `MedicalAnswer` to `{ answer, verdict }` (the new `GroundedResult` type) so the
+engine can classify the gate outcome. On the grounded path only, the engine appends an
+optional IDs/enums-only `AuditEntry.criticVerdict` (type `CriticVerdict`):
+
+- `approve` — the gate returned an approved answer,
+- `reject-abstained` — the gate abstained after a critic reject,
+- `error-abstained` — the gate abstained due to a thrown transport/model error.
+
+`criticVerdict` is one of those three literals — **never** the critic's feedback string or
+any prompt / answer / health value — and is spread into the audit line **only** when the
+grounded branch produced a verdict, so non-grounded entries are byte-identical. The audit
+file stays mode `0600` after appending, and the line carries no substring of the prompt or
+answer. Full details:
+[`docs/sprints/sprint-spec-20260618-medical-grounding-critic-3.md`](sprints/sprint-spec-20260618-medical-grounding-critic-3.md).
 
 ---
 

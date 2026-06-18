@@ -372,7 +372,7 @@ FFDCA §201(h) counsel + regulatory review gate** — a non-engineering gate tha
 open; the code is engineering-complete. See the finale record
 [`sprint-spec-20260617-medical-whoop-guardrails-3.md`](./sprint-spec-20260617-medical-whoop-guardrails-3.md).
 
-## Medical Team — Grounding Critic — in progress (2 of 3)
+## Medical Team — Grounding Critic — complete (3 of 3)
 
 `spec-20260618-medical-grounding-critic` — adds a **fail-closed grounding critic** to the
 medical-sop pipeline: an independent reviewer that judges a synthesized answer for
@@ -417,20 +417,57 @@ happy-path count moved `1 → 2` for synth + critic). Config/CLI and the
 existing `answer` / `abstain` audit event. **+12 collocated grounded-gate tests, all 8
 criteria passed iteration 1; no regression.**
 
+Sprint 3 **closes the plan** with the **configurable model + cloud-inference gating + audit
+verdict**. (1) A new optional `config.medical.inference` block (`schema.ts`,
+`{ provider?, endpoint?, model? }`, all optional) makes the synthesis/critic model + provider
+configurable. (2) A resolver `buildMedicalInferenceClient(config, egress)`
+(`src/medical/inference.ts`) returns `{ client, model }` and is the **single** place that
+decides local-vs-cloud: it classifies "local" as `openai-compat` + a `localhost` endpoint, and
+when `inference` names a **cloud** provider it is honoured **only** if
+`egress.isAllowed("cloud-inference")` is `true` — otherwise it **FAILS CLOSED** (`inference.ts:44`),
+returning the exact local Ollama default (`openai-compat`, `http://localhost:11434/v1`,
+`llama3`) so **no cloud client is ever constructed** and no cloud egress occurs. With no
+`inference` block the default is byte-identical to Sprint 2. **No new egress axis** was added —
+cloud is gated by the existing `cloud-inference` axis (default **false**). (3)
+`synthesizeGrounded`'s return widened from `MedicalAnswer` to `{ answer, verdict }` (new
+`GroundedResult` type) and gained a threaded `model` param; the engine's grounded branch
+resolves its `LLMClient` + `synthModel` via `buildMedicalInferenceClient` (injected
+`deps.llmClient` still wins) and maps the returned verdict into a new optional
+`AuditEntry.criticVerdict` (`'approve' | 'reject-abstained' | 'error-abstained'`,
+IDs/enums-only) appended **only on the grounded path** (non-grounded entries byte-identical),
+PHI-free at mode `0600`. **2673 tests pass** (6 pre-existing cockpit E2E failures unrelated);
+all 8 criteria passed iteration 1; no regression.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-medical-grounding-critic-1.md](./sprint-spec-20260618-medical-grounding-critic-1.md) | **Fail-closed grounding-critic module (pure, not yet wired):** `src/medical/retrieval/grounding-critic.ts` exporting `GroundingVerdict`/`GroundingVerdictSchema`, never-throws `validateGroundingVerdict` (direct parse → fence → first-brace → zod `safeParse`), `buildGroundingSystemPrompt` (faithfulness + completeness review pinned to the cited-passage block), `getGroundingVerdict` (bounded retry-with-coercion, **FAIL-CLOSED `reject` on parse exhaustion** — the inversion of fleet `critic-deep.ts:201`'s fail-open `approve`), and the `GROUNDING_PARSE_MAX_RETRIES`/`GROUNDING_MAX_LLM_CALLS` (= 2) caps; internal `callGroundingCritic` builds a **fresh** single-`user`-turn message array (LOCK1, never extends the synthesis conversation) with `jsonObjectMode:true`; transport errors propagate (not caught here); depends only on `zod` + injected `LLMClient`/`Passage` (no SDK/network/`fetch`); **purely additive** — no engine wiring / config / CLI / audit (Sprints 2–3); +22 tests, all 7 criteria iter-1, no regression |
 | 2 | [sprint-spec-20260618-medical-grounding-critic-2.md](./sprint-spec-20260618-medical-grounding-critic-2.md) | **Gated synthesis flow + engine wiring (critic now LIVE):** `synthesizeGrounded` (`literature.ts:259`) composes `synthesize` + `getGroundingVerdict` into a **fail-closed gate** — synthesize → critique → on `reject` **one** re-synth (`synthesizeWithFeedback`, feedback appended to the synthesis system prompt) → re-critique → **abstain** on second-reject **or any thrown** transport/model error (every call try/catch-wrapped → canned `abstainAnswer` `abstained:true`/`citations:[]`/footer; no exception escapes, no ungrounded answer); exported `GROUNDED_GATE_MAX_LLM_CALLS` (= 6) **computed** from `GROUNDING_MAX_LLM_CALLS` (`1 synth + critic + 1 re-synth + re-critic`), call-cap asserted on reject→reject; engine grounded branch swap (`engine.ts:403` `synthesize` → `synthesizeGrounded`, same `llmClient`/footer; import at `:29` updated) — **only the grounded branch now makes > 1 LLM call**; every non-grounded path (consent / red-flag / refuse / numeric-only / literature-disabled) stays **zero-LLM** (all 11 `engine.test.ts` spy assertions unchanged, only grounded happy-path count `1 → 2`); audit event unchanged (`answer`/`abstain`; `criticVerdict` deferred to S3); +12 grounded-gate tests, all 8 criteria iter-1, no regression |
+| 3 | [sprint-spec-20260618-medical-grounding-critic-3.md](./sprint-spec-20260618-medical-grounding-critic-3.md) | **Finale — configurable model + cloud-inference gating + audit verdict:** optional `config.medical.inference` block (`schema.ts`, `{ provider?, endpoint?, model? }`, all-optional zod, sibling of `medical.egress`); resolver `buildMedicalInferenceClient(config, egress, factory?)` (`src/medical/inference.ts:31`) ⇒ `{ client, model }`, the **sole** local-vs-cloud decision + the **only** `createClient` seam — "local" = `openai-compat` + `localhost` endpoint; a cloud provider is honoured **only** when `egress.isAllowed("cloud-inference")` else **FAIL-CLOSED to the local default** (`inference.ts:44`, no cloud client ever constructed, factory-spy-asserted never-called-with-cloud), no-config ⇒ exact local default `openai-compat`/`http://localhost:11434/v1`/`llama3` (byte-identical to S2); **no new egress axis** — reuses `cloud-inference` (default false); `synthesizeGrounded` return widened `MedicalAnswer` → `{ answer, verdict }` (new `GroundedResult`) + threaded `model` param on `synthesize`/`synthesizeWithFeedback`/`synthesizeGrounded` (default `SYNTHESIS_MODEL` back-compat); engine grounded branch resolves client+`synthModel` via the resolver (injected `deps.llmClient` still wins, pinned `llama3`) and maps the verdict into new optional `AuditEntry.criticVerdict` (`CriticVerdict` = `approve`/`reject-abstained`/`error-abstained`, IDs/enums-only — never text) **spread in only on the grounded path** (`...(criticVerdict ? {criticVerdict} : {})`, non-grounded entries byte-identical), PHI-free, mode `0600` stat-asserted, line carries no prompt/answer substring; new `inference.test.ts` (cloud-off→local, cloud-on→cloud via factory spy, no-config→default) + `engine.test.ts`/`audit.test.ts` verdict additions; **2673 tests pass** (6 pre-existing cockpit E2E unrelated), all 8 criteria iter-1, no regression |
 
-A configurable model/provider with cloud-inference gating + the `AuditEntry.criticVerdict`
-field (Sprint 3) remain explicit non-goals — so the grounding critic still has **no**
-user-facing CLI / config surface. The **live gate** is now reflected in
-[`docs/teams.md`](../teams.md) (the "MedlinePlus grounded retrieval + cited synthesis"
-section's synthesis + wiring notes and the full ordered SOP list), but the critic still has
-**no** README config/CLI entry until Sprint 3. See the sprint records
-[`sprint-spec-20260618-medical-grounding-critic-1.md`](./sprint-spec-20260618-medical-grounding-critic-1.md)
+The configurable model + the `cloud-inference` gating + the `AuditEntry.criticVerdict` field
+(Sprint 3) are now reflected in [`docs/teams.md`](../teams.md) (the "MedlinePlus grounded
+retrieval + cited synthesis" section's "Configurable model + cloud-inference gating" and
+"Critic verdict in the audit" notes), and the `medical.inference` block + its cloud-inference
+gating note are in the README "Full Configuration Reference". See the sprint records
+[`sprint-spec-20260618-medical-grounding-critic-1.md`](./sprint-spec-20260618-medical-grounding-critic-1.md),
+[`sprint-spec-20260618-medical-grounding-critic-2.md`](./sprint-spec-20260618-medical-grounding-critic-2.md),
 and
-[`sprint-spec-20260618-medical-grounding-critic-2.md`](./sprint-spec-20260618-medical-grounding-critic-2.md).
+[`sprint-spec-20260618-medical-grounding-critic-3.md`](./sprint-spec-20260618-medical-grounding-critic-3.md).
+
+### Plan close-out
+
+`spec-20260618-medical-grounding-critic` is **complete (3 of 3)** on branch
+`bober/medical-team` — all three sprints passed evaluation on iteration 1 (zero reworks),
+**2673 tests** green (6 pre-existing cockpit E2E failures are unrelated / not a regression).
+The spec adds a **fail-closed grounding critic** to the medical-sop pipeline (Sprints 1–2)
+plus a **configurable synthesis/critic model** whose cloud use is **strictly gated by the
+existing `cloud-inference` egress axis** — **default off, fail-closed to the local Ollama
+default** — and an IDs/enums-only `criticVerdict` audit field (Sprint 3). It is **additive on
+top of base ADRs 1-7** with **byte-zero impact on the programming team**, and the default
+medical posture still makes **zero cloud egress** out of the box. **Shipping still inherits the
+base medical team's external S6.5 FFDCA §201(h) counsel + regulatory review gate** — a
+non-engineering gate that remains open; the code is engineering-complete. See the finale record
+[`sprint-spec-20260618-medical-grounding-critic-3.md`](./sprint-spec-20260618-medical-grounding-critic-3.md).
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 

@@ -823,6 +823,11 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
       "cloudInference": false,            // Permit cloud inference synthesis. Default false.
       "literatureRetrieval": false,       // Permit MedlinePlus literature retrieval. Default false.
       "deviceConnection": false           // Permit WHOOP device-connection egress. Default false.
+    },
+    "inference": {                        // Optional. Synthesis/critic model override. Omit => local Ollama default.
+      "provider": "openai-compat",        // Default openai-compat. A CLOUD provider here needs egress.cloudInference=true.
+      "endpoint": "http://localhost:11434/v1", // Default localhost (Ollama). Non-localhost => treated as cloud + gated.
+      "model": "llama3"                   // Default llama3. Threaded into both synthesis and the grounding critic.
     }
   }
 }
@@ -849,6 +854,20 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > [docs/teams.md](./docs/teams.md) ("EgressGuard + full SOP wiring", "MedlinePlus
 > grounded retrieval + cited synthesis", and "WHOOP device-connection axis +
 > authenticated transport").
+
+> **The synthesis/critic model is configurable, and cloud is gated by `cloudInference`.**
+> The optional `medical.inference` block `{ provider?, endpoint?, model? }` overrides the
+> model used for grounded synthesis **and** the grounding critic. Omit it (the default) and
+> the medical team uses the **local Ollama default** (`openai-compat`,
+> `http://localhost:11434/v1`, `llama3`). A **cloud** provider here (anything that is not
+> `openai-compat` against a `localhost` endpoint) is honoured **only** when
+> `medical.egress.cloudInference` is `true`; with the axis off (the default) the resolver
+> **fails closed to the local default** and **no cloud client is ever constructed** — so the
+> out-of-the-box posture still makes zero cloud egress. The critic's outcome is recorded as
+> the IDs/enums-only `criticVerdict` (`approve` / `reject-abstained` / `error-abstained`)
+> field on the PHI-free `0600` medical audit log. See
+> [docs/teams.md](./docs/teams.md) ("Configurable model + cloud-inference gating" and
+> "Critic verdict in the audit").
 
 ### Sprint Sizes
 
