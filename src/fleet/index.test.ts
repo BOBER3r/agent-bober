@@ -1,13 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, dirname } from "node:path";
 import { Command } from "commander";
 import { runFleet, registerFleetCommand } from "./index.js";
-import type { FleetCoordinator } from "./coordinator.js";
+import { FleetCoordinator } from "./coordinator.js";
 import type { OutcomeAggregator } from "./aggregator.js";
 import type { ChildExecution, ChildOutcome } from "./types.js";
 import type { FleetManifest } from "./manifest.js";
+import type { Scaffolder, Runner } from "./coordinator.js";
+import type { ScaffoldResult } from "./scaffolder.js";
+import type { ChildSpawnResult } from "./runner.js";
 
 // ── Fake helpers ──────────────────────────────────────────────────────
 
@@ -319,5 +322,182 @@ describe("registerFleetCommand (sc-4-8)", () => {
     expect(fleet).toBeDefined();
     // Commander registers positional args via usage string
     expect(fleet!.usage()).toContain("manifest");
+  });
+});
+
+// ── sc-3-5: no-blackboard → single execute, no SharedBlackboard opened ──
+
+describe("runFleet no-blackboard single-pass (sc-3-5)", () => {
+  let tmpDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-fleet-nobb-"));
+    savedKey = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "fake-key-for-test";
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    if (savedKey !== undefined) {
+      process.env["DEEPSEEK_API_KEY"] = savedKey;
+    } else {
+      delete process.env["DEEPSEEK_API_KEY"];
+    }
+  });
+
+  it("no-blackboard manifest → execute() called once, executeRounds NOT called, no facts.db created", async () => {
+    const manifestPath = join(tmpDir, "fleet.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        rootDir: tmpDir,
+        concurrency: 1,
+        children: [{ folder: "nobb-child", task: "test-task" }],
+        // No blackboard field
+      }),
+      "utf-8",
+    );
+
+    let executeCalled = 0;
+    let executeRoundsCalled = 0;
+
+    const fakeCoord = {
+      async execute(_manifest: FleetManifest): Promise<ChildExecution[]> {
+        executeCalled++;
+        return [
+          {
+            folder: "nobb-child",
+            scaffold: {
+              folder: "nobb-child",
+              absPath: join(tmpDir, "nobb-child"),
+              configWritten: true,
+              gitInitialized: true,
+            },
+            spawn: { cwd: join(tmpDir, "nobb-child"), exitCode: 0, stdout: "", stderr: "" },
+          },
+        ];
+      },
+      async executeRounds(_manifest: FleetManifest): Promise<ChildExecution[]> {
+        executeRoundsCalled++;
+        return [];
+      },
+    } as unknown as FleetCoordinator;
+
+    const aggr = {
+      async aggregate(exec: ChildExecution): Promise<ChildOutcome> {
+        return { folder: exec.folder, status: "completed", source: "exit-code" };
+      },
+    } as unknown as OutcomeAggregator;
+
+    await runFleet(manifestPath, {}, { coordinator: fakeCoord, aggregator: aggr });
+
+    // Single execute pass, no executeRounds
+    expect(executeCalled).toBe(1);
+    expect(executeRoundsCalled).toBe(0);
+
+    // No facts.db should have been created
+    const expectedDbPath = join(tmpDir, ".bober", "memory");
+    let dbDirExists = false;
+    try {
+      await access(expectedDbPath);
+      dbDirExists = true;
+    } catch {
+      // directory does not exist — expected
+    }
+    expect(dbDirExists).toBe(false);
+  });
+});
+
+// ── sc-3-6: blackboard manifest → path injected, db dir created, rounds run ──
+
+describe("runFleet blackboard path (sc-3-6)", () => {
+  let tmpDir: string;
+  let savedKey: string | undefined;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-fleet-bb-"));
+    savedKey = process.env["DEEPSEEK_API_KEY"];
+    process.env["DEEPSEEK_API_KEY"] = "fake-key-for-test";
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+    if (savedKey !== undefined) {
+      process.env["DEEPSEEK_API_KEY"] = savedKey;
+    } else {
+      delete process.env["DEEPSEEK_API_KEY"];
+    }
+  });
+
+  it("blackboard manifest → resolveBlackboardPath computed, db dir created, child config carries fleet section", async () => {
+    const namespace = "test-ns";
+    const manifestPath = join(tmpDir, "fleet.json");
+    await writeFile(
+      manifestPath,
+      JSON.stringify({
+        rootDir: tmpDir,
+        concurrency: 1,
+        children: [{ folder: "bb-child", task: "test-task" }],
+        blackboard: { namespace, maxRounds: 2 },
+      }),
+      "utf-8",
+    );
+
+    // Capture the 3rd scaffold arg to verify dbPath injection
+    const scaffoldArgs: Array<{ dbPath: string; namespace: string; maxRounds: number } | undefined> = [];
+
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+        bbArg?: { dbPath: string; namespace: string; maxRounds: number },
+      ): Promise<ScaffoldResult> {
+        scaffoldArgs.push(bbArg);
+        return {
+          folder: child.folder,
+          absPath: join(tmpDir, child.folder),
+          configWritten: true,
+          gitInitialized: true,
+        };
+      },
+    };
+
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string }): Promise<ChildSpawnResult> {
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+
+    const aggr = {
+      async aggregate(exec: ChildExecution): Promise<ChildOutcome> {
+        return { folder: exec.folder, status: "completed", source: "exit-code" };
+      },
+    } as unknown as OutcomeAggregator;
+
+    await runFleet(manifestPath, {}, { coordinator: coord, aggregator: aggr });
+
+    // Verify the expected dbPath matches resolveBlackboardPath
+    const expectedDbPath = join(resolve(tmpDir), ".bober", "memory", namespace, "facts.db");
+
+    // db dir must have been created
+    const dbDir = dirname(expectedDbPath);
+    let dbDirExists = false;
+    try {
+      await access(dbDir);
+      dbDirExists = true;
+    } catch {
+      // directory not found — will fail the assertion below
+    }
+    expect(dbDirExists).toBe(true);
+
+    // scaffold received the blackboard arg with the correct absolute dbPath
+    expect(scaffoldArgs).toHaveLength(1);
+    expect(scaffoldArgs[0]).toBeDefined();
+    expect(scaffoldArgs[0]?.dbPath).toBe(expectedDbPath);
+    expect(scaffoldArgs[0]?.namespace).toBe(namespace);
+    expect(scaffoldArgs[0]?.maxRounds).toBe(2);
   });
 });

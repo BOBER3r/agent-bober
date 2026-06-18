@@ -9,7 +9,7 @@
 
 import chalk from "chalk";
 import type { Command } from "commander";
-import { join, resolve } from "node:path";
+import { join, resolve, dirname } from "node:path";
 
 import { load } from "./manifest.js";
 import { buildChildConfig } from "./child-config.js";
@@ -17,13 +17,15 @@ import { assertManifest } from "./tool-role-guard.js";
 import { FleetCoordinator } from "./coordinator.js";
 import { OutcomeAggregator } from "./aggregator.js";
 import { PortfolioReporter } from "./reporter.js";
+import { SharedBlackboard } from "./shared-blackboard.js";
 import { validateApiKey, createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { decomposeGoal } from "./decomposer.js";
 import { decomposeGoalDeep } from "./decomposer-deep.js";
 import { writeManifestWithProvenance } from "./manifest-write.js";
+import { ensureDir } from "../state/helpers.js";
 import type { FleetManifest } from "./manifest.js";
-import type { ChildOutcome } from "./types.js";
+import type { ChildOutcome, ChildExecution } from "./types.js";
 import type { PortfolioReport } from "./reporter.js";
 import type { LLMClient } from "../providers/types.js";
 
@@ -129,7 +131,32 @@ export async function runFleet(
   const aggregator = deps?.aggregator ?? new OutcomeAggregator();
   const reporter = deps?.reporter ?? new PortfolioReporter();
 
-  const executions = await coordinator.execute(effectiveManifest);
+  // ── Blackboard-aware execution branch ────────────────────────────
+  const dbPath = resolveBlackboardPath(effectiveManifest);
+  let executions: ChildExecution[];
+
+  if (dbPath) {
+    // Blackboard path: open a shared WAL facts.db, run bounded rounds,
+    // close in finally to guarantee WAL checkpoint on any error.
+    await ensureDir(dirname(dbPath));
+    const bb = await SharedBlackboard.open({
+      dbPath,
+      namespace: effectiveManifest.blackboard!.namespace,
+      maxRounds: effectiveManifest.blackboard!.maxRounds,
+    });
+    try {
+      executions = await coordinator.executeRounds(effectiveManifest, bb, {
+        maxRounds: effectiveManifest.blackboard!.maxRounds,
+        dbPath,
+      });
+    } finally {
+      bb.close();
+    }
+  } else {
+    // No-blackboard path: single mapBounded pass, byte-identical to pre-Phase-B.
+    executions = await coordinator.execute(effectiveManifest);
+  }
+
   const outcomes: ChildOutcome[] = await Promise.all(
     executions.map((e) => aggregator.aggregate(e)),
   );
