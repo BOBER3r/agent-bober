@@ -256,6 +256,170 @@ resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 
 ---
 
+## Fleet Commands
+
+The fleet orchestrator runs **N isolated `agent-bober` child runs in bulk** from a manifest.
+A manifest is a JSON file describing a `rootDir`, a `concurrency`, and a list of `children`,
+each `{ "folder", "task" }` (children may carry an optional per-child `config`). These
+commands are invoked as `agent-bober …` (not `bober …`).
+
+### `agent-bober fleet <manifest>`
+
+Run a fleet of child agent-bober runs from a prepared manifest. Each child runs in its own
+`<rootDir>/<folder>` directory against its `task`. Per-child failures are **reported, not
+fatal** (the command still exits `0`); exit `1` is reserved for batch-setup errors (bad
+manifest, missing credentials, report IO failure). Prints a Fleet Summary (total / completed /
+failed / other) when done.
+
+```bash
+agent-bober fleet ./fleet.json
+agent-bober fleet ./fleet.json --concurrency 4    # Override manifest concurrency
+agent-bober fleet ./fleet.json --root ./projects  # Override manifest rootDir
+```
+
+A manifest looks like:
+
+```json
+{
+  "rootDir": ".",
+  "concurrency": 3,
+  "children": [
+    { "folder": "api-server", "task": "Build a REST API server with auth" },
+    { "folder": "web-frontend", "task": "Build a React frontend for the API" }
+  ]
+}
+```
+
+### `agent-bober fleet expand <goal>`
+
+Decompose a single high-level **goal** into a fleet manifest using a DeepSeek decomposer, then
+**write it and stop for review by default**. It builds the decomposer LLM client first (so a
+missing `DEEPSEEK_API_KEY` fails fast with exit `1` **before any file is written**), turns the
+goal into a children-only manifest, atomically writes it to `<root>/.bober/fleet-expand.json`
+(overwriting any existing file with a printed notice), prints the manifest, and prints a review
+hint. It does **not** run the fleet unless you pass `--yes`.
+
+```bash
+# Decompose → write manifest → STOP for review (default)
+agent-bober fleet expand "Build a todo app with an API server and a web frontend"
+
+#   …writes <root>/.bober/fleet-expand.json and prints:
+#   Review then run: agent-bober fleet "<root>/.bober/fleet-expand.json"
+
+# Review/edit the written manifest, then run it with the runner above:
+agent-bober fleet ".bober/fleet-expand.json"
+
+# …or decompose AND run immediately, skipping the review gate:
+agent-bober fleet expand "Build a todo app …" --yes
+```
+
+`--yes` is the **sole** spawn gate — without it, `fleet expand` writes the manifest and exits
+`0` without launching any child runs (no interactive prompt, no TTY check). With `--yes` it
+chains into `agent-bober fleet <writtenPath>` after the write and prints the same Fleet Summary.
+
+**Provenance sidecar + recoverable overwrite.** Alongside the manifest, `fleet expand` writes a
+provenance sidecar `<outPath>.meta.json` recording `{ command, goal, critique, childCount,
+timestamp }` for the manifest it just produced. If a manifest already exists at the output path,
+the **prior manifest is preserved as `<outPath>.bak`** (renamed before the new one is written, so
+it is fully recoverable) and an **informative, non-blocking notice** is printed — when the prior
+sidecar is present it reports which command/goal/childCount produced the old manifest and its
+relative age (e.g. `Replacing manifest from \`fleet expand\` for goal "…" (4 children, 12m ago) →
+kept as fleet-expand.json.bak`); otherwise a generic `Overwriting existing manifest … → kept as
+…bak` notice. The sidecar and `.bak` derive from the **actual** output path, so `--out <custom>`
+writes `<custom>.meta.json` / `<custom>.bak` and leaves the default path untouched. This applies
+to **both** `fleet expand` and `fleet expand-deep`, which share the same default output path
+(unchanged) — the overwrite is now recoverable rather than silently clobbering.
+
+Options:
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `--count <n>` | — | Soft target for the number of sub-projects (folded into the decomposer prompt as a hint, not a hard cap) |
+| `--provider <p>` | `openai-compat` | Override the decomposer LLM provider |
+| `--model <m>` | `deepseek-v4-pro` | Override the decomposer LLM model **only** (not the children's per-run providers) |
+| `--root <dir>` | `.` | Manifest `rootDir` |
+| `--concurrency <c>` | `3` | Manifest concurrency |
+| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest (the `.meta.json` sidecar and `.bak` backup derive from this path) |
+| `--yes` | off | Chain into the fleet run after writing the manifest |
+
+Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
+decomposition step calls DeepSeek via the `openai-compat` provider.
+
+### `agent-bober fleet expand-deep <goal>`
+
+The **robust** sibling of `fleet expand` for **large or ambiguous goals**. Where `fleet expand`
+makes a single decomposer pass (and can yield one giant low-quality child on a sprawling goal),
+`fleet expand-deep` uses a **two-stage plan-then-expand** decomposer: it first plans a coarse
+outline of independent sub-project *areas*, then expands that outline into the children-only
+manifest. Everything else is identical to `fleet expand` — same options, same default output
+path, same atomic write, same **write-and-stop-by-default** review gate, and the same
+**provenance sidecar + recoverable overwrite** (see `fleet expand` above). It builds the
+decomposer LLM client first (so a missing `DEEPSEEK_API_KEY` fails fast with exit `1` **before any
+file is written**), atomically writes the manifest to `<root>/.bober/fleet-expand.json` plus a
+`<outPath>.meta.json` provenance sidecar (here `command` is `"fleet expand-deep"` and `critique`
+reflects `--critique`). Because it **shares** the same default path as `fleet expand`, overwriting
+a manifest there preserves the **prior** file as `<outPath>.bak` and prints an informative notice
+(use `--out` to keep both manifests side by side instead). It prints the manifest, and prints a
+review hint. It does **not** run the fleet unless you pass `--yes`.
+
+```bash
+# Robustly decompose a large/ambiguous goal → write manifest → STOP for review (default)
+agent-bober fleet expand-deep "Build a multi-tenant SaaS platform with billing, auth, and an admin console"
+
+#   …writes <root>/.bober/fleet-expand.json and prints:
+#   Review then run: agent-bober fleet "<root>/.bober/fleet-expand.json"
+
+# Review/edit the written manifest, then run it with the runner above:
+agent-bober fleet ".bober/fleet-expand.json"
+
+# …or decompose AND run immediately, skipping the review gate:
+agent-bober fleet expand-deep "Build a multi-tenant SaaS platform …" --yes
+```
+
+`--yes` is the **sole** spawn gate — without it, `fleet expand-deep` writes the manifest and exits
+`0` without launching any child runs (no interactive prompt, no TTY check). With `--yes` it
+chains into `agent-bober fleet <writtenPath>` after the write and prints the same Fleet Summary.
+
+`--critique` (opt-in, **default off**) adds a **fresh-context critic gate** to the decomposition.
+With it, after the two-stage decompose produces a shape-valid manifest a **fresh LLM critic**
+(no memory of the original decompose) judges whether the split is degenerate or under-expanded
+(e.g. 2 children for a 12-area goal); on a reject verdict the manifest is **re-expanded** with the
+critic's feedback. The gate is bounded to **one round** with a closed-form budget of
+`DEEP_CRITIQUE_MAX_TOTAL_CALLS = 8` chat calls and **accepts-best on exhaustion** (it never throws
+and never returns a result worse than the plain `expand-deep` baseline). The gate runs **after**
+the manifest is built and **before** it is written, so everything downstream is unchanged —
+**write-and-stop is untouched** (the manifest is still written to disk and reviewed before any
+spawn, and `--yes` is still the sole spawn gate). With `--critique` omitted the command is
+**byte-identical to plain `fleet expand-deep`** (no critic call, no extra chat calls).
+
+```bash
+# Add the fresh-context critic gate (re-expands a degenerate/under-expanded manifest):
+agent-bober fleet expand-deep "Build a multi-tenant SaaS platform …" --critique
+```
+
+Options:
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `--count <n>` | — | Soft target for the number of sub-projects (folded into the decomposer prompt as a hint, not a hard cap) |
+| `--provider <p>` | `openai-compat` | Override the decomposer LLM provider |
+| `--model <m>` | `deepseek-v4-pro` | Override the decomposer LLM model **only** (not the children's per-run providers) |
+| `--root <dir>` | `.` | Manifest `rootDir` |
+| `--concurrency <c>` | `3` | Manifest concurrency |
+| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest (the `.meta.json` sidecar and `.bak` backup derive from this path) |
+| `--yes` | off | Chain into the fleet run after writing the manifest |
+| `--critique` | off | Run a fresh-context critic gate that re-expands a degenerate/under-expanded manifest (one round, budget `DEEP_CRITIQUE_MAX_TOTAL_CALLS=8`, accept-best on exhaustion; write-and-stop unchanged). Default off is byte-identical to plain `expand-deep`. |
+
+Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
+decomposition step calls DeepSeek via the `openai-compat` provider.
+
+**`expand` vs `expand-deep`:** prefer `fleet expand` for small/clear goals (one fast pass);
+reach for `fleet expand-deep` when the goal is broad or vague and the single-shot pass produces a
+poor split. Both write the same manifest format and feed the same `agent-bober fleet <manifest>`
+runner. The `--critique` self-judged gate is available on `fleet expand-deep` only.
+
+---
+
 ## Approval & Checkpoint Commands
 
 These commands manage checkpoint approval in careful-flow mode. Checkpoints appear as
