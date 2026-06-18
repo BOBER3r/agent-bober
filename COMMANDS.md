@@ -494,6 +494,18 @@ directories, all open that **same** absolute path, so they share one blackboard.
 `blackboard` block the manifest behaves exactly as before and the children's configs are
 byte-identical to a non-blackboard run.
 
+**Bounded rounds + early-stop.** With a `blackboard` block, `agent-bober fleet` runs the children
+for **up to `maxRounds` rounds** over that one shared blackboard, instead of the single pass a
+no-blackboard run does. The head scaffolds each child's config **once** (on round 1) and **re-spawns
+`agent-bober run` every round** — re-spawning is how a child gets to *read* the prior round's
+siblings' findings (via `agent-bober blackboard read`) before its next attempt. After each round the
+head counts the findings on the blackboard and **stops early** the moment a completed round adds
+**zero new findings** (so a converged run finishes in fewer than `maxRounds` rounds; the loop always
+runs at least 2 rounds before it can early-stop). Round 1's config is never re-written on later
+rounds, the run still exits `0` on per-child failures, and `fleet-report.json` is written from the
+**final** round's outcomes. With **no** `blackboard` block the run is a single pass, byte-for-byte
+as before.
+
 #### `agent-bober blackboard publish <value> [--round N]`
 
 Publish a finding to the shared fleet blackboard. Run from inside a child's working directory (its

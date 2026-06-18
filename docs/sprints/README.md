@@ -817,7 +817,7 @@ non-goal of every sprint here and is now **in progress** under
 `spec-20260618-fleet-blackboard-exchange` (see the section below). See the finale record
 [`sprint-spec-20260618-fleet-tier-provider-routing-3.md`](./sprint-spec-20260618-fleet-tier-provider-routing-3.md).
 
-## Fleet Blackboard Exchange (Phase B) — in progress (2 of 4)
+## Fleet Blackboard Exchange (Phase B) — in progress (3 of 4)
 
 `spec-20260618-fleet-blackboard-exchange` — Phase B of
 `arch-20260618-heterogeneous-multi-provider-agent-team`: the bounded inter-agent exchange channel by
@@ -871,10 +871,38 @@ via the explicit CLI only. Full suite **2775 passed** (only the 6 pre-existing c
 failures); all 8 criteria passed iteration 1, no regression, no SDK/network import in
 `blackboard.ts`.
 
+Sprint 3 makes the blackboard a **live exchange loop** — until now a blackboard manifest only
+*configured* a shared db; the fleet still ran one pass. A new
+`FleetCoordinator.executeRounds(manifest, blackboard, { maxRounds, dbPath })` (`coordinator.ts:55`)
+runs the children for **up to `maxRounds` rounds** over the same `SharedBlackboard`: round 1
+scaffolds each child (threading the Sprint-2 `{dbPath, namespace, maxRounds}` config), every round
+re-spawns via `mapBounded(children, concurrency, …)`, and the loop **early-stops** the moment a
+completed round adds **zero new `'finding'` facts** (`r > 1 && readAll().length === prevCount`,
+`coordinator.ts:77`). The private round-aware `runChildRound` (`coordinator.ts:91`) enforces
+**scaffold-once** — it calls the scaffolder only when `round === 1` and on rounds ≥ 2 synthesizes a
+`ScaffoldResult` from `resolve(rootDir, child.folder)`, so a child's round-1 `bober.config.json`
+(with its `fleet` section) is **never re-written/clobbered** — and is a full `try`/`catch`
+never-reject thunk (a failing child becomes a `ChildExecution` with `scaffold.error`, never aborting
+the round). The coordinator's `Scaffolder` seam interface gained the same **optional** 3rd
+`blackboard?` param (not an overload, so the test fakes stay type-compatible). `runFleet`
+(`index.ts:135`) now branches on `resolveBlackboardPath(manifest)`: with a path it `ensureDir`s the
+db dir, `SharedBlackboard.open`s, runs `executeRounds` in a `try`/`finally` that always `close()`s
+(WAL checkpoint even on error), and threads the absolute path into round-1 scaffolding; with **no**
+blackboard it calls `coordinator.execute(...)` **verbatim** — a **byte-identical single pass** (no
+blackboard opened, no `.bober/memory/.../facts.db` created, the 5 pre-existing coordinator tests +
+all index tests unchanged). `fleet-report.json` is still written from the **final** round's
+outcomes, and the exit-0 contract (per-child failures are data) is preserved. Early-stop is **purely
+structural** ("no new findings this round") — no semantic convergence judging (a non-goal); the loop
+runs at least 2 rounds before it can stop. **No** `fleet-synthesis.json` yet (Sprint 4) and **no**
+auto-publish on the children's behalf (findings come only from task prompts calling the Sprint-2
+CLI). Full suite **2781 passed**, fleet **268/268** (only the 6 pre-existing cockpit MCP failures);
+all 8 criteria passed iteration 1, no regression.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-fleet-blackboard-exchange-1.md](./sprint-spec-20260618-fleet-blackboard-exchange-1.md) | **`SharedBlackboard` WAL `facts.db` wrapper + opt-in `FactStore` WAL (Phase B foundation, not yet wired):** new `src/fleet/shared-blackboard.ts` — `BLACKBOARD_MAX_ROUNDS=3` (hard ceiling, `min(maxRounds??3,3)`), `BlackboardFinding {childFolder,round,payload,confidence?}`, `SharedBlackboard` with `private` ctor + static async `open({dbPath,namespace,busyTimeoutMs?,maxRounds?})` (`ensureDir`, `FactStore({journalModeWal:true,busyTimeoutMs??5000})` for file-backed only — **not** `:memory:`), `publish(finding,now)` (writes `predicate='finding'` `FactRecord`, scope=namespace/subject=childFolder/value=payload/tValid=tCreated=now; **throws** past effective cap), `readSiblings(selfFolder)` (excludes self), `readAll()`, `close()` (WAL checkpoint); `FactStore` gains **optional** 2nd ctor arg `{journalModeWal?,busyTimeoutMs?}` ⇒ `PRAGMA journal_mode=WAL`/`busy_timeout` **only when set**, default-**off** ⇒ every existing caller byte-identical (default `journal_mode==='delete'`, sc-1-7); depends only on `FactStore` (no network/SDK import); **no** coordinator/`runFleet`/CLI/config wiring (Sprints 2-4); +15 tests, all 8 criteria iter-1, no regression |
 | 2 | [sprint-spec-20260618-fleet-blackboard-exchange-2.md](./sprint-spec-20260618-fleet-blackboard-exchange-2.md) | **`config.fleet` section + `manifest.blackboard` + absolute path injection + `agent-bober blackboard` CLI (the child seam):** optional `FleetSectionSchema {blackboardDbPath,blackboardNamespace,blackboardSubject,maxRounds 1–3}` declared on `BoberConfigSchema` (`schema.ts:405`/`:449` — declared so it survives the unknown-key strip into children) + `type FleetSection`; optional `blackboard {namespace.min(1), maxRounds 1–3 default 3}` on `FleetManifestSchema` (`manifest.ts:19`; `maxRounds>3`/empty-ns ⇒ `ZodError`); `resolveBlackboardPath(manifest)` (`index.ts:41`) ⇒ **ABSOLUTE** `join(resolve(rootDir),'.bober','memory',<ns>,'facts.db')` or `undefined` (**ADR-5 caller-side absolute path, discharged head-side**); `ChildScaffolder.scaffold` optional 3rd `blackboard?` param sets `config.fleet` (`subject=child.folder`+abs path) **inside the `if`-guard only** ⇒ no-blackboard output **byte-identical**; new `agent-bober blackboard publish <value> [--round N]`/`read [--all]` CLI (`cli/commands/blackboard.ts`, DI'd `runBlackboardPublish`/`runBlackboardRead` cores, registered in `cli/index.ts`) reads abs path from **`config.fleet` ONLY** (never cwd), opens Sprint 1 `SharedBlackboard`, prints `[subject] value`, `close()` in `finally`; **no fleet section ⇒ clear message + `exitCode=1`, never throws**; two-cwd shared-visibility proof; **no** coordinator (S3)/synthesis (S4)/`run` auto-wiring; +tests, suite **2775 passed**, all 8 criteria iter-1, no regression |
+| 3 | [sprint-spec-20260618-fleet-blackboard-exchange-3.md](./sprint-spec-20260618-fleet-blackboard-exchange-3.md) | **Coordinator rounds loop + `runFleet` blackboard branch (the live exchange loop):** `FleetCoordinator.executeRounds(manifest, blackboard, {maxRounds, dbPath})` (`coordinator.ts:55`) — bounded `1..maxRounds` loop, each round `mapBounded(children, concurrency, runChildRound)`, **scaffold-once** (Sprint-2 `{dbPath,namespace,maxRounds}` threaded **only on round 1**, `undefined` after), **early-stop** when `r > 1 && blackboard.readAll().length === prevCount` (`coordinator.ts:77`; `prevCount` seeded pre-loop so round 1 never stops), returns the **final** round's `ChildExecution[]`; private `runChildRound` (`coordinator.ts:91`) scaffolds only `round === 1` else reuses `resolve(rootDir, child.folder)` (**never re-writes/clobbers** round-1 `config.fleet`) + full `try`/`catch` never-reject thunk (failing child ⇒ `ChildExecution` w/ `scaffold.error`); coordinator's `Scaffolder` seam widened with **optional** 3rd `blackboard?` param (not an overload ⇒ test fakes stay type-compatible); `runFleet` (`index.ts:135`) branches on `resolveBlackboardPath(manifest)` ⇒ with a path: `ensureDir(dirname)` + `SharedBlackboard.open` + `executeRounds` in `try`/`finally(close)` (WAL checkpoint even on error) + abs path threaded into round-1 scaffold; **no** blackboard ⇒ `coordinator.execute(...)` **verbatim** (byte-identical single pass, no blackboard opened, no `.bober/memory/.../facts.db`, 5 pre-existing coordinator + all index tests unchanged); `fleet-report.json` still from the **final** round; exit-0 (per-child-failures-are-data) preserved; early-stop is **purely structural** (no semantic convergence — non-goal); **no** `fleet-synthesis.json` (S4), **no** auto-publish on children's behalf; suite **2781 passed**, fleet **268/268**, all 8 criteria iter-1, no regression |
 
 This phase's architecture is in `.bober/architecture/` under
 `arch-20260618-heterogeneous-multi-provider-agent-team-*` — notably ADR-3 (shared blackboard via one
@@ -883,4 +911,7 @@ WAL-mode `facts.db`, bounded to ≤3 rounds) and ADR-5 (head-injected absolute b
 `agent-bober blackboard publish|read` and the optional `manifest.blackboard` block lives in
 [`COMMANDS.md`](../../COMMANDS.md) under "Fleet Commands". The internal child-injected `config.fleet`
 section is deliberately **not** in the README "Full Configuration Reference" — it is head-written,
-not user-authored. The coordinator rounds loop and `fleet-synthesis.json` arrive in Sprints 3-4.
+not user-authored. The Sprint-3 coordinator rounds loop (bounded re-spawn + no-new-findings
+early-stop, byte-identical no-blackboard single pass) is documented in
+[`COMMANDS.md`](../../COMMANDS.md) under "Inter-child blackboard (Phase B)". The head-side
+`fleet-synthesis.json` synthesis is the remaining Sprint 4.
