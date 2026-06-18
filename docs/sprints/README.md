@@ -220,3 +220,35 @@ User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Comm
 The fleet orchestrator's architecture is in `.bober/architecture/` under
 `arch-20260609-fleet-orchestrator-tech-lead-*` (Phase 1, the `fleet <manifest>` runner) and
 `arch-20260617-fleet-orchestrator-phase-2-expand-*` (this phase, goal → manifest).
+
+## Fleet Expand Deep (robust two-stage decomposition) — in progress (1 of N)
+
+`spec-20260618-fleet-expand-deep` — Phase 3 of the fleet orchestrator: a **robust** goal
+decomposer for very large or ambiguous goals where Phase 2's single-shot `decomposeGoal` yields
+one giant low-quality child or fails validation. Sprint 1 lands the **engine core** — a new
+sibling module `src/fleet/decomposer-deep.ts` whose `decomposeGoalDeep({ goal, client, model,
+count?, planMaxRetries?, expandMaxRetries? })` runs a bounded **PLAN → EXPAND** loop instead of a
+single pass: `runPlanStage` makes one bounded DeepSeek call (`jsonObjectMode: true`, **not**
+`responseSchema`) to produce a **transient, in-memory** `Outline` (`{ areas: [{ name, intent }] }`)
+gated by a never-throwing `validateOutline`, then `runExpandStage` makes one bounded call to turn
+that outline into a children-only `FleetManifest` validated through `validateManifest` **imported
+verbatim** from `decomposer.ts` (inheriting its JSON-extract + `FleetManifestSchema.safeParse` +
+per-child `config`-key guard). Both stages mirror Phase 2's `maxAttempts = 1 + maxRetries` loop and
+3-message `[user, assistant, user]` coercion shape, and the whole run is capped at a fixed
+`DEEP_MAX_TOTAL_CALLS = 4` (= `(1+DEEP_PLAN_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES)`, both `= 1`);
+a PLAN exhaustion stops at 2 calls and never reaches EXPAND. The module is **engine-only and
+additive** — no CLI, no disk IO, no network, and the byte-locked Phase-2
+decomposer/manifest/CLI (`decomposeGoal`, `FleetManifestSchema`, `fleet expand`, the `--yes` gate)
+are untouched — proven entirely against a fake `LLMClient` (both calls asserted
+`jsonObjectMode:true` + `responseSchema:undefined`; budget ≤4). The user-facing
+`agent-bober fleet expand-deep <goal>` subcommand that wraps `decomposeGoalDeep` lands in **Sprint 2**.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-expand-deep-1.md](./sprint-spec-20260618-fleet-expand-deep-1.md) | Engine core `decomposeGoalDeep` (bounded **PLAN → EXPAND**, goal → Zod-valid children-only `FleetManifest`): `runPlanStage` → never-throwing `validateOutline` → transient in-memory `Outline`, then `runExpandStage` → **imported** `validateManifest`; both `jsonObjectMode:true`/no `responseSchema`, 3-message coercion, fixed `DEEP_MAX_TOTAL_CALLS=4` (`DEEP_PLAN_MAX_RETRIES`/`DEEP_EXPAND_MAX_RETRIES=1`); engine-only, no CLI/spawn/network/fs, Phase-2 path byte-locked |
+
+This phase's architecture is in `.bober/architecture/` under
+`arch-20260617-fleet-robust-decomposition-*` (extends Phase 1
+`arch-20260609-fleet-orchestrator-tech-lead-*` and Phase 2
+`arch-20260617-fleet-orchestrator-phase-2-expand-*`). The CLI surface
+(`agent-bober fleet expand-deep <goal>`) is **not yet shipped** — it arrives in Sprint 2.
