@@ -1,6 +1,7 @@
 import { BoberConfigSchema, createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig } from "../config/schema.js";
 import type { FleetChild } from "./manifest.js";
+import { tierPolicy } from "./tier-policy.js";
 
 // ── DeepSeek / openai-compat constants ──────────────────────────────
 
@@ -39,6 +40,13 @@ export function buildChildConfig(child: FleetChild): BoberConfig {
     provider: DEEPSEEK_PROVIDER,
     endpoint: DEEPSEEK_ENDPOINT,
   };
+
+  const block = tierPolicy.resolveTier(child.tier);
+  if (block) {
+    base.planner = { ...base.planner, ...block.planner };
+    base.generator = { ...base.generator, ...block.generator };
+    base.evaluator = { ...base.evaluator, ...block.evaluator };
+  }
 
   const merged = { ...base, ...(child.config ?? {}) };
   return BoberConfigSchema.parse(merged);

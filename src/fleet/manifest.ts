@@ -7,6 +7,7 @@ export const FleetChildSchema = z.object({
   folder: z.string().min(1),
   task: z.string().min(1),
   config: z.record(z.string(), z.unknown()).optional(),
+  tier: z.enum(["default", "cheap", "standard", "hard", "frontier"]).optional(),
 });
 export type FleetChild = z.infer<typeof FleetChildSchema>;
 
