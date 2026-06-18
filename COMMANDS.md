@@ -332,6 +332,58 @@ Options:
 Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
 decomposition step calls DeepSeek via the `openai-compat` provider.
 
+### `agent-bober fleet expand-deep <goal>`
+
+The **robust** sibling of `fleet expand` for **large or ambiguous goals**. Where `fleet expand`
+makes a single decomposer pass (and can yield one giant low-quality child on a sprawling goal),
+`fleet expand-deep` uses a **two-stage plan-then-expand** decomposer: it first plans a coarse
+outline of independent sub-project *areas*, then expands that outline into the children-only
+manifest. Everything else is identical to `fleet expand` — same options, same default output
+path, same atomic write, same **write-and-stop-by-default** review gate. It builds the decomposer
+LLM client first (so a missing `DEEPSEEK_API_KEY` fails fast with exit `1` **before any file is
+written**), atomically writes the manifest to `<root>/.bober/fleet-expand.json` (overwriting any
+existing file with a printed notice — note it **shares** the same default path as `fleet expand`,
+so use `--out` to keep both), prints the manifest, and prints a review hint. It does **not** run
+the fleet unless you pass `--yes`.
+
+```bash
+# Robustly decompose a large/ambiguous goal → write manifest → STOP for review (default)
+agent-bober fleet expand-deep "Build a multi-tenant SaaS platform with billing, auth, and an admin console"
+
+#   …writes <root>/.bober/fleet-expand.json and prints:
+#   Review then run: agent-bober fleet "<root>/.bober/fleet-expand.json"
+
+# Review/edit the written manifest, then run it with the runner above:
+agent-bober fleet ".bober/fleet-expand.json"
+
+# …or decompose AND run immediately, skipping the review gate:
+agent-bober fleet expand-deep "Build a multi-tenant SaaS platform …" --yes
+```
+
+`--yes` is the **sole** spawn gate — without it, `fleet expand-deep` writes the manifest and exits
+`0` without launching any child runs (no interactive prompt, no TTY check). With `--yes` it
+chains into `agent-bober fleet <writtenPath>` after the write and prints the same Fleet Summary.
+
+Options (identical to `fleet expand`):
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `--count <n>` | — | Soft target for the number of sub-projects (folded into the decomposer prompt as a hint, not a hard cap) |
+| `--provider <p>` | `openai-compat` | Override the decomposer LLM provider |
+| `--model <m>` | `deepseek-v4-pro` | Override the decomposer LLM model **only** (not the children's per-run providers) |
+| `--root <dir>` | `.` | Manifest `rootDir` |
+| `--concurrency <c>` | `3` | Manifest concurrency |
+| `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest |
+| `--yes` | off | Chain into the fleet run after writing the manifest |
+
+Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
+decomposition step calls DeepSeek via the `openai-compat` provider.
+
+**`expand` vs `expand-deep`:** prefer `fleet expand` for small/clear goals (one fast pass);
+reach for `fleet expand-deep` when the goal is broad or vague and the single-shot pass produces a
+poor split. Both write the same manifest format and feed the same `agent-bober fleet <manifest>`
+runner.
+
 ---
 
 ## Approval & Checkpoint Commands
