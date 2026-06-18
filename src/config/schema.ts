@@ -400,6 +400,20 @@ export const MedicalSectionSchema = z.object({
 });
 export type MedicalSection = z.infer<typeof MedicalSectionSchema>;
 
+// ── Fleet Section (Phase B — inter-agent blackboard, child-visible) ──
+
+export const FleetSectionSchema = z.object({
+  /** Absolute path to the shared WAL facts.db file. */
+  blackboardDbPath: z.string(),
+  /** Namespace scoping all findings for this fleet run. */
+  blackboardNamespace: z.string(),
+  /** This child's own subject identifier (equals the child folder name). */
+  blackboardSubject: z.string(),
+  /** Maximum number of exchange rounds (1–3). */
+  maxRounds: z.number().int().min(1).max(3),
+});
+export type FleetSection = z.infer<typeof FleetSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -431,6 +445,8 @@ export const BoberConfigSchema = z.object({
   defaultTeam: z.string().optional(),
   // ── Phase 6: medical team egress config ──
   medical: MedicalSectionSchema.optional(),
+  // ── Phase B: fleet blackboard (child-visible channel) ──
+  fleet: FleetSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

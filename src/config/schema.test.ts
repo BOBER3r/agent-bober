@@ -5,6 +5,7 @@ import {
   ArchitectSectionSchema,
   BoberConfigSchema,
   HistorySectionSchema,
+  FleetSectionSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -119,6 +120,115 @@ describe("HistorySectionSchema", () => {
 
   it("accepts a positive integer maxActiveLines", () => {
     expect(HistorySectionSchema.parse({ maxActiveLines: 500 }).maxActiveLines).toBe(500);
+  });
+});
+
+describe("BoberConfigSchema — fleet section is optional (sc-2-3)", () => {
+  const minimalBase = {
+    project: { name: "test-project", mode: "greenfield" },
+    planner: {},
+    generator: {},
+    evaluator: { strategies: [] },
+    sprint: {},
+    pipeline: {},
+    commands: {},
+  };
+
+  it("parses a config without a fleet section (fleet is undefined)", () => {
+    const result = BoberConfigSchema.safeParse(minimalBase);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fleet).toBeUndefined();
+    }
+  });
+
+  it("parses a config with a complete fleet section", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      fleet: {
+        blackboardDbPath: "/abs/path/.bober/memory/run-1/facts.db",
+        blackboardNamespace: "run-1",
+        blackboardSubject: "child-a",
+        maxRounds: 2,
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.fleet?.blackboardDbPath).toBe("/abs/path/.bober/memory/run-1/facts.db");
+      expect(result.data.fleet?.blackboardNamespace).toBe("run-1");
+      expect(result.data.fleet?.blackboardSubject).toBe("child-a");
+      expect(result.data.fleet?.maxRounds).toBe(2);
+    }
+  });
+
+  it("rejects fleet.maxRounds > 3 (ZodError)", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      fleet: {
+        blackboardDbPath: "/abs/path/facts.db",
+        blackboardNamespace: "run-1",
+        blackboardSubject: "child-a",
+        maxRounds: 4,
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects fleet.maxRounds < 1 (ZodError)", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      fleet: {
+        blackboardDbPath: "/abs/path/facts.db",
+        blackboardNamespace: "run-1",
+        blackboardSubject: "child-a",
+        maxRounds: 0,
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("FleetSectionSchema — standalone validation (sc-2-3)", () => {
+  it("parses a valid fleet section with maxRounds=1", () => {
+    const result = FleetSectionSchema.safeParse({
+      blackboardDbPath: "/abs/path/facts.db",
+      blackboardNamespace: "ns",
+      blackboardSubject: "folder-x",
+      maxRounds: 1,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("parses a valid fleet section with maxRounds=3", () => {
+    const result = FleetSectionSchema.safeParse({
+      blackboardDbPath: "/abs/path/facts.db",
+      blackboardNamespace: "ns",
+      blackboardSubject: "folder-x",
+      maxRounds: 3,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects maxRounds=4", () => {
+    expect(() =>
+      FleetSectionSchema.parse({
+        blackboardDbPath: "/abs/path/facts.db",
+        blackboardNamespace: "ns",
+        blackboardSubject: "folder-x",
+        maxRounds: 4,
+      }),
+    ).toThrow();
+  });
+
+  it("rejects non-integer maxRounds", () => {
+    expect(() =>
+      FleetSectionSchema.parse({
+        blackboardDbPath: "/abs/path/facts.db",
+        blackboardNamespace: "ns",
+        blackboardSubject: "folder-x",
+        maxRounds: 1.5,
+      }),
+    ).toThrow();
   });
 });
 

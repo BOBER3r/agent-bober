@@ -9,7 +9,7 @@
 
 import chalk from "chalk";
 import type { Command } from "commander";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { load } from "./manifest.js";
 import { buildChildConfig } from "./child-config.js";
@@ -28,6 +28,20 @@ import type { PortfolioReport } from "./reporter.js";
 import type { LLMClient } from "../providers/types.js";
 
 export type { PortfolioReport };
+
+// ── resolveBlackboardPath ─────────────────────────────────────────────
+
+/**
+ * Resolve the ABSOLUTE shared blackboard path for a fleet run.
+ * Returns undefined when no blackboard is configured.
+ *
+ * ADR-5: the caller bears the absolute-path responsibility — resolve() is
+ * applied here so downstream modules receive an absolute path directly.
+ */
+export function resolveBlackboardPath(manifest: FleetManifest): string | undefined {
+  if (!manifest.blackboard) return undefined;
+  return join(resolve(manifest.rootDir), ".bober", "memory", manifest.blackboard.namespace, "facts.db");
+}
 
 // ── DI seam ───────────────────────────────────────────────────────────
 

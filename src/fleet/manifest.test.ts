@@ -1,8 +1,9 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FleetChildSchema, load } from "./manifest.js";
+import { FleetChildSchema, FleetManifestSchema, load } from "./manifest.js";
+import { resolveBlackboardPath } from "./index.js";
 
 let tmpDir: string;
 
@@ -86,6 +87,83 @@ describe("load() — invalid paths", () => {
     const manifestPath = join(tmpDir, "neg-concurrency.json");
     await writeFile(manifestPath, JSON.stringify(manifest), "utf-8");
     await expect(load(manifestPath)).rejects.toThrow();
+  });
+});
+
+describe("FleetManifestSchema — blackboard block (sc-2-4)", () => {
+  it("parses a manifest without blackboard (blackboard is undefined)", () => {
+    const r = FleetManifestSchema.parse({ children: [{ folder: "x", task: "t" }] });
+    expect(r.blackboard).toBeUndefined();
+  });
+
+  it("parses a manifest with blackboard and defaults maxRounds=3 when omitted", () => {
+    const r = FleetManifestSchema.parse({
+      children: [{ folder: "x", task: "t" }],
+      blackboard: { namespace: "run-1" },
+    });
+    expect(r.blackboard?.namespace).toBe("run-1");
+    expect(r.blackboard?.maxRounds).toBe(3);
+  });
+
+  it("parses a manifest with explicit maxRounds=2", () => {
+    const r = FleetManifestSchema.parse({
+      children: [{ folder: "x", task: "t" }],
+      blackboard: { namespace: "run-2", maxRounds: 2 },
+    });
+    expect(r.blackboard?.maxRounds).toBe(2);
+  });
+
+  it("throws ZodError when maxRounds > 3", () => {
+    expect(() =>
+      FleetManifestSchema.parse({
+        children: [{ folder: "x", task: "t" }],
+        blackboard: { namespace: "r", maxRounds: 4 },
+      }),
+    ).toThrow();
+  });
+
+  it("throws ZodError when namespace is an empty string", () => {
+    expect(() =>
+      FleetManifestSchema.parse({
+        children: [{ folder: "x", task: "t" }],
+        blackboard: { namespace: "" },
+      }),
+    ).toThrow();
+  });
+});
+
+describe("resolveBlackboardPath (sc-2-5)", () => {
+  it("returns an absolute path containing .bober/memory/<namespace>/facts.db when blackboard is set", () => {
+    const manifest = FleetManifestSchema.parse({
+      rootDir: "/tmp/root",
+      children: [{ folder: "a", task: "t" }],
+      blackboard: { namespace: "ns", maxRounds: 3 },
+    });
+    const p = resolveBlackboardPath(manifest);
+    expect(p).toBe(join(resolve("/tmp/root"), ".bober", "memory", "ns", "facts.db"));
+    expect(p).not.toBeUndefined();
+    // Absolute path check
+    expect(p?.startsWith("/")).toBe(true);
+  });
+
+  it("returns undefined when no blackboard is set", () => {
+    const manifest = FleetManifestSchema.parse({
+      children: [{ folder: "a", task: "t" }],
+    });
+    expect(resolveBlackboardPath(manifest)).toBeUndefined();
+  });
+
+  it("produces an absolute path even when rootDir is relative '.'", () => {
+    const manifest = FleetManifestSchema.parse({
+      rootDir: ".",
+      children: [{ folder: "a", task: "t" }],
+      blackboard: { namespace: "my-ns" },
+    });
+    const p = resolveBlackboardPath(manifest);
+    expect(p).toBeDefined();
+    // Must be absolute (resolve('.') = cwd)
+    expect(p?.startsWith("/")).toBe(true);
+    expect(p).toContain(join(".bober", "memory", "my-ns", "facts.db"));
   });
 });
 
