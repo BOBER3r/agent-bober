@@ -372,7 +372,7 @@ FFDCA §201(h) counsel + regulatory review gate** — a non-engineering gate tha
 open; the code is engineering-complete. See the finale record
 [`sprint-spec-20260617-medical-whoop-guardrails-3.md`](./sprint-spec-20260617-medical-whoop-guardrails-3.md).
 
-## Medical Team — Grounding Critic — in progress (1 of N)
+## Medical Team — Grounding Critic — in progress (2 of 3)
 
 `spec-20260618-medical-grounding-critic` — adds a **fail-closed grounding critic** to the
 medical-sop pipeline: an independent reviewer that judges a synthesized answer for
@@ -395,16 +395,42 @@ injected `LLMClient`/`Passage` types (no SDK / network / `fetch` import — the 
 wiring, config, CLI, or audit field. **+22 tests, all 7 criteria passed iteration 1; no
 regression in the pre-existing suite.**
 
+Sprint 2 makes the critic **live in the pipeline** for the first time. A new
+`synthesizeGrounded` (`src/medical/retrieval/literature.ts:259`) composes the existing
+`synthesize` primitive with the Sprint-1 critic into a **fail-closed gate**: synthesize →
+critique → on `reject`, **one** re-synthesis (`synthesizeWithFeedback`, module-private,
+critic feedback appended to the synthesis system prompt) → re-critique → **abstain** on a
+second `reject` **or on any thrown** transport/model error at any step. Every `synthesize`
+and every `getGroundingVerdict` call is wrapped so a throw maps to the canned
+`abstainAnswer` (`abstained:true`, `citations:[]`, footer present) — an exception **never**
+escapes and an ungrounded answer is **never** returned. The exported
+`GROUNDED_GATE_MAX_LLM_CALLS` (= 6 today) caps the gate's worst case and is **computed from**
+`GROUNDING_MAX_LLM_CALLS`, not a literal (`1 synth + critic + 1 re-synth + re-critic`). The
+engine's grounded branch (`engine.ts:403`) now calls `synthesizeGrounded` instead of the bare
+`synthesize`, threading the same lazily-constructed local `LLMClient` + footer. **Crucially,
+only the grounded-synthesis branch now makes > 1 LLM call** — every upstream gate stays
+**zero-LLM**: the consent-refuse, red-flag short-circuit, content-policy refuse, numeric-only
+(`sampleCount > 0`), and literature-disabled paths construct **no** critic and make **no** LLM
+call (all 11 `engine.test.ts` spy-`LLMClient` negative assertions unchanged; only the grounded
+happy-path count moved `1 → 2` for synth + critic). Config/CLI and the
+`AuditEntry.criticVerdict` field remain deferred to Sprint 3 — the engine still appends the
+existing `answer` / `abstain` audit event. **+12 collocated grounded-gate tests, all 8
+criteria passed iteration 1; no regression.**
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-medical-grounding-critic-1.md](./sprint-spec-20260618-medical-grounding-critic-1.md) | **Fail-closed grounding-critic module (pure, not yet wired):** `src/medical/retrieval/grounding-critic.ts` exporting `GroundingVerdict`/`GroundingVerdictSchema`, never-throws `validateGroundingVerdict` (direct parse → fence → first-brace → zod `safeParse`), `buildGroundingSystemPrompt` (faithfulness + completeness review pinned to the cited-passage block), `getGroundingVerdict` (bounded retry-with-coercion, **FAIL-CLOSED `reject` on parse exhaustion** — the inversion of fleet `critic-deep.ts:201`'s fail-open `approve`), and the `GROUNDING_PARSE_MAX_RETRIES`/`GROUNDING_MAX_LLM_CALLS` (= 2) caps; internal `callGroundingCritic` builds a **fresh** single-`user`-turn message array (LOCK1, never extends the synthesis conversation) with `jsonObjectMode:true`; transport errors propagate (not caught here); depends only on `zod` + injected `LLMClient`/`Passage` (no SDK/network/`fetch`); **purely additive** — no engine wiring / config / CLI / audit (Sprints 2–3); +22 tests, all 7 criteria iter-1, no regression |
+| 2 | [sprint-spec-20260618-medical-grounding-critic-2.md](./sprint-spec-20260618-medical-grounding-critic-2.md) | **Gated synthesis flow + engine wiring (critic now LIVE):** `synthesizeGrounded` (`literature.ts:259`) composes `synthesize` + `getGroundingVerdict` into a **fail-closed gate** — synthesize → critique → on `reject` **one** re-synth (`synthesizeWithFeedback`, feedback appended to the synthesis system prompt) → re-critique → **abstain** on second-reject **or any thrown** transport/model error (every call try/catch-wrapped → canned `abstainAnswer` `abstained:true`/`citations:[]`/footer; no exception escapes, no ungrounded answer); exported `GROUNDED_GATE_MAX_LLM_CALLS` (= 6) **computed** from `GROUNDING_MAX_LLM_CALLS` (`1 synth + critic + 1 re-synth + re-critic`), call-cap asserted on reject→reject; engine grounded branch swap (`engine.ts:403` `synthesize` → `synthesizeGrounded`, same `llmClient`/footer; import at `:29` updated) — **only the grounded branch now makes > 1 LLM call**; every non-grounded path (consent / red-flag / refuse / numeric-only / literature-disabled) stays **zero-LLM** (all 11 `engine.test.ts` spy assertions unchanged, only grounded happy-path count `1 → 2`); audit event unchanged (`answer`/`abstain`; `criticVerdict` deferred to S3); +12 grounded-gate tests, all 8 criteria iter-1, no regression |
 
-Engine wiring + the re-synthesis loop (Sprint 2) and a configurable model/provider with
-cloud-inference gating + the `AuditEntry.criticVerdict` field (Sprint 3) are explicit
-non-goals of Sprint 1 and are not yet built — so the grounding critic has **no** user-facing
-CLI / config surface and is intentionally **absent** from [`docs/teams.md`](../teams.md) and
-the README until it is wired. See the sprint record
-[`sprint-spec-20260618-medical-grounding-critic-1.md`](./sprint-spec-20260618-medical-grounding-critic-1.md).
+A configurable model/provider with cloud-inference gating + the `AuditEntry.criticVerdict`
+field (Sprint 3) remain explicit non-goals — so the grounding critic still has **no**
+user-facing CLI / config surface. The **live gate** is now reflected in
+[`docs/teams.md`](../teams.md) (the "MedlinePlus grounded retrieval + cited synthesis"
+section's synthesis + wiring notes and the full ordered SOP list), but the critic still has
+**no** README config/CLI entry until Sprint 3. See the sprint records
+[`sprint-spec-20260618-medical-grounding-critic-1.md`](./sprint-spec-20260618-medical-grounding-critic-1.md)
+and
+[`sprint-spec-20260618-medical-grounding-critic-2.md`](./sprint-spec-20260618-medical-grounding-critic-2.md).
 
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 

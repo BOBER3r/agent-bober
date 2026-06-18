@@ -116,7 +116,12 @@ Selects the orchestration engine for sprints driven by this team:
 > (no-auth) grounded retrieval + cited LLM synthesis** that **abstains unless a
 > retrieved passage supports the claim** and otherwise cites ≥ 1 passage — retrieval is
 > now real behind the axis, not a stub (see "MedlinePlus grounded retrieval + cited
-> synthesis" below). As of `spec-20260617-medical-whoop-guardrails` Sprint 1 the
+> synthesis" below). As of `spec-20260618-medical-grounding-critic` Sprint 2 that cited
+> synthesis runs behind a **fail-closed grounding gate** (`synthesizeGrounded`): an
+> independent critic judges the answer against its cited passages and, on reject, drives
+> **one** re-synthesis before **abstaining** — so a poorly-grounded answer is caught
+> before it reaches the user (see the grounding-gate note in that same section). As of
+> `spec-20260617-medical-whoop-guardrails` Sprint 1 the
 > guardrail set also emits a **code-enforced non-emergency `refuse` verdict** for
 > prescription / dosing / treatment-plan requests, deterministically and before any LLM
 > call, slotting in as **Gate 2b** between the red-flag short-circuit and `allow` (see
@@ -485,7 +490,8 @@ state.
 5. **Medications** — `FactStore.getActiveFacts(...)` (ADR-7).
 6. **Gate 3 + retrieval** — `EgressGuard.isAllowed("literature-retrieval")`;
    `LiteratureRetriever.retrieve` ⇒ `{disabled}` (abstain) when off, or
-   `{grounded,passages}` → `synthesize` (cited synthesis, **S7**) when on.
+   `{grounded,passages}` → `synthesizeGrounded` (cited synthesis behind the
+   **fail-closed grounding gate**, **S7** + grounding-critic S2) when on.
 7. **Disclaimer footer**, then **audit** (`answer` / `abstain`, PHI-free), then
    return `PipelineResult & { medicalAnswer }`.
 
@@ -553,6 +559,22 @@ answer. The default model is **local Ollama `llama3`**
   `citations.length >= 1` is guaranteed. **No code path emits a non-abstained answer
   with zero citations.**
 
+**Grounding gate (`synthesizeGrounded`, grounding-critic Sprint 2).** As of
+`spec-20260618-medical-grounding-critic` Sprint 2 the engine's grounded branch no longer
+calls `synthesize` directly — it calls **`synthesizeGrounded`** (also in
+`src/medical/retrieval/literature.ts`), a **fail-closed gate** that wraps `synthesize` with
+the independent grounding critic (`src/medical/retrieval/grounding-critic.ts`): synthesize →
+critique → on `reject`, **one** re-synthesis with the critic's feedback appended to the
+synthesis system prompt → re-critique → **abstain** on a second `reject` **or on any thrown**
+transport/model error at any step (every `synthesize` / critic call is try/catch-wrapped to a
+canned abstain — an exception never escapes and an ungrounded answer is never returned). On a
+first approve the original cited answer passes through unchanged. The gate is bounded by the
+exported `GROUNDED_GATE_MAX_LLM_CALLS` (= 6 today, **computed** from the critic's
+`GROUNDING_MAX_LLM_CALLS` as `1 synth + critic + 1 re-synth + re-critic`). This is the **only**
+place in the SOP that makes more than one LLM call — every upstream gate stays zero-LLM. The
+critic verdict is **not yet** recorded in the audit (`AuditEntry.criticVerdict` is
+grounding-critic Sprint 3).
+
 **Fail-closed at three independent layers (never fail-open, never an uncited claim):**
 
 1. **Axis off** — `assertAllowed` throws ⇒ `abstain{source-error}`; `synthesize` on a
@@ -571,9 +593,15 @@ enable cloud inference.
 **Wiring (`MedicalSopEngine.run`).** The grounded branch resolves the `LLMClient`
 **lazily, on that path only**, so numeric / disabled / red-flag / abstain turns
 construct **zero** LLM clients (preserving the S2/S3 never-called guarantees and
-sc-7-8). The audit event is `answer` for a non-abstained synthesis, `abstain`
-otherwise. Full details:
-[`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md).
+sc-7-8). As of grounding-critic Sprint 2 that branch (`engine.ts:403`) calls
+`synthesizeGrounded` (the fail-closed grounding gate above) instead of the bare
+`synthesize`, threading the same lazy `LLMClient` + footer; every non-grounded path
+(consent / red-flag / refuse / numeric-only / literature-disabled) remains zero-LLM. The
+audit event is still `answer` for a non-abstained synthesis, `abstain` otherwise. Full
+details:
+[`docs/sprints/sprint-spec-20260616-medical-team-7.md`](sprints/sprint-spec-20260616-medical-team-7.md)
+and
+[`docs/sprints/sprint-spec-20260618-medical-grounding-critic-2.md`](sprints/sprint-spec-20260618-medical-grounding-critic-2.md).
 
 ---
 
