@@ -272,3 +272,49 @@ This phase's architecture is in `.bober/architecture/` under
 `arch-20260617-fleet-robust-decomposition-*` (extends Phase 1
 `arch-20260609-fleet-orchestrator-tech-lead-*` and Phase 2
 `arch-20260617-fleet-orchestrator-phase-2-expand-*`).
+
+## Fleet Critique Loop (self-judged expand-deep gate) — in progress (1 of 2)
+
+`spec-20260618-fleet-expand-deep-critique` — Phase 4 of the fleet orchestrator: add a
+**self-judged critique gate** to `fleet expand-deep` so a shape-valid-but-degenerate manifest
+(e.g. 2 children for a 12-area outline) is caught before it reaches the human write-and-stop
+review. A **fresh LLM critic** returns a boolean `approve | reject` verdict plus free-text
+feedback; on **reject** the manifest is re-expanded through a fresh `runExpandStage` seeded with
+that feedback, bounded by a single round and a closed-form budget `DEEP_CRITIQUE_MAX_TOTAL_CALLS =
+8`. On every failure mode the gate **fails open / accepts-best** and never throws, so behavior
+degrades to Phase 3 and never below it. **The plan is in progress (1 of 2) on branch
+`bober/fleet-expand-deep-critique` (unmerged); Sprint 1 shipped the engine; the `--critique` CLI
+surface lands in Sprint 2 and is NOT yet exposed.**
+
+Sprint 1 (engine + opt-in threading) is the bounded fresh-critic loop in a new module
+`src/fleet/critic-deep.ts`: `validateVerdict` (tolerant JSON-extract + Zod `CritiqueVerdictSchema`,
+mirrors `validateOutline`, never throws) → `callCritic` (its **own** clean `CRITIQUE_SYSTEM_PROMPT`,
+manifest presented as a third-party "review this", `jsonObjectMode:true` / no `responseSchema`,
+3-message coercion) → `getCriticVerdict` (**fail-open** to `{verdict:"approve"}` after 2 unparseable
+responses) → `runCritiqueLoop` (`reject` → fresh `runExpandStage({ critiqueFeedback })` →
+**accept-best** on exhaustion, tiebreak most children then baseline, never throws, ≤8 calls). Three
+**additive** edits thread it into `src/fleet/decomposer-deep.ts`: `DecomposeDeepInput.critique?`,
+a `critiqueFeedback?` appended to the first EXPAND user turn only when present, and
+`decomposeGoalDeep` routing into `runCritiqueLoop` **only** when `critique===true`. With `critique`
+absent/false the chat sequence is **byte-identical to Phase 3** (zero critic calls, ≤4 chat). The
+evaluator confirmed the change is purely additive (`decomposer-deep.ts` 16 insertions, **0 deleted
+lines**): `decomposer.ts`, `manifest.ts` (`FleetManifestSchema`), `src/fleet/index.ts` (the
+`fleet`/`expand`/`expand-deep` CLI), and `providers/` are byte-unchanged. **Engine-only — no CLI
+this sprint.**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-expand-deep-critique-1.md](./sprint-spec-20260618-fleet-expand-deep-critique-1.md) | Engine `src/fleet/critic-deep.ts` (bounded fresh-critic critique/refine loop): `validateVerdict` (never-throw, mirrors `validateOutline`) + `callCritic` (own `CRITIQUE_SYSTEM_PROMPT`, third-party framing, `jsonObjectMode:true`/no `responseSchema`, 3-message coercion) + `getCriticVerdict` (fail-open `approve` after 2 parse fails) + `runCritiqueLoop` (`reject`→fresh `runExpandStage({critiqueFeedback})`→accept-best, never throws, ≤`DEEP_CRITIQUE_MAX_TOTAL_CALLS=8`); constants `CRITIQUE_MAX_ROUNDS=1`/`CRITIQUE_PARSE_MAX_RETRIES=1` + closed-form budget audit test; additive `decomposer-deep.ts` threading (`critique?`, `critiqueFeedback?`, `decomposeGoalDeep` routing) byte-identical Phase 3 when absent; **engine-only, no CLI**, Phase-2/3 decomposer/manifest/CLI byte-locked |
+| 2 | _Pending_ — `--critique` CLI surface on `agent-bober fleet expand-deep` (not yet shipped) | |
+
+The `--critique` CLI flag is **not yet shipped**, so `COMMANDS.md` is unchanged this phase; it
+will be updated in Sprint 2 when the flag lands on `agent-bober fleet expand-deep`.
+
+This phase's architecture is in `.bober/architecture/` under
+`arch-20260618-fleet-expand-deep-critique-*` (ADR-1 loop structure / boolean critic / accept-best;
+ADR-2 opt-in `critique` field preserves byte-identical Phase-3 default; ADR-3 verdict parse mirrors
+`validateOutline`, closed-form fail-open coercion budget; ADR-4 reuse `runExpandStage` as the
+re-expand seam; ADR-5 critic after `validateManifest`, before the atomic write). It extends Phase 1
+`arch-20260609-fleet-orchestrator-tech-lead-*`, Phase 2
+`arch-20260617-fleet-orchestrator-phase-2-expand-*`, and Phase 3
+`arch-20260617-fleet-robust-decomposition-*`.
