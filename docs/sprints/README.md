@@ -273,7 +273,7 @@ This phase's architecture is in `.bober/architecture/` under
 `arch-20260609-fleet-orchestrator-tech-lead-*` and Phase 2
 `arch-20260617-fleet-orchestrator-phase-2-expand-*`).
 
-## Fleet Critique Loop (self-judged expand-deep gate) — in progress (1 of 2)
+## Fleet Critique Loop (self-judged expand-deep gate) — complete (2 of 2)
 
 `spec-20260618-fleet-expand-deep-critique` — Phase 4 of the fleet orchestrator: add a
 **self-judged critique gate** to `fleet expand-deep` so a shape-valid-but-degenerate manifest
@@ -282,9 +282,8 @@ review. A **fresh LLM critic** returns a boolean `approve | reject` verdict plus
 feedback; on **reject** the manifest is re-expanded through a fresh `runExpandStage` seeded with
 that feedback, bounded by a single round and a closed-form budget `DEEP_CRITIQUE_MAX_TOTAL_CALLS =
 8`. On every failure mode the gate **fails open / accepts-best** and never throws, so behavior
-degrades to Phase 3 and never below it. **The plan is in progress (1 of 2) on branch
-`bober/fleet-expand-deep-critique` (unmerged); Sprint 1 shipped the engine; the `--critique` CLI
-surface lands in Sprint 2 and is NOT yet exposed.**
+degrades to Phase 3 and never below it. **The plan is complete (2 of 2) and the feature is
+user-facing.**
 
 Sprint 1 (engine + opt-in threading) is the bounded fresh-critic loop in a new module
 `src/fleet/critic-deep.ts`: `validateVerdict` (tolerant JSON-extract + Zod `CritiqueVerdictSchema`,
@@ -302,13 +301,33 @@ lines**): `decomposer.ts`, `manifest.ts` (`FleetManifestSchema`), `src/fleet/ind
 `fleet`/`expand`/`expand-deep` CLI), and `providers/` are byte-unchanged. **Engine-only — no CLI
 this sprint.**
 
+Sprint 2 ships the **user-facing flag** that exposes the engine: a `--critique` boolean on the
+existing `agent-bober fleet expand-deep <goal>` subcommand. Three additive edits in
+`src/fleet/index.ts` thread it — `FleetExpandDeepOptions.critique?`, a
+`.option("--critique", …)` beside the existing seven options, and a guarded spread
+`...(opts.critique ? { critique: true } : {})` on the `decomposeGoalDeep` call in
+`runFleetExpandDeep`. With `--critique` the decomposition routes through Sprint 1's
+`runCritiqueLoop` (one bounded round, accept-best, budget 8) **after** the structural
+`validateManifest` gate and **before** the atomic write; without it the decompose argument object
+is **byte-identical to Phase 3** (the `critique` key is *absent*, not `undefined`) and emits zero
+extra chat calls. No sibling subcommand was added (LOCK2): `--critique` is a flag on the existing
+command, and the byte-locked tree (`fleet <manifest>` positional + `--concurrency`/`--root` and the
+`fleet expand` subcommand) is intact. Spawn-safety is unchanged on the `--critique` path —
+credential fail-fast (no file on missing key), write-before-spawn, and `--yes` as the sole spawn
+gate all hold. The evaluator confirmed the change is purely additive (`src/fleet/index.ts` +1 new
+test; the lone deleted line is the intended rewrite of the single-line decompose call into the
+multi-line guarded-spread form): `decomposer-deep.ts`, `critic-deep.ts`, `decomposer.ts`,
+`manifest.ts`, and `src/cli/index.ts` are byte-unchanged. All 14 fleet suites (188 tests) plus 9
+new `expand-deep-critique` tests are green.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-fleet-expand-deep-critique-1.md](./sprint-spec-20260618-fleet-expand-deep-critique-1.md) | Engine `src/fleet/critic-deep.ts` (bounded fresh-critic critique/refine loop): `validateVerdict` (never-throw, mirrors `validateOutline`) + `callCritic` (own `CRITIQUE_SYSTEM_PROMPT`, third-party framing, `jsonObjectMode:true`/no `responseSchema`, 3-message coercion) + `getCriticVerdict` (fail-open `approve` after 2 parse fails) + `runCritiqueLoop` (`reject`→fresh `runExpandStage({critiqueFeedback})`→accept-best, never throws, ≤`DEEP_CRITIQUE_MAX_TOTAL_CALLS=8`); constants `CRITIQUE_MAX_ROUNDS=1`/`CRITIQUE_PARSE_MAX_RETRIES=1` + closed-form budget audit test; additive `decomposer-deep.ts` threading (`critique?`, `critiqueFeedback?`, `decomposeGoalDeep` routing) byte-identical Phase 3 when absent; **engine-only, no CLI**, Phase-2/3 decomposer/manifest/CLI byte-locked |
-| 2 | _Pending_ — `--critique` CLI surface on `agent-bober fleet expand-deep` (not yet shipped) | |
+| 2 | [sprint-spec-20260618-fleet-expand-deep-critique-2.md](./sprint-spec-20260618-fleet-expand-deep-critique-2.md) | **Finale** — user-facing `--critique` flag on `agent-bober fleet expand-deep <goal>`: additive `FleetExpandDeepOptions.critique?` + `.option("--critique", …)` (beside the existing 7 options) + guarded spread `...(opts.critique ? { critique: true } : {})` on the `decomposeGoalDeep` call in `runFleetExpandDeep`, routing into Sprint 1's `runCritiqueLoop` (one round, accept-best, budget 8) **after** `validateManifest`, **before** the atomic write; **opt-in (default off = byte-identical to Phase 3** — `critique` key *absent*, zero extra chat calls); **no sibling subcommand (LOCK2)**, byte-locked command tree intact; spawn-safety (credential fail-fast, write-before-spawn, `--yes` sole gate) unchanged; the lone deleted line is the intended decompose-call rewrite, all other fleet modules + `src/cli/index.ts` byte-unchanged |
 
-The `--critique` CLI flag is **not yet shipped**, so `COMMANDS.md` is unchanged this phase; it
-will be updated in Sprint 2 when the flag lands on `agent-bober fleet expand-deep`.
+User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands** — the
+`--critique` flag is documented under `agent-bober fleet expand-deep <goal>` (opt-in; default off
+is byte-identical to plain `expand-deep`).
 
 This phase's architecture is in `.bober/architecture/` under
 `arch-20260618-fleet-expand-deep-critique-*` (ADR-1 loop structure / boolean critic / accept-best;

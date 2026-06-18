@@ -364,7 +364,24 @@ agent-bober fleet expand-deep "Build a multi-tenant SaaS platform …" --yes
 `0` without launching any child runs (no interactive prompt, no TTY check). With `--yes` it
 chains into `agent-bober fleet <writtenPath>` after the write and prints the same Fleet Summary.
 
-Options (identical to `fleet expand`):
+`--critique` (opt-in, **default off**) adds a **fresh-context critic gate** to the decomposition.
+With it, after the two-stage decompose produces a shape-valid manifest a **fresh LLM critic**
+(no memory of the original decompose) judges whether the split is degenerate or under-expanded
+(e.g. 2 children for a 12-area goal); on a reject verdict the manifest is **re-expanded** with the
+critic's feedback. The gate is bounded to **one round** with a closed-form budget of
+`DEEP_CRITIQUE_MAX_TOTAL_CALLS = 8` chat calls and **accepts-best on exhaustion** (it never throws
+and never returns a result worse than the plain `expand-deep` baseline). The gate runs **after**
+the manifest is built and **before** it is written, so everything downstream is unchanged —
+**write-and-stop is untouched** (the manifest is still written to disk and reviewed before any
+spawn, and `--yes` is still the sole spawn gate). With `--critique` omitted the command is
+**byte-identical to plain `fleet expand-deep`** (no critic call, no extra chat calls).
+
+```bash
+# Add the fresh-context critic gate (re-expands a degenerate/under-expanded manifest):
+agent-bober fleet expand-deep "Build a multi-tenant SaaS platform …" --critique
+```
+
+Options:
 
 | Option | Default | Purpose |
 |--------|---------|---------|
@@ -375,6 +392,7 @@ Options (identical to `fleet expand`):
 | `--concurrency <c>` | `3` | Manifest concurrency |
 | `--out <path>` | `<root>/.bober/fleet-expand.json` | Override the output path for the written manifest |
 | `--yes` | off | Chain into the fleet run after writing the manifest |
+| `--critique` | off | Run a fresh-context critic gate that re-expands a degenerate/under-expanded manifest (one round, budget `DEEP_CRITIQUE_MAX_TOTAL_CALLS=8`, accept-best on exhaustion; write-and-stop unchanged). Default off is byte-identical to plain `expand-deep`. |
 
 Requires `DEEPSEEK_API_KEY` (see [Environment Variables](#environment-variables)) — the
 decomposition step calls DeepSeek via the `openai-compat` provider.
@@ -382,7 +400,7 @@ decomposition step calls DeepSeek via the `openai-compat` provider.
 **`expand` vs `expand-deep`:** prefer `fleet expand` for small/clear goals (one fast pass);
 reach for `fleet expand-deep` when the goal is broad or vague and the single-shot pass produces a
 poor split. Both write the same manifest format and feed the same `agent-bober fleet <manifest>`
-runner.
+runner. The `--critique` self-judged gate is available on `fleet expand-deep` only.
 
 ---
 
