@@ -372,6 +372,40 @@ FFDCA §201(h) counsel + regulatory review gate** — a non-engineering gate tha
 open; the code is engineering-complete. See the finale record
 [`sprint-spec-20260617-medical-whoop-guardrails-3.md`](./sprint-spec-20260617-medical-whoop-guardrails-3.md).
 
+## Medical Team — Grounding Critic — in progress (1 of N)
+
+`spec-20260618-medical-grounding-critic` — adds a **fail-closed grounding critic** to the
+medical-sop pipeline: an independent reviewer that judges a synthesized answer for
+**faithfulness + completeness** against its cited passages before it can reach the user.
+Sprint 1 is the **risk-first crux** — the standalone, pure, injectable critic module, **not
+yet wired into the engine**. New file `src/medical/retrieval/grounding-critic.ts` is
+structurally modelled on the fleet critic (`src/fleet/critic-deep.ts`) — the same tolerant
+`GroundingVerdict` shape, never-throws `validateGroundingVerdict` parser (direct parse →
+fence extract → first-brace slice → zod `safeParse`), fresh-message-array (LOCK1)
+`callGroundingCritic`, and bounded retry-with-coercion loop — with **one** behavioral
+inversion: at parse exhaustion `getGroundingVerdict` FAIL-**CLOSED** returns
+`{verdict:"reject", feedback:"<unparseable critic output>"}` (`grounding-critic.ts:206`),
+the exact opposite of the fleet critic's fail-**open** `approve` (`critic-deep.ts:201`), so
+an unparseable critic output can never approve an unverified medical answer.
+`buildGroundingSystemPrompt(question, answerBody, passages)` pins the critic to the numbered
+cited-passage block; the call budget is capped at `GROUNDING_MAX_LLM_CALLS` (= 2); transport
+errors propagate (Sprint 2 maps them to abstain). The module depends only on `zod` + the
+injected `LLMClient`/`Passage` types (no SDK / network / `fetch` import — the scoped
+`src/medical/**` ESLint boundary stays green) and is **purely additive**: **no** engine
+wiring, config, CLI, or audit field. **+22 tests, all 7 criteria passed iteration 1; no
+regression in the pre-existing suite.**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-medical-grounding-critic-1.md](./sprint-spec-20260618-medical-grounding-critic-1.md) | **Fail-closed grounding-critic module (pure, not yet wired):** `src/medical/retrieval/grounding-critic.ts` exporting `GroundingVerdict`/`GroundingVerdictSchema`, never-throws `validateGroundingVerdict` (direct parse → fence → first-brace → zod `safeParse`), `buildGroundingSystemPrompt` (faithfulness + completeness review pinned to the cited-passage block), `getGroundingVerdict` (bounded retry-with-coercion, **FAIL-CLOSED `reject` on parse exhaustion** — the inversion of fleet `critic-deep.ts:201`'s fail-open `approve`), and the `GROUNDING_PARSE_MAX_RETRIES`/`GROUNDING_MAX_LLM_CALLS` (= 2) caps; internal `callGroundingCritic` builds a **fresh** single-`user`-turn message array (LOCK1, never extends the synthesis conversation) with `jsonObjectMode:true`; transport errors propagate (not caught here); depends only on `zod` + injected `LLMClient`/`Passage` (no SDK/network/`fetch`); **purely additive** — no engine wiring / config / CLI / audit (Sprints 2–3); +22 tests, all 7 criteria iter-1, no regression |
+
+Engine wiring + the re-synthesis loop (Sprint 2) and a configurable model/provider with
+cloud-inference gating + the `AuditEntry.criticVerdict` field (Sprint 3) are explicit
+non-goals of Sprint 1 and are not yet built — so the grounding critic has **no** user-facing
+CLI / config surface and is intentionally **absent** from [`docs/teams.md`](../teams.md) and
+the README until it is wired. See the sprint record
+[`sprint-spec-20260618-medical-grounding-critic-1.md`](./sprint-spec-20260618-medical-grounding-critic-1.md).
+
 ## Memory Self-Improvement (P0) — complete (5 of 5)
 
 `spec-20260615-memory-self-improve-p0` — upgrades the memory substrate from a distilled
