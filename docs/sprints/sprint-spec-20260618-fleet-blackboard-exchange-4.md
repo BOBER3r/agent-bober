@@ -51,7 +51,7 @@ it to perform the actual cross-child synthesis over the bundled findings. Exampl
 ```json
 {
   "rounds": 3,
-  "childResults": { "...": "the same PortfolioReport written to fleet-report.json" },
+  "childResults": { "...": "the same PortfolioReport written to fleet-report.json (now also carries its own rounds field on a blackboard run)" },
   "findings": [
     { "id": "…", "scope": "fleet-run-123", "subject": "api-server",
       "predicate": "finding", "value": "auth bug is in token refresh", "confidence": 1, "...": "…" }
@@ -64,14 +64,18 @@ output is unchanged from Phase A.
 
 ## Notes for maintainers
 
-- **`bundle.rounds` is the configured cap, not the executed count.** It is sourced from
-  `effectiveManifest.blackboard!.maxRounds`, flagged in the source with a `bober:` ceiling comment
-  (`src/fleet/index.ts`). `coordinator.executeRounds` returns only the final-round executions with
-  **no** explicit round count, and adding a returned-count shape would mean touching the coordinator
-  — an explicit Sprint-4 non-goal (#5). So if a blackboard run early-stops, `rounds` reports the cap
-  (e.g. `3`), not the actual number of rounds executed (e.g. `2`). The evaluator accepted this as
-  satisfying "the round count" as written; a future sprint that has the coordinator return its
-  executed-round count should plumb it through here.
+- **~~`bundle.rounds` is the configured cap, not the executed count.~~ RESOLVED** by
+  `spec-20260618-fleet-synthesis-round-count` (Sprint 1, commit `5a4d6b7`). At the time of this
+  sprint, `bundle.rounds` was sourced from `effectiveManifest.blackboard!.maxRounds` (flagged with a
+  `bober:` ceiling comment) because `coordinator.executeRounds` returned only the final-round
+  executions with **no** explicit round count, and plumbing one would touch the coordinator — an
+  explicit Sprint-4 non-goal (#5). So an early-stopped run reported the cap (e.g. `3`) instead of the
+  actual executed count (e.g. `2`). The evaluator accepted this as satisfying "the round count" as
+  written. **`executeRounds` now returns `{ executions, roundsRun }`** with `roundsRun` the real
+  terminating round, the `bober:` ceiling comment + the hardcoded assignment were removed, and
+  `runFleet` threads the real count into both `fleet-synthesis.json.rounds` **and** a new optional
+  `rounds` field on `fleet-report.json` (blackboard runs only). See
+  [`sprint-spec-20260618-fleet-synthesis-round-count-1.md`](./sprint-spec-20260618-fleet-synthesis-round-count-1.md).
 - **Close-ordering is load-bearing.** `bb` and `roundsRun` were hoisted out of the Sprint-3
   `if (dbPath)` block, and `bb.close()` moved to an **outer `finally`**, so `collect()` →
   `bb.readAll()` runs while the db is still **open**. The `finally` also guarantees the WAL is

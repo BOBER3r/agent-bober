@@ -513,15 +513,19 @@ as before.
 
 ```jsonc
 {
-  "rounds": 3,                  // the configured maxRounds cap for the run
+  "rounds": 3,                  // the number of rounds actually executed (≤ maxRounds; lower if the run early-stopped)
   "childResults": { /* … */ },  // the same PortfolioReport written to fleet-report.json
   "findings": [ /* … */ ]       // every finding on the blackboard (FactRecord[], from readAll())
 }
 ```
 
 With **no** `blackboard` block, **no** `fleet-synthesis.json` is written and the run output is
-byte-for-byte identical to a non-blackboard fleet. (Note: `rounds` reports the configured
-`maxRounds` cap, not the number of rounds actually executed when a run early-stops.)
+byte-for-byte identical to a non-blackboard fleet. `rounds` is the **real executed round count** —
+it equals `maxRounds` on a full run and is **lower** when the run early-stops (e.g. `2` when a
+`maxRounds: 3` run converges and stops at round 2). On a blackboard run the **same** count also
+appears as an optional top-level `rounds` field on `fleet-report.json` (it equals
+`fleet-synthesis.json.rounds`); a no-blackboard `fleet-report.json` has **no** `rounds` key, so it
+stays byte-for-byte identical to a non-blackboard fleet.
 
 #### `agent-bober blackboard publish <value> [--round N]`
 
