@@ -868,14 +868,23 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
 
     const literature = new LiteratureRetriever(egress, sourceStub);
 
-    // Injected LLM spy returning a supported answer.
+    // Injected LLM spy: first call returns synthesis body; second call returns a critic-approve verdict.
+    // The grounded gate now makes >=2 calls (synth + critic) on this path — critic approves on first attempt.
     const llmSpy: LLMClient = {
-      chat: vi.fn().mockResolvedValue({
-        text: "Metformin commonly causes gastrointestinal side effects including nausea and diarrhea.",
-        toolCalls: [],
-        stopReason: "end",
-        usage: { inputTokens: 100, outputTokens: 50 },
-      }),
+      chat: vi
+        .fn()
+        .mockResolvedValueOnce({
+          text: "Metformin commonly causes gastrointestinal side effects including nausea and diarrhea.",
+          toolCalls: [],
+          stopReason: "end",
+          usage: { inputTokens: 100, outputTokens: 50 },
+        })
+        .mockResolvedValueOnce({
+          text: '{"verdict":"approve","feedback":""}',
+          toolCalls: [],
+          stopReason: "end",
+          usage: { inputTokens: 50, outputTokens: 10 },
+        }),
     };
 
     const facts = new FactStore(":memory:");
@@ -909,8 +918,9 @@ describe("MedicalSopEngine.run — full zero-egress SOP turn (sc-6-8)", () => {
     expect(answer.citations[0]?.source).toBe("medlineplus");
     expect(answer.disclaimerFooter).toBeTruthy();
 
-    // LLM was called once (synthesis).
-    expect(llmSpy.chat).toHaveBeenCalledTimes(1);
+    // The grounded gate now makes >=2 LLM calls: 1 synth + 1 critic (approve on first attempt).
+    // Previously asserted toHaveBeenCalledTimes(1) — updated for Sprint 2 gate wiring.
+    expect(llmSpy.chat).toHaveBeenCalledTimes(2);
 
     // Cloud-inference axis stays OFF.
     expect(egress.isAllowed("cloud-inference")).toBe(false);

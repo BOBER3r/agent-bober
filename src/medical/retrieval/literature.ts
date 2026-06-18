@@ -3,6 +3,7 @@ import type { EgressGuard } from "../egress.js";
 import { MedlineSource, type RetrievalOutcome, type Passage } from "./medline-source.js";
 import type { LLMClient } from "../../providers/types.js";
 import type { MedicalAnswer, Citation } from "../types.js";
+import { getGroundingVerdict, GROUNDING_MAX_LLM_CALLS, type GroundingVerdict } from "./grounding-critic.js";
 
 // ── LiteratureRetriever ──────────────────────────────────────────────
 
@@ -174,4 +175,143 @@ export async function synthesize(
     disclaimerFooter: footer,
     shortCircuit: false,
   };
+}
+
+// ── synthesizeGrounded ────────────────────────────────────────────────
+
+/**
+ * Worst-case LLM call budget for the grounded gate:
+ *   1 synth + GROUNDING_MAX_LLM_CALLS critic + 1 re-synth + GROUNDING_MAX_LLM_CALLS re-critic
+ * Computed from the imported constant so it tracks future changes to the critic budget.
+ */
+export const GROUNDED_GATE_MAX_LLM_CALLS =
+  1 + GROUNDING_MAX_LLM_CALLS + 1 + GROUNDING_MAX_LLM_CALLS; // = 6 today (1+2+1+2)
+
+/**
+ * Canned abstain answer used throughout the gate when the answer cannot be
+ * sufficiently grounded in the retrieved literature.
+ */
+function abstainAnswer(footer: string): MedicalAnswer {
+  return {
+    body:
+      "I cannot provide a sufficiently-supported answer grounded in the retrieved literature. " +
+      "For evidence-based guidance, please consult a licensed healthcare professional.",
+    abstained: true,
+    citations: [],
+    disclaimerFooter: footer,
+    shortCircuit: false,
+  };
+}
+
+/**
+ * Re-synthesize with critic feedback appended to the system prompt.
+ * A near-copy of the grounded branch inside synthesize, with one extra instruction line.
+ * Module-private — only synthesizeGrounded calls this.
+ */
+async function synthesizeWithFeedback(
+  query: string,
+  outcome: Extract<RetrievalOutcome, { kind: "grounded" }>,
+  llm: LLMClient,
+  footer: string,
+  feedback: string,
+): Promise<MedicalAnswer> {
+  const passages = outcome.passages;
+  if (passages.length === 0) return abstainAnswer(footer); // mirrors synthesize:120-130
+  const system =
+    buildSynthesisSystem(passages) +
+    `\n\nAddress this reviewer feedback while staying grounded ONLY in the passages: ${feedback}`;
+  let responseText: string;
+  try {
+    const response = await llm.chat({
+      model: SYNTHESIS_MODEL,
+      system,
+      messages: [{ role: "user", content: query }],
+      maxTokens: SYNTHESIS_MAX_TOKENS,
+    });
+    responseText = response.text.trim();
+  } catch {
+    return abstainAnswer(footer);
+  }
+  if (!responseText || responseText.toUpperCase() === "ABSTAIN") return abstainAnswer(footer);
+  return {
+    body: responseText,
+    abstained: false,
+    citations: passagesToCitations(passages),
+    disclaimerFooter: footer,
+    shortCircuit: false,
+  };
+}
+
+/**
+ * synthesizeGrounded — fail-closed gate: synthesize → critic → one re-synth → abstain.
+ *
+ * For non-grounded outcomes, delegates to synthesize (disabled/abstain handled there).
+ * For grounded outcomes:
+ *   1. synthesize → if abstained, return it
+ *   2. getGroundingVerdict → if approve, return answer
+ *   3. synthesizeWithFeedback (one re-synth with critic feedback)
+ *   4. getGroundingVerdict again → if approve, return re-synth answer
+ *   5. else → return abstainAnswer (fail-closed)
+ *
+ * Any thrown error from synthesize or the critic maps to abstainAnswer (fail-closed).
+ * Bounded by GROUNDED_GATE_MAX_LLM_CALLS (= 6 worst case today).
+ */
+export async function synthesizeGrounded(
+  query: string,
+  outcome: RetrievalOutcome,
+  llm: LLMClient,
+  footer: string,
+): Promise<MedicalAnswer> {
+  // Non-grounded outcomes are already handled by synthesize (disabled/abstain → abstained).
+  if (outcome.kind !== "grounded") {
+    return synthesize(query, outcome, llm, footer);
+  }
+
+  // 1) First synthesis.
+  let answer: MedicalAnswer;
+  try {
+    answer = await synthesize(query, outcome, llm, footer);
+  } catch {
+    return abstainAnswer(footer);
+  }
+  if (answer.abstained) return answer; // synthesize abstained (empty/ABSTAIN/no-passages/model-unavailable)
+
+  // 2) First critique. getGroundingVerdict PROPAGATES transport errors → wrap.
+  let verdict: GroundingVerdict;
+  try {
+    verdict = await getGroundingVerdict({
+      llm,
+      model: SYNTHESIS_MODEL,
+      question: query,
+      answerBody: answer.body,
+      passages: outcome.passages,
+    });
+  } catch {
+    return abstainAnswer(footer);
+  }
+  if (verdict.verdict === "approve") return answer;
+
+  // 3) ONE re-synthesis with critic feedback appended to the system prompt.
+  let answer2: MedicalAnswer;
+  try {
+    answer2 = await synthesizeWithFeedback(query, outcome, llm, footer, verdict.feedback);
+  } catch {
+    return abstainAnswer(footer);
+  }
+  if (answer2.abstained) return answer2;
+
+  // 4) Re-critique.
+  let verdict2: GroundingVerdict;
+  try {
+    verdict2 = await getGroundingVerdict({
+      llm,
+      model: SYNTHESIS_MODEL,
+      question: query,
+      answerBody: answer2.body,
+      passages: outcome.passages,
+    });
+  } catch {
+    return abstainAnswer(footer);
+  }
+  return verdict2.verdict === "approve" ? answer2 : abstainAnswer(footer);
 }

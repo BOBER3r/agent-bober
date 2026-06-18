@@ -26,7 +26,7 @@ import { ConsentGate } from "./consent.js";
 import { DisclaimerComposer } from "./disclaimer.js";
 import { MedicalGuardrails } from "./guardrails.js";
 import { EgressGuard } from "./egress.js";
-import { LiteratureRetriever, synthesize } from "./retrieval/literature.js";
+import { LiteratureRetriever, synthesizeGrounded } from "./retrieval/literature.js";
 import { NumericsQueryLayer } from "./numerics.js";
 import { HealthDataStore } from "./health-store.js";
 import { FactStore, factsDbPath } from "../state/facts.js";
@@ -400,7 +400,7 @@ export class MedicalSopEngine implements PipelineEngine {
       // bober: local Ollama default via openai-compat (no cloud provider); if Ollama is
       //        unavailable at runtime, synthesize catches the throw and abstains — no cloud fallback.
       const llmClient: LLMClient = this.deps?.llmClient ?? createClient("openai-compat", "http://localhost:11434/v1", undefined, "llama3");
-      answer = await synthesize(userPrompt, outcome, llmClient, footer);
+      answer = await synthesizeGrounded(userPrompt, outcome, llmClient, footer);
     } else {
       // ── Numeric / disabled / abstain path ─────────────────────────
       // composeBody is pure text composition — no LLM, no network.
