@@ -817,7 +817,7 @@ non-goal of every sprint here and is now **in progress** under
 `spec-20260618-fleet-blackboard-exchange` (see the section below). See the finale record
 [`sprint-spec-20260618-fleet-tier-provider-routing-3.md`](./sprint-spec-20260618-fleet-tier-provider-routing-3.md).
 
-## Fleet Blackboard Exchange (Phase B) — in progress (1 of N)
+## Fleet Blackboard Exchange (Phase B) — in progress (2 of 4)
 
 `spec-20260618-fleet-blackboard-exchange` — Phase B of
 `arch-20260618-heterogeneous-multi-provider-agent-team`: the bounded inter-agent exchange channel by
@@ -844,12 +844,43 @@ throw, `readSiblings`/`readAll` 2-subject + empty + namespace isolation, ≥5 co
 default-FactStore non-WAL); full suite **2749 passed** (only the 6 pre-existing cockpit-integration
 MCP failures remain). All 8 criteria passed iteration 1.
 
+Sprint 2 lands the **additive config/manifest surface and the explicit child seam** that makes the
+Sprint 1 module reachable. It declares an **optional `fleet` section on `BoberConfigSchema`**
+(`FleetSectionSchema {blackboardDbPath, blackboardNamespace, blackboardSubject, maxRounds 1–3}`,
+`schema.ts:405`/`:449`) — a **declared** section is required because `BoberConfigSchema` strips
+unknown keys, so this is the only channel that survives the scaffold into a child — plus an
+**optional `blackboard` block on `FleetManifestSchema`** (`{namespace.min(1), maxRounds 1–3 default
+3}`, `manifest.ts:19`; `maxRounds>3` / empty ns ⇒ `ZodError`). The head-side
+`resolveBlackboardPath(manifest)` (`index.ts:41`) computes **one ABSOLUTE**
+`join(resolve(rootDir),'.bober','memory',<ns>,'facts.db')` (absolute even when `rootDir==='.'`) or
+`undefined` — discharging ADR-5's caller-side absolute-path responsibility head-side. The
+`ChildScaffolder.scaffold` gained an optional 3rd `blackboard?` param and, **inside the
+`if(blackboard)` guard only**, sets `config.fleet` (`blackboardSubject=child.folder` + the absolute
+shared path) before writing `bober.config.json` — so the **no-blackboard output is byte-identical**
+(the test compares to `JSON.stringify(buildChildConfig(child),null,2)`). A new
+**`agent-bober blackboard publish <value> [--round N]` / `read [--all]`** CLI
+(`cli/commands/blackboard.ts`, registered in `cli/index.ts`, DI'd `runBlackboardPublish`/`Read`
+cores) reads the absolute db path from **`config.fleet` ONLY** — never re-deriving from cwd — opens
+the Sprint 1 `SharedBlackboard`, publishes a finding with `subject=blackboardSubject` (round
+defaults to 1), prints siblings'/all findings as `[subject] value`, and `close()`s in a `finally`;
+with **no** fleet section it prints a clear message + `process.exitCode=1` and **never throws**. A
+two-cwd test (two configs at one shared `blackboardDbPath`) proves each cwd sees the other's
+finding (path from config, not cwd). **No** coordinator rounds loop (Sprint 3), **no**
+`fleet-synthesis.json` (Sprint 4), and **no** auto-wiring into `agent-bober run` — participation is
+via the explicit CLI only. Full suite **2775 passed** (only the 6 pre-existing cockpit MCP
+failures); all 8 criteria passed iteration 1, no regression, no SDK/network import in
+`blackboard.ts`.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260618-fleet-blackboard-exchange-1.md](./sprint-spec-20260618-fleet-blackboard-exchange-1.md) | **`SharedBlackboard` WAL `facts.db` wrapper + opt-in `FactStore` WAL (Phase B foundation, not yet wired):** new `src/fleet/shared-blackboard.ts` — `BLACKBOARD_MAX_ROUNDS=3` (hard ceiling, `min(maxRounds??3,3)`), `BlackboardFinding {childFolder,round,payload,confidence?}`, `SharedBlackboard` with `private` ctor + static async `open({dbPath,namespace,busyTimeoutMs?,maxRounds?})` (`ensureDir`, `FactStore({journalModeWal:true,busyTimeoutMs??5000})` for file-backed only — **not** `:memory:`), `publish(finding,now)` (writes `predicate='finding'` `FactRecord`, scope=namespace/subject=childFolder/value=payload/tValid=tCreated=now; **throws** past effective cap), `readSiblings(selfFolder)` (excludes self), `readAll()`, `close()` (WAL checkpoint); `FactStore` gains **optional** 2nd ctor arg `{journalModeWal?,busyTimeoutMs?}` ⇒ `PRAGMA journal_mode=WAL`/`busy_timeout` **only when set**, default-**off** ⇒ every existing caller byte-identical (default `journal_mode==='delete'`, sc-1-7); depends only on `FactStore` (no network/SDK import); **no** coordinator/`runFleet`/CLI/config wiring (Sprints 2-4); +15 tests, all 8 criteria iter-1, no regression |
+| 2 | [sprint-spec-20260618-fleet-blackboard-exchange-2.md](./sprint-spec-20260618-fleet-blackboard-exchange-2.md) | **`config.fleet` section + `manifest.blackboard` + absolute path injection + `agent-bober blackboard` CLI (the child seam):** optional `FleetSectionSchema {blackboardDbPath,blackboardNamespace,blackboardSubject,maxRounds 1–3}` declared on `BoberConfigSchema` (`schema.ts:405`/`:449` — declared so it survives the unknown-key strip into children) + `type FleetSection`; optional `blackboard {namespace.min(1), maxRounds 1–3 default 3}` on `FleetManifestSchema` (`manifest.ts:19`; `maxRounds>3`/empty-ns ⇒ `ZodError`); `resolveBlackboardPath(manifest)` (`index.ts:41`) ⇒ **ABSOLUTE** `join(resolve(rootDir),'.bober','memory',<ns>,'facts.db')` or `undefined` (**ADR-5 caller-side absolute path, discharged head-side**); `ChildScaffolder.scaffold` optional 3rd `blackboard?` param sets `config.fleet` (`subject=child.folder`+abs path) **inside the `if`-guard only** ⇒ no-blackboard output **byte-identical**; new `agent-bober blackboard publish <value> [--round N]`/`read [--all]` CLI (`cli/commands/blackboard.ts`, DI'd `runBlackboardPublish`/`runBlackboardRead` cores, registered in `cli/index.ts`) reads abs path from **`config.fleet` ONLY** (never cwd), opens Sprint 1 `SharedBlackboard`, prints `[subject] value`, `close()` in `finally`; **no fleet section ⇒ clear message + `exitCode=1`, never throws**; two-cwd shared-visibility proof; **no** coordinator (S3)/synthesis (S4)/`run` auto-wiring; +tests, suite **2775 passed**, all 8 criteria iter-1, no regression |
 
 This phase's architecture is in `.bober/architecture/` under
 `arch-20260618-heterogeneous-multi-provider-agent-team-*` — notably ADR-3 (shared blackboard via one
-WAL-mode `facts.db`, bounded to ≤3 rounds) and ADR-5 (head-injected absolute blackboard path). The
-`SharedBlackboard` module has **no user-facing CLI surface yet** — the `--blackboard` flag /
-`manifest.blackboard` / `config.fleet` plumbing arrive in later sprints.
+WAL-mode `facts.db`, bounded to ≤3 rounds) and ADR-5 (head-injected absolute blackboard path,
+**discharged head-side by Sprint 2's `resolveBlackboardPath`**). User-facing usage for
+`agent-bober blackboard publish|read` and the optional `manifest.blackboard` block lives in
+[`COMMANDS.md`](../../COMMANDS.md) under "Fleet Commands". The internal child-injected `config.fleet`
+section is deliberately **not** in the README "Full Configuration Reference" — it is head-written,
+not user-authored. The coordinator rounds loop and `fleet-synthesis.json` arrive in Sprints 3-4.

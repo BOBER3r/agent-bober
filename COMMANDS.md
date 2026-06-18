@@ -261,7 +261,9 @@ resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 The fleet orchestrator runs **N isolated `agent-bober` child runs in bulk** from a manifest.
 A manifest is a JSON file describing a `rootDir`, a `concurrency`, and a list of `children`,
 each `{ "folder", "task" }` (children may carry an optional per-child `config` and an optional
-per-child `tier`). These commands are invoked as `agent-bober …` (not `bober …`).
+per-child `tier`). A manifest may also carry an optional top-level `blackboard` block to opt the
+run into the cross-child blackboard (see "Inter-child blackboard" below). These commands are
+invoked as `agent-bober …` (not `bober …`).
 
 ### `agent-bober fleet <manifest>`
 
@@ -463,6 +465,60 @@ decomposition step calls DeepSeek via the `openai-compat` provider.
 reach for `fleet expand-deep` when the goal is broad or vague and the single-shot pass produces a
 poor split. Both write the same manifest format and feed the same `agent-bober fleet <manifest>`
 runner. The `--critique` self-judged gate is available on `fleet expand-deep` only.
+
+### Inter-child blackboard (Phase B)
+
+A fleet run can opt into a **bounded inter-agent blackboard** — a single shared `facts.db` (opened
+in WAL mode) by which the isolated children publish and read each other's findings. Add an optional
+top-level `blackboard` block to the manifest:
+
+```jsonc
+{
+  "rootDir": ".",
+  "concurrency": 3,
+  "blackboard": {
+    "namespace": "fleet-run-123",   // Required. Scopes all findings for this run.
+    "maxRounds": 3                   // Optional. Exchange rounds, 1–3, default 3 (hard-capped at 3).
+  },
+  "children": [
+    { "folder": "api-server",  "task": "Build a REST API server with auth" },
+    { "folder": "web-frontend", "task": "Build a React frontend for the API" }
+  ]
+}
+```
+
+When a `blackboard` block is present, the head resolves **one absolute** shared db path —
+`<rootDir>/.bober/memory/<namespace>/facts.db` — and writes it verbatim into each child's
+`bober.config.json` (a child-internal `fleet` section). Children, running in separate working
+directories, all open that **same** absolute path, so they share one blackboard. With **no**
+`blackboard` block the manifest behaves exactly as before and the children's configs are
+byte-identical to a non-blackboard run.
+
+#### `agent-bober blackboard publish <value> [--round N]`
+
+Publish a finding to the shared fleet blackboard. Run from inside a child's working directory (its
+`bober.config.json` must carry the head-injected `fleet` section). The finding is published under
+this child's subject (its folder name); `--round` defaults to `1`.
+
+```bash
+agent-bober blackboard publish "auth bug is in token refresh"
+agent-bober blackboard publish "retrying with backoff fixed it" --round 2
+```
+
+#### `agent-bober blackboard read [--all]`
+
+Print findings from the shared fleet blackboard, one `[<subject>] <value>` line each. By default it
+prints **siblings'** findings (every child except this one); `--all` prints every child's findings.
+
+```bash
+agent-bober blackboard read          # siblings only
+agent-bober blackboard read --all    # all children's findings
+```
+
+Both subcommands read the shared db path from the child's `config.fleet` section **only** (never
+re-derived from the cwd). If the current directory's `bober.config.json` has **no** `fleet` section
+— i.e. it is not part of a blackboard fleet run — both print a clear message and exit `1` (they
+never throw). An empty read prints nothing and exits `0`.
 
 ---
 
