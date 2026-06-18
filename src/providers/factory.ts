@@ -74,13 +74,23 @@ export async function preflightClaudeBinary(
   }
 }
 
+// ── xAI / Grok endpoint predicate ────────────────────────────────────────────
+
+/**
+ * True when the endpoint targets xAI's OpenAI-compatible Grok API.
+ * SOLE place the "api.x.ai" host substring is matched (sc-1-6).
+ */
+export function isXaiEndpoint(endpoint?: string): boolean {
+  return !!endpoint && endpoint.includes("api.x.ai");
+}
+
 /**
  * Validate that the required API key environment variable is set for a given provider.
  *
  * @param resolvedProvider - The resolved provider name.
  * @param role - Optional role label (e.g. "Planner", "Generator", "Evaluator") for the error message.
  * @param apiKey - Optional explicit API key from providerConfig (skips env var check if set).
- * @param endpoint - Optional endpoint URL used to distinguish DeepSeek from other openai-compat servers.
+ * @param endpoint - Optional endpoint URL used to distinguish DeepSeek/xAI from other openai-compat servers.
  * @throws If the required environment variable is missing and no explicit apiKey was provided.
  */
 export function validateApiKey(
@@ -134,6 +144,16 @@ export function validateApiKey(
           throw new Error(
             `${roleLabel} is configured to use DeepSeek but neither providerConfig.apiKey nor DEEPSEEK_API_KEY is set. ` +
               `Set the DEEPSEEK_API_KEY environment variable and try again.`,
+          );
+        }
+      }
+      // Grok/xAI (api.x.ai) requires a key — check specifically for it.
+      if (isXaiEndpoint(endpoint)) {
+        const key = apiKey ?? process.env["XAI_API_KEY"];
+        if (!key) {
+          throw new Error(
+            `${roleLabel} is configured to use Grok/xAI but XAI_API_KEY is not set. ` +
+              `Set the XAI_API_KEY environment variable and try again.`,
           );
         }
       }
@@ -248,13 +268,16 @@ export function createClient(
         );
       }
 
-      // Inject DEEPSEEK_API_KEY env fallback only for the api.deepseek.com endpoint.
+      // Inject provider API key env fallback only for known cloud endpoints.
+      // Grok/xAI (api.x.ai) → XAI_API_KEY; DeepSeek (api.deepseek.com) → DEEPSEEK_API_KEY.
       // Ollama and other openai-compat endpoints keep the no-key (not-needed) behavior.
       const compatKey =
         apiKey ??
-        (resolvedEndpoint.includes("api.deepseek.com")
-          ? process.env["DEEPSEEK_API_KEY"]
-          : undefined);
+        (isXaiEndpoint(resolvedEndpoint)
+          ? process.env["XAI_API_KEY"]
+          : resolvedEndpoint.includes("api.deepseek.com")
+            ? process.env["DEEPSEEK_API_KEY"]
+            : undefined);
 
       return new OpenAICompatAdapter(resolvedEndpoint, resolvedModelId, compatKey);
     }

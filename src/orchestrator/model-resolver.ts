@@ -38,6 +38,10 @@ const SHORTHAND_MAP: Record<string, { provider: string; modelId: string }> = {
   deepseek: { provider: "openai-compat", modelId: "deepseek-v4-pro" },
   "deepseek-v4-pro": { provider: "openai-compat", modelId: "deepseek-v4-pro" },
   "deepseek-v4-flash": { provider: "openai-compat", modelId: "deepseek-v4-flash" },
+  // Grok / xAI — resolved via openai-compat adapter at api.x.ai/v1
+  grok: { provider: "openai-compat", modelId: "grok-4" },
+  "grok-4": { provider: "openai-compat", modelId: "grok-4" },
+  "grok-4-fast": { provider: "openai-compat", modelId: "grok-4-fast" },
 };
 
 /**
@@ -77,12 +81,12 @@ export function resolveProviderModel(
   const mapped = SHORTHAND_MAP[model];
   if (mapped) {
     if (mapped.provider === "openai-compat") {
-      // openai-compat shorthands (e.g. deepseek) need an endpoint attached.
-      return {
-        provider: mapped.provider,
-        modelId: mapped.modelId,
-        endpoint: "https://api.deepseek.com",
-      };
+      // openai-compat shorthands need an endpoint attached.
+      // Grok/xAI shorthands resolve to api.x.ai/v1; DeepSeek to api.deepseek.com.
+      const endpoint = mapped.modelId.startsWith("grok")
+        ? "https://api.x.ai/v1"
+        : "https://api.deepseek.com";
+      return { provider: mapped.provider, modelId: mapped.modelId, endpoint };
     }
     return { provider: mapped.provider, modelId: mapped.modelId };
   }
