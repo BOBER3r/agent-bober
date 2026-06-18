@@ -812,7 +812,44 @@ layers: (1) **Grok / xAI wiring** as the existing `openai-compat` provider at `h
 `frontier → Opus`; `default`/absent = byte-identical DeepSeek default — Sprint 2); and (3) a
 **build-time `ToolRoleGuard`** that fails the fleet fast when a child would put `claude-code` on a
 tool role (Sprint 3). The tier-less / no-`tier` fleet path is byte-identical to the prior DeepSeek
-default throughout. The **shared-blackboard / cross-child coordination (Phase B)** is **deferred**
-per `arch-20260618-heterogeneous-multi-provider-agent-team` and was an explicit non-goal of every
-sprint here. See the finale record
+default throughout. The **shared-blackboard / cross-child coordination (Phase B)** was an explicit
+non-goal of every sprint here and is now **in progress** under
+`spec-20260618-fleet-blackboard-exchange` (see the section below). See the finale record
 [`sprint-spec-20260618-fleet-tier-provider-routing-3.md`](./sprint-spec-20260618-fleet-tier-provider-routing-3.md).
+
+## Fleet Blackboard Exchange (Phase B) — in progress (1 of N)
+
+`spec-20260618-fleet-blackboard-exchange` — Phase B of
+`arch-20260618-heterogeneous-multi-provider-agent-team`: the bounded inter-agent exchange channel by
+which isolated fleet children share findings, plus the head-side synthesis collection. Sprint 1 is
+the **risk-first foundation** — the standalone `SharedBlackboard` module, **not yet wired into the
+coordinator / `runFleet` / CLI** (WAL concurrency was the architecture's highest unknown, so it was
+proven first). New file `src/fleet/shared-blackboard.ts` exports `BLACKBOARD_MAX_ROUNDS` (= 3, a hard
+ceiling), the `BlackboardFinding` shape (`{childFolder, round, payload, confidence?}`), and the
+`SharedBlackboard` class: a static async `open({dbPath, namespace, busyTimeoutMs?, maxRounds?})`
+factory (`ensureDir` then a `FactStore` constructed with `{journalModeWal: true, busyTimeoutMs ??
+5000}` for a file-backed db — WAL is **not** forced for `:memory:`; `maxRounds` clamped to 3, ctor
+`private`), `publish(finding, now)` (writes a `predicate='finding'` `FactRecord` via
+`FactStore.insertFact` with `scope=namespace`/`subject=childFolder`/`value=payload`/`tValid=tCreated=now`,
+and **throws** `blackboard round <n> exceeds cap <cap>` past the effective cap), `readSiblings(selfFolder)`
+(active `'finding'` facts excluding `subject===selfFolder`), `readAll()` (all of them), and `close()`
+(checkpoints the WAL). To get WAL **without** touching any existing caller, `FactStore`'s constructor
+gained an **optional** 2nd arg `{ journalModeWal?, busyTimeoutMs? }` that runs `PRAGMA journal_mode =
+WAL` / `PRAGMA busy_timeout = <ms>` **only when set** — default-**off**, so every existing
+`FactStore` caller (medical / memory / lessons) is byte-identical and a default store still reports
+`journal_mode === 'delete'` (the sc-1-7 no-regression guard). The module depends **only** on
+`FactStore` (no network / SDK import). No coordinator / `runFleet` / CLI / `config.fleet` /
+`manifest.blackboard` wiring (Sprints 2-4). +15 tests (WAL-after-open, publish fields + round-cap
+throw, `readSiblings`/`readAll` 2-subject + empty + namespace isolation, ≥5 concurrent `publish`,
+default-FactStore non-WAL); full suite **2749 passed** (only the 6 pre-existing cockpit-integration
+MCP failures remain). All 8 criteria passed iteration 1.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260618-fleet-blackboard-exchange-1.md](./sprint-spec-20260618-fleet-blackboard-exchange-1.md) | **`SharedBlackboard` WAL `facts.db` wrapper + opt-in `FactStore` WAL (Phase B foundation, not yet wired):** new `src/fleet/shared-blackboard.ts` — `BLACKBOARD_MAX_ROUNDS=3` (hard ceiling, `min(maxRounds??3,3)`), `BlackboardFinding {childFolder,round,payload,confidence?}`, `SharedBlackboard` with `private` ctor + static async `open({dbPath,namespace,busyTimeoutMs?,maxRounds?})` (`ensureDir`, `FactStore({journalModeWal:true,busyTimeoutMs??5000})` for file-backed only — **not** `:memory:`), `publish(finding,now)` (writes `predicate='finding'` `FactRecord`, scope=namespace/subject=childFolder/value=payload/tValid=tCreated=now; **throws** past effective cap), `readSiblings(selfFolder)` (excludes self), `readAll()`, `close()` (WAL checkpoint); `FactStore` gains **optional** 2nd ctor arg `{journalModeWal?,busyTimeoutMs?}` ⇒ `PRAGMA journal_mode=WAL`/`busy_timeout` **only when set**, default-**off** ⇒ every existing caller byte-identical (default `journal_mode==='delete'`, sc-1-7); depends only on `FactStore` (no network/SDK import); **no** coordinator/`runFleet`/CLI/config wiring (Sprints 2-4); +15 tests, all 8 criteria iter-1, no regression |
+
+This phase's architecture is in `.bober/architecture/` under
+`arch-20260618-heterogeneous-multi-provider-agent-team-*` — notably ADR-3 (shared blackboard via one
+WAL-mode `facts.db`, bounded to ≤3 rounds) and ADR-5 (head-injected absolute blackboard path). The
+`SharedBlackboard` module has **no user-facing CLI surface yet** — the `--blackboard` flag /
+`manifest.blackboard` / `config.fleet` plumbing arrive in later sprints.
