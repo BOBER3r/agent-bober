@@ -273,6 +273,8 @@ export interface FleetExpandDeepOptions {
   out?: string;
   /** When true, chain into runFleet(outPath) after writing */
   yes?: boolean;
+  /** When true, run a fresh-context critic gate that re-expands degenerate manifests */
+  critique?: boolean;
 }
 
 export interface FleetExpandDeepDeps {
@@ -322,7 +324,12 @@ export async function runFleetExpandDeep(
       : goal;
 
   const decomposeDeepFn = deps?.decomposeDeep ?? decomposeGoalDeep;
-  const decomposed = await decomposeDeepFn({ goal: goalWithHint, client, model });
+  const decomposed = await decomposeDeepFn({
+    goal: goalWithHint,
+    client,
+    model,
+    ...(opts.critique ? { critique: true } : {}),
+  });
 
   // ── Step 3: assemble the manifest ────────────────────────────────
   const root = opts.root ?? ".";
@@ -406,6 +413,7 @@ export function registerFleetExpandDeepSubcommand(fleet: Command): void {
     .option("--concurrency <c>", "Override manifest concurrency (default: 3)")
     .option("--out <path>", "Override the output path for the written manifest")
     .option("--yes", "Chain into fleet run after writing the manifest")
+    .option("--critique", "Run a fresh-context critic gate that re-expands degenerate manifests")
     .action(
       async (
         goal: string,
@@ -417,6 +425,7 @@ export function registerFleetExpandDeepSubcommand(fleet: Command): void {
           concurrency?: string;
           out?: string;
           yes?: boolean;
+          critique?: boolean;
         },
       ) => {
         try {
