@@ -1,12 +1,14 @@
 import { z } from "zod";
 import type { LLMClient, Message } from "../providers/types.js";
 import type { FleetManifest } from "./manifest.js";
+import { type Outline, runExpandStage } from "./decomposer-deep.js";
+// bober: read budget constants from the dependency-free leaf, NOT from ./decomposer-deep.js.
+// These are used at module-evaluation time (DEEP_CRITIQUE_MAX_TOTAL_CALLS below); importing them
+// from the leaf avoids the circular-import TDZ that killed the CLI (inc-20260620-cli-tdz-crash).
 import {
-  type Outline,
-  runExpandStage,
   DEEP_MAX_TOTAL_CALLS,
   DEEP_EXPAND_MAX_RETRIES,
-} from "./decomposer-deep.js";
+} from "./decomposer-deep-constants.js";
 
 // ── Constants ────────────────────────────────────────────────────────
 

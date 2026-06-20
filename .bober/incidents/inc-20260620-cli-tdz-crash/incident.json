@@ -1,0 +1,16 @@
+{
+  "id": "inc-20260620-cli-tdz-crash",
+  "title": "agent-bober CLI fully broken — circular-import TDZ at module load",
+  "severity": "high",
+  "status": "resolved",
+  "branch": "bober/medical-team",
+  "detectedAt": "2026-06-20T00:00:00Z",
+  "resolvedAt": "2026-06-20T00:11:00Z",
+  "introducedBy": "e4f7b6b (fleet Phase-4 critique engine: src/fleet/critic-deep.ts)",
+  "scope": "global — every agent-bober command aborts at CLI import time",
+  "rootCause": "Order-dependent circular-import temporal-dead-zone: critic-deep.ts read DEEP_MAX_TOTAL_CALLS/DEEP_EXPAND_MAX_RETRIES at module-evaluation time, imported from decomposer-deep.ts which imports runCritiqueLoop back from critic-deep.ts. Loading decomposer-deep first (via src/fleet/index.ts:27) left those bindings in their TDZ.",
+  "whyMissed": "Unit tests import the modules in the safe order so the suite was green; the real Node ESM CLI loads the unsafe order. Passes-tests / breaks-binary.",
+  "fix": "New dependency-free leaf src/fleet/decomposer-deep-constants.ts holds the init-time constants; decomposer-deep re-exports them; critic-deep imports the init-time ones from the leaf. + regression test src/fleet/decomposer-deep-load-order.test.ts.",
+  "verification": "tsc clean; both module load orders OK; CLI boots (--version 0.17.1, --help 0 TDZ lines); full suite 2797 passed / 3 skipped / 0 failed.",
+  "artifacts": ["observations.jsonl", "hypotheses.md", "actions.jsonl"]
+}
