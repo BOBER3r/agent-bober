@@ -12,15 +12,16 @@ import { PassThrough } from "node:stream";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 
 // ── tokensave availability probe ─────────────────────────────────────
-
-import { execaSync } from "execa";
+// Uses node:child_process (not execa) so the vi.mock("execa") below
+// does not interfere with the probe at module-load time.
 
 function hasTokensave(): boolean {
   try {
-    const r = execaSync("tokensave", ["--version"], { reject: false, timeout: 2_000 });
-    return r.exitCode === 0;
+    const r = spawnSync("tokensave", ["--version"], { timeout: 2_000 });
+    return r.status === 0;
   } catch {
     return false;
   }
@@ -131,10 +132,29 @@ describe("Circuit breaker rolling-window math (pure logic, no binary)", () => {
 
     (execa as unknown as Mock).mockImplementation(() => {
       callCount++;
-      const { subprocess, stdout, emit } = makeFakeSubprocess();
-      // Respond with a handshake message on first spawn
-      setTimeout(() => {
-        stdout.push('{"jsonrpc":"2.0","method":"ready"}\n');
+      const writes: string[] = [];
+      const { subprocess, stdout, emit } = makeFakeSubprocess({
+        onWrite: (d) => writes.push(d),
+      });
+      // Respond to the initialize request by id, then simulate a crash
+      setTimeout(async () => {
+        // Wait for the initialize request to appear in writes
+        await new Promise<void>((r) => setTimeout(r, 5));
+        const initWrite = writes.find((w) => w.includes('"initialize"'));
+        if (initWrite) {
+          const initReq = JSON.parse(initWrite.trim()) as { id: number };
+          stdout.push(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: initReq.id,
+              result: {
+                protocolVersion: "2024-11-05",
+                serverInfo: { name: "tokensave", version: "6.1.1" },
+                capabilities: {},
+              },
+            }) + "\n",
+          );
+        }
         // Then immediately exit (simulate crash on all spawns)
         setTimeout(() => {
           (subprocess as Record<string, unknown>).exitCode = 1;
@@ -218,23 +238,57 @@ describe("JSON-RPC PendingMap correlation (pure logic)", () => {
       incidents as never,
     );
 
-    // Manually trigger handshake by pushing a ready message
+    // Trigger handshake — the client writes an initialize request; reply by id
     const startPromise = client.start().catch(() => {
       // may fail due to mock — that's OK for this test
     });
 
-    // Push handshake
-    stdout.push('{"jsonrpc":"2.0","method":"ready"}\n');
+    // Wait for the initialize request to be written, then reply by id
+    await new Promise<void>((r) => setTimeout(r, 20));
+    const initWrite = writes.find((w) => w.includes('"initialize"'));
+    if (initWrite) {
+      const initReq = JSON.parse(initWrite.trim()) as { id: number };
+      stdout.push(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: initReq.id,
+          result: {
+            protocolVersion: "2024-11-05",
+            serverInfo: { name: "tokensave", version: "6.1.1" },
+            capabilities: {},
+          },
+        }) + "\n",
+      );
+    }
     await startPromise;
 
     // Simulate two concurrent calls
     const call1 = client.call<{ result: string }>("tool_a", {}).catch(() => null);
     const call2 = client.call<{ result: string }>("tool_b", {}).catch(() => null);
 
-    // Push responses in REVERSE order (id=2 first, then id=1)
+    // Push responses in REVERSE order (id=N+1 first, then id=N).
+    // The handshake consumed id=1, so call1 gets id=2, call2 gets id=3.
     await new Promise<void>((res) => setTimeout(res, 20));
-    stdout.push('{"jsonrpc":"2.0","id":2,"result":{"result":"B"}}\n');
-    stdout.push('{"jsonrpc":"2.0","id":1,"result":{"result":"A"}}\n');
+    // Find the actual ids from the writes
+    const toolWrites = writes.filter((w) => w.includes('"tools/call"'));
+    const ids = toolWrites.map((w) => (JSON.parse(w.trim()) as { id: number }).id).sort((a, b) => a - b);
+    // Reply in reverse order so we prove id-correlation (not FIFO)
+    if (ids.length >= 2) {
+      stdout.push(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: ids[1],
+          result: { content: [{ type: "text", text: JSON.stringify({ result: "B" }) }] },
+        }) + "\n",
+      );
+      stdout.push(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: ids[0],
+          result: { content: [{ type: "text", text: JSON.stringify({ result: "A" }) }] },
+        }) + "\n",
+      );
+    }
 
     const [r1, r2] = await Promise.all([call1, call2]);
 
@@ -284,16 +338,360 @@ describe("Health state: graph.enabled=false", () => {
   });
 });
 
+// ── MCP transport: handshake + envelope + unwrap (sc-1-2/1-3/1-4/1-5) ─
+
+describe("MCP initialize handshake (sc-1-2 / sc-1-3)", () => {
+  it("start() resolves health='ready' only when correlated initialize response arrives", async () => {
+    const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+    const incidents = makeIncidentLog();
+
+    const writes: string[] = [];
+    const { subprocess, stdout } = makeFakeSubprocess({
+      onWrite: (d) => writes.push(d),
+    });
+    (execa as unknown as Mock).mockReturnValueOnce(subprocess);
+
+    const client = new TokensaveMcpClient(
+      tmp,
+      { enabled: true, queryTimeoutMs: 2_000 } as never,
+      incidents as never,
+    );
+
+    const startPromise = client.start();
+
+    // Wait for the client to write the initialize request
+    await new Promise<void>((r) => setTimeout(r, 20));
+
+    // Verify an initialize request was written
+    const initWrite = writes.find((w) => w.includes('"initialize"'));
+    expect(initWrite).toBeDefined();
+    const initReq = JSON.parse(initWrite!.trim()) as {
+      id: number;
+      method: string;
+      params: { protocolVersion: string; clientInfo: { name: string } };
+    };
+    expect(initReq.method).toBe("initialize");
+    expect(initReq.params.protocolVersion).toBe("2024-11-05");
+    expect(initReq.params.clientInfo.name).toBe("agent-bober");
+
+    // Push the correlated initialize response
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: initReq.id,
+        result: {
+          protocolVersion: "2024-11-05",
+          serverInfo: { name: "tokensave", version: "6.1.1" },
+          capabilities: {},
+        },
+      }) + "\n",
+    );
+
+    await startPromise;
+    expect(client.health()).toBe("ready");
+    await client.stop();
+  });
+
+  it("start() does NOT resolve on an unrelated first line (sc-1-2 negative)", async () => {
+    const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+    const incidents = makeIncidentLog();
+
+    const { subprocess, stdout } = makeFakeSubprocess();
+    (execa as unknown as Mock).mockReturnValueOnce(subprocess);
+
+    const client = new TokensaveMcpClient(
+      tmp,
+      { enabled: true, queryTimeoutMs: 2_000 } as never,
+      incidents as never,
+    );
+
+    const startPromise = client.start();
+
+    // Push a line that is valid JSON but NOT the correlated initialize response
+    await new Promise<void>((r) => setTimeout(r, 20));
+    stdout.push('{"jsonrpc":"2.0","method":"someNotification"}\n');
+
+    // Health must still NOT be ready
+    await new Promise<void>((r) => setTimeout(r, 20));
+    expect(client.health()).not.toBe("ready");
+
+    // Clean up — let the timeout fire (we won't wait the full 5s; just reject)
+    startPromise.catch(() => {
+      /* expected */
+    });
+    await client.stop();
+  });
+
+  it("notifications/initialized is sent AFTER initialize response (sc-1-3)", async () => {
+    const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+    const incidents = makeIncidentLog();
+
+    const writes: string[] = [];
+    const { subprocess, stdout } = makeFakeSubprocess({
+      onWrite: (d) => writes.push(d),
+    });
+    (execa as unknown as Mock).mockReturnValueOnce(subprocess);
+
+    const client = new TokensaveMcpClient(
+      tmp,
+      { enabled: true, queryTimeoutMs: 2_000 } as never,
+      incidents as never,
+    );
+
+    const startPromise = client.start();
+    await new Promise<void>((r) => setTimeout(r, 20));
+
+    const initWrite = writes.find((w) => w.includes('"initialize"'));
+    expect(initWrite).toBeDefined();
+    const initReq = JSON.parse(initWrite!.trim()) as { id: number };
+
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: initReq.id,
+        result: {
+          protocolVersion: "2024-11-05",
+          serverInfo: { name: "tokensave", version: "6.1.1" },
+          capabilities: {},
+        },
+      }) + "\n",
+    );
+
+    await startPromise;
+
+    // Allow a tick for the notifications/initialized write to complete
+    await new Promise<void>((r) => setTimeout(r, 20));
+
+    const initIdx = writes.findIndex((w) => w.includes('"initialize"'));
+    const notifIdx = writes.findIndex((w) => w.includes("notifications/initialized"));
+
+    expect(initIdx).toBeGreaterThanOrEqual(0);
+    expect(notifIdx).toBeGreaterThan(initIdx);
+
+    const notifMsg = JSON.parse(writes[notifIdx].trim()) as {
+      method: string;
+      id?: unknown;
+    };
+    expect(notifMsg.method).toBe("notifications/initialized");
+    expect(notifMsg.id).toBeUndefined(); // notifications have no id
+
+    await client.stop();
+  });
+});
+
+describe("tools/call envelope + content unwrap (sc-1-4 / sc-1-5)", () => {
+  async function startClientWithFake(): Promise<{
+    client: Awaited<ReturnType<typeof import("../../src/graph/mcp-client.js").TokensaveMcpClient.prototype.start>> extends void
+      ? import("../../src/graph/mcp-client.js").TokensaveMcpClient
+      : never;
+    stdout: PassThrough;
+    writes: string[];
+    stop: () => Promise<void>;
+  }> {
+    const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+    const incidents = makeIncidentLog();
+    const writes: string[] = [];
+    const { subprocess, stdout } = makeFakeSubprocess({
+      onWrite: (d) => writes.push(d),
+    });
+    (execa as unknown as Mock).mockReturnValueOnce(subprocess);
+
+    const client = new TokensaveMcpClient(
+      tmp,
+      { enabled: true, queryTimeoutMs: 2_000 } as never,
+      incidents as never,
+    );
+
+    const startPromise = client.start();
+    await new Promise<void>((r) => setTimeout(r, 20));
+
+    const initWrite = writes.find((w) => w.includes('"initialize"'))!;
+    const initReq = JSON.parse(initWrite.trim()) as { id: number };
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: initReq.id,
+        result: {
+          protocolVersion: "2024-11-05",
+          serverInfo: { name: "tokensave", version: "6.1.1" },
+          capabilities: {},
+        },
+      }) + "\n",
+    );
+    await startPromise;
+
+    return {
+      client: client as never,
+      stdout,
+      writes,
+      stop: () => client.stop(),
+    };
+  }
+
+  it("call() writes the tools/call envelope with name + arguments (sc-1-4a)", async () => {
+    const { client, stdout, writes, stop } = await startClientWithFake();
+
+    const callP = (client as import("../../src/graph/mcp-client.js").TokensaveMcpClient).call<{
+      status: string;
+    }>("tokensave_status", {});
+
+    await new Promise<void>((r) => setTimeout(r, 20));
+
+    const toolWrite = writes.find((w) => w.includes('"tools/call"'));
+    expect(toolWrite).toBeDefined();
+    const toolReq = JSON.parse(toolWrite!.trim()) as {
+      method: string;
+      params: { name: string; arguments: unknown };
+      id: number;
+    };
+    expect(toolReq.method).toBe("tools/call");
+    expect(toolReq.params.name).toBe("tokensave_status");
+    expect(toolReq.params.arguments).toEqual({});
+
+    // Reply with a JSON content entry
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: toolReq.id,
+        result: {
+          content: [{ type: "text", text: JSON.stringify({ status: "ok" }) }],
+        },
+      }) + "\n",
+    );
+
+    const result = await callP;
+    expect(result).toEqual({ status: "ok" });
+    await stop();
+  });
+
+  it("unwrap: JSON entry chosen even when content[0] is a WARNING string (sc-1-4b)", async () => {
+    const { client, stdout, writes, stop } = await startClientWithFake();
+
+    const callP = (client as import("../../src/graph/mcp-client.js").TokensaveMcpClient).call<{
+      active_branch: string;
+    }>("tokensave_status", {});
+
+    await new Promise<void>((r) => setTimeout(r, 20));
+    const toolWrite = writes.find((w) => w.includes('"tools/call"'))!;
+    const toolReq = JSON.parse(toolWrite.trim()) as { id: number };
+
+    // content[0] = plain-text WARNING (not JSON), content[1] = JSON payload
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: toolReq.id,
+        result: {
+          content: [
+            { type: "text", text: "WARNING: Index last synced 2h ago. Run tokensave sync." },
+            { type: "text", text: JSON.stringify({ active_branch: "bober/medical-team" }) },
+          ],
+        },
+      }) + "\n",
+    );
+
+    const result = await callP;
+    expect(result).toEqual({ active_branch: "bober/medical-team" });
+    await stop();
+  });
+
+  it("unwrap: plain-text content (no JSON) is returned as raw string (sc-1-4c)", async () => {
+    const { client, stdout, writes, stop } = await startClientWithFake();
+
+    const callP = (client as import("../../src/graph/mcp-client.js").TokensaveMcpClient).call<string>(
+      "some_tool",
+      {},
+    );
+
+    await new Promise<void>((r) => setTimeout(r, 20));
+    const toolWrite = writes.find((w) => w.includes('"tools/call"'))!;
+    const toolReq = JSON.parse(toolWrite.trim()) as { id: number };
+
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: toolReq.id,
+        result: {
+          content: [{ type: "text", text: "hello world" }],
+        },
+      }) + "\n",
+    );
+
+    const result = await callP;
+    expect(result).toBe("hello world");
+    await stop();
+  });
+
+  it("isError:true in result rejects with GRAPH_ERROR (sc-1-5a)", async () => {
+    const { client, stdout, writes, stop } = await startClientWithFake();
+
+    const callP = (client as import("../../src/graph/mcp-client.js").TokensaveMcpClient).call<never>(
+      "some_tool",
+      {},
+    );
+
+    await new Promise<void>((r) => setTimeout(r, 20));
+    const toolWrite = writes.find((w) => w.includes('"tools/call"'))!;
+    const toolReq = JSON.parse(toolWrite.trim()) as { id: number };
+
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: toolReq.id,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "tool execution failed" }],
+        },
+      }) + "\n",
+    );
+
+    const err = await callP.catch((e: Error) => e);
+    expect((err as Error & { reason: string }).reason).toBe("GRAPH_ERROR");
+    await stop();
+  });
+
+  it("JSON-RPC error response rejects with GRAPH_ERROR (sc-1-5b)", async () => {
+    const { client, stdout, writes, stop } = await startClientWithFake();
+
+    const callP = (client as import("../../src/graph/mcp-client.js").TokensaveMcpClient).call<never>(
+      "tokensave_nonexistent",
+      {},
+    );
+
+    await new Promise<void>((r) => setTimeout(r, 20));
+    const toolWrite = writes.find((w) => w.includes('"tools/call"'))!;
+    const toolReq = JSON.parse(toolWrite.trim()) as { id: number };
+
+    stdout.push(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: toolReq.id,
+        error: { code: -32603, message: "tool execution failed: unknown tool: tokensave_nonexistent" },
+      }) + "\n",
+    );
+
+    const err = await callP.catch((e: Error) => e);
+    expect((err as Error & { reason: string }).reason).toBe("GRAPH_ERROR");
+    await stop();
+  });
+});
+
 // ── Integration tests (require real tokensave binary) ─────────────────
 
 describe("TokensaveMcpClient (integration — requires real tokensave binary)", () => {
+  // Restore the real execa for integration tests so the real tokensave binary is used.
+  beforeEach(async () => {
+    const realExeca = await vi.importActual<typeof import("execa")>("execa");
+    (execa as unknown as Mock).mockImplementation(realExeca.execa);
+  });
+
   it.skipIf(!tokensaveAvailable)(
     "start() resolves health='ready' in <2s",
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
       const incidents = makeIncidentLog();
+      // Use process.cwd() (repo root) so tokensave serve can locate its .tokensave db
       const client = new TokensaveMcpClient(
-        tmp,
+        process.cwd(),
         { enabled: true, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
         "tokensave",
@@ -309,12 +707,40 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
   );
 
   it.skipIf(!tokensaveAvailable)(
+    "call('tokensave_status', {}) returns a parsed object (sc-1-7 round-trip)",
+    async () => {
+      const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
+      const incidents = makeIncidentLog();
+      // Use process.cwd() (repo root) so tokensave serve can locate its .tokensave db
+      const client = new TokensaveMcpClient(
+        process.cwd(),
+        { enabled: true, queryTimeoutMs: 10_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
+        incidents as never,
+        "tokensave",
+      );
+
+      await client.start();
+      expect(client.health()).toBe("ready");
+
+      const res = await client.call("tokensave_status", {});
+      // Must be a parsed object, not a string
+      expect(typeof res).toBe("object");
+      expect(res).not.toBeNull();
+      // tokensave_status returns an object with db_size_bytes or similar numeric field
+      expect(typeof (res as Record<string, unknown>)["db_size_bytes"]).toBe("number");
+
+      await client.stop();
+    },
+  );
+
+  it.skipIf(!tokensaveAvailable)(
     "crash-restart: in-flight call() rejects with GRAPH_ERROR; subsequent call succeeds",
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
       const incidents = makeIncidentLog();
+      // Use process.cwd() (repo root) so tokensave serve can locate its .tokensave db
       const client = new TokensaveMcpClient(
-        tmp,
+        process.cwd(),
         { enabled: true, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
         "tokensave",
@@ -322,8 +748,8 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
 
       await client.start();
 
-      // Start a call that we will interrupt
-      const inflightCall = client.call("semantic_search_nodes", { query: "test" });
+      // Start a call that we will interrupt (use a real 6.1.1 tool name)
+      const inflightCall = client.call("tokensave_status", {});
 
       // Kill the child mid-call
       const pid = (client as unknown as { childPid: number }).childPid;
@@ -334,7 +760,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
       expect((err as Error & { reason?: string }).reason).toBe("GRAPH_ERROR");
 
       // Wait for restart
-      await new Promise<void>((res) => setTimeout(res, 1_000));
+      await new Promise<void>((res) => setTimeout(res, 1_500));
 
       expect(client.health()).toBe("ready");
       await client.stop();
@@ -346,8 +772,9 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
     async () => {
       const { TokensaveMcpClient } = await import("../../src/graph/mcp-client.js");
       const incidents = makeIncidentLog();
+      // Use process.cwd() (repo root) so tokensave serve can locate its .tokensave db
       const client = new TokensaveMcpClient(
-        tmp,
+        process.cwd(),
         { enabled: true, queryTimeoutMs: 5_000 } as unknown as Parameters<typeof TokensaveMcpClient.prototype.start>[0] extends never ? never : never,
         incidents as never,
         "tokensave",
@@ -360,7 +787,7 @@ describe("TokensaveMcpClient (integration — requires real tokensave binary)", 
         const pid = (client as unknown as { childPid: number }).childPid;
         if (pid) process.kill(pid, "SIGKILL");
         // Wait for restart to settle
-        await new Promise<void>((res) => setTimeout(res, 500));
+        await new Promise<void>((res) => setTimeout(res, 1_000));
       }
 
       // 4th call must reject with GRAPH_UNAVAILABLE
