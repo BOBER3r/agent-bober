@@ -1003,3 +1003,43 @@ The single sprint passed evaluation on iteration 1 (zero reworks), **2789 tests*
 last open Phase B carry-forward** — the blackboard round count is now the real executed count on both
 output artifacts, with the no-blackboard path byte-identical. See the record
 [`sprint-spec-20260618-fleet-synthesis-round-count-1.md`](./sprint-spec-20260618-fleet-synthesis-round-count-1.md).
+
+## Graph — Tokensave 6.1.1 MCP Compatibility — in progress (1 of 2)
+
+`spec-20260620-graph-tokensave-6-1-compat` — restores the graph engine against `tokensave serve`
+**6.1.1**, which moved to a standard MCP wire protocol that the old `TokensaveMcpClient` did not
+speak (the `agent-bober onboard` `tokensave serve handshake timed out` failure). Sprint 1 rewrites
+the **transport layer only**: `spawnAndHandshake` now writes a JSON-RPC **`initialize`** request
+after spawn and resolves `health="ready"` **only** on the correlated response id (a new private
+`handshakeId` reserved from the same `nextId` counter) — no longer on an arbitrary first stdout
+line — then emits a `notifications/initialized` notification before any tool call. `call()` writes
+the **`tools/call`** envelope (`{ method:"tools/call", params:{ name, arguments } }`) and returns a
+new `unwrapMcpContent(result)` helper that scans **all** `result.content[]` `text` entries and
+returns the first JSON-parseable one (live `tokensave_status` returns a staleness `WARNING:` as
+`content[0]` with the JSON payload a later entry), falling back to the first text string and
+throwing `GRAPH_ERROR` on `isError:true` / a JSON-RPC `error`. `HANDSHAKE_TIMEOUT_MS` was raised
+**1000 → 5000** for cold starts. The circuit breaker, health states, concurrent-call id
+correlation, `stop()` shutdown, stderr→debug routing, and early-exit reject are **all preserved**;
+the diff is confined to `src/graph/mcp-client.ts` + its test. **`GraphClient`'s stale tool-name
+catalog (e.g. `semantic_search_nodes`) is NOT fixed here** — that is **Sprint 2** — so `agent-bober
+onboard` is **not fully working after Sprint 1 alone** (handshake succeeds; higher-level queries
+still need the Sprint 2 tool-name fix). Full suite **2809 passed** (up from 2789); all 8 criteria
+(sc-1-1..sc-1-8) passed iteration 1, zero regressions.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260620-graph-tokensave-6-1-compat-1.md](./sprint-spec-20260620-graph-tokensave-6-1-compat-1.md) | **MCP-compliant transport in `TokensaveMcpClient` (fixes `tokensave serve` 6.1.1 handshake timeout):** `spawnAndHandshake` (`mcp-client.ts:239`) writes a JSON-RPC `initialize` request (`protocolVersion "2024-11-05"`, `clientInfo {name:"agent-bober"}`, `capabilities {}`) post-spawn + resolves `health="ready"` **only** on the correlated response (`id === handshakeId`, the new private field reserved from `nextId`) — **not** on any first line — then writes `notifications/initialized`; `call<T>` (`:194`) writes `{ method:"tools/call", params:{ name: tool, arguments: params } }` and returns `unwrapMcpContent(result)`; `unwrapMcpContent` (`:79`) scans **all** `content[].text`, returns the **first JSON-parseable** one (handles the `content[0]` staleness `WARNING:` quirk), falls back to raw first text, throws `GRAPH_ERROR` on `isError:true`; JSON-RPC `error` + `isError` both reject `.reason === "GRAPH_ERROR"` (⇒ `client.ts` `toFailureResult` `ok:false`); `HANDSHAKE_TIMEOUT_MS` **1000 → 5000**; breaker / health / id-correlation / `stop()` / stderr→debug / early-exit reject **preserved**; integration test uses real `tokensave_status` round-trip (replaces stale `semantic_search_nodes`); **`GraphClient` tool catalog deferred to Sprint 2**; commit `1441890`, only `src/graph/mcp-client.ts` + `tests/graph/mcp-client.test.ts`; suite **2809 passed**, all 8 criteria (sc-1-1..sc-1-8) iter-1, no regression |
+
+The graph engine's user-facing surface (`bober graph init|sync|status`, `bober onboard`,
+`bober impact`) is documented in the README "Graph (Tokensave) Integration" section and in
+[`COMMANDS.md`](../../COMMANDS.md) "Graph Commands" / "Utility Commands". This sprint changed only
+the **internal** MCP transport, so those user-facing docs remain accurate; the required tokensave
+version range (`>=6.0.0-beta.1 <7.0.0`) already covers 6.1.1.
+
+### Plan status
+
+`spec-20260620-graph-tokensave-6-1-compat` is **in progress (1 of 2)** on branch
+`bober/medical-team`. Sprint 1 (MCP transport) passed evaluation on iteration 1 (zero reworks).
+**Sprint 2 is still required** to land the `GraphClient` tool-name catalog fix before `agent-bober
+onboard` works end-to-end against tokensave 6.1.1. See the record
+[`sprint-spec-20260620-graph-tokensave-6-1-compat-1.md`](./sprint-spec-20260620-graph-tokensave-6-1-compat-1.md).
