@@ -1069,7 +1069,7 @@ tools for accurate docs. A separate **pre-existing** dangling onboarding link (`
 its own follow-up. See the finale record
 [`sprint-spec-20260620-graph-tokensave-6-1-compat-2.md`](./sprint-spec-20260620-graph-tokensave-6-1-compat-2.md).
 
-## Codebase Health Remediation — Sprints 1–2 (break the fleet runtime cycle, collapse positional params)
+## Codebase Health Remediation — complete (3 of 3)
 
 `spec-20260621-codebase-health-remediation` — acts on the structural findings of
 `research-20260621-codebase-health-hotspots-cycles`. Sprint 1 **fully eliminates the genuine
@@ -1103,23 +1103,54 @@ impact**. **Pure mechanical refactor, zero behavior change** (the retry / evalua
 contract-status / reviewer-and-documenter-spawning body is untouched): **2815/2815 tests green**, all 6
 criteria (sc-2-1..sc-2-6) passed iteration 1.
 
+**Sprint 3 closes the plan** by acting on the dead-code finding: it **removes the two verified
+orphans** — `stashAndRestore` (`src/utils/git.ts`) and `saveOutline` (`src/state/outline-state.ts`) —
+plus their two barrel re-export lines. Both were exported solely through a barrel
+(`src/utils/index.ts`, `src/state/index.ts`) with **zero** call sites (grep-verified), so the removal
+shrinks the public surface with **zero behavior change**. `outline-state.ts` is **kept** because its
+other export `readOutline` is **live** (`pipeline.ts:58` import, `:828` call) — only `saveOutline` and
+the now-unused `writeFile` / `ensureDir` imports it pulled in were pruned (a **mandatory** prune:
+`noUnusedLocals` would otherwise fail the build). Crucially, the dead-code work **confirmed 3 of the 5
+research candidates were false positives** and **left them untouched**: `runPlanAnswerInteractive`
+(live caller `cli/index.ts:152`), `summarizeSprint` (live caller `context-handoff.ts:171`), and
+`readBriefing` (public API via `src/index.ts:153`); dynamic-dispatch candidates (checkpoint renderers,
+registry lookups, `createBoberMCPServer`) were also out of scope. After the sprint
+`grep -rnE '\b(stashAndRestore|saveOutline)\b' src/` is **empty**; the diff is confined to 4 files;
+**2815/2815 tests green**, all 5 required criteria (sc-3-1..sc-3-5) passed iteration 1.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260621-codebase-health-remediation-1.md](./sprint-spec-20260621-codebase-health-remediation-1.md) | **Fully break the `critic-deep` ↔ `decomposer-deep` runtime import cycle (dependency injection):** new dependency-free leaf `src/fleet/decomposer-deep-types.ts` (`OutlineArea`/`Outline`, **0 relative imports**, mirrors `decomposer-deep-constants.ts`); `critic-deep.ts` **deletes** its `./decomposer-deep.js` import (value **and** type) and imports `Outline` from `./decomposer-deep-types.js`; `runCritiqueLoop` (`critic-deep.ts:211`) gains an injected `expand: (input) => Promise<FleetManifest>` param (`:218`) and calls `input.expand(...)` (`:258`) in place of the imported `runExpandStage`; `decomposer-deep.ts` `import type`s + **re-exports** `Outline`/`OutlineArea` from the leaf (`:89-90`, public surface unchanged) and at `:371` passes `expand: runExpandStage` into `runCritiqueLoop`; `decomposeGoalDeep` (`:341`, sole production caller) **exported signature byte-identical**; `critic-deep.test.ts` supplies `expand` to all 8 existing `runCritiqueLoop` calls + 1 new sc-1-7 spy test (injected fn invoked once on a critique miss); supersedes `a73526c`'s module-init-only mitigation (constants leaf retained, `decomposer-deep-load-order.test.ts` guard still applies); **Cycle 1** (`fact-judge` ↔ `reconcile`, type-only) deliberately untouched; commit `349c22c`, 4 source files; suite **2815/2815**, all 7 criteria iter-1, no regression |
 | 2 | [sprint-spec-20260621-codebase-health-remediation-2.md](./sprint-spec-20260621-codebase-health-remediation-2.md) | **Collapse `runSprintCycle`'s 7 positional params into a single typed `RunSprintCycleParams` object:** new `export interface RunSprintCycleParams` (`pipeline.ts:158`, 7 fields — `contract`/`spec`/`completedContracts`/`projectRoot`/`config`/`projectContext`/`pipelineRunId?`, names mirror the former params); signature `runSprintCycle(params: RunSprintCycleParams)` (`:168`) with the **only** body delta a destructure at `:171`; production caller `runTsPipeline` passes an object literal at `:936`, mapping local `completedSprints → completedContracts` by position (`:939`); the 5 test call sites (`code-reviewer-agent.test.ts:229,333`; `documenter-agent.test.ts:229,265,299`) converted to object literals; `runSprintCycle` stays **internal** (grep `src/index.ts` + `src/mcp/` empty, no public-API change); **zero behavior change** (retry/evaluator/status/reviewer-documenter body untouched); diff confined to 3 files; commit `c7e721c`, suite **2815/2815**, all 6 criteria iter-1, no regression |
+| 3 | [sprint-spec-20260621-codebase-health-remediation-3.md](./sprint-spec-20260621-codebase-health-remediation-3.md) | **Finale — remove the two verified dead-code orphans `stashAndRestore` + `saveOutline`:** **deleted** `stashAndRestore<T>(cwd, fn)` from `src/utils/git.ts` (was `:149-171`, fn + doc; no import change) and de-listed it from the `./git.js` re-export in `src/utils/index.ts`; **deleted** `saveOutline(projectRoot, specId, content)` from `src/state/outline-state.ts` (fn + doc) and de-listed it from the `./outline-state.js` re-export in `src/state/index.ts`; **pruned** the now-unused `writeFile` + `ensureDir` imports in `outline-state.ts` (kept `readFile`) — a **mandatory** prune (`noUnusedLocals`); **`outline-state.ts` KEPT** because `readOutline` is live (`pipeline.ts:58` import, `:828` call), still re-exported; **3 false positives left untouched** — `runPlanAnswerInteractive` (live `cli/index.ts:152`), `summarizeSprint` (live `context-handoff.ts:171`), `readBriefing` (public API `src/index.ts:153`); dynamic-dispatch candidates out of scope; `grep '(stashAndRestore\|saveOutline)' src/` **empty**, diff confined to 4 files; **zero behavior change**; commit `a980d30`, suite **2815/2815**, all 5 required criteria (sc-3-1..sc-3-5) iter-1, no regression |
 
 ### Plan close-out
 
-`spec-20260621-codebase-health-remediation` Sprints 1–2 are **complete** on branch
-`bober/medical-team` — each passed evaluation on iteration 1 (zero reworks), **2815/2815 tests** green.
-Sprint 1 **resolves the one genuine runtime import cycle** in the codebase (the `fleet`
-`critic-deep` ↔ `decomposer-deep` value cycle): `critic-deep` now holds **zero** edges to the cycle
-node, the re-expand function is injected rather than imported, and `Outline` lives in a
-dependency-free leaf. The remaining `decomposer-deep → critic-deep` edge is one-directional and not
-a cycle. **Cycle 1** (`orchestrator/memory/fact-judge.ts` ↔ `reconcile.ts`) is `import type`-only —
-erased at compile time, no runtime cycle — and was intentionally out of scope. Sprint 2 **collapses
-`runSprintCycle`'s 7 positional parameters into a single typed `RunSprintCycleParams` object** (pure
-mechanical refactor, internal-only, zero behavior change). See the records
-[`sprint-spec-20260621-codebase-health-remediation-1.md`](./sprint-spec-20260621-codebase-health-remediation-1.md)
+`spec-20260621-codebase-health-remediation` is **complete (3 of 3)** on branch
+`bober/medical-team` — each sprint passed evaluation on iteration 1 (zero reworks), **2815/2815 tests**
+green throughout. The plan acted on the structural findings of
+`research-20260621-codebase-health-hotspots-cycles` with **zero behavior change across all three
+sprints**:
+
+- **Sprint 1 — broke the one genuine runtime import cycle** (the `fleet`
+  `critic-deep` ↔ `decomposer-deep` value cycle): `critic-deep` now holds **zero** edges to the cycle
+  node, the re-expand function is **injected** rather than imported, and `Outline` lives in a
+  dependency-free leaf. The remaining `decomposer-deep → critic-deep` edge is one-directional and not
+  a cycle. **Cycle 1** (`orchestrator/memory/fact-judge.ts` ↔ `reconcile.ts`) is `import type`-only —
+  erased at compile time, no runtime cycle — and was **deliberately out of scope**.
+- **Sprint 2 — collapsed `runSprintCycle`'s 7 positional parameters** into a single typed
+  `RunSprintCycleParams` **options object** (pure mechanical refactor, internal-only). `runSprintCycle`
+  now takes a params object rather than a mis-orderable positional list.
+- **Sprint 3 — removed the two verified dead-code orphans** `stashAndRestore` (`src/utils/git.ts`) and
+  `saveOutline` (`src/state/outline-state.ts`) plus their barrel re-export lines (`outline-state.ts`
+  kept — `readOutline` is live). Critically, this work **confirmed that 3 of the 5 research candidates
+  were false positives** — `runPlanAnswerInteractive`, `summarizeSprint`, and `readBriefing` have live
+  callers / are public API and were **left untouched** — so the plan removed exactly the 2 genuinely
+  dead exports and nothing more.
+
+Overall outcome: the genuine fleet runtime cycle is broken, `runSprintCycle` takes a params object,
+and two dead-code orphans are gone. See the records
+[`sprint-spec-20260621-codebase-health-remediation-1.md`](./sprint-spec-20260621-codebase-health-remediation-1.md),
+[`sprint-spec-20260621-codebase-health-remediation-2.md`](./sprint-spec-20260621-codebase-health-remediation-2.md),
 and
-[`sprint-spec-20260621-codebase-health-remediation-2.md`](./sprint-spec-20260621-codebase-health-remediation-2.md).
+[`sprint-spec-20260621-codebase-health-remediation-3.md`](./sprint-spec-20260621-codebase-health-remediation-3.md).
