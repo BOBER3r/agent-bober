@@ -82,8 +82,12 @@ Rules:
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type OutlineArea = { name: string; intent: string };
-export type Outline = { areas: OutlineArea[] };
+// bober: Outline/OutlineArea now live in the dependency-free ./decomposer-deep-types.js leaf
+// (imported here for internal use and re-exported so existing importers of
+// `import { Outline } from "./decomposer-deep.js"` keep working). Sourcing them from a leaf lets
+// critic-deep import Outline WITHOUT a decomposer-deep dependency, breaking the cycle.
+import type { Outline, OutlineArea } from "./decomposer-deep-types.js";
+export type { Outline, OutlineArea };
 
 export interface DecomposeDeepInput {
   goal: string;
@@ -364,7 +368,7 @@ export async function decomposeGoalDeep(
   });
 
   if (input.critique === true) {
-    return runCritiqueLoop({ client, model, goal, outline, baseline: manifest, expandMaxRetries });
+    return runCritiqueLoop({ client, model, goal, outline, baseline: manifest, expandMaxRetries, expand: runExpandStage });
   }
 
   return manifest;

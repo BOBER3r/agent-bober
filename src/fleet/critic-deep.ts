@@ -1,7 +1,10 @@
 import { z } from "zod";
 import type { LLMClient, Message } from "../providers/types.js";
 import type { FleetManifest } from "./manifest.js";
-import { type Outline, runExpandStage } from "./decomposer-deep.js";
+// bober: import Outline from the dependency-free leaf, NOT from ./decomposer-deep.js.
+// This breaks the critic-deep ↔ decomposer-deep import cycle: critic-deep no longer holds any
+// edge (value or type) to the cycle node. runExpandStage is injected via the expand param instead.
+import type { Outline } from "./decomposer-deep-types.js";
 // bober: read budget constants from the dependency-free leaf, NOT from ./decomposer-deep.js.
 // These are used at module-evaluation time (DEEP_CRITIQUE_MAX_TOTAL_CALLS below); importing them
 // from the leaf avoids the circular-import TDZ that killed the CLI (inc-20260620-cli-tdz-crash).
@@ -212,6 +215,14 @@ export async function runCritiqueLoop(input: {
   outline: Outline;
   baseline: FleetManifest;
   expandMaxRetries: number;
+  expand: (input: {
+    client: LLMClient;
+    model: string;
+    outline: Outline;
+    goal: string;
+    maxRetries: number;
+    critiqueFeedback?: string;
+  }) => Promise<FleetManifest>;
 }): Promise<FleetManifest> {
   const { client, model, goal, outline, baseline, expandMaxRetries } = input;
 
@@ -244,7 +255,7 @@ export async function runCritiqueLoop(input: {
 
     reExpandsLeft -= 1;
     try {
-      const reExpanded = await runExpandStage({
+      const reExpanded = await input.expand({
         client,
         model,
         outline,
