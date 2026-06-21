@@ -155,15 +155,20 @@ export function injectGuidanceIntoHandoff(
 
 // ── Sprint cycle ───────────────────────────────────────────────────
 
+export interface RunSprintCycleParams {
+  contract: SprintContract;
+  spec: PlanSpec;
+  completedContracts: SprintContract[];
+  projectRoot: string;
+  config: BoberConfig;
+  projectContext: ProjectContext;
+  pipelineRunId?: string;
+}
+
 export async function runSprintCycle(
-  contract: SprintContract,
-  spec: PlanSpec,
-  completedContracts: SprintContract[],
-  projectRoot: string,
-  config: BoberConfig,
-  projectContext: ProjectContext,
-  pipelineRunId?: string,
+  params: RunSprintCycleParams,
 ): Promise<SprintCycleResult> {
+  const { contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId } = params;
   const maxIterations = config.evaluator.maxIterations;
   let currentContract = updateContractStatus(contract, "in-progress");
   await updateContract(projectRoot, currentContract);
@@ -928,15 +933,15 @@ export async function runTsPipeline(
       const contract = contracts[i];
       logger.progress(i + 1, maxSprints, contract.title);
 
-      const result = await runSprintCycle(
+      const result = await runSprintCycle({
         contract,
         spec,
-        completedSprints,
+        completedContracts: completedSprints,
         projectRoot,
         config,
         projectContext,
         pipelineRunId,
-      );
+      });
 
       if (result.contract.status === "passed") {
         completedSprints.push(result.contract);

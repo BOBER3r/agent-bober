@@ -226,14 +226,14 @@ describe("code-reviewer pipeline integration (s5-c6)", () => {
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    const result = await runSprintCycle(
-      testContract,
-      testSpec,
-      [],
-      tmpRoot,
-      minimalConfig,
-      testProjectContext,
-    );
+    const result = await runSprintCycle({
+      contract: testContract,
+      spec: testSpec,
+      completedContracts: [],
+      projectRoot: tmpRoot,
+      config: minimalConfig,
+      projectContext: testProjectContext,
+    });
 
     // Pipeline returned a passed contract
     expect(result.contract.status).toBe("passed");
@@ -330,14 +330,14 @@ describe("code-reviewer pipeline integration (s5-c6)", () => {
     let result: Awaited<ReturnType<typeof runSprintCycle>>;
     await expect(
       (async () => {
-        result = await runSprintCycle(
-          testContract,
-          testSpec,
-          [],
-          tmpRoot,
-          minimalConfig,
-          testProjectContext,
-        );
+        result = await runSprintCycle({
+          contract: testContract,
+          spec: testSpec,
+          completedContracts: [],
+          projectRoot: tmpRoot,
+          config: minimalConfig,
+          projectContext: testProjectContext,
+        });
       })(),
     ).resolves.toBeUndefined();
 

@@ -226,14 +226,14 @@ describe("documenter pipeline integration", () => {
       timestamp: "2026-01-01T00:00:00.000Z",
     });
 
-    const result = await runSprintCycle(
-      testContract,
-      testSpec,
-      [],
-      tmpRoot,
-      baseConfig,
-      testProjectContext,
-    );
+    const result = await runSprintCycle({
+      contract: testContract,
+      spec: testSpec,
+      completedContracts: [],
+      projectRoot: tmpRoot,
+      config: baseConfig,
+      projectContext: testProjectContext,
+    });
 
     expect(result.contract.status).toBe("passed");
     expect(documenterSpy).toHaveBeenCalledTimes(1);
@@ -262,14 +262,14 @@ describe("documenter pipeline integration", () => {
     let result: Awaited<ReturnType<typeof runSprintCycle>>;
     await expect(
       (async () => {
-        result = await runSprintCycle(
-          testContract,
-          testSpec,
-          [],
-          tmpRoot,
-          baseConfig,
-          testProjectContext,
-        );
+        result = await runSprintCycle({
+          contract: testContract,
+          spec: testSpec,
+          completedContracts: [],
+          projectRoot: tmpRoot,
+          config: baseConfig,
+          projectContext: testProjectContext,
+        });
       })(),
     ).resolves.toBeUndefined();
 
@@ -296,14 +296,14 @@ describe("documenter pipeline integration", () => {
       documenter: { ...baseConfig.documenter, enabled: false },
     };
 
-    const result = await runSprintCycle(
-      testContract,
-      testSpec,
-      [],
-      tmpRoot,
-      disabledConfig,
-      testProjectContext,
-    );
+    const result = await runSprintCycle({
+      contract: testContract,
+      spec: testSpec,
+      completedContracts: [],
+      projectRoot: tmpRoot,
+      config: disabledConfig,
+      projectContext: testProjectContext,
+    });
 
     expect(result.contract.status).toBe("passed");
     expect(documenterSpy).not.toHaveBeenCalled();
