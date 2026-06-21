@@ -1069,7 +1069,7 @@ tools for accurate docs. A separate **pre-existing** dangling onboarding link (`
 its own follow-up. See the finale record
 [`sprint-spec-20260620-graph-tokensave-6-1-compat-2.md`](./sprint-spec-20260620-graph-tokensave-6-1-compat-2.md).
 
-## Codebase Health Remediation — Sprint 1 (break the fleet runtime cycle)
+## Codebase Health Remediation — Sprints 1–2 (break the fleet runtime cycle, collapse positional params)
 
 `spec-20260621-codebase-health-remediation` — acts on the structural findings of
 `research-20260621-codebase-health-hotspots-cycles`. Sprint 1 **fully eliminates the genuine
@@ -1092,18 +1092,34 @@ semantics are unchanged (a spy test asserts the injected `expand` is invoked onc
 miss). The diff is confined to 4 source files; build / typecheck / lint clean; **2815/2815 tests
 green**, all 7 criteria (sc-1-1..sc-1-7) passed iteration 1.
 
+**Sprint 2** addresses the second structural-health finding: `runSprintCycle`'s **7 positional
+parameters** — a long argument list that was easy to mis-order. The signature now takes a single typed
+**`RunSprintCycleParams`** options object (a new `export interface` carrying the same 7 fields with
+`pipelineRunId` optional), the body gains exactly **one** destructure line, and all **6 invocations**
+(1 production + 5 test) were converted to object literals. The production call maps its local
+`completedSprints` var into the `completedContracts` field by position — the only non-identity mapping.
+`runSprintCycle` stays **internal** (absent from `src/index.ts` and MCP), so there is **no public-API
+impact**. **Pure mechanical refactor, zero behavior change** (the retry / evaluator-iteration /
+contract-status / reviewer-and-documenter-spawning body is untouched): **2815/2815 tests green**, all 6
+criteria (sc-2-1..sc-2-6) passed iteration 1.
+
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260621-codebase-health-remediation-1.md](./sprint-spec-20260621-codebase-health-remediation-1.md) | **Fully break the `critic-deep` ↔ `decomposer-deep` runtime import cycle (dependency injection):** new dependency-free leaf `src/fleet/decomposer-deep-types.ts` (`OutlineArea`/`Outline`, **0 relative imports**, mirrors `decomposer-deep-constants.ts`); `critic-deep.ts` **deletes** its `./decomposer-deep.js` import (value **and** type) and imports `Outline` from `./decomposer-deep-types.js`; `runCritiqueLoop` (`critic-deep.ts:211`) gains an injected `expand: (input) => Promise<FleetManifest>` param (`:218`) and calls `input.expand(...)` (`:258`) in place of the imported `runExpandStage`; `decomposer-deep.ts` `import type`s + **re-exports** `Outline`/`OutlineArea` from the leaf (`:89-90`, public surface unchanged) and at `:371` passes `expand: runExpandStage` into `runCritiqueLoop`; `decomposeGoalDeep` (`:341`, sole production caller) **exported signature byte-identical**; `critic-deep.test.ts` supplies `expand` to all 8 existing `runCritiqueLoop` calls + 1 new sc-1-7 spy test (injected fn invoked once on a critique miss); supersedes `a73526c`'s module-init-only mitigation (constants leaf retained, `decomposer-deep-load-order.test.ts` guard still applies); **Cycle 1** (`fact-judge` ↔ `reconcile`, type-only) deliberately untouched; commit `349c22c`, 4 source files; suite **2815/2815**, all 7 criteria iter-1, no regression |
+| 2 | [sprint-spec-20260621-codebase-health-remediation-2.md](./sprint-spec-20260621-codebase-health-remediation-2.md) | **Collapse `runSprintCycle`'s 7 positional params into a single typed `RunSprintCycleParams` object:** new `export interface RunSprintCycleParams` (`pipeline.ts:158`, 7 fields — `contract`/`spec`/`completedContracts`/`projectRoot`/`config`/`projectContext`/`pipelineRunId?`, names mirror the former params); signature `runSprintCycle(params: RunSprintCycleParams)` (`:168`) with the **only** body delta a destructure at `:171`; production caller `runTsPipeline` passes an object literal at `:936`, mapping local `completedSprints → completedContracts` by position (`:939`); the 5 test call sites (`code-reviewer-agent.test.ts:229,333`; `documenter-agent.test.ts:229,265,299`) converted to object literals; `runSprintCycle` stays **internal** (grep `src/index.ts` + `src/mcp/` empty, no public-API change); **zero behavior change** (retry/evaluator/status/reviewer-documenter body untouched); diff confined to 3 files; commit `c7e721c`, suite **2815/2815**, all 6 criteria iter-1, no regression |
 
 ### Plan close-out
 
-`spec-20260621-codebase-health-remediation` Sprint 1 is **complete** on branch
-`bober/medical-team` — passed evaluation on iteration 1 (zero reworks), **2815/2815 tests** green.
-It **resolves the one genuine runtime import cycle** in the codebase (the `fleet`
+`spec-20260621-codebase-health-remediation` Sprints 1–2 are **complete** on branch
+`bober/medical-team` — each passed evaluation on iteration 1 (zero reworks), **2815/2815 tests** green.
+Sprint 1 **resolves the one genuine runtime import cycle** in the codebase (the `fleet`
 `critic-deep` ↔ `decomposer-deep` value cycle): `critic-deep` now holds **zero** edges to the cycle
 node, the re-expand function is injected rather than imported, and `Outline` lives in a
 dependency-free leaf. The remaining `decomposer-deep → critic-deep` edge is one-directional and not
 a cycle. **Cycle 1** (`orchestrator/memory/fact-judge.ts` ↔ `reconcile.ts`) is `import type`-only —
-erased at compile time, no runtime cycle — and was intentionally out of scope. See the record
-[`sprint-spec-20260621-codebase-health-remediation-1.md`](./sprint-spec-20260621-codebase-health-remediation-1.md).
+erased at compile time, no runtime cycle — and was intentionally out of scope. Sprint 2 **collapses
+`runSprintCycle`'s 7 positional parameters into a single typed `RunSprintCycleParams` object** (pure
+mechanical refactor, internal-only, zero behavior change). See the records
+[`sprint-spec-20260621-codebase-health-remediation-1.md`](./sprint-spec-20260621-codebase-health-remediation-1.md)
+and
+[`sprint-spec-20260621-codebase-health-remediation-2.md`](./sprint-spec-20260621-codebase-health-remediation-2.md).
