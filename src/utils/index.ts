@@ -5,7 +5,6 @@ export {
   commitAll,
   getChangedFiles,
   getDiff,
-  stashAndRestore,
   hasUncommittedChanges,
 } from "./git.js";
 export {

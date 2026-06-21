@@ -1,7 +1,5 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-
-import { ensureDir } from "./helpers.js";
 
 const OUTLINES_DIR = ".bober/outlines";
 
@@ -12,28 +10,6 @@ function outlinesDir(projectRoot: string): string {
 function outlinePath(projectRoot: string, specId: string): string {
   const safeId = specId.replace(/[^a-zA-Z0-9_-]/g, "_");
   return join(outlinesDir(projectRoot), `${safeId}-outline.md`);
-}
-
-/**
- * Save a structure outline document to disk as a markdown file.
- * Overwrites any existing outline with the same specId.
- *
- * The content should be a complete markdown document with sections per phase:
- * - Phase title
- * - Key Changes (types, signatures, interfaces)
- * - Files affected
- * - Test Checkpoint (how to verify independently)
- * - Depends On (prior phases)
- */
-export async function saveOutline(
-  projectRoot: string,
-  specId: string,
-  content: string,
-): Promise<void> {
-  await ensureDir(outlinesDir(projectRoot));
-
-  const filePath = outlinePath(projectRoot, specId);
-  await writeFile(filePath, content, "utf-8");
 }
 
 /**

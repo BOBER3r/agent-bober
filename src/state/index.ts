@@ -41,7 +41,6 @@ export {
 } from "./design-state.js";
 
 export {
-  saveOutline,
   readOutline,
 } from "./outline-state.js";
 
