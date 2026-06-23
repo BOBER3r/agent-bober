@@ -19,6 +19,7 @@ import {
 } from "../../state/index.js";
 import { getCurrentBranch, getChangedFiles, commitAll } from "../../utils/git.js";
 import { logger } from "../../utils/logger.js";
+import { getOpenClarifications } from "../../contracts/spec.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -109,10 +110,30 @@ export async function runSprintCommand(
     return;
   }
 
-  // Load contracts
-  const contracts = await listContracts(projectRoot);
+  // Refuse to run sprints against a spec that still needs clarification
+  if (spec.status === "needs-clarification") {
+    const open = getOpenClarifications(spec);
+    logger.error(
+      `Plan "${spec.title}" needs clarification before sprints can run.`,
+    );
+    for (const q of open) {
+      logger.info(`  [${q.questionId}] ${q.question}`);
+    }
+    logger.info(
+      "Answer with 'npx agent-bober plan-answer <specId> <questionId> <answer>', then re-run.",
+    );
+    return;
+  }
+
+  // Load contracts, scoped to the active (latest) spec
+  const allContracts = await listContracts(projectRoot);
+  const contracts = allContracts.filter((c) => c.specId === spec.specId);
   if (contracts.length === 0) {
-    logger.error("No sprint contracts found. Run 'npx agent-bober plan' first.");
+    logger.error(
+      "No sprint contracts found for the active plan. " +
+        "Run 'npx agent-bober plan' to (re)materialize contracts, " +
+        "or 'npx agent-bober run' to execute the full pipeline.",
+    );
     return;
   }
 
