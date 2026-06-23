@@ -20,7 +20,7 @@
 import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
-import { createContract } from "../contracts/sprint-contract.js";
+import { createContract, SprintContractSchema } from "../contracts/sprint-contract.js";
 import { generateContractPrecision } from "./planner-agent.js";
 import { saveContract } from "../state/index.js";
 import { logger } from "../utils/logger.js";
@@ -40,6 +40,48 @@ export async function materializeContracts(
   projectRoot: string,
   config: BoberConfig,
 ): Promise<SprintContract[]> {
+  // ── Embedded branch: prefer valid spec.sprints when present ──────────
+  // Real bober-authored specs have string sprints (ids) — safeParse fails
+  // those and falls through to the feature-derived branch below.
+  // External/planner-authored specs may carry full contract objects here.
+  if (Array.isArray(spec.sprints) && spec.sprints.length > 0) {
+    const embedded: SprintContract[] = [];
+    let allParsed = true;
+
+    for (let i = 0; i < spec.sprints.length; i++) {
+      const parsed = SprintContractSchema.safeParse(spec.sprints[i]);
+      if (!parsed.success) {
+        allParsed = false;
+        logger.warn(
+          `Embedded spec.sprints[${i}] failed schema validation; falling back to feature-derived contracts for the whole spec.`,
+        );
+        break;
+      }
+      const contract = parsed.data;
+      contract.status = "proposed";
+      contract.specId = spec.specId;
+      contract.sprintNumber = i + 1;
+      // bober: width-2 pad covers 1–99; widen to 3 if suite grows past 99.
+      contract.contractId = `sprint-${spec.specId}-${String(i + 1).padStart(2, "0")}`;
+      embedded.push(contract);
+    }
+
+    if (allParsed && embedded.length > 0) {
+      try {
+        for (const c of embedded) {
+          await saveContract(projectRoot, c);
+        }
+        return embedded;
+      } catch (err) {
+        logger.warn(
+          `Embedded sprints failed the precision gate; falling back to feature-derived contracts: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        // fall through to feature-derived loop
+      }
+    }
+  }
+
+  // ── Feature-derived branch (fallback and default path) ───────────────
   const contracts: SprintContract[] = [];
   for (let i = 0; i < spec.features.length; i++) {
     const feature = spec.features[i];

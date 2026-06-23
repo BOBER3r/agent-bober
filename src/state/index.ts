@@ -6,6 +6,7 @@ export {
   loadContract,
   listContracts,
   updateContract,
+  clearContractsForSpec,
 } from "./sprint-state.js";
 
 export {

@@ -21,7 +21,8 @@ import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSpec } from "../contracts/spec.js";
-import { listContracts } from "../state/index.js";
+import { SprintContractSchema } from "../contracts/sprint-contract.js";
+import { listContracts, clearContractsForSpec } from "../state/index.js";
 
 // ── Mock the LLM call so tests are fast and network-free ──────────────
 
@@ -171,5 +172,153 @@ describe("materializeContracts", () => {
     expect(idx09).toBeGreaterThanOrEqual(0);
     expect(idx10).toBeGreaterThanOrEqual(0);
     expect(idx09).toBeLessThan(idx10);
+  });
+
+  it("S2-C2: valid embedded spec.sprints entries are used verbatim with status normalized to proposed", async () => {
+    const { materializeContracts } = await import("./contract-materialization.js");
+    const cfg = { planner: { model: "x" } } as never;
+    const spec = specWith(2);
+
+    // Build two fully-valid SprintContract objects (status "agreed" to verify normalization)
+    const embeddedEntry1 = {
+      contractId: "orig-id-1",
+      specId: "other-spec",
+      sprintNumber: 99,
+      title: "Embedded Sprint One",
+      description: "This embedded sprint implements the login feature.",
+      status: "agreed" as const,
+      successCriteria: [
+        {
+          criterionId: "emb-1-c1",
+          description: "The login form submits credentials and returns a JWT token on success.",
+          verificationMethod: "unit-test" as const,
+          required: true,
+        },
+      ],
+      nonGoals: ["Do not implement the registration flow in this sprint."],
+      stopConditions: ["All unit tests pass for the authentication module."],
+      definitionOfDone: "The login endpoint accepts valid credentials and returns a JWT.",
+      assumptions: ["JWT secret is pre-configured in env."],
+      outOfScope: ["Registration and password reset flows."],
+      dependsOn: [],
+      features: ["feat-login"],
+      iterationHistory: [],
+      lastEvalId: null,
+    };
+    const embeddedEntry2 = {
+      contractId: "orig-id-2",
+      specId: "other-spec",
+      sprintNumber: 100,
+      title: "Embedded Sprint Two",
+      description: "This embedded sprint implements the logout feature.",
+      status: "in-progress" as const,
+      successCriteria: [
+        {
+          criterionId: "emb-2-c1",
+          description: "The logout endpoint invalidates the user session and clears the cookie.",
+          verificationMethod: "api-check" as const,
+          required: true,
+        },
+      ],
+      nonGoals: ["Do not implement token refresh in this sprint."],
+      stopConditions: ["Integration test verifies logout clears the session cookie."],
+      definitionOfDone: "The logout endpoint clears the session and returns HTTP 200 with no body.",
+      assumptions: [],
+      outOfScope: [],
+      dependsOn: [],
+      features: ["feat-logout"],
+      iterationHistory: [],
+      lastEvalId: null,
+    };
+
+    // Assign embedded sprints (createSpec doesn't accept sprints)
+    (spec as Record<string, unknown>).sprints = [embeddedEntry1, embeddedEntry2];
+
+    const out = await materializeContracts(spec, tmpDir, cfg);
+
+    // Embedded branch: both entries used, status normalized, ids deterministic
+    expect(out).toHaveLength(2);
+
+    expect(out[0].status).toBe("proposed");
+    expect(out[0].specId).toBe(spec.specId);
+    expect(out[0].sprintNumber).toBe(1);
+    expect(out[0].contractId).toBe(`sprint-${spec.specId}-01`);
+
+    // Embedded criteria preserved
+    expect(out[0].successCriteria).toHaveLength(1);
+    expect(out[0].successCriteria[0].criterionId).toBe("emb-1-c1");
+    expect(out[0].successCriteria[0].verificationMethod).toBe("unit-test");
+    expect(out[0].nonGoals).toEqual(embeddedEntry1.nonGoals);
+    expect(out[0].stopConditions).toEqual(embeddedEntry1.stopConditions);
+    expect(out[0].definitionOfDone).toBe(embeddedEntry1.definitionOfDone);
+
+    expect(out[1].status).toBe("proposed");
+    expect(out[1].contractId).toBe(`sprint-${spec.specId}-02`);
+    expect(out[1].successCriteria[0].criterionId).toBe("emb-2-c1");
+
+    // Files must be on disk and schema-valid
+    const listed = await listContracts(tmpDir);
+    expect(listed).toHaveLength(2);
+    for (const c of listed) {
+      const parseResult = SprintContractSchema.safeParse(c);
+      expect(parseResult.success).toBe(true);
+    }
+  });
+
+  it("S2-C3: malformed embedded entries fall back to feature-derived without throwing", async () => {
+    const { materializeContracts } = await import("./contract-materialization.js");
+    const cfg = { planner: { model: "x" } } as never;
+    const spec = specWith(2);
+
+    // Assign malformed embedded entry (missing required fields: status, successCriteria, etc.)
+    (spec as Record<string, unknown>).sprints = [{ title: "x" }];
+
+    // Must not throw
+    const out = await materializeContracts(spec, tmpDir, cfg);
+
+    // Falls back to feature-derived: count == features.length
+    expect(out).toHaveLength(spec.features.length);
+
+    // Feature-derived contracts have titles matching the feature titles
+    expect(out[0].title).toBe(spec.features[0].title);
+    expect(out[1].title).toBe(spec.features[1].title);
+
+    // All are schema-valid
+    for (const c of out) {
+      const parseResult = SprintContractSchema.safeParse(c);
+      expect(parseResult.success).toBe(true);
+    }
+
+    // All use agent-evaluation (feature-derived signature)
+    expect(out[0].successCriteria[0].verificationMethod).toBe("agent-evaluation");
+  });
+
+  it("S2-C5: idempotency — re-materializing same specId leaves no stale higher-numbered files", async () => {
+    const { materializeContracts } = await import("./contract-materialization.js");
+    const cfg = { planner: { model: "x" } } as never;
+
+    // First: materialize a 3-feature spec
+    const spec3 = specWith(3);
+    await materializeContracts(spec3, tmpDir, cfg);
+    const after3 = await listContracts(tmpDir);
+    expect(after3).toHaveLength(3);
+
+    // Second: clear + materialize a 2-feature version of the SAME specId
+    const spec2 = {
+      ...spec3,
+      features: spec3.features.slice(0, 2),
+    } as typeof spec3;
+
+    await clearContractsForSpec(tmpDir, spec3.specId);
+    await materializeContracts(spec2, tmpDir, cfg);
+
+    const after2 = await listContracts(tmpDir);
+    expect(after2).toHaveLength(2);
+
+    // The stale -03 file must not exist
+    const ids = after2.map((c) => c.contractId);
+    expect(ids.some((id) => id.endsWith("-03"))).toBe(false);
+    expect(ids.some((id) => id.endsWith("-01"))).toBe(true);
+    expect(ids.some((id) => id.endsWith("-02"))).toBe(true);
   });
 });
