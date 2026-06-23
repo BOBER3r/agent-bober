@@ -120,7 +120,7 @@ export async function runSprintCommand(
       logger.info(`  [${q.questionId}] ${q.question}`);
     }
     logger.info(
-      "Answer with 'npx agent-bober plan-answer <specId> <questionId> <answer>', then re-run.",
+      `Answer with 'npx agent-bober plan answer ${spec.specId} <questionId> "<answer>"', then re-run.`,
     );
     return;
   }

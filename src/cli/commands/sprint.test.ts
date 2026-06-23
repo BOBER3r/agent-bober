@@ -160,8 +160,9 @@ describe("S3-C3 — needs-clarification refusal", () => {
       }),
     );
 
-    // Spy on console.error to capture the clarification message
+    // Spy on console.error (logger.error) and console.log (logger.info) to capture all output
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
     const { runGenerator } = await import("../../orchestrator/generator-agent.js");
     const { runSprintCommand } = await import("./sprint.js");
@@ -174,7 +175,14 @@ describe("S3-C3 — needs-clarification refusal", () => {
     const errOutput = errSpy.mock.calls.map((args) => args.join(" ")).join("\n");
     expect(errOutput).toContain("needs clarification");
 
+    // The hint logged via logger.info (console.log) must use 'plan answer' (space form),
+    // not 'plan-answer' (hyphenated form — that command does not exist in the CLI).
+    const infoOutput = infoSpy.mock.calls.map((args) => args.join(" ")).join("\n");
+    expect(infoOutput).toContain("plan answer");
+    expect(infoOutput).not.toContain("plan-answer");
+
     errSpy.mockRestore();
+    infoSpy.mockRestore();
   });
 });
 
