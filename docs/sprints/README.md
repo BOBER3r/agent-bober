@@ -370,12 +370,13 @@ User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Comm
 provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
 under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
 
-## Plan→Contracts Materialization — in progress (1 of 3)
+## Plan→Contracts Materialization — in progress (2 of 3)
 
 `spec-20260623-plan-contracts-materialization` — refactor the run pipeline's sprint-contract
 creation into a reusable helper so a standalone `plan` path can share it, and make contract ids
-deterministic. **This plan is in progress (1 of 3); the plan→sprint standalone gap is NOT yet
-closed.** Sprint 1 is the **extraction step only**: it pulls the inline contract-creation loop
+deterministic. **This plan is in progress (2 of 3); as of Sprint 2 the standalone plan→sprint
+gap is CLOSED** — `plan` now materializes contracts so `sprint` no longer errors *"No sprint
+contracts found"*. Sprint 1 is the **extraction step only**: it pulls the inline contract-creation loop
 out of `runTsPipeline` (the old `pipeline.ts:~856-906` block) into a new exported async helper
 `materializeContracts(spec, projectRoot, config)` in `src/orchestrator/contract-materialization.ts`,
 which `runTsPipeline` now calls in one line (`pipeline.ts:853`). The extraction is **verbatim** —
@@ -387,9 +388,22 @@ so `listContracts()` lexical filename ordering equals sprint execution order (`-
 The post-plan (`pipeline.ts:844`) and post-sprint-contract (`pipeline.ts:857`) audit checkpoints
 **stay in the pipeline** on either side of the call; the helper carries **zero**
 audit/checkpoint/history logic. The helper is orchestrator-internal (not re-exported from
-`src/index.ts`) and as of this sprint has exactly **one caller** (`runTsPipeline`). Sprint 2 wires
-the standalone `plan` command; Sprint 3 scopes sprint-command contracts.
+`src/index.ts`) and as of that sprint had exactly **one caller** (`runTsPipeline`). Sprint 2
+**closes the original bug** — it gives `materializeContracts` an **embedded branch** (use valid
+`spec.sprints` *objects* verbatim, status→`proposed`, deterministic ids; any parse/precision
+failure → whole-set feature-derived fallback, no throw, no partial mix) and **eagerly wires it
+into all three `plan` entry points** (`runPlanCommand` + the two `plan answer` paths), which
+**clear-then-materialize** the current spec's contracts on resolve→`ready` (skipped for
+`needs-clarification`) via the new `clearContractsForSpec(projectRoot, specId)` helper. The
+next-step hint across all paths was corrected from `run` (which re-plans and ignores the fresh
+contracts) to `npx agent-bober sprint` (which consumes them) — the iteration-1 fail was this
+hint *semantics* (S2-C6); fixed in iteration 2. **Standalone `plan` → `sprint` now works
+end-to-end.** NB bober-authored specs store `spec.sprints` as contractId *strings* (which
+safeParse-reject → fallback); the embedded branch is for external/planner specs that emit full
+sprint *objects*. Sprint 3 scopes the `sprint` command to the active spec + adds a clarification
+guard.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260623-plan-contracts-materialization-1.md](./sprint-spec-20260623-plan-contracts-materialization-1.md) | Extraction step: new exported `materializeContracts(spec, projectRoot, config): Promise<SprintContract[]>` (`src/orchestrator/contract-materialization.ts`) replaces `runTsPipeline`'s inline contract-creation loop (verbatim content: `createContract` + `generateContractPrecision` + same logs/order); **sole behavioral change** = deterministic zero-padded `sprint-<specId>-NN` ids (override `createContract`'s `Date.now` default) so `listContracts()` lexical order == `sprintNumber` order for 12+ sprints; post-plan + post-sprint-contract checkpoints stay in `pipeline.ts` (helper has zero audit logic); orchestrator-internal, one caller; **extraction only — standalone plan→sprint wiring is Sprint 2, not shipped here** |
+| 2 | [sprint-spec-20260623-plan-contracts-materialization-2.md](./sprint-spec-20260623-plan-contracts-materialization-2.md) | **Closes the bug** — `materializeContracts` gains an embedded branch (valid `spec.sprints` *objects* used verbatim: status→`proposed`, `specId` rebound, deterministic `sprint-<specId>-NN` ids; any parse/precision failure → **whole-set** feature-derived fallback, no throw/partial mix) + new `clearContractsForSpec(projectRoot, specId)` (`src/state/sprint-state.ts`, re-exported) deleting only that spec's contract files; all three `plan` entry points (`runPlanCommand` + `runPlanAnswerCommand` + `runPlanAnswerInteractive`) **clear-then-materialize** on resolve→`ready` (skipped for `needs-clarification`; `plan answer` paths non-fatal `try/catch`) so `sprint` finds contracts — **standalone plan→sprint works**; all next-step hints corrected `run`→`npx agent-bober sprint`. **2 iterations**: iter-1 (`36de025`) failed S2-C6 on hint semantics (`run` re-plans/ignores fresh contracts), iter-2 (`bef849e`) fixed hints + materialize-on-`plan answer`; passed 6/6 |

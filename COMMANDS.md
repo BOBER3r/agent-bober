@@ -57,27 +57,37 @@ project's recorded `mode`/`preset`. It never touches `bober.config.json`, `.bobe
 
 ### `bober plan "feature"`
 
-Run the planner. Produces a PlanSpec with sprint contracts.
+Run the planner. Produces a PlanSpec **and** eagerly materializes its sprint contracts into
+`.bober/contracts/` (one schema-valid `sprint-<specId>-NN.json` per sprint), so a following
+`bober sprint` finds them immediately — the standalone `plan` → `sprint` flow works
+end-to-end with no full `run`.
 
 ```bash
 bober plan "Add CSV export to the users table page"
+# → writes .bober/specs/<specId>.json AND .bober/contracts/sprint-<specId>-NN.json
+# → prints: Next: npx agent-bober sprint
 ```
 
+Re-planning the same feature **clears that spec's prior contracts first**, so stale
+higher-numbered files do not accumulate (other specs' contracts are left untouched).
+
 If the planner needs more information, it emits `status: needs-clarification` and surfaces
-questions. Resolve them with:
+questions — **no contracts are written yet**. Resolve them with:
 
 ```bash
 bober plan answer <specId>                            # Interactive resolution
 bober plan answer <specId> <questionId> "my answer"   # Single-question resolution
 ```
 
-After the last question is answered, the spec auto-promotes to `ready` and the pipeline proceeds.
+After the last question is answered, the spec auto-promotes to `ready`, contracts are
+materialized at that point, and the command prints `Next: npx agent-bober sprint`.
 
 ---
 
 ### `bober sprint`
 
-Execute the next pending sprint contract (generator + evaluator loop).
+Execute the next pending sprint contract (generator + evaluator loop). It consumes the
+contract files that `bober plan` materialized into `.bober/contracts/`.
 
 ```bash
 bober sprint
