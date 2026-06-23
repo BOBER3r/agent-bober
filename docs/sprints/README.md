@@ -369,3 +369,27 @@ the `--yes` gate + write-and-stop default are unchanged, and the written manifes
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Commands** — the
 provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
 under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
+
+## Plan→Contracts Materialization — in progress (1 of 3)
+
+`spec-20260623-plan-contracts-materialization` — refactor the run pipeline's sprint-contract
+creation into a reusable helper so a standalone `plan` path can share it, and make contract ids
+deterministic. **This plan is in progress (1 of 3); the plan→sprint standalone gap is NOT yet
+closed.** Sprint 1 is the **extraction step only**: it pulls the inline contract-creation loop
+out of `runTsPipeline` (the old `pipeline.ts:~856-906` block) into a new exported async helper
+`materializeContracts(spec, projectRoot, config)` in `src/orchestrator/contract-materialization.ts`,
+which `runTsPipeline` now calls in one line (`pipeline.ts:853`). The extraction is **verbatim** —
+same `createContract` inputs (criteria mapped with `verificationMethod: "agent-evaluation"`), same
+`generateContractPrecision` call, same log strings, same order — with **one authorized behavioral
+change**: feature-derived contracts now get a **deterministic, zero-padded `sprint-<specId>-NN`**
+id (overriding `createContract`'s `sprint-${Date.now()}-${counter}` default *after* construction)
+so `listContracts()` lexical filename ordering equals sprint execution order (`-09` before `-10`).
+The post-plan (`pipeline.ts:844`) and post-sprint-contract (`pipeline.ts:857`) audit checkpoints
+**stay in the pipeline** on either side of the call; the helper carries **zero**
+audit/checkpoint/history logic. The helper is orchestrator-internal (not re-exported from
+`src/index.ts`) and as of this sprint has exactly **one caller** (`runTsPipeline`). Sprint 2 wires
+the standalone `plan` command; Sprint 3 scopes sprint-command contracts.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260623-plan-contracts-materialization-1.md](./sprint-spec-20260623-plan-contracts-materialization-1.md) | Extraction step: new exported `materializeContracts(spec, projectRoot, config): Promise<SprintContract[]>` (`src/orchestrator/contract-materialization.ts`) replaces `runTsPipeline`'s inline contract-creation loop (verbatim content: `createContract` + `generateContractPrecision` + same logs/order); **sole behavioral change** = deterministic zero-padded `sprint-<specId>-NN` ids (override `createContract`'s `Date.now` default) so `listContracts()` lexical order == `sprintNumber` order for 12+ sprints; post-plan + post-sprint-contract checkpoints stay in `pipeline.ts` (helper has zero audit logic); orchestrator-internal, one caller; **extraction only — standalone plan→sprint wiring is Sprint 2, not shipped here** |
