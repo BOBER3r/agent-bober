@@ -4,9 +4,13 @@
   "sprintNumber": 2,
   "title": "Embedded-sprint materialization and eager wiring into plan",
   "description": "Extend materializeContracts to prefer valid embedded spec.sprints: safeParse each entry against SprintContractSchema, normalize status to proposed, and on any parse or precision failure fall back to feature-derived generation without throwing. Wire runPlanCommand to call materializeContracts after a successful non-clarification plan, clearing the current specId's prior contracts first, and correct the next-step hint so it points to a command that now functions.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260623-plan-contracts-materialization-1"],
-  "features": ["feat-2"],
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260623-plan-contracts-materialization-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
   "successCriteria": [
     {
       "criterionId": "S2-C1",
@@ -71,8 +75,24 @@
     "src/orchestrator/contract-materialization.test.ts"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
-  "lastEvalId": null,
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-2-1",
+      "result": "fail",
+      "timestamp": "2026-06-23T13:20:00.000Z"
+    },
+    {
+      "iteration": 2,
+      "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-2-2",
+      "result": "pass",
+      "timestamp": "2026-06-23T13:40:00.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260623-plan-contracts-materialization-2-2",
   "createdAt": "2026-06-23T12:00:00.000Z",
-  "updatedAt": "2026-06-23T12:00:00.000Z"
+  "updatedAt": "2026-06-23T13:40:00.000Z",
+  "startedAt": "2026-06-23T13:00:00.000Z",
+  "evaluatorFeedback": "Passed iter 2 (6/6).",
+  "completedAt": "2026-06-23T13:40:00.000Z"
 }

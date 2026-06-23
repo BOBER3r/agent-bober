@@ -1,0 +1,13 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-3",
+  "iteration": 2,
+  "status": "complete",
+  "filesChanged": [
+    { "path": "src/cli/commands/sprint.ts", "action": "modified", "description": "sprint.ts:123 refusal hint now uses 'npx agent-bober plan answer <specId> <questionId> \"<answer>\"' (space form)." },
+    { "path": "src/cli/commands/sprint.test.ts", "action": "modified", "description": "S3-C3 test strengthened: console.log spy asserts output contains 'plan answer' and not 'plan-answer'." }
+  ],
+  "testsAdded": [],
+  "commits": ["559025f - bober(sprint-3): correct needs-clarification hint to 'plan answer'"],
+  "blockers": [],
+  "notes": "Iteration 2 (fixes only S3-C3). tsc clean; eslint clean; full suite 2370 passed / 3 skipped / 6 pre-existing cockpit failures. sprint.test.ts 4/4; S3-C1/C2/C4/C5 + prior sprints green."
+}

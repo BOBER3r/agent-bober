@@ -554,3 +554,15 @@
 {"event":"sprint-completed","contractId":"sprint-spec-20260621-codebase-health-remediation-3","specId":"spec-20260621-codebase-health-remediation","iteration":1,"timestamp":"2026-06-21T23:10:00Z"}
 {"event":"plan-completed","specId":"spec-20260621-codebase-health-remediation","sprintsCompleted":3,"timestamp":"2026-06-21T23:10:00Z"}
 {"event":"plan-created","specId":"spec-20260623-plan-contracts-materialization","title":"Fix standalone plan to sprint contract materialization","sprintCount":3,"timestamp":"2026-06-23T12:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260623-plan-contracts-materialization-1","specId":"spec-20260623-plan-contracts-materialization","timestamp":"2026-06-23T12:30:00.000Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-1","iteration":1,"result":"pass","timestamp":"2026-06-23T12:45:00.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-1","specId":"spec-20260623-plan-contracts-materialization","iteration":1,"timestamp":"2026-06-23T12:45:00.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","specId":"spec-20260623-plan-contracts-materialization","timestamp":"2026-06-23T13:00:00.000Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","iteration":1,"failedCriteria":["S2-C6"],"timestamp":"2026-06-23T13:20:00.000Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","iteration":2,"result":"pass","timestamp":"2026-06-23T13:40:00.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","specId":"spec-20260623-plan-contracts-materialization","iteration":2,"timestamp":"2026-06-23T13:40:00.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","specId":"spec-20260623-plan-contracts-materialization","timestamp":"2026-06-23T14:00:00.000Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","iteration":1,"failedCriteria":["S3-C3"],"timestamp":"2026-06-23T14:20:00.000Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","iteration":2,"result":"pass","timestamp":"2026-06-23T14:40:00.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","specId":"spec-20260623-plan-contracts-materialization","iteration":2,"timestamp":"2026-06-23T14:40:00.000Z"}
+{"event":"plan-completed","specId":"spec-20260623-plan-contracts-materialization","sprintsCompleted":3,"timestamp":"2026-06-23T14:40:00.000Z"}

@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-2-1",
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-2",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "timestamp": "2026-06-23T05:40:00.000Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 5, "criteriaFailed": 1, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 1, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "exit 0", "details": "clean" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "exit 0", "details": "clean" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "ok" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "6 failed (pre-existing cockpit) | 2365 passed | 3 skipped", "details": "contract-materialization 7/7, plan 8/8; 6 cockpit failures pre-existing/unrelated." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "S2-C1", "description": "build + typecheck zero errors", "required": true, "result": "pass", "evidence": "tsc --noEmit + tsc exit 0.", "feedback": "" },
+    { "criterionId": "S2-C2", "description": "valid embedded used verbatim, status→proposed", "required": true, "result": "pass", "evidence": "embedded branch normalizes status, rebinds specId, deterministic ids, preserves criteria/precision; test green.", "feedback": "" },
+    { "criterionId": "S2-C3", "description": "malformed embedded → feature-derived fallback, no throw", "required": true, "result": "pass", "evidence": "safeParse fail → whole-set fallback; test green.", "feedback": "" },
+    { "criterionId": "S2-C4", "description": "ready plan writes contracts; needs-clarification writes none", "required": true, "result": "pass", "evidence": "clear+materialize only on non-clarification branch; needs-clarification → 0 files, exit 2; tests green.", "feedback": "" },
+    { "criterionId": "S2-C5", "description": "idempotent re-plan, no stale files", "required": true, "result": "pass", "evidence": "clearContractsForSpec matches by specId; 3→2 leaves no -03; tests green.", "feedback": "" },
+    { "criterionId": "S2-C6", "description": "next-step hint points to a command that succeeds, consistent with plan answer", "required": true, "result": "fail", "evidence": "plan.ts:178 hint changed to 'npx agent-bober run', but run re-plans (runPlanner) and ignores the just-written contracts; the command that executes the plan is 'npx agent-bober sprint'. Test only asserts string presence, not semantics.", "feedback": "Change plan.ts:178 hint to 'npx agent-bober sprint'. For consistency, plan answer (plan.ts:297) must also say 'sprint' — which requires plan answer to materialize contracts when it resolves a spec to ready, else sprint would fail there. Update the S2-C6 test to assert 'agent-bober sprint'." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "high", "category": "bug", "file": "src/cli/commands/plan.ts", "line": "178/297", "description": "Hint says 'run' but run re-plans and ignores fresh contracts; sprint is the correct executor.", "expected": "Both runPlanCommand and runPlanAnswerCommand hints say 'sprint'; plan answer must materialize contracts on resolve→ready so sprint succeeds." }
+  ],
+  "summary": "5/6 pass. Embedded branch, fallback, clearContractsForSpec, needs-clarification skip all correct. S2-C6 fails: hint points to 'run' which re-plans and ignores the materialized contracts; should be 'sprint', and plan answer must materialize+say sprint for consistency."
+}

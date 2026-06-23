@@ -4,9 +4,11 @@
   "sprintNumber": 1,
   "title": "Extract shared deterministic materializeContracts helper",
   "description": "Pull the contract-creation loop at src/orchestrator/pipeline.ts:861-906 into a reusable materializeContracts(spec, projectRoot, config) helper that runTsPipeline calls in place of the inline loop. Feature-derived contract content is preserved; contract ids become deterministic and zero-padded as sprint-<specId>-NN so listContracts lexical ordering matches execution order. The post-plan and post-sprint-contract audit checkpoints stay in the pipeline.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
-  "features": ["feat-1"],
+  "features": [
+    "feat-1"
+  ],
   "successCriteria": [
     {
       "criterionId": "S1-C1",
@@ -64,8 +66,17 @@
     "src/orchestrator/contract-materialization.test.ts"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
-  "lastEvalId": null,
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-1-1",
+      "result": "pass",
+      "timestamp": "2026-06-23T12:45:00.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260623-plan-contracts-materialization-1-1",
   "createdAt": "2026-06-23T12:00:00.000Z",
-  "updatedAt": "2026-06-23T12:00:00.000Z"
+  "updatedAt": "2026-06-23T12:45:00.000Z",
+  "startedAt": "2026-06-23T12:30:00.000Z",
+  "completedAt": "2026-06-23T12:45:00.000Z"
 }

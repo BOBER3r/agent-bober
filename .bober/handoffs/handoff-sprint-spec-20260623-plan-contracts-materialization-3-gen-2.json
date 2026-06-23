@@ -1,0 +1,19 @@
+{
+  "handoffId": "handoff-sprint-spec-20260623-plan-contracts-materialization-3-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-3",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "timestamp": "2026-06-23T14:20:00.000Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Sprint 3 retry. Iteration 1 (commit 6f4029d) passed S3-C1/C2/C4/C5; failed S3-C3 only.",
+    "currentBranch": "bober/plan-contracts-materialization",
+    "relevantFiles": ["src/cli/commands/sprint.ts", "src/cli/commands/sprint.test.ts"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": false }
+  },
+  "evaluatorFeedback": "Iteration 1 FAILED S3-C3 ONLY (4/5; S3-C1/C2/C4/C5 are GREEN in commit 6f4029d — do NOT redo or regress them). The needs-clarification guard works functionally, but the user-facing message at src/cli/commands/sprint.ts:123 references the command 'npx agent-bober plan-answer <specId> <questionId> <answer>' with a HYPHEN. That command does not exist. The CLI registers 'answer' as a SUBCOMMAND of 'plan' (src/cli/index.ts:137), so the runnable form is 'npx agent-bober plan answer <specId> <questionId> \"<answer>\"' with a SPACE — exactly as used in src/cli/commands/plan.ts:219. REQUIRED FIXES: (1) Edit sprint.ts:123 to use the space form: Answer with 'npx agent-bober plan answer <specId> <questionId> \"<answer>\"', then re-run. (2) In src/cli/commands/sprint.test.ts, strengthen the S3-C3 test: spy on console.info (the refusal questions are logged via logger which writes to console.info/stdout) and assert the captured output contains the substring 'plan answer' (with a space) so this defect class is caught automatically. Keep S3-C1/C2/C4/C5 and all prior sprints' tests green; the 6 cockpit-integration E2E failures are pre-existing/unrelated.",
+  "instructionsPointer": "Read the contract at .bober/contracts/sprint-spec-20260623-plan-contracts-materialization-3.json and the briefing at .bober/briefings/sprint-spec-20260623-plan-contracts-materialization-3-briefing.md."
+}

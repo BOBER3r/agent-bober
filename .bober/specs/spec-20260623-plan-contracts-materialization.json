@@ -2,11 +2,11 @@
   "specId": "spec-20260623-plan-contracts-materialization",
   "version": 1,
   "createdAt": "2026-06-23T12:00:00.000Z",
-  "updatedAt": "2026-06-23T12:00:00.000Z",
+  "updatedAt": "2026-06-23T14:40:00.000Z",
   "title": "Fix standalone plan to sprint contract materialization",
   "description": "The standalone plan command writes only .bober/specs/*.json; the spec-to-contracts materialization lives solely inside the run pipeline, so sprint errors with 'No sprint contracts found' even though plan prints 'Next: sprint'. This plan extracts a single shared materializeContracts helper used by both plan and run, has plan eagerly materialize contracts (preferring the planner's embedded spec.sprints with feature-derived fallback), gives materialized contracts deterministic zero-padded ids, and hardens the sprint command against the failure modes eager materialization amplifies.",
   "mode": "brownfield",
-  "status": "ready",
+  "status": "completed",
   "ambiguityScore": 2,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -77,7 +77,9 @@
         "AC3: When a spec is needs-clarification, plan writes zero contracts.",
         "AC4: When plan is re-run for the same specId, prior contracts for that specId are overwritten without stale leftovers."
       ],
-      "dependencies": ["feat-1"],
+      "dependencies": [
+        "feat-1"
+      ],
       "estimatedComplexity": "medium"
     },
     {
@@ -90,7 +92,9 @@
         "AC2: When the active spec is needs-clarification, sprint refuses with a message naming the open clarifications and invokes no generator.",
         "AC3: When no contracts match the active spec, the error message instructs the user to re-plan or run the full pipeline."
       ],
-      "dependencies": ["feat-2"],
+      "dependencies": [
+        "feat-2"
+      ],
       "estimatedComplexity": "low"
     }
   ],
@@ -123,5 +127,6 @@
     "estimatedTotalDuration": "3-5 hours",
     "riskLevel": "medium",
     "riskNotes": "Refactors the previously-frozen run pipeline; mitigated by characterization tests asserting feature-derived content parity and deterministic ids. Owner explicitly authorized the run behavior change so run now honors embedded spec.sprints."
-  }
+  },
+  "completedAt": "2026-06-23T14:40:00.000Z"
 }

@@ -325,13 +325,13 @@ Last updated: 2026-06-18
 - Spec: spec-20260623-plan-contracts-materialization
 - Created: 2026-06-23
 - Sprints: 3
-- Status: planned
+- Status: completed (3/3 sprints)
 - Trigger: external tester report — `plan --provider openai` wrote .bober/specs/ but no .bober/contracts/, so `sprint` failed with "No sprint contracts found". Materialization lives only inside `run` (pipeline.ts:856-906).
 
 ### Sprint Breakdown
-1. [proposed] Extract shared deterministic materializeContracts helper -- pull pipeline.ts:861-906 into materializeContracts() called by runTsPipeline; preserve feature-derived content; deterministic zero-padded sprint-<specId>-NN ids; characterization test.
-2. [proposed] Embedded-sprint materialization + eager wiring into plan -- prefer valid spec.sprints (safeParse, status→proposed) w/ feature-derived fallback; plan materializes after non-clarification plan; clear stale same-specId contracts; fix next-step hint.
-3. [proposed] Scope sprint to the active spec + clarification guard -- filter listContracts by spec.specId; refuse needs-clarification specs; improve empty-contracts message; single-spec flow unchanged.
+1. [completed] Extract shared deterministic materializeContracts helper -- pull pipeline.ts:861-906 into materializeContracts() called by runTsPipeline; preserve feature-derived content; deterministic zero-padded sprint-<specId>-NN ids; characterization test.
+2. [completed] Embedded-sprint materialization + eager wiring into plan -- prefer valid spec.sprints (safeParse, status→proposed) w/ feature-derived fallback; plan materializes after non-clarification plan; clear stale same-specId contracts; fix next-step hint.
+3. [completed] Scope sprint to the active spec + clarification guard -- filter listContracts by spec.specId; refuse needs-clarification specs; improve empty-contracts message; single-spec flow unchanged.
 
 ### Scope notes
 - Owner lifted the run-pipeline freeze: run + plan share one helper; run now honors valid embedded spec.sprints (skips per-feature generateContractPrecision LLM calls when present). Protected invariant = feature-derived content parity when no embedded sprints; contract ids legitimately change to deterministic zero-padded form.

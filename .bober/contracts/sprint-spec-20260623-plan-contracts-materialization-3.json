@@ -4,9 +4,13 @@
   "sprintNumber": 3,
   "title": "Scope sprint to the active spec with clarification guard",
   "description": "Make runSprintCommand select only the contracts whose specId matches the latest loaded spec, refuse to run when the latest spec has status needs-clarification, and improve the empty-contracts message to point at re-planning or the full pipeline. The single-spec flow stays unchanged.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260623-plan-contracts-materialization-2"],
-  "features": ["feat-3"],
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260623-plan-contracts-materialization-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
   "successCriteria": [
     {
       "criterionId": "S3-C1",
@@ -63,8 +67,24 @@
     "src/cli/commands/sprint.test.ts"
   ],
   "estimatedDuration": "small",
-  "iterationHistory": [],
-  "lastEvalId": null,
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-3-1",
+      "result": "fail",
+      "timestamp": "2026-06-23T14:20:00.000Z"
+    },
+    {
+      "iteration": 2,
+      "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-3-2",
+      "result": "pass",
+      "timestamp": "2026-06-23T14:40:00.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260623-plan-contracts-materialization-3-2",
   "createdAt": "2026-06-23T12:00:00.000Z",
-  "updatedAt": "2026-06-23T12:00:00.000Z"
+  "updatedAt": "2026-06-23T14:40:00.000Z",
+  "startedAt": "2026-06-23T14:00:00.000Z",
+  "evaluatorFeedback": "Passed iter 2 (5/5).",
+  "completedAt": "2026-06-23T14:40:00.000Z"
 }
