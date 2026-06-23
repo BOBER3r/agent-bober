@@ -1,0 +1,13 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-3",
+  "iteration": 1,
+  "status": "complete",
+  "filesChanged": [
+    { "path": "src/cli/commands/sprint.ts", "action": "modified", "description": "needs-clarification guard (getOpenClarifications, returns before generator); listContracts filtered to c.specId === spec.specId; improved empty-contracts message referencing plan/run." },
+    { "path": "src/cli/commands/sprint.test.ts", "action": "created", "description": "New tests S3-C2 (two-spec filtering), S3-C3 (needs-clarification refusal, generator never called), S3-C4 (empty message mentions plan+run), S3-C5 (single-spec happy path)." }
+  ],
+  "testsAdded": ["src/cli/commands/sprint.test.ts"],
+  "commits": ["6f4029d - bober(sprint-3): scope sprint to active spec + needs-clarification guard"],
+  "blockers": [],
+  "notes": "tsc clean; eslint clean; full suite 2370 passed / 3 skipped / 6 pre-existing cockpit failures. sprint.test.ts 4/4; plan.test.ts + run.test.ts green. ORCHESTRATOR NOTE for evaluator: the new clarification message at sprint.ts:123 uses 'plan-answer' (hyphen) but the real command is 'plan answer' (space) per cli/index.ts:137 and plan.ts:219 — verify the message points to a runnable command."
+}

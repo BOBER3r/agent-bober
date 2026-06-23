@@ -1,0 +1,132 @@
+{
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "version": 1,
+  "createdAt": "2026-06-23T12:00:00.000Z",
+  "updatedAt": "2026-06-23T14:40:00.000Z",
+  "title": "Fix standalone plan to sprint contract materialization",
+  "description": "The standalone plan command writes only .bober/specs/*.json; the spec-to-contracts materialization lives solely inside the run pipeline, so sprint errors with 'No sprint contracts found' even though plan prints 'Next: sprint'. This plan extracts a single shared materializeContracts helper used by both plan and run, has plan eagerly materialize contracts (preferring the planner's embedded spec.sprints with feature-derived fallback), gives materialized contracts deterministic zero-padded ids, and hardens the sprint command against the failure modes eager materialization amplifies.",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "approve . Changing run's research/plan/contract behavior (frozen) — including making run honor spec.sprints[]. this would make sense. 3. Numeric/topological ordering for >=10 sprints (C7, pre-existing) beyond trivial zero-padding. this as well",
+      "resolvedAt": "2026-06-23T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q1-where-to-fix",
+      "answer": "Eager at end of plan — plan writes contracts immediately after the spec.",
+      "resolvedAt": "2026-06-23T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-data-source",
+      "answer": "Prefer valid spec.sprints, else regenerate from features via generateContractPrecision.",
+      "resolvedAt": "2026-06-23T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-refactor",
+      "answer": "Extract a shared materializeContracts helper used by both plan and the run pipeline. Owner additionally authorized run to honor embedded spec.sprints (lifting the freeze) so the helper needs no mode flag.",
+      "resolvedAt": "2026-06-23T12:00:00.000Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The standalone plan-then-sprint flow is an intended, supported path (plan.ts:171 prints 'Next: npx agent-bober sprint').",
+    "spec.sprints[] is incidental, unvalidated model passthrough (spec.ts:160 z.array(z.unknown()); runPlanner only saveSpec-s at planner-agent.ts:275), so every entry must be safeParse-d, never trusted.",
+    "Materialized contracts are forced to status 'proposed' regardless of any embedded status, so findNextPendingSprint (sprint.ts:38-43) picks them up.",
+    "Eager materialization runs only when the spec is not needs-clarification; a parked spec writes zero contracts.",
+    "Owner authorized lifting the run-pipeline freeze: run and plan share one helper and run now honors valid embedded spec.sprints, skipping per-feature generateContractPrecision LLM calls when present.",
+    "The protected invariant is that feature-derived contract content is preserved when no embedded sprints exist; contract ids legitimately change to deterministic zero-padded sprint-<specId>-NN form.",
+    "A build is required for the CLI to pick up the fix: npm run build (and npm run update-all for skill copies) is part of done.",
+    "Re-running plan for the same specId must overwrite that specId's prior contracts without leaving stale files behind."
+  ],
+  "outOfScope": [
+    "A new standalone contracts CLI command (rejected design fork).",
+    "Topological reordering of sprints by dependsOn (only lexical ordering via zero-padded ids is addressed).",
+    "Broad rework of the clarification gate beyond the minimal sprint-side guard in Sprint 3.",
+    "Provider-specific planner-prompt changes to coerce schema-perfect spec.sprints[].",
+    "Multi-spec parallel execution semantics beyond scoping the sprint command to the latest spec."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Shared deterministic materializeContracts helper",
+      "description": "Extract the pipeline contract-creation loop into a reusable materializeContracts helper that both the run pipeline and the plan command call, producing deterministic zero-padded contract ids while preserving feature-derived contract content.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When npm run build runs after the refactor, it completes with zero TypeScript errors.",
+        "AC2: When runTsPipeline creates contracts, it delegates to materializeContracts and the feature-derived contract content matches the pre-refactor output for a multi-feature spec with no embedded sprints.",
+        "AC3: When a spec has twelve or more sprints, the materialized contract ids are zero-padded so lexical ordering equals execution order."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Embedded-sprint materialization and eager wiring into plan",
+      "description": "Teach materializeContracts to prefer valid embedded spec.sprints with feature-derived fallback, and wire the plan command to eagerly materialize contracts after a successful non-clarification plan.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When plan completes for a ready spec, the contracts directory contains one schema-valid contract per sprint.",
+        "AC2: When spec.sprints entries are valid they are used with status normalized to proposed; when invalid, feature-derived generation is used without throwing.",
+        "AC3: When a spec is needs-clarification, plan writes zero contracts.",
+        "AC4: When plan is re-run for the same specId, prior contracts for that specId are overwritten without stale leftovers."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Scope sprint to the active spec with clarification guard",
+      "description": "Make the sprint command run only the contracts belonging to the latest spec, refuse a needs-clarification spec with a clear message, and improve the empty-contracts message.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When contracts from multiple specs are present, sprint runs only the active spec's contracts.",
+        "AC2: When the active spec is needs-clarification, sprint refuses with a message naming the open clarifications and invokes no generator.",
+        "AC3: When no contracts match the active spec, the error message instructs the user to re-plan or run the full pipeline."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "Contract materialization has a single source of truth shared by plan and the run pipeline.",
+      "verificationMethod": "Code review confirms one materializeContracts helper imported by both src/cli/commands/plan.ts and src/orchestrator/pipeline.ts."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Materialization never throws on malformed spec.sprints input.",
+      "verificationMethod": "A unit test passing malformed spec.sprints entries asserts no throw and that valid feature-derived contracts are written instead."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "SprintContract (src/contracts/sprint-contract.ts) and PlanSpec (src/contracts/spec.ts); contracts persisted under .bober/contracts via saveContract (src/state/sprint-state.ts).",
+    "securityConsiderations": [
+      "No new external input surface; spec.sprints is parsed via SprintContractSchema.safeParse before any disk write."
+    ],
+    "existingPatterns": "Follow the contract-creation loop at pipeline.ts:856-906 and the save/list helpers in src/state/sprint-state.ts."
+  },
+  "sprints": [
+    "sprint-spec-20260623-plan-contracts-materialization-1",
+    "sprint-spec-20260623-plan-contracts-materialization-2",
+    "sprint-spec-20260623-plan-contracts-materialization-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Refactors the previously-frozen run pipeline; mitigated by characterization tests asserting feature-derived content parity and deterministic ids. Owner explicitly authorized the run behavior change so run now honors embedded spec.sprints."
+  },
+  "completedAt": "2026-06-23T14:40:00.000Z"
+}

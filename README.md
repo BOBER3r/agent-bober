@@ -508,10 +508,10 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 ```bash
 npx agent-bober init [preset]                            # Initialize project (with provider selection)
 npx agent-bober update                                   # Refresh .claude/ commands + agents after upgrading the package
-npx agent-bober plan "feature"                           # Run the planner
+npx agent-bober plan "feature"                           # Run the planner (also materializes sprint contracts)
 npx agent-bober plan answer <specId>                     # Resolve clarification questions interactively
 npx agent-bober plan answer <specId> <questionId> "..."  # Resolve a single clarification question
-npx agent-bober sprint                                   # Execute next sprint
+npx agent-bober sprint                                   # Execute next sprint (consumes plan's contracts)
 npx agent-bober eval                                     # Evaluate current sprint
 npx agent-bober run "feature"                            # Full autonomous loop
 npx agent-bober run "feature" --team example             # Full autonomous loop using the 'example' team
@@ -576,7 +576,7 @@ npx agent-bober playbook search '<symptom>'        # Search by symptom
 
 #### Clarification gating
 
-When the planner can't fully decompose a feature without more information, it stops with `status: "needs-clarification"` instead of fabricating sprints. The CLI surfaces the open questions and you resolve them via `plan answer`. After the last question is answered the spec auto-promotes to `status: "ready"` and the next `sprint`/`run` proceeds. See the **Architecture** section for the full lifecycle.
+When the planner can't fully decompose a feature without more information, it stops with `status: "needs-clarification"` instead of fabricating sprints — and writes **no** contracts. The CLI surfaces the open questions and you resolve them via `plan answer`. After the last question is answered the spec auto-promotes to `status: "ready"`, its sprint contracts are materialized into `.bober/contracts/`, and the next `sprint`/`run` proceeds. See the **Architecture** section for the full lifecycle.
 
 ### Fully Autonomous Mode (no human in the loop)
 

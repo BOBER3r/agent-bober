@@ -371,3 +371,198 @@
 {"event":"sprint-iteration-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","iteration":1,"timestamp":"2026-06-15T14:57:52Z"}
 {"event":"sprint-completed","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-5","specId":"spec-20260615-chat-interrupt-approve-steer","iteration":1,"timestamp":"2026-06-15T15:05:19Z"}
 {"event":"sprint-started","contractId":"sprint-spec-20260615-chat-interrupt-approve-steer-6","specId":"spec-20260615-chat-interrupt-approve-steer","sprint":6,"timestamp":"2026-06-15T15:06:30Z"}
+{"event":"architecture-completed","architectureId":"arch-20260616-medical-team","feature":"Phase 6 - Medical Team (second domain Team instance)","componentCount":12,"decisionCount":7,"timestamp":"2026-06-16T12:41:07Z"}
+{"event":"plan-created","specId":"spec-20260616-medical-team","title":"Phase 6 - The Medical Team (local-first, code-enforced health/wellness team)","mode":"greenfield","fromArchitecture":"arch-20260616-medical-team","sprintCount":7,"status":"ready","ambiguityScore":3,"timestamp":"2026-06-16T00:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-16T17:53:01Z","task":"Phase 6 — The Medical Team (spec-20260616-medical-team, 7 sprints)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-1","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T17:55:33Z"}
+{"event":"pipeline-started","timestamp":"2026-06-16T18:55:01Z","task":"resume spec-20260616-medical-team from sprint 1 evaluation (generator committed 60215d2, evaluator interrupted)"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-1","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T18:59:34Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-2","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T19:06:19Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260616-medical-team-2","iteration":1,"timestamp":"2026-06-16T19:06:19Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-2","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T19:20:11Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-3","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T19:24:53Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260616-medical-team-3","iteration":1,"timestamp":"2026-06-16T19:24:53Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-3","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T19:41:24Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-4","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T19:45:56Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260616-medical-team-4","iteration":1,"timestamp":"2026-06-16T19:45:56Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-4","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T19:58:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-5","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T20:03:05Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260616-medical-team-5","iteration":1,"timestamp":"2026-06-16T20:03:05Z"}
+{"event":"human-escalation","contractId":"sprint-spec-20260616-medical-team-5","reason":"generator API socket crash mid-self-verify; implementation complete on disk (typecheck+build+full suite green), 4 unused-import lint errors remain + uncommitted; auto-recovering by re-spawning generator to fix lint + commit","timestamp":"2026-06-16T20:15:38Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-5","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T20:23:13Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-6","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T20:29:40Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260616-medical-team-6","iteration":1,"timestamp":"2026-06-16T20:29:40Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-6","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T20:46:04Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260616-medical-team-7","specId":"spec-20260616-medical-team","timestamp":"2026-06-16T20:51:58Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260616-medical-team-7","iteration":1,"timestamp":"2026-06-16T20:51:58Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260616-medical-team-7","specId":"spec-20260616-medical-team","iteration":1,"timestamp":"2026-06-16T21:07:23Z"}
+{"event":"plan-completed","specId":"spec-20260616-medical-team","sprintsCompleted":7,"timestamp":"2026-06-16T21:07:23Z"}
+{"event":"architecture-completed","architectureId":"arch-20260617-medical-team-whoop-guardrails","feature":"Medical team — WHOOP device-connection + code-enforced refusal guardrails","componentCount":8,"decisionCount":4,"timestamp":"2026-06-17T14:24:29Z"}
+{"event":"plan-created","specId":"spec-20260617-medical-whoop-guardrails","title":"Medical Team — WHOOP Connection + Code-Enforced Refusal Guardrails","sprintCount":3,"timestamp":"2026-06-17T14:32:38Z"}
+{"event":"pipeline-started","timestamp":"2026-06-17T15:14:05Z","task":"Resume spec-20260617-medical-whoop-guardrails (most recent actionable spec; no task provided)","specId":"spec-20260617-medical-whoop-guardrails"}
+{"event":"sprint-started","contractId":"sprint-spec-20260617-medical-whoop-guardrails-1","specId":"spec-20260617-medical-whoop-guardrails","timestamp":"2026-06-17T15:14:05Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260617-medical-whoop-guardrails-1","iteration":1,"timestamp":"2026-06-17T15:27:22Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260617-medical-whoop-guardrails-1","iteration":1,"result":"pass","timestamp":"2026-06-17T15:32:54Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260617-medical-whoop-guardrails-1","specId":"spec-20260617-medical-whoop-guardrails","iteration":1,"timestamp":"2026-06-17T15:32:54Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260617-medical-whoop-guardrails-2","specId":"spec-20260617-medical-whoop-guardrails","timestamp":"2026-06-17T15:34:51Z"}
+{"event":"sprint-docs-written","contractId":"sprint-spec-20260617-medical-whoop-guardrails-1","docsCommit":"a8d780c","timestamp":"2026-06-17T15:37:43Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260617-medical-whoop-guardrails-2","iteration":1,"timestamp":"2026-06-17T15:49:30Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260617-medical-whoop-guardrails-2","iteration":1,"result":"pass","timestamp":"2026-06-17T15:55:53Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260617-medical-whoop-guardrails-2","specId":"spec-20260617-medical-whoop-guardrails","iteration":1,"timestamp":"2026-06-17T15:55:53Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260617-medical-whoop-guardrails-3","specId":"spec-20260617-medical-whoop-guardrails","timestamp":"2026-06-17T15:57:13Z"}
+{"event":"sprint-docs-written","contractId":"sprint-spec-20260617-medical-whoop-guardrails-2","docsCommit":"7f11de2","timestamp":"2026-06-17T16:02:38Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260617-medical-whoop-guardrails-3","iteration":1,"timestamp":"2026-06-17T16:11:06Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260617-medical-whoop-guardrails-3","iteration":1,"result":"pass","timestamp":"2026-06-17T16:15:47Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260617-medical-whoop-guardrails-3","specId":"spec-20260617-medical-whoop-guardrails","iteration":1,"timestamp":"2026-06-17T16:15:47Z"}
+{"event":"plan-completed","specId":"spec-20260617-medical-whoop-guardrails","sprintsCompleted":3,"timestamp":"2026-06-17T16:15:47Z"}
+{"event":"sprint-docs-written","contractId":"sprint-spec-20260617-medical-whoop-guardrails-3","docsCommit":"595f1ba","timestamp":"2026-06-17T16:21:50Z"}
+{"event":"pipeline-completed","specId":"spec-20260617-medical-whoop-guardrails","sprintsCompleted":3,"totalIterations":3,"timestamp":"2026-06-17T16:21:50Z"}
+{"event":"architecture-completed","architectureId":"arch-20260617-fleet-orchestrator-phase-2-expand","feature":"Fleet orchestrator Phase 2 --expand LLM goal decomposer","componentCount":3,"decisionCount":5,"timestamp":"2026-06-17T19:03:08Z"}
+{"event":"plan-created","specId":"spec-20260617-fleet-expand-decomposer","title":"Fleet Expand — LLM Goal Decomposer","sprintCount":2,"timestamp":"2026-06-17T19:43:33Z"}
+{"event":"pipeline-started","timestamp":"2026-06-17T19:50:44Z","task":"Resume actionable spec spec-20260617-fleet-expand-decomposer (Fleet Expand — LLM Goal Decomposer, Phase 2 of fleet orchestrator)","specId":"spec-20260617-fleet-expand-decomposer","branch":"bober/fleet-expand-decomposer"}
+{"event":"sprint-started","contractId":"sprint-spec-20260617-fleet-expand-decomposer-1","specId":"spec-20260617-fleet-expand-decomposer","timestamp":"2026-06-17T19:50:44Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260617-fleet-expand-decomposer-1","iteration":1,"timestamp":"2026-06-17T19:55:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260617-fleet-expand-decomposer-1","iteration":1,"result":"pass","timestamp":"2026-06-17T20:01:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260617-fleet-expand-decomposer-1","specId":"spec-20260617-fleet-expand-decomposer","iteration":1,"timestamp":"2026-06-17T20:01:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260617-fleet-expand-decomposer-2","specId":"spec-20260617-fleet-expand-decomposer","timestamp":"2026-06-17T20:02:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260617-fleet-expand-decomposer-1","docsCommit":"40b86e8","timestamp":"2026-06-17T20:04:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260617-fleet-expand-decomposer-2","iteration":1,"timestamp":"2026-06-17T20:06:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260617-fleet-expand-decomposer-2","iteration":1,"result":"pass","timestamp":"2026-06-17T20:17:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260617-fleet-expand-decomposer-2","specId":"spec-20260617-fleet-expand-decomposer","iteration":1,"timestamp":"2026-06-17T20:17:00Z"}
+{"event":"plan-completed","specId":"spec-20260617-fleet-expand-decomposer","sprintsCompleted":2,"timestamp":"2026-06-17T20:17:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260617-fleet-expand-decomposer-2","docsCommit":"3567750","timestamp":"2026-06-17T20:20:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260617-fleet-expand-decomposer","sprintsCompleted":2,"totalIterations":2,"timestamp":"2026-06-17T20:20:00Z"}
+{"event":"architecture-completed","architectureId":"arch-20260617-fleet-robust-decomposition","feature":"Fleet Phase 3 — robust large/ambiguous-goal decomposition via fleet expand-deep (two-call plan-then-expand)","componentCount":4,"decisionCount":5,"timestamp":"2026-06-17T21:12:49Z"}
+{"event":"plan-created","specId":"spec-20260618-fleet-expand-deep","title":"Fleet Robust Decomposition (fleet expand-deep)","sprintCount":2,"ambiguityScore":2,"architecture":"arch-20260617-fleet-robust-decomposition","timestamp":"2026-06-18T07:32:33Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T07:57:30Z","task":"resume spec-20260618-fleet-expand-deep (fleet expand-deep robust two-stage decomposer)","specId":"spec-20260618-fleet-expand-deep"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260618-fleet-expand-deep-1", "specId": "spec-20260618-fleet-expand-deep", "timestamp": "2026-06-18T07:57:59Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-expand-deep-1","iteration":1,"timestamp":"2026-06-18T08:01:19Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260618-fleet-expand-deep-1", "specId": "spec-20260618-fleet-expand-deep", "iteration": 1, "timestamp": "2026-06-18T08:08:18Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260618-fleet-expand-deep-2", "specId": "spec-20260618-fleet-expand-deep", "timestamp": "2026-06-18T08:08:59Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-expand-deep-2","iteration":1,"timestamp":"2026-06-18T08:12:38Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260618-fleet-expand-deep-2", "specId": "spec-20260618-fleet-expand-deep", "iteration": 1, "timestamp": "2026-06-18T08:19:41Z"}
+{"event": "plan-completed", "specId": "spec-20260618-fleet-expand-deep", "sprintsCompleted": 2, "timestamp": "2026-06-18T08:19:41Z"}
+{"event":"pipeline-completed","specId":"spec-20260618-fleet-expand-deep","sprintsCompleted":2,"totalIterations":2,"timestamp":"2026-06-18T08:23:26Z"}
+{"event":"architecture-completed","architectureId":"arch-20260618-fleet-expand-deep-critique","feature":"self-judged EXPAND critique loop (Approach B) for fleet expand-deep","componentCount":6,"decisionCount":5,"timestamp":"2026-06-18T09:50:27Z"}
+{"event":"plan-created","specId":"spec-20260618-fleet-expand-deep-critique","title":"Fleet Critique Loop (fleet expand-deep --critique)","sprintCount":2,"timestamp":"2026-06-18T10:07:29Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T10:13:25Z","task":"resume spec-20260618-fleet-expand-deep-critique (fleet expand-deep --critique self-judged loop)","specId":"spec-20260618-fleet-expand-deep-critique"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-1", "specId": "spec-20260618-fleet-expand-deep-critique", "timestamp": "2026-06-18T10:13:54Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-expand-deep-critique-1","iteration":1,"timestamp":"2026-06-18T10:18:19Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-1", "specId": "spec-20260618-fleet-expand-deep-critique", "iteration": 1, "timestamp": "2026-06-18T10:33:14Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-2", "specId": "spec-20260618-fleet-expand-deep-critique", "timestamp": "2026-06-18T10:33:59Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-expand-deep-critique-2","iteration":1,"timestamp":"2026-06-18T10:37:21Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-2", "specId": "spec-20260618-fleet-expand-deep-critique", "iteration": 1, "timestamp": "2026-06-18T10:45:14Z"}
+{"event": "plan-completed", "specId": "spec-20260618-fleet-expand-deep-critique", "sprintsCompleted": 2, "timestamp": "2026-06-18T10:45:14Z"}
+{"event":"pipeline-completed","specId":"spec-20260618-fleet-expand-deep-critique","sprintsCompleted":2,"totalIterations":2,"timestamp":"2026-06-18T10:48:42Z"}
+{"event":"research-completed","researchId":"research-20260618-fleet-branch-merge-readiness","feature":"merge-readiness of bober/fleet-expand-decomposer","questionsGenerated":7,"filesExplored":9,"timestamp":"2026-06-18T11:15:15Z"}
+{"event": "plan-created", "specId": "spec-20260618-fleet-manifest-provenance", "title": "Fleet Manifest Provenance + Recoverable Overwrite", "sprintCount": 1, "timestamp": "2026-06-18T12:07:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T12:13:32Z","task":"resume spec-20260618-fleet-manifest-provenance (provenance sidecar + recoverable overwrite)","specId":"spec-20260618-fleet-manifest-provenance"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260618-fleet-manifest-provenance-1", "specId": "spec-20260618-fleet-manifest-provenance", "timestamp": "2026-06-18T12:13:50Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-manifest-provenance-1","iteration":1,"timestamp":"2026-06-18T12:17:13Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260618-fleet-manifest-provenance-1", "specId": "spec-20260618-fleet-manifest-provenance", "iteration": 1, "timestamp": "2026-06-18T12:26:56Z"}
+{"event": "plan-completed", "specId": "spec-20260618-fleet-manifest-provenance", "sprintsCompleted": 1, "timestamp": "2026-06-18T12:26:56Z"}
+{"event":"pipeline-completed","specId":"spec-20260618-fleet-manifest-provenance","sprintsCompleted":1,"totalIterations":1,"timestamp":"2026-06-18T12:30:05Z"}
+{"event":"research-completed","researchId":"research-20260618-fleet-decomposer-to-medical-team","feature":"How can we use the newly-merged fleet decomposer work (expand / expand-deep / --critique / manifest-provenance) to improve the medical team while preserving its safety guarantees","questionsGenerated":7,"filesExplored":12,"timestamp":"2026-06-18T00:00:00Z"}
+{"event":"plan-created","specId":"spec-20260618-medical-grounding-critic","title":"Fail-closed grounding-critic gate for medical synthesis","sprintCount":3,"timestamp":"2026-06-18T16:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T16:05:00Z","task":"Fail-closed grounding-critic gate for medical synthesis (spec-20260618-medical-grounding-critic)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-medical-grounding-critic-1","specId":"spec-20260618-medical-grounding-critic","timestamp":"2026-06-18T16:05:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-medical-grounding-critic-1","iteration":1,"timestamp":"2026-06-18T16:08:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-1","iteration":1,"result":"pass","timestamp":"2026-06-18T16:25:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-1","specId":"spec-20260618-medical-grounding-critic","iteration":1,"timestamp":"2026-06-18T16:25:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-medical-grounding-critic-2","specId":"spec-20260618-medical-grounding-critic","timestamp":"2026-06-18T16:25:30Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-1","docsCommit":"82567d1","timestamp":"2026-06-18T16:27:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-medical-grounding-critic-2","iteration":1,"timestamp":"2026-06-18T16:30:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-2","iteration":1,"result":"pass","timestamp":"2026-06-18T16:45:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-2","specId":"spec-20260618-medical-grounding-critic","iteration":1,"timestamp":"2026-06-18T16:45:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-medical-grounding-critic-3","specId":"spec-20260618-medical-grounding-critic","timestamp":"2026-06-18T16:45:30Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-2","docsCommit":"a0efe45","timestamp":"2026-06-18T16:47:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-medical-grounding-critic-3","iteration":1,"timestamp":"2026-06-18T16:48:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-3","iteration":1,"result":"pass","timestamp":"2026-06-18T16:55:30Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-3","specId":"spec-20260618-medical-grounding-critic","iteration":1,"timestamp":"2026-06-18T16:55:30Z"}
+{"event":"plan-completed","specId":"spec-20260618-medical-grounding-critic","sprintsCompleted":3,"timestamp":"2026-06-18T16:55:30Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260618-medical-grounding-critic-3","docsCommit":"988470f","timestamp":"2026-06-18T17:00:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260618-medical-grounding-critic","sprintsCompleted":3,"totalIterations":3,"timestamp":"2026-06-18T17:00:00Z"}
+{"event":"research-completed","researchId":"research-20260618-heterogeneous-multi-provider-agent-team","feature":"Heterogeneous multi-provider agent team with a difficulty-triaging head model (claude-code/DeepSeek/Grok/Anthropic), built on fleet expand-deep + role-provider-map, with bounded inter-agent exchange","questionsGenerated":7,"filesExplored":11,"timestamp":"2026-06-18T17:30:00Z"}
+{"event":"architecture-completed","architectureId":"arch-20260618-heterogeneous-multi-provider-agent-team","feature":"Head-agnostic heterogeneous multi-provider agent-team worker substrate (tier-by-difficulty + Grok/xAI + tool-role guard + bounded WAL blackboard), drivable by a Claude Code dynamic-workflow head","componentCount":7,"decisionCount":5,"timestamp":"2026-06-18T18:00:00Z"}
+{"event":"plan-created","specId":"spec-20260618-fleet-tier-provider-routing","title":"Phase A — Tier-by-difficulty provider routing + Grok/xAI + tool-role guard","sprintCount":3,"timestamp":"2026-06-18T18:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T18:35:00Z","task":"Phase A — Tier-by-difficulty provider routing + Grok/xAI + tool-role guard (spec-20260618-fleet-tier-provider-routing)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-1","specId":"spec-20260618-fleet-tier-provider-routing","timestamp":"2026-06-18T18:35:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-1","iteration":1,"timestamp":"2026-06-18T18:38:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-1","iteration":1,"result":"pass","timestamp":"2026-06-18T18:45:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-1","specId":"spec-20260618-fleet-tier-provider-routing","iteration":1,"timestamp":"2026-06-18T18:45:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-2","specId":"spec-20260618-fleet-tier-provider-routing","timestamp":"2026-06-18T18:45:30Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-1","docsCommit":"c4ab111","timestamp":"2026-06-18T18:48:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-2","iteration":1,"timestamp":"2026-06-18T18:50:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-2","iteration":1,"result":"pass","timestamp":"2026-06-18T18:58:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-2","specId":"spec-20260618-fleet-tier-provider-routing","iteration":1,"timestamp":"2026-06-18T18:58:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-3","specId":"spec-20260618-fleet-tier-provider-routing","timestamp":"2026-06-18T18:58:30Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-2","docsCommit":"780f65d","timestamp":"2026-06-18T19:01:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-3","iteration":1,"timestamp":"2026-06-18T19:03:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-3","iteration":1,"result":"pass","timestamp":"2026-06-18T19:10:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-3","specId":"spec-20260618-fleet-tier-provider-routing","iteration":1,"timestamp":"2026-06-18T19:10:00Z"}
+{"event":"plan-completed","specId":"spec-20260618-fleet-tier-provider-routing","sprintsCompleted":3,"timestamp":"2026-06-18T19:10:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260618-fleet-tier-provider-routing-3","docsCommit":"08077dd","timestamp":"2026-06-18T19:12:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260618-fleet-tier-provider-routing","sprintsCompleted":3,"totalIterations":3,"timestamp":"2026-06-18T19:12:00Z"}
+{"event":"plan-created","specId":"spec-20260618-fleet-blackboard-exchange","title":"Phase B — bounded inter-agent blackboard + round loop + synthesis","sprintCount":4,"timestamp":"2026-06-18T19:30:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T18:49:57Z","task":"Resume spec-20260618-fleet-blackboard-exchange (Phase B inter-agent blackboard) — 4 sprints, contracts pre-written"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-1","specId":"spec-20260618-fleet-blackboard-exchange","timestamp":"2026-06-18T18:49:57Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-1","iteration":1,"timestamp":"2026-06-18T18:58:23Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-1","specId":"spec-20260618-fleet-blackboard-exchange","iteration":1,"timestamp":"2026-06-18T19:01:50Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-2","specId":"spec-20260618-fleet-blackboard-exchange","timestamp":"2026-06-18T19:02:58Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-2","iteration":1,"timestamp":"2026-06-18T19:14:18Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-2","specId":"spec-20260618-fleet-blackboard-exchange","iteration":1,"timestamp":"2026-06-18T19:18:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-3","specId":"spec-20260618-fleet-blackboard-exchange","timestamp":"2026-06-18T19:19:03Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-3","iteration":1,"timestamp":"2026-06-18T19:29:31Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-3","specId":"spec-20260618-fleet-blackboard-exchange","iteration":1,"timestamp":"2026-06-18T19:33:59Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-4","specId":"spec-20260618-fleet-blackboard-exchange","timestamp":"2026-06-18T19:34:30Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-4","iteration":1,"timestamp":"2026-06-18T19:43:06Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-blackboard-exchange-4","specId":"spec-20260618-fleet-blackboard-exchange","iteration":1,"timestamp":"2026-06-18T19:46:39Z"}
+{"event":"plan-completed","specId":"spec-20260618-fleet-blackboard-exchange","sprintsCompleted":4,"timestamp":"2026-06-18T19:46:39Z"}
+{"event":"plan-created","specId":"spec-20260618-fleet-synthesis-round-count","title":"Real executed round count in fleet synthesis + report","sprintCount":1,"timestamp":"2026-06-18T20:02:17Z"}
+{"event":"pipeline-started","timestamp":"2026-06-18T20:05:47Z","task":"spec-20260618-fleet-synthesis-round-count — real executed round count in fleet synthesis + report (1 sprint)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260618-fleet-synthesis-round-count-1","specId":"spec-20260618-fleet-synthesis-round-count","timestamp":"2026-06-18T20:05:47Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260618-fleet-synthesis-round-count-1","iteration":1,"timestamp":"2026-06-18T20:15:39Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260618-fleet-synthesis-round-count-1","specId":"spec-20260618-fleet-synthesis-round-count","iteration":1,"timestamp":"2026-06-18T20:19:15Z"}
+{"event":"plan-completed","specId":"spec-20260618-fleet-synthesis-round-count","sprintsCompleted":1,"timestamp":"2026-06-18T20:19:15Z"}
+{"event":"plan-created","specId":"spec-20260620-graph-tokensave-6-1-compat","title":"Graph integration compatibility with tokensave serve 6.1.1","sprintCount":2,"status":"draft","ambiguityScore":2,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-20T00:00:00Z","task":"Execute spec-20260620-graph-tokensave-6-1-compat (graph/tokensave 6.1.1 compat)","specId":"spec-20260620-graph-tokensave-6-1-compat"}
+{"event":"sprint-started","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-1","specId":"spec-20260620-graph-tokensave-6-1-compat","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-1","briefing":".bober/briefings/sprint-spec-20260620-graph-tokensave-6-1-compat-1-briefing.md","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-1","iteration":1,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-1","iteration":1,"result":"pass","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-1","specId":"spec-20260620-graph-tokensave-6-1-compat","iteration":1,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-1","docsCommit":"f3ffdc2","concern":"pre-existing dangling link README.md:204 / onboard.ts:27 -> .bober/architecture/arch-20260524-port-code-review-graph-architecture.md (missing)","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-curated","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-2","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-2","specId":"spec-20260620-graph-tokensave-6-1-compat","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-2","iteration":1,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-2","iteration":1,"result":"pass","timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-2","specId":"spec-20260620-graph-tokensave-6-1-compat","iteration":1,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"plan-completed","specId":"spec-20260620-graph-tokensave-6-1-compat","sprintsCompleted":2,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260620-graph-tokensave-6-1-compat-2","docsCommit":"fbb18fa","followups":["stale MCP tool names in skills/bober.{graph,onboard,impact}/SKILL.md + .claude/commands mirrors","option C onboard quality rework","pre-existing dangling onboarding arch-doc link"],"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260620-graph-tokensave-6-1-compat","sprintsCompleted":2,"sprintsTotal":2,"iterations":2,"reworks":0,"subagents":8,"timestamp":"2026-06-20T00:00:00Z"}
+{"event":"research-completed","researchId":"research-20260621-codebase-health-hotspots-cycles","feature":"Codebase health: top hotspots, real circular dependencies, dead-code candidates","questionsGenerated":8,"filesExplored":11,"timestamp":"2026-06-21T18:40:42Z"}
+{"event":"plan-created","specId":"spec-20260621-codebase-health-remediation","title":"Codebase Health Remediation: break fleet cycle, refactor runSprintCycle params, remove dead-code orphans","sprintCount":3,"timestamp":"2026-06-21T18:45:00Z"}
+{"event":"pipeline-started","timestamp":"2026-06-21T18:50:00Z","task":"Codebase Health Remediation (spec-20260621-codebase-health-remediation): break fleet cycle, refactor runSprintCycle params, remove dead-code orphans"}
+{"event":"sprint-started","contractId":"sprint-spec-20260621-codebase-health-remediation-1","specId":"spec-20260621-codebase-health-remediation","timestamp":"2026-06-21T18:50:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260621-codebase-health-remediation-1","iteration":1,"timestamp":"2026-06-21T18:54:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260621-codebase-health-remediation-1","specId":"spec-20260621-codebase-health-remediation","iteration":1,"timestamp":"2026-06-21T19:48:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260621-codebase-health-remediation-2","specId":"spec-20260621-codebase-health-remediation","timestamp":"2026-06-21T19:55:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260621-codebase-health-remediation-2","iteration":1,"timestamp":"2026-06-21T19:55:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260621-codebase-health-remediation-2","specId":"spec-20260621-codebase-health-remediation","iteration":1,"timestamp":"2026-06-21T20:02:30Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260621-codebase-health-remediation-3","specId":"spec-20260621-codebase-health-remediation","timestamp":"2026-06-21T20:08:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260621-codebase-health-remediation-3","iteration":1,"timestamp":"2026-06-21T20:08:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260621-codebase-health-remediation-3","specId":"spec-20260621-codebase-health-remediation","iteration":1,"timestamp":"2026-06-21T23:10:00Z"}
+{"event":"plan-completed","specId":"spec-20260621-codebase-health-remediation","sprintsCompleted":3,"timestamp":"2026-06-21T23:10:00Z"}
+{"event":"plan-created","specId":"spec-20260623-plan-contracts-materialization","title":"Fix standalone plan to sprint contract materialization","sprintCount":3,"timestamp":"2026-06-23T12:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260623-plan-contracts-materialization-1","specId":"spec-20260623-plan-contracts-materialization","timestamp":"2026-06-23T12:30:00.000Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-1","iteration":1,"result":"pass","timestamp":"2026-06-23T12:45:00.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-1","specId":"spec-20260623-plan-contracts-materialization","iteration":1,"timestamp":"2026-06-23T12:45:00.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","specId":"spec-20260623-plan-contracts-materialization","timestamp":"2026-06-23T13:00:00.000Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","iteration":1,"failedCriteria":["S2-C6"],"timestamp":"2026-06-23T13:20:00.000Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","iteration":2,"result":"pass","timestamp":"2026-06-23T13:40:00.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-2","specId":"spec-20260623-plan-contracts-materialization","iteration":2,"timestamp":"2026-06-23T13:40:00.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","specId":"spec-20260623-plan-contracts-materialization","timestamp":"2026-06-23T14:00:00.000Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","iteration":1,"failedCriteria":["S3-C3"],"timestamp":"2026-06-23T14:20:00.000Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","iteration":2,"result":"pass","timestamp":"2026-06-23T14:40:00.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","specId":"spec-20260623-plan-contracts-materialization","iteration":2,"timestamp":"2026-06-23T14:40:00.000Z"}
+{"event":"plan-completed","specId":"spec-20260623-plan-contracts-materialization","sprintsCompleted":3,"timestamp":"2026-06-23T14:40:00.000Z"}

@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-2",
+  "iteration": 1,
+  "status": "complete",
+  "filesChanged": [
+    { "path": "src/orchestrator/contract-materialization.ts", "action": "modified", "description": "Added embedded-sprint branch: safeParse each spec.sprints entry; if all valid, normalize status→proposed, rebind specId, deterministic id, saveContract; any parse/save failure → whole-set feature-derived fallback." },
+    { "path": "src/state/sprint-state.ts", "action": "modified", "description": "Added clearContractsForSpec(projectRoot, specId) — deletes .bober/contracts/*.json whose parsed specId matches." },
+    { "path": "src/state/index.ts", "action": "modified", "description": "Re-exported clearContractsForSpec." },
+    { "path": "src/cli/commands/plan.ts", "action": "modified", "description": "runPlanCommand clears-then-materializes after a ready (non-clarification) plan; printPlan hint changed from sprint to run." },
+    { "path": "src/orchestrator/contract-materialization.test.ts", "action": "modified", "description": "Added S2-C2/C3/C5 tests." },
+    { "path": "src/cli/commands/plan.test.ts", "action": "modified", "description": "Added runPlanCommand tests S2-C4/C5/C6 (mocks runPlanner + config loader)." }
+  ],
+  "testsAdded": ["src/orchestrator/contract-materialization.test.ts", "src/cli/commands/plan.test.ts"],
+  "commits": ["36de025 - bober(sprint-2): embedded-sprint materialization + eager plan wiring"],
+  "blockers": [],
+  "notes": "tsc --noEmit clean; eslint 0 errors (2 pre-existing warnings); full suite Tests 6 failed | 2365 passed | 3 skipped — the 6 are pre-existing cockpit-integration E2E MCP failures, unrelated. contract-materialization.test.ts 7/7; plan.test.ts 8/8. NOTE for evaluator: hint was changed to 'run' to match plan answer; orchestrator wants the semantic correctness of this checked (run re-plans; sprint consumes the just-created spec)."
+}

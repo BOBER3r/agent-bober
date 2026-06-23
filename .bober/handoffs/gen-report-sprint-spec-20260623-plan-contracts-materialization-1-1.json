@@ -1,0 +1,14 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-1",
+  "iteration": 1,
+  "status": "complete",
+  "filesChanged": [
+    { "path": "src/orchestrator/contract-materialization.ts", "action": "created", "description": "materializeContracts(spec, projectRoot, config): Promise<SprintContract[]> — verbatim feature-derived loop from pipeline.ts plus deterministic zero-padded contractId assignment before saveContract." },
+    { "path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "Replaced inline contract-creation loop with a single materializeContracts call; removed now-unused imports; post-plan and post-sprint-contract checkpoints unchanged." },
+    { "path": "src/orchestrator/contract-materialization.test.ts", "action": "created", "description": "Characterization + deterministic-id + 12-sprint ordering tests; mocks generateContractPrecision, uses real createContract/saveContract/listContracts against a tmp dir." }
+  ],
+  "testsAdded": ["src/orchestrator/contract-materialization.test.ts"],
+  "commits": ["1a7cd2b - bober(sprint-1): extract materializeContracts helper with deterministic ids"],
+  "blockers": [],
+  "notes": "Self-verify: npx tsc --noEmit exit 0; npx vitest run -> Test Files 192 passed, Tests 2364 passed | 3 skipped (pre-existing); npx eslint clean. nonGoals honored: phase order unchanged, checkpoint sites unchanged, no spec.sprints branch."
+}

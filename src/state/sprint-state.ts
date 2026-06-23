@@ -1,4 +1,4 @@
-import { readFile, writeFile, readdir } from "node:fs/promises";
+import { readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { ZodError } from "zod";
@@ -154,4 +154,38 @@ export async function updateContract(
   contract: SprintContract,
 ): Promise<void> {
   await saveContract(projectRoot, contract);
+}
+
+/**
+ * Delete all contract files in `.bober/contracts/` whose parsed `specId`
+ * matches the given specId. Other specs' contracts are left untouched.
+ *
+ * Silently ignores missing directories, unreadable files, and non-JSON
+ * files so that a partial state never aborts a re-plan.
+ */
+export async function clearContractsForSpec(
+  projectRoot: string,
+  specId: string,
+): Promise<void> {
+  const dir = contractsDir(projectRoot);
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    // Directory absent — nothing to clear.
+    return;
+  }
+
+  for (const file of entries.filter((f) => f.endsWith(".json"))) {
+    const filePath = join(dir, file);
+    try {
+      const raw = await readFile(filePath, "utf-8");
+      const body = JSON.parse(raw) as { specId?: string };
+      if (body.specId === specId) {
+        await unlink(filePath).catch(() => {});
+      }
+    } catch {
+      // Skip unreadable or non-JSON files.
+    }
+  }
 }
