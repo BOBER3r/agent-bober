@@ -1,0 +1,13 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-2",
+  "iteration": 2,
+  "status": "complete",
+  "filesChanged": [
+    { "path": "src/cli/commands/plan.ts", "action": "modified", "description": "printPlan hint -> 'npx agent-bober sprint'; runPlanAnswerCommand + runPlanAnswerInteractive now loadConfig + clearContractsForSpec + materializeContracts (try/catch non-fatal) when resolving to ready, then print the sprint hint." },
+    { "path": "src/cli/commands/plan.test.ts", "action": "modified", "description": "S2-C6 assertion updated to 'agent-bober sprint'; new test: resolving final clarification materializes schema-valid contracts and prints sprint hint." }
+  ],
+  "testsAdded": ["src/cli/commands/plan.test.ts"],
+  "commits": ["bef849e - bober(sprint-2): correct next-step hint to sprint; materialize on plan-answer resolve"],
+  "blockers": [],
+  "notes": "Iteration 2 (fixes only S2-C6). tsc --noEmit clean; eslint 0 errors; full suite 2366 passed / 3 skipped / 6 pre-existing cockpit E2E failures. contract-materialization.test.ts 7/7, plan.test.ts 9/9. S2-C1..C5 and S1 unchanged/green. Hints at plan.ts:178/307/394 all 'sprint'; materialization at 99-100/298-300/385-387."
+}

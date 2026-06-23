@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260623-plan-contracts-materialization-2-2",
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-2",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "timestamp": "2026-06-23T13:40:00.000Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "exit 0", "details": "clean" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "exit 0", "details": "clean" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "ok" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "6 failed (pre-existing cockpit) | 2366 passed | 3 skipped", "details": "contract-materialization 7/7, plan 9/9, run.test.ts green; 6 cockpit failures pre-existing/untouched by bef849e." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "S2-C1", "description": "build + typecheck zero errors", "required": true, "result": "pass", "evidence": "tsc clean.", "feedback": "" },
+    { "criterionId": "S2-C2", "description": "valid embedded used verbatim", "required": true, "result": "pass", "evidence": "embedded branch; test green.", "feedback": "" },
+    { "criterionId": "S2-C3", "description": "malformed → fallback no throw", "required": true, "result": "pass", "evidence": "whole-set fallback; test green.", "feedback": "" },
+    { "criterionId": "S2-C4", "description": "ready writes; needs-clarification none", "required": true, "result": "pass", "evidence": "tests green.", "feedback": "" },
+    { "criterionId": "S2-C5", "description": "idempotent re-plan", "required": true, "result": "pass", "evidence": "no stale -03; tests green.", "feedback": "" },
+    { "criterionId": "S2-C6", "description": "correct hint, consistent with plan answer", "required": true, "result": "pass", "evidence": "all 3 hints (plan.ts:178/307/394) say 'sprint'; plan-answer paths materialize on resolve→ready (try/catch non-fatal); new plan-answer test proves contracts materialized + sprint hint.", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 2 passes 6/6 on iteration 2. Hint misdirection fixed across runPlanCommand, runPlanAnswerCommand, runPlanAnswerInteractive; plan-answer materializes contracts on resolve→ready. Only the 6 pre-existing cockpit E2E failures remain."
+}

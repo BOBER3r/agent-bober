@@ -1,0 +1,107 @@
+{
+  "handoffId": "handoff-sprint-spec-20260623-plan-contracts-materialization-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-1",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "timestamp": "2026-06-23T12:30:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "The standalone plan command writes only .bober/specs/*.json; the spec-to-contracts materialization lives solely inside the run pipeline, so sprint errors with 'No sprint contracts found' even though plan prints 'Next: sprint'. This plan extracts a single shared materializeContracts helper used by both plan and run, has plan eagerly materialize contracts (preferring the planner's embedded spec.sprints with feature-derived fallback), gives materialized contracts deterministic zero-padded ids, and hardens the sprint command against the failure modes eager materialization amplifies.",
+    "completedSprints": [],
+    "currentBranch": "bober/plan-contracts-materialization",
+    "relevantFiles": [
+      "src/orchestrator/contract-materialization.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/contract-materialization.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260623-plan-contracts-materialization-1",
+    "specId": "spec-20260623-plan-contracts-materialization",
+    "sprintNumber": 1,
+    "title": "Extract shared deterministic materializeContracts helper",
+    "description": "Pull the contract-creation loop at src/orchestrator/pipeline.ts:861-906 into a reusable materializeContracts(spec, projectRoot, config) helper that runTsPipeline calls in place of the inline loop. Feature-derived contract content is preserved; contract ids become deterministic and zero-padded as sprint-<specId>-NN so listContracts lexical ordering matches execution order. The post-plan and post-sprint-contract audit checkpoints stay in the pipeline.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "S1-C1",
+        "description": "Running npm run build and the TypeScript typecheck completes with zero errors after the helper extraction.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "S1-C2",
+        "description": "A unit test confirms runTsPipeline delegates contract creation to materializeContracts while the post-plan and post-sprint-contract audit checkpoints remain in the pipeline body.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "S1-C3",
+        "description": "With generateContractPrecision mocked, a three-feature spec that has no embedded sprints produces feature-derived contracts whose title, description, successCriteria, status, precision fields, sprintNumber and features match the pre-refactor output.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "S1-C4",
+        "description": "Materialized contract ids follow the deterministic sprint-<specId>-NN form, zero-padded so that listContracts lexical ordering matches sprint execution order for a spec with twelve or more sprints.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "S1-C5",
+        "description": "The full existing vitest suite passes with no regressions in run.test.ts after the refactor.",
+        "verificationMethod": "unit-test",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not change the pipeline phase order, audit checkpoint sites, or the research and plan steps.",
+      "Do not introduce the embedded spec.sprints branch in this sprint; that arrives in Sprint 2."
+    ],
+    "stopConditions": [
+      "Stop when materializeContracts is the single source of feature-derived contract creation called by runTsPipeline and the suite is green.",
+      "Stop when contract ids are deterministic and zero-padded and ordering is verified for twelve-plus sprints."
+    ],
+    "definitionOfDone": "The contract-creation loop is extracted into a reusable materializeContracts helper that runTsPipeline calls; feature-derived contract content is preserved, contract ids are deterministic and zero-padded for stable ordering, and the full test suite passes.",
+    "assumptions": [
+      "generateContractPrecision remains an async planner LLM call and is mocked in tests.",
+      "The post-plan and post-sprint-contract checkpoints are pipeline concerns and stay outside the helper."
+    ],
+    "outOfScope": [
+      "Wiring the plan command (Sprint 2).",
+      "Sprint-command contract scoping (Sprint 3)."
+    ],
+    "generatorNotes": "Keep the feature-derived branch faithful to pipeline.ts:861-906: same createContract inputs (criteria mapped with verificationMethod agent-evaluation), same logging strings, same order. Replace only the id assignment with deterministic zero-padded sprint-<specId>-NN. Helper signature: materializeContracts(spec, projectRoot, config). Have it return the SprintContract[] so the pipeline can pass it to the post-sprint-contract checkpoint. Honor the freeze comment intent (pipeline.ts:610-612) for everything except the now-authorized id scheme and the later embedded-sprints support.",
+    "evaluatorNotes": "Verify the inline loop is gone from runTsPipeline and replaced by a single helper call. Confirm checkpoints at the post-plan and post-sprint-contract sites still fire with the same arguments. Add or extend a test that builds a 12-sprint spec and asserts listContracts returns contracts in sprintNumber order. Confirm feature-derived content parity by snapshotting contract fields other than id/timestamps.",
+    "estimatedFiles": [
+      "src/orchestrator/contract-materialization.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/contract-materialization.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "lastEvalId": null,
+    "createdAt": "2026-06-23T12:00:00.000Z",
+    "updatedAt": "2026-06-23T12:30:00.000Z",
+    "startedAt": "2026-06-23T12:30:00.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "tsc",
+      "typecheck": "tsc --noEmit",
+      "lint": "eslint src/",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": false,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

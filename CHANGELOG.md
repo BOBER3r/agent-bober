@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-06-23
+
+### Fixed
+
+- **Standalone `plan` → `sprint` flow**: `plan` now materializes sprint contracts to `.bober/contracts/` after planning. Previously only the `run` pipeline did this, so a standalone `plan` followed by `sprint` failed with "No sprint contracts found." `plan answer` likewise materializes contracts when it resolves a spec to `ready`, and the next-step hints now correctly point to `npx agent-bober sprint`.
+
+### Added
+
+- **Shared `materializeContracts` helper** (`src/orchestrator/contract-materialization.ts`) used by both `plan` and the `run` pipeline as the single source of truth for spec → contract materialization. It prefers valid embedded `spec.sprints[]` (e.g. planner-authored contracts), falling back to feature-derived generation when they are absent or invalid. Contract ids are now deterministic and zero-padded (`sprint-<specId>-NN`) so `listContracts` ordering matches execution order at ten or more sprints.
+- **`run` honors embedded `spec.sprints[]`**: when the planner emits valid embedded contracts, `run` uses them and skips the per-feature precision LLM calls.
+
+### Changed
+
+- **`sprint` scopes to the active spec**: contract selection is now filtered to the latest spec's `specId`, so stale contracts from other specs are not executed. `sprint` also refuses a `needs-clarification` spec (printing the open questions and the correct `plan answer` command) and gives a clearer empty-contracts message pointing at `plan` or `run`.
+
 ## [0.17.1] — 2026-06-13
 
 ### Added

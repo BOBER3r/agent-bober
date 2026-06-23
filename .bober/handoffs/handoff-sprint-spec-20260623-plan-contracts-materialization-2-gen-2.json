@@ -1,0 +1,22 @@
+{
+  "handoffId": "handoff-sprint-spec-20260623-plan-contracts-materialization-2-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-2",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "timestamp": "2026-06-23T13:20:00.000Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Sprint 2 retry. Iteration 1 passed S2-C1..C5 but FAILED S2-C6 (hint).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260623-plan-contracts-materialization-1", "title": "materializeContracts helper", "summary": "helper + deterministic ids; pipeline delegates. Commit 1a7cd2b." }
+    ],
+    "currentBranch": "bober/plan-contracts-materialization",
+    "relevantFiles": ["src/cli/commands/plan.ts", "src/cli/commands/plan.test.ts", "src/orchestrator/contract-materialization.ts", "src/state/sprint-state.ts"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": false }
+  },
+  "evaluatorFeedback": "Iteration 1 FAILED on S2-C6 only (5/6 passed; S2-C1..C5 are GREEN and committed in 36de025 — do NOT redo or regress them). Root cause: the next-step hint at plan.ts:178 (runPlanCommand, non-clarification branch) was changed to 'npx agent-bober run', but `run` re-plans from scratch (calls runPlanner internally) and IGNORES the contracts that plan just materialized. The command that executes the just-created plan is `npx agent-bober sprint` (it loadLatestSpec + listContracts). REQUIRED FIXES: (1) plan.ts runPlanCommand non-clarification hint -> point to `npx agent-bober sprint` to execute the plan. (2) The S2-C6 criterion requires the hint be CONSISTENT with plan answer's hint. So plan answer (runPlanAnswerCommand, currently plan.ts:~297) must ALSO say `sprint`. For that to be CORRECT (sprint must succeed there), plan answer must MATERIALIZE contracts when it resolves the spec to status 'ready'. runPlanAnswerCommand currently does NOT load config — add loadConfig(projectRoot), and when remaining open clarifications == 0 AND updated.status === 'ready', call clearContractsForSpec(projectRoot, updated.specId) then materializeContracts(updated, projectRoot, config), then print the `sprint` hint. Apply the same materialize-on-ready behavior to runPlanAnswerInteractive (it also flips to ready). Guard with try/catch so a materialization error logs but does not crash the answer command. (3) Update the S2-C6 test to assert the printed output contains 'agent-bober sprint' (not 'agent-bober run'); add a test that resolving the final clarification through runPlanAnswerCommand materializes schema-valid contracts and prints the sprint hint. Keep S2-C1..C5 and all S1 tests green. The 6 cockpit-integration E2E failures are pre-existing/unrelated — ignore them.",
+  "instructionsPointer": "Read the contract at .bober/contracts/sprint-spec-20260623-plan-contracts-materialization-2.json and the briefing at .bober/briefings/sprint-spec-20260623-plan-contracts-materialization-2-briefing.md."
+}

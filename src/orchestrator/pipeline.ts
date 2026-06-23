@@ -14,10 +14,8 @@ import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { isPipelineReady } from "../contracts/spec.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
-import {
-  createContract,
-  updateContractStatus,
-} from "../contracts/sprint-contract.js";
+import { updateContractStatus } from "../contracts/sprint-contract.js";
+import { materializeContracts } from "./contract-materialization.js";
 import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { persistEvalResult } from "./eval-persist.js";
 import {
@@ -25,7 +23,7 @@ import {
   summarizeOlderSprints,
 } from "./context-handoff.js";
 import type { ContextHandoff, ProjectContext } from "./context-handoff.js";
-import { runPlanner, generateContractPrecision } from "./planner-agent.js";
+import { runPlanner } from "./planner-agent.js";
 import { runResearch } from "./research-agent.js";
 import type { ResearchDoc } from "./research-agent.js";
 import { listResearch, readResearch } from "../state/research-state.js";
@@ -51,7 +49,6 @@ import { runWithAudit, type MechanismName } from "./checkpoints/audit.js";
 import { emit } from "../telemetry/emit.js";
 import {
   ensureBoberDir,
-  saveContract,
   updateContract,
   appendHistory,
   readDesign,
@@ -858,57 +855,7 @@ export async function runTsPipeline(
     // ── Phase 2: Sprint loop ─────────────────────────────────────
     logger.phase("Sprint Execution");
 
-    // Create sprint contracts from features.
-    // These auto-generated contracts use placeholder precision fields;
-    // a planner-authored contract (saved directly by the bober-planner
-    // subagent) supersedes them with substantive nonGoals, stopConditions,
-    // and definitionOfDone.
-    const contracts: SprintContract[] = [];
-    for (let i = 0; i < spec.features.length; i++) {
-      const feature = spec.features[i];
-      // Generate substantive precision fields (nonGoals/stopConditions/
-      // definitionOfDone) so the contract passes the generator's BLOCKING
-      // precision preflight. Without this the standalone pipeline emits
-      // placeholder contracts that every generator (Claude or DeepSeek) refuses.
-      const precision = await generateContractPrecision(feature, spec, config);
-      if (precision) {
-        logger.info(
-          `Generated precision fields for sprint ${i + 1} (${precision.nonGoals.length} non-goals, ${precision.stopConditions.length} stop conditions).`,
-        );
-      } else {
-        logger.warn(
-          `Could not generate precision fields for sprint ${i + 1}; contract will use placeholders and the generator may block it.`,
-        );
-      }
-      const contract = createContract(
-        feature.title,
-        feature.description,
-        feature.acceptanceCriteria.map((ac, idx) => ({
-          criterionId: `${feature.featureId}-criterion-${idx + 1}`,
-          description: ac,
-          verificationMethod: "agent-evaluation",
-        })),
-        {
-          specId: spec.specId,
-          sprintNumber: i + 1,
-          features: [feature.featureId],
-          ...(precision
-            ? {
-                nonGoals: precision.nonGoals,
-                stopConditions: precision.stopConditions,
-                definitionOfDone: precision.definitionOfDone,
-              }
-            : {}),
-        },
-      );
-      // createContract doesn't take assumptions/outOfScope; set them directly.
-      if (precision) {
-        contract.assumptions = precision.assumptions;
-        contract.outOfScope = precision.outOfScope;
-      }
-      contracts.push(contract);
-      await saveContract(projectRoot, contract);
-    }
+    const contracts = await materializeContracts(spec, projectRoot, config);
     await runWithAudit({
       projectRoot,
       runId: pipelineRunId,
