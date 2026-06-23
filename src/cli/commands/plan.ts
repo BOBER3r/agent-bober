@@ -175,7 +175,7 @@ function printPlan(spec: PlanSpec): void {
   console.log(chalk.gray(`Saved to .bober/specs/${spec.specId}.json`));
   console.log();
   console.log(
-    `Next: ${chalk.green("npx agent-bober run")} to execute the plan.`,
+    `Next: ${chalk.green("npx agent-bober sprint")} to execute the plan.`,
   );
 }
 
@@ -293,8 +293,18 @@ export async function runPlanAnswerCommand(
       ),
     );
     if (updated.status === "ready") {
+      // Eagerly materialize contracts so `sprint` finds them immediately.
+      try {
+        const config = await loadConfig(projectRoot);
+        await clearContractsForSpec(projectRoot, updated.specId);
+        await materializeContracts(updated, projectRoot, config);
+      } catch (err) {
+        logger.warn(
+          `Contract materialization after plan-answer failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
       console.log(
-        `Next: ${chalk.green(`npx agent-bober run`)} to execute the plan.`,
+        `Next: ${chalk.green(`npx agent-bober sprint`)} to execute the plan.`,
       );
     }
   } else {
@@ -369,6 +379,21 @@ export async function runPlanAnswerInteractive(
         `All clarifications resolved. Spec is now status: ${working.status}.`,
       ),
     );
+    if (working.status === "ready") {
+      // Eagerly materialize contracts so `sprint` finds them immediately.
+      try {
+        const config = await loadConfig(projectRoot);
+        await clearContractsForSpec(projectRoot, working.specId);
+        await materializeContracts(working, projectRoot, config);
+      } catch (err) {
+        logger.warn(
+          `Contract materialization after plan-answer failed (non-fatal): ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      console.log(
+        `Next: ${chalk.green(`npx agent-bober sprint`)} to execute the plan.`,
+      );
+    }
   } else {
     console.log(
       chalk.yellow(

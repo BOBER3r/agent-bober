@@ -178,7 +178,7 @@ describe("runPlanCommand", () => {
     expect(ids.some((id) => id.endsWith("-03"))).toBe(false);
   });
 
-  it("S2-C6: plan hint matches plan answer hint (both say agent-bober run)", async () => {
+  it("S2-C6: plan hint points to agent-bober sprint (consistent with plan answer hint)", async () => {
     const { runPlanner } = await import("../../orchestrator/planner-agent.js");
     const spec = makeReadySpec(1);
     (runPlanner as ReturnType<typeof vi.fn>).mockResolvedValue({ kind: "ready", spec });
@@ -186,8 +186,8 @@ describe("runPlanCommand", () => {
     await runPlanCommand("build something", tmpRoot, {});
 
     const output = consoleLogSpy.mock.calls.flat().join("\n");
-    // The hint must reference "agent-bober run" (consistent with plan answer's hint)
-    expect(output).toContain("agent-bober run");
+    // The hint must reference "agent-bober sprint" (the command that executes the materialized plan)
+    expect(output).toContain("agent-bober sprint");
   });
 });
 
@@ -288,5 +288,53 @@ describe("runPlanAnswerCommand", () => {
 
     expect(process.exitCode).toBe(1);
     errSpy.mockRestore();
+  });
+
+  it("S2-C6: resolving the final clarification materializes schema-valid contracts and prints agent-bober sprint hint", async () => {
+    // Build a spec with one open clarification question and one feature.
+    const spec = createSpec(
+      "Add login flow",
+      "Login with JWT tokens",
+      [
+        {
+          title: "Login form",
+          description: "Form posts to /api/auth/login and stores JWT",
+          priority: "must-have",
+          acceptanceCriteria: [
+            "AC1: form submits and stores JWT in localStorage",
+          ],
+        },
+      ],
+      {
+        clarificationQuestions: [
+          {
+            questionId: "Q1",
+            category: "scope",
+            question: "Should the API support refresh tokens?",
+          },
+        ],
+      },
+    );
+    await seedSpec(spec);
+
+    await runPlanAnswerCommand(spec.specId, "Q1", "Yes, with rotation", tmpRoot);
+
+    // The spec should now be ready
+    const written = JSON.parse(
+      await readFile(join(tmpRoot, ".bober/specs", `${spec.specId}.json`), "utf-8"),
+    );
+    expect(written.status).toBe("ready");
+
+    // Contracts must have been materialized
+    const contracts = await listContracts(tmpRoot);
+    expect(contracts.length).toBeGreaterThan(0);
+    for (const c of contracts) {
+      const result = SprintContractSchema.safeParse(c);
+      expect(result.success).toBe(true);
+    }
+
+    // The printed output must hint at agent-bober sprint
+    const output = consoleLogSpy.mock.calls.flat().join("\n");
+    expect(output).toContain("agent-bober sprint");
   });
 });
