@@ -1,0 +1,70 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-3",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "sprintNumber": 3,
+  "title": "Scope sprint to the active spec with clarification guard",
+  "description": "Make runSprintCommand select only the contracts whose specId matches the latest loaded spec, refuse to run when the latest spec has status needs-clarification, and improve the empty-contracts message to point at re-planning or the full pipeline. The single-spec flow stays unchanged.",
+  "status": "proposed",
+  "dependsOn": ["sprint-spec-20260623-plan-contracts-materialization-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "S3-C1",
+      "description": "Running npm run build and the typecheck completes with zero errors after the sprint-command changes.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "S3-C2",
+      "description": "When the contracts directory holds contracts from two different specIds, runSprintCommand executes only the contracts whose specId matches the latest spec.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S3-C3",
+      "description": "When the latest spec has status needs-clarification, runSprintCommand refuses to run, prints a message naming the open clarifications, and invokes no generator.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S3-C4",
+      "description": "When no contracts match the active spec, the error message instructs the user to re-plan or run the full pipeline.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S3-C5",
+      "description": "The single-spec flow produces the same sprint selection as before and the full vitest suite passes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement multi-spec parallel execution.",
+    "Do not change generator or evaluator behavior."
+  ],
+  "stopConditions": [
+    "Stop when sprint runs only the active spec's contracts and refuses needs-clarification specs.",
+    "Stop when the single-spec flow is unchanged and all tests pass."
+  ],
+  "definitionOfDone": "The sprint command scopes contract selection to the active spec, refuses to run a needs-clarification spec with a clear message, improves the empty-contracts message, and preserves the single-spec flow with all tests passing.",
+  "assumptions": [
+    "loadLatestSpec (plan-state.ts:85) returns the spec whose contracts the user intends to run.",
+    "Filtering contracts by specId is safe because every materialized contract carries its specId."
+  ],
+  "outOfScope": [
+    "Helper or plan-command changes (delivered in Sprints 1 and 2).",
+    "Topological ordering by dependsOn."
+  ],
+  "generatorNotes": "In runSprintCommand (sprint.ts), after loadLatestSpec, filter listContracts to contracts where c.specId === spec.specId before findNextPendingSprint. Add a guard: if spec.status === 'needs-clarification', print the open clarification questions (reuse getOpenClarifications from contracts/spec.ts) and return without invoking the generator. Improve the existing 'No sprint contracts found' message (sprint.ts:115) to mention re-running plan or running the full pipeline. Keep the single-spec path identical when only one spec's contracts exist.",
+  "evaluatorNotes": "Seed the contracts dir with two specs' contracts and assert only the latest spec's sprints run. Set the latest spec to needs-clarification and assert no generator invocation plus a clarifications message. Confirm the empty-contracts message references re-plan or run. Run the full suite to confirm no regression to the existing single-spec sprint behavior.",
+  "estimatedFiles": [
+    "src/cli/commands/sprint.ts",
+    "src/cli/commands/sprint.test.ts"
+  ],
+  "estimatedDuration": "small",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-23T12:00:00.000Z",
+  "updatedAt": "2026-06-23T12:00:00.000Z"
+}

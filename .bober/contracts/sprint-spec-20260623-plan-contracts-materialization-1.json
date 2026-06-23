@@ -1,0 +1,71 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-1",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "sprintNumber": 1,
+  "title": "Extract shared deterministic materializeContracts helper",
+  "description": "Pull the contract-creation loop at src/orchestrator/pipeline.ts:861-906 into a reusable materializeContracts(spec, projectRoot, config) helper that runTsPipeline calls in place of the inline loop. Feature-derived contract content is preserved; contract ids become deterministic and zero-padded as sprint-<specId>-NN so listContracts lexical ordering matches execution order. The post-plan and post-sprint-contract audit checkpoints stay in the pipeline.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "S1-C1",
+      "description": "Running npm run build and the TypeScript typecheck completes with zero errors after the helper extraction.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "S1-C2",
+      "description": "A unit test confirms runTsPipeline delegates contract creation to materializeContracts while the post-plan and post-sprint-contract audit checkpoints remain in the pipeline body.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S1-C3",
+      "description": "With generateContractPrecision mocked, a three-feature spec that has no embedded sprints produces feature-derived contracts whose title, description, successCriteria, status, precision fields, sprintNumber and features match the pre-refactor output.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S1-C4",
+      "description": "Materialized contract ids follow the deterministic sprint-<specId>-NN form, zero-padded so that listContracts lexical ordering matches sprint execution order for a spec with twelve or more sprints.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S1-C5",
+      "description": "The full existing vitest suite passes with no regressions in run.test.ts after the refactor.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change the pipeline phase order, audit checkpoint sites, or the research and plan steps.",
+    "Do not introduce the embedded spec.sprints branch in this sprint; that arrives in Sprint 2."
+  ],
+  "stopConditions": [
+    "Stop when materializeContracts is the single source of feature-derived contract creation called by runTsPipeline and the suite is green.",
+    "Stop when contract ids are deterministic and zero-padded and ordering is verified for twelve-plus sprints."
+  ],
+  "definitionOfDone": "The contract-creation loop is extracted into a reusable materializeContracts helper that runTsPipeline calls; feature-derived contract content is preserved, contract ids are deterministic and zero-padded for stable ordering, and the full test suite passes.",
+  "assumptions": [
+    "generateContractPrecision remains an async planner LLM call and is mocked in tests.",
+    "The post-plan and post-sprint-contract checkpoints are pipeline concerns and stay outside the helper."
+  ],
+  "outOfScope": [
+    "Wiring the plan command (Sprint 2).",
+    "Sprint-command contract scoping (Sprint 3)."
+  ],
+  "generatorNotes": "Keep the feature-derived branch faithful to pipeline.ts:861-906: same createContract inputs (criteria mapped with verificationMethod agent-evaluation), same logging strings, same order. Replace only the id assignment with deterministic zero-padded sprint-<specId>-NN. Helper signature: materializeContracts(spec, projectRoot, config). Have it return the SprintContract[] so the pipeline can pass it to the post-sprint-contract checkpoint. Honor the freeze comment intent (pipeline.ts:610-612) for everything except the now-authorized id scheme and the later embedded-sprints support.",
+  "evaluatorNotes": "Verify the inline loop is gone from runTsPipeline and replaced by a single helper call. Confirm checkpoints at the post-plan and post-sprint-contract sites still fire with the same arguments. Add or extend a test that builds a 12-sprint spec and asserts listContracts returns contracts in sprintNumber order. Confirm feature-derived content parity by snapshotting contract fields other than id/timestamps.",
+  "estimatedFiles": [
+    "src/orchestrator/contract-materialization.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/contract-materialization.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-23T12:00:00.000Z",
+  "updatedAt": "2026-06-23T12:00:00.000Z"
+}

@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260623-plan-contracts-materialization-2",
+  "specId": "spec-20260623-plan-contracts-materialization",
+  "sprintNumber": 2,
+  "title": "Embedded-sprint materialization and eager wiring into plan",
+  "description": "Extend materializeContracts to prefer valid embedded spec.sprints: safeParse each entry against SprintContractSchema, normalize status to proposed, and on any parse or precision failure fall back to feature-derived generation without throwing. Wire runPlanCommand to call materializeContracts after a successful non-clarification plan, clearing the current specId's prior contracts first, and correct the next-step hint so it points to a command that now functions.",
+  "status": "proposed",
+  "dependsOn": ["sprint-spec-20260623-plan-contracts-materialization-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    {
+      "criterionId": "S2-C1",
+      "description": "Running npm run build and the typecheck completes with zero errors after wiring eager materialization into the plan command.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "S2-C2",
+      "description": "Given a spec whose sprints array entries each satisfy SprintContractSchema, materializeContracts writes one contract file per entry with status normalized to proposed and the embedded success criteria and precision fields preserved.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S2-C3",
+      "description": "Given a spec whose sprints entries omit status or use an unknown verificationMethod, materializeContracts does not throw and instead writes feature-derived contracts that satisfy SprintContractSchema.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S2-C4",
+      "description": "After runPlanCommand completes for a ready spec the contracts directory contains schema-valid files, while a spec with status needs-clarification yields zero contract files.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S2-C5",
+      "description": "Re-running materialization for the same specId overwrites that specId's prior contracts and leaves no stale higher-numbered files behind.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "S2-C6",
+      "description": "The plan command prints a next-step hint that points to a command which succeeds, consistent with the hint printed by plan answer.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add a separate contracts CLI command.",
+    "Do not modify the sprint command's contract selection in this sprint; that is Sprint 3."
+  ],
+  "stopConditions": [
+    "Stop when plan writes valid contracts from embedded sprints with feature-derived fallback and the needs-clarification path writes none.",
+    "Stop when re-planning the same spec does not accumulate stale contract files."
+  ],
+  "definitionOfDone": "The plan command eagerly materializes schema-valid sprint contracts from embedded spec.sprints when present, falls back to feature-derived generation otherwise, skips materialization for needs-clarification specs, avoids stale-file accumulation, and prints an accurate next-step hint.",
+  "assumptions": [
+    "Embedded entries that fail safeParse trigger a whole-set feature-derived fallback rather than a partial mix, keeping a single id scheme per spec.",
+    "Clearing prior contracts is scoped to files whose specId matches the current spec, leaving other specs untouched."
+  ],
+  "outOfScope": [
+    "Sprint-command behavior changes (Sprint 3).",
+    "Honoring embedded sprints inside run is already delivered via the shared helper from Sprint 1 and needs no extra plan-side work."
+  ],
+  "generatorNotes": "Add the embedded branch to materializeContracts from Sprint 1: iterate spec.sprints, SprintContractSchema.safeParse each, override id with deterministic sprint-<specId>-NN, force status to proposed, and pass through saveContract (which still enforces the precision gate). If any entry fails to parse, log and fall back to the feature-derived branch for the whole spec. In runPlanCommand (plan.ts), after printPlan and only when result.kind is not needs-clarification, call materializeContracts(spec, projectRoot, config). Before writing, delete existing .bober/contracts files whose parsed specId equals spec.specId. Update printPlan's final hint; reconcile the inconsistency where plan suggests sprint (plan.ts:171) but plan answer suggests run (plan.ts:290).",
+  "evaluatorNotes": "Test three paths: valid embedded sprints used verbatim with normalized status; malformed embedded sprints falling back to feature-derived without throwing; needs-clarification spec producing zero contracts. Verify idempotency by materializing a 3-sprint spec, then a 2-sprint version of the same specId, and asserting only two files remain. Confirm the printed hint names a command that the new code makes functional.",
+  "estimatedFiles": [
+    "src/orchestrator/contract-materialization.ts",
+    "src/cli/commands/plan.ts",
+    "src/cli/commands/plan.test.ts",
+    "src/orchestrator/contract-materialization.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-23T12:00:00.000Z",
+  "updatedAt": "2026-06-23T12:00:00.000Z"
+}
