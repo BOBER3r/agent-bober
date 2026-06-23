@@ -370,13 +370,19 @@ User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Fleet Comm
 provenance sidecar (`.meta.json`) and recoverable overwrite (`.bak` + notice) are documented
 under both `agent-bober fleet expand <goal>` and `agent-bober fleet expand-deep <goal>`.
 
-## Plan→Contracts Materialization — in progress (2 of 3)
+## Plan→Contracts Materialization — complete (3 of 3)
 
 `spec-20260623-plan-contracts-materialization` — refactor the run pipeline's sprint-contract
 creation into a reusable helper so a standalone `plan` path can share it, and make contract ids
-deterministic. **This plan is in progress (2 of 3); as of Sprint 2 the standalone plan→sprint
-gap is CLOSED** — `plan` now materializes contracts so `sprint` no longer errors *"No sprint
-contracts found"*. Sprint 1 is the **extraction step only**: it pulls the inline contract-creation loop
+deterministic. **The plan is complete (3 of 3) and the original bug is fixed end-to-end:**
+`plan` → `sprint` works without the full `run` pipeline. The arc was: **(1)** extract the
+inline materialization loop into a shared deterministic `materializeContracts` helper; **(2)**
+give that helper an embedded branch and eagerly wire it into all three `plan` entry points so a
+ready plan writes its contracts immediately — this **closed** the standalone plan→sprint gap
+that made `sprint` error *"No sprint contracts found"* after a bare `plan`; **(3)** scope the
+`sprint` command to the active spec's contracts and add a `needs-clarification` guard so the
+freshly-materialized contracts are consumed safely even when older specs' contracts linger on
+disk. Sprint 1 is the **extraction step only**: it pulls the inline contract-creation loop
 out of `runTsPipeline` (the old `pipeline.ts:~856-906` block) into a new exported async helper
 `materializeContracts(spec, projectRoot, config)` in `src/orchestrator/contract-materialization.ts`,
 which `runTsPipeline` now calls in one line (`pipeline.ts:853`). The extraction is **verbatim** —
@@ -400,10 +406,18 @@ contracts) to `npx agent-bober sprint` (which consumes them) — the iteration-1
 hint *semantics* (S2-C6); fixed in iteration 2. **Standalone `plan` → `sprint` now works
 end-to-end.** NB bober-authored specs store `spec.sprints` as contractId *strings* (which
 safeParse-reject → fallback); the embedded branch is for external/planner specs that emit full
-sprint *objects*. Sprint 3 scopes the `sprint` command to the active spec + adds a clarification
-guard.
+sprint *objects*. Sprint 3 **closes the plan** — it scopes `runSprintCommand` (`src/cli/commands/sprint.ts`)
+to the active spec by filtering `listContracts` to `c.specId === spec.specId` **before**
+`findNextPendingSprint` (stale other-spec contracts can no longer run), refuses a
+`needs-clarification` spec (prints the open questions + the correct `plan answer` hint and
+returns **before** invoking the generator), and improves the empty-contracts message to point at
+`plan` (re-materialize) or `run` (full pipeline) — the single-spec flow is provably unchanged.
+**2 iterations**: iter-1 (`6f4029d`) used a non-existent `plan-answer` (hyphen) hint and failed
+S3-C3; iter-2 (`559025f`) corrected it to `plan answer` (space, interpolating `spec.specId`) +
+test assertion; passed 5/5. **The standalone plan→sprint bug is now fixed end-to-end.**
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260623-plan-contracts-materialization-1.md](./sprint-spec-20260623-plan-contracts-materialization-1.md) | Extraction step: new exported `materializeContracts(spec, projectRoot, config): Promise<SprintContract[]>` (`src/orchestrator/contract-materialization.ts`) replaces `runTsPipeline`'s inline contract-creation loop (verbatim content: `createContract` + `generateContractPrecision` + same logs/order); **sole behavioral change** = deterministic zero-padded `sprint-<specId>-NN` ids (override `createContract`'s `Date.now` default) so `listContracts()` lexical order == `sprintNumber` order for 12+ sprints; post-plan + post-sprint-contract checkpoints stay in `pipeline.ts` (helper has zero audit logic); orchestrator-internal, one caller; **extraction only — standalone plan→sprint wiring is Sprint 2, not shipped here** |
 | 2 | [sprint-spec-20260623-plan-contracts-materialization-2.md](./sprint-spec-20260623-plan-contracts-materialization-2.md) | **Closes the bug** — `materializeContracts` gains an embedded branch (valid `spec.sprints` *objects* used verbatim: status→`proposed`, `specId` rebound, deterministic `sprint-<specId>-NN` ids; any parse/precision failure → **whole-set** feature-derived fallback, no throw/partial mix) + new `clearContractsForSpec(projectRoot, specId)` (`src/state/sprint-state.ts`, re-exported) deleting only that spec's contract files; all three `plan` entry points (`runPlanCommand` + `runPlanAnswerCommand` + `runPlanAnswerInteractive`) **clear-then-materialize** on resolve→`ready` (skipped for `needs-clarification`; `plan answer` paths non-fatal `try/catch`) so `sprint` finds contracts — **standalone plan→sprint works**; all next-step hints corrected `run`→`npx agent-bober sprint`. **2 iterations**: iter-1 (`36de025`) failed S2-C6 on hint semantics (`run` re-plans/ignores fresh contracts), iter-2 (`bef849e`) fixed hints + materialize-on-`plan answer`; passed 6/6 |
+| 3 | [sprint-spec-20260623-plan-contracts-materialization-3.md](./sprint-spec-20260623-plan-contracts-materialization-3.md) | **Finale** — hardens `runSprintCommand` (`src/cli/commands/sprint.ts`): filters `listContracts` to `c.specId === spec.specId` **before** `findNextPendingSprint` so only the **active** (latest) spec's contracts run (stale other-spec contracts ignored); adds a `needs-clarification` guard (prints open questions via `getOpenClarifications` + the correct `plan answer` hint, returns **before** the generator — never spawns it); improves the empty-contracts message to point at `plan` (re-materialize) or `run` (full pipeline). Single-spec flow provably unchanged (filter is a no-op); **no** multi-spec parallel exec, **no** `dependsOn` topo-ordering (both non-goals). **2 iterations**: iter-1 (`6f4029d`) used a non-existent `plan-answer` (hyphen) hint, failed S3-C3; iter-2 (`559025f`) corrected it to `plan answer` (space, interpolating `spec.specId`) + asserted in the test; passed 5/5. **The standalone plan→sprint bug is fixed end-to-end.** |

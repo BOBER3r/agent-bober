@@ -96,6 +96,14 @@ bober sprint
 Runs one sprint: curator reads the codebase for context, generator writes code, evaluator
 verifies. On failure, the generator reworks up to `evaluator.maxIterations` times.
 
+`sprint` always acts on the **active** (latest) plan only: it selects contracts whose
+`specId` matches the latest spec, so older specs' contracts left on disk are ignored. If
+the latest plan is still `needs-clarification`, `sprint` refuses to run — it prints the open
+questions and the resolution hint
+(`npx agent-bober plan answer <specId> <questionId> "<answer>"`) and spawns **no** generator.
+If no contract matches the active plan, the error points you at `plan` (to re-materialize
+contracts) or `run` (the full pipeline).
+
 ---
 
 ### `bober eval`
