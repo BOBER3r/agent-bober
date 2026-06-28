@@ -113,7 +113,11 @@ Selects the orchestration engine for sprints driven by this team:
 > `cloud-inference` egress axis (default off)**: with the axis off it prints a clear
 > message naming `medical.egress.cloudInference`, exits 1, and reads **no PDF bytes** —
 > it **ships nothing to cloud by default** (see "Ingestion" below and
-> [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
+> [`COMMANDS.md`](../COMMANDS.md)). As of `spec-20260628-medical-ingest` Sprint 4 a
+> deterministic, no-LLM **supplements** path exists — `bober medical supplements add|list`
+> records a `{ name, dose }` entry as a **FactStore fact** under the `medical` scope
+> (`subject=name`, `predicate="dose"`), with re-adding an identical entry an **idempotent
+> NOOP** (see "Supplements" below and [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
 > ordered SOP is wired end-to-end** under a **code-enforced zero-egress default**:
 > consent → red-flag → numerics → medications (from `FactStore`) → an `EgressGuard`
 > literature gate → retrieval → disclaimer footer → audit. Both egress axes default
@@ -460,6 +464,32 @@ order**:
 User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical import-labs`.
 Full details:
 [`docs/sprints/sprint-spec-20260628-medical-ingest-3.md`](sprints/sprint-spec-20260628-medical-ingest-3.md).
+
+**Supplements — `bober medical supplements add|list` (`spec-20260628-medical-ingest`
+Sprint 4).** A deterministic, no-LLM capture path for supplements. Unlike the lab-PDF and
+device-export ingestion above, supplements are **FactStore facts under the `medical`
+scope**, not `HealthDataStore` rows. The testable cores `runSupplementAdd` /
+`runSupplementList` (`src/medical/supplements.ts`, nested `medical` **subcommands**, not
+top-level commands):
+
+- `add <name> [--dose <d>]` flattens the entry into a `FactInput`
+  (`scope: "medical"`, `subject: <name>`, `predicate: "dose"`, `value: <dose>` or the
+  `"unspecified"` placeholder) and reconciles it into the FactStore via the existing
+  `writeFact` with **no judge** — a deterministic ADD/UPDATE/NOOP path (no LLM, no network).
+  Re-adding an **identical name+dose** is an **idempotent NOOP** (`reconcileFact`
+  exact-match), so the active-fact count never grows; a changed dose UPDATEs the fact.
+- `list [--file <path>]` parses a markdown-frontmatter supplements list (default
+  `.bober/medical/supplements.md`, one `Name | dose` item per line) and prints each entry.
+
+Supplements deliberately use a **different FactStore shape from medications** (ADR-7):
+`subject=<name>` / `predicate="dose"` (each supplement is its own subject row), whereas
+medications are `subject="patient"` / `predicate="takes-medication"` (the bi-temporal
+value-of-record the SOP reads via
+`getActiveFacts("medical","patient","takes-medication")`).
+
+User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical supplements`.
+Full details:
+[`docs/sprints/sprint-spec-20260628-medical-ingest-4.md`](sprints/sprint-spec-20260628-medical-ingest-4.md).
 
 ### EgressGuard + full SOP wiring (Phase 6 Sprint 6)
 

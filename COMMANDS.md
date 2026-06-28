@@ -897,6 +897,53 @@ axis on it prints `records parsed` and `new rows`. Re-importing the same report 
 `new rows: 0`. `--vault <dir>` overrides the note directory (default: under
 `.bober/medical`).
 
+### `bober medical supplements add <name> [--dose <d>]`
+
+Record a supplement (a name plus an optional dose) as a fact in the medical FactStore
+(the same `facts.db` that `bober facts` reads). This is **not** the lab-ingest path —
+supplements are FactStore facts under the `medical` scope, not `HealthDataStore` lab
+rows.
+
+```bash
+bober medical supplements add "Vitamin D" --dose "1000 IU"
+bober medical supplements add Magnesium                       # dose optional (stored as "unspecified")
+```
+
+Each entry flattens into a fact with `subject = <name>`, `predicate = dose`, and the
+dose as its value (the placeholder `unspecified` when `--dose` is omitted). Reconcile is
+**deterministic** — no LLM, no judge, no network. Re-adding the **same name and dose** is
+an **idempotent NOOP** (it prints `Supplement unchanged: <name>` and the active-fact count
+does not grow); supplying a **different** dose for the same name updates the existing fact
+(`Updated supplement: <name> -> <dose>`). The command never throws — on error it prints a
+clear message and exits non-zero.
+
+> Supplements deliberately use a different FactStore shape from medications. A supplement
+> is `subject=<name>` / `predicate=dose` (its own subject row), whereas medications are
+> `subject=patient` / `predicate=takes-medication` (the value-of-record the SOP reads).
+
+### `bober medical supplements list [--file <path>]`
+
+Print the supplements recorded in a markdown-frontmatter file.
+
+```bash
+bober medical supplements list
+bober medical supplements list --file ~/health-vault/supplements.md   # custom file
+```
+
+`--file` defaults to `.bober/medical/supplements.md`. The file is a YAML-frontmatter list,
+one `Name | dose` item per line:
+
+```
+---
+supplements:
+  - Vitamin D | 1000 IU
+  - Magnesium | 200 mg
+---
+```
+
+Each entry prints as `name: dose` (`unspecified` when no dose is given). An empty list
+prints `No supplements found.`; the command never throws.
+
 ### `bober medical whoop sync [--since <iso>]`
 
 Pull WHOOP `recovery` / `sleep` / `cycle` / `workout` records over a window and write
