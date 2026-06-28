@@ -944,6 +944,43 @@ supplements:
 Each entry prints as `name: dose` (`unspecified` when no dose is given). An empty list
 prints `No supplements found.`; the command never throws.
 
+### `bober medical profile show`
+
+Decrypt and print the personalization profile stored at `<vaultDir>/profile.yaml`
+(default `.bober/medical/profile.yaml`; `--vault <dir>` overrides). The profile holds
+`age` / `sex` / `conditions` / `medications` / `supplements` / `allergies` / `goals`.
+
+```bash
+bober medical profile show
+bober medical profile show --vault ~/health-vault   # custom vault dir
+```
+
+The profile is **SOPS-encrypted** (age backend, local — **no egress**). Reading is
+**fail-closed**: if `sops` is not available, the command prints a clear message and exits
+non-zero **without** reading or decrypting anything — it never throws.
+
+### `bober medical profile set <key> <value>`
+
+Update a single profile field, then re-validate and re-encrypt the whole profile.
+
+```bash
+bober medical profile set age 42
+bober medical profile set sex female
+bober medical profile set goals "lower ldl, improve sleep"   # array key: comma-separated
+bober medical profile set allergies "penicillin, shellfish"
+```
+
+Valid keys are `age` / `sex` / `conditions` / `medications` / `supplements` / `allergies`
+/ `goals`. `age` must be a non-negative integer and `sex` one of `male` / `female` /
+`other` — an invalid value is rejected (Zod) before anything is written. Array keys take a
+comma-separated value. The command starts from a safe default if no profile exists yet,
+updates the one field, and writes the re-encrypted `profile.yaml`.
+
+> The profile is **SOPS-encrypted** (age backend, local — **no egress**). Writing is
+> **fail-closed**: if `sops` is unavailable the command refuses and exits non-zero, and
+> **no plaintext profile is ever written to disk** — only ciphertext reaches the file.
+> `--vault <dir>` overrides the vault dir (default `.bober/medical`).
+
 ### `bober medical whoop sync [--since <iso>]`
 
 Pull WHOOP `recovery` / `sleep` / `cycle` / `workout` records over a window and write

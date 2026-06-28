@@ -578,6 +578,8 @@ npx agent-bober medical import <file>              # Stream-import a health expo
 npx agent-bober medical import-labs <pdf>          # Parse a lab PDF into vault notes + health store (cloud-inference axis; fail-closed off)
 npx agent-bober medical supplements add <name> [--dose <d>]  # Record a supplement as a FactStore fact (medical scope; idempotent re-add)
 npx agent-bober medical supplements list           # Print supplements from the markdown-frontmatter file
+npx agent-bober medical profile show               # Decrypt + show the SOPS-encrypted personalization profile (fail-closed if sops missing)
+npx agent-bober medical profile set <key> <value>  # Update one profile field (age/sex/conditions/...); re-encrypts via sops (age backend, local)
 npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
 
 # Vault knowledge base

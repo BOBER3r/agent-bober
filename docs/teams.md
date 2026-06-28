@@ -117,7 +117,14 @@ Selects the orchestration engine for sprints driven by this team:
 > deterministic, no-LLM **supplements** path exists — `bober medical supplements add|list`
 > records a `{ name, dose }` entry as a **FactStore fact** under the `medical` scope
 > (`subject=name`, `predicate="dose"`), with re-adding an identical entry an **idempotent
-> NOOP** (see "Supplements" below and [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
+> NOOP** (see "Supplements" below and [`COMMANDS.md`](../COMMANDS.md)). As of
+> `spec-20260628-medical-ingest` Sprint 5 (the finale, completing that spec **5 of 5**) a
+> **SOPS-encrypted personalization profile** exists — `bober medical profile show|set`
+> reads/writes a Zod-validated `profile.yaml` (age / sex / conditions / medications /
+> supplements / allergies / goals) behind an injectable cipher seam (default sops, age
+> backend, local — **no egress**); read and write **fail closed** (refuse, no plaintext
+> PHI on disk) when sops is unavailable (see "Personalization profile" below and
+> [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
 > ordered SOP is wired end-to-end** under a **code-enforced zero-egress default**:
 > consent → red-flag → numerics → medications (from `FactStore`) → an `EgressGuard`
 > literature gate → retrieval → disclaimer footer → audit. Both egress axes default
@@ -490,6 +497,36 @@ value-of-record the SOP reads via
 User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical supplements`.
 Full details:
 [`docs/sprints/sprint-spec-20260628-medical-ingest-4.md`](sprints/sprint-spec-20260628-medical-ingest-4.md).
+
+**Personalization profile — `bober medical profile show|set` (`spec-20260628-medical-ingest`
+Sprint 5, the finale).** A small, Zod-validated personalization snapshot (age / sex /
+conditions / medications / supplements / allergies / goals) persisted as a
+**SOPS-encrypted `<vaultDir>/profile.yaml`** (default `.bober/medical/profile.yaml`). The
+module `src/medical/profile.ts` keeps encryption behind an **injectable cipher seam**
+(`ProfileCipher { available(); encrypt(); decrypt() }`) whose default shells out to `sops`
+(age backend) via `execa`; tests inject a reversible fake cipher, so no real binary runs in
+the suite.
+
+- `writeProfile` / `readProfile` are **fail-closed**: `cipher.available()` is checked
+  **before** any serialization, encryption, or disk IO. When `sops` is unavailable both
+  paths reject with a clear message and **plaintext PHI never reaches disk** — the only
+  bytes ever written to `profile.yaml` are ciphertext. The encryption is **local, age
+  backend, no egress**.
+- `set <key> <value>` is read-modify-write: it reads the existing profile (or a safe
+  default if none exists), updates one field, re-validates the whole object via
+  `ProfileSchema` (negative age / unknown sex rejected), and re-encrypts. Array keys take a
+  comma-separated value.
+- The profile is a **denormalized personalization snapshot** — `FactStore` remains
+  canonical for structured medication/supplement facts, and only this structured
+  `profile.yaml` is encrypted (free-text markdown bodies stay plaintext-in-private-repo by
+  design). Goals are captured here for a downstream analysis pass (a sibling spec).
+
+`src/medical/profile.ts` hand-rolls its flat-YAML emit/parse and does **not import
+`src/vault`** — like the Sprint 2 / Sprint 4 frontmatter readers, it stays independent of
+the sibling vault spec's timing. User-facing usage is in
+[`COMMANDS.md`](../COMMANDS.md) under `bober medical profile`. Full details:
+[`docs/sprints/sprint-spec-20260628-medical-ingest-5.md`](sprints/sprint-spec-20260628-medical-ingest-5.md).
+**`spec-20260628-medical-ingest` is engineering-complete (5 of 5).**
 
 ### EgressGuard + full SOP wiring (Phase 6 Sprint 6)
 
