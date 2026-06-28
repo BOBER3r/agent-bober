@@ -1,5 +1,7 @@
 /** `bober medical import <file>` — stream-ingest a health export (Phase 6, Sprint 5). */
 /** `bober medical whoop sync` — WHOOP device-connection sync (Phase 6, Sprint 3). */
+/** `bober medical import-labs <pdf>` — lab PDF ingest: fail-closed cloud-inference gate + vault + audit (Sprint 3). */
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
@@ -17,6 +19,10 @@ import { WhoopTokenStore } from "../../medical/whoop/whoop-token.js";
 import { WhoopClient } from "../../medical/whoop/whoop-client.js";
 import { WhoopSyncAdapter } from "../../medical/whoop/whoop-sync.js";
 import { AuditLog } from "../../medical/audit.js";
+import { parseLabPdf } from "../../medical/lab-pdf-parser.js";
+import { writeLabNote } from "../../medical/lab-note.js";
+import { reindexLabNotes } from "../../medical/lab-reindex.js";
+import { buildMedicalInferenceClient } from "../../medical/inference.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -120,6 +126,92 @@ export async function runWhoopSync(
   }
 }
 
+// ── ImportLabs deps injection (for testability) ───────────────────────
+
+/** Injectable dependencies for runImportLabs — production callers pass undefined. */
+export interface ImportLabsDeps {
+  /** Override the PDF parser (e.g. fixture parser in tests). */
+  parse?: typeof parseLabPdf;
+  /** Override the current time ISO string (default: new Date().toISOString()). */
+  nowIso?: string;
+}
+
+/**
+ * Core logic for `bober medical import-labs <pdf>`.
+ * Extracted so tests can inject fixture deps without module-level mocking.
+ * The CLI .action() calls this with no deps (production).
+ *
+ * LOAD-BEARING ORDER (ADR-6 / sc-3-3):
+ *   1. loadConfig + EgressGuard.fromConfig
+ *   2. cloud-inference axis check — exits 1 BEFORE any readFile or client build
+ *   3. buildMedicalInferenceClient
+ *   4. readFile(pdfPath) + parse(pdfBytes)
+ *   5. writeLabNote per marker + reindexLabNotes into HealthDataStore (dedup)
+ *   6. AuditLog.append (IDs/enums only — PHI rule)
+ *   7. finally: store?.close()
+ */
+export async function runImportLabs(
+  projectRoot: string,
+  pdfPath: string,
+  deps: ImportLabsDeps = {},
+  opts: { vault?: string } = {},
+): Promise<void> {
+  let store: HealthDataStore | undefined;
+  try {
+    const config = await loadConfig(projectRoot);
+    const egress = EgressGuard.fromConfig(config);
+
+    // axis-off branch: clear message, exit 1, NEVER read the PDF or build any client (FAIL CLOSED — sc-3-3)
+    if (!egress.isAllowed("cloud-inference")) {
+      process.stderr.write(
+        chalk.red(
+          "cloud-inference egress not enabled — set medical.egress.cloudInference: true in bober.config.json\n",
+        ),
+      );
+      process.exitCode = 1;
+      return;
+    }
+
+    const { client, model } = buildMedicalInferenceClient(config, egress);
+
+    const pdfBytes = await readFile(pdfPath);
+    const parse = deps.parse ?? parseLabPdf;
+    const report = await parse(pdfBytes, { client, model });
+
+    const nowIso = deps.nowIso ?? new Date().toISOString();
+    const medicalDir = join(projectRoot, ".bober", "medical");
+    await ensureDir(medicalDir);
+    const vaultDir = opts.vault ?? medicalDir;
+
+    store = new HealthDataStore(join(medicalDir, "health.db"));
+
+    for (const marker of report.markers) {
+      await writeLabNote(vaultDir, marker, {
+        panel: report.panel,
+        collectedAtIso: report.collectedAtIso,
+        source: "lab-pdf",
+      });
+    }
+    const newRows = await reindexLabNotes(vaultDir, store);
+
+    // Audit entry — IDs/enums only (no values, panel names, counts, or PHI — audit.ts:1)
+    await new AuditLog(projectRoot).append({ tIso: nowIso, event: "ingest" });
+
+    process.stdout.write(chalk.green("Lab import complete\n"));
+    process.stdout.write(`  records parsed: ${report.markers.length}\n`);
+    process.stdout.write(`  new rows:       ${newRows}\n`);
+  } catch (err) {
+    process.stderr.write(
+      chalk.red(
+        `Failed to import labs: ${err instanceof Error ? err.message : String(err)}\n`,
+      ),
+    );
+    process.exitCode = 1;
+  } finally {
+    store?.close();
+  }
+}
+
 // ── registerMedicalCommand ────────────────────────────────────────────
 
 /**
@@ -169,6 +261,16 @@ export function registerMedicalCommand(program: Command): void {
         // CLI handlers MUST NOT throw — set exitCode and return (facts.ts:135-142).
         process.exitCode = 1;
       }
+    });
+
+  // ── medical import-labs ──────────────────────────────────────────
+  medicalCmd
+    .command("import-labs <pdf>")
+    .description("Parse a lab PDF and ingest results into the medical health store")
+    .option("--vault <dir>", "vault dir (default: under .bober/medical)")
+    .action(async (pdf: string, opts: { vault?: string }) => {
+      const projectRoot = await resolveRoot();
+      await runImportLabs(projectRoot, pdf, {}, opts);
     });
 
   // ── medical whoop sync ────────────────────────────────────────────
