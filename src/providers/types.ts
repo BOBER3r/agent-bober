@@ -182,10 +182,21 @@ export interface ChatParams {
    */
   jsonObjectMode?: boolean;
   /**
-   * Optional documents to attach to the request. Each entry contains a base64-
-   * encoded payload and its MIME type. Only the Anthropic adapter renders these
-   * as `document` content blocks (prepended to the first user message); all
-   * other adapters ignore this field and existing calls remain byte-identical.
+   * Optional documents (e.g. PDFs) to attach to the request. Each entry is a
+   * base64-encoded payload plus its MIME type. This is a provider-agnostic
+   * input shape: each adapter renders it in that provider's native document
+   * format, prepended to the FIRST user message —
+   *
+   *   - Anthropic → `document` content block (base64 source)
+   *   - OpenAI    → `file` content part (`file_data` base64 data-URL)
+   *   - Gemini    → `inlineData` part (`mimeType` + base64 `data`)
+   *
+   * Adapters whose provider has NO document-input surface (`openai-compat`
+   * endpoints such as DeepSeek/Grok/Ollama, and the `claude-code` CLI) THROW a
+   * clear error when documents are supplied rather than silently dropping them —
+   * a dropped PDF would let the model hallucinate from nothing. Omitting this
+   * field leaves every adapter's rendered request byte-identical to prior
+   * behaviour.
    */
   documents?: { base64: string; mediaType: string }[];
 }

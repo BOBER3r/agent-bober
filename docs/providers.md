@@ -69,24 +69,37 @@ No extra install required. Set `ANTHROPIC_API_KEY` in your environment.
 
 Shorthands (`opus`, `sonnet`, `haiku`) resolve to the latest model version automatically.
 
-### Anthropic-only: PDF document blocks (`ChatParams.documents`)
+### Provider-agnostic PDF document blocks (`ChatParams.documents`)
 
 The programmatic provider layer exposes an **additive, optional** `documents` field on `ChatParams`
-(`src/providers/types.ts:190`):
+(`src/providers/types.ts`):
 
 ```ts
 documents?: { base64: string; mediaType: string }[];
 ```
 
-**Only the Anthropic adapter renders it.** Each entry becomes a base64 `document` content block
-(`{ type: "document", source: { type: "base64", media_type, data } }`) prepended to the first user message,
-letting Claude read a native-text PDF directly (no OCR). **Every other adapter** (`openai-compat` /
-DeepSeek / Grok, `google`, `claude-code`) **ignores the field**, and a request **without** `documents` is
-byte-identical to prior behaviour — so adding it never changes existing calls. The medical lab-PDF parser
+This is a **provider-agnostic input shape**: each adapter renders it in that provider's native document
+format, prepended to the **first user message**:
+
+| Provider      | Native rendering                                                                 |
+| ------------- | -------------------------------------------------------------------------------- |
+| `anthropic`   | `document` content block (`{ type: "document", source: { type: "base64", media_type, data } }`) |
+| `openai`      | `file` content part (`{ type: "file", file: { filename, file_data: "data:<mime>;base64,<…>" } }`) |
+| `google`      | `inlineData` part (`{ inlineData: { mimeType, data } }`)                          |
+
+Providers that have **no document-input surface** fail loudly rather than silently dropping the PDF (a
+dropped document would let the model answer from nothing):
+
+- **`openai-compat`** (DeepSeek, Grok, Ollama, LM Studio, …) — throws a clear "does not support `documents`"
+  error. These endpoints share OpenAI's wire format but not its file-input capability.
+- **`claude-code`** — throws; the `claude` CLI accepts only a text prompt.
+
+A request **without** `documents` (or with an empty array) renders byte-identically to prior behaviour on
+every adapter — so adding the field never changes existing calls. The medical lab-PDF parser
 (`parseLabPdf`, `src/medical/lab-pdf-parser.ts`) is the first consumer: it pairs `documents` with
-`responseSchema` to extract a Zod-validated structured lab report. Because document parsing is
-Anthropic-only, a pipeline that relies on it must route the relevant call through the Anthropic API (or a
-provider that supports document blocks); other providers will silently receive a request with no document.
+`responseSchema` to extract a Zod-validated structured lab report, and works against any provider that
+renders documents (Anthropic, OpenAI, or Gemini) — route the call to one of those, not to an
+`openai-compat`/`claude-code` client.
 
 ---
 

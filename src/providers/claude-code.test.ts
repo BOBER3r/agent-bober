@@ -180,3 +180,22 @@ describe("ClaudeCodeAdapter.chat — binary/timeout overrides (sc-4-5)", () => {
     expect(args).not.toContain("--append-system-prompt");
   });
 });
+
+// ── documents-guard throw without calling execa ──────────────────────────────
+
+describe("ClaudeCodeAdapter.chat — documents-guard", () => {
+  it("throws when documents are supplied, stating the CLI accepts only text", async () => {
+    const adapter = new ClaudeCodeAdapter();
+
+    await expect(
+      adapter.chat({
+        model: "claude",
+        system: "sys",
+        messages: [{ role: "user", content: "parse this" }],
+        documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+      }),
+    ).rejects.toThrow(/does not support `documents`/);
+
+    expect(mockedExeca).not.toHaveBeenCalled();
+  });
+});

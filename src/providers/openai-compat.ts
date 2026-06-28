@@ -11,7 +11,7 @@
  */
 
 import { OpenAIAdapter } from "./openai.js";
-import type { LLMClient } from "./types.js";
+import type { ChatParams, ChatResponse, LLMClient } from "./types.js";
 
 /**
  * LLMClient implementation for OpenAI-compatible endpoints.
@@ -40,5 +40,25 @@ export class OpenAICompatAdapter extends OpenAIAdapter implements LLMClient {
     // Pass "not-needed" as apiKey default — the openai SDK requires a non-empty
     // value but OpenAI-compat servers (like Ollama) typically ignore it.
     super(model, apiKey ?? "not-needed", endpoint);
+  }
+
+  /**
+   * OpenAI-compatible endpoints (DeepSeek, Grok, Ollama, LM Studio, …) have no
+   * standard file/document-input surface. Rather than inherit OpenAIAdapter's
+   * `file` content-part rendering and let the upstream endpoint reject it (or,
+   * worse, silently ignore it), fail loudly so the caller routes documents to a
+   * provider that supports them. Requests without `documents` delegate
+   * unchanged to OpenAIAdapter.
+   */
+  override async chat(params: ChatParams): Promise<ChatResponse> {
+    if (params.documents && params.documents.length > 0) {
+      throw new Error(
+        "OpenAICompatAdapter does not support `documents` (PDF/file inputs): " +
+          "OpenAI-compatible endpoints (DeepSeek, Grok, Ollama, etc.) have no " +
+          "standard file-input surface. Use the anthropic, openai, or google " +
+          "provider for document parsing.",
+      );
+    }
+    return super.chat(params);
   }
 }

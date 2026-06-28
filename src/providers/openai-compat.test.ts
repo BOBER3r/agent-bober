@@ -318,3 +318,64 @@ describe("OpenAICompatAdapter", () => {
     }
   });
 });
+
+// ── Documents (fail-loud: no file-input surface) ─────────────────────
+
+describe("OpenAICompatAdapter — documents (fail-loud)", () => {
+  let createFn: FakeCreateFn;
+
+  beforeEach(() => {
+    createFn = vi.fn();
+    vi.doMock("openai", () => ({ default: makeFakeOpenAI(createFn) }));
+  });
+
+  async function makeAdapter() {
+    const { OpenAICompatAdapter } = await import(
+      "./openai-compat.js?v=docs-" + Date.now()
+    );
+    return new OpenAICompatAdapter("http://localhost:11434/v1", "llama3");
+  }
+
+  it("throws a clear error when documents are supplied (never calls the endpoint)", async () => {
+    const adapter = await makeAdapter();
+
+    await expect(
+      adapter.chat({
+        model: "llama3",
+        system: "sys",
+        messages: [{ role: "user", content: "parse this" }],
+        documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+      }),
+    ).rejects.toThrow(/does not support `documents`/);
+
+    expect(createFn).not.toHaveBeenCalled();
+  });
+
+  it("delegates to OpenAIAdapter unchanged when documents is absent", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hello" }));
+    const adapter = await makeAdapter();
+
+    const res = await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(res.text).toBe("hello");
+    expect(createFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("delegates unchanged when documents is an empty array", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hello" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    });
+
+    expect(createFn).toHaveBeenCalledTimes(1);
+  });
+});

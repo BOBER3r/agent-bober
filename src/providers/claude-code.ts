@@ -118,6 +118,17 @@ export class ClaudeCodeAdapter implements LLMClient {
       );
     }
 
+    // Hard fail on documents — the `claude` CLI accepts only a text prompt, so a
+    // PDF/file would be silently dropped (the model would answer from nothing).
+    if (params.documents && params.documents.length > 0) {
+      throw new Error(
+        "ClaudeCodeAdapter does not support `documents` (PDF/file inputs): the " +
+          "`claude` CLI accepts only a text prompt, so a document would be " +
+          "silently dropped. Use the anthropic, openai, or google provider for " +
+          "document parsing.",
+      );
+    }
+
     const prompt = flattenMessages(messages);
 
     const args = [

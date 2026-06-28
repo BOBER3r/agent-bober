@@ -63,9 +63,28 @@ interface OAISystemMessage {
   content: string;
 }
 
+// ── User content parts (multimodal) ─────────────────────────────────
+// A user message is either a plain string or an array of content parts.
+// PDFs/files ride as a `file` part with a base64 `file_data` data-URL.
+
+interface OAITextPart {
+  type: "text";
+  text: string;
+}
+
+interface OAIFilePart {
+  type: "file";
+  file: {
+    filename: string;
+    file_data: string;
+  };
+}
+
+type OAIContentPart = OAITextPart | OAIFilePart;
+
 interface OAIUserMessage {
   role: "user";
-  content: string;
+  content: string | OAIContentPart[];
 }
 
 interface OAIAssistantMessage {
@@ -204,6 +223,60 @@ function toOpenAIMessages(message: Message): OAIRequestMessage[] {
 }
 
 /**
+ * Map a document MIME type to a filename extension. OpenAI requires a
+ * `filename` alongside inline `file_data`; the extension is cosmetic (the
+ * data-URL MIME is authoritative), so an unknown type falls back to `bin`.
+ */
+function extensionForMediaType(mediaType: string): string {
+  switch (mediaType) {
+    case "application/pdf":
+      return "pdf";
+    case "image/png":
+      return "png";
+    case "image/jpeg":
+      return "jpg";
+    default:
+      return "bin";
+  }
+}
+
+/**
+ * Attach `documents` to the FIRST user message as OpenAI `file` content parts.
+ *
+ * The string content of that message is preserved as a trailing `text` part.
+ * Mutates `messages` in place. No-op semantics for callers: when `documents`
+ * is empty the caller skips this entirely, leaving the request byte-identical.
+ */
+function attachOpenAIDocuments(
+  messages: OAIRequestMessage[],
+  documents: { base64: string; mediaType: string }[],
+): void {
+  const firstUserIdx = messages.findIndex((m) => m.role === "user");
+  if (firstUserIdx === -1) {
+    return;
+  }
+  const firstUser = messages[firstUserIdx] as OAIUserMessage;
+
+  const fileParts: OAIFilePart[] = documents.map((doc, i) => ({
+    type: "file" as const,
+    file: {
+      filename: `document-${i + 1}.${extensionForMediaType(doc.mediaType)}`,
+      file_data: `data:${doc.mediaType};base64,${doc.base64}`,
+    },
+  }));
+
+  const existing: OAIContentPart[] =
+    typeof firstUser.content === "string"
+      ? [{ type: "text" as const, text: firstUser.content }]
+      : firstUser.content;
+
+  messages[firstUserIdx] = {
+    ...firstUser,
+    content: [...fileParts, ...existing],
+  };
+}
+
+/**
  * Parse tool_calls from an OAI response message into ToolCall[].
  *
  * Guards against an empty array (treated as no tool calls) and handles
@@ -320,6 +393,12 @@ export class OpenAIAdapter implements LLMClient {
       { role: "system", content: system },
       ...messages.flatMap(toOpenAIMessages),
     ];
+
+    // Documents (PDFs/files) → `file` content part on the first user message.
+    // Omitting documents leaves the rendered request byte-identical.
+    if (params.documents && params.documents.length > 0) {
+      attachOpenAIDocuments(oaiMessages, params.documents);
+    }
 
     // Structured output via response_format. `responseSchema` (strict json_schema)
     // wins when set; otherwise `jsonObjectMode` requests the loose json_object

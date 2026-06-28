@@ -614,3 +614,90 @@ describe("GoogleAdapter missing @google/generative-ai package", () => {
     );
   });
 });
+
+// ── Documents (provider-agnostic PDF rendering) ──────────────────────
+
+describe("GoogleAdapter — documents (PDF) rendering", () => {
+  let generateContentFn: FakeGenerateContentFn;
+  let getGenerativeModelFn: Mock;
+
+  beforeEach(() => {
+    generateContentFn = vi.fn();
+    getGenerativeModelFn = vi.fn();
+    vi.doMock("@google/generative-ai", () => ({
+      GoogleGenerativeAI: makeFakeGeminiGenAI(generateContentFn, getGenerativeModelFn),
+    }));
+  });
+
+  async function makeAdapter(model = "gemini-2.5-pro", apiKey = "test-gemini-key") {
+    const { GoogleAdapter } = await import("./google.js?v=docs-" + Date.now());
+    return new GoogleAdapter(model, apiKey);
+  }
+
+  it("renders ChatParams.documents as an `inlineData` part on the first user content", async () => {
+    generateContentFn.mockResolvedValue(makeGeminiResponse({ textParts: ["ok"] }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "Parse the PDF.",
+      messages: [{ role: "user", content: "extract markers" }],
+      documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+    });
+
+    const callArgs = generateContentFn.mock.calls[0][0] as {
+      contents: Array<{ role: string; parts: Array<Record<string, unknown>> }>;
+    };
+    const userContent = callArgs.contents[0];
+    expect(userContent.role).toBe("user");
+
+    const dataPart = userContent.parts.find((p) => "inlineData" in p) as
+      | { inlineData: { mimeType: string; data: string } }
+      | undefined;
+    expect(dataPart).toBeDefined();
+    expect(dataPart?.inlineData).toEqual({
+      mimeType: "application/pdf",
+      data: "QkFTRTY0",
+    });
+    // inlineData prepended before the original text part.
+    expect(userContent.parts[0]).toEqual({
+      inlineData: { mimeType: "application/pdf", data: "QkFTRTY0" },
+    });
+    expect(userContent.parts.at(-1)).toEqual({ text: "extract markers" });
+  });
+
+  it("leaves the request byte-identical (no inlineData) when documents is absent", async () => {
+    generateContentFn.mockResolvedValue(makeGeminiResponse({ textParts: ["ok"] }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const callArgs = generateContentFn.mock.calls[0][0] as Record<string, unknown>;
+    expect((callArgs["contents"] as Array<{ parts: unknown }>)[0]).toEqual({
+      role: "user",
+      parts: [{ text: "hi" }],
+    });
+    expect(JSON.stringify(callArgs)).not.toContain("inlineData");
+  });
+
+  it("is a no-op when documents is an empty array", async () => {
+    generateContentFn.mockResolvedValue(makeGeminiResponse({ textParts: ["ok"] }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    });
+
+    const callArgs = generateContentFn.mock.calls[0][0] as {
+      contents: Array<{ role: string; parts: unknown }>;
+    };
+    expect(callArgs.contents[0]).toEqual({ role: "user", parts: [{ text: "hi" }] });
+  });
+});

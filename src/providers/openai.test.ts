@@ -539,3 +539,107 @@ describe("OpenAIAdapter missing openai package", () => {
     ).rejects.toThrow('OpenAI provider requires the "openai" package. Run: npm install openai');
   });
 });
+
+// ── Documents (provider-agnostic PDF rendering) ──────────────────────
+
+describe("OpenAIAdapter — documents (PDF) rendering", () => {
+  let createFn: FakeCreateFn;
+
+  beforeEach(() => {
+    createFn = vi.fn();
+    vi.doMock("openai", () => ({ default: makeFakeOpenAI(createFn) }));
+  });
+
+  async function makeAdapter(model = "gpt-4.1") {
+    const { OpenAIAdapter } = await import("./openai.js?v=docs-" + Date.now());
+    return new OpenAIAdapter(model, "test-api-key");
+  }
+
+  it("renders ChatParams.documents as a `file` content part on the first user message", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "Parse the PDF.",
+      messages: [{ role: "user", content: "extract markers" }],
+      documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const userMsg = callArgs.messages[1];
+    expect(userMsg.role).toBe("user");
+    expect(Array.isArray(userMsg.content)).toBe(true);
+
+    const parts = userMsg.content as Array<Record<string, unknown>>;
+    const filePart = parts.find((p) => p["type"] === "file") as
+      | { file: { filename: string; file_data: string } }
+      | undefined;
+    expect(filePart).toBeDefined();
+    expect(filePart?.file.file_data).toBe("data:application/pdf;base64,QkFTRTY0");
+    expect(filePart?.file.filename).toBe("document-1.pdf");
+    // The original text is preserved as a trailing text part.
+    expect(
+      parts.some((p) => p["type"] === "text" && p["text"] === "extract markers"),
+    ).toBe(true);
+  });
+
+  it("prepends a file part for each document, before the text part", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [
+        { base64: "QQ==", mediaType: "application/pdf" },
+        { base64: "Qg==", mediaType: "application/pdf" },
+      ],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const parts = callArgs.messages[1].content;
+    expect(parts[0]["type"]).toBe("file");
+    expect(parts[1]["type"]).toBe("file");
+    expect(parts[2]).toEqual({ type: "text", text: "hi" });
+  });
+
+  it("leaves the request byte-identical (string content, no `file`) when documents is absent", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(callArgs.messages[1]).toEqual({ role: "user", content: "hi" });
+    expect(JSON.stringify(callArgs)).not.toContain('"file"');
+  });
+
+  it("is a no-op when documents is an empty array", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(callArgs.messages[1]).toEqual({ role: "user", content: "hi" });
+  });
+});
