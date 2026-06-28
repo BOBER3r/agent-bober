@@ -108,6 +108,66 @@ describe("FactStore (in-memory)", () => {
   });
 });
 
+// ── FactStore (readonly flag — sc-2-1) ───────────────────────────────
+
+describe("FactStore (readonly flag)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-facts-ro-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("readonly:true opens read-only and skips CREATE TABLE (sc-2-1)", () => {
+    const p = join(tmpDir, "ro.db");
+    const T = "2026-06-28T00:00:00.000Z";
+    // seed via writable store first
+    const w = new FactStore(p);
+    w.insertFact({
+      scope: "s",
+      subject: "x",
+      predicate: "finding",
+      value: "v",
+      confidence: 1,
+      sourceRunId: null,
+      tValid: T,
+      tCreated: T,
+    });
+    w.close();
+    // open readonly
+    const ro = new FactStore(p, { readonly: true });
+    // reads succeed
+    expect(ro.getActiveFacts("s")).toHaveLength(1);
+    // writes are rejected by better-sqlite3 (SQLITE_READONLY)
+    expect(() =>
+      ro.invalidateFact("nope", T),
+    ).toThrow();
+    ro.close();
+  });
+
+  it("no-flag path is byte-identical: default FactStore still creates the table (sc-2-1)", () => {
+    const p = join(tmpDir, "default.db");
+    const T = "2026-06-28T00:00:00.000Z";
+    const store = new FactStore(p);
+    // table was created — insert succeeds
+    const rec = store.insertFact({
+      scope: "s",
+      subject: "y",
+      predicate: "finding",
+      value: "w",
+      confidence: 1,
+      sourceRunId: null,
+      tValid: T,
+      tCreated: T,
+    });
+    expect(rec).toBeDefined();
+    store.close();
+  });
+});
+
 // ── FactStore (default journal mode regression — sc-1-7) ──────────────
 
 describe("FactStore (default journal mode regression)", () => {

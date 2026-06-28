@@ -5,15 +5,23 @@
  * Pattern mirrors src/cli/commands/facts.ts and src/cli/commands/blackboard.ts.
  */
 
+import { join } from "node:path";
+
 import chalk from "chalk";
 import type { Command } from "commander";
 
-import { findProjectRoot } from "../../utils/fs.js";
+import { findProjectRoot, readJson } from "../../utils/fs.js";
 import { loadConfig } from "../../config/loader.js";
 import { loadTeam } from "../../teams/registry.js";
 import { FactStore, factsDbPath, ensureFactsDir } from "../../state/facts.js";
 import { FactStoreFindingSource, HUB_SCOPE } from "../../hub/finding-source.js";
 import type { FindingSource } from "../../hub/finding-source.js";
+import { resolveSiblingRepos } from "../../hub/repo-resolver.js";
+import { collectFindings } from "../../hub/collector.js";
+
+// ── Config candidates ─────────────────────────────────────────────────
+
+const CONFIG_CANDIDATES = ["bober.config.json", ".bober/config.json"] as const;
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -38,6 +46,30 @@ async function resolveDefaultNamespace(
   } catch {
     return undefined;
   }
+}
+
+// ── Configured repos resolver ─────────────────────────────────────────
+
+/**
+ * Read the raw config file (bypassing Zod which strips unknown keys) and
+ * extract hub.repos if present. Falls back to undefined so the resolver
+ * can discover kb-* siblings instead. Never throws.
+ * schema.ts is NOT edited in this sprint — hub is not yet a typed field.
+ */
+async function resolveConfiguredRepos(projectRoot: string): Promise<string[] | undefined> {
+  for (const candidate of CONFIG_CANDIDATES) {
+    try {
+      const raw = await readJson<{ hub?: { repos?: unknown } }>(join(projectRoot, candidate));
+      const repos = raw.hub?.repos;
+      if (Array.isArray(repos)) {
+        return repos.filter((r): r is string => typeof r === "string");
+      }
+      return undefined;
+    } catch {
+      // file not found, not valid JSON, or no hub section — try next
+    }
+  }
+  return undefined;
 }
 
 // ── runHubList ────────────────────────────────────────────────────────
@@ -77,7 +109,21 @@ export function registerHubCommand(program: Command): void {
         await ensureFactsDir(projectRoot, ns);
         const store = new FactStore(factsDbPath(projectRoot, ns));
         try {
-          runHubList(new FactStoreFindingSource(store, HUB_SCOPE));
+          // own findings come first (own store takes priority in dedup)
+          const own = new FactStoreFindingSource(store, HUB_SCOPE).read();
+          const configuredRepos = await resolveConfiguredRepos(projectRoot);
+          const siblings = await resolveSiblingRepos(projectRoot, configuredRepos);
+          const sibFindings = collectFindings(siblings, HUB_SCOPE);
+          // merge: own first, then sibling findings not already seen
+          const seen = new Set(own.map((f) => f.id));
+          const merged = [...own];
+          for (const f of sibFindings) {
+            if (!seen.has(f.id)) {
+              seen.add(f.id);
+              merged.push(f);
+            }
+          }
+          runHubList({ read: () => merged });
         } finally {
           store.close();
         }

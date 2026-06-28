@@ -138,32 +138,36 @@ export class FactStore {
 
   constructor(
     dbPath: string,
-    opts?: { journalModeWal?: boolean; busyTimeoutMs?: number },
+    opts?: { journalModeWal?: boolean; busyTimeoutMs?: number; readonly?: boolean },
   ) {
-    this.db = new Database(dbPath);
+    this.db = opts?.readonly
+      ? new Database(dbPath, { readonly: true })
+      : new Database(dbPath);
     if (opts?.journalModeWal) {
       this.db.pragma("journal_mode = WAL");
     }
     if (opts?.busyTimeoutMs !== undefined) {
       this.db.pragma(`busy_timeout = ${opts.busyTimeoutMs}`);
     }
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS semantic_facts (
-        id TEXT PRIMARY KEY,
-        scope TEXT NOT NULL,
-        subject TEXT NOT NULL,
-        predicate TEXT NOT NULL,
-        value TEXT NOT NULL,
-        confidence REAL NOT NULL,
-        source_run_id TEXT,
-        t_valid TEXT NOT NULL,
-        t_invalid TEXT,
-        t_created TEXT NOT NULL,
-        t_invalidated TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_facts_sp ON semantic_facts(scope, subject, predicate);
-      CREATE INDEX IF NOT EXISTS idx_facts_active ON semantic_facts(scope, t_invalidated);
-    `);
+    if (!opts?.readonly) {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS semantic_facts (
+          id TEXT PRIMARY KEY,
+          scope TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          predicate TEXT NOT NULL,
+          value TEXT NOT NULL,
+          confidence REAL NOT NULL,
+          source_run_id TEXT,
+          t_valid TEXT NOT NULL,
+          t_invalid TEXT,
+          t_created TEXT NOT NULL,
+          t_invalidated TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_facts_sp ON semantic_facts(scope, subject, predicate);
+        CREATE INDEX IF NOT EXISTS idx_facts_active ON semantic_facts(scope, t_invalidated);
+      `);
+    }
   }
 
   /**
