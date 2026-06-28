@@ -1,6 +1,7 @@
 /** `bober medical import <file>` — stream-ingest a health export (Phase 6, Sprint 5). */
 /** `bober medical whoop sync` — WHOOP device-connection sync (Phase 6, Sprint 3). */
 /** `bober medical import-labs <pdf>` — lab PDF ingest: fail-closed cloud-inference gate + vault + audit (Sprint 3). */
+/** `bober medical review` — deterministic proactive trend review pass (spec-20260628-medical-analysis Sprint 1). */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
@@ -25,6 +26,7 @@ import { reindexLabNotes } from "../../medical/lab-reindex.js";
 import { buildMedicalInferenceClient } from "../../medical/inference.js";
 import { runSupplementAdd, runSupplementList } from "../../medical/supplements.js";
 import { runProfileShow, runProfileSet } from "../../medical/profile.js";
+import { runProactiveReview } from "../../medical/analysis/review-pass.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -342,5 +344,31 @@ export function registerMedicalCommand(program: Command): void {
     .action(async (key: string, value: string, opts: { vault?: string }) => {
       const projectRoot = await resolveRoot();
       await runProfileSet(projectRoot, key, value, opts);
+    });
+
+  // ── medical review ────────────────────────────────────────────────────
+  medicalCmd
+    .command("review")
+    .description(
+      "Run the deterministic proactive trend review pass and write Finding notes + dashboard",
+    )
+    .action(async () => {
+      const projectRoot = await resolveRoot();
+      try {
+        const config = await loadConfig(projectRoot);
+        // Clock read ONLY here at the CLI boundary (mirrors medical.ts:97)
+        const now = new Date().toISOString();
+        const result = await runProactiveReview(projectRoot, config, { now });
+        process.stdout.write(chalk.green(`Proactive review complete\n`));
+        process.stdout.write(`  findings written: ${result.findingsWritten}\n`);
+        process.stdout.write(`  dashboard:        ${result.dashboardPath}\n`);
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `Failed to run review: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1; // MUST NOT throw (mirrors import action pattern at line 257-265)
+      }
     });
 }

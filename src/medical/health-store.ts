@@ -261,6 +261,17 @@ export class HealthDataStore {
     return row?.v;
   }
 
+  /**
+   * Return all distinct biomarker names present in the lab_results table, ordered alphabetically.
+   * Returns an empty array when no lab results have been loaded.
+   */
+  listBiomarkers(): string[] {
+    const rows = this.db
+      .prepare(`SELECT DISTINCT biomarker FROM lab_results ORDER BY biomarker ASC`)
+      .all() as { biomarker: string }[];
+    return rows.map((r) => r.biomarker);
+  }
+
   /** Close the underlying database connection. */
   close(): void {
     this.db.close();

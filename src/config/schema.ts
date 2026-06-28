@@ -397,6 +397,8 @@ export const MedicalSectionSchema = z.object({
       model: z.string().optional(),
     })
     .optional(),
+  /** Optional vault dir for medical Findings/notes. Default: <projectRoot>/.bober/medical/vault. */
+  vaultDir: z.string().optional(),
 });
 export type MedicalSection = z.infer<typeof MedicalSectionSchema>;
 
