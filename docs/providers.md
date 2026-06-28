@@ -69,6 +69,25 @@ No extra install required. Set `ANTHROPIC_API_KEY` in your environment.
 
 Shorthands (`opus`, `sonnet`, `haiku`) resolve to the latest model version automatically.
 
+### Anthropic-only: PDF document blocks (`ChatParams.documents`)
+
+The programmatic provider layer exposes an **additive, optional** `documents` field on `ChatParams`
+(`src/providers/types.ts:190`):
+
+```ts
+documents?: { base64: string; mediaType: string }[];
+```
+
+**Only the Anthropic adapter renders it.** Each entry becomes a base64 `document` content block
+(`{ type: "document", source: { type: "base64", media_type, data } }`) prepended to the first user message,
+letting Claude read a native-text PDF directly (no OCR). **Every other adapter** (`openai-compat` /
+DeepSeek / Grok, `google`, `claude-code`) **ignores the field**, and a request **without** `documents` is
+byte-identical to prior behaviour — so adding it never changes existing calls. The medical lab-PDF parser
+(`parseLabPdf`, `src/medical/lab-pdf-parser.ts`) is the first consumer: it pairs `documents` with
+`responseSchema` to extract a Zod-validated structured lab report. Because document parsing is
+Anthropic-only, a pipeline that relies on it must route the relevant call through the Anthropic API (or a
+provider that supports document blocks); other providers will silently receive a request with no document.
+
 ---
 
 ## DeepSeek

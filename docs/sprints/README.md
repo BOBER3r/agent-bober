@@ -1278,3 +1278,27 @@ on-device MCP adapter, which itself **refuses any non-local declaration before s
 decryption is deliberately **not** implemented — Sprint 5 leaves only the detection hook. Full suite
 **2911 tests** green, all 23 criteria across the five sprints passed (Sprints 1/2/3/5 iter-1, Sprint 4
 iter-2 on a lint-only fix).
+
+## Medical Ingest — Lab-PDF Parser — in progress (1 of 5)
+
+`spec-20260628-medical-ingest` — the **lab-ingestion leg** of the medical knowledge template: a lab-report
+PDF is parsed (Claude `document` block, **no OCR**) into structured markers, written as
+markdown-with-frontmatter notes in the canonical vault, reindexed into the existing `HealthDataStore`, with
+a markdown-frontmatter supplements list and a SOPS-encrypted personalization `profile.yaml` rounding out the
+plan. **Sprint 1 lands the lowest layer only:** a pure `parseLabPdf(pdfBytes, deps)` that base64-encodes a
+native-text PDF, sends it to Claude as a `document` content block through an **injectable** `LLMClient` with
+schema-constrained output, and returns a **Zod-validated** `ParsedLabReport` (panel, ISO collection date,
+markers each with name / numeric value / unit / optional reference low+high+critical) — malformed model
+output throws a `ZodError` and is **never returned unvalidated**. To carry the PDF, `ChatParams` gains an
+**additive, optional** `documents` field that **only the Anthropic adapter** renders as a base64
+`application/pdf` document block prepended to the first user message; every other adapter ignores it and a
+request without `documents` is **byte-identical** to prior behaviour. There is **no CLI command, no vault
+writing, and no store reindex** in this sprint — those are Sprints 2 (`Lab-note vault writer + reindex`) and
+3 (`bober medical import-labs <pdf>`); supplements (Sprint 4) and the SOPS `profile.yaml` (Sprint 5) follow.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-medical-ingest-1.md](./sprint-spec-20260628-medical-ingest-1.md) | **Lab-PDF → structured JSON parser + `ChatParams.documents` plumbing:** new `src/medical/lab-types.ts` (`ParsedLabMarkerSchema` `{ name, value:number, unit, referenceLow?, referenceHigh?, critical? }` + `ParsedLabReportSchema` `{ panel, collectedAtIso, markers[] }` + inferred types) and `src/medical/lab-pdf-parser.ts` — `parseLabPdf(pdfBytes: Uint8Array, deps: { client: LLMClient; model: string }): Promise<ParsedLabReport>` base64-encodes the PDF, sends it via `client.chat({ documents:[{base64, mediaType:"application/pdf"}], responseSchema })`, `JSON.parse`s `response.text`, and returns `ParsedLabReportSchema.parse(...)` — **throws `ZodError` on malformed output, never coerces** (internal hand-written `LAB_REPORT_JSON_SCHEMA` literal as the `responseSchema`; markers map onto the existing `LabResult` shape `src/medical/types.ts:118`). Provider plumbing: **additive optional** `ChatParams.documents?: { base64: string; mediaType: string }[]` (`src/providers/types.ts:190`) rendered **only** by the Anthropic adapter (`src/providers/anthropic.ts:228`) as `{ type:"document", source:{ type:"base64", media_type, data } }` blocks **prepended to the first user message**, injected **before** the cache-breakpoint pass; **non-Anthropic adapters untouched** (`openai.ts`/`google.ts`/`openai-compat.ts`/`claude-code.ts`), no-`documents` request **byte-identical** (snapshot-guarded). Tests inject a fake/scripted `LLMClient` — **no network**; malformed-output tests use `.rejects.toThrow()` on the Zod parse. commit `be98982`, 3 new files + 2 provider edits + 4 sc-1-5 adapter tests, no new deps, suite **2921** green (+10), sc-1-1..sc-1-5 iter-1. **Plumbing only — `bober medical import-labs` CLI, vault-note writing, and reindex are Sprints 2–3.** |
+
+User-facing usage will land with the `bober medical import-labs <pdf>` command in Sprint 3; the
+Anthropic-only `documents` provider capability is noted in [`../providers.md`](../providers.md).
