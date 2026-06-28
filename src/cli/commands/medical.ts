@@ -2,6 +2,7 @@
 /** `bober medical whoop sync` — WHOOP device-connection sync (Phase 6, Sprint 3). */
 /** `bober medical import-labs <pdf>` — lab PDF ingest: fail-closed cloud-inference gate + vault + audit (Sprint 3). */
 /** `bober medical review` — deterministic proactive trend review pass (spec-20260628-medical-analysis Sprint 1). */
+/** `bober medical research` — egress-gated online research job (spec-20260628-medical-analysis Sprint 5). */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import chalk from "chalk";
@@ -28,6 +29,7 @@ import { runSupplementAdd, runSupplementList } from "../../medical/supplements.j
 import { runProfileShow, runProfileSet } from "../../medical/profile.js";
 import { runProactiveReview, digDeeper } from "../../medical/analysis/review-pass.js";
 import { generateRecommendation } from "../../medical/recommend/recommend.js";
+import { runResearchJob } from "../../medical/research/online-research.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -447,6 +449,42 @@ export function registerMedicalCommand(program: Command): void {
           ),
         );
         process.exitCode = 1; // MUST NOT throw — sc-3-7 exit 0 on normal outcomes
+      }
+    });
+
+  // ── medical research ──────────────────────────────────────────────────
+  medicalCmd
+    .command("research")
+    .description(
+      "Retrieve latest MedlinePlus evidence for markers and write vault research notes (egress-gated)",
+    )
+    .option("--marker <m>", "marker to research (default: ldl, hdl, a1c)")
+    .action(async (opts: { marker?: string }) => {
+      const projectRoot = await resolveRoot();
+      try {
+        const config = await loadConfig(projectRoot);
+        // Clock read ONLY here at the CLI boundary (sc-5-7)
+        const now = new Date().toISOString();
+        const markers = opts.marker !== undefined ? [opts.marker] : ["ldl", "hdl", "a1c"];
+        const summary = await runResearchJob(projectRoot, config, { markers, now });
+        if (summary.disabled) {
+          process.stdout.write(
+            chalk.yellow(
+              "literature-retrieval egress not enabled — research skipped (zero egress)\n",
+            ),
+          );
+        } else {
+          process.stdout.write(chalk.green("Research complete\n"));
+          process.stdout.write(`  notes written:    ${summary.notesWritten}\n`);
+          process.stdout.write(`  findings written: ${summary.findingsWritten}\n`);
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `Failed to run research: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1; // MUST NOT throw (sc-5-7: exit 0 on both ran and disabled)
       }
     });
 }
