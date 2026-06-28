@@ -5,7 +5,7 @@
  * All tests run without spawning any subprocess.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   VaultMcpAdapter,
   DEFAULT_VAULT_TOOL_NAMES,
