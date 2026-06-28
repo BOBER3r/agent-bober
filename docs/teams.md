@@ -362,6 +362,22 @@ So `value === null && sampleCount === 0` means "nothing to compute," whereas
 as-is." Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-4.md`](sprints/sprint-spec-20260616-medical-team-4.md).
 
+**`lab_results` is a derived, rebuildable index.** Besides the Apple Health
+ingestion path below, the **medical-ingest leg** (a separate spec) populates
+`lab_results` from **canonical vault lab notes**: `writeLabNote`
+(`src/medical/lab-note.ts`) serializes each parsed marker to a
+markdown-with-frontmatter note under `<vaultDir>/labs/<panel-slug>/`, and
+`reindexLabNotes(vaultDir, store)` (`src/medical/lab-reindex.ts`) globs those
+notes back and `upsertLabResult`s each one. The **vault markdown is canonical**;
+the SQLite `lab_results` table holds no information the notes do not and can be
+dropped and fully rebuilt by re-running `reindexLabNotes`. Reindex is
+**idempotent** — dedup is the same deterministic `labResultId(biomarker,
+collectedAtIso, value)` under `INSERT OR IGNORE`, so a second pass over unchanged
+notes inserts 0 rows. That module is **pure file + SQLite** and deliberately does
+**not import `src/vault`** (it hand-rolls a flat-scalar frontmatter subset), so its
+build stays independent of the vault-store spec's timing. Full details:
+[`docs/sprints/sprint-spec-20260628-medical-ingest-2.md`](sprints/sprint-spec-20260628-medical-ingest-2.md).
+
 ### Ingestion (Phase 6 Sprint 5)
 
 The store above is filled by a **bounded, streaming ingestion** path —
