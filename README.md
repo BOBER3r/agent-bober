@@ -575,6 +575,7 @@ npx agent-bober playbook search '<symptom>'        # Search by symptom
 
 # Medical team (Phase 6)
 npx agent-bober medical import <file>              # Stream-import a health export (e.g. Apple Health export.xml)
+npx agent-bober medical import-labs <pdf>          # Parse a lab PDF into vault notes + health store (cloud-inference axis; fail-closed off)
 npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
 
 # Vault knowledge base

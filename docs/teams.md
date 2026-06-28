@@ -106,7 +106,14 @@ Selects the orchestration engine for sprints driven by this team:
 > "Numerics + data store" below). As of Phase 6 Sprint 5 the **streaming ingestion**
 > path that fills that store exists too — `bober medical import <file>`
 > stream-parses an Apple Health export into `HealthDataStore` (see "Ingestion"
-> below and [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
+> below and [`COMMANDS.md`](../COMMANDS.md)). As of `spec-20260628-medical-ingest`
+> Sprint 3 a second ingestion entry point exists — `bober medical import-labs <pdf>`
+> parses a lab-report PDF (Sprint 1's `parseLabPdf`) into vault notes and reindexes
+> them into the same `HealthDataStore` (Sprint 2). It is **fail-closed behind the
+> `cloud-inference` egress axis (default off)**: with the axis off it prints a clear
+> message naming `medical.egress.cloudInference`, exits 1, and reads **no PDF bytes** —
+> it **ships nothing to cloud by default** (see "Ingestion" below and
+> [`COMMANDS.md`](../COMMANDS.md)). As of Phase 6 Sprint 6 the **full
 > ordered SOP is wired end-to-end** under a **code-enforced zero-egress default**:
 > consent → red-flag → numerics → medications (from `FactStore`) → an `EgressGuard`
 > literature gate → retrieval → disclaimer footer → audit. Both egress axes default
@@ -426,6 +433,33 @@ so new sources are additive (ADR-4): an adapter is a `new class` only.
 User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical
 import`. Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md).
+
+**Lab-PDF ingestion — `bober medical import-labs <pdf>` (`spec-20260628-medical-ingest`
+Sprint 3).** A second ingestion entry point, for a different source: a lab-report PDF
+rather than a streamed device export. The exported, testable
+`runImportLabs(projectRoot, pdfPath, deps?, opts?)` (`src/cli/commands/medical.ts:153`,
+a `medical` **subcommand**, not a top-level command) runs a **load-bearing fail-closed
+order**:
+
+- It resolves an `EgressGuard` from config and checks the `cloud-inference` axis
+  **first**. With the axis **off (the default)** it writes a clear message naming
+  `medical.egress.cloudInference`, sets `process.exitCode = 1`, and **returns before
+  reading the PDF or constructing any inference client** — so a default-config run reads
+  **zero PDF bytes** and **ships nothing to cloud**.
+- Only when `medical.egress.cloudInference: true` does it build the parse client
+  (`buildMedicalInferenceClient`), read the PDF, call Sprint 1's `parseLabPdf`, write a
+  Sprint 2 vault note per marker, `reindexLabNotes` into the same `HealthDataStore`
+  (`.bober/medical/health.db`), and report `records parsed` / `new rows`.
+- Re-importing the same report is **idempotent** — the Sprint 2 reindex dedups on the
+  deterministic `labResultId` (`INSERT OR IGNORE`), so the second run reports `new
+  rows: 0`.
+- It appends an **IDs/enums-only** audit entry (`{ tIso, event: "ingest" }`) — no marker
+  name, value, panel, or count reaches the audit log — and always `store.close()`s in
+  `finally`; the `.action()` never throws.
+
+User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical import-labs`.
+Full details:
+[`docs/sprints/sprint-spec-20260628-medical-ingest-3.md`](sprints/sprint-spec-20260628-medical-ingest-3.md).
 
 ### EgressGuard + full SOP wiring (Phase 6 Sprint 6)
 

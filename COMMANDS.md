@@ -876,6 +876,27 @@ same file is **idempotent** — the store dedups on a deterministic id, so the s
 run reports `new rows: 0`. An unsupported file type exits non-zero with a clear
 message naming the file.
 
+### `bober medical import-labs <pdf>`
+
+Parse a lab-report PDF and ingest its results into the medical health store. Each parsed
+marker is written as a markdown-with-frontmatter note in the canonical vault and reindexed
+into `.bober/medical/health.db`.
+
+```bash
+bober medical import-labs ~/labs/cbc-2026-06-01.pdf
+bober medical import-labs ~/labs/cbc-2026-06-01.pdf --vault ~/health-vault   # custom note dir
+```
+
+Requires the `cloud-inference` egress axis to be enabled
+(`medical.egress.cloudInference: true`, **default false**) — the PDF is parsed by a cloud
+model. With the axis **off (the default)** the command prints a clear message naming
+`medical.egress.cloudInference`, exits non-zero, and reads **no PDF bytes** and builds **no
+inference client** — it is **fail-closed and ships nothing to cloud by default**. With the
+axis on it prints `records parsed` and `new rows`. Re-importing the same report is
+**idempotent** — the derived index dedups on a deterministic id, so the second run reports
+`new rows: 0`. `--vault <dir>` overrides the note directory (default: under
+`.bober/medical`).
+
 ### `bober medical whoop sync [--since <iso>]`
 
 Pull WHOOP `recovery` / `sleep` / `cycle` / `workout` records over a window and write
