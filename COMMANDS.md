@@ -1193,9 +1193,54 @@ A `Finding` carries: `id`, `domain`, `title`, `kind` (`action` | `watch` | `risk
 (`open` | `in-progress` | `snoozed` | `done` | `dropped`), and optional `promotesTo`.
 
 > Cross-repo aggregation landed in Sprint 2 (`bober hub list` now pools sibling repos read-only,
-> deduplicated by id). Ranking and `priority.md` rendering are owned by later sprints of
-> `spec-20260628-priority-hub`. Note: `hub.repos` is read from the **raw** config file because the
-> Zod config schema strips unknown keys — it is not yet a typed config field.
+> deduplicated by id). Note: `hub.repos` (and `hub.outVault`, below) are read from the **raw** config
+> file because the Zod config schema strips unknown keys — they are not yet typed config fields.
+
+### `bober hub priority`
+
+Collect findings across the resolved siblings, **rank** them, and write a Dataview-friendly
+`priority.md` note into the **kb-hub output vault**. With no options the ranking runs under
+**general** scope; passing any of `--domain <d>`, `--due <days>`, or `--tag <t>` switches it to a
+**filtered** scope (a finding must match **all** specified constraints). After writing the note the
+command prints a `<rank>. <title>` summary to stdout.
+
+```bash
+bober hub priority                       # general scope → <kb-hub>/priority.md
+bober hub priority --domain medical --due 14   # filtered: medical findings due within 14 days
+```
+
+The ranking is the two-pass judge from Sprint 3 (LLM relevance + per-lens scores, then a
+deterministic JS sort — **the LLM never emits the order**); the LLM client is built from the active
+`chat` provider. The renderer is **pure** and **never re-ranks**: `priority.md` carries a flat YAML
+frontmatter block (`generatedAt` / `scope` / `count`), a table
+`| rank | title | domain | kind | urgency | severity | dueBy |` with one row per finding, and a
+per-finding evidence/rationale section. Sibling source stores are opened **read-only** and never
+modified — only `priority.md` is written.
+
+### `bober hub decide <expr>`
+
+Rank findings under **decision** scope. Pass an `"X vs Y"` expression (split case-insensitively on
+` vs `); only findings the judge marks relevant to **either** option survive, ranked within that
+frame, and the result is written to `priority.md` exactly as `hub priority` does. A malformed
+expression (not two non-empty sides) prints a usage error and exits non-zero **without throwing**.
+
+```bash
+bober hub decide "take the job offer vs stay"
+```
+
+#### Output vault resolution
+
+`priority.md` is written to the **kb-hub output vault**, resolved to an **absolute** path:
+`hub.outVault` from `bober.config.json` / `.bober/config.json` if present (resolved against the
+project root), otherwise the documented default `<parentOfProjectRoot>/kb-hub` — the kb-hub sibling
+vault beside the project root. The target file is `<outVault>/priority.md`. If the output vault
+directory does **not** exist, both commands print a clear red error and set a non-zero exit code
+**without throwing** and **without auto-creating** another repo's vault root — create the vault (or
+set `hub.outVault`) first.
+
+> `priority.md` rendering + the `priority` / `decide` commands landed in Sprint 4 of
+> `spec-20260628-priority-hub`. The do-bridge (`Finding.promotesTo`), calendar slot-fill, and the
+> chat hub surface remain owned by later sprints / sibling specs.
 
 ---
 
