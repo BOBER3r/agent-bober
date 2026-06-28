@@ -581,7 +581,7 @@ npx agent-bober medical supplements list           # Print supplements from the 
 npx agent-bober medical profile show               # Decrypt + show the SOPS-encrypted personalization profile (fail-closed if sops missing)
 npx agent-bober medical profile set <key> <value>  # Update one profile field (age/sex/conditions/...); re-encrypts via sops (age backend, local)
 npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
-npx agent-bober medical review                     # Deterministic offline proactive trend review -> vault Finding notes + Dataview dashboard
+npx agent-bober medical review [--dig-deeper <id>] # Deterministic offline proactive pass -> trend + cadence-gap + cross-marker-offer Finding notes; --dig-deeper runs the gated 4-lens deep analysis for an offer
 npx agent-bober medical recommend <question> [--goal <g>]  # 4-lens judge panel -> action/question Finding (cloud-inference axis; fail-closed local)
 
 # Vault knowledge base

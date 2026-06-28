@@ -1003,27 +1003,51 @@ never throws. On success it prints `records parsed` and `new rows`. Syncing is
 window reports `new rows: 0`) and **fail-closed** (a mid-sync failure leaves already-
 written rows intact and is recovered by re-running).
 
-### `bober medical review`
+### `bober medical review [--dig-deeper <id>]`
 
 Run the **deterministic, offline** proactive trend review pass. It scans the lab series in
-the medical health store (`.bober/medical/health.db`), applies reference-range and slope
-rules, and writes one **Finding** markdown note per detected condition into the vault
-`findings/` directory plus a `findings/dashboard.md` Dataview note.
+the medical health store (`.bober/medical/health.db`), applies reference-range, slope,
+**re-test cadence**, and **cross-marker** rules, and writes one **Finding** markdown note per
+detection into the vault `findings/` directory plus a `findings/dashboard.md` Dataview note.
 
 ```bash
 bober medical review
-#   findings written: 2
+#   findings written: 4
 #   dashboard:        /abs/.bober/medical/vault/findings/dashboard.md
 ```
 
-The pass involves **no LLM and no network** — all trend math is deterministic (delegated to
-the numerics layer), so it is safe to schedule. Findings are written into the vault, which is
-the canonical markdown sink (default `<projectRoot>/.bober/medical/vault`, overridable with the
-`medical.vaultDir` config key). Finding ids are derived from `domain|biomarker|rule` (not the
-clock), so **re-running over an unchanged store overwrites the same notes without creating
-duplicates**. On success it prints the number of findings written and the dashboard path and
-exits 0; on error it prints a clear message and exits non-zero **without throwing**. The
-reactive medical SOP / Q&A engine is not involved.
+A single offline pass now emits three kinds of finding:
+
+- **trend** — a biomarker crossing a reference range or trending toward its nearer edge;
+- **test-gap (cadence)** — a `kind: "question"` finding when a biomarker is **overdue for
+  re-testing** versus a **closed, code-reviewed cadence table** (`ldl`, `hba1c`, `tsh`,
+  `vitamin_d`, `ferritin`). Biomarkers **absent** from the table are skipped — no cadence is
+  guessed;
+- **cross-marker offer** — a `kind: "question"` *"want me to dig deeper?"* finding when **both**
+  markers of a configured pair (e.g. `ldl` + `triglycerides`) are out of range. It only **offers**
+  the deeper analysis; it does **not** run it, and makes **no LLM call**.
+
+The pass involves **no LLM and no network** — all trend/cadence/cross-marker detection is
+deterministic (trend math delegated to the numerics layer), so it is safe to schedule. Findings
+are written into the vault, which is the canonical markdown sink (default
+`<projectRoot>/.bober/medical/vault`, overridable with the `medical.vaultDir` config key). Finding
+ids are derived from `domain|biomarker|rule` (not the clock), so **re-running over an unchanged
+store overwrites the same notes without creating duplicates**. On success it prints the number of
+findings written and the dashboard path and exits 0; on error it prints a clear message and exits
+non-zero **without throwing**. The reactive medical SOP / Q&A engine is not involved.
+
+**`--dig-deeper <id>`** is the **only** path that crosses the LLM gate. Pass the id of a
+cross-marker offer finding and it recovers the marker pair from the note's frontmatter and runs the
+deeper analysis by **delegating to the 4-lens recommendation panel** (the same gated path as
+`bober medical recommend`, inheriting its red-flag short-circuit and **cloud-inference fail-closed**
+model selection). It prints whether the deep analysis was **accepted** / **flagged for review** /
+**escalated** / **refused** and exits 0 on every normal outcome:
+
+```bash
+bober medical review --dig-deeper <offer-finding-id>
+#   Deep analysis accepted
+#     finding: /abs/.bober/medical/vault/findings/<id>.md
+```
 
 ### `bober medical recommend <question> [--goal <g>]`
 
