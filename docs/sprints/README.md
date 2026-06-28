@@ -1351,7 +1351,7 @@ inherits the base medical team's external S6.5 FFDCA §201(h) counsel + regulato
 non-engineering gate that remains open. See the finale record
 [`sprint-spec-20260628-medical-ingest-5.md`](./sprint-spec-20260628-medical-ingest-5.md).
 
-## Medical Analysis — Proactive Review — in progress (1 of N)
+## Medical Analysis — Proactive Review + Recommendation judge-loop — in progress (2 of N)
 
 `spec-20260628-medical-analysis` — the **proactive analysis leg** of the medical knowledge
 template: turn the lab data that ingestion wrote into surfaced **Findings** without waiting for a
@@ -1370,11 +1370,27 @@ clock **only at the CLI boundary** and sets `process.exitCode = 1` on error with
 LLM, no network, no `Date.now()` inside the analysis modules; `engine.ts` untouched.** Findings are
 emitted as markdown-with-frontmatter into the **canonical vault** — this sprint defines **no**
 canonical Zod Finding schema (that is owned by `spec-20260628-priority-hub`, which will aggregate
-these notes).
+these notes). Sprint 2 lands the **core safety engine** for the *recommendation* half of the leg: a
+**pure, fully injectable** 4-lens judge loop under a new module `src/medical/recommend/`. Candidate
+recommendations are gated through four independent lenses (evidence-grader,
+contraindication-checker, conservative-clinician, optimization-lens) and reconciled by **strict
+majority with an absolute contraindication VETO** (`reconcilePanel` checks the veto **first**, before
+the vote — a veto can never be overridden by a majority), regenerating on rejection up to
+`MEDICAL_PANEL_MAX_ROUNDS = 3` rounds and **failing CLOSED** (no recommendation surfaced, per-lens
+dissent captured) on veto / tie / exhaustion. Two safety invariants — the **fail-closed inversion**
+(parse-exhaustion, loop-exhaustion, and a thrown lens client all map to *reject*, mirroring
+`grounding-critic.ts:203-206` and inverting fleet's `critic-deep.ts` accept-on-exhaustion) and the
+**absolute veto** — were independently verified in source by the evaluator. The worst-case LLM call
+count is bounded by `MEDICAL_PANEL_MAX_TOTAL_CALLS = 27` (`= 3 × (1 + 4×2)`). The whole module is
+orchestration over **injected** functions — no fs / network / real provider / FactStore — and
+`engine.ts` is untouched. **This is the CORE that Sprint 3 wires into a real path** (per-lens model
+assignment via tier-policy, the real FactStore profile context, Finding emission, and the CLI);
+there is **no `bober medical recommend` command yet** — the judge loop is internal-only this sprint.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260628-medical-analysis-1.md](./sprint-spec-20260628-medical-analysis-1.md) | **Deterministic offline proactive review pass:** new `src/medical/analysis/` — `MedicalFinding` field set + `findingId(domain,biomarker,ruleKey)` SHA-256 slice (**excludes `now`** ⇒ idempotent, mirrors `observationId`) + `serializeFindingToMarkdown` (reuses `src/vault/frontmatter.ts`); `writeFinding` ⇒ `findings/<id>.md` + `writeDashboard` ⇒ `findings/dashboard.md` fenced `dataview` `TABLE urgency,severity,kind,status` (`node:fs/promises` only); **pure/sync** `analyzeTrends` (Rule A range-crossing `watch`/`risk@>20%` precedence over Rule B slope-toward-edge; abstain at `sampleCount=0`; trend math **only** via `NumericsQueryLayer.getLabTrend`, ADR-3); `runProactiveReview(projectRoot,config,opts)` schedulable entrypoint (opens `.bober/medical/health.db`, resolves `config.medical.vaultDir` or default vault, closes only stores it opened, returns `{findingsWritten,dashboardPath,findingPaths}`); additive `HealthDataStore.listBiomarkers()` (DISTINCT, alpha-sorted); new optional `medical.vaultDir` on `MedicalSectionSchema`; `bober medical review` CLI subtree (clock read only here, `process.exitCode=1` on error, never throws). **No LLM/network/`Date.now()` in `src/medical/analysis/`; `engine.ts` untouched.** commit `307e5e7`, 4 new src + 4 collocated test files (43 tests) + 3 additive edits, no new deps, suite **3029** green (+43), sc-1-1..sc-1-7 iter-1. |
+| 2 | [sprint-spec-20260628-medical-analysis-2.md](./sprint-spec-20260628-medical-analysis-2.md) | **Pure injectable 4-lens recommendation judge-loop core:** new `src/medical/recommend/` — `types.ts` (`LensName` union of the four lenses, `LensVerdict`, `LensClients` one injected `{client,model}` per lens, `PanelOutcome` discriminated union `accepted`/`rejected`/`short-circuit`/`refuse`, budget constants **`MEDICAL_PANEL_MAX_TOTAL_CALLS=27` = `MEDICAL_PANEL_MAX_ROUNDS(3) × (1 + 4×LENS_MAX_LLM_CALLS(2))`**); `lenses.ts` (**never-throwing** `validateLensVerdict` four-tier JSON extraction mirroring `grounding-critic.ts:40-88` + `getLensVerdict` **FAIL-CLOSED reject-on-parse-exhaustion** + the four lens system prompts, only contraindication-checker emits `veto`); `judge-panel.ts` (`reconcilePanel` — **absolute contraindication VETO checked BEFORE the strict-majority vote**, 2-2 tie ⇒ fail-closed `no-consensus`; `runJudgeLoop` — **red-flag guard fires FIRST** so `generateCandidate` is never called on short-circuit/refuse, bounded regenerate-on-reject loop folding per-lens dissent, a thrown lens client counted as reject, **never throws / never exceeds the call budget**). **Two safety invariants verified in source:** (1) FAIL-CLOSED inversion mirrors `grounding-critic.ts:203-206`, inverts `critic-deep.ts` accept-on-exhaustion (in-code line refs document the intent); (2) the veto early-return makes majority-override structurally impossible. **Pure orchestration over injected fns — no fs/network/provider/FactStore; `engine.ts` untouched; no `bober medical recommend` CLI yet (Sprint 3 wires the real path).** commit `fb467c6`, 5 new files (3 src + 2 collocated test, 43 tests), purely additive, no new deps, suite **3072** green (+43), sc-2-1..sc-2-7 iter-1. |
 
 User-facing usage for `bober medical review` is in [`COMMANDS.md`](../../COMMANDS.md) (Medical Team
 Commands) and the README "Medical team (Phase 6)" command list; the new optional `medical.vaultDir`
