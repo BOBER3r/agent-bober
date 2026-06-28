@@ -1025,6 +1025,38 @@ duplicates**. On success it prints the number of findings written and the dashbo
 exits 0; on error it prints a clear message and exits non-zero **without throwing**. The
 reactive medical SOP / Q&A engine is not involved.
 
+### `bober medical recommend <question> [--goal <g>]`
+
+Generate a medical recommendation by gating a candidate through the **4-lens judge panel** and
+writing a **Finding** note. The pass assembles the patient context (medications + supplements from
+the medical FactStore, conditions/allergies/goals from the SOPS profile — defaulting to empty when
+absent), builds four per-lens LLM clients, generates a candidate, and reconciles the panel by strict
+majority with an absolute contraindication veto.
+
+```bash
+bober medical recommend --goal "optimize energy" "what should I do about my high LDL"
+#   Recommendation accepted
+#     finding: /abs/.bober/medical/vault/findings/<id>.md
+```
+
+The panel outcome decides what is written:
+
+- **accepted** → a `kind: "action"` Finding stating the recommendation **directly** (no refer-out
+  hedging) with an **LLM-assigned urgency/severity (clamped 1..5) and a `confidence:<x>` tag**;
+- **flagged for review** → a `kind: "question"` Finding titled *"flagged for your review"* carrying
+  the per-lens dissent (the panel could not reach consensus);
+- **escalated** → the canned red-flag escalation is printed and **no Finding is written**;
+- **refused** → a content-policy refusal reason is printed and **no Finding is written**.
+
+**Cloud inference is fail-closed.** Per-lens provider diversity (tier-policy: cheap / standard /
+hard / frontier) is used **only when the `cloud-inference` egress axis is enabled**; with it off (the
+default), all four lenses **and** the candidate generator resolve to the **local Ollama model** and
+**no cloud client is constructed**. The audit log records IDs/enums only (no recommendation text, no
+health values). Finding ids are derived from `domain|question|rule` (not the clock), so re-asking the
+same question overwrites the same note. The command prints the outcome and the finding path and
+exits 0 on every normal outcome; on an unexpected error it prints a message and sets a non-zero exit
+code **without throwing**.
+
 ---
 
 ## Vault Commands

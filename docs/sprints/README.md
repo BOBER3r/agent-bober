@@ -1351,7 +1351,7 @@ inherits the base medical team's external S6.5 FFDCA §201(h) counsel + regulato
 non-engineering gate that remains open. See the finale record
 [`sprint-spec-20260628-medical-ingest-5.md`](./sprint-spec-20260628-medical-ingest-5.md).
 
-## Medical Analysis — Proactive Review + Recommendation judge-loop — in progress (2 of N)
+## Medical Analysis — Proactive Review + Recommendation judge-loop — in progress (3 of N)
 
 `spec-20260628-medical-analysis` — the **proactive analysis leg** of the medical knowledge
 template: turn the lab data that ingestion wrote into surfaced **Findings** without waiting for a
@@ -1386,12 +1386,32 @@ orchestration over **injected** functions — no fs / network / real provider / 
 `engine.ts` is untouched. **This is the CORE that Sprint 3 wires into a real path** (per-lens model
 assignment via tier-policy, the real FactStore profile context, Finding emission, and the CLI);
 there is **no `bober medical recommend` command yet** — the judge loop is internal-only this sprint.
+Sprint 3 **closes the recommendation loop**: `generateRecommendation` (new
+`src/medical/recommend/recommend.ts`) wires the Sprint-2 `runJudgeLoop` into a real path. It
+assembles the profile context (meds via `FactStore.getActiveFacts("medical","patient",
+"takes-medication")`, supplements via the **`"dose"` predicate**, conditions/allergies/goals via the
+SOPS profile reader — all defaulting to empty when absent), builds four per-lens clients (distinct
+tier providers when `cloud-inference` is allowed, **all-local fail-closed** via
+`buildMedicalInferenceClient` otherwise), generates a candidate, gates it through the panel, and
+emits a Finding keyed by outcome: **accepted** ⇒ a `kind: "action"` Finding stating the advice
+**directly with no refer-out hedging** + an LLM-assigned urgency/severity/confidence
+(`assignUrgencySeverity`, clamped 1..5, conservative default on failure, outside the ADR-3 numerics
+boundary by design); **no-consensus** ⇒ a `kind: "question"` Finding **flagged for your review** with
+per-lens dissent; **red-flag** ⇒ the canned escalation and **no Finding**. A per-outcome `AuditLog`
+entry (IDs/enums only) is appended. Exposed as the new `bober medical recommend [--goal <g>]
+<question>` subcommand (clock read **only** at the CLI boundary). Two invariants were independently
+verified in source by the evaluator: **fail-closed model selection** (cloud-inference OFF constructs
+**no** cloud client — all four lenses + the generator resolve to the local Ollama model) and
+**no-refer-out hedging** on accepted Findings. `runJudgeLoop` is imported (not re-implemented), the
+Sprint-1 finding-writer is reused, and `engine.ts` is untouched.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260628-medical-analysis-1.md](./sprint-spec-20260628-medical-analysis-1.md) | **Deterministic offline proactive review pass:** new `src/medical/analysis/` — `MedicalFinding` field set + `findingId(domain,biomarker,ruleKey)` SHA-256 slice (**excludes `now`** ⇒ idempotent, mirrors `observationId`) + `serializeFindingToMarkdown` (reuses `src/vault/frontmatter.ts`); `writeFinding` ⇒ `findings/<id>.md` + `writeDashboard` ⇒ `findings/dashboard.md` fenced `dataview` `TABLE urgency,severity,kind,status` (`node:fs/promises` only); **pure/sync** `analyzeTrends` (Rule A range-crossing `watch`/`risk@>20%` precedence over Rule B slope-toward-edge; abstain at `sampleCount=0`; trend math **only** via `NumericsQueryLayer.getLabTrend`, ADR-3); `runProactiveReview(projectRoot,config,opts)` schedulable entrypoint (opens `.bober/medical/health.db`, resolves `config.medical.vaultDir` or default vault, closes only stores it opened, returns `{findingsWritten,dashboardPath,findingPaths}`); additive `HealthDataStore.listBiomarkers()` (DISTINCT, alpha-sorted); new optional `medical.vaultDir` on `MedicalSectionSchema`; `bober medical review` CLI subtree (clock read only here, `process.exitCode=1` on error, never throws). **No LLM/network/`Date.now()` in `src/medical/analysis/`; `engine.ts` untouched.** commit `307e5e7`, 4 new src + 4 collocated test files (43 tests) + 3 additive edits, no new deps, suite **3029** green (+43), sc-1-1..sc-1-7 iter-1. |
 | 2 | [sprint-spec-20260628-medical-analysis-2.md](./sprint-spec-20260628-medical-analysis-2.md) | **Pure injectable 4-lens recommendation judge-loop core:** new `src/medical/recommend/` — `types.ts` (`LensName` union of the four lenses, `LensVerdict`, `LensClients` one injected `{client,model}` per lens, `PanelOutcome` discriminated union `accepted`/`rejected`/`short-circuit`/`refuse`, budget constants **`MEDICAL_PANEL_MAX_TOTAL_CALLS=27` = `MEDICAL_PANEL_MAX_ROUNDS(3) × (1 + 4×LENS_MAX_LLM_CALLS(2))`**); `lenses.ts` (**never-throwing** `validateLensVerdict` four-tier JSON extraction mirroring `grounding-critic.ts:40-88` + `getLensVerdict` **FAIL-CLOSED reject-on-parse-exhaustion** + the four lens system prompts, only contraindication-checker emits `veto`); `judge-panel.ts` (`reconcilePanel` — **absolute contraindication VETO checked BEFORE the strict-majority vote**, 2-2 tie ⇒ fail-closed `no-consensus`; `runJudgeLoop` — **red-flag guard fires FIRST** so `generateCandidate` is never called on short-circuit/refuse, bounded regenerate-on-reject loop folding per-lens dissent, a thrown lens client counted as reject, **never throws / never exceeds the call budget**). **Two safety invariants verified in source:** (1) FAIL-CLOSED inversion mirrors `grounding-critic.ts:203-206`, inverts `critic-deep.ts` accept-on-exhaustion (in-code line refs document the intent); (2) the veto early-return makes majority-override structurally impossible. **Pure orchestration over injected fns — no fs/network/provider/FactStore; `engine.ts` untouched; no `bober medical recommend` CLI yet (Sprint 3 wires the real path).** commit `fb467c6`, 5 new files (3 src + 2 collocated test, 43 tests), purely additive, no new deps, suite **3072** green (+43), sc-2-1..sc-2-7 iter-1. |
+| 3 | [sprint-spec-20260628-medical-analysis-3.md](./sprint-spec-20260628-medical-analysis-3.md) | **Recommendation generation end-to-end + `bober medical recommend` CLI:** new `src/medical/recommend/recommend.ts` `generateRecommendation(projectRoot,config,{question,goal?,now},deps?)` wires the Sprint-2 `runJudgeLoop` (imported, not re-implemented) into a real path returning `RecommendOutcome {kind:"accepted"\|"question"\|"escalated"\|"refused", findingPath?, cannedResponse?, reason?}`; `context.ts` `assembleRecommendationContext` (meds via `getActiveFacts("medical","patient","takes-medication")`, supplements via **`"dose"` predicate**, conditions/allergies/goals via the SOPS profile reader, **all default-empty when absent**) + `contextToString`; `urgency.ts` `assignUrgencySeverity` (**one bounded LLM call**, never-throwing four-tier JSON parse, **clamp 1..5**, conservative default `{3,3,0.5}` on failure, **outside the ADR-3 numerics boundary** by design). Outcome routing: **accepted** ⇒ `kind:"action"` Finding stating the advice **directly, no refer-out hedging** + LLM urgency/severity + `confidence:<x>` tag; **no-consensus** ⇒ `kind:"question"` Finding **"flagged for your review"** with per-lens dissent; **red-flag** ⇒ canned escalation + **no Finding**; per-outcome `AuditLog` entry (`answer`/`abstain`/`short-circuit`/`refuse`, IDs/enums only). New `bober medical recommend [--goal <g>] <question>` CLI subtree (clock only at boundary, `process.exitCode=1` on error, never throws). **Two invariants evaluator-verified in source:** (1) **fail-closed model selection** — cloud-inference OFF skips the tier branch entirely, all four lenses + generator resolve to the local Ollama model via `buildMedicalInferenceClient`, factory spy proves **no** anthropic/x.ai/deepseek client constructed; (2) **no refer-out hedging** on accepted Findings. Sprint-1 finding-writer reused; `engine.ts` untouched. commit `3b2abb9`, 3 new src + 3 collocated test files (25 new tests), no new deps, suite **3097** green (+25), sc-3-1..sc-3-7 iter-1. |
 
-User-facing usage for `bober medical review` is in [`COMMANDS.md`](../../COMMANDS.md) (Medical Team
-Commands) and the README "Medical team (Phase 6)" command list; the new optional `medical.vaultDir`
-config key is in the README "Full Configuration Reference".
+User-facing usage for `bober medical review` and `bober medical recommend` is in
+[`COMMANDS.md`](../../COMMANDS.md) (Medical Team Commands) and the README "Medical team (Phase 6)"
+command list; the new optional `medical.vaultDir` config key is in the README "Full Configuration
+Reference".

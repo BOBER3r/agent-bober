@@ -582,6 +582,7 @@ npx agent-bober medical profile show               # Decrypt + show the SOPS-enc
 npx agent-bober medical profile set <key> <value>  # Update one profile field (age/sex/conditions/...); re-encrypts via sops (age backend, local)
 npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
 npx agent-bober medical review                     # Deterministic offline proactive trend review -> vault Finding notes + Dataview dashboard
+npx agent-bober medical recommend <question> [--goal <g>]  # 4-lens judge panel -> action/question Finding (cloud-inference axis; fail-closed local)
 
 # Vault knowledge base
 npx agent-bober vault reindex --scope <domain> [--vault <dir>]  # Rebuild the derived FactStore from a vault's note frontmatter
