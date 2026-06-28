@@ -27,6 +27,7 @@ import { buildMedicalInferenceClient } from "../../medical/inference.js";
 import { runSupplementAdd, runSupplementList } from "../../medical/supplements.js";
 import { runProfileShow, runProfileSet } from "../../medical/profile.js";
 import { runProactiveReview } from "../../medical/analysis/review-pass.js";
+import { generateRecommendation } from "../../medical/recommend/recommend.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -369,6 +370,52 @@ export function registerMedicalCommand(program: Command): void {
           ),
         );
         process.exitCode = 1; // MUST NOT throw (mirrors import action pattern at line 257-265)
+      }
+    });
+
+  // ── medical recommend ─────────────────────────────────────────────────
+  medicalCmd
+    .command("recommend <question>")
+    .description(
+      "Generate a medical recommendation through the 4-lens judge panel and write a Finding note",
+    )
+    .option("--goal <g>", "optional health goal to include in the recommendation context")
+    .action(async (question: string, opts: { goal?: string }) => {
+      const projectRoot = await resolveRoot();
+      try {
+        const config = await loadConfig(projectRoot);
+        // Clock read ONLY here at the CLI boundary (sc-3-7)
+        const now = new Date().toISOString();
+        const result = await generateRecommendation(projectRoot, config, {
+          question,
+          goal: opts.goal,
+          now,
+        });
+        if (result.kind === "accepted") {
+          process.stdout.write(chalk.green(`Recommendation accepted\n`));
+          if (result.findingPath !== undefined) {
+            process.stdout.write(`  finding: ${result.findingPath}\n`);
+          }
+        } else if (result.kind === "question") {
+          process.stdout.write(chalk.yellow(`Recommendation flagged for review\n`));
+          if (result.findingPath !== undefined) {
+            process.stdout.write(`  finding: ${result.findingPath}\n`);
+          }
+        } else if (result.kind === "escalated") {
+          process.stdout.write(chalk.red(`Escalated: ${result.cannedResponse ?? ""}\n`));
+        } else {
+          // refused
+          process.stdout.write(
+            chalk.yellow(`Recommendation refused: ${result.reason ?? ""}\n`),
+          );
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `Failed to generate recommendation: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1; // MUST NOT throw — sc-3-7 exit 0 on normal outcomes
       }
     });
 }
