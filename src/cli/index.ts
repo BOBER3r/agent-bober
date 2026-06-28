@@ -40,6 +40,7 @@ import { registerChatCommand } from "./commands/chat.js";
 import { registerMedicalCommand } from "./commands/medical.js";
 import { registerVaultCommand } from "./commands/vault.js";
 import { registerBlackboardCommand } from "./commands/blackboard.js";
+import { registerHubCommand } from "./commands/hub.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -330,6 +331,9 @@ async function main(): Promise<void> {
 
   // ── blackboard ────────────────────────────────────────────────────
   registerBlackboardCommand(program);
+
+  // ── hub ───────────────────────────────────────────────────────────────
+  registerHubCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
