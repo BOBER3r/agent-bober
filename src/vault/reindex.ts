@@ -14,20 +14,14 @@
  */
 
 import type { VaultNote } from "./types.js";
-import type { NoteStatus } from "./types.js";
 import type { FactStore, ReconcileAction } from "../state/facts.js";
 import { writeFact } from "../state/facts.js";
 import type { FactJudge } from "../orchestrator/memory/fact-judge.js";
 import { noteToFacts } from "./index-map.js";
+import { SUPERSEDED_STATUS } from "./conventions.js";
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
-/**
- * Frontmatter status value that excludes a note from the active FactStore index.
- * Sprint 5 (status lifecycle) consumes this — do NOT rename.
- * Typed as NoteStatus to tie it to the documented enum in types.ts.
- */
-export const SUPERSEDED_STATUS: NoteStatus = "superseded";
+// ── Sprint 5 convergence: SUPERSEDED_STATUS is canonical in conventions.ts ───
+export { SUPERSEDED_STATUS };
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

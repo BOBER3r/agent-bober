@@ -71,10 +71,5 @@ export function noteToFacts(
   return facts;
 }
 
-// ── Sprint 5 consumption point ───────────────────────────────────────────────
-
-/**
- * Frontmatter status value that marks a note as superseded.
- * Exported for Sprint 5 (status lifecycle) to consume — do NOT rename.
- */
-export const SUPERSEDED_STATUS = "superseded" as const;
+// ── Sprint 5 convergence: canonical status lives in conventions.ts ───────────
+export { SUPERSEDED_STATUS } from "./conventions.js";
