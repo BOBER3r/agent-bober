@@ -181,6 +181,13 @@ export interface ChatParams {
    * lack the knob. When both are set, `responseSchema` takes precedence.
    */
   jsonObjectMode?: boolean;
+  /**
+   * Optional documents to attach to the request. Each entry contains a base64-
+   * encoded payload and its MIME type. Only the Anthropic adapter renders these
+   * as `document` content blocks (prepended to the first user message); all
+   * other adapters ignore this field and existing calls remain byte-identical.
+   */
+  documents?: { base64: string; mediaType: string }[];
 }
 
 /**

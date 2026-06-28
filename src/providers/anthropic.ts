@@ -225,6 +225,43 @@ export class AnthropicAdapter implements LLMClient {
     const anthropicMessages: Anthropic.Messages.MessageParam[] =
       messages.map(toAnthropicMessage);
 
+    // ── Document blocks ─────────────────────────────────────────────
+    // When params.documents is present, prepend a document content block for
+    // each entry to the FIRST user message. Inject BEFORE attachMessageBreakpoints
+    // so the cache breakpoint lands on the last (text) block. Omitting documents
+    // leaves the rendered request byte-identical to prior behaviour (sc-1-5).
+    if (params.documents && params.documents.length > 0) {
+      const firstUserIdx = anthropicMessages.findIndex((m) => m.role === "user");
+      if (firstUserIdx !== -1) {
+        const firstUser = anthropicMessages[firstUserIdx];
+        const docBlocks: Anthropic.Messages.DocumentBlockParam[] =
+          params.documents.map((doc) => ({
+            type: "document" as const,
+            source: {
+              type: "base64" as const,
+              media_type: doc.mediaType as Anthropic.Messages.Base64PDFSource["media_type"],
+              data: doc.base64,
+            },
+          }));
+
+        if (typeof firstUser.content === "string") {
+          // Convert plain-string content to a content-block array with doc blocks prepended.
+          anthropicMessages[firstUserIdx] = {
+            ...firstUser,
+            content: [
+              ...docBlocks,
+              { type: "text" as const, text: firstUser.content },
+            ],
+          };
+        } else if (Array.isArray(firstUser.content)) {
+          anthropicMessages[firstUserIdx] = {
+            ...firstUser,
+            content: [...docBlocks, ...firstUser.content],
+          };
+        }
+      }
+    }
+
     // ── Structured output branch ────────────────────────────────────
     // When responseSchema is set, force a single "structured_output" tool
     // whose input_schema IS the schema, and do NOT forward the user's tools.

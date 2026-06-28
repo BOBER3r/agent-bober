@@ -363,4 +363,77 @@ describe("AnthropicAdapter prompt caching", () => {
     expect(req).not.toHaveProperty("tool_choice");
     expect(JSON.stringify(req)).not.toContain("tool_choice");
   });
+
+  // ── Document blocks (sc-1-5) ────────────────────────────────────────────────
+
+  it("renders ChatParams.documents as a base64 application/pdf document block on the first user message", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "extract this" }],
+      documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const firstUserBlocks = req.messages[0].content;
+    expect(Array.isArray(firstUserBlocks)).toBe(true);
+    expect(firstUserBlocks[0]).toMatchObject({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: "QkFTRTY0" },
+    });
+    // The original text content is preserved as the second block
+    expect(firstUserBlocks[1]).toMatchObject({ type: "text", text: "extract this" });
+  });
+
+  it("prepends multiple document blocks when documents has more than one entry", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "compare" }],
+      documents: [
+        { base64: "AAAA", mediaType: "application/pdf" },
+        { base64: "BBBB", mediaType: "application/pdf" },
+      ],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const blocks = req.messages[0].content;
+    expect(blocks[0]).toMatchObject({ type: "document", source: { data: "AAAA" } });
+    expect(blocks[1]).toMatchObject({ type: "document", source: { data: "BBBB" } });
+    expect(blocks[2]).toMatchObject({ type: "text", text: "compare" });
+  });
+
+  it("omits the document block (request unchanged) when documents is absent", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as Record<string, unknown>;
+    // Byte-identical guard: no "document" key anywhere in the serialised request.
+    expect(JSON.stringify(req)).not.toContain('"document"');
+    expect(req["messages"]).toEqual([{ role: "user", content: "hi" }]);
+  });
+
+  it("omits the document block (request unchanged) when documents is an empty array", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(req)).not.toContain('"document"');
+    expect(req["messages"]).toEqual([{ role: "user", content: "hi" }]);
+  });
 });
