@@ -832,9 +832,36 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
       "endpoint": "http://localhost:11434/v1", // Default localhost (Ollama). Non-localhost => treated as cloud + gated.
       "model": "llama3"                   // Default llama3. Threaded into both synthesis and the grounding critic.
     }
+  },
+
+  // -- Vault (on-device Obsidian MCP read/write adapter) --
+  "vault": {                              // Optional. Omit entirely => no MCP adapter.
+    "obsidian": {                         // Declares ONE on-device Obsidian MCP server.
+      "name": "my_vault",                 // Alphanumeric/underscore. Used in errors — never secrets.
+      "mcpCommand": "npx",                // Local executable to spawn (stdio). REMOTE schemes are refused.
+      "mcpArgs": ["-y", "obsidian-mcp-server"],
+      "mcpEnv": { "OBSIDIAN_API_KEY": "..." }, // OPAQUE secret — never logged or stringified.
+      "enabled": true,                    // Default true.
+      "toolNames": {                      // Optional. Override per-op tool names for a non-cyanheads server.
+        "readNote": "obsidian_read_file",      // Default (cyanheads/obsidian-mcp-server).
+        "writeNote": "obsidian_update_file",   // Default.
+        "listNotes": "obsidian_list_files_in_dir" // Default.
+      }
+    }
   }
 }
 ```
+
+> **The Obsidian MCP adapter is on-device only.** `VaultMcpAdapter` wraps the existing
+> `ExternalMcpServer` and exposes `readNote` / `writeNote` / `listNotes` over the declared
+> server. An `isOnDevice()` guard **refuses any non-local declaration before the server is
+> spawned** — a `mcpCommand` with a remote URL scheme (`https?`/`wss?`/`ftp`/`tcp://`) or an
+> `mcpArgs` element pointing at a non-loopback host throws (naming only `name`, never `mcpEnv`).
+> `mcpEnv` is treated as opaque secrets and is never logged. Tool names default to
+> cyanheads/obsidian-mcp-server and are overridable for other servers (e.g. the Obsidian Local
+> REST API plugin's built-in MCP). The adapter is an independent read/write surface — it is **not**
+> wired into `bober vault reindex`, which reads notes from the local filesystem. See
+> [docs/sprints/sprint-spec-20260628-obsidian-vault-store-4.md](./docs/sprints/sprint-spec-20260628-obsidian-vault-store-4.md).
 
 > **Zero-egress is code-enforced for the medical team.** All three `medical.egress` axes
 > default `false`, so a medical SOP turn makes **zero outbound calls** out of the box —
