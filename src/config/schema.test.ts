@@ -6,6 +6,8 @@ import {
   BoberConfigSchema,
   HistorySectionSchema,
   FleetSectionSchema,
+  VaultSectionSchema,
+  VaultObsidianSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -251,5 +253,146 @@ describe("PipelineSectionSchema.engine", () => {
 
   it("accepts 'ts' explicitly", () => {
     expect(PipelineSectionSchema.parse({ engine: "ts" }).engine).toBe("ts");
+  });
+});
+
+// ── VaultSectionSchema tests (sc-4-2) ─────────────────────────────────
+
+const minimalBaseForVault = {
+  project: { name: "test-project", mode: "greenfield" },
+  planner: {},
+  generator: {},
+  evaluator: { strategies: [] },
+  sprint: {},
+  pipeline: {},
+  commands: {},
+};
+
+describe("BoberConfigSchema — vault section is optional (sc-4-2)", () => {
+  it("parses a config without a vault section (vault is undefined)", () => {
+    const result = BoberConfigSchema.safeParse(minimalBaseForVault);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.vault).toBeUndefined();
+    }
+  });
+
+  it("parses a config with a complete vault.obsidian section and round-trips all fields including mcpEnv", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      vault: {
+        obsidian: {
+          name: "obsidian",
+          mcpCommand: "npx",
+          mcpArgs: ["-y", "obsidian-mcp-server"],
+          mcpEnv: { OBSIDIAN_API_KEY: "secret-token" },
+          enabled: true,
+          toolNames: { readNote: "custom_read", writeNote: "custom_write" },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const obs = result.data.vault?.obsidian;
+      expect(obs?.name).toBe("obsidian");
+      expect(obs?.mcpCommand).toBe("npx");
+      expect(obs?.mcpArgs).toEqual(["-y", "obsidian-mcp-server"]);
+      // mcpEnv round-trip — secret value preserved
+      expect(obs?.mcpEnv?.OBSIDIAN_API_KEY).toBe("secret-token");
+      // toolNames overrides preserved
+      expect(obs?.toolNames?.readNote).toBe("custom_read");
+      expect(obs?.toolNames?.writeNote).toBe("custom_write");
+      expect(obs?.enabled).toBe(true);
+    }
+  });
+
+  it("defaults vault.obsidian.enabled to true when omitted", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      vault: { obsidian: { name: "obs", mcpCommand: "node" } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.vault?.obsidian?.enabled).toBe(true);
+    }
+  });
+
+  it("parses a config with vault.obsidian.toolNames partially overridden (only listNotes)", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      vault: {
+        obsidian: {
+          name: "myobs",
+          mcpCommand: "npx",
+          toolNames: { listNotes: "list_files" },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.vault?.obsidian?.toolNames?.listNotes).toBe("list_files");
+      // other overrides absent
+      expect(result.data.vault?.obsidian?.toolNames?.readNote).toBeUndefined();
+    }
+  });
+
+  it("rejects vault.obsidian.name with invalid characters", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      vault: { obsidian: { name: "invalid name!", mcpCommand: "npx" } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects vault.obsidian.mcpCommand as empty string", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      vault: { obsidian: { name: "obs", mcpCommand: "" } },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("VaultSectionSchema — standalone validation", () => {
+  it("parses an empty vault section (obsidian is undefined)", () => {
+    const result = VaultSectionSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.obsidian).toBeUndefined();
+    }
+  });
+
+  it("parses a vault section with obsidian present", () => {
+    const result = VaultSectionSchema.safeParse({
+      obsidian: { name: "obs", mcpCommand: "node", mcpArgs: ["server.js"] },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.obsidian?.name).toBe("obs");
+    }
+  });
+});
+
+describe("VaultObsidianSchema — standalone validation", () => {
+  it("parses a minimal obsidian config with defaults", () => {
+    const result = VaultObsidianSchema.safeParse({ name: "obs", mcpCommand: "npx" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.enabled).toBe(true);
+      expect(result.data.toolNames).toBeUndefined();
+      expect(result.data.mcpEnv).toBeUndefined();
+    }
+  });
+
+  it("preserves multiple mcpEnv secret entries unchanged", () => {
+    const result = VaultObsidianSchema.safeParse({
+      name: "obs",
+      mcpCommand: "npx",
+      mcpEnv: { TOKEN: "abc", VAULT_PATH: "/my/vault" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mcpEnv).toEqual({ TOKEN: "abc", VAULT_PATH: "/my/vault" });
+    }
   });
 });

@@ -414,6 +414,40 @@ export const FleetSectionSchema = z.object({
 });
 export type FleetSection = z.infer<typeof FleetSectionSchema>;
 
+// ── Vault Section (Sprint 4 — on-device Obsidian MCP) ────────────────
+
+/**
+ * Configuration for one on-device Obsidian MCP server.
+ * Mirrors ObservabilityProviderSchema but drops `kind` and adds `toolNames`.
+ * mcpEnv may contain secrets — treat as opaque (never log, never stringify).
+ */
+export const VaultObsidianSchema = z.object({
+  /** Unique server name (used in error messages — never secrets). */
+  name: z.string().min(1).regex(/^[a-z0-9_]+$/i, "name must be alphanumeric/underscore"),
+  /** Executable to spawn (e.g., "npx", "/usr/local/bin/obsidian-mcp"). */
+  mcpCommand: z.string().min(1),
+  mcpArgs: z.array(z.string()).optional(),
+  /** Env vars passed to the child — may contain SECRETS (treat as opaque, never log). */
+  mcpEnv: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().default(true),
+  /**
+   * Override the server tool names per logical operation.
+   * When absent, cyanheads/obsidian-mcp-server defaults are used (see DEFAULT_VAULT_TOOL_NAMES).
+   * Provide overrides when using a different MCP server (e.g., Obsidian Local REST API).
+   */
+  toolNames: z
+    .object({
+      readNote: z.string().optional(),
+      writeNote: z.string().optional(),
+      listNotes: z.string().optional(),
+    })
+    .optional(),
+});
+export type VaultObsidian = z.infer<typeof VaultObsidianSchema>;
+
+export const VaultSectionSchema = z.object({ obsidian: VaultObsidianSchema.optional() });
+export type VaultSection = z.infer<typeof VaultSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -447,6 +481,8 @@ export const BoberConfigSchema = z.object({
   medical: MedicalSectionSchema.optional(),
   // ── Phase B: fleet blackboard (child-visible channel) ──
   fleet: FleetSectionSchema.optional(),
+  // ── Sprint 4: on-device Obsidian MCP adapter ──
+  vault: VaultSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
