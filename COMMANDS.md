@@ -900,6 +900,35 @@ written rows intact and is recovered by re-running).
 
 ---
 
+## Vault Commands
+
+Utilities for the domain-agnostic **vault storage layer**, where an Obsidian vault
+(markdown + YAML frontmatter) is the canonical source of truth and the FactStore is a
+derived, rebuildable index over note frontmatter.
+
+### `bober vault reindex --scope <domain> [--vault <dir>]`
+
+Walk a vault directory, parse every note, and rebuild the derived FactStore at the active
+team's namespace memory path from the notes' frontmatter.
+
+```bash
+bober vault reindex --scope medical --vault ./kb-medical
+bober vault reindex --scope finance                     # --vault defaults to the project root
+```
+
+`--scope` is **required** (the fact scope label, e.g. `medical`, `finance`); `--vault` is
+optional and **defaults to the project root**. The command resolves the **same `facts.db`**
+that `bober facts` uses (the team/namespace memory path) and writes through the existing
+reconcile-at-ingest path, so the FactStore stays a rebuildable projection of the markdown:
+re-running over unchanged notes changes nothing (every fact is unchanged), a changed
+frontmatter value supersedes the prior fact, and a note flagged `status: superseded`
+contributes no active facts. On completion it prints `notes parsed`, `facts added`,
+`facts superseded`, and `facts unchanged`. The command is **read-only over the vault** (it
+never mutates notes or touches git); a missing/invalid `--vault` directory prints a clear
+red message and exits non-zero **without throwing**, and the store is always closed.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |
