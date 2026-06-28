@@ -1239,8 +1239,41 @@ directory does **not** exist, both commands print a clear red error and set a no
 set `hub.outVault`) first.
 
 > `priority.md` rendering + the `priority` / `decide` commands landed in Sprint 4 of
-> `spec-20260628-priority-hub`. The do-bridge (`Finding.promotesTo`), calendar slot-fill, and the
-> chat hub surface remain owned by later sprints / sibling specs.
+> `spec-20260628-priority-hub`; the `bober chat hub` surface (below) landed in Sprint 5. The
+> do-bridge (`Finding.promotesTo`), calendar slot-fill, the scheduler, and the Telegram adapter
+> remain owned by sibling specs.
+
+### `bober chat hub`
+
+Open an interactive chat REPL bound to the built-in **`hub`** team (memory namespace `hub`).
+This is the conversational sibling of `bober hub priority` / `bober hub decide` — same collect
+→ rank → render pipeline, but it keeps you in the REPL and returns the ranked summary inline.
+The `hub` team is registered **as data** (no guardrails, default pipeline shape), so
+`bober chat hub` routes through the ordinary `bober chat [team]` command.
+
+```bash
+bober chat hub
+```
+
+Inside a hub session, two extra slash commands are available **only in the hub team**:
+
+```
+> /priority                 # rank all pooled findings (general scope), print "rank. title" per line
+> /decide <X> vs <Y>        # rank only findings relevant to X or Y (decision scope)
+```
+
+`/priority` and `/decide` collect findings across the resolved sibling repos, rank them with
+the Sprint 3 two-pass judge (using the session's configured `chat` LLM client), print a
+`rank. title` summary, and **best-effort** write the same Dataview-friendly `priority.md` to the
+resolved kb-hub output vault (a write failure never breaks the chat turn). `/decide` expects an
+`X vs Y` expression (split case-insensitively on ` vs `); a malformed expression returns
+`Expected 'X vs Y', got: <expr>`. Both commands are **hub-only** — in any other team they return
+an informative no-op message and make **no** LLM call.
+
+> These two commands are intentionally **not** listed by `/help` (the `/help` output is
+> unchanged from before Sprint 5). All the other deterministic slash commands (`/runs`, `/stop`,
+> `/pause`, `/resume`, `/careful`, `/approve`, `/reject`, `/tell`, `/help`, `/exit`) behave
+> exactly as documented under `bober chat [team]` above.
 
 ---
 

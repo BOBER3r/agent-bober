@@ -517,6 +517,7 @@ npx agent-bober run "feature"                            # Full autonomous loop
 npx agent-bober run "feature" --team example             # Full autonomous loop using the 'example' team
 npx agent-bober chat                                     # Interactive chat REPL (roster + memory aware)
 npx agent-bober chat example                             # Interactive chat REPL using the 'example' team
+npx agent-bober chat hub                                 # Priority-hub chat REPL (in-session /priority + /decide)
 npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
 ```
 
