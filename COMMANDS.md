@@ -1154,6 +1154,41 @@ red message and exits non-zero **without throwing**, and the store is always clo
 
 ---
 
+## Hub Commands
+
+The **priority hub** is the cross-domain surface that collects **Findings** — actionable items,
+watches, risks, and open questions surfaced by the various domains (medical, and later others). The
+hub **owns the one canonical `Finding` schema** (`src/hub/finding.ts`); every producer and consumer
+imports it from there. Findings are stored as FactStore rows at predicate `finding` in the `hub`
+scope, with each `Finding` serialized as the row's JSON value.
+
+### `bober hub list`
+
+Print the Findings held in the **project's own FactStore** (the active team's namespace memory
+path — the same `facts.db` that `bober facts` and `bober vault reindex` resolve). One line per
+finding shows its title, kind, urgency, and severity.
+
+```bash
+bober hub list
+# Lipid panel overdue  [question]  urgency=4  severity=2
+# LDL trending toward range edge  [watch]  urgency=2  severity=3
+```
+
+When the hub scope holds no findings it prints a gray `No findings found.` Rows whose stored value
+is **malformed JSON or fails Finding validation are silently skipped** — the read path never throws,
+so one bad row never breaks the listing. On error the command prints a red message and sets a
+non-zero exit code **without throwing**, and the store is always closed.
+
+A `Finding` carries: `id`, `domain`, `title`, `kind` (`action` | `watch` | `risk` | `question`),
+`urgency` (1–5), `severity` (1–5), `evidence[]`, `surfacedAt` (ISO), optional `dueBy` (ISO),
+`tags[]`, optional `estDurationMin`, optional `calendarSafeTitle`, `status`
+(`open` | `in-progress` | `snoozed` | `done` | `dropped`), and optional `promotesTo`.
+
+> Cross-repo aggregation, ranking, and `priority.md` rendering are owned by later sprints of
+> `spec-20260628-priority-hub`; `bober hub list` reads the local store only.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |

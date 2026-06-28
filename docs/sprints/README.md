@@ -1459,3 +1459,26 @@ in (cloud synthesis stays independently fail-closed to the local model). `runRes
 entrypoint awaiting `spec-20260628-research-scheduler`. Shipping still inherits the base medical team's
 **external S6.5 FFDCA §201(h) counsel + regulatory review gate** (non-engineering). See the finale record
 [`sprint-spec-20260628-medical-analysis-5.md`](./sprint-spec-20260628-medical-analysis-5.md).
+
+## Priority Hub — in progress (1 of N)
+
+`spec-20260628-priority-hub` — the unified cross-domain priority surface that collects **Findings**
+(actionable items, watches, risks, open questions) from each domain into one ranked hub. Sprint 1
+lays the **foundational vertical slice**: a new `src/hub/` module that **owns the single canonical
+`Finding` Zod schema** for the whole codebase (no second Finding schema exists anywhere — domain
+producers like `src/medical/analysis/` emit the same field set as markdown frontmatter only), a
+`FindingSource` interface with a `FactStoreFindingSource` that reads predicate-`finding` rows from
+the `hub` scope (`HUB_SCOPE = "hub"`) and turns each into a validated `Finding` while **silently
+skipping malformed/invalid rows (never throws)**, and a `bober hub list` CLI command that prints the
+local store's findings (`<title> [<kind>] urgency=<n> severity=<n>`). `runHubList(source)` is the
+**DI seam** later sprints inject a different `FindingSource` into rather than re-wiring the CLI. The
+`FactStore` constructor was left untouched. Cross-repo aggregation/dedup (Sprint 2), the lens judge /
+scope / ranking (Sprint 3), `priority.md` + `decide` (Sprint 4), and the chat hub surface (Sprint 5)
+are explicit non-goals here.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-priority-hub-1.md](./sprint-spec-20260628-priority-hub-1.md) | **Canonical `Finding` schema + FactStore source + `bober hub list`:** new `src/hub/` — `finding.ts` `FindingSchema` (locked field set: `id`/`domain`/`title`/`kind`∈{action,watch,risk,question}/`urgency`&`severity` int 1–5/`evidence[]`/`surfacedAt` ISO/`dueBy?`/`tags[]`/`estDurationMin?`/`calendarSafeTitle?`/`status`∈{open,in-progress,snoozed,done,dropped}/`promotesTo?`) + exported `Finding` type (the **single** canonical schema, siblings import it); `finding-source.ts` `FindingSource {read():Finding[]}` + `FactStoreFindingSource` reading `getActiveFacts(HUB_SCOPE, undefined, "finding")` → `JSON.parse` → `safeParse`, **never-throw skip** of malformed/invalid rows + `HUB_SCOPE="hub"` constant; `src/cli/commands/hub.ts` `runHubList(source)` DI core + `registerHubCommand` registering `hub list` (resolves team namespace `facts.db`, `process.exitCode=1` on error, never throws, store always closed), wired via 4-line additive edit to `src/cli/index.ts`. commit `2bb3b95`, 3 new src + 3 collocated test files (21 tests: 12 schema, 6 source, 3 CLI), no new deps, `FactStore` constructor untouched, no competing Finding schema; sc-1-1..sc-1-5 iter-1, build/typecheck/lint clean, facts/blackboard regression green. |
+
+User-facing usage for `bober hub list` is in [`COMMANDS.md`](../../COMMANDS.md) (Hub Commands) and the
+README "Priority hub" command list.
