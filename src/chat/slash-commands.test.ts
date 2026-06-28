@@ -522,6 +522,180 @@ describe("/resume slash command dispatch (sc-5-6)", () => {
   });
 });
 
+// ── sc-5-2 / sc-5-3: /priority and /decide slash commands ────────────
+
+describe("/priority slash command dispatch (sc-5-2)", () => {
+  it("/priority without priorityHandler returns 'Priority is unavailable.'", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/priority", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Priority is unavailable.");
+    }
+  });
+
+  it("/priority calls priorityHandler and returns its output", async () => {
+    const roster = new RosterReader(tmpDir);
+    let called = false;
+    const priorityHandler = async () => {
+      called = true;
+      return "1. Foo\n2. Bar";
+    };
+    const result = await dispatch(
+      "/priority",
+      roster,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      priorityHandler,
+    );
+    expect(called).toBe(true);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("1. Foo");
+      expect(result.output).toContain("2. Bar");
+    }
+  });
+
+  it("back-compat: 9-arg callers (no priorityHandler) — /priority returns unavailable", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch(
+      "/priority",
+      roster,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      // no priorityHandler
+    );
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Priority is unavailable.");
+    }
+  });
+
+  it("/help does NOT include /priority (sc-5-4: HELP_TEXT unchanged)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      // /priority is intentionally NOT advertised in /help this sprint
+      expect(result.output).not.toContain("/priority");
+    }
+  });
+});
+
+describe("/decide slash command dispatch (sc-5-3)", () => {
+  it("/decide without expr returns usage hint", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/decide", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("Usage: /decide");
+    }
+  });
+
+  it("/decide without decideHandler returns 'Decide is unavailable.'", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/decide option A vs option B", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      expect(result.output).toBe("Decide is unavailable.");
+    }
+  });
+
+  it("/decide calls decideHandler with 'X vs Y' expr", async () => {
+    const roster = new RosterReader(tmpDir);
+    let receivedExpr = "";
+    const decideHandler = async (expr: string) => {
+      receivedExpr = expr;
+      return "1. Alpha";
+    };
+    const result = await dispatch(
+      "/decide option A vs option B",
+      roster,
+      undefined, undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined,
+      decideHandler,
+    );
+    expect(result.handled).toBe(true);
+    expect(receivedExpr).toBe("option A vs option B");
+    if (result.handled && !result.exit) {
+      expect(result.output).toContain("1. Alpha");
+    }
+  });
+
+  it("/help does NOT include /decide (sc-5-4: HELP_TEXT unchanged)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      // /decide is intentionally NOT advertised in /help this sprint
+      expect(result.output).not.toContain("/decide");
+    }
+  });
+});
+
+// ── sc-5-4: existing commands regression ─────────────────────────────
+
+describe("sc-5-4: existing slash commands unchanged after /priority + /decide additions", () => {
+  it("/help output unchanged — contains all pre-existing commands", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/help", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) {
+      const out = result.output ?? "";
+      expect(out).toContain("/runs");
+      expect(out).toContain("/stop");
+      expect(out).toContain("/careful");
+      expect(out).toContain("/approve");
+      expect(out).toContain("/reject");
+      expect(out).toContain("/tell");
+      expect(out).toContain("/pause");
+      expect(out).toContain("/resume");
+      expect(out).toContain("/help");
+      expect(out).toContain("/exit");
+    }
+  });
+
+  it("/exit still returns exit:true (byte-identical)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/exit", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled) expect(result.exit).toBe(true);
+  });
+
+  it("/runs still returns handled + string output (byte-identical)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/runs", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) expect(typeof result.output).toBe("string");
+  });
+
+  it("/stop without runId still returns usage hint (byte-identical)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/stop", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) expect(result.output).toContain("Usage: /stop");
+  });
+
+  it("/careful without handler still returns 'unavailable' (byte-identical)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/careful on", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) expect(result.output).toBe("Careful mode is unavailable.");
+  });
+
+  it("/pause without handler still returns 'Pause is unavailable.' (byte-identical)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/pause run-x", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) expect(result.output).toBe("Pause is unavailable.");
+  });
+
+  it("/resume without handler still returns 'Resume is unavailable.' (byte-identical)", async () => {
+    const roster = new RosterReader(tmpDir);
+    const result = await dispatch("/resume run-x", roster);
+    expect(result.handled).toBe(true);
+    if (result.handled && !result.exit) expect(result.output).toBe("Resume is unavailable.");
+  });
+});
+
 // ── sc-6-6: /help lists the full steer command set ─────────────────────
 
 describe("sc-6-6: /help lists the full steer command set", () => {

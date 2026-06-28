@@ -52,7 +52,11 @@ const HELP_TEXT = [
  * @param pauseHandler - Optional handler for /pause <runId>. When omitted,
  *   /pause returns an "unavailable" message. Kept optional for back-compat.
  * @param resumeHandler - Optional handler for /resume <runId>. When omitted,
- *   /resume returns an "unavailable" message. Last optional param preserves back-compat.
+ *   /resume returns an "unavailable" message.
+ * @param priorityHandler - Optional handler for /priority (hub team only). When omitted,
+ *   /priority returns an "unavailable" message. Kept optional for back-compat.
+ * @param decideHandler - Optional handler for /decide <X> vs <Y> (hub team only). When omitted,
+ *   /decide returns an "unavailable" message. Last optional param preserves back-compat.
  */
 export async function dispatch(
   input: string,
@@ -64,6 +68,8 @@ export async function dispatch(
   tellHandler?: (runId: string, text: string) => Promise<string>,
   pauseHandler?: (runId: string) => Promise<string>,
   resumeHandler?: (runId: string) => Promise<string>,
+  priorityHandler?: () => Promise<string>,
+  decideHandler?: (expr: string) => Promise<string>,
 ): Promise<SlashResult> {
   const trimmed = input.trimStart();
   if (!trimmed.startsWith("/")) {
@@ -145,6 +151,23 @@ export async function dispatch(
       const arg = trimmed.split(/\s+/)[1];
       if (!arg) return { handled: true, output: "Usage: /resume <runId>" };
       const output = resumeHandler ? await resumeHandler(arg) : "Resume is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/priority": {
+      const output = priorityHandler
+        ? await priorityHandler()
+        : "Priority is unavailable.";
+      return { handled: true, output };
+    }
+
+    case "/decide": {
+      // Capture everything after '/decide' as the 'X vs Y' expression.
+      const expr = trimmed.replace(/^\/decide\s*/i, "").trim();
+      if (!expr) return { handled: true, output: "Usage: /decide <X> vs <Y>" };
+      const output = decideHandler
+        ? await decideHandler(expr)
+        : "Decide is unavailable.";
       return { handled: true, output };
     }
 

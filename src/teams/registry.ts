@@ -43,6 +43,19 @@ export function loadTeam(config: BoberConfig, teamId?: string): Team {
     return buildMedicalTeam(config);
   }
 
+  // Built-in hub team (data): default pipeline, dedicated 'hub' memory namespace.
+  if (teamId === "hub") {
+    return {
+      id: "hub",
+      displayName: "Priority hub",
+      memoryNamespace: "hub",
+      providers: resolveRoleProviders(config),
+      pipelineShape: resolveEngineName(config),
+      roles: DEFAULT_ROLES,
+      guardrails: undefined,
+    };
+  }
+
   const entry = config.teams?.[teamId];
   if (!entry) {
     throw new Error(

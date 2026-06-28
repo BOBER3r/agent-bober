@@ -158,6 +158,47 @@ describe("loadTeam — declared team with override (sc-1-6)", () => {
   });
 });
 
+// ── sc-5-1: hub team (built-in) ──────────────────────────────────────
+
+describe("loadTeam — hub team (sc-5-1)", () => {
+  it("returns id 'hub' with memoryNamespace 'hub'", () => {
+    const config = createDefaultConfig("test", "greenfield");
+    const team = loadTeam(config, "hub");
+    expect(team.id).toBe("hub");
+    expect(team.memoryNamespace).toBe("hub");
+  });
+
+  it("hub team has default pipelineShape from resolveEngineName", () => {
+    const config = createDefaultConfig("test", "greenfield");
+    const team = loadTeam(config, "hub");
+    expect(team.pipelineShape).toBe(resolveEngineName(config));
+  });
+
+  it("hub team has resolved providers from resolveRoleProviders", () => {
+    const config = createDefaultConfig("test", "greenfield");
+    const team = loadTeam(config, "hub");
+    expect(team.providers).toEqual(resolveRoleProviders(config));
+  });
+
+  it("hub team has undefined guardrails", () => {
+    const config = createDefaultConfig("test", "greenfield");
+    const team = loadTeam(config, "hub");
+    expect(team.guardrails).toBeUndefined();
+  });
+
+  it("hub team includes all 7 role descriptors", () => {
+    const config = createDefaultConfig("test", "greenfield");
+    const team = loadTeam(config, "hub");
+    expect(team.roles).toHaveLength(7);
+  });
+
+  it("hub team displayName is 'Priority hub'", () => {
+    const config = createDefaultConfig("test", "greenfield");
+    const team = loadTeam(config, "hub");
+    expect(team.displayName).toBe("Priority hub");
+  });
+});
+
 // ── sc-1-7: unknown team id throws ───────────────────────────────────
 
 describe("loadTeam — unknown team id (sc-1-7)", () => {
