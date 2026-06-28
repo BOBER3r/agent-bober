@@ -10,15 +10,28 @@
  *
  * Accepts an optional opts.store for testability — if provided the caller owns the lifecycle
  * (this function will NOT close an injected store, mirrors engine.ts:342-347).
+ *
+ * Sprint 4 extension: also runs detectTestGaps (cadence.ts) and detectCrossMarkerPatterns
+ * (cross-marker.ts) in the same offline pass. All finding ids use DISTINCT ruleKeys so they
+ * never collide with trend ids and idempotency (sc-1-4) is preserved.
+ *
+ * digDeeper: reads an offer finding from disk, recovers its marker pair from frontmatter tags,
+ * and delegates the deep analysis to generateRecommendation (the ONLY LLM step in this module).
  */
 
 import { join } from "node:path";
+import { readFile } from "node:fs/promises";
 
 import { HealthDataStore } from "../health-store.js";
 import { ensureDir } from "../../utils/fs.js";
 import type { BoberConfig } from "../../config/schema.js";
 import { analyzeTrends } from "./trends.js";
+import { detectTestGaps } from "./cadence.js";
+import { detectCrossMarkerPatterns } from "./cross-marker.js";
 import { writeFinding, writeDashboard } from "./finding-writer.js";
+import { parseFrontmatter } from "../../vault/frontmatter.js";
+import { generateRecommendation } from "../recommend/recommend.js";
+import type { RecommendDeps, RecommendOutcome } from "../recommend/recommend.js";
 
 // -- Types ----------------------------------------------------------------
 
@@ -29,6 +42,18 @@ export interface ProactiveReviewResult {
   findingPaths: string[];
 }
 
+/**
+ * Injectable dependencies for digDeeper.
+ * Production callers pass no deps. Tests inject a generateRecommendation spy
+ * to assert delegation without triggering real LLM/network calls (sc-4-6).
+ */
+export interface DigDeeperDeps {
+  /** Injected for sc-4-6 spy — defaults to the real generateRecommendation. */
+  generateRecommendation?: typeof generateRecommendation;
+  /** Forwarded to generateRecommendation for its own test deps. */
+  recommendDeps?: RecommendDeps;
+}
+
 // -- Public API -----------------------------------------------------------
 
 /**
@@ -37,6 +62,8 @@ export interface ProactiveReviewResult {
  * Opens a HealthDataStore at <projectRoot>/.bober/medical/health.db (always closes in finally
  * unless store was injected). Resolves vaultDir from config.medical.vaultDir or the default
  * <projectRoot>/.bober/medical/vault.
+ *
+ * Sprint 4: emits trend + gap + cross-marker-offer findings in one deterministic offline pass.
  *
  * @param projectRoot  Absolute path to the project root
  * @param config       Loaded BoberConfig
@@ -74,7 +101,13 @@ export async function runProactiveReview(
         ? opts.biomarkers
         : store.listBiomarkers();
 
-    const findings = analyzeTrends(store, biomarkers, { now: opts.now });
+    // Sprint 4: gather trend + gap + cross-marker-offer findings in one offline pass.
+    // Each analyzer uses a DISTINCT ruleKey so ids never collide and idempotency holds (sc-1-4).
+    const findings = [
+      ...analyzeTrends(store, biomarkers, { now: opts.now }),
+      ...detectTestGaps(store, biomarkers, { now: opts.now }),
+      ...detectCrossMarkerPatterns(store, { now: opts.now }),
+    ];
 
     // Write one finding note per detected condition
     const findingPaths: string[] = [];
@@ -97,4 +130,39 @@ export async function runProactiveReview(
       store.close();
     }
   }
+}
+
+/**
+ * Run deeper cross-marker analysis for a given offer finding id (the ONLY LLM step here).
+ *
+ * Reads the offer finding note from disk, recovers the marker pair from its frontmatter tags
+ * (tags: ["cross-marker", markerA, markerB]), frames a question, and delegates to
+ * generateRecommendation (sprint 3). Does NOT re-implement the judge loop.
+ *
+ * @param projectRoot  Absolute project root path
+ * @param config       Loaded BoberConfig
+ * @param offerId      Finding id of the cross-marker offer note
+ * @param opts         { now: ISO 8601 injected timestamp }
+ * @param deps         Optional injectable deps (tests inject a generateRecommendation spy)
+ */
+export async function digDeeper(
+  projectRoot: string,
+  config: BoberConfig,
+  offerId: string,
+  opts: { now: string },
+  deps: DigDeeperDeps = {},
+): Promise<RecommendOutcome> {
+  const vaultDir =
+    config.medical?.vaultDir ?? join(projectRoot, ".bober", "medical", "vault");
+  const notePath = join(vaultDir, "findings", `${offerId}.md`);
+  const raw = await readFile(notePath, "utf-8");
+  const { frontmatter } = parseFrontmatter(raw);
+  const tags = (frontmatter["tags"] as string[] | undefined) ?? [];
+  // Recover marker pair: filter out the "cross-marker" sentinel; remainder is [markerA, markerB]
+  const pair = tags.filter((t) => t !== "cross-marker");
+  const question =
+    `The markers ${pair.join(" and ")} are both out of reference range. ` +
+    `Dig deeper into what that combination suggests.`;
+  const gen = deps.generateRecommendation ?? generateRecommendation;
+  return gen(projectRoot, config, { question, now: opts.now }, deps.recommendDeps);
 }

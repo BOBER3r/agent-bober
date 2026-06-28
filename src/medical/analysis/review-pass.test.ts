@@ -1,12 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { vi } from "vitest";
+import { mkdtemp, rm, readdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { HealthDataStore } from "../health-store.js";
 import { ensureDir } from "../../utils/fs.js";
 import type { BoberConfig } from "../../config/schema.js";
-import { runProactiveReview } from "./review-pass.js";
+import { runProactiveReview, digDeeper } from "./review-pass.js";
+import { findingId } from "./finding.js";
+import { parseFrontmatter } from "../../vault/frontmatter.js";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────
 
@@ -174,5 +177,98 @@ describe("runProactiveReview", () => {
 
     // Sorted paths must match exactly
     expect(result1.findingPaths.sort()).toEqual(result2.findingPaths.sort());
+  });
+
+  it("sc-4-5: one offline pass emits trend + gap + cross-marker-offer findings", async () => {
+    // Seed ldl OOR and >365d old → trend finding + gap finding
+    // Seed triglycerides OOR → trend finding
+    // ldl + triglycerides both OOR → cross-marker offer finding
+    const store = new HealthDataStore(":memory:");
+    store.upsertLabResult({
+      biomarker: "ldl",
+      value: 200,
+      unit: "mg/dL",
+      // 2024-01-01 is >365d before NOW (2026-06-28) → gap finding fires
+      collectedAtIso: "2024-01-01T08:00:00.000Z",
+      referenceHigh: 130,
+    });
+    store.upsertLabResult({
+      biomarker: "triglycerides",
+      value: 400,
+      unit: "mg/dL",
+      collectedAtIso: "2026-03-01T08:00:00.000Z",
+      referenceHigh: 150,
+    });
+
+    const result = await runProactiveReview(tmpRoot, MINIMAL_CONFIG, {
+      now: NOW,
+      store,
+    });
+
+    store.close();
+
+    // Expect: ldl trend + ldl gap + triglycerides trend + ldl-triglycerides offer = 4
+    // (triglycerides not in cadence table → no gap finding for it)
+    expect(result.findingsWritten).toBeGreaterThanOrEqual(3);
+
+    // Verify at least one kind="question" cross-marker offer is among the written notes
+    const vaultDir = join(tmpRoot, ".bober", "medical", "vault");
+    const findingFiles = await readdir(join(vaultDir, "findings"));
+    const noteContents = await Promise.all(
+      findingFiles
+        .filter((f) => f.endsWith(".md") && f !== "dashboard.md")
+        .map(async (f) => readFile(join(vaultDir, "findings", f), "utf-8")),
+    );
+    const crossMarkerNotes = noteContents.filter((content) => {
+      const { frontmatter } = parseFrontmatter(content);
+      const tags = (frontmatter["tags"] as string[] | undefined) ?? [];
+      return (
+        frontmatter["kind"] === "question" && tags.includes("cross-marker")
+      );
+    });
+    expect(crossMarkerNotes.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("sc-4-6: dig-deeper delegates to generateRecommendation with the marker pair", async () => {
+    // 1. Seed store so cross-marker offer is written to disk
+    const store = new HealthDataStore(":memory:");
+    store.upsertLabResult({
+      biomarker: "ldl",
+      value: 200,
+      unit: "mg/dL",
+      collectedAtIso: "2026-03-01T08:00:00.000Z",
+      referenceHigh: 130,
+    });
+    store.upsertLabResult({
+      biomarker: "triglycerides",
+      value: 400,
+      unit: "mg/dL",
+      collectedAtIso: "2026-03-01T08:00:00.000Z",
+      referenceHigh: 150,
+    });
+
+    await runProactiveReview(tmpRoot, MINIMAL_CONFIG, { now: NOW, store });
+    store.close();
+
+    // 2. Compute the offer finding id (deterministic: domain|biomarker|ruleKey)
+    const offerId = findingId("medical", "ldl", "cross-marker-ldl-triglycerides");
+
+    // 3. Inject a spy in place of generateRecommendation
+    const genSpy = vi.fn(async () => ({
+      kind: "accepted" as const,
+      findingPath: "/spy-output/finding.md",
+    }));
+
+    const outcome = await digDeeper(tmpRoot, MINIMAL_CONFIG, offerId, { now: NOW }, {
+      generateRecommendation: genSpy,
+    });
+
+    // 4. Assert the spy was called exactly once with the marker pair in the question
+    expect(genSpy).toHaveBeenCalledTimes(1);
+    const callArgs = genSpy.mock.calls[0]!;
+    const callOpts = callArgs[2] as { question: string; now: string };
+    expect(callOpts.question).toContain("ldl");
+    expect(callOpts.question).toContain("triglycerides");
+    expect(outcome.kind).toBe("accepted");
   });
 });

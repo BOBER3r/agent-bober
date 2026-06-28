@@ -26,7 +26,7 @@ import { reindexLabNotes } from "../../medical/lab-reindex.js";
 import { buildMedicalInferenceClient } from "../../medical/inference.js";
 import { runSupplementAdd, runSupplementList } from "../../medical/supplements.js";
 import { runProfileShow, runProfileSet } from "../../medical/profile.js";
-import { runProactiveReview } from "../../medical/analysis/review-pass.js";
+import { runProactiveReview, digDeeper } from "../../medical/analysis/review-pass.js";
 import { generateRecommendation } from "../../medical/recommend/recommend.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
@@ -353,12 +353,43 @@ export function registerMedicalCommand(program: Command): void {
     .description(
       "Run the deterministic proactive trend review pass and write Finding notes + dashboard",
     )
-    .action(async () => {
+    .option(
+      "--dig-deeper <id>",
+      "run deeper cross-marker analysis for the given offer finding id (gated LLM path)",
+    )
+    .action(async (opts: { digDeeper?: string }) => {
       const projectRoot = await resolveRoot();
       try {
         const config = await loadConfig(projectRoot);
         // Clock read ONLY here at the CLI boundary (mirrors medical.ts:97)
         const now = new Date().toISOString();
+
+        if (opts.digDeeper !== undefined) {
+          // -- dig-deeper path (gated LLM) --
+          const result = await digDeeper(projectRoot, config, opts.digDeeper, { now });
+          if (result.kind === "accepted") {
+            process.stdout.write(chalk.green(`Deep analysis accepted\n`));
+            if (result.findingPath !== undefined) {
+              process.stdout.write(`  finding: ${result.findingPath}\n`);
+            }
+          } else if (result.kind === "question") {
+            process.stdout.write(chalk.yellow(`Deep analysis flagged for review\n`));
+            if (result.findingPath !== undefined) {
+              process.stdout.write(`  finding: ${result.findingPath}\n`);
+            }
+          } else if (result.kind === "escalated") {
+            process.stdout.write(chalk.red(`Escalated: ${result.cannedResponse ?? ""}\n`));
+          } else {
+            // refused
+            process.stdout.write(
+              chalk.yellow(`Deep analysis refused: ${result.reason ?? ""}\n`),
+            );
+          }
+          return;
+        }
+
+        // -- standard review path (offline, deterministic) --
+        // counts now include gap + offer findings from sprint-4 analyzers (sc-4-7)
         const result = await runProactiveReview(projectRoot, config, { now });
         process.stdout.write(chalk.green(`Proactive review complete\n`));
         process.stdout.write(`  findings written: ${result.findingsWritten}\n`);
