@@ -24,6 +24,7 @@ import { writeLabNote } from "../../medical/lab-note.js";
 import { reindexLabNotes } from "../../medical/lab-reindex.js";
 import { buildMedicalInferenceClient } from "../../medical/inference.js";
 import { runSupplementAdd, runSupplementList } from "../../medical/supplements.js";
+import { runProfileShow, runProfileSet } from "../../medical/profile.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -316,5 +317,30 @@ export function registerMedicalCommand(program: Command): void {
     .action(async (opts: { file?: string }) => {
       const projectRoot = await resolveRoot();
       await runSupplementList(projectRoot, opts);
+    });
+
+  // ── medical profile ───────────────────────────────────────────────────
+  const profileCmd = medicalCmd
+    .command("profile")
+    .description(
+      "Manage personalization profile (SOPS-encrypted profile.yaml)",
+    );
+
+  profileCmd
+    .command("show")
+    .description("Decrypt and display the current personalization profile")
+    .option("--vault <dir>", "vault dir (default: .bober/medical under project root)")
+    .action(async (opts: { vault?: string }) => {
+      const projectRoot = await resolveRoot();
+      await runProfileShow(projectRoot, opts);
+    });
+
+  profileCmd
+    .command("set <key> <value>")
+    .description("Update one profile field after Zod validation")
+    .option("--vault <dir>", "vault dir (default: .bober/medical under project root)")
+    .action(async (key: string, value: string, opts: { vault?: string }) => {
+      const projectRoot = await resolveRoot();
+      await runProfileSet(projectRoot, key, value, opts);
     });
 }
