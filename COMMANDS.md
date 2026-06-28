@@ -1165,16 +1165,24 @@ scope, with each `Finding` serialized as the row's JSON value.
 ### `bober hub list`
 
 Print the Findings held in the **project's own FactStore** (the active team's namespace memory
-path — the same `facts.db` that `bober facts` and `bober vault reindex` resolve). One line per
-finding shows its title, kind, urgency, and severity.
+path — the same `facts.db` that `bober facts` and `bober vault reindex` resolve) **plus Findings
+aggregated across resolved sibling repos**. Each sibling's derived `facts.db` is opened
+**read-only** (never mutated) and its findings are pooled into one list **deduplicated by
+`Finding.id`** — the project's own findings come first and win dedup ties. One line per finding
+shows its title, kind, urgency, and severity.
+
+Siblings are resolved from a `hub.repos` array in `bober.config.json` or `.bober/config.json`
+(paths resolved relative to the project root); when that key is absent the hub instead discovers
+directories named `kb-*` sitting beside the project root. A configured path that does not exist,
+or a sibling with no/corrupt `facts.db`, is silently skipped — resolution never throws.
 
 ```bash
 bober hub list
-# Lipid panel overdue  [question]  urgency=4  severity=2
-# LDL trending toward range edge  [watch]  urgency=2  severity=3
+# Lipid panel overdue       [question]  urgency=4  severity=2   # own store
+# Portfolio rebalance due   [action]    urgency=3  severity=2   # from a sibling kb-* repo (read-only)
 ```
 
-When the hub scope holds no findings it prints a gray `No findings found.` Rows whose stored value
+When no resolved store holds findings it prints a gray `No findings found.` Rows whose stored value
 is **malformed JSON or fails Finding validation are silently skipped** — the read path never throws,
 so one bad row never breaks the listing. On error the command prints a red message and sets a
 non-zero exit code **without throwing**, and the store is always closed.
@@ -1184,8 +1192,10 @@ A `Finding` carries: `id`, `domain`, `title`, `kind` (`action` | `watch` | `risk
 `tags[]`, optional `estDurationMin`, optional `calendarSafeTitle`, `status`
 (`open` | `in-progress` | `snoozed` | `done` | `dropped`), and optional `promotesTo`.
 
-> Cross-repo aggregation, ranking, and `priority.md` rendering are owned by later sprints of
-> `spec-20260628-priority-hub`; `bober hub list` reads the local store only.
+> Cross-repo aggregation landed in Sprint 2 (`bober hub list` now pools sibling repos read-only,
+> deduplicated by id). Ranking and `priority.md` rendering are owned by later sprints of
+> `spec-20260628-priority-hub`. Note: `hub.repos` is read from the **raw** config file because the
+> Zod config schema strips unknown keys — it is not yet a typed config field.
 
 ---
 

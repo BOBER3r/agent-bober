@@ -589,7 +589,7 @@ npx agent-bober medical research [--marker <m>]    # Online MedlinePlus research
 npx agent-bober vault reindex --scope <domain> [--vault <dir>]  # Rebuild the derived FactStore from a vault's note frontmatter
 
 # Priority hub (cross-domain Findings)
-npx agent-bober hub list                           # Print Findings held in the project's own FactStore (hub scope); title [kind] urgency/severity per line
+npx agent-bober hub list                           # Print Findings from the project's own FactStore + sibling kb-* repos (read-only, deduped by id); title [kind] urgency/severity per line
 ```
 
 #### Clarification gating
