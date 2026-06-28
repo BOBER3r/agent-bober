@@ -1081,6 +1081,48 @@ same question overwrites the same note. The command prints the outcome and the f
 exits 0 on every normal outcome; on an unexpected error it prints a message and sets a non-zero exit
 code **without throwing**.
 
+### `bober medical research [--marker <m>]`
+
+Run the **online** research job — the networked complement to the offline `bober medical review` pass.
+For each marker it retrieves latest **MedlinePlus** evidence, **grounds** a note through the fail-closed
+grounding critic, and writes a citation-bearing **research note** (`research/<date>-<marker>.md`) into the
+vault plus an optional `kind: "watch"` "new evidence" Finding. When `--marker` is omitted it researches a
+default marker set (`ldl`, `hdl`, `a1c`).
+
+```bash
+bober medical research                 # default markers: ldl, hdl, a1c
+bober medical research --marker ldl    # single marker
+#   Research complete
+#     notes written:    1
+#     findings written: 1
+```
+
+**This command is gated behind the `literature-retrieval` egress axis and ships zero outbound bytes until
+it is explicitly enabled.** With the axis **off** (the default) the job is a **no-op with zero egress** — it
+returns immediately, contacts no network, and writes nothing:
+
+```bash
+bober medical research
+#   literature-retrieval egress not enabled — research skipped (zero egress)
+```
+
+Three guarantees hold by construction (evaluator-verified in source):
+
+- **Zero egress when off** — the axis is checked **first**, returning before any retriever / MedlinePlus
+  source is even constructed.
+- **Fail-closed abstain** — if the grounding critic rejects (or there is no supporting passage), that
+  topic **abstains**: no research note and no finding are written. **No uncited synthesis is ever
+  persisted.**
+- **Cloud inference is independently fail-closed** — synthesis uses the **local Ollama model** unless the
+  separate `cloud-inference` axis is enabled; enabling `literature-retrieval` does **not** enable cloud
+  inference.
+
+Citations are stored as **flattened** frontmatter (`citationTitles[]` / `citationUrls[]` + a scalar
+`source: medlineplus`) so the notes stay queryable. The clock is read only at the CLI boundary; on error the
+command prints a message and sets a non-zero exit code **without throwing**. `runResearchJob` (the function
+behind this command) is also the **schedulable entrypoint** that a future research scheduler drives on a
+cadence.
+
 ---
 
 ## Vault Commands

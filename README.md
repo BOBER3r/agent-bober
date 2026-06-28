@@ -583,6 +583,7 @@ npx agent-bober medical profile set <key> <value>  # Update one profile field (a
 npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
 npx agent-bober medical review [--dig-deeper <id>] # Deterministic offline proactive pass -> trend + cadence-gap + cross-marker-offer Finding notes; --dig-deeper runs the gated 4-lens deep analysis for an offer
 npx agent-bober medical recommend <question> [--goal <g>]  # 4-lens judge panel -> action/question Finding (cloud-inference axis; fail-closed local)
+npx agent-bober medical research [--marker <m>]    # Online MedlinePlus research -> grounded vault research notes + watch findings (literature-retrieval axis; zero egress off)
 
 # Vault knowledge base
 npx agent-bober vault reindex --scope <domain> [--vault <dir>]  # Rebuild the derived FactStore from a vault's note frontmatter
