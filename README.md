@@ -581,6 +581,7 @@ npx agent-bober medical supplements list           # Print supplements from the 
 npx agent-bober medical profile show               # Decrypt + show the SOPS-encrypted personalization profile (fail-closed if sops missing)
 npx agent-bober medical profile set <key> <value>  # Update one profile field (age/sex/conditions/...); re-encrypts via sops (age backend, local)
 npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
+npx agent-bober medical review                     # Deterministic offline proactive trend review -> vault Finding notes + Dataview dashboard
 
 # Vault knowledge base
 npx agent-bober vault reindex --scope <domain> [--vault <dir>]  # Rebuild the derived FactStore from a vault's note frontmatter
@@ -836,7 +837,8 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
       "provider": "openai-compat",        // Default openai-compat. A CLOUD provider here needs egress.cloudInference=true.
       "endpoint": "http://localhost:11434/v1", // Default localhost (Ollama). Non-localhost => treated as cloud + gated.
       "model": "llama3"                   // Default llama3. Threaded into both synthesis and the grounding critic.
-    }
+    },
+    "vaultDir": ".bober/medical/vault"    // Optional. Vault dir for proactive-review Finding notes. Omit => <root>/.bober/medical/vault.
   },
 
   // -- Vault (on-device Obsidian MCP read/write adapter) --

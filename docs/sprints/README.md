@@ -1350,3 +1350,32 @@ readers/writers are hand-rolled so the build stays independent of that spec's ti
 inherits the base medical team's external S6.5 FFDCA §201(h) counsel + regulatory review gate** — a
 non-engineering gate that remains open. See the finale record
 [`sprint-spec-20260628-medical-ingest-5.md`](./sprint-spec-20260628-medical-ingest-5.md).
+
+## Medical Analysis — Proactive Review — in progress (1 of N)
+
+`spec-20260628-medical-analysis` — the **proactive analysis leg** of the medical knowledge
+template: turn the lab data that ingestion wrote into surfaced **Findings** without waiting for a
+reactive question. Sprint 1 lands the **deterministic, fully offline** opening pass. A new module
+`src/medical/analysis/` adds the `MedicalFinding` field set + a deterministic `findingId`
+(`SHA-256(domain|biomarker|ruleKey)`, **`now` excluded** ⇒ idempotent overwrite), a vault writer
+(`writeFinding` ⇒ `<vaultDir>/findings/<id>.md`, `writeDashboard` ⇒ a `findings/dashboard.md`
+Dataview `TABLE urgency, severity, kind, status` note), a **pure/synchronous** `analyzeTrends`
+(Rule A reference-range crossing — `watch` / `risk` at the >20 % boundary; Rule B
+slope-toward-nearer-edge; abstains at `sampleCount === 0`; **all** arithmetic delegated to
+`NumericsQueryLayer.getLabTrend` per ADR-3, no inline slope math), and the schedulable
+`runProactiveReview` entrypoint (opens `.bober/medical/health.db` like `engine.ts:350`, resolves
+the vault from the **new optional `medical.vaultDir`** config key or `<root>/.bober/medical/vault`,
+closes only stores it opened). Exposed as a `bober medical review` subcommand that reads the wall
+clock **only at the CLI boundary** and sets `process.exitCode = 1` on error without throwing. **No
+LLM, no network, no `Date.now()` inside the analysis modules; `engine.ts` untouched.** Findings are
+emitted as markdown-with-frontmatter into the **canonical vault** — this sprint defines **no**
+canonical Zod Finding schema (that is owned by `spec-20260628-priority-hub`, which will aggregate
+these notes).
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-medical-analysis-1.md](./sprint-spec-20260628-medical-analysis-1.md) | **Deterministic offline proactive review pass:** new `src/medical/analysis/` — `MedicalFinding` field set + `findingId(domain,biomarker,ruleKey)` SHA-256 slice (**excludes `now`** ⇒ idempotent, mirrors `observationId`) + `serializeFindingToMarkdown` (reuses `src/vault/frontmatter.ts`); `writeFinding` ⇒ `findings/<id>.md` + `writeDashboard` ⇒ `findings/dashboard.md` fenced `dataview` `TABLE urgency,severity,kind,status` (`node:fs/promises` only); **pure/sync** `analyzeTrends` (Rule A range-crossing `watch`/`risk@>20%` precedence over Rule B slope-toward-edge; abstain at `sampleCount=0`; trend math **only** via `NumericsQueryLayer.getLabTrend`, ADR-3); `runProactiveReview(projectRoot,config,opts)` schedulable entrypoint (opens `.bober/medical/health.db`, resolves `config.medical.vaultDir` or default vault, closes only stores it opened, returns `{findingsWritten,dashboardPath,findingPaths}`); additive `HealthDataStore.listBiomarkers()` (DISTINCT, alpha-sorted); new optional `medical.vaultDir` on `MedicalSectionSchema`; `bober medical review` CLI subtree (clock read only here, `process.exitCode=1` on error, never throws). **No LLM/network/`Date.now()` in `src/medical/analysis/`; `engine.ts` untouched.** commit `307e5e7`, 4 new src + 4 collocated test files (43 tests) + 3 additive edits, no new deps, suite **3029** green (+43), sc-1-1..sc-1-7 iter-1. |
+
+User-facing usage for `bober medical review` is in [`COMMANDS.md`](../../COMMANDS.md) (Medical Team
+Commands) and the README "Medical team (Phase 6)" command list; the new optional `medical.vaultDir`
+config key is in the README "Full Configuration Reference".

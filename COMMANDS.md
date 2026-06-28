@@ -1003,6 +1003,28 @@ never throws. On success it prints `records parsed` and `new rows`. Syncing is
 window reports `new rows: 0`) and **fail-closed** (a mid-sync failure leaves already-
 written rows intact and is recovered by re-running).
 
+### `bober medical review`
+
+Run the **deterministic, offline** proactive trend review pass. It scans the lab series in
+the medical health store (`.bober/medical/health.db`), applies reference-range and slope
+rules, and writes one **Finding** markdown note per detected condition into the vault
+`findings/` directory plus a `findings/dashboard.md` Dataview note.
+
+```bash
+bober medical review
+#   findings written: 2
+#   dashboard:        /abs/.bober/medical/vault/findings/dashboard.md
+```
+
+The pass involves **no LLM and no network** — all trend math is deterministic (delegated to
+the numerics layer), so it is safe to schedule. Findings are written into the vault, which is
+the canonical markdown sink (default `<projectRoot>/.bober/medical/vault`, overridable with the
+`medical.vaultDir` config key). Finding ids are derived from `domain|biomarker|rule` (not the
+clock), so **re-running over an unchanged store overwrites the same notes without creating
+duplicates**. On success it prints the number of findings written and the dashboard path and
+exits 0; on error it prints a clear message and exits non-zero **without throwing**. The
+reactive medical SOP / Q&A engine is not involved.
+
 ---
 
 ## Vault Commands
