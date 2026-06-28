@@ -23,6 +23,7 @@ import { parseLabPdf } from "../../medical/lab-pdf-parser.js";
 import { writeLabNote } from "../../medical/lab-note.js";
 import { reindexLabNotes } from "../../medical/lab-reindex.js";
 import { buildMedicalInferenceClient } from "../../medical/inference.js";
+import { runSupplementAdd, runSupplementList } from "../../medical/supplements.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -287,5 +288,33 @@ export function registerMedicalCommand(program: Command): void {
     .action(async (opts: { since?: string }) => {
       const projectRoot = await resolveRoot();
       await runWhoopSync(projectRoot, opts);
+    });
+
+  // ── medical supplements ───────────────────────────────────────────────
+  const suppCmd = medicalCmd
+    .command("supplements")
+    .description("Manage supplements list in FactStore (scope: medical)");
+
+  suppCmd
+    .command("add <name>")
+    .description(
+      "Reconcile a supplement into FactStore (creates or noops on duplicate)",
+    )
+    .option("--dose <d>", "dose string (default: unspecified)")
+    .action(async (name: string, opts: { dose?: string }) => {
+      const projectRoot = await resolveRoot();
+      await runSupplementAdd(projectRoot, name, opts);
+    });
+
+  suppCmd
+    .command("list")
+    .description("Print supplements from the markdown-frontmatter file")
+    .option(
+      "--file <path>",
+      "supplements markdown file (default: .bober/medical/supplements.md)",
+    )
+    .action(async (opts: { file?: string }) => {
+      const projectRoot = await resolveRoot();
+      await runSupplementList(projectRoot, opts);
     });
 }
