@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { runDo } from "./do.js";
 import { InMemoryFindingStore } from "../../do-bridge/finding-port.js";
 import { PromoterRegistry } from "../../do-bridge/registry.js";
 import { codingPromoter } from "../../do-bridge/coding-promoter.js";
+import type { Launcher } from "../../do-bridge/launcher.js";
+import type { PromotionPlan } from "../../do-bridge/types.js";
 import type { Finding } from "../../hub/finding.js";
 
 const T = "2026-06-28T00:00:00.000Z";
@@ -192,5 +197,187 @@ describe("runDo — unknown finding id", () => {
     await runDo(store, registry, "nonexistent-id-xyz", { dryRun: true });
 
     expect(stderrWrites.join("")).toContain("nonexistent-id-xyz");
+  });
+});
+
+// ── Sprint 2: real launch path ────────────────────────────────────────
+
+/** Fake Launcher that records calls and never spawns a real process. */
+function makeFakeLauncher(runId = "do-x-1") {
+  const calls: PromotionPlan[] = [];
+  const launcher: Launcher = {
+    async launch(plan: PromotionPlan) {
+      calls.push(plan);
+      return { runId, pid: 4242 };
+    },
+  };
+  return { launcher, calls };
+}
+
+// ── sc-2-2: approve → launch once → markers correct ──────────────────
+
+describe("runDo — sc-2-2: approve path launches exactly once and writes markers", () => {
+  it("calls launcher.launch exactly once with the promoter task", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc22-"));
+    try {
+      const { launcher, calls } = makeFakeLauncher("do-abc-123");
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: true }, {
+        launcher,
+        projectRoot,
+        confirm: async () => true,
+        isTTY: false,
+        now: () => T,
+      });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.task).toBe(CODING_FINDING.title);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── sc-2-3: approve → finding status + promotesTo ────────────────────
+
+describe("runDo — sc-2-3: approve sets status=in-progress and promotesTo", () => {
+  it("finding status is in-progress after approve", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc23-"));
+    try {
+      const { launcher } = makeFakeLauncher("do-abc-123");
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: true }, {
+        launcher,
+        projectRoot,
+        confirm: async () => true,
+        isTTY: false,
+        now: () => T,
+      });
+
+      const f = await store.readFinding(CODING_FINDING.id);
+      expect(f!.status).toBe("in-progress");
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("promotesTo.runId matches the runId from the fake launcher", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc23b-"));
+    try {
+      const FAKE_RUN_ID = "do-abc123-fakerun";
+      const { launcher } = makeFakeLauncher(FAKE_RUN_ID);
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: true }, {
+        launcher,
+        projectRoot,
+        confirm: async () => true,
+        isTTY: false,
+        now: () => T,
+      });
+
+      const f = await store.readFinding(CODING_FINDING.id);
+      expect(f!.promotesTo).toMatchObject({ runId: FAKE_RUN_ID, status: "launched" });
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("store.writes has exactly one entry after approve", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc23c-"));
+    try {
+      const { launcher } = makeFakeLauncher("do-abc-123");
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: true }, {
+        launcher,
+        projectRoot,
+        confirm: async () => true,
+        isTTY: false,
+        now: () => T,
+      });
+
+      expect(store.writes).toHaveLength(1);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── sc-2-4: reject → launch zero times, finding unchanged ────────────
+
+describe("runDo — sc-2-4: reject path", () => {
+  it("calls launcher.launch zero times when user rejects", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc24-"));
+    try {
+      const { launcher, calls } = makeFakeLauncher("do-abc-123");
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      // TTY mode with confirm returning false → reject
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: false }, {
+        launcher,
+        projectRoot,
+        confirm: async () => false,
+        isTTY: true,
+        now: () => T,
+      });
+
+      expect(calls).toHaveLength(0);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("finding status stays 'open' after reject", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc24b-"));
+    try {
+      const { launcher } = makeFakeLauncher("do-abc-123");
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: false }, {
+        launcher,
+        projectRoot,
+        confirm: async () => false,
+        isTTY: true,
+        now: () => T,
+      });
+
+      const f = await store.readFinding(CODING_FINDING.id);
+      expect(f!.status).toBe("open");
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("store.writes has zero entries after reject (finding not mutated)", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "bober-do-sc24c-"));
+    try {
+      const { launcher } = makeFakeLauncher("do-abc-123");
+      const store = new InMemoryFindingStore([CODING_FINDING]);
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      await runDo(store, buildCodingRegistry(), CODING_FINDING.id, { yes: false }, {
+        launcher,
+        projectRoot,
+        confirm: async () => false,
+        isTTY: true,
+        now: () => T,
+      });
+
+      expect(store.writes).toHaveLength(0);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
   });
 });

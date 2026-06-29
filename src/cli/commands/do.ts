@@ -1,14 +1,15 @@
 /**
- * `bober do <findingId> --dry-run` — preview the promotion plan for a hub Finding.
+ * `bober do <findingId>` — promote a hub Finding into a bober run task.
  *
  * Error handling: CLI handlers MUST NOT throw. Set process.exitCode=1 and return.
- * --dry-run is the only active path this sprint; real launch is Sprint 2.
  *
  * HARD BOUNDARY: this file MUST NOT import execa, node:child_process,
- * or any RunSpawner. The dry-run path reads + prints only.
+ * or RunSpawner directly. Import the Launcher adapter from do-bridge/launcher.ts
+ * instead — it owns the RunSpawner import.
  */
 
 import chalk from "chalk";
+import prompts from "prompts";
 import type { Command } from "commander";
 
 import { findProjectRoot } from "../../utils/fs.js";
@@ -19,6 +20,9 @@ import type { FindingStore } from "../../do-bridge/finding-port.js";
 import { FactStoreFindingStore } from "../../do-bridge/finding-port.js";
 import { PromoterRegistry } from "../../do-bridge/registry.js";
 import { codingPromoter } from "../../do-bridge/coding-promoter.js";
+import type { Launcher } from "../../do-bridge/launcher.js";
+import { RunSpawnerLauncher } from "../../do-bridge/launcher.js";
+import { runPromotionGate } from "../../do-bridge/promote.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -45,6 +49,30 @@ async function resolveDefaultNamespace(
   }
 }
 
+// ── RunDoDeps ─────────────────────────────────────────────────────────
+
+/**
+ * Injected dependencies for the real (non-dry-run) launch path.
+ * OPTIONAL so the 12 existing Sprint-1 tests (4-arg calls that hit
+ * dry-run/error branches) still compile without providing deps.
+ */
+export interface RunDoDeps {
+  /** Launcher port — injected so tests use a fake and never spawn a real process. */
+  launcher: Launcher;
+  /** Absolute project root for approval marker files. */
+  projectRoot: string;
+  /** Interactive confirm. TTY path calls this; tests pass a stub. */
+  confirm: () => Promise<boolean>;
+  /** Whether stdout is a TTY. Defaults to process.stdout.isTTY. */
+  isTTY?: boolean;
+  /** Clock injection. Defaults to () => new Date().toISOString(). */
+  now?: () => string;
+  /** Non-TTY poll interval in ms (small values for tests). */
+  pollMs?: number;
+  /** Non-TTY timeout in ms. */
+  timeoutMs?: number;
+}
+
 // ── runDo (DI core) ───────────────────────────────────────────────────
 
 /**
@@ -57,13 +85,14 @@ async function resolveDefaultNamespace(
  *  1. finding === null          → stderr "no finding with id …" + exitCode 1 + return.
  *  2. promoter === undefined    → stderr naming the unsupported domain + exitCode 1 + return.
  *  3. --dry-run                 → print ONE stdout line containing plan.task + "dry-run"; NO writes.
- *  4. non-dry-run (Sprint 2)   → print a notice; must NOT spawn anything.
+ *  4. non-dry-run               → gate (pending → approve/reject) → launch on approve.
  */
 export async function runDo(
   store: FindingStore,
   registry: PromoterRegistry,
   findingId: string,
-  opts: { dryRun?: boolean },
+  opts: { dryRun?: boolean; yes?: boolean },
+  deps?: RunDoDeps,
 ): Promise<void> {
   // Branch 1: look up the finding
   const finding = await store.readFinding(findingId);
@@ -88,7 +117,9 @@ export async function runDo(
   }
 
   // Branch 3: build the promotion plan
-  const plan = promoter(finding);
+  // Cast to Finding for the promoter call — DoFinding is compatible except for
+  // promotesTo type (object vs string); codingPromoter never reads promotesTo.
+  const plan = promoter(finding as Parameters<typeof promoter>[0]);
   const teamDisplay = plan.teamId !== undefined ? plan.teamId : "default team";
 
   if (opts.dryRun) {
@@ -101,12 +132,71 @@ export async function runDo(
     return;
   }
 
-  // Branch 4: non-dry-run (Sprint 2 territory) — real launch not implemented yet
+  // Branch 4: non-dry-run — gate + launch
+  if (deps === undefined) {
+    // Safety net: deps are required for the real path
+    process.stderr.write(
+      chalk.red(`do: internal error — missing deps for real launch path\n`),
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const now = deps.now ?? (() => new Date().toISOString());
+  const isTTY = deps.isTTY ?? process.stdout.isTTY ?? false;
+
   process.stdout.write(
-    chalk.yellow(
-      `Real launch is not implemented yet. Use --dry-run to preview the planned task.\n`,
+    chalk.cyan(
+      `do: requesting approval to launch bober run "${plan.task}" (team: ${teamDisplay})\n`,
     ),
   );
+
+  try {
+    const outcome = await runPromotionGate({
+      projectRoot: deps.projectRoot,
+      findingId,
+      plan,
+      yes: opts.yes ?? false,
+      isTTY,
+      confirm: deps.confirm,
+      now,
+      pollMs: deps.pollMs,
+      timeoutMs: deps.timeoutMs,
+    });
+
+    if (!outcome.approved) {
+      process.stdout.write(
+        chalk.yellow(`do: promotion rejected — no launch, finding unchanged\n`),
+      );
+      return;
+    }
+
+    // Approved: launch and update finding
+    const { runId, pid } = await deps.launcher.launch(plan);
+
+    const ref = {
+      kind: "bober-run" as const,
+      runId,
+      launchedAt: now(),
+      status: "launched" as const,
+    };
+
+    await store.setPromotion(findingId, ref, { now: now() });
+
+    const pidDisplay = pid !== undefined ? ` (pid ${pid})` : "";
+    process.stdout.write(
+      chalk.green(
+        `do: launched bober run "${plan.task}" — runId: ${runId}${pidDisplay}\n`,
+      ),
+    );
+  } catch (err) {
+    process.stderr.write(
+      chalk.red(
+        `do: launch failed — ${err instanceof Error ? err.message : String(err)}\n`,
+      ),
+    );
+    process.exitCode = 1;
+  }
 }
 
 // ── registerDoCommand ─────────────────────────────────────────────────
@@ -116,7 +206,8 @@ export function registerDoCommand(program: Command): void {
     .command("do <findingId>")
     .description("Promote a hub Finding into a bober run task")
     .option("--dry-run", "Preview the planned launch without spawning anything", false)
-    .action(async (findingId: string, opts: { dryRun?: boolean }) => {
+    .option("--yes", "Auto-approve the promotion without prompting", false)
+    .action(async (findingId: string, opts: { dryRun?: boolean; yes?: boolean }) => {
       const projectRoot = await resolveRoot();
       try {
         const ns = await resolveDefaultNamespace(projectRoot);
@@ -130,8 +221,29 @@ export function registerDoCommand(program: Command): void {
         registry.register({ domain: "coding" }, codingPromoter);
         registry.register({ domain: "projects" }, codingPromoter);
 
+        // Build the real deps for the launch path
+        const launcher = new RunSpawnerLauncher({
+          projectRoot,
+          findingId,
+        });
+
+        const deps: RunDoDeps = {
+          launcher,
+          projectRoot,
+          confirm: async () => {
+            const answer = await prompts({
+              type: "confirm",
+              name: "value",
+              message: `Approve promotion for finding '${findingId}'?`,
+              initial: false,
+            });
+            return answer.value === true;
+          },
+          isTTY: process.stdout.isTTY,
+        };
+
         try {
-          await runDo(findingStore, registry, findingId, opts);
+          await runDo(findingStore, registry, findingId, opts, deps);
         } finally {
           store.close();
         }

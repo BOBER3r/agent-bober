@@ -35,11 +35,35 @@ export interface PromotionPlan {
 // ── PromotionRef ──────────────────────────────────────────────────────
 
 /**
- * Stable string id for a planned or recorded promotion.
- * This is the value later written to Finding.promotesTo after real launch.
- * Kept as a plain string alias this sprint; Sprint 3 may add structure.
+ * Structured ref written to Finding.promotesTo after a real launch.
+ *
+ * On-disk: serialized to a JSON string (Finding.promotesTo is z.string()).
+ * In-process (via FindingStore port): callers receive this object shape.
+ * Use serializePromotionRef / parsePromotionRef to cross the boundary.
  */
-export type PromotionRef = string;
+export interface PromotionRef {
+  kind: "bober-run";
+  runId: string;
+  launchedAt: string;
+  status: "launched" | "completed" | "aborted";
+}
+
+/** Serialize a PromotionRef to a JSON string for on-disk storage. */
+export function serializePromotionRef(ref: PromotionRef): string {
+  return JSON.stringify(ref);
+}
+
+/**
+ * Parse a PromotionRef from a JSON string.
+ * Returns null on parse failure or missing required fields.
+ */
+export function parsePromotionRef(s: string): PromotionRef | null {
+  try {
+    return JSON.parse(s) as PromotionRef;
+  } catch {
+    return null;
+  }
+}
 
 // ── Promoter ──────────────────────────────────────────────────────────
 

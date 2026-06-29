@@ -1,16 +1,55 @@
 import type { Finding } from "../hub/finding.js";
 import type { FactStore } from "../state/facts.js";
-import { readFindings } from "../hub/finding-store.js";
+import { readFindings, transitionFinding } from "../hub/finding-store.js";
+import type { PromotionRef } from "./types.js";
+import { serializePromotionRef, parsePromotionRef } from "./types.js";
+
+// ── DoFinding ─────────────────────────────────────────────────────────
+
+/**
+ * Do-bridge view of a Finding where promotesTo is a parsed PromotionRef
+ * object rather than the raw string stored on disk.
+ *
+ * FindingSchema.promotesTo is z.string().optional() — the hub schema is NOT
+ * modified. This type is owned by the do-bridge port layer; serialization
+ * and deserialization happen inside the adapters below.
+ */
+export type DoFinding = Omit<Finding, "promotesTo"> & {
+  promotesTo?: PromotionRef;
+};
+
+// ── Internal helpers ──────────────────────────────────────────────────
+
+/**
+ * Convert a hub Finding (string promotesTo) to a DoFinding (object promotesTo).
+ * If promotesTo is present but unparseable, it is dropped (undefined).
+ */
+function toDoFinding(f: Finding): DoFinding {
+  const ref =
+    f.promotesTo !== undefined ? (parsePromotionRef(f.promotesTo) ?? undefined) : undefined;
+  return { ...f, promotesTo: ref };
+}
 
 // ── FindingStore ──────────────────────────────────────────────────────
 
 /**
- * Narrow read-only port for finding lookup.
- * No write path this sprint — the DI core never mutates findings.
- * Sprint 3 may extend this with a writeFinding method for outcome recording.
+ * Narrow port for finding lookup and promotion state writes.
+ * Returns DoFinding (promotesTo as structured object) so callers never
+ * touch the raw JSON string stored on disk.
  */
 export interface FindingStore {
-  readFinding(id: string): Promise<Finding | null>;
+  /** Read a finding by id. Returns null if not found. */
+  readFinding(id: string): Promise<DoFinding | null>;
+
+  /**
+   * Set promotesTo = ref AND transition status open->in-progress in one call.
+   * Returns the updated DoFinding, or null if the id does not exist.
+   */
+  setPromotion(
+    id: string,
+    ref: PromotionRef,
+    opts: { now: string },
+  ): Promise<DoFinding | null>;
 }
 
 // ── FactStoreFindingStore ─────────────────────────────────────────────
@@ -18,41 +57,72 @@ export interface FindingStore {
 /**
  * FactStore-backed adapter for FindingStore.
  *
- * Delegates to readFindings() (src/hub/finding-store.ts:45) — the hub's
- * canonical read path — rather than calling getActiveFacts() directly.
- * There is no single-finding-by-id API in the hub; we filter in-process.
+ * readFinding: delegates to readFindings() (hub's canonical read path) and
+ * converts the string promotesTo to a PromotionRef object.
+ *
+ * setPromotion: serializes the ref to a JSON string, delegates to
+ * transitionFinding() (hub's supersede-aware UPDATE path) so bitemporal
+ * history is preserved, then converts the result back to DoFinding.
  */
 export class FactStoreFindingStore implements FindingStore {
   constructor(private readonly store: FactStore) {}
 
-  async readFinding(id: string): Promise<Finding | null> {
-    return readFindings(this.store).find((f) => f.id === id) ?? null;
+  async readFinding(id: string): Promise<DoFinding | null> {
+    const f = readFindings(this.store).find((f) => f.id === id);
+    return f !== undefined ? toDoFinding(f) : null;
+  }
+
+  async setPromotion(
+    id: string,
+    ref: PromotionRef,
+    { now }: { now: string },
+  ): Promise<DoFinding | null> {
+    // Serialize the object ref to the string the hub schema expects on disk.
+    const result = await transitionFinding(this.store, id, "in-progress", {
+      now,
+      mutate: { promotesTo: serializePromotionRef(ref) },
+    });
+    return result !== null ? toDoFinding(result) : null;
   }
 }
 
 // ── InMemoryFindingStore ──────────────────────────────────────────────
 
 /**
- * In-memory fake for tests — backed by a Map<string, Finding>.
+ * In-memory fake for tests — backed by a Map<string, DoFinding>.
  *
- * Exposes a `writes` array that records any attempted writes so tests can
- * assert zero mutation (sc-1-4). This sprint has no write method, so
- * writes stays empty by construction.
+ * setPromotion stores the PromotionRef OBJECT directly (no serialization)
+ * so tests can assert promotesTo.runId / promotesTo.status on the result of
+ * readFinding without JSON.parse.
+ *
+ * `writes` records every setPromotion call:
+ *  - sc-2-2/2-3: assert writes.length === 1 on approve
+ *  - sc-2-4: assert writes.length === 0 on reject
  */
 export class InMemoryFindingStore implements FindingStore {
-  private readonly map: Map<string, Finding>;
+  private readonly map: Map<string, DoFinding>;
 
-  /**
-   * Records any attempted writes (should always be empty this sprint —
-   * the FindingStore port has no write path).
-   */
-  readonly writes: Finding[] = [];
+  /** Records every setPromotion write. Tests assert .length for mutation count. */
+  readonly writes: DoFinding[] = [];
 
   constructor(seed: Finding[] = []) {
-    this.map = new Map(seed.map((f) => [f.id, f]));
+    this.map = new Map(seed.map((f) => [f.id, toDoFinding(f)]));
   }
 
-  async readFinding(id: string): Promise<Finding | null> {
+  async readFinding(id: string): Promise<DoFinding | null> {
     return this.map.get(id) ?? null;
+  }
+
+  async setPromotion(
+    id: string,
+    ref: PromotionRef,
+    _opts: { now: string },
+  ): Promise<DoFinding | null> {
+    const cur = this.map.get(id);
+    if (cur === undefined) return null;
+    const next: DoFinding = { ...cur, status: "in-progress", promotesTo: ref };
+    this.map.set(id, next);
+    this.writes.push(next);
+    return next;
   }
 }
