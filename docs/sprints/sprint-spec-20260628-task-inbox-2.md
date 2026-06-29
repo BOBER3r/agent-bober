@@ -110,5 +110,3 @@ FactStore). Iteration-2 commit `26f45db`: a 1-line test-only lint fix. **No** ne
 collector/judge/renderer are untouched. All five criteria (`sc-2-1..sc-2-5`, four required) passed;
 eval `eval-sprint-spec-20260628-task-inbox-2-2` → **pass** (5/5), full suite **3281 → 3291** green,
 build + typecheck clean, lint 0 errors (2 pre-existing unrelated warnings).
-</content>
-</invoke>
