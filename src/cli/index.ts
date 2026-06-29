@@ -42,6 +42,7 @@ import { registerMedicalCommand } from "./commands/medical.js";
 import { registerVaultCommand } from "./commands/vault.js";
 import { registerBlackboardCommand } from "./commands/blackboard.js";
 import { registerHubCommand } from "./commands/hub.js";
+import { registerDoCommand } from "./commands/do.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -338,6 +339,9 @@ async function main(): Promise<void> {
 
   // ── hub ───────────────────────────────────────────────────────────────
   registerHubCommand(program);
+
+  // ── do ────────────────────────────────────────────────────────────────
+  registerDoCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
