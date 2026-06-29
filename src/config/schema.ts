@@ -459,6 +459,23 @@ export type VaultObsidian = z.infer<typeof VaultObsidianSchema>;
 export const VaultSectionSchema = z.object({ obsidian: VaultObsidianSchema.optional() });
 export type VaultSection = z.infer<typeof VaultSectionSchema>;
 
+// ── Calendar Section (Sprint 3 — cloud-calendar egress axis default off) ──
+
+export const CalendarSectionSchema = z.object({
+  /** Egress opt-in axis (Sprint 3). Default false — zero cloud egress by default. */
+  egress: z
+    .object({
+      /** When true, Google Calendar (cloud) egress is permitted. Default false (fail-closed). */
+      cloudCalendar: z.boolean().default(false),
+    })
+    .optional(),
+  /** Which connector to use. Default 'ics' (local, zero-egress). */
+  connector: z.enum(["ics", "google"]).default("ics"),
+  /** Optional IANA timezone (informational only; not used in epoch-ms math). */
+  timezone: z.string().optional(),
+});
+export type CalendarSection = z.infer<typeof CalendarSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -496,6 +513,8 @@ export const BoberConfigSchema = z.object({
   vault: VaultSectionSchema.optional(),
   // ── Sprint 6: task-inbox Gmail egress axis ──
   taskInbox: TaskInboxSectionSchema.optional(),
+  // ── Sprint 3: calendar planner cloud-calendar egress axis ──
+  calendar: CalendarSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

@@ -71,6 +71,13 @@ export interface PlanItem {
   title: string;
   startIso: string;
   endIso: string;
+  /**
+   * Privacy-safe title for cloud connectors (Sprint 3).
+   * Set by the slotter from finding.calendarSafeTitle.
+   * When absent, the Google connector falls back to the generic placeholder
+   * "Focus block" — it NEVER uses the full `title` field for cloud egress.
+   */
+  calendarSafeTitle?: string;
 }
 
 /**

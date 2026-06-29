@@ -209,6 +209,8 @@ export function planSlots(
           title: finding.calendarSafeTitle ?? finding.title,
           startIso: new Date(itemStart).toISOString(),
           endIso: new Date(itemEnd).toISOString(),
+          // calendarSafeTitle threaded for cloud connectors (Sprint 3); undefined when absent.
+          calendarSafeTitle: finding.calendarSafeTitle,
         };
         scheduled.push(planItem);
 
