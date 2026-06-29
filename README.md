@@ -888,6 +888,15 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
   // -- Task inbox Gmail egress (opt-in; isolated single axis, default false) --
   "taskInbox": {                          // Optional. Omit entirely => zero Gmail egress.
     "gmailEgress": false                  // Permit `bober task from-gmail` to read a thread via the MCP connector. Default false.
+  },
+
+  // -- Calendar planner (Google Calendar egress, opt-in; default 'ics', zero-egress) --
+  "calendar": {                           // Optional. Omit entirely => local .ics connector, zero cloud egress.
+    "egress": {                           // Single opt-in axis; code-enforced fail-closed default.
+      "cloudCalendar": false              // Permit Google Calendar (cloud) free/busy read + event write. Default false.
+    },
+    "connector": "ics",                   // 'ics' (local, default) | 'google' (cloud, needs egress.cloudCalendar=true + a 0600 token).
+    "timezone": "America/New_York"        // Optional IANA tz, informational only (not used in epoch-ms slot math).
   }
 }
 ```
@@ -952,6 +961,18 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > demand and captured through the same `captureTask` write path as `task add`. See
 > [COMMANDS.md](./COMMANDS.md) (`bober task from-gmail <thread>`) and
 > [docs/sprints/sprint-spec-20260628-task-inbox-6.md](./docs/sprints/sprint-spec-20260628-task-inbox-6.md).
+
+> **Google Calendar egress is opt-in and default-off.** The isolated `calendar.egress.cloudCalendar`
+> axis (default `false`, separate from the `medical`/`taskInbox` axes) gates the Sprint 3 Google
+> Calendar connector. With the axis off — the default — the calendar planner uses the local-first
+> `.ics` connector and makes **zero cloud egress**; any Google read/write **refuses before constructing
+> the MCP client**, naming `calendar.egress.cloudCalendar`. Enabling it also requires a provisioned
+> `0600` OAuth token sidecar (`.bober/calendar/google-token.json`), and only a non-sensitive
+> `calendarSafeTitle` (never the full finding title, evidence, or tags) ever leaves the device as the
+> event summary; connector errors are sanitized (`KEY=VALUE` stripped, same regex as
+> `src/mcp/external-client.ts`) so tokens never leak. Hosted OAuth is **unfit for unattended/cron runs**,
+> so scheduled use should stay on the `.ics` fallback. See [docs/calendar.md](./docs/calendar.md) and
+> [docs/sprints/sprint-spec-20260628-calendar-planner-3.md](./docs/sprints/sprint-spec-20260628-calendar-planner-3.md).
 
 ### Sprint Sizes
 

@@ -1643,10 +1643,16 @@ END:VEVENT
 END:VCALENDAR
 ```
 
-> **Status.** Sprints 1–2 of 4 of `spec-20260628-calendar-planner`: the deterministic slotter +
+> **Status.** Sprints 1–3 of 4 of `spec-20260628-calendar-planner`: the deterministic slotter +
 > `bober calendar plan --dry-run` (Sprint 1) and the local-first, zero-egress `.ics` export via
-> `--export-ics` (Sprint 2). The Google Calendar MCP adapter + live free/busy read (Sprint 3) and the
-> approve-gated live write (Sprint 4) are owned by later sprints.
+> `--export-ics` (Sprint 2). **Sprint 3** added a **Google Calendar MCP connector** (free/busy read +
+> event write through an external MCP) behind the new `calendar` config section — it is **egress-gated and
+> off by default**: writes require `calendar.egress.cloudCalendar: true` **and** a provisioned 0600 OAuth
+> token sidecar, and only a non-sensitive `calendarSafeTitle` ever leaves the device. Hosted OAuth is
+> **unfit for unattended/cron runs** (tokens expire, re-auth is interactive), so the local `.ics`
+> path above stays the recommended choice for scheduled/automated use. Config + privacy details:
+> [`docs/calendar.md`](docs/calendar.md). The approve-gated **live** write (Sprint 4) is owned by the
+> final sprint.
 
 ---
 
