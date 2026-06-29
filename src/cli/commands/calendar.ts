@@ -6,7 +6,9 @@ import type { Command } from "commander";
 import { findProjectRoot } from "../../utils/fs.js";
 import { planSlots } from "../../calendar/slotter.js";
 import { readFindingsFromFile, readBusyIntervalsFromFile } from "../../calendar/finding-source.js";
+import { createIcsConnector } from "../../calendar/ics-connector.js";
 import type { Finding, BusyInterval, SlotConstraints } from "../../calendar/types.js";
+import type { CalendarConnector } from "../../calendar/connector.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -29,6 +31,8 @@ export interface CalendarPlanDeps {
   readFreeBusy?: (path: string) => Promise<BusyInterval[]>;
   /** Override the current ISO time string (clock read ONLY at the CLI boundary). */
   nowIso?: string;
+  /** Factory for the calendar connector used by --export-ics (default: createIcsConnector). */
+  makeConnector?: (outPath: string) => CalendarConnector;
 }
 
 // ── Default planning window ───────────────────────────────────────────
@@ -49,7 +53,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  */
 export async function runCalendarPlan(
   _projectRoot: string,
-  opts: { findings?: string; freebusy?: string; dryRun?: boolean },
+  opts: { findings?: string; freebusy?: string; dryRun?: boolean; exportIcs?: string },
   deps: CalendarPlanDeps = {},
 ): Promise<void> {
   try {
@@ -105,6 +109,18 @@ export async function runCalendarPlan(
       }
     }
 
+    // ── 6. --export-ics → write VCALENDAR via the connector ──────────
+    if (opts.exportIcs !== undefined) {
+      const makeConnector =
+        deps.makeConnector ??
+        ((outPath) => createIcsConnector({ outPath, freeBusyPath: opts.freebusy, nowIso }));
+      const connector = makeConnector(opts.exportIcs);
+      const result = await connector.writeEvents(plan.scheduled);
+      process.stdout.write(
+        chalk.green(`\nWrote ${result.writtenCount} event(s) to ${result.target}\n`),
+      );
+    }
+
     if (opts.dryRun === true) {
       process.stdout.write(chalk.gray("\n(dry-run — nothing written to any calendar)\n"));
     }
@@ -135,8 +151,9 @@ export function registerCalendarCommand(program: Command): void {
     .option("--dry-run", "print the proposed plan; write nothing to any calendar")
     .option("--findings <path>", "ranked findings JSON file (Finding[] ordered by priority)")
     .option("--freebusy <path>", "free/busy intervals JSON file (BusyInterval[])")
+    .option("--export-ics <path>", "write the scheduled plan to an RFC 5545 .ics file (local, no network)")
     .action(
-      async (opts: { dryRun?: boolean; findings?: string; freebusy?: string }) => {
+      async (opts: { dryRun?: boolean; findings?: string; freebusy?: string; exportIcs?: string }) => {
         const projectRoot = await resolveRoot();
         await runCalendarPlan(projectRoot, opts);
       },

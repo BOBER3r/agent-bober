@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { runCalendarPlan } from "./calendar.js";
 import type { Finding, BusyInterval } from "../../calendar/types.js";
@@ -188,6 +191,79 @@ describe("runCalendarPlan — extracted core (sc-1-6)", () => {
 
     const out = stdoutChunks.join("");
     expect(out).toContain("No findings");
+    expect(process.exitCode).toBe(0);
+  });
+});
+
+// ── sc-2-6: --export-ics wires through runCalendarPlan ───────────────
+
+describe("runCalendarPlan — --export-ics (sc-2-6)", () => {
+  let tmpDir: string;
+  let stdoutChunks: string[];
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-cal-ics-"));
+    stdoutChunks = [];
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdoutChunks.push(String(chunk));
+      return true;
+    });
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    stdoutSpy.mockRestore();
+    process.exitCode = 0;
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("writes a valid VCALENDAR and exits 0 when --export-ics is set (sc-2-6)", async () => {
+    const out = join(tmpDir, "out.ics");
+    await runCalendarPlan(
+      PROJECT_ROOT,
+      { findings: "/fake/findings.json", exportIcs: out },
+      { readFindings: async () => FIXTURE_FINDINGS, readFreeBusy: async () => [], nowIso: NOW_ISO },
+    );
+    const ics = await readFile(out, "utf8");
+    expect(ics).toContain("BEGIN:VCALENDAR");
+    expect(ics).toContain("END:VCALENDAR");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("prints the writtenCount and path after writing (sc-2-6)", async () => {
+    const out = join(tmpDir, "out2.ics");
+    await runCalendarPlan(
+      PROJECT_ROOT,
+      { findings: "/fake/findings.json", exportIcs: out },
+      { readFindings: async () => FIXTURE_FINDINGS, readFreeBusy: async () => [], nowIso: NOW_ISO },
+    );
+    const outText = stdoutChunks.join("");
+    expect(outText).toContain("event(s)");
+    expect(outText).toContain(out);
+  });
+
+  it("--export-ics respects injected makeConnector dep", async () => {
+    let capturedItems: unknown[] = [];
+    const out = join(tmpDir, "stub.ics");
+    await runCalendarPlan(
+      PROJECT_ROOT,
+      { findings: "/fake/findings.json", exportIcs: out },
+      {
+        readFindings: async () => FIXTURE_FINDINGS,
+        readFreeBusy: async () => [],
+        nowIso: NOW_ISO,
+        makeConnector: (_outPath) => ({
+          name: "stub",
+          readFreeBusy: async () => [],
+          writeEvents: async (items) => {
+            capturedItems = items;
+            return { writtenCount: items.length, target: _outPath };
+          },
+        }),
+      },
+    );
+    expect(capturedItems.length).toBeGreaterThan(0);
     expect(process.exitCode).toBe(0);
   });
 });
