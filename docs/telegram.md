@@ -5,9 +5,11 @@ locally-run bot that lets a whitelisted operator talk to the platform from Teleg
 ships the **transport + access-control spine** — a long-polling bot, a user-id whitelist,
 and a single outbound funnel. Sprint 2 adds the **first domain behavior**: a message router
 plus **zero-friction task capture**, so plain text from an admitted sender lands as one open
-task in the shared inbox. Hub / calendar / medical command dispatch is still deferred; an
-admitted sender's `/start` (and any non-text update) still gets the help stub, and any other
-`/command` gets an `Unknown command` placeholder later sprints replace.
+task in the shared inbox. Sprint 3 adds the **first hub-query commands** — `/today`,
+`/priority`, and `/decide X vs Y` — which parse an **ephemeral** scope from the command text and
+reply with a numbered ranked list from the priority hub. Calendar / medical command dispatch is
+still deferred; an admitted sender's `/start` (and any non-text update) still gets the help stub,
+and any other `/command` gets an `Unknown command` placeholder later sprints replace.
 
 ---
 
@@ -124,7 +126,8 @@ The whitelisted-sender branch of `startPollLoop` then dispatches:
 |--------|-------|
 | Non-text update (sticker, photo, empty) | `helpReply()` stub |
 | `/start` | `helpReply()` stub |
-| Any other `/command` | `Unknown command: /<name>` (Sprint 3–4 placeholder) |
+| `/today` · `/priority` · `/decide X vs Y` | **prioritize** → numbered ranked list (Sprint 3, below) |
+| Any other `/command` | `Unknown command: /<name>` (Sprint 4 placeholder) |
 | Plain text | **capture** → one-line confirmation |
 
 ### Zero-friction capture
@@ -147,6 +150,65 @@ nothing parses or enriches it (AI triage stays owned by the task-inbox spec).
 
 Because the sink is injected, the router and capture handler are unit-testable with a fake that
 records calls and **never opens a `FactStore`** — no filesystem, no clock, no network.
+
+---
+
+## Scoped prioritization (Sprint 3)
+
+Three commands ask the **priority hub** (`spec-20260628-priority-hub`) to rank findings, each with a
+**different scope** parsed from the command text:
+
+| Command | Scope | What it ranks |
+|---------|-------|---------------|
+| `/priority` | `{ mode:"general" }` | all pooled findings (hub relevance-filters the full pool) |
+| `/today` | `{ mode:"filtered", dueWithinDays:1 }` | findings due within one day |
+| `/decide X vs Y` | `{ mode:"decision", optionA:X, optionB:Y }` | only findings relevant to X or Y |
+
+The reply is a **numbered ranked list of finding titles** in the **hub's returned order** — the
+adapter never re-ranks (a hard non-goal).
+
+### Ephemeral scope parsing
+
+`parseScopeFromCommand(name, args)` (`src/telegram/router.ts:60`) is a **pure** function (no I/O, no
+network, no clock) that derives a hub `Scope` (`src/hub/scope.ts`) from the command name + trailing
+args, or returns `null`:
+
+- `today` → `{ mode:"filtered", dueWithinDays:1 }`
+- `priority` → `{ mode:"general" }`
+- `decide` → split args on `/\s+vs\s+/i` and trim ⇒ `{ mode:"decision", optionA, optionB }`, but only
+  when the split yields **exactly two non-empty** options (`/decide foo` or `/decide a vs b vs c` →
+  `null`)
+- any other name → `null`
+
+The scope is **ephemeral** — each command re-derives it from its own text, and it is **never written
+to disk** (a hard non-goal). A `null` result falls through to the `Unknown command: /<name>` stub.
+
+### Delegation to the hub CLI (the LLM stays out of the adapter)
+
+`handlePrioritize(name, args, query)` (`src/telegram/handlers/prioritize.ts:117`) parses the scope,
+calls an **injected** `HubQuery` (`(scope) => Promise<HubResult[]>`), and returns the numbered list
+(or `No findings to prioritize.` when the hub returns none). It has **no** transport access — the
+loop passes its return value to `sendSafe`.
+
+The production query, `defaultPrioritize` (`prioritize.ts:56`), invokes the **hub CLI in a
+subprocess** via `execa(process.execPath, …)`:
+
+- `decision` → `node <cliEntry> hub decide "<optionA> vs <optionB>"`
+- `filtered` → `node <cliEntry> hub priority` (+ optional `--due` / `--domain` / `--tag`)
+- `general` → `node <cliEntry> hub priority`
+
+It parses the CLI's `N. <title>` stdout lines (`src/cli/commands/hub.ts:207`/`:251`) into
+`HubResult[]` and **throws** on a non-zero exit (the error surfaces in the reply via `sendSafe`).
+**The subprocess fully owns any LLM/model call — `src/telegram/` imports no provider and never
+constructs an `LLMClient`** (evaluator-verified). This is the deliberate boundary that keeps the
+adapter thin: all relevance filtering and lens-panel judging happen inside the hub subprocess.
+
+### Control-plane rendering: titles only
+
+The hub `Finding` has **no `summary` field**, so the reply renders **finding titles only** — no raw
+domain detail leaks past `sendSafe`. Because `HubQuery` is injected, the parser and handler are
+unit-testable with a fake returning fixture findings and **no subprocess at all** — no child process,
+no clock, no network.
 
 ---
 
@@ -177,9 +239,10 @@ swapping the SDK is a `bot.ts`-only change.
 |------|------|
 | `src/telegram/whitelist.ts` | Pure authoriser: `parseAllowedUsers` / `isAllowed` / `denialReply` (+ `AllowedUsers` type). No I/O. |
 | `src/telegram/outbound.ts` | `TelegramTransport` interface + the `sendSafe` outbound funnel (single chokepoint). |
-| `src/telegram/router.ts` | Pure `classify(message)` → `RoutedMessage` (`command` vs `text`). No I/O. |
+| `src/telegram/router.ts` | Pure `classify(message)` → `RoutedMessage` (`command` vs `text`) + pure `parseScopeFromCommand(name, args)` → hub `Scope` \| `null` (`/today`/`/priority`/`/decide`). No I/O. |
 | `src/telegram/handlers/capture.ts` | `handleCapture` (zero-friction capture via an injected `InboxCapture` sink) + production `defaultCapture` (persists via `captureTask`). |
-| `src/telegram/bot.ts` | `BotTransport` + `GrammyTransport` adapter (sole grammy import), `helpReply` stub, and the `startPollLoop` getUpdates loop (now `classify` → capture / command dispatch). |
+| `src/telegram/handlers/prioritize.ts` | `handlePrioritize` (numbered ranked list via an injected `HubQuery`, title-only render) + production `defaultPrioritize` (execa → `hub priority`/`hub decide` subprocess; the subprocess owns all LLM calls). |
+| `src/telegram/bot.ts` | `BotTransport` + `GrammyTransport` adapter (sole grammy import), `helpReply` stub, and the `startPollLoop` getUpdates loop (now `classify` → capture / prioritize / command dispatch). |
 | `src/cli/commands/telegram.ts` | `registerTelegramCommand` — the `agent-bober telegram` command (env credential read, SIGINT/SIGTERM shutdown, never-throw). |
 
 User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Commands**.
@@ -189,8 +252,9 @@ User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Comm
 ## Roadmap (deferred to later sprints)
 
 Sprint 1 shipped transport + whitelist + funnel; Sprint 2 added message routing + zero-friction
-task capture. Still to come (Sprints 3–6): real command dispatch for hub/inbox/calendar actions
-(replacing the `Unknown command` stub), document upload, streaming replies, approvals, and
+task capture; Sprint 3 added the scoped hub-priority commands (`/today`, `/priority`,
+`/decide X vs Y`). Still to come (Sprints 4–6): the remaining command dispatch for inbox/calendar
+actions (replacing the `Unknown command` stub), document upload, streaming replies, approvals, and
 **silent scheduled delivery of the research-scheduler morning digest**
 (`.bober/research/digests/<date>.json`). Each new reply path must return content through
 `sendSafe`, and each new command must sit behind the `isAllowed` whitelist.

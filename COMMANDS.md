@@ -1914,8 +1914,10 @@ agent-bober from Telegram. Sprint 1 ships the **transport + access-control spine
 getUpdates long-polling, a numeric user-id whitelist, and a single outbound funnel. Sprint 2 adds
 **zero-friction task capture**: plain text from an admitted sender is captured as one open task in
 the inbox (the same surface `bober task list` reads) and the bot replies with a confirmation.
-Hub / calendar / medical command dispatch is still a later sprint — `/start` returns a help stub
-and any other `/command` returns an `Unknown command` placeholder. See
+Sprint 3 adds the **scoped hub-priority commands** `/today`, `/priority`, and `/decide X vs Y`,
+which reply with a numbered ranked list from the priority hub. Inbox / calendar / medical command
+dispatch is still a later sprint — `/start` returns a help stub and any other `/command` returns an
+`Unknown command` placeholder. See
 [docs/telegram.md](./docs/telegram.md) for the adapter, the message router, the control-plane
 boundary, and the privacy posture.
 
@@ -1946,16 +1948,29 @@ bober telegram
   the bot replies `Captured: <title> (#<id>)`. `/start` returns the help stub; any other
   `/command` (and non-text updates such as stickers/photos) returns an `Unknown command`
   placeholder reserved for later sprints. A `/`-prefixed message is **never** captured as a task.
+- **Scoped prioritization commands (admitted senders).** Three commands ask the priority hub to
+  rank findings and reply with a **numbered ranked list of titles** in the hub's order:
+  - `/priority` — rank all pooled findings (general scope).
+  - `/today` — rank findings due within one day (filtered scope).
+  - `/decide X vs Y` — rank only findings relevant to X or Y (decision scope; requires a literal
+    case-insensitive ` vs ` separator yielding exactly two options, else falls through to the
+    `Unknown command` stub).
+
+  The scope is parsed from the command text only and **never persisted**. The bot delegates the
+  ranking to the **hub CLI in a subprocess** (`bober hub priority` / `bober hub decide`), so all
+  relevance filtering and any model calls happen inside the hub — the Telegram adapter never
+  constructs an LLM client. The reply carries finding **titles only**.
 - **Single outbound funnel.** Every reply leaves through one `sendSafe` chokepoint; no handler
   sends directly — the seam where later sprints add rate-limiting / audit / sanitisation.
 - **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
 - **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
   wrapper — only `src/telegram/bot.ts` imports it.
 
-> **Status.** **Sprint 2 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
-> (Sprint 1) + plain-text → zero-friction task capture (Sprint 2). Real hub/inbox/calendar command
-> dispatch (replacing the `Unknown command` stub), document upload, streaming, approvals, and
-> silent scheduled delivery of the research-scheduler morning digest
+> **Status.** **Sprint 3 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
+> (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped hub-priority commands
+> `/today` / `/priority` / `/decide X vs Y` (Sprint 3). Remaining inbox/calendar command dispatch
+> (replacing the `Unknown command` stub), document upload, streaming, approvals, and silent
+> scheduled delivery of the research-scheduler morning digest
 > (`.bober/research/digests/<date>.json`) are later sprints.
 
 ---
