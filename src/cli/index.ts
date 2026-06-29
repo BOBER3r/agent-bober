@@ -39,6 +39,7 @@ import { registerTaskCommand } from "./commands/task.js";
 import { registerFleetCommand } from "../fleet/index.js";
 import { registerChatCommand } from "./commands/chat.js";
 import { registerMedicalCommand } from "./commands/medical.js";
+import { registerResearchCommand } from "./commands/research.js";
 import { registerCalendarCommand } from "./commands/calendar.js";
 import { registerVaultCommand } from "./commands/vault.js";
 import { registerBlackboardCommand } from "./commands/blackboard.js";
@@ -325,6 +326,9 @@ async function main(): Promise<void> {
 
   // ── medical ───────────────────────────────────────────────────────
   registerMedicalCommand(program);
+
+  // ── research ────────────────────────────────────────────
+  registerResearchCommand(program);
 
   // ── calendar ──────────────────────────────────────────────────────
   registerCalendarCommand(program);
