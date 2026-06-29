@@ -137,7 +137,8 @@ describe("runTaskList", () => {
     writes.length = 0;
     runTaskList(store, {});
     const output = writes.join("");
-    // task2 (still open) is shown
+    // task2 (still open) is shown — assert by both id and title
+    expect(output).toContain(task2.id);
     expect(output).toMatch(/remaining open task/);
     // task1 (now done) is absent — assert by id since title substring could collide
     expect(output).not.toContain(task1.id);
