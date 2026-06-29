@@ -1641,7 +1641,7 @@ scheduler, and the Telegram adapter remain owned by sibling specs — the regist
 where they plug in. See the finale record
 [`sprint-spec-20260628-do-bridge-3.md`](./sprint-spec-20260628-do-bridge-3.md).
 
-## Calendar Planner — in progress (3 of 4)
+## Calendar Planner — complete (4 of 4)
 
 `spec-20260628-calendar-planner` — *Calendar planner: deterministic slotter + Google MCP/.ics +
 approve-gate.* Takes the ranked **Findings** from the priority hub (with `dueBy` + `estDurationMin`),
@@ -1660,17 +1660,42 @@ is read **only** at the CLI boundary. A local `Finding` consume-copy (`src/calen
 hub field names without importing the sibling priority-hub spec; `finding-source.ts` reads ranked
 `Finding[]` / `BusyInterval[]` JSON files fail-closed; and `bober calendar plan --dry-run --findings
 <path> [--freebusy <path>]` prints the proposed plan and **writes nothing** to any calendar (no
-connectors yet).
+connectors yet). Sprint 4 **closes the plan** with the **approve-gated live write**: a new
+`src/calendar/proposal-gate.ts` composes the full safety flow. The default `bober calendar plan` (no
+`--dry-run` / `--export-ics`) now **proposes** — `proposePlan` slots the findings, writes a pending
+approval marker (`.bober/approvals/<id>.pending.json` via `savePending`) + a plan sidecar
+(`.bober/calendar/<id>.plan.json`), and writes **zero** events — then prints `checkpointId` (=
+`calendar-<planId>`, mirroring do-bridge's `promote-<id>`) and the `bober approve <id>` / `/approve <id>`
+instructions. A new `bober calendar apply <checkpointId>` detects the approved/rejected marker **inline**
+(via `readdir`, no `readApproved`/`readRejected` export) and calls the chosen connector's `writeEvents`
+**exactly once** on approval (then `deletePending`), **never** on rejection. `adjustPlan` re-runs the
+Sprint 1 slotter under a `/tell`-style `ConstraintDelta` (exclude interval / shift window) — **pure, no
+write**. The gate **reuses** `src/state/approval-state.ts` and the existing `/approve` / `/reject` /
+`/tell` handlers (**no** new mechanism, **no** auto-approve in any mode); all fs writes live in
+`proposal-gate.ts` (`calendar.ts` keeps no `writeFile` import, Sprint-1 source-scan still holds); and the
+Google connector stays egress-gated on the apply path. **The plan is complete (4 of 4).**
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260628-calendar-planner-1.md](./sprint-spec-20260628-calendar-planner-1.md) | **Deterministic slot-fill engine + `bober calendar plan --dry-run`:** new `src/calendar/` — `types.ts` (local `Finding` consume-copy mirroring `src/hub/finding.ts` + `FindingSchema`/`FindingArraySchema`, `BusyInterval`/`FreeInterval`/`WorkingHours`/`SlotConstraints`, `PlanItem`, closed `UnscheduledReason` union, `ProposedPlan`), `slotter.ts` **pure synchronous** `planSlots(findings, busy, constraints)` (free = window − busy, optional UTC `workingHours` clamp; place in **input order** into earliest slot fitting `estDurationMin` before `dueBy`, in-place split; **no `await`/`async`/`node:fs`/network/LLM**; exhaustive `never`-guarded reason switch; `Date.parse`→epoch-ms math = deterministic), `finding-source.ts` fail-closed `readFindingsFromFile`/`readBusyIntervalsFromFile` (Zod-validated JSON readers) + `src/cli/commands/calendar.ts` `runCalendarPlan` DI core (`CalendarPlanDeps` inject readers + `nowIso`; 7-day window from clock **at the CLI boundary**; `--dry-run` prints stdout only, writes nothing; never throws → `exitCode=1` on failure) / `registerCalendarCommand` (`bober calendar plan --dry-run --findings <path> [--freebusy <path>]`), wired via 4-line additive edit to `src/cli/index.ts:330`. commit `0d141c1`, +1063/-0, **28 calendar tests**, full suite **3428** green, no new dep; `sc-1-1..sc-1-6` iter-1. |
 | 2 | [sprint-spec-20260628-calendar-planner-2.md](./sprint-spec-20260628-calendar-planner-2.md) | **`CalendarConnector` interface + zero-egress `.ics` export:** new `src/calendar/connector.ts` (single abstraction both connectors implement — `CalendarConnector { name; readFreeBusy(window): BusyInterval[]; writeEvents(items: PlanItem[]): WriteResult }` + `FreeBusyWindow` + `WriteResult {writtenCount,target}`) and `src/calendar/ics-connector.ts` `createIcsConnector({outPath,freeBusyPath?,nowIso?})` → RFC 5545 writer: `writeEvents` serializes `PlanItem[]` to a `VCALENDAR` (one `VEVENT` per item: `UID <id>@agent-bober`, `DTSTAMP`, UTC-basic `DTSTART`/`DTEND` `YYYYMMDDTHHMMSSZ`, TEXT-escaped `SUMMARY`, CRLF) via `node:fs/promises` `writeFile`; `readFreeBusy` reads a local JSON file only — **no `http`/`https`/`fetch`/`external-client`/`child_process`**. `src/cli/commands/calendar.ts` gains `--export-ics <path>` + `CalendarPlanDeps.makeConnector` (default `createIcsConnector`); the connector owns the **only** write (`calendar.ts` keeps no `writeFile` import), `slotter.ts` byte-unchanged, no-flag path identical to Sprint 1. commit `0481407`, +343/-2, **10 new calendar tests** (generation/round-trip/no-egress source-scan/live `--export-ics`), full suite **3438** green, no new dep; `sc-2-1..sc-2-6` iter-1. |
 | 3 | [sprint-spec-20260628-calendar-planner-3.md](./sprint-spec-20260628-calendar-planner-3.md) | **Google Calendar MCP connector (egress-gated) + safe-title privacy:** new `src/calendar/google-connector.ts` `createGoogleConnector({adapter,egress,token,findings,...})` → second `CalendarConnector` (named `"google"`) reading free/busy + writing events through a `GoogleCalendarToolAdapter { listTools; callTool }` injection surface (`ExternalMcpServer` satisfies it; tests stub it). A shared `guard()` (egress axis + token-present) runs **first** in both methods, so an axis-off/token-absent call refuses with **zero** `listTools`/`callTool`. **Privacy invariant:** event `summary = safeTitleById.get(findingId) ?? item.calendarSafeTitle ?? "Focus block"` — **never** `PlanItem.title`/evidence/tags. `sanitizeCalendarError` strips `KEY=VALUE` (replicates `external-client.ts:69`) so tokens never leak in errors. New `CalendarEgressGuard` (`calendar-egress.ts`, `assertCloudCalendarAllowed` throws naming `calendar.egress.cloudCalendar`), 0600 fail-closed `CalendarTokenStore` (`calendar-token.ts`, `.bober/calendar/google-token.json`), additive `CalendarSectionSchema` in `src/config/schema.ts` (`egress.cloudCalendar` default false, `connector` `"ics"|"google"` default `"ics"`, `timezone?`; `createDefaultConfig` untouched), additive optional `PlanItem.calendarSafeTitle` (`types.ts`) threaded by a 2-line `slotter.ts` edit. Hosted OAuth documented **unfit for unattended/cron** → `.ics` fallback (module doc + `docs/calendar.md`). commit `123c7c4`, +1096/-0, **82 new tests**, full suite **3482** green, no new dep; `sc-3-1..sc-3-6` iter-1. |
+| 4 | [sprint-spec-20260628-calendar-planner-4.md](./sprint-spec-20260628-calendar-planner-4.md) | **Finale — approve-gated live write (propose → /approve\|/tell → write events):** new `src/calendar/proposal-gate.ts` composing the full safety flow on top of the existing approval gate. `proposePlan(args)` writes a plan sidecar (`.bober/calendar/<id>.plan.json` = `ProposedPlan` + `connectorName`) + a pending marker (`savePending`) and returns `{checkpointId}` (= `calendar-<planId>`, mirrors do-bridge `promote-<id>`) — **takes no connector**, so `writeEvents` before approval is structurally impossible. `applyPlan(root,checkpointId,connector)` → `ApplyOutcome` (`applied{writtenCount}`\|`rejected{feedback?}`\|`pending`): detects the `.approved.json`/`.rejected.json` marker **inline** via `readdir` (no `readApproved`/`readRejected` export, mirrors `approve.ts`/`promote.ts`) — approved ⇒ reload sidecar + `connector.writeEvents(plan.scheduled)` **exactly once** + best-effort `deletePending`; rejected ⇒ **never** writes; neither ⇒ `pending`. `adjustPlan(findings,busy,constraints,delta)` = **pure** re-run of `planSlots` under a `ConstraintDelta` (`excludeInterval` appended to `busy[]` / window shift), no write, no input mutation. Live `bober calendar plan` (no `--dry-run`/`--export-ics`) → `proposePlan` + prints `bober approve <id>` / `/approve <id>`; new `bober calendar apply <checkpointId>` (`--out <path>` override) resolves the connector from `calendar.connector` (default `ics`; Google still egress-gated → actionable error + exit 1 when OAuth absent). **Reuses** `src/state/approval-state.ts` + the existing `/approve`/`/reject`/`/tell` handlers — **no** new mechanism, **no** auto-approve anywhere; all fs writes in `proposal-gate.ts` (`calendar.ts` no `writeFile` import, Sprint-1 source-scan holds). commit `f30c769`, +925/-2, **87 calendar tests**, full suite **3497** green, no new dep; `sc-4-1..sc-4-6` iter-1. |
 
-User-facing usage for `bober calendar plan --dry-run` and `--export-ics` lives in
-[`COMMANDS.md`](../../COMMANDS.md) under **Calendar Commands** and the README CLI list; the Google
-connector's config + privacy model is in [`docs/calendar.md`](../calendar.md). Sprint 3 added the
-egress-gated Google Calendar MCP connector (off by default, safe-title only). The approve-gated live
-write (Sprint 4) — which calls that connector behind the existing approve/steer gate — remains owned by
-the final sprint.
+User-facing usage for `bober calendar plan` (live propose path + `--dry-run` + `--export-ics`) and
+`bober calendar apply <checkpointId>` lives in [`COMMANDS.md`](../../COMMANDS.md) under **Calendar
+Commands** and the README CLI list; the Google connector's config + privacy model and the
+propose → approve → apply gate are in [`docs/calendar.md`](../calendar.md).
+
+### Plan close-out
+
+`spec-20260628-calendar-planner` is **complete (4 of 4)** on branch `bober/medical-team` — all four
+sprints passed evaluation on iteration 1 (zero reworks), full suite **3497** green. The plan delivers the
+end-to-end flow: ranked hub **Findings** → deterministic, LLM-free **slot-fill** (Sprint 1) → a
+connector-agnostic write surface with a zero-egress local **`.ics`** connector (Sprint 2) and an
+egress-gated, safe-title-only **Google Calendar MCP** connector (Sprint 3) → and the **approve-gated live
+write** (Sprint 4): the default `bober calendar plan` proposes through the existing approval gate writing
+**zero** events, and `bober calendar apply <checkpointId>` writes the events **exactly once** on approval
+and **never** on reject. **No auto-approve in any mode**, the whole gate reuses the existing
+approval-state machinery and slash-command handlers, and Google cloud egress stays opt-in/default-off. See
+the finale record [`sprint-spec-20260628-calendar-planner-4.md`](./sprint-spec-20260628-calendar-planner-4.md).

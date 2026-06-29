@@ -613,6 +613,8 @@ npx agent-bober do --reconcile                     # Reconcile launched promotio
 # Calendar planner (deterministic slot-fill from ranked Findings)
 npx agent-bober calendar plan --dry-run --findings <path> [--freebusy <path>]  # Place ranked Findings into open slots in priority order (pure JS, LLM never packs); print scheduled (ISO start/end) + unscheduled (reason) — dry-run writes nothing to any calendar
 npx agent-bober calendar plan --export-ics <path> --findings <path> [--freebusy <path>]  # Same slot-fill, then write the plan to a local-first RFC 5545 .ics file (one VEVENT per scheduled item, UTC DTSTART/DTEND) with zero network egress — import it manually into your calendar app
+npx agent-bober calendar plan --findings <path> [--freebusy <path>]  # Live path: slot, then PROPOSE through the existing approval gate — writes a pending marker + plan sidecar and ZERO events; prints checkpointId (calendar-<id>) + how to approve. No auto-approve in any mode
+npx agent-bober calendar apply <checkpointId>      # Write events for an approved plan: detects the approved/rejected marker inline → connector.writeEvents EXACTLY once on approval / never on reject (Google still egress-gated). Approve first: bober approve <checkpointId> (or /approve in chat)
 ```
 
 #### Clarification gating

@@ -1643,16 +1643,71 @@ END:VEVENT
 END:VCALENDAR
 ```
 
-> **Status.** Sprints 1–3 of 4 of `spec-20260628-calendar-planner`: the deterministic slotter +
-> `bober calendar plan --dry-run` (Sprint 1) and the local-first, zero-egress `.ics` export via
-> `--export-ics` (Sprint 2). **Sprint 3** added a **Google Calendar MCP connector** (free/busy read +
-> event write through an external MCP) behind the new `calendar` config section — it is **egress-gated and
-> off by default**: writes require `calendar.egress.cloudCalendar: true` **and** a provisioned 0600 OAuth
-> token sidecar, and only a non-sensitive `calendarSafeTitle` ever leaves the device. Hosted OAuth is
-> **unfit for unattended/cron runs** (tokens expire, re-auth is interactive), so the local `.ics`
-> path above stays the recommended choice for scheduled/automated use. Config + privacy details:
-> [`docs/calendar.md`](docs/calendar.md). The approve-gated **live** write (Sprint 4) is owned by the
-> final sprint.
+### `bober calendar plan` (live — propose through the approval gate)
+
+With **neither** `--dry-run` **nor** `--export-ics`, `bober calendar plan` is the **live path**: it slots
+the findings, **proposes** the schedule through the **existing** approval gate, and writes **zero**
+calendar events until the checkpoint is approved. It writes a pending approval marker
+(`.bober/approvals/<checkpointId>.pending.json`) plus a plan sidecar
+(`.bober/calendar/<checkpointId>.plan.json`) and prints the `checkpointId` (= `calendar-<planId>`) and how
+to approve it. There is **no auto-approve in any mode** — approval is strictly out-of-band.
+
+```bash
+bober calendar plan --findings ./ranked-findings.json --freebusy ./freebusy.json
+```
+
+```text
+Proposed calendar plan
+Window: 2026-06-29T00:00:00.000Z → 2026-07-06T00:00:00.000Z
+
+Scheduled (2):
+  [2026-06-29T00:00:00.000Z → 2026-06-29T00:30:00.000Z]  Renew prescription
+  [2026-06-29T00:30:00.000Z → 2026-06-29T01:30:00.000Z]  Book dentist
+
+Proposal saved. Approve to write events:
+  bober approve calendar-<planId>
+  /approve calendar-<planId>  (in chat)
+
+Checkpoint ID: calendar-<planId>
+```
+
+`--findings` / `--freebusy` behave exactly as in `--dry-run`. The connector that will write the events is
+read from `calendar.connector` (default `ics`) and recorded in the marker summary.
+
+### `bober calendar apply <checkpointId>`
+
+Write the events for a calendar plan **once it has been approved**. It detects the approved/rejected
+marker for the checkpoint and calls the chosen connector's `writeEvents` **exactly once** on approval,
+**never** on rejection.
+
+```bash
+bober approve calendar-<planId>            # or  /approve calendar-<planId>  in chat
+bober calendar apply calendar-<planId>
+```
+
+- If the checkpoint is **approved** → reloads the plan sidecar and writes the proposed events once, then
+  prints `Applied: N event(s) written.` and clears the pending marker.
+- If the checkpoint is **rejected** (`/reject calendar-<planId> [feedback]`) → aborts with the feedback
+  and exit 1; **no** events are written.
+- If **neither** marker exists yet → prints a `Pending approval` hint and writes nothing.
+- `--out <path>` overrides the `.ics` output path (ics connector only). When `calendar.connector` is
+  `google`, apply refuses with an actionable message + exit 1 unless OAuth is provisioned — the Sprint 3
+  `calendar.egress.cloudCalendar` axis is **not** bypassed; use the `--export-ics` fallback for
+  unattended runs.
+
+A `/tell`-style correction re-runs the deterministic slotter under the new constraint (exclude an
+interval / shift the window) and **re-proposes** — again writing no events.
+
+> **Status.** **Sprints 1–4 of 4 — COMPLETE.** `spec-20260628-calendar-planner`: the deterministic
+> slotter + `bober calendar plan --dry-run` (Sprint 1), the local-first, zero-egress `.ics` export via
+> `--export-ics` (Sprint 2), the **egress-gated Google Calendar MCP connector** (Sprint 3, off by default;
+> writes require `calendar.egress.cloudCalendar: true` **and** a provisioned 0600 OAuth token sidecar, and
+> only a non-sensitive `calendarSafeTitle` ever leaves the device), and the **approve-gated live write**
+> (Sprint 4): the default `bober calendar plan` proposes through the existing approval gate (zero events
+> written) and `bober calendar apply <checkpointId>` writes the events exactly once on approval / never on
+> reject. Hosted Google OAuth is **unfit for unattended/cron runs** (tokens expire, re-auth is
+> interactive), so the local `.ics` path stays the recommended choice for scheduled/automated use.
+> Config + privacy details: [`docs/calendar.md`](docs/calendar.md).
 
 ---
 

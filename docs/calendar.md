@@ -81,6 +81,53 @@ The `.ics` connector uses the full title locally (no egress).
 
 ---
 
+## Approval gate: propose -> approve -> apply
+
+The default `bober calendar plan` (no `--dry-run` / `--export-ics`) is the **live path**. It does
+**not** write any calendar events directly. Instead it **proposes** the schedule through the existing
+approval gate and writes events only after the checkpoint is explicitly approved. This is the full safety
+flow and it reuses `src/state/approval-state.ts` and the existing `bober approve` / `/approve` /
+`/reject` / `/tell` handlers — there is **no** new approval mechanism and **no** auto-approve in any mode
+(including autopilot).
+
+1. **Propose.** `bober calendar plan --findings <path> [--freebusy <path>]` slots the findings and writes:
+   - a pending approval marker at `.bober/approvals/<checkpointId>.pending.json` (via `savePending`), and
+   - a plan sidecar at `.bober/calendar/<checkpointId>.plan.json` holding the proposed plan + connector name.
+
+   It writes **zero** calendar events and prints the `checkpointId` (= `calendar-<planId>`, mirroring
+   do-bridge's `promote-<id>`) plus how to approve it.
+
+2. **Approve (out-of-band).** `bober approve <checkpointId>` (or `/approve <checkpointId>` in chat) writes
+   the `.approved.json` marker. Rejecting with `/reject <checkpointId> [feedback]` writes a
+   `.rejected.json` marker instead.
+
+3. **Apply.** `bober calendar apply <checkpointId>` detects the marker inline (via `readdir`, there is no
+   `readApproved`/`readRejected` reader) and:
+   - on **approved** → reloads the sidecar and calls the chosen connector's `writeEvents` **exactly once**,
+     then deletes the pending marker;
+   - on **rejected** → aborts with the feedback and exit 1, **never** writing;
+   - on **neither** → reports `Pending approval` and writes nothing.
+
+```bash
+# propose (zero events written)
+bober calendar plan --findings ./ranked-findings.json --freebusy ./freebusy.json
+#   → Checkpoint ID: calendar-<planId>
+
+# approve, then apply (writeEvents called exactly once)
+bober approve calendar-<planId>
+bober calendar apply calendar-<planId>
+```
+
+A `/tell`-style correction re-runs the deterministic slotter under a constraint delta (exclude an
+interval, or shift the planning window) and **re-proposes** the schedule — pure, with no events written.
+
+**The connector chosen for the live write is `calendar.connector`** (default `ics`). When it is
+`google`, the apply path still enforces the `calendar.egress.cloudCalendar` egress axis and the 0600
+OAuth token requirement described above — it refuses with an actionable message + exit 1 when OAuth is not
+provisioned, and recommends the `--export-ics` fallback for unattended runs.
+
+---
+
 ## Config reference
 
 ```json
