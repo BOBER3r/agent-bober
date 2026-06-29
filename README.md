@@ -608,6 +608,7 @@ npx agent-bober task from-gmail <thread>           # Opt-in: capture one Gmail t
 npx agent-bober do <findingId> --dry-run           # Preview the bober run task a coding/projects Finding would launch (read-only: no mutation, no approval marker, no spawn); unsupported domain → exitCode=1
 npx agent-bober do <findingId>                      # Real path: write a promote-<id> approval marker, gate (TTY confirm / non-TTY wait for bober approve|reject), then launch detached `agent-bober run` on approve — links Finding.promotesTo (runId, status launched) + moves it open→in-progress; reject leaves it unchanged
 npx agent-bober do <findingId> --yes               # Real path, auto-approve (skip the confirm prompt; still writes+clears the marker)
+npx agent-bober do --reconcile                     # Reconcile launched promotions: read each run's run-state.json snapshot → advance the Finding (completed→done, aborted/failed→open, running→unchanged); also runs best-effort at the start of every `bober do`
 ```
 
 #### Clarification gating

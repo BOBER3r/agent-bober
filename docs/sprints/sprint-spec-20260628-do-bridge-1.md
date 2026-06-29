@@ -61,7 +61,10 @@ team, and **changes nothing on disk**. Failure paths are also non-throwing:
 - A finding whose `domain` has **no registered promoter** → stderr naming the unsupported domain
   (`do: unsupported domain '<domain>' …`) + exit 1.
 - Without `--dry-run` (Sprint 2 territory) the command prints a "Real launch is not implemented yet"
-  notice and spawns nothing.
+  notice and spawns nothing. **(Historical — superseded by Sprint 2:** `bober do <findingId>` now writes a
+  `promote-<id>` approval marker, gates on it, and launches the real run on approve. See
+  [`sprint-spec-20260628-do-bridge-2.md`](./sprint-spec-20260628-do-bridge-2.md), and the terminal
+  reconciliation in [`sprint-spec-20260628-do-bridge-3.md`](./sprint-spec-20260628-do-bridge-3.md).**)**
 
 The CLI boundary builds the registry and registers `codingPromoter` under both `{domain:"coding"}` and
 `{domain:"projects"}`; the registry is the seam where future domain promoters (medical/financial) plug

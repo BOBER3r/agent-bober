@@ -1529,3 +1529,114 @@ config) plus the `bober hub list` / `bober hub priority` / `bober hub decide` CL
 plan is the additive `{ readonly?: boolean }` flag on the `FactStore` constructor (Sprint 2, no-flag
 path byte-identical); **no new dependency** was added. The do-bridge (`Finding.promotesTo`), calendar
 slot-fill, the research scheduler, and the Telegram adapter remain owned by sibling specs.
+
+## Task Inbox — complete (6 of 6)
+
+`spec-20260628-task-inbox` — a **zero-friction personal task inbox** layered on the priority-hub
+pool: every captured task is an ordinary open `kind=action` `Finding` written through a **single
+`captureTask` write path** into the unified hub pool (`scope='hub'`, `predicate='finding'`), so it
+immediately appears in `bober hub list` / `bober hub priority` / `bober chat hub`. The plan **imports**
+the canonical `FindingSchema` from `src/hub/finding.ts` and **never redefines** it; capture fills the
+schema's required `domain`/`urgency`/`severity` fields with neutral defaults (`inbox`/`3`/`1`) so it
+can never block. Sprint 1 lands the **capture spine** — a thin `writeFinding`/`readFindings`
+persistence helper over `FactStore`, a **pure** clock-injected `captureTask` (deterministic
+`id = sha256(title|now).slice(0,16)`), and `bober task add <text> [--domain <d>]`. Sprint 2 makes the
+inbox **usable**: a **pure** `transitionFinding` helper that supersedes a task's active Finding with a
+new-status copy through the reconcile **UPDATE** path (prior status survives as bitemporal history —
+**no row is ever `DELETE`d**), plus `bober task list [--all] [--status]` (default hides terminal tasks)
+and the `bober task start|done|drop <id>` lifecycle subcommands. Sprint 3 adds **snooze with wake
+semantics**: `bober task snooze <id> --until <when>` moves a task to `status='snoozed'`, records the
+wake time as a `snooze-until:<ISO>` `tags[]` entry (**no schema field added**), and the **pure**
+`isVisibleInDefaultList(finding, now)` predicate hides it from the default list until the wake time
+passes — computed **lazily at list time** against an injected clock (no background timer, no auto-wake).
+Sprint 4 opens a **domain intake seam**: an exported `ingestFinding(store, input, {now})` plus
+`bober task ingest [file]` (file path or stdin) that validates the payload against `FindingSchema`,
+derives a **content-stable** `id = sha256(domain|title|kind)` when none is supplied, and persists
+through `writeFinding` so **re-surfacing the same finding reconciles to a single active row** (`update`
+/`noop`) instead of duplicating; malformed/invalid input is **fail-closed** (stderr + `exitCode=1`,
+writes nothing, never throws). Sprint 5 teaches **`bober chat` to recognise a task statement**: an
+**additive** `{action:'capture-task', task}` classifier variant + a `handleCaptureTask` branch that
+writes through the **same Sprint-1 `captureTask`** (no Answerer round-trip) — a question still routes to
+`answer` and a decision/scope statement is explicitly **not** treated as a task; the classifier keeps
+its never-throw `answer` fallback. Sprint 6 **closes the plan** with an **opt-in, default-off**
+`bober task from-gmail <thread>`: a new **isolated** `taskInbox.gmailEgress` Zod axis (default
+**false**, separate from the medical `EgressGuard`), a **pure** `parseGmailThread`, a
+`sanitizeConnectorError` (token-stripping regex identical to `external-client.ts`), and a
+`fromGmailTask` DI core that **refuses before constructing any MCP client / touching the network** when
+the axis is off — reading one thread through the existing `ExternalMcpServer` connector and capturing it
+via the same `captureTask` when on. **The plan is complete (6 of 6).**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-task-inbox-1.md](./sprint-spec-20260628-task-inbox-1.md) | **Capture spine + `bober task add`:** `writeFinding`/`readFindings` helper over `FactStore` (`src/hub/finding-store.ts`, routes through `writeFact`/reconcile not raw insert; `readFindings` strict-`parse` throws on bad row) + **pure** clock-injected `captureTask` (`src/hub/task-inbox.ts`, deterministic `id=sha256(title\|now)`, `kind='action'`/`status='open'`, neutral defaults `domain='inbox'`/`urgency=3`/`severity=1`, `--domain` sets field + `domain:<d>` tag) + `bober task add <text> [--domain]` (`runTaskAdd` DI core, never throws); imports canonical `FindingSchema`, never redefines. commit `0e39c15`, 3 src + 3 test files (+17 tests), no new deps, `finding.ts`/`facts.ts`/priority-hub untouched; sc-1-1..sc-1-5 iter-1, suite **3264 → 3281** green. |
+| 2 | [sprint-spec-20260628-task-inbox-2.md](./sprint-spec-20260628-task-inbox-2.md) | **`task list` + start/done/drop lifecycle:** **pure** `transitionFinding(store,id,newStatus,{now,mutate?})` supersedes the active Finding via the reconcile **UPDATE** branch (prior status preserved as a `t_invalidated` history row, **never `DELETE`**; returns `null` if no active row) + `bober task list [--all] [--status]` (default shows `open`+`in-progress`, columns `ID STATUS DOMAIN TITLE`) + `bober task start\|done\|drop <id>` (one registration loop; unknown id ⇒ yellow msg + `exitCode=1`, never throws). commits `5e2bc2f` (+ `26f45db` trivial unused-var lint fix — the plan's **only** rework, S2 iter-2); sc-2-1..sc-2-5 passed. |
+| 3 | [sprint-spec-20260628-task-inbox-3.md](./sprint-spec-20260628-task-inbox-3.md) | **Snooze with wake semantics:** `bober task snooze <id> --until <when>` ⇒ `status='snoozed'` + wake time stored as a `snooze-until:<ISO>` `tags[]` entry (**no schema field added**; `'snoozed'` already in the status enum; re-snooze **replaces** the tag, terminal tasks can't be snoozed) + **pure** `isVisibleInDefaultList(finding, now)` (hides snoozed until wake `<= now`, injected clock, **no background timer/auto-wake**) + `snoozeUntil`/`SNOOZE_TAG_PREFIX` helpers; `runTaskList` gained a third `now` param. commit `2b5c3c9`; never throws on bad `--until`/unknown id (msg + `exitCode=1`). |
+| 4 | [sprint-spec-20260628-task-inbox-4.md](./sprint-spec-20260628-task-inbox-4.md) | **Domain finding intake (pool ingest + dedup):** exported `ingestFinding(store,input,{now})` validates against relaxed `IngestInputSchema` (`FindingSchema.partial({id,surfacedAt})`), derives content-stable `deriveFindingId = sha256(domain\|title\|kind).slice(0,16)` when no id, fills `surfacedAt=now`, **re-validates the full `FindingSchema`** then persists via `writeFinding` ⇒ re-surface reconciles to **one** active row (`add`/`update`/`noop`, never duplicates) + `bober task ingest [file]` (file path or **stdin**); malformed/invalid ⇒ **fail-closed** (stderr + `exitCode=1`, writes nothing, never throws). commit `5c77a49`. |
+| 5 | [sprint-spec-20260628-task-inbox-5.md](./sprint-spec-20260628-task-inbox-5.md) | **Chat intent-detection capture:** **additive** `{action:'capture-task', task}` `ClassifierAction` variant (`turn-classifier.ts`, alongside the unchanged answer/spawn/steer/approve/reject/tell/pause/resume members) + two system-prompt rules (imperative to-do ⇒ `capture-task`; "deciding between X and Y" ⇒ `answer`, **not** a task) + private `ChatSession.handleCaptureTask(task)` writing through the **Sprint-1 `captureTask`** (single write path, no Answerer) ⇒ `Captured task: <text>`; classifier keeps its never-throw `answer` fallback. commit `3846c50` (FALLBACK byte-identical). |
+| 6 | [sprint-spec-20260628-task-inbox-6.md](./sprint-spec-20260628-task-inbox-6.md) | **Finale — Gmail thread → task (egress-gated, default-off):** new **isolated** `TaskInboxSectionSchema` `{ gmailEgress: z.boolean().default(false) }` optional `taskInbox` key (`schema.ts`, existing configs byte-identical; medical `EgressGuard` untouched) + **pure** `parseGmailThread` (subject from `{subject}`/`{messages}`/MCP envelope, fallback `(no subject)`) + `sanitizeConnectorError` (`KEY=VALUE`→`[redacted]`, same regex as `external-client.ts:69`) + `fromGmailTask` DI core that **throws BEFORE `mcp.start()`/`callTool()`** when the axis is off (zero network) and otherwise reads one thread via `ExternalMcpServer` and captures via `captureTask` (`domain:"gmail"`, the **only** write path) + `bober task from-gmail <thread>` (fail-closed config, sanitized errors + `exitCode=1`, never throws, `mcp.stop()` in `finally`). One-thread-on-demand only (no polling). commit `55d6878`, +12 + 3 tests, no new dep; sc-6-1..sc-6-5 iter-1 (zero reworks), suite **3309 → 3324** green. |
+
+User-facing usage for `bober task add\|list\|start\|done\|drop\|snooze\|ingest\|from-gmail` lives in
+[`COMMANDS.md`](../../COMMANDS.md) and the README CLI list; the `taskInbox.gmailEgress` config key
+(default false) is in the README configuration reference.
+
+### Plan close-out
+
+`spec-20260628-task-inbox` is **complete (6 of 6)** on branch `bober/medical-team` — five of six
+sprints passed on iteration 1, the **only** rework being a trivial unused-var lint fix in Sprint 2
+(`26f45db`, no logic change). Every command writes through the **single `captureTask` path** into the
+unified hub pool and **imports the canonical `FindingSchema`** (never a second schema); `start`/`done`/
+`drop`/`snooze`/`ingest` all transition via **supersede** so no Finding row is ever deleted. The only
+config change is the additive, default-off, **isolated** `taskInbox.gmailEgress` axis (Sprint 6) — the
+medical `EgressGuard` axes are untouched and **no new runtime dependency** was added. Full suite **3324**
+green. See the finale record
+[`sprint-spec-20260628-task-inbox-6.md`](./sprint-spec-20260628-task-inbox-6.md).
+
+## Do-Bridge — promote a Finding into a `bober run` — complete (3 of 3)
+
+`spec-20260628-do-bridge` — the bridge that turns a hub **Finding** into launched, tracked work: a
+new `src/do-bridge/` module that resolves a domain-specific **Promoter** for a Finding, gates the
+launch on human approval, spawns a detached `bober run`, links the Finding to the run, and reconciles
+the run's terminal outcome back onto the Finding. Sprint 1 lays the **spine** — the `PromotionPlan` /
+`PromotionRef` / `PromoterKey` / `Promoter` types, a `PromoterRegistry` (resolution precedence
+**domain+kind > domain-only > undefined**, `resolve` never throws), a narrow `FindingStore` **read**
+port (FactStore-backed + in-memory fake), the first `codingPromoter` (maps a `coding`/`projects`
+Finding to a `{ kind:"bober-run", task, teamId? }` plan), and a **read-only** `bober do <findingId>
+--dry-run` that previews the launch and changes nothing. Sprint 2 turns that into a **real,
+approve-gated launch**: `bober do <findingId>` writes a `.bober/approvals/promote-<id>.pending.json`
+marker (reusing the run pipeline's approval machinery verbatim), **gates** on it (TTY confirm ·
+non-TTY poll for an external `bober approve`/`reject` · `--yes` auto-approve), and **only on approval**
+launches the work **detached** through an injected `Launcher` port, links the Finding
+(`promotesTo = { runId, status:"launched" }`) and transitions it `open → in-progress`; the structured
+`PromotionRef` is **serialized into the existing `promotesTo: z.string()` field** so the hub
+`FindingSchema` stays byte-unchanged. Sprint 3 **closes the loop and the plan**: `reconcilePromotions`
+reads each launched run's `run-state.json` **snapshot** and advances the Finding to its terminal status
+(`completed → done` via supersede + `promotesTo.status='completed'`; `aborted`/`failed → open` +
+`promotesTo.status='aborted'`; `running`/missing → unchanged), **best-effort and never-throwing**,
+exposed via `bober do --reconcile` and run at the start of every `bober do`. It also **proves registry
+extensibility** by registering a second non-functional stub promoter under `{domain:'projects',
+kind:'action'}` (an unregistered `(domain,kind)` still **fails closed**) and ships the consolidated
+[`docs/do-bridge.md`](../do-bridge.md) extension-point guide. **The plan is complete (3 of 3).**
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-do-bridge-1.md](./sprint-spec-20260628-do-bridge-1.md) | **Promoter registry + FindingStore read port + `bober do --dry-run`:** new `src/do-bridge/` — `types.ts` (`PromoterKey {domain;kind?}` / `PromotionPlan {kind:"bober-run";task;teamId?}` / `PromotionRef` (string this sprint) / `Promoter = (finding)=>plan`, pure), `registry.ts` `PromoterRegistry` (`register`/`resolve`, precedence **domain+kind > domain-only > undefined**, never throws), `finding-port.ts` narrow read port + `FactStoreFindingStore`/`InMemoryFindingStore`, `coding-promoter.ts` (`coding`/`projects` ⇒ `bober run` task from title + ≤2 evidence lines + optional `team:<id>` tag) + `runDo`/`registerDoCommand` (`bober do <id> --dry-run`, **read-only**: no marker, no spawn, no mutation; unknown id / unsupported domain ⇒ `exitCode=1`, never throws). commit `8370612`, +829/-0, **32 tests**, no new dep; sc-1-1..sc-1-5 iter-1. |
+| 2 | [sprint-spec-20260628-do-bridge-2.md](./sprint-spec-20260628-do-bridge-2.md) | **Approve-gated real launch + `--yes`:** `Launcher` port + `RunSpawnerLauncher` (wraps chat `RunSpawner` ⇒ detached `agent-bober run <task> --run-id do-<id>-<ts>`; **hard boundary** — `do.ts` never imports `execa`/`RunSpawner`); `PromotionRef` **changed to a structured object** `{kind;runId;launchedAt;status}` + `serialize`/`parsePromotionRef` (JSON to/from the on-disk string); `DoFinding` view + `FindingStore.setPromotion` (sets `promotesTo` **and** `open→in-progress` via supersede-aware `transitionFinding`); `runPromotionGate` writes/clears `.bober/approvals/promote-<id>.pending.json` (reuses `approval-state.ts` verbatim; `--yes` · TTY confirm · non-TTY poll resolved by `bober approve`/`reject promote-<id>`) ⇒ launch only on approve, reject leaves Finding untouched. **`src/hub/finding.ts` byte-unchanged.** commit `cf33acb`, +1143/-37, **58 do-bridge tests**; sc-2-1..sc-2-5 iter-1. |
+| 3 | [sprint-spec-20260628-do-bridge-3.md](./sprint-spec-20260628-do-bridge-3.md) | **Finale — terminal reconciliation + registry-extensibility proof + `docs/do-bridge.md`:** `reconcilePromotions(deps)` (`reconcile.ts`) lists promoted Findings, reads each launched run's `run-state.json` **snapshot** via injected `readState`, and applies `completed→done`(supersede,`promotesTo.status='completed'`) / `aborted`\|`failed`→`open`(`'aborted'`) / `running`\|missing→unchanged ⇒ `ReconcileSummary {completed,aborted,unchanged}`; **never throws** (per-finding try/catch + CLI try/catch), **snapshot not poll**, clock injected; new `FindingStore.listPromoted()`/`applyOutcome()` on both adapters; `bober do --reconcile` flag + **best-effort start-of-command reconcile** (mirrors `seedProjectFacts`, can't abort `bober do`); **second non-functional stub promoter** under `{domain:'projects',kind:'action'}` proves `register` accepts a new key (unregistered `(domain,kind)` **fails closed**); generator-owned [`docs/do-bridge.md`](../do-bridge.md) names the `register()` call site + `Promoter` interface. **`src/hub/finding.ts` byte-unchanged.** commit `f430fd1`, +686/-4, **76 do-bridge tests**, suite **3400** green; sc-3-1..sc-3-5 iter-1. *Non-blocking follow-up:* the unsupported-promoter error names only the domain, not the `(domain,kind)` pair (cosmetic; criterion passed). |
+
+User-facing usage for `bober do [findingId] [--dry-run] [--yes] [--reconcile]` lives in
+[`COMMANDS.md`](../../COMMANDS.md) under **Do-Bridge Commands** and the README CLI list; the consolidated
+feature + extension-point guide is [`docs/do-bridge.md`](../do-bridge.md).
+
+### Plan close-out
+
+`spec-20260628-do-bridge` is **complete (3 of 3)** on branch `bober/medical-team` — all three sprints
+passed evaluation on iteration 1 (zero reworks), full suite **3400** green. The plan ships the
+Finding→work bridge as a **net-new `src/do-bridge/` module**: the promoter registry + read port +
+dry-run preview (Sprint 1), the approve-gated detached real launch + `--yes` (Sprint 2), and terminal
+reconciliation (`--reconcile`) + the registry-extensibility proof + the consolidated `docs/do-bridge.md`
+(Sprint 3). The structured `PromotionRef` is **serialized into the existing `promotesTo` string field**,
+so the canonical hub `FindingSchema` (`src/hub/finding.ts`) stays **byte-unchanged** across the whole
+plan; **no new dependency** was added. Medical/financial promoters, calendar slot-fill, the research
+scheduler, and the Telegram adapter remain owned by sibling specs — the registry is the documented seam
+where they plug in. See the finale record
+[`sprint-spec-20260628-do-bridge-3.md`](./sprint-spec-20260628-do-bridge-3.md).

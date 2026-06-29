@@ -1491,6 +1491,7 @@ resolves the promoter for its `domain`/`kind`, and either **previews** the launc
 bober do 1f3c9a0b2e4d6f80 --dry-run    # Preview only — read-only, no marker, no spawn
 bober do 1f3c9a0b2e4d6f80              # Real path — write an approval marker, gate, then launch on approve
 bober do 1f3c9a0b2e4d6f80 --yes        # Real path, auto-approve (skip the confirm prompt)
+bober do --reconcile                   # Reconcile launched promotions to their run outcome, then exit (no findingId)
 ```
 
 **Dry-run (`--dry-run`)** is read-only: it mutates no state, writes nothing under `.bober/approvals/`,
@@ -1533,9 +1534,30 @@ deleted and the Finding is left unchanged. Failure branches are non-throwing and
 unknown id prints `do: no finding with id '<id>'`, and a finding whose domain has **no registered
 promoter** prints a clear message naming the unsupported domain.
 
-> **Status.** The real launch landed in **Sprint 2** of `spec-20260628-do-bridge` (dry-run was Sprint 1).
-> Terminal outcome reconciliation (`in-progress → done`) and the consolidated `docs/do-bridge.md` guide
-> are Sprint 3.
+### `bober do --reconcile`
+
+Close the loop after a promoted run finishes. `bober do --reconcile` (no `findingId`) reads each launched
+promotion's `run-state.json` **snapshot** and advances the linked Finding to its terminal status, then
+prints a summary and exits:
+
+```bash
+bober do --reconcile                   # → do --reconcile: completed=1 aborted=0 unchanged=2
+```
+
+| Run state | Finding transition | `promotesTo.status` |
+|-----------|--------------------|---------------------|
+| `completed` | `in-progress → done` | `completed` |
+| `aborted` / `failed` | `in-progress → open` | `aborted` |
+| `running` (or missing/corrupt state) | unchanged | unchanged |
+
+Reconcile is **snapshot-based** (it reads the current state and returns immediately — it never polls or
+blocks waiting for a run to finish) and **best-effort** (a missing/corrupt `run-state.json` is treated as
+"still running" and the Finding is left untouched). The same reconcile also runs automatically at the
+**start of every `bober do <id>`**, wrapped so a reconcile failure can never abort the command.
+
+> **Status.** Complete — `spec-20260628-do-bridge` is **done (3 of 3)**: dry-run preview (Sprint 1),
+> approve-gated real launch + `--yes` (Sprint 2), and terminal reconciliation (`--reconcile`) + the
+> consolidated [`docs/do-bridge.md`](docs/do-bridge.md) extension-point guide (Sprint 3).
 
 ---
 
