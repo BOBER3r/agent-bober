@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FactStore } from "../../state/facts.js";
-import { runTaskAdd, runTaskList, runTaskTransition, runTaskSnooze } from "./task.js";
+import { runTaskAdd, runTaskList, runTaskTransition, runTaskSnooze, runTaskIngest } from "./task.js";
 import { captureTask } from "../../hub/task-inbox.js";
 import { readFindings } from "../../hub/finding-store.js";
+import { HUB_SCOPE } from "../../hub/finding-source.js";
 
 const T = "2026-06-28T00:00:00.000Z";
 
@@ -349,6 +350,58 @@ describe("runTaskSnooze", () => {
     ).resolves.toBeUndefined();
     expect(process.exitCode).toBe(1);
 
+    store.close();
+  });
+});
+
+describe("runTaskIngest", () => {
+  const T = "2026-06-28T00:00:00.000Z";
+
+  // sc-4-4a: malformed JSON -> exitCode 1, nothing written, no throw
+  it("sc-4-4: malformed JSON rejects with exitCode 1 and writes nothing", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    await expect(runTaskIngest(store, "{ not json", T)).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
+    expect(store.getActiveFacts(HUB_SCOPE, undefined, "finding")).toHaveLength(0);
+    store.close();
+  });
+
+  // sc-4-4b: schema-invalid (missing required `title`) -> exitCode 1, nothing written
+  it("sc-4-4: payload missing a required field rejects and writes nothing", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const bad = JSON.stringify({
+      domain: "medical",
+      kind: "watch",
+      urgency: 3,
+      severity: 2,
+      evidence: [],
+      tags: [],
+      status: "open",
+    }); // no title
+    await expect(runTaskIngest(store, bad, T)).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
+    expect(store.getActiveFacts(HUB_SCOPE, undefined, "finding")).toHaveLength(0);
+    store.close();
+  });
+
+  // valid ingest -> exitCode stays 0
+  it("valid finding JSON ingests and keeps exitCode 0", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const good = JSON.stringify({
+      domain: "medical",
+      title: "watch ferritin",
+      kind: "watch",
+      urgency: 3,
+      severity: 2,
+      evidence: [],
+      tags: [],
+      status: "open",
+    });
+    await runTaskIngest(store, good, T);
+    expect(process.exitCode).toBe(0);
     store.close();
   });
 });

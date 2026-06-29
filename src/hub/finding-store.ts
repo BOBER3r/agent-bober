@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { FindingSchema } from "./finding.js";
 import type { Finding } from "./finding.js";
 import { HUB_SCOPE } from "./finding-source.js";
@@ -112,4 +113,41 @@ export function isVisibleInDefaultList(finding: Finding, now: string): boolean {
     return wake <= now;
   }
   return false;
+}
+
+// ── ingestFinding ─────────────────────────────────────────────────────
+
+/** Content-stable id: hash of domain|title|kind (no clock — mirrors factId). */
+function deriveFindingId(domain: string, title: string, kind: string): string {
+  return createHash("sha256")
+    .update(`${domain}|${title}|${kind}`)
+    .digest("hex")
+    .slice(0, 16);
+}
+
+/** Input shape: id + surfacedAt are optional (ingest fills them); everything else required. */
+const IngestInputSchema = FindingSchema.partial({ id: true, surfacedAt: true });
+
+/**
+ * Validate + normalize a domain-supplied Finding payload, then persist it via
+ * writeFinding so reconcile dedups a re-surfaced finding to a single active row.
+ *
+ * - Validates with .parse — THROWS on a missing required field (caught at the CLI boundary).
+ * - Derives a content-stable id from domain|title|kind when absent (supplied id is kept).
+ * - Sets surfacedAt = now when absent. PURE: never reads the clock; `now` is injected.
+ * Returns the ReconcileAction (add | update | delete | noop).
+ */
+export async function ingestFinding(
+  store: FactStore,
+  input: unknown,
+  { now }: { now: string },
+): Promise<ReconcileAction> {
+  const parsed = IngestInputSchema.parse(input); // validate BEFORE any write
+  const id = parsed.id ?? deriveFindingId(parsed.domain, parsed.title, parsed.kind);
+  const finding: Finding = FindingSchema.parse({
+    ...parsed,
+    id,
+    surfacedAt: parsed.surfacedAt ?? now,
+  });
+  return writeFinding(store, finding, { now }); // reuse — reconcile dedups
 }

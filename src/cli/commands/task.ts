@@ -8,6 +8,9 @@
  * return on all errors. Pattern mirrors src/cli/commands/facts.ts.
  */
 
+import { Buffer } from "node:buffer";
+import { readFile } from "node:fs/promises";
+
 import chalk from "chalk";
 import type { Command } from "commander";
 
@@ -25,6 +28,7 @@ import {
   transitionFinding,
   isVisibleInDefaultList,
   SNOOZE_TAG_PREFIX,
+  ingestFinding,
 } from "../../hub/finding-store.js";
 import type { Finding } from "../../hub/finding.js";
 
@@ -235,6 +239,57 @@ export async function runTaskSnooze(
   }
 }
 
+// ── readIngestInput (file or stdin) ───────────────────────────────────
+
+/**
+ * Read the raw JSON payload from a file path, or stdin when omitted.
+ * File path uses node:fs/promises readFile (no sync fs per principles).
+ * Stdin uses async iteration over process.stdin (no file descriptor cast needed).
+ */
+async function readIngestInput(file?: string): Promise<string> {
+  if (file !== undefined) {
+    return await readFile(file, "utf-8");
+  }
+  // bober: async-iterate stdin; swap for readFile(fh,"utf-8") on a FileHandle if Node typings expose fd as PathLike
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+}
+
+// ── runTaskIngest (DI core) ───────────────────────────────────────────
+
+/**
+ * Parse the raw JSON, ingest it, print the reconcile action. Never throws:
+ * bad JSON or schema-invalid payload → chalk.red + exitCode=1 + return, no write.
+ */
+export async function runTaskIngest(
+  store: FactStore,
+  raw: string,
+  now: string,
+): Promise<void> {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw) as unknown;
+  } catch {
+    process.stderr.write(chalk.red("task ingest: input is not valid JSON\n"));
+    process.exitCode = 1;
+    return;
+  }
+  try {
+    const action = await ingestFinding(store, payload, { now });
+    process.stdout.write(chalk.green(`Ingested finding (${chalk.bold(action)})\n`));
+  } catch (err) {
+    process.stderr.write(
+      chalk.red(
+        `task ingest: invalid finding: ${err instanceof Error ? err.message : String(err)}\n`,
+      ),
+    );
+    process.exitCode = 1;
+  }
+}
+
 // ── registerTaskCommand ───────────────────────────────────────────────
 
 export function registerTaskCommand(program: Command): void {
@@ -323,6 +378,34 @@ export function registerTaskCommand(program: Command): void {
         process.stderr.write(
           chalk.red(
             `task snooze failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  // ── task ingest ──────────────────────────────────────────────────
+  taskCmd
+    .command("ingest [file]")
+    .description("Ingest a Finding JSON (file path, or stdin when omitted) into the hub pool")
+    .action(async (file?: string) => {
+      const projectRoot = await resolveRoot();
+      try {
+        const ns = await resolveDefaultNamespace(projectRoot);
+        await ensureFactsDir(projectRoot, ns);
+        // Stamp wall-clock time at handler boundary — NEVER inside the store
+        const now = new Date().toISOString();
+        const raw = await readIngestInput(file);
+        const store = new FactStore(factsDbPath(projectRoot, ns));
+        try {
+          await runTaskIngest(store, raw, now);
+        } finally {
+          store.close();
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `task ingest failed: ${err instanceof Error ? err.message : String(err)}\n`,
           ),
         );
         process.exitCode = 1;
