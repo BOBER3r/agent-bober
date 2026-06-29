@@ -179,6 +179,7 @@ Inside the session:
 ```
 > build a settings page        # spawns a detached `bober run`, returns immediately
 > what runs are active?         # answered using roster + memory context
+> renew passport                # plain task statement → captured as an open hub task
 > stop the settings page run    # natural language → stops the matching running run
 > /runs                         # list active/recent runs (deterministic, no LLM call)
 > /stop <runId>                 # HARD stop: kill the run's process by id (deterministic, no LLM call)
@@ -256,6 +257,18 @@ next turn only (no live between-turn push); they are deduped by `runId` and that
 state persists across a REPL restart via `.bober/chat/<sessionId>.cursor.json`, so a run is
 announced exactly once. The notice is rotation-safe — it still fires correctly if
 `.bober/history.jsonl` was rotated or truncated between turns.
+
+**Capturing a task.** A plain task statement — an imperative like `renew passport`,
+`book dentist`, `call the bank` — is recognised by the turn classifier as a **new-task intent** and
+**captured into the hub pool** as a single open `action` Finding, with the reply being a short
+`Captured task: <text>` confirmation rather than an LLM answer. This is the chat front-end for
+`bober task add`: it reuses the **same `captureTask` write path**, so the captured item shows up in
+`bober task list`, `bober hub list`, and is eligible for `priority` / `decide` / `bober chat hub`. A
+**question** ("what is X?", "how do I Y?") still routes to the answerer, and a **decision/scope
+statement** ("I'm deciding between X and Y", "should I do A or B?") is **not** captured as a task — it
+is answered — so prioritization phrasing is never mistaken for a to-do. Capture is deterministic and
+**never throws**: a persistence failure becomes a `Failed to capture task: …` reply, not a crash, and
+a malformed classifier response falls back to a normal answer turn.
 
 **Steering runs.** You can stop a run two ways, both deterministic (no LLM call):
 the `/stop <runId>` slash command, or natural language ("stop the settings page run")
@@ -1406,7 +1419,9 @@ write path as `task add`, so supersede/dedup history works identically.
 > `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`; `list` and the
 > `start` / `done` / `drop` lifecycle transitions landed in Sprint 2; `snooze` and its wake-aware
 > list filter landed in Sprint 3; the domain-finding `ingest` seam (with content-id dedup) landed in
-> Sprint 4. Chat capture remains owned by a later sprint.
+> Sprint 4; and **chat intent-detection capture** — typing a plain task into `bober chat` to file it
+> through the same `captureTask` write path — landed in Sprint 5 (see **`bober chat [team]` →
+> Capturing a task** above).
 
 ---
 
