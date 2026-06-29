@@ -602,6 +602,7 @@ npx agent-bober task done <id>                     # Mark a task done (supersede
 npx agent-bober task drop <id>                     # Abandon a task → status=dropped via supersede (never deleted)
 npx agent-bober task snooze <id> --until <when>    # Defer a task: status=snoozed + snooze-until:<ISO> tag; hidden from default list until wake time passes (lazy, no timer)
 npx agent-bober task ingest [file]                 # Domain seam: ingest a Finding JSON (file or stdin) into the hub pool; content-id dedup (domain|title|kind), schema-validated, fail-closed exitCode=1
+npx agent-bober task from-gmail <thread>           # Opt-in: capture one Gmail thread as an open action task. OFF by default (taskInbox.gmailEgress) — refuses with no MCP client/network when disabled; sanitizes connector errors (never leaks tokens)
 ```
 
 #### Clarification gating
@@ -872,6 +873,11 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
         "listNotes": "obsidian_list_files_in_dir" // Default.
       }
     }
+  },
+
+  // -- Task inbox Gmail egress (opt-in; isolated single axis, default false) --
+  "taskInbox": {                          // Optional. Omit entirely => zero Gmail egress.
+    "gmailEgress": false                  // Permit `bober task from-gmail` to read a thread via the MCP connector. Default false.
   }
 }
 ```
@@ -922,6 +928,20 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > field on the PHI-free `0600` medical audit log. See
 > [docs/teams.md](./docs/teams.md) ("Configurable model + cloud-inference gating" and
 > "Critic verdict in the audit").
+
+> **Gmail capture is opt-in and default-off.** The isolated `taskInbox.gmailEgress` axis
+> (default `false`, separate from the `medical.egress` axes) gates `bober task from-gmail
+> <thread>`. With the axis off — the default — the command **refuses with an opt-in message,
+> sets `exitCode=1`, and constructs no MCP client / makes no network call**, so the
+> out-of-the-box build performs **zero Gmail egress**. The gate fires fail-closed at two
+> layers (the CLI returns before constructing the connector, and the `fromGmailTask` core
+> throws before `mcp.start()`/`callTool()`), a missing/invalid config resolves to disabled,
+> and any connector error is caught and **sanitized** (`KEY=VALUE` env assignments stripped to
+> `[redacted]`, the same regex as `src/mcp/external-client.ts`) so tokens never leak. When
+> enabled (plus an enabled `observability` provider named `gmail`), one thread is read on
+> demand and captured through the same `captureTask` write path as `task add`. See
+> [COMMANDS.md](./COMMANDS.md) (`bober task from-gmail <thread>`) and
+> [docs/sprints/sprint-spec-20260628-task-inbox-6.md](./docs/sprints/sprint-spec-20260628-task-inbox-6.md).
 
 ### Sprint Sizes
 

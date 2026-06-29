@@ -1416,12 +1416,60 @@ schema (with `id`/`surfacedAt` optional) and again as a fully-assembled Finding 
 a **non-zero exit code**, writes **nothing**, and **never throws**. Ingest reuses the same reconcile
 write path as `task add`, so supersede/dedup history works identically.
 
+### `bober task from-gmail <thread>` (opt-in Gmail egress)
+
+Turn a single Gmail thread into a captured task. This command is **off by default** and gated behind
+an explicit opt-in egress axis — `taskInbox.gmailEgress` in `bober.config.json` (default `false`).
+
+```bash
+# Default posture — the axis is unset/false: zero Gmail egress.
+bober task from-gmail 18f0a1b2c3d4
+#   task from-gmail: Gmail egress not enabled — set taskInbox.gmailEgress: true in bober.config.json to opt in.
+#   (exitCode=1, and NO MCP client is constructed — no network call is made)
+```
+
+With the axis off (the default) the command **refuses with an opt-in message, sets `exitCode=1`, and
+constructs no MCP client / makes no network call**. To enable it, set the axis **and** declare an
+enabled `observability` provider named `gmail` (it reuses the existing external-MCP connector):
+
+```jsonc
+{
+  "taskInbox": { "gmailEgress": true },
+  "observability": {
+    "providers": [
+      { "name": "gmail", "kind": "custom", "mcpCommand": "npx",
+        "mcpArgs": ["-y", "some-gmail-mcp-server"], "enabled": true }
+    ]
+  }
+}
+```
+
+```bash
+bober task from-gmail 18f0a1b2c3d4
+#   Captured task 1f3c9a0b2e4d6f80 from Gmail
+#     title: Pay invoice
+```
+
+When enabled, the command reads **one thread on demand** through the MCP connector, parses it
+**locally** into an open `action` Finding (title from the thread subject), and captures it through the
+**same `captureTask` write path** as `task add` — so it shows up in `bober task list`, `bober hub
+list`, and is eligible for `priority` / `decide` / `chat hub`. The captured Finding carries
+`domain=gmail` and a `source:gmail` tag.
+
+**Fail-closed and secret-safe.** A missing or invalid config resolves the axis to **disabled** (never
+enabled-by-accident). Any connector failure is **caught**, surfaced on stderr with `exitCode=1`, and
+**sanitized** — `KEY=VALUE` env assignments (e.g. a connector token) are stripped to `[redacted]`
+(the same regex as `src/mcp/external-client.ts`), so env vars / tokens never leak into a message or
+log. This reads one thread on demand — there is **no** Gmail polling, label automation, or general
+sync.
+
 > `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`; `list` and the
 > `start` / `done` / `drop` lifecycle transitions landed in Sprint 2; `snooze` and its wake-aware
 > list filter landed in Sprint 3; the domain-finding `ingest` seam (with content-id dedup) landed in
-> Sprint 4; and **chat intent-detection capture** — typing a plain task into `bober chat` to file it
+> Sprint 4; **chat intent-detection capture** — typing a plain task into `bober chat` to file it
 > through the same `captureTask` write path — landed in Sprint 5 (see **`bober chat [team]` →
-> Capturing a task** above).
+> Capturing a task** above); and the opt-in, egress-gated `from-gmail` source landed in Sprint 6,
+> completing the plan (6/6).
 
 ---
 
