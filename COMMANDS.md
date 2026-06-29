@@ -1479,29 +1479,63 @@ The **do-bridge** turns a hub **Finding** into a launchable unit of work. A *pro
 finding's `domain`, and optionally its `kind`) maps the finding to a *promotion plan* — for coding /
 projects findings that is a `bober run` task.
 
-### `bober do <findingId> --dry-run`
+### `bober do <findingId>`
 
-Preview the promotion plan for a hub Finding **without launching anything**. The command reads the
-finding from the project's FactStore (the active team's namespace `facts.db` — the same store
-`bober hub list` and `bober task list` read), resolves the promoter for its `domain`/`kind`, and prints
-the `bober run` task that would be launched, naming the target team.
+Promote a hub Finding into a `bober run` task. The command reads the finding from the project's FactStore
+(the active team's namespace `facts.db` — the same store `bober hub list` and `bober task list` read),
+resolves the promoter for its `domain`/`kind`, and either **previews** the launch (`--dry-run`) or
+**requests approval and launches** it. Only `coding` / `projects` findings are promotable (they map to a
+`bober run` task; the target team comes from an optional `team:<id>` tag, otherwise the default team).
 
 ```bash
-bober do 1f3c9a0b2e4d6f80 --dry-run
-#   [dry-run] would launch: bober run "Fix flaky auth test — token refresh races on expiry" (team: default team)
+bober do 1f3c9a0b2e4d6f80 --dry-run    # Preview only — read-only, no marker, no spawn
+bober do 1f3c9a0b2e4d6f80              # Real path — write an approval marker, gate, then launch on approve
+bober do 1f3c9a0b2e4d6f80 --yes        # Real path, auto-approve (skip the confirm prompt)
 ```
 
-The dry-run path is **read-only**: it mutates no state, writes nothing under `.bober/approvals/`, and
-spawns no process. Failure branches are non-throwing and exit non-zero (`1`): an unknown id prints
-`do: no finding with id '<id>'`, and a finding whose domain has **no registered promoter** prints a
-clear message naming the unsupported domain. Only `coding` / `projects` findings are promotable at this
-stage (they map to a `bober run` task; the target team comes from an optional `team:<id>` tag, otherwise
-the default team).
+**Dry-run (`--dry-run`)** is read-only: it mutates no state, writes nothing under `.bober/approvals/`,
+and spawns no process:
 
-> **Dry-run is the only active path right now.** Running `bober do <findingId>` **without** `--dry-run`
-> prints `Real launch is not implemented yet. Use --dry-run to preview the planned task.` — the real
-> launch (Sprint 2) and outcome recording (Sprint 3) of `spec-20260628-do-bridge` are not built yet.
-> This command landed in Sprint 1 of that spec.
+```text
+[dry-run] would launch: bober run "Fix flaky auth test — token refresh races on expiry" (team: default team)
+```
+
+**Real path** (no `--dry-run`) writes a pending approval marker and **gates** on it before launching
+anything:
+
+```text
+do: requesting approval to launch bober run "Fix flaky auth test …" (team: default team)
+? Approve promotion for finding '1f3c9a0b2e4d6f80'? (y/N)
+do: launched bober run "Fix flaky auth test …" — runId: do-1f3c9a0b2e4d6f80-<ts> (pid 40912)
+```
+
+The gate resolves one of three ways:
+
+- **`--yes`** — auto-approve without prompting (still writes then clears the marker).
+- **TTY** — an interactive confirm prompt; decline → reject (nothing launches, the Finding is unchanged).
+- **Non-TTY** (CI, pipes) — the command writes the marker and **waits**, polling until an operator
+  resolves it out-of-band.
+
+The approval marker reuses the **same `.bober/approvals/` mechanism the run pipeline uses** — no new
+format. The marker's checkpointId is `promote-<findingId>`, so it is resolved with the standard
+[`bober approve <checkpointId>`](#bober-approve-checkpointid) / [`bober reject <checkpointId>`](#bober-reject-checkpointid)
+commands:
+
+```bash
+bober approve promote-1f3c9a0b2e4d6f80   # Approve a waiting promotion → launch proceeds
+bober reject  promote-1f3c9a0b2e4d6f80   # Reject it → no launch, Finding untouched
+```
+
+On **approval**, the work is launched **detached** (`agent-bober run <task> --run-id do-<id>-<ts>`; the
+pipeline is not run in-process), the Finding is linked (`promotesTo` records the new `runId` with status
+`launched`), and its status transitions `open → in-progress`. On **rejection**, the pending marker is
+deleted and the Finding is left unchanged. Failure branches are non-throwing and exit non-zero (`1`): an
+unknown id prints `do: no finding with id '<id>'`, and a finding whose domain has **no registered
+promoter** prints a clear message naming the unsupported domain.
+
+> **Status.** The real launch landed in **Sprint 2** of `spec-20260628-do-bridge` (dry-run was Sprint 1).
+> Terminal outcome reconciliation (`in-progress → done`) and the consolidated `docs/do-bridge.md` guide
+> are Sprint 3.
 
 ---
 
