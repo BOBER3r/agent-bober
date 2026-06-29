@@ -16,6 +16,9 @@ import type { Finding } from "../hub/finding.js";
 import type { RoleProviderBlock } from "../fleet/tier-policy.js";
 import { ResearchJobSchema } from "./types.js";
 import { runResearchJob } from "./runner.js";
+import { ResearchEgressGuard } from "./egress.js";
+import type { RetrievalClient } from "./online-retrieval.js";
+import type { BoberConfig } from "../config/schema.js";
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -182,5 +185,76 @@ describe("runResearchJob — sc-2-3 (hub Finding)", () => {
     const res = await runResearchJob(JOB, { queryModel, findingSink, now: NOW, vaultRoot: tmpRoot });
 
     expect(res.finding).toEqual(calls[0]);
+  });
+});
+
+// ── sc-3-3: gated online-research retrieval ───────────────────────────
+
+describe("runResearchJob — sc-3-3 (gated online-research retrieval)", () => {
+  const SOURCES = [{ title: "ESM RFC", url: "https://example.com/esm" }];
+
+  it("axis OFF (default config): retrieval client called 0 times", async () => {
+    let calls = 0;
+    const retrievalClient: RetrievalClient = {
+      search: async () => { calls++; return SOURCES; },
+    };
+    const egress = ResearchEgressGuard.fromConfig({} as BoberConfig); // off by default
+    await runResearchJob(JOB, {
+      queryModel,
+      findingSink: async () => {},
+      now: NOW,
+      vaultRoot: tmpRoot,
+      egress,
+      retrievalClient,
+    });
+    expect(calls).toBe(0);
+  });
+
+  it("axis OFF: no egress/retrievalClient injected => still 0 retrieval calls (byte-identical Sprint-2 path)", async () => {
+    // Sprint-2 callers never inject egress/retrievalClient — must still compile + run cleanly.
+    const res = await runResearchJob(JOB, { queryModel, findingSink: async () => {}, now: NOW, vaultRoot: tmpRoot });
+    const raw = await readFile(res.notePath, "utf-8");
+    // sources must NOT appear in the note when axis is off
+    expect(raw).not.toContain("https://example.com/esm");
+  });
+
+  it("axis ON: retrieval client is invoked and note lists the source URLs", async () => {
+    let calls = 0;
+    const retrievalClient: RetrievalClient = {
+      search: async () => { calls++; return SOURCES; },
+    };
+    const egress = ResearchEgressGuard.fromConfig({
+      research: { egress: { onlineResearch: true } },
+    } as unknown as BoberConfig);
+    const res = await runResearchJob(JOB, {
+      queryModel,
+      findingSink: async () => {},
+      now: NOW,
+      vaultRoot: tmpRoot,
+      egress,
+      retrievalClient,
+    });
+    expect(calls).toBe(1);
+    const raw = await readFile(res.notePath, "utf-8");
+    expect(raw).toContain("https://example.com/esm");
+  });
+
+  it("axis ON: note does not contain [object Object] (sources are string URLs)", async () => {
+    const retrievalClient: RetrievalClient = {
+      search: async () => SOURCES,
+    };
+    const egress = ResearchEgressGuard.fromConfig({
+      research: { egress: { onlineResearch: true } },
+    } as unknown as BoberConfig);
+    const res = await runResearchJob(JOB, {
+      queryModel,
+      findingSink: async () => {},
+      now: NOW,
+      vaultRoot: tmpRoot,
+      egress,
+      retrievalClient,
+    });
+    const raw = await readFile(res.notePath, "utf-8");
+    expect(raw).not.toContain("[object Object]");
   });
 });

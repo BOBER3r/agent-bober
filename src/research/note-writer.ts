@@ -53,6 +53,7 @@ export function serializeResearchNote(
   labels: string[],
   contributions: ModelContribution[],
   now: string,
+  sources: string[] = [],   // Sprint 3: optional source URLs; default [] => byte-identical off-path
 ): string {
   const frontmatter: Record<string, unknown> = {
     title: `Research — ${job.question}`,
@@ -63,6 +64,8 @@ export function serializeResearchNote(
     domain: job.domain ?? "research",
     type: "research",
     status: "open",
+    // Sprint 3: spread sources only when non-empty (string[] URLs; never objects — see pitfall above)
+    ...(sources.length > 0 ? { sources } : {}),
   };
 
   const contributionsSections = contributions

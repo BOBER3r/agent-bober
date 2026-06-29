@@ -32,6 +32,8 @@ import {
   serializeResearchNote,
   type ModelContribution,
 } from "./note-writer.js";
+import { retrieve, type RetrievalClient } from "./online-retrieval.js";
+import type { ResearchEgressGuard } from "./egress.js";
 
 // ── Public types ──────────────────────────────────────────────────────
 
@@ -51,6 +53,11 @@ export interface RunDeps {
   now: string;
   /** Writable vault root directory. */
   vaultRoot: string;
+  // ── Sprint 3 (additive, optional — omit => byte-identical offline run) ──
+  /** Research egress guard — when absent, retrieval is skipped entirely (zero outbound). */
+  egress?: ResearchEgressGuard;
+  /** Injected retrieval client — when absent, retrieval is skipped entirely. */
+  retrievalClient?: RetrievalClient;
 }
 
 /** Result returned by runResearchJob. */
@@ -162,9 +169,18 @@ export async function runResearchJob(
     contributions.push({ label: modelLabel(block), text });
   }
 
+  // ── Sprint 3: gated online-research retrieval (axis OFF default => skipped entirely) ──
+  // When egress is absent or axis is off: sourceUrls stays [] and the retrieval client
+  // is NEVER constructed or invoked — zero outbound requests (sc-3-3 off-path proof).
+  let sourceUrls: string[] = [];
+  if (deps.egress?.isAllowed("online-research") === true && deps.retrievalClient !== undefined) {
+    const sources = await retrieve(job.question, deps.retrievalClient);
+    sourceUrls = sources.map((s) => s.url);
+  }
+
   // 3. Build the note content (PURE — no fs)
   const labels = contributions.map((c) => c.label);
-  const noteContent = serializeResearchNote(job, labels, contributions, now);
+  const noteContent = serializeResearchNote(job, labels, contributions, now, sourceUrls);
 
   // 4. Write the note to disk (sc-2-2)
   // Marker = first 12 chars of job id (stable slug for the filename)

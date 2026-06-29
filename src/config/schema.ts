@@ -476,6 +476,19 @@ export const CalendarSectionSchema = z.object({
 });
 export type CalendarSection = z.infer<typeof CalendarSectionSchema>;
 
+// ── Research Section (Sprint 3 — online-research egress axis default off) ──
+
+export const ResearchSectionSchema = z.object({
+  /** Egress opt-in axis. Default false — zero outbound bytes by default (fail-closed, ADR-6 lineage). */
+  egress: z
+    .object({
+      /** When true, online/web research retrieval is permitted. Default false. */
+      onlineResearch: z.boolean().default(false),
+    })
+    .optional(),
+});
+export type ResearchSection = z.infer<typeof ResearchSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -515,6 +528,8 @@ export const BoberConfigSchema = z.object({
   taskInbox: TaskInboxSectionSchema.optional(),
   // ── Sprint 3: calendar planner cloud-calendar egress axis ──
   calendar: CalendarSectionSchema.optional(),
+  // ── Sprint 3 (research-scheduler): online-research egress axis ──
+  research: ResearchSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
