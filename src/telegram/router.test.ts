@@ -1,10 +1,11 @@
 /**
- * router.test.ts — Unit tests for the pure classify() router (sc-2-2).
+ * router.test.ts — Unit tests for the pure classify() router (sc-2-2)
+ * and parseScopeFromCommand scope parser (sc-3-2).
  * No network access; no side effects — the router is entirely pure.
  */
 import { describe, it, expect } from "vitest";
 
-import { classify } from "./router.js";
+import { classify, parseScopeFromCommand } from "./router.js";
 
 describe("classify — message router (sc-2-2)", () => {
   it("classifies '/start' as a command with name 'start' and empty args", () => {
@@ -54,5 +55,54 @@ describe("classify — message router (sc-2-2)", () => {
       expect(r.name).toBe("");
       expect(r.args).toBe("");
     }
+  });
+});
+
+describe("parseScopeFromCommand — ephemeral scope parser (sc-3-2)", () => {
+  it("/today maps to filtered scope with dueWithinDays:1", () => {
+    expect(parseScopeFromCommand("today", "")).toEqual({
+      mode: "filtered",
+      dueWithinDays: 1,
+    });
+  });
+
+  it("/priority maps to general scope", () => {
+    expect(parseScopeFromCommand("priority", "")).toEqual({ mode: "general" });
+  });
+
+  it("/decide A vs B maps to decision scope with trimmed options", () => {
+    expect(parseScopeFromCommand("decide", "A vs B")).toEqual({
+      mode: "decision",
+      optionA: "A",
+      optionB: "B",
+    });
+  });
+
+  it("/decide tolerates extra whitespace around 'vs' separator", () => {
+    expect(parseScopeFromCommand("decide", "Buy a car  vs  Lease a car")).toEqual({
+      mode: "decision",
+      optionA: "Buy a car",
+      optionB: "Lease a car",
+    });
+  });
+
+  it("/decide is case-insensitive for the 'vs' separator", () => {
+    expect(parseScopeFromCommand("decide", "X VS Y")).toEqual({
+      mode: "decision",
+      optionA: "X",
+      optionB: "Y",
+    });
+  });
+
+  it("unknown command returns null", () => {
+    expect(parseScopeFromCommand("done", "")).toBeNull();
+  });
+
+  it("/decide with no 'vs' separator returns null", () => {
+    expect(parseScopeFromCommand("decide", "only one thing")).toBeNull();
+  });
+
+  it("/decide with three parts returns null (ambiguous split)", () => {
+    expect(parseScopeFromCommand("decide", "X vs Y vs Z")).toBeNull();
   });
 });

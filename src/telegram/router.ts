@@ -1,4 +1,5 @@
 /** router.ts — Pure classifier: slash-command vs plain text. No side effects, no network. */
+import type { Scope } from "../hub/scope.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -37,4 +38,40 @@ export function classify(message: string): RoutedMessage {
   }
   // Return message verbatim — do not trim/lowercase/parse (generatorNotes).
   return { kind: "text", text: message };
+}
+
+// ── parseScopeFromCommand ─────────────────────────────────────────────
+
+/**
+ * Parse an ephemeral Scope from a slash-command name and its trailing args.
+ *
+ * Maps:
+ *   "today"    → { mode: "filtered", dueWithinDays: 1 }
+ *   "priority" → { mode: "general" }
+ *   "decide"   → { mode: "decision", optionA: X, optionB: Y }
+ *                 (split args on /\s+vs\s+/i, trim both; returns null if ≠2 parts)
+ *
+ * Returns null for all other command names, or if /decide args do not yield
+ * exactly two non-empty trimmed options (caller should fall through to Unknown command).
+ *
+ * PURE: no side effects, no network, no disk access. Scope is ephemeral —
+ * never persisted (nonGoal #2).
+ */
+export function parseScopeFromCommand(name: string, args: string): Scope | null {
+  switch (name.toLowerCase()) {
+    case "today":
+      return { mode: "filtered", dueWithinDays: 1 };
+    case "priority":
+      return { mode: "general" };
+    case "decide": {
+      const parts = args.split(/\s+vs\s+/i);
+      if (parts.length !== 2) return null;
+      const optionA = parts[0]!.trim();
+      const optionB = parts[1]!.trim();
+      if (!optionA || !optionB) return null;
+      return { mode: "decision", optionA, optionB };
+    }
+    default:
+      return null;
+  }
 }

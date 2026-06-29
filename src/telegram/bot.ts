@@ -11,6 +11,8 @@ import { isAllowed, parseAllowedUsers, denialReply } from "./whitelist.js";
 import { classify } from "./router.js";
 import { handleCapture, defaultCapture } from "./handlers/capture.js";
 import type { InboxCapture } from "./handlers/capture.js";
+import { handlePrioritize, defaultPrioritize } from "./handlers/prioritize.js";
+import type { PrioritizeFn } from "./handlers/prioritize.js";
 
 // ── Minimal update shape ──────────────────────────────────────────────
 
@@ -103,6 +105,7 @@ export async function startPollLoop(
   transport: BotTransport,
   signal: AbortSignal,
   capture: InboxCapture = defaultCapture,
+  prioritize: PrioritizeFn = defaultPrioritize,
 ): Promise<void> {
   let offset = 0;
   const allowed = parseAllowedUsers(process.env);
@@ -145,10 +148,22 @@ export async function startPollLoop(
       }
       const routed = classify(text);
       if (routed.kind === "command") {
-        // Command dispatch: /start → help; everything else is a stub for Sprints 3-4.
-        // bober: single-level command switch; replace with a command registry map
-        //        when Sprint 3+ adds real commands (hub/inbox/calendar queries).
-        const reply = routed.name === "start" ? helpReply() : `Unknown command: /${routed.name}`;
+        // Command dispatch (Sprint 3): /start → help; hub-priority commands → prioritize handler;
+        // everything else → Unknown-command stub.
+        // bober: single-level command switch; extend to a command registry map
+        //        if Sprint 4+ inbox/calendar commands grow this block further.
+        let reply: string;
+        if (routed.name === "start") {
+          reply = helpReply();
+        } else if (
+          routed.name === "today" ||
+          routed.name === "priority" ||
+          routed.name === "decide"
+        ) {
+          reply = await handlePrioritize(routed.name, routed.args, prioritize);
+        } else {
+          reply = `Unknown command: /${routed.name}`;
+        }
         await sendSafe(transport, chatId, reply);
       } else {
         // Plain text → zero-friction capture via the injected inbox sink.
