@@ -17,7 +17,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Command } from "commander";
 
 import { registerResearchCommand } from "./research.js";
-import { listJobs } from "../../research/job-store.js";
+import { listJobs, addJob, jobId } from "../../research/job-store.js";
+import { ResearchJobSchema } from "../../research/types.js";
 import type { Finding } from "../../hub/finding.js";
 import type { RoleProviderBlock } from "../../fleet/tier-policy.js";
 
@@ -282,5 +283,95 @@ describe("research run", () => {
     await parse(runProgram, ["research", "run", "nonexistent-job-id"]);
 
     expect(process.exitCode).toBe(1);
+  });
+});
+
+// ── sc-4-4: research tick CLI ─────────────────────────────────────────
+
+describe("research tick", () => {
+  it("sc-4-4: runs tick with no jobs due and reports 'no jobs due'", async () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    // Add a future job so there is something in the store but nothing due
+    const createdAt = "2026-06-01T00:00:00.000Z";
+    const question = "tick future question";
+    const job = ResearchJobSchema.parse({
+      id: jobId(question, createdAt),
+      question,
+      cadence: "weekly" as const,
+      onlineResearch: false,
+      createdAt,
+      nextDueAt: "2099-01-01T00:00:00.000Z",
+    });
+    await addJob(tmpRoot, job);
+
+    const sinkCalls: Finding[] = [];
+    const fakeQm = async (_b: RoleProviderBlock, _p: string): Promise<string> => "answer";
+    const fakeSink = async (f: Finding): Promise<void> => { sinkCalls.push(f); };
+    const program = makeProgramWithRunOverrides(fakeQm, fakeSink);
+
+    await parse(program, ["research", "tick"]);
+
+    expect(process.exitCode).toBe(0);
+    expect(writes.join("")).toMatch(/no jobs due/i);
+    expect(sinkCalls).toHaveLength(0); // no real LLM calls
+  });
+
+  it("sc-4-4: tick runs a due job via injected queryModel and findingSink", async () => {
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    // Add a due job (nextDueAt in the past)
+    const createdAt = "2026-06-01T00:00:00.000Z";
+    const question = "tick due question for CLI test";
+    const job = ResearchJobSchema.parse({
+      id: jobId(question, createdAt),
+      question,
+      cadence: "daily" as const,
+      onlineResearch: false,
+      createdAt,
+      nextDueAt: "2026-01-01T00:00:00.000Z", // well in the past
+    });
+    await addJob(tmpRoot, job);
+
+    const sinkCalls: Finding[] = [];
+    const fakeQm = async (_b: RoleProviderBlock, _p: string): Promise<string> =>
+      "injected answer from tick test";
+    const fakeSink = async (f: Finding): Promise<void> => { sinkCalls.push(f); };
+    const program = makeProgramWithRunOverrides(fakeQm, fakeSink);
+
+    await parse(program, ["research", "tick"]);
+
+    expect(process.exitCode).toBe(0);
+    // The job ran → finding sink was invoked
+    expect(sinkCalls).toHaveLength(1);
+    expect(writes.join("")).toMatch(/ran 1 job/i);
+  });
+
+  it("sc-4-4: --watch flag parses without error (does not hang — we do not start the real interval)", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    // Use vi.stubGlobal to prevent the setInterval from actually running
+    const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockImplementation(
+      (() => 0) as typeof setInterval,
+    );
+
+    const fakeQm = async (_b: RoleProviderBlock, _p: string): Promise<string> => "answer";
+    const fakeSink = async (_f: Finding): Promise<void> => {};
+    const program = makeProgramWithRunOverrides(fakeQm, fakeSink);
+
+    await parse(program, ["research", "tick", "--watch", "--interval", "1000"]);
+
+    expect(process.exitCode).toBe(0);
+    expect(setIntervalSpy).toHaveBeenCalledOnce();
+
+    setIntervalSpy.mockRestore();
   });
 });

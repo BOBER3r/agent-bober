@@ -1,6 +1,7 @@
 /**
  * `bober research job add|list|remove` — manage recurring multi-model research jobs.
  * `bober research run <jobId>`          — execute a stored research job.
+ * `bober research tick [--watch]`       — run every due job (idempotent).
  *
  * Subcommands:
  *   research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>]
@@ -8,6 +9,7 @@
  *   research job list
  *   research job remove <jobId>
  *   research run <jobId>
+ *   research tick [--watch] [--interval <ms>]
  *
  * Error handling: CLI handlers MUST NOT throw. They set process.exitCode=1 and
  * return on all errors. Pattern mirrors src/cli/commands/task.ts:360-367.
@@ -42,6 +44,7 @@ import {
 import { ingestFinding } from "../../hub/finding-store.js";
 import { runResearchJob } from "../../research/runner.js";
 import type { QueryModel, FindingSink } from "../../research/runner.js";
+import { tick } from "../../research/scheduler.js";
 import { createClient } from "../../providers/factory.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
@@ -265,6 +268,121 @@ export function registerResearchCommand(
         process.stderr.write(
           chalk.red(
             `research run failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  // ── research tick [--watch] ──────────────────────────────────────────
+
+  researchCmd
+    .command("tick")
+    .description(
+      "Run every research job that is due as of now (idempotent).\n\n" +
+        "Scheduling mechanism tradeoff:\n" +
+        "  --watch        in-process setInterval loop — simple, but DIES with the\n" +
+        "                 process (not suitable for unattended production use).\n" +
+        "  OS cron/launchd calling `bober research tick` — survives reboots;\n" +
+        "                 RECOMMENDED for unattended runs. Example crontab entry:\n" +
+        "                   0 * * * * /usr/local/bin/bober research tick\n" +
+        "  harness scheduler (/schedule) — fires the CLI on a cadence inside the\n" +
+        "                 agent harness.\n\n" +
+        "Note: hosted-OAuth schedulers are unfit for unattended runs (research\n" +
+        "doc L135) — use OS cron/launchd for unattended scheduling.",
+    )
+    .option("--watch", "Run tick on an in-process interval (loop keeps process alive)")
+    .option("--interval <ms>", "Watch interval in milliseconds (default: 3600000 = 1 hour)", "3600000")
+    .action(async (opts: { watch?: boolean; interval?: string }) => {
+      const projectRoot = await resolveRoot();
+      const vaultRoot = projectRoot;
+
+      // Build one runOnce closure that captures the injected deps.
+      // clock is stamped ONLY inside runOnce at the .action boundary.
+      const runOnce = async (): Promise<void> => {
+        // Wall-clock read happens ONLY here (principles L31 / research.ts clock discipline).
+        const now = new Date().toISOString();
+
+        // -- queryModel binding (mirrors research run above) --
+        const qm: QueryModel =
+          overrides?.queryModel ??
+          ((block, prompt) => {
+            const client = createClient(
+              block.provider,
+              block.endpoint ?? null,
+              undefined,
+              block.model,
+              "research",
+            );
+            return client
+              .chat({
+                model: block.model,
+                system:
+                  "You are a research assistant. Answer concisely and accurately.",
+                messages: [{ role: "user", content: prompt }],
+              })
+              .then((r) => r.text);
+          });
+
+        // -- findingSink binding (open/close FactStore per runOnce for --watch) --
+        let store: FactStore | null = null;
+        const fs: FindingSink =
+          overrides?.findingSink ??
+          (async (finding) => {
+            if (store === null) {
+              throw new Error("FactStore was closed before findingSink was called");
+            }
+            await ingestFinding(store, finding, { now });
+          });
+
+        if (overrides?.findingSink === undefined) {
+          await ensureFactsDir(projectRoot);
+          store = new FactStore(factsDbPath(projectRoot));
+        }
+
+        try {
+          const result = await tick({
+            now,
+            listJobs: () => listJobs(projectRoot),
+            saveJob: (j) => addJob(projectRoot, j),
+            runJob: (job) =>
+              runResearchJob(job, {
+                queryModel: qm,
+                findingSink: fs,
+                now,
+                vaultRoot,
+              }).then(() => undefined),
+          });
+
+          if (result.ran.length > 0) {
+            process.stdout.write(
+              chalk.green(`research tick: ran ${result.ran.length} job(s): ${result.ran.join(", ")}\n`),
+            );
+          } else {
+            process.stdout.write("research tick: no jobs due.\n");
+          }
+        } finally {
+          // Always close the store — prevents SQLite lock across interval iterations.
+          store?.close();
+        }
+      };
+
+      try {
+        await runOnce();
+
+        if (opts.watch === true) {
+          const ms = Math.max(1000, Number(opts.interval ?? "3600000"));
+          // Do NOT .unref() — the watch loop must keep the process alive.
+          // bober: in-memory setInterval; replace with OS cron if the process must
+          //        survive reboots or system sleep (contract nonGoal L4 / briefing §9).
+          setInterval(() => {
+            void runOnce();
+          }, ms);
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `research tick failed: ${err instanceof Error ? err.message : String(err)}\n`,
           ),
         );
         process.exitCode = 1;

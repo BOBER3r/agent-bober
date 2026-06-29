@@ -51,6 +51,13 @@ export const ResearchJobSchema = z.object({
   onlineResearch: z.boolean().default(false),
   /** ISO-8601 creation timestamp — set once at CLI boundary, never mutated. */
   createdAt: z.string().datetime(),
+  /**
+   * ISO-8601 next-due instant (Sprint 4). Unset => due immediately on first tick.
+   * Advanced by computeNextDue(cadence, now) after each run. Never read from the wall clock.
+   */
+  nextDueAt: z.string().datetime().optional(),
+  /** ISO-8601 timestamp of the most recent successful run (Sprint 4). Unset until first run. */
+  lastRunAt: z.string().datetime().optional(),
 });
 
 export type ResearchJob = z.infer<typeof ResearchJobSchema>;
