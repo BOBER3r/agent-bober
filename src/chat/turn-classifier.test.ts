@@ -187,3 +187,44 @@ describe("TurnClassifier — pause/resume actions (sc-5-7)", () => {
     expect(system).toContain("resume");
   });
 });
+
+// ── capture-task classifier action (sc-5-2 / sc-5-3 / sc-5-5) ──────────
+describe("TurnClassifier — capture-task action", () => {
+  it("parses capture-task for an imperative task phrase (sc-5-2)", async () => {
+    const client = new ScriptedClient(['{"action":"capture-task","task":"renew passport"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+    const result = await classifier.classify("renew passport");
+    expect(result).toEqual({ action: "capture-task", task: "renew passport" });
+  });
+
+  it("a question routes to answer (sc-5-3)", async () => {
+    const client = new ScriptedClient(['{"action":"answer"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+    const result = await classifier.classify("What is a passport?");
+    expect(result).toEqual({ action: "answer" });
+  });
+
+  it("a decision/scope statement does NOT capture a task (sc-5-3)", async () => {
+    const client = new ScriptedClient(['{"action":"answer"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+    const result = await classifier.classify("I'm deciding between Postgres and MySQL");
+    expect(result.action).not.toBe("capture-task");
+    expect(result).toEqual({ action: "answer" });
+  });
+
+  it("system prompt describes capture-task and the scope-statement rule (sc-5-3)", async () => {
+    const client = new ScriptedClient(['{"action":"answer"}']);
+    const classifier = new TurnClassifier(client, "test-model");
+    await classifier.classify("test");
+    const system = client.calls[0]?.system ?? "";
+    expect(system).toContain("capture-task");
+    expect(system).toContain("deciding between");
+  });
+
+  it("malformed classifier response falls back to answer (sc-5-5)", async () => {
+    const client = new ScriptedClient(["this is not json at all"]);
+    const classifier = new TurnClassifier(client, "test-model");
+    const result = await classifier.classify("renew passport");
+    expect(result).toEqual({ action: "answer" });
+  });
+});

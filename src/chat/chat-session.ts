@@ -40,6 +40,8 @@ import { HUB_SCOPE } from "../hub/finding-source.js";
 import { parseScope } from "../hub/scope.js";
 import type { Scope } from "../hub/scope.js";
 import { fileExists } from "../utils/fs.js";
+import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
+import { captureTask } from "../hub/task-inbox.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -285,6 +287,8 @@ export class ChatSession {
       reply = await this.handlePause(action.runId);
     } else if (action.action === "resume") {
       reply = await this.handleResume(action.runId);
+    } else if (action.action === "capture-task") {
+      reply = await this.handleCaptureTask(action.task);
     } else {
       // Unknown action — should not happen given the classifier union
       reply = `Unrecognised action. For now, try /help for available commands.`;
@@ -449,6 +453,33 @@ export class ChatSession {
       await writeRunState(this.projectRoot, { ...rest, status: "running" });
     }
     return `Resumed run ${runId}.`;
+  }
+
+  /**
+   * Capture a plain task statement as an open action Finding in the hub pool.
+   * Reuses captureTask (sprint 1) — the single write path; never re-implements it.
+   * `now` is stamped here at the chat handler boundary (the only permitted
+   * new Date() per principles); captureTask/the store stay clock-free.
+   * Never throws: a persistence failure becomes an error reply, not an exception.
+   */
+  private async handleCaptureTask(task: string): Promise<string> {
+    const title = task.trim();
+    if (title.length === 0) {
+      return "Nothing to capture — the task text was empty.";
+    }
+    try {
+      await ensureFactsDir(this.projectRoot, this.memoryNamespace);
+      const now = new Date().toISOString();
+      const store = new FactStore(factsDbPath(this.projectRoot, this.memoryNamespace));
+      try {
+        const finding = await captureTask(store, title, { now });
+        return `Captured task: ${finding.title}`;
+      } finally {
+        store.close();
+      }
+    } catch (err) {
+      return `Failed to capture task: ${err instanceof Error ? err.message : String(err)}`;
+    }
   }
 
   // ── Hub slash commands ────────────────────────────────────────────────

@@ -17,7 +17,8 @@ export type ClassifierAction =
   | { action: "reject"; checkpointId?: string; feedback?: string }
   | { action: "tell"; runId: string; text: string }
   | { action: "pause"; runId: string }
-  | { action: "resume"; runId: string };
+  | { action: "resume"; runId: string }
+  | { action: "capture-task"; task: string };
 
 // ── Zod discriminated union ───────────────────────────────────────────
 
@@ -41,6 +42,7 @@ const ClassifierActionSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("tell"), runId: z.string(), text: z.string() }),
   z.object({ action: z.literal("pause"), runId: z.string() }),
   z.object({ action: z.literal("resume"), runId: z.string() }),
+  z.object({ action: z.literal("capture-task"), task: z.string() }),
 ]);
 
 const FALLBACK: ClassifierAction = { action: "answer" };
@@ -88,6 +90,9 @@ function parseClassifierAction(text: string): ClassifierAction {
       const data = result.data;
       if (data.action === "answer") return { action: "answer" };
       if (data.action === "spawn") return { action: "spawn", task: data.task };
+      if (data.action === "capture-task") {
+        return { action: "capture-task", task: data.task };
+      }
       if (data.action === "steer") {
         const raw = parsed as Record<string, unknown>;
         if (raw["op"] === "stop" && typeof raw["runId"] === "string") {
@@ -152,6 +157,9 @@ export class TurnClassifier {
       '  {"action":"tell","runId":"<id>","text":"<instruction>"}  — queue free-text guidance for a run',
       '  {"action":"pause","runId":"<id>"}  — soft-pause a run (process stays alive)',
       '  {"action":"resume","runId":"<id>"}  — resume a soft-paused run',
+      '  {"action":"capture-task","task":"<task text>"}  — capture a NEW personal task/to-do the user states (an imperative like "renew passport", "book dentist", "call the bank")',
+      'A plain question (e.g. "what is X?", "how do I Y?") is {"action":"answer"} — NOT a task.',
+      'A decision/scope statement (e.g. "I\'m deciding between X and Y", "should I do A or B?") is NOT a new task — route it to {"action":"answer"}.',
       "Return ONLY the JSON object, no other text.",
     ].join("\n");
 
