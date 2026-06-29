@@ -1473,6 +1473,38 @@ sync.
 
 ---
 
+## Do-Bridge Commands
+
+The **do-bridge** turns a hub **Finding** into a launchable unit of work. A *promoter* (resolved by the
+finding's `domain`, and optionally its `kind`) maps the finding to a *promotion plan* — for coding /
+projects findings that is a `bober run` task.
+
+### `bober do <findingId> --dry-run`
+
+Preview the promotion plan for a hub Finding **without launching anything**. The command reads the
+finding from the project's FactStore (the active team's namespace `facts.db` — the same store
+`bober hub list` and `bober task list` read), resolves the promoter for its `domain`/`kind`, and prints
+the `bober run` task that would be launched, naming the target team.
+
+```bash
+bober do 1f3c9a0b2e4d6f80 --dry-run
+#   [dry-run] would launch: bober run "Fix flaky auth test — token refresh races on expiry" (team: default team)
+```
+
+The dry-run path is **read-only**: it mutates no state, writes nothing under `.bober/approvals/`, and
+spawns no process. Failure branches are non-throwing and exit non-zero (`1`): an unknown id prints
+`do: no finding with id '<id>'`, and a finding whose domain has **no registered promoter** prints a
+clear message naming the unsupported domain. Only `coding` / `projects` findings are promotable at this
+stage (they map to a `bober run` task; the target team comes from an optional `team:<id>` tag, otherwise
+the default team).
+
+> **Dry-run is the only active path right now.** Running `bober do <findingId>` **without** `--dry-run`
+> prints `Real launch is not implemented yet. Use --dry-run to preview the planned task.` — the real
+> launch (Sprint 2) and outcome recording (Sprint 3) of `spec-20260628-do-bridge` are not built yet.
+> This command landed in Sprint 1 of that spec.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |

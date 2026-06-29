@@ -603,6 +603,9 @@ npx agent-bober task drop <id>                     # Abandon a task → status=d
 npx agent-bober task snooze <id> --until <when>    # Defer a task: status=snoozed + snooze-until:<ISO> tag; hidden from default list until wake time passes (lazy, no timer)
 npx agent-bober task ingest [file]                 # Domain seam: ingest a Finding JSON (file or stdin) into the hub pool; content-id dedup (domain|title|kind), schema-validated, fail-closed exitCode=1
 npx agent-bober task from-gmail <thread>           # Opt-in: capture one Gmail thread as an open action task. OFF by default (taskInbox.gmailEgress) — refuses with no MCP client/network when disabled; sanitizes connector errors (never leaks tokens)
+
+# Do-bridge (promote a Finding into a bober run)
+npx agent-bober do <findingId> --dry-run           # Preview the bober run task a coding/projects Finding would launch (read-only: no mutation, no approval marker, no spawn); unsupported domain → exitCode=1
 ```
 
 #### Clarification gating
