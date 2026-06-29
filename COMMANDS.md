@@ -1311,8 +1311,43 @@ layer so later dedup/supersede works. Empty text prints a red error and exits no
 the command writes to stderr and sets a non-zero exit code **without throwing**, and the store is
 always closed.
 
-> `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`. Inbox management
-> (`list` / `done` / `snooze` / `drop`), ingest, and chat capture remain owned by later sprints.
+### `bober task list [--all] [--status <status>]`
+
+Print a table of tasks (columns `ID  STATUS  DOMAIN  TITLE`; the title is truncated at 36 chars).
+By **default** the list shows only **active** tasks — those whose status is `open` or `in-progress`
+— so finished work stays out of the way. Pass `--all` to include every status (including
+`done`/`dropped`), or `--status <s>` to show only one status (`--status` takes precedence over
+`--all`). When the filtered set is empty it prints `No tasks found.` The command is read-only; on any
+error it writes to stderr and sets a non-zero exit code **without throwing**.
+
+```bash
+bober task list                 # only open + in-progress
+bober task list --all           # every status, including done/dropped
+bober task list --status done   # only completed tasks
+```
+
+### `bober task start <id>` · `bober task done <id>` · `bober task drop <id>`
+
+Move a task through its lifecycle. `start` sets `status='in-progress'`, `done` sets `status='done'`,
+and `drop` abandons the task by setting `status='dropped'`. Each transition **supersedes** the task's
+active Finding with a new-status copy through the reconcile UPDATE path (supersede old row + insert
+new active row), so the prior status survives as **bitemporal history** — **no row is ever deleted**,
+not even on `drop`. A successful transition prints `Task <id> → <status>`. An **unknown id** prints a
+yellow "no task found" message and exits non-zero **without throwing**.
+
+```bash
+bober task start 1f3c9a0b2e4d6f80   # → in-progress
+bober task done  1f3c9a0b2e4d6f80   # → done (now hidden from the default list)
+bober task drop  1f3c9a0b2e4d6f80   # → dropped (superseded, never deleted)
+```
+
+Because terminal tasks remain active rows (filtered out of the default list by their `status` field,
+not by deletion), `bober task done <id>` removes a task from `bober task list` while
+`bober task list --all` still shows it with `status=done`.
+
+> `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`; `list` and the
+> `start` / `done` / `drop` lifecycle transitions landed in Sprint 2. Snooze, ingest, and chat
+> capture remain owned by later sprints.
 
 ---
 

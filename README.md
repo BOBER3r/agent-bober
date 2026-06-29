@@ -596,6 +596,10 @@ npx agent-bober hub decide "X vs Y"                # Rank Findings under decisio
 
 # Task inbox (zero-friction capture into the hub pool)
 npx agent-bober task add "<text>" [--domain <d>]   # Capture a plain task as one open kind=action Finding in the hub pool; deterministic, never prompts/blocks
+npx agent-bober task list [--all] [--status <s>]   # List tasks (open + in-progress by default; --all or --status widens to done/dropped)
+npx agent-bober task start <id>                    # Move a task to in-progress (supersede; prior status kept as history)
+npx agent-bober task done <id>                     # Mark a task done (supersede; hidden from the default list, still in --all)
+npx agent-bober task drop <id>                     # Abandon a task → status=dropped via supersede (never deleted)
 ```
 
 #### Clarification gating
