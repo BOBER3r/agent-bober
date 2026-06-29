@@ -336,6 +336,15 @@ export const TelemetrySectionSchema = z.object({
 });
 export type TelemetrySection = z.infer<typeof TelemetrySectionSchema>;
 
+// ── Task Inbox Section (Sprint 6 — opt-in Gmail egress axis) ─────────
+
+export const TaskInboxSectionSchema = z.object({
+  /** When true, `bober task from-gmail` may read a Gmail thread via the MCP
+   *  connector. Default false — zero Gmail egress unless explicitly opted in. */
+  gmailEgress: z.boolean().default(false),
+});
+export type TaskInboxSection = z.infer<typeof TaskInboxSectionSchema>;
+
 // ── History Section (Sprint 1 — scale-safe rotation) ─────────────────
 
 export const HistorySectionSchema = z.object({
@@ -485,6 +494,8 @@ export const BoberConfigSchema = z.object({
   fleet: FleetSectionSchema.optional(),
   // ── Sprint 4: on-device Obsidian MCP adapter ──
   vault: VaultSectionSchema.optional(),
+  // ── Sprint 6: task-inbox Gmail egress axis ──
+  taskInbox: TaskInboxSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

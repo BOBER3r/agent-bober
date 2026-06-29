@@ -31,6 +31,13 @@ import {
   ingestFinding,
 } from "../../hub/finding-store.js";
 import type { Finding } from "../../hub/finding.js";
+import type { ObservabilityProvider } from "../../config/schema.js";
+import { ExternalMcpServer } from "../../mcp/external-client.js";
+import {
+  fromGmailTask,
+  sanitizeConnectorError,
+} from "../../hub/gmail-to-task.js";
+import type { GmailMcpLike } from "../../hub/gmail-to-task.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -290,6 +297,39 @@ export async function runTaskIngest(
   }
 }
 
+// ── runTaskFromGmail (DI core) ────────────────────────────────────────
+
+/**
+ * DI core for `task from-gmail`. egressAllowed is resolved at the CLI boundary.
+ *
+ * When disabled → opt-in error from fromGmailTask is caught, written to stderr,
+ * exitCode=1, return. When enabled → fromGmailTask runs with the injected mcp.
+ * Connector errors are caught, sanitized (KEY=VALUE stripped), set exitCode=1.
+ *
+ * Never throws. mcp.stop() is always attempted in a finally block.
+ */
+export async function runTaskFromGmail(
+  store: FactStore,
+  mcp: GmailMcpLike,
+  threadRef: string,
+  egressAllowed: boolean,
+  now: string,
+): Promise<void> {
+  try {
+    const finding = await fromGmailTask({ egressAllowed, mcp, threadRef, store, now });
+    process.stdout.write(chalk.green(`Captured task ${chalk.bold(finding.id)} from Gmail\n`));
+    process.stdout.write(`  title: ${finding.title}\n`);
+  } catch (err) {
+    const raw = err instanceof Error ? err.message : String(err);
+    process.stderr.write(chalk.red(`task from-gmail: ${sanitizeConnectorError(raw)}\n`));
+    process.exitCode = 1;
+  } finally {
+    await mcp.stop().catch(() => {
+      // ignore stop errors
+    });
+  }
+}
+
 // ── registerTaskCommand ───────────────────────────────────────────────
 
 export function registerTaskCommand(program: Command): void {
@@ -406,6 +446,68 @@ export function registerTaskCommand(program: Command): void {
         process.stderr.write(
           chalk.red(
             `task ingest failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  // ── task from-gmail ──────────────────────────────────────────────
+  taskCmd
+    .command("from-gmail <thread>")
+    .description("Capture a Gmail thread as a task (requires opt-in taskInbox.gmailEgress)")
+    .action(async (thread: string) => {
+      const projectRoot = await resolveRoot();
+      try {
+        // Resolve the gmail axis fail-closed: any config error => disabled.
+        let gmailAllowed = false;
+        let gmailProvider: ObservabilityProvider | undefined;
+        try {
+          const config = await loadConfig(projectRoot);
+          gmailAllowed = config.taskInbox?.gmailEgress ?? false;
+          gmailProvider = (config.observability?.providers ?? []).find(
+            (p) => p.name === "gmail" && p.enabled,
+          );
+        } catch {
+          gmailAllowed = false; // missing/invalid config => fail-closed
+        }
+
+        if (!gmailAllowed) {
+          process.stderr.write(
+            chalk.yellow(
+              "task from-gmail: Gmail egress not enabled — set taskInbox.gmailEgress: true in bober.config.json to opt in.\n",
+            ),
+          );
+          process.exitCode = 1;
+          return; // NO MCP construction (sc-6-2)
+        }
+
+        if (!gmailProvider) {
+          process.stderr.write(
+            chalk.red(
+              "task from-gmail: no enabled observability provider named 'gmail' configured.\n",
+            ),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const ns = await resolveDefaultNamespace(projectRoot);
+        await ensureFactsDir(projectRoot, ns);
+        // Stamp wall-clock time at handler boundary — NEVER inside the core
+        const now = new Date().toISOString();
+        const store = new FactStore(factsDbPath(projectRoot, ns));
+        // ExternalMcpServer satisfies GmailMcpLike structurally
+        const mcp = new ExternalMcpServer(gmailProvider);
+        try {
+          await runTaskFromGmail(store, mcp, thread, gmailAllowed, now);
+        } finally {
+          store.close();
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `task from-gmail failed: ${err instanceof Error ? sanitizeConnectorError(err.message) : String(err)}\n`,
           ),
         );
         process.exitCode = 1;

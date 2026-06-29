@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FactStore } from "../../state/facts.js";
-import { runTaskAdd, runTaskList, runTaskTransition, runTaskSnooze, runTaskIngest } from "./task.js";
+import {
+  runTaskAdd,
+  runTaskList,
+  runTaskTransition,
+  runTaskSnooze,
+  runTaskIngest,
+  runTaskFromGmail,
+} from "./task.js";
 import { captureTask } from "../../hub/task-inbox.js";
 import { readFindings } from "../../hub/finding-store.js";
 import { HUB_SCOPE } from "../../hub/finding-source.js";
@@ -401,6 +408,59 @@ describe("runTaskIngest", () => {
       status: "open",
     });
     await runTaskIngest(store, good, T);
+    expect(process.exitCode).toBe(0);
+    store.close();
+  });
+});
+
+describe("runTaskFromGmail", () => {
+  // sc-6-4 CLI layer: connector error → sanitized, no token leak in stderr
+  it("sc-6-4: catches connector error, sets exitCode=1, sanitizes secrets from stderr", async () => {
+    const store = new FactStore(":memory:");
+    const stderr: string[] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((c) => {
+      stderr.push(String(c));
+      return true;
+    });
+    const mcp = {
+      start: vi.fn<[], Promise<void>>().mockResolvedValue(undefined),
+      stop: vi.fn<[], Promise<void>>().mockResolvedValue(undefined),
+      callTool: vi
+        .fn<[string, unknown], Promise<unknown>>()
+        .mockRejectedValue(new Error("GMAIL_TOKEN=secret 500")),
+    };
+    await runTaskFromGmail(store, mcp, "t1", true, T);
+    expect(process.exitCode).toBe(1);
+    expect(stderr.join("")).not.toContain("secret");
+    expect(stderr.join("")).toContain("[redacted]");
+    store.close();
+  });
+
+  it("egressAllowed=false → exitCode=1, callTool never invoked", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const mcp = {
+      start: vi.fn<[], Promise<void>>().mockResolvedValue(undefined),
+      stop: vi.fn<[], Promise<void>>().mockResolvedValue(undefined),
+      callTool: vi.fn<[string, unknown], Promise<unknown>>().mockResolvedValue({}),
+    };
+    await runTaskFromGmail(store, mcp, "t1", false, T);
+    expect(process.exitCode).toBe(1);
+    expect(mcp.callTool).not.toHaveBeenCalled();
+    store.close();
+  });
+
+  it("egressAllowed=true + stub payload → exitCode stays 0", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const mcp = {
+      start: vi.fn<[], Promise<void>>().mockResolvedValue(undefined),
+      stop: vi.fn<[], Promise<void>>().mockResolvedValue(undefined),
+      callTool: vi
+        .fn<[string, unknown], Promise<unknown>>()
+        .mockResolvedValue({ subject: "Pay rent" }),
+    };
+    await runTaskFromGmail(store, mcp, "t1", true, T);
     expect(process.exitCode).toBe(0);
     store.close();
   });
