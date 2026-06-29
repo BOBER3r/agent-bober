@@ -905,6 +905,13 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     },
     "connector": "ics",                   // 'ics' (local, default) | 'google' (cloud, needs egress.cloudCalendar=true + a 0600 token).
     "timezone": "America/New_York"        // Optional IANA tz, informational only (not used in epoch-ms slot math).
+  },
+
+  // -- Research scheduler online egress (opt-in; isolated single axis, default false) --
+  "research": {                           // Optional. Omit entirely => research runs are fully offline.
+    "egress": {                           // Single opt-in axis; code-enforced fail-closed default.
+      "onlineResearch": false             // Permit `bober research run` web/online retrieval. Default false.
+    }
   }
 }
 ```
@@ -981,6 +988,17 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > `src/mcp/external-client.ts`) so tokens never leak. Hosted OAuth is **unfit for unattended/cron runs**,
 > so scheduled use should stay on the `.ics` fallback. See [docs/calendar.md](./docs/calendar.md) and
 > [docs/sprints/sprint-spec-20260628-calendar-planner-3.md](./docs/sprints/sprint-spec-20260628-calendar-planner-3.md).
+
+> **Online research egress is opt-in and default-off.** The isolated `research.egress.onlineResearch`
+> axis (default `false`, **separate** from the `medical`/`taskInbox`/`calendar` axes) gates `bober
+> research run`'s web retrieval. With the axis off — the default — a research run uses only its injected
+> provider clients and makes **zero outbound retrieval requests**; the `ResearchEgressGuard`
+> (`src/research/egress.ts`, mirroring the medical `EgressGuard`) is fail-closed (`assertAllowed` throws
+> `Egress axis 'online-research' not enabled` when off), and the runner's gated branch skips retrieval
+> entirely so the retrieval client is **never constructed** and the note is byte-identical to the
+> offline run. Opting in threads the retrieved source URLs into the note frontmatter `sources` list. See
+> [COMMANDS.md](./COMMANDS.md) (Research Commands → "Online research egress") and
+> [docs/sprints/sprint-spec-20260628-research-scheduler-3.md](./docs/sprints/sprint-spec-20260628-research-scheduler-3.md).
 
 ### Sprint Sizes
 

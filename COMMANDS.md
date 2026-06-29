@@ -1715,13 +1715,14 @@ interval / shift the window) and **re-proposes** — again writing no events.
 
 The **research scheduler** lets you define recurring **multi-model research jobs** — a question
 plus a cadence — once, so a later scheduler can rerun it across a model set, optionally retrieve
-online, and feed the results into the priority hub. Sprints 1–2 ship the **definition + execution
-layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json` (not in
+online, and feed the results into the priority hub. Sprints 1–3 ship the **definition + execution +
+egress layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json` (not in
 `bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`, and
 the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
 clock — the CLI stamps `createdAt` once at the command boundary. `bober research run <jobId>`
 executes one stored job on demand across ≥2 distinct models, writing a vault note and one hub
-Finding (no online retrieval yet — that is Sprint 3).
+Finding. A run is **offline by default**: web retrieval is gated behind the opt-in
+`research.egress.onlineResearch` config axis (default `false`, fail-closed — see below).
 
 ### `bober research job add --question "..." [options]`
 
@@ -1787,15 +1788,43 @@ bober research run 3f8a1c0b9d2e4f76
   `### <provider>/<model>` section per model answer.
 - Emits **exactly one** `kind: "watch"` Finding to the hub (`domain` from the job, default
   `research`; `evidence` = per-model contribution snippets), via the hub's `ingestFinding` writer.
-- **No online/web retrieval** happens — the run uses only the injected provider clients. On-demand
-  only; cadence/scheduling is a later sprint. Prints the note path on success.
+- **Offline by default.** Web/online retrieval is gated behind the opt-in `research.egress.onlineResearch`
+  config axis (default `false`). With the axis off the run uses only the injected provider clients and
+  issues **zero outbound requests**; opting in permits web retrieval whose source URLs are threaded into
+  the note frontmatter (see **Online research egress** below). On-demand only; cadence/scheduling is a
+  later sprint. Prints the note path on success.
 
-> **Status.** **Sprint 2 of 5 — in progress.** `spec-20260628-research-scheduler` Sprints 1–2 ship
-> the **definition + execution layers**: the `ResearchJob` schema, the clock-free JSON store under
-> `.bober/research/jobs/`, `bober research job add|list|remove`, and `bober research run <jobId>`
-> (single-shot multi-model run → vault note + one hub Finding). **No online egress, cadence/scheduling,
-> or digest output exists yet** — those are Sprints 3–5. Defining a job with `--online-research`
-> stores the flag but makes **no** network call, and a `run` performs **no** web retrieval.
+#### Online research egress (opt-in, default off)
+
+A research run is **fully offline** unless you opt the `online-research` egress axis in. It is a
+**research-owned** axis — separate from the medical egress axes — and is **fail-closed**: absent or
+`false` ⇒ no web retrieval, zero outbound bytes.
+
+```jsonc
+// bober.config.json
+{
+  "research": {
+    "egress": {
+      "onlineResearch": true   // default false — permit online/web research retrieval
+    }
+  }
+}
+```
+
+With the axis off (or the config section absent), `runResearchJob` skips retrieval entirely — the
+retrieval client is never constructed and the note is byte-identical to the offline run. With it on,
+the runner retrieves sources and records their URLs in the note's frontmatter `sources` list. (A
+`run` does **not** itself bind a live web-search client yet — the axis is enforced and the slot is
+injectable; binding a real search provider is a later step.)
+
+> **Status.** **Sprint 3 of 5 — in progress.** `spec-20260628-research-scheduler` Sprints 1–3 ship
+> the **definition + execution + egress layers**: the `ResearchJob` schema, the clock-free JSON store
+> under `.bober/research/jobs/`, `bober research job add|list|remove`, `bober research run <jobId>`
+> (single-shot multi-model run → vault note + one hub Finding), and the opt-in
+> `research.egress.onlineResearch` egress axis (default `false`, fail-closed) that gates web retrieval.
+> **No cadence/scheduling or digest output exists yet** — those are Sprints 4–5. Defining a job with
+> `--online-research` stores the per-job flag; the *config* axis `research.egress.onlineResearch` is
+> what gates an actual `run`'s web retrieval.
 
 ---
 
