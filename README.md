@@ -612,6 +612,7 @@ npx agent-bober do --reconcile                     # Reconcile launched promotio
 
 # Calendar planner (deterministic slot-fill from ranked Findings)
 npx agent-bober calendar plan --dry-run --findings <path> [--freebusy <path>]  # Place ranked Findings into open slots in priority order (pure JS, LLM never packs); print scheduled (ISO start/end) + unscheduled (reason) — dry-run writes nothing to any calendar
+npx agent-bober calendar plan --export-ics <path> --findings <path> [--freebusy <path>]  # Same slot-fill, then write the plan to a local-first RFC 5545 .ics file (one VEVENT per scheduled item, UTC DTSTART/DTEND) with zero network egress — import it manually into your calendar app
 ```
 
 #### Clarification gating

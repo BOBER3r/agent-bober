@@ -1572,8 +1572,8 @@ call inside the algorithm.
 ### `bober calendar plan --dry-run`
 
 Propose a schedule from a ranked findings file and a free/busy file, and print it. In `--dry-run` the
-command is **read-only** — it writes **nothing** to any calendar or `.ics` file (no connectors exist
-yet; those land in later sprints).
+command is **read-only** — it writes **nothing** to any calendar or `.ics` file (use `--export-ics`
+below to write the plan to disk).
 
 ```bash
 bober calendar plan --dry-run --findings ./ranked-findings.json --freebusy ./freebusy.json
@@ -1607,9 +1607,46 @@ Unscheduled (1):
 A missing `--findings` path, an unreadable file, or a finding/interval that fails validation prints a
 red message to stderr and sets a non-zero exit code **without throwing**.
 
-> **Status.** Sprint 1 of 4 of `spec-20260628-calendar-planner`: the deterministic slotter +
-> `bober calendar plan --dry-run`. The `.ics` export, the Google Calendar MCP adapter, the live free/busy
-> read, and the approve-gated write are owned by later sprints.
+### `bober calendar plan --export-ics <path>`
+
+Slot the findings exactly as the dry-run does, then **write the scheduled plan to an RFC 5545 `.ics`
+file** with **zero network egress** — a local-first export you import manually into your calendar app.
+This is the user-invoked path; there is no approval gate (the manual import is the human review).
+
+```bash
+bober calendar plan --export-ics out.ics --findings ./ranked-findings.json --freebusy ./freebusy.json
+```
+
+- `--export-ics <path>` — the destination `.ics` file. The written file is a `VCALENDAR` with **one
+  `VEVENT` per scheduled item**: `UID` (`<findingId>@agent-bober`), `DTSTAMP`, `DTSTART`/`DTEND` in UTC
+  basic format (`YYYYMMDDTHHMMSSZ`), and `SUMMARY` (the item title, RFC 5545 TEXT-escaped). Lines use CRLF
+  endings.
+- `--findings` / `--freebusy` behave exactly as in `--dry-run`. The slot-fill algorithm is unchanged; the
+  only difference is that the resulting plan is written to disk via the local `.ics` connector instead of
+  only printed.
+
+On success the command prints `Wrote N event(s) to <path>`. The write is the **only** filesystem write
+on the calendar path and lives entirely in the `.ics` connector — there is no live calendar or network
+access. Validation/I/O failures still set a non-zero exit code **without throwing**.
+
+```text
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//agent-bober//calendar-planner//EN
+BEGIN:VEVENT
+UID:f-1@agent-bober
+DTSTAMP:20260629T000000Z
+DTSTART:20260629T000000Z
+DTEND:20260629T003000Z
+SUMMARY:Renew prescription
+END:VEVENT
+END:VCALENDAR
+```
+
+> **Status.** Sprints 1–2 of 4 of `spec-20260628-calendar-planner`: the deterministic slotter +
+> `bober calendar plan --dry-run` (Sprint 1) and the local-first, zero-egress `.ics` export via
+> `--export-ics` (Sprint 2). The Google Calendar MCP adapter + live free/busy read (Sprint 3) and the
+> approve-gated live write (Sprint 4) are owned by later sprints.
 
 ---
 

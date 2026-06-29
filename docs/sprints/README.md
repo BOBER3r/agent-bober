@@ -1641,7 +1641,7 @@ scheduler, and the Telegram adapter remain owned by sibling specs — the regist
 where they plug in. See the finale record
 [`sprint-spec-20260628-do-bridge-3.md`](./sprint-spec-20260628-do-bridge-3.md).
 
-## Calendar Planner — in progress (1 of 4)
+## Calendar Planner — in progress (2 of 4)
 
 `spec-20260628-calendar-planner` — *Calendar planner: deterministic slotter + Google MCP/.ics +
 approve-gate.* Takes the ranked **Findings** from the priority hub (with `dueBy` + `estDurationMin`),
@@ -1665,7 +1665,9 @@ connectors yet).
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260628-calendar-planner-1.md](./sprint-spec-20260628-calendar-planner-1.md) | **Deterministic slot-fill engine + `bober calendar plan --dry-run`:** new `src/calendar/` — `types.ts` (local `Finding` consume-copy mirroring `src/hub/finding.ts` + `FindingSchema`/`FindingArraySchema`, `BusyInterval`/`FreeInterval`/`WorkingHours`/`SlotConstraints`, `PlanItem`, closed `UnscheduledReason` union, `ProposedPlan`), `slotter.ts` **pure synchronous** `planSlots(findings, busy, constraints)` (free = window − busy, optional UTC `workingHours` clamp; place in **input order** into earliest slot fitting `estDurationMin` before `dueBy`, in-place split; **no `await`/`async`/`node:fs`/network/LLM**; exhaustive `never`-guarded reason switch; `Date.parse`→epoch-ms math = deterministic), `finding-source.ts` fail-closed `readFindingsFromFile`/`readBusyIntervalsFromFile` (Zod-validated JSON readers) + `src/cli/commands/calendar.ts` `runCalendarPlan` DI core (`CalendarPlanDeps` inject readers + `nowIso`; 7-day window from clock **at the CLI boundary**; `--dry-run` prints stdout only, writes nothing; never throws → `exitCode=1` on failure) / `registerCalendarCommand` (`bober calendar plan --dry-run --findings <path> [--freebusy <path>]`), wired via 4-line additive edit to `src/cli/index.ts:330`. commit `0d141c1`, +1063/-0, **28 calendar tests**, full suite **3428** green, no new dep; `sc-1-1..sc-1-6` iter-1. |
+| 2 | [sprint-spec-20260628-calendar-planner-2.md](./sprint-spec-20260628-calendar-planner-2.md) | **`CalendarConnector` interface + zero-egress `.ics` export:** new `src/calendar/connector.ts` (single abstraction both connectors implement — `CalendarConnector { name; readFreeBusy(window): BusyInterval[]; writeEvents(items: PlanItem[]): WriteResult }` + `FreeBusyWindow` + `WriteResult {writtenCount,target}`) and `src/calendar/ics-connector.ts` `createIcsConnector({outPath,freeBusyPath?,nowIso?})` → RFC 5545 writer: `writeEvents` serializes `PlanItem[]` to a `VCALENDAR` (one `VEVENT` per item: `UID <id>@agent-bober`, `DTSTAMP`, UTC-basic `DTSTART`/`DTEND` `YYYYMMDDTHHMMSSZ`, TEXT-escaped `SUMMARY`, CRLF) via `node:fs/promises` `writeFile`; `readFreeBusy` reads a local JSON file only — **no `http`/`https`/`fetch`/`external-client`/`child_process`**. `src/cli/commands/calendar.ts` gains `--export-ics <path>` + `CalendarPlanDeps.makeConnector` (default `createIcsConnector`); the connector owns the **only** write (`calendar.ts` keeps no `writeFile` import), `slotter.ts` byte-unchanged, no-flag path identical to Sprint 1. commit `0481407`, +343/-2, **10 new calendar tests** (generation/round-trip/no-egress source-scan/live `--export-ics`), full suite **3438** green, no new dep; `sc-2-1..sc-2-6` iter-1. |
 
-User-facing usage for `bober calendar plan --dry-run` lives in [`COMMANDS.md`](../../COMMANDS.md) under
-**Calendar Commands** and the README CLI list. The `.ics` export, the Google Calendar MCP adapter, the
-live free/busy read, and the approve-gated write remain owned by Sprints 2–4.
+User-facing usage for `bober calendar plan --dry-run` and `--export-ics` lives in
+[`COMMANDS.md`](../../COMMANDS.md) under **Calendar Commands** and the README CLI list. The Google
+Calendar MCP adapter + live free/busy read (Sprint 3) and the approve-gated live write (Sprint 4) remain
+owned by later sprints.
