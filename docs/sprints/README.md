@@ -1640,3 +1640,32 @@ plan; **no new dependency** was added. Medical/financial promoters, calendar slo
 scheduler, and the Telegram adapter remain owned by sibling specs — the registry is the documented seam
 where they plug in. See the finale record
 [`sprint-spec-20260628-do-bridge-3.md`](./sprint-spec-20260628-do-bridge-3.md).
+
+## Calendar Planner — in progress (1 of 4)
+
+`spec-20260628-calendar-planner` — *Calendar planner: deterministic slotter + Google MCP/.ics +
+approve-gate.* Takes the ranked **Findings** from the priority hub (with `dueBy` + `estDurationMin`),
+reads current free/busy, runs a **deterministic JS slot-fill** that places tasks into open slots **in
+priority order** (the LLM never packs slots), then proposes the schedule through the existing
+approve/steer gate before writing events — connector-agnostic (Google Calendar MCP adapter + local-first
+`.ics` fallback; cloud events carry only a non-sensitive `calendarSafeTitle` while the sensitive "why"
+stays local). Sprint 1 builds the **engine + dry-run preview**: a new `src/calendar/` module with a pure
+synchronous `planSlots` (derives free intervals from a window minus busy, places each finding in **input
+order** into the earliest slot that fits its `estDurationMin` before `dueBy`, splits the consumed
+interval in-place, and returns `scheduled` `PlanItem[]` + an `unscheduled` list with a closed
+`UnscheduledReason` — `does-not-fit` | `no-free-slot-before-dueBy` — via an exhaustive `never`-guarded
+switch). The engine mirrors the medical `NumericsQueryLayer` purity boundary: **no `await`/`async`/
+`node:fs`/network/LLM** inside the algorithm, so identical input yields deep-equal output and the clock
+is read **only** at the CLI boundary. A local `Finding` consume-copy (`src/calendar/types.ts`) keeps the
+hub field names without importing the sibling priority-hub spec; `finding-source.ts` reads ranked
+`Finding[]` / `BusyInterval[]` JSON files fail-closed; and `bober calendar plan --dry-run --findings
+<path> [--freebusy <path>]` prints the proposed plan and **writes nothing** to any calendar (no
+connectors yet).
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-calendar-planner-1.md](./sprint-spec-20260628-calendar-planner-1.md) | **Deterministic slot-fill engine + `bober calendar plan --dry-run`:** new `src/calendar/` — `types.ts` (local `Finding` consume-copy mirroring `src/hub/finding.ts` + `FindingSchema`/`FindingArraySchema`, `BusyInterval`/`FreeInterval`/`WorkingHours`/`SlotConstraints`, `PlanItem`, closed `UnscheduledReason` union, `ProposedPlan`), `slotter.ts` **pure synchronous** `planSlots(findings, busy, constraints)` (free = window − busy, optional UTC `workingHours` clamp; place in **input order** into earliest slot fitting `estDurationMin` before `dueBy`, in-place split; **no `await`/`async`/`node:fs`/network/LLM**; exhaustive `never`-guarded reason switch; `Date.parse`→epoch-ms math = deterministic), `finding-source.ts` fail-closed `readFindingsFromFile`/`readBusyIntervalsFromFile` (Zod-validated JSON readers) + `src/cli/commands/calendar.ts` `runCalendarPlan` DI core (`CalendarPlanDeps` inject readers + `nowIso`; 7-day window from clock **at the CLI boundary**; `--dry-run` prints stdout only, writes nothing; never throws → `exitCode=1` on failure) / `registerCalendarCommand` (`bober calendar plan --dry-run --findings <path> [--freebusy <path>]`), wired via 4-line additive edit to `src/cli/index.ts:330`. commit `0d141c1`, +1063/-0, **28 calendar tests**, full suite **3428** green, no new dep; `sc-1-1..sc-1-6` iter-1. |
+
+User-facing usage for `bober calendar plan --dry-run` lives in [`COMMANDS.md`](../../COMMANDS.md) under
+**Calendar Commands** and the README CLI list. The `.ics` export, the Google Calendar MCP adapter, the
+live free/busy read, and the approve-gated write remain owned by Sprints 2–4.

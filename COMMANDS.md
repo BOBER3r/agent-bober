@@ -1561,6 +1561,58 @@ blocks waiting for a run to finish) and **best-effort** (a missing/corrupt `run-
 
 ---
 
+## Calendar Commands
+
+The **calendar planner** takes the ranked **Findings** from the priority hub (with `dueBy` and
+`estDurationMin`) plus a free/busy model and runs a **deterministic, LLM-free slot-fill** that places
+tasks into open slots **in priority order** — the LLM never packs slots. Placement is pure synchronous
+TypeScript: identical input produces deep-equal output, with no async, filesystem, network, or model
+call inside the algorithm.
+
+### `bober calendar plan --dry-run`
+
+Propose a schedule from a ranked findings file and a free/busy file, and print it. In `--dry-run` the
+command is **read-only** — it writes **nothing** to any calendar or `.ics` file (no connectors exist
+yet; those land in later sprints).
+
+```bash
+bober calendar plan --dry-run --findings ./ranked-findings.json --freebusy ./freebusy.json
+```
+
+- `--findings <path>` (**required**) — a ranked `Finding[]` JSON file, ordered by priority (index 0 =
+  highest). Each `Finding` has the same shape `bober hub list` emits; the slotter reads `estDurationMin`
+  (default 30 min if absent), optional `dueBy`, and `calendarSafeTitle` (falling back to `title`).
+- `--freebusy <path>` (optional) — a `BusyInterval[]` JSON file (`{ startIso, endIso }` entries). Omit it
+  to plan against a fully open window.
+
+The planning window is **7 days** from now, computed at the command boundary. Findings are placed into
+the earliest free slot that fits their duration before their `dueBy`; each placed item prints with its
+ISO start/end and title, and anything that could not be placed prints in an **Unscheduled** list with a
+reason (`does-not-fit` or `no-free-slot-before-dueBy`):
+
+```text
+Proposed calendar plan
+Window: 2026-06-29T00:00:00.000Z → 2026-07-06T00:00:00.000Z
+
+Scheduled (2):
+  [2026-06-29T00:00:00.000Z → 2026-06-29T00:30:00.000Z]  Renew prescription
+  [2026-06-29T00:30:00.000Z → 2026-06-29T01:30:00.000Z]  Book dentist
+
+Unscheduled (1):
+  f-90  reason: does-not-fit
+
+(dry-run — nothing written to any calendar)
+```
+
+A missing `--findings` path, an unreadable file, or a finding/interval that fails validation prints a
+red message to stderr and sets a non-zero exit code **without throwing**.
+
+> **Status.** Sprint 1 of 4 of `spec-20260628-calendar-planner`: the deterministic slotter +
+> `bober calendar plan --dry-run`. The `.ics` export, the Google Calendar MCP adapter, the live free/busy
+> read, and the approve-gated write are owned by later sprints.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |
