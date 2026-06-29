@@ -10,7 +10,7 @@
  * process.exitCode is reset in before/afterEach (mirrors task.test.ts:17-26).
  */
 
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -18,6 +18,8 @@ import { Command } from "commander";
 
 import { registerResearchCommand } from "./research.js";
 import { listJobs } from "../../research/job-store.js";
+import type { Finding } from "../../hub/finding.js";
+import type { RoleProviderBlock } from "../../fleet/tier-policy.js";
 
 // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -52,6 +54,17 @@ function makeProgram(): Command {
   const program = new Command();
   program.exitOverride(); // prevent commander from calling process.exit()
   registerResearchCommand(program);
+  return program;
+}
+
+/** Make a program with injected run deps — avoids real provider + SQLite in tests. */
+function makeProgramWithRunOverrides(
+  queryModel: (b: RoleProviderBlock, p: string) => Promise<string>,
+  findingSink: (f: Finding) => Promise<void>,
+): Command {
+  const program = new Command();
+  program.exitOverride();
+  registerResearchCommand(program, { queryModel, findingSink });
   return program;
 }
 
@@ -205,6 +218,68 @@ describe("research job remove", () => {
 
     const program = makeProgram();
     await parse(program, ["research", "job", "remove", "nonexistent-id"]);
+
+    expect(process.exitCode).toBe(1);
+  });
+});
+
+// ── sc-2-4: research run <jobId> ──────────────────────────────────────
+
+describe("research run", () => {
+  it("sc-2-4: loads the stored job, runs with injected deps, and prints the note path", async () => {
+    // First, add a job
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const addProgram = makeProgram();
+    await parse(addProgram, [
+      "research", "job", "add",
+      "--question", "What are the benefits of ESM modules?",
+      "--cadence", "weekly",
+    ]);
+
+    // Get the created job id
+    const jobs = await listJobs(tmpRoot);
+    expect(jobs).toHaveLength(1);
+    const jobId = jobs[0].id;
+
+    // Inject fake queryModel (returns distinct answers per block) and a recording findingSink
+    const sinkCalls: Finding[] = [];
+    const fakeQueryModel = async (b: RoleProviderBlock, _p: string): Promise<string> =>
+      `injected answer from ${b.provider}/${b.model}`;
+    const fakeFindingSink = async (f: Finding): Promise<void> => { sinkCalls.push(f); };
+
+    // Capture stdout to get the note path
+    const outWrites: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      outWrites.push(String(chunk));
+      return true;
+    });
+
+    const runProgram = makeProgramWithRunOverrides(fakeQueryModel, fakeFindingSink);
+    await parse(runProgram, ["research", "run", jobId]);
+
+    // sc-2-4: prints the note path
+    const output = outWrites.join("");
+    expect(output).toMatch(/\.md$/m);
+    expect(output).toContain("research");
+    expect(process.exitCode).toBe(0);
+
+    // sc-2-4: note file actually exists and has correct content
+    const notePath = output.trim();
+    const noteContent = await readFile(notePath, "utf-8");
+    expect(noteContent).toContain("What are the benefits of ESM modules?");
+
+    // sc-2-4: findingSink was called exactly once (no real network hit)
+    expect(sinkCalls).toHaveLength(1);
+    expect(sinkCalls[0].title).toContain("ESM");
+  });
+
+  it("sc-2-4: sets exitCode=1 when job not found", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const fakeSink = async (_f: Finding): Promise<void> => {};
+    const fakeQm = async (_b: RoleProviderBlock, _p: string): Promise<string> => "answer";
+    const runProgram = makeProgramWithRunOverrides(fakeQm, fakeSink);
+    await parse(runProgram, ["research", "run", "nonexistent-job-id"]);
 
     expect(process.exitCode).toBe(1);
   });
