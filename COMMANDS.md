@@ -1715,11 +1715,13 @@ interval / shift the window) and **re-proposes** — again writing no events.
 
 The **research scheduler** lets you define recurring **multi-model research jobs** — a question
 plus a cadence — once, so a later scheduler can rerun it across a model set, optionally retrieve
-online, and feed the results into the priority hub. Sprint 1 ships only the **definition layer**:
-jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json` (not in
+online, and feed the results into the priority hub. Sprints 1–2 ship the **definition + execution
+layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json` (not in
 `bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`, and
 the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
-clock — the CLI stamps `createdAt` once at the command boundary.
+clock — the CLI stamps `createdAt` once at the command boundary. `bober research run <jobId>`
+executes one stored job on demand across ≥2 distinct models, writing a vault note and one hub
+Finding (no online retrieval yet — that is Sprint 3).
 
 ### `bober research job add --question "..." [options]`
 
@@ -1767,11 +1769,33 @@ bober research job remove 3f8a1c0b9d2e4f76
 
 A not-found id prints a yellow message and exits non-zero.
 
-> **Status.** **Sprint 1 of 5 — in progress.** `spec-20260628-research-scheduler` Sprint 1 ships the
-> **definition layer only**: the `ResearchJob` schema, the clock-free JSON store under
-> `.bober/research/jobs/`, and `bober research job add|list|remove`. **No execution, model querying,
-> scheduling, online egress, or digest output exists yet** — those are Sprints 2–5. Defining a job
-> with `--online-research` stores the flag but makes **no** network call.
+### `bober research run <jobId>`
+
+Execute a stored research job **once, on demand**: query ≥2 distinct provider/model blocks, write a
+markdown research note into the vault, and emit one Finding to the priority hub.
+
+```bash
+bober research run 3f8a1c0b9d2e4f76
+# /path/to/vault/research/2026-06-29-3f8a1c0b9d2e.md
+```
+
+- Loads the job by id (a not-found id prints a red message and exits non-zero **without throwing**).
+- Resolves **≥2 distinct provider/model blocks** from `src/fleet/tier-policy.ts` (across different
+  difficulty tiers — `cheap`/`standard`/`hard`/`frontier`) and asks each the job's `question`.
+- Writes a markdown note to `<vaultRoot>/research/<YYYY-MM-DD>-<marker>.md` whose frontmatter records
+  `jobId`, `question`, the list of `models` queried, and a `generatedAt` timestamp; the body has one
+  `### <provider>/<model>` section per model answer.
+- Emits **exactly one** `kind: "watch"` Finding to the hub (`domain` from the job, default
+  `research`; `evidence` = per-model contribution snippets), via the hub's `ingestFinding` writer.
+- **No online/web retrieval** happens — the run uses only the injected provider clients. On-demand
+  only; cadence/scheduling is a later sprint. Prints the note path on success.
+
+> **Status.** **Sprint 2 of 5 — in progress.** `spec-20260628-research-scheduler` Sprints 1–2 ship
+> the **definition + execution layers**: the `ResearchJob` schema, the clock-free JSON store under
+> `.bober/research/jobs/`, `bober research job add|list|remove`, and `bober research run <jobId>`
+> (single-shot multi-model run → vault note + one hub Finding). **No online egress, cadence/scheduling,
+> or digest output exists yet** — those are Sprints 3–5. Defining a job with `--online-research`
+> stores the flag but makes **no** network call, and a `run` performs **no** web retrieval.
 
 ---
 

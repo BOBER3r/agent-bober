@@ -1700,7 +1700,7 @@ and **never** on reject. **No auto-approve in any mode**, the whole gate reuses 
 approval-state machinery and slash-command handlers, and Google cloud egress stays opt-in/default-off. See
 the finale record [`sprint-spec-20260628-calendar-planner-4.md`](./sprint-spec-20260628-calendar-planner-4.md).
 
-## Research Scheduler — in progress (1 of 5)
+## Research Scheduler — in progress (2 of 5)
 
 `spec-20260628-research-scheduler` — recurring **multi-model research jobs**: define a research
 question + cadence once, and a scheduler (later sprints) reruns it across a model set, optionally
@@ -1714,12 +1714,23 @@ CLI registered alongside the existing top-level commands. `cadence` is a **close
 `onlineResearch` defaults **false** and is stored verbatim — it triggers **no** network call here
 (egress is Sprint 3). Jobs are JSON files (**not** `bober.config.json`, **not** the FactStore SQLite
 db); each round-trips through `ResearchJobSchema`, and `addJob` `safeParse`s before writing so an
-invalid job never reaches disk. **No execution, model querying, scheduling, egress, or digest output
-yet** — those are Sprints 2–5.
+invalid job never reaches disk. Sprint 2 lands the **execution layer**: a deterministic,
+clock-injected `runResearchJob(job, deps)` runner that resolves **≥2 distinct provider/model blocks**
+across **different** fleet tiers (`diverseBlocks` via `tierPolicy.resolveTier()`, deduped by
+`provider/model` label — 4 distinct in the current table), queries each via an **injected**
+`queryModel` (no SDK import in the runner; **no web egress**), synthesizes the answers into a markdown
+vault note (`note-writer` — PURE `serializeResearchNote`, frontmatter `{ jobId, question, models[],
+generatedAt }` mirroring the medical research-note), and emits **exactly one** `kind:"watch"` Finding
+(canonical `FindingSchema` from `src/hub/finding.ts`, **not** redefined) through an injected
+`findingSink`. A pluggable domain-analyzer **registry** (`registerAnalyzer`) is stubbed but registers
+nothing (no `src/medical/` import). The new `bober research run <jobId>` CLI binds `queryModel` to a
+real provider `createClient(...).chat()` and `findingSink` to the hub's `ingestFinding`, prints the
+note path, and never throws. **No online egress (S3), cadence/tick runner (S4), or digest (S5) yet.**
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260628-research-scheduler-1.md](./sprint-spec-20260628-research-scheduler-1.md) | **Research job schema + JSON store + `bober research job` CLI:** new `src/research/` — `types.ts` (`CadenceSchema` closed enum `daily\|weekly\|monthly` + `ResearchJobSchema` `{ id, question(min 1), cadence, tier?, modelSet?, targetRepo?, domain?, onlineResearch(default false), createdAt(ISO) }`; empty `question` ⇒ Zod error, sc-1-1) + `job-store.ts` (**clock-free, async-only** — `jobId(question,createdAt)=sha256(...).slice(0,16)`, `addJob` `safeParse`-before-write to `.bober/research/jobs/<id>.json`, `listJobs` sorted + **silently skips** malformed files, `readJob`, `removeJob`⇒bool) + `src/cli/commands/research.ts` `registerResearchCommand` exposing `research job add --question "..." [--cadence --tier --domain --target-repo --online-research]` / `list` / `remove <jobId>` (clock stamped **only** at the `.action()` boundary, **never throws** — stderr + `process.exitCode=1`), wired via 4-line additive edit to `src/cli/index.ts` (import `:42`, call `:331`). `--online-research` is stored but inert (egress is Sprint 3). commit `0336e47`, 6 files (+739), **22 new tests** (4 schema, 15 store, 7 CLI minus overlap; full suite **3519** green), no new deps; sc-1-1..sc-1-4 iter-1, typecheck/build/lint clean. **Definition layer only — execution (S2), egress axis (S3), cadence due-date + tick runner (S4), and digest (S5) follow.** |
+| 2 | [sprint-spec-20260628-research-scheduler-2.md](./sprint-spec-20260628-research-scheduler-2.md) | **Single-shot multi-model runner → vault note + hub Finding + `bober research run`:** `model-diversity.ts` (`diverseBlocks(tier?)` enumerates `cheap→standard→hard→frontier` via `tierPolicy.resolveTier(t)?.generator`, dedupes by `modelLabel`=`provider/model` ⇒ 4 distinct: `openai-compat/deepseek`, `openai-compat/grok`, `anthropic/sonnet`, `anthropic/opus`; PURE — no fs/net/clock; sc-2-1) + `note-writer.ts` (PURE `serializeResearchNote(job,labels,contributions,now)` ⇒ frontmatter `{ title, jobId, question, models[] (string labels — never blocks), generatedAt, domain, type, status }` + `### <label>` body sections via `serializeFrontmatter`, mirrors medical `research-note.ts`; `researchNotePath`=`<vault>/research/<YYYY-MM-DD>-<marker>.md` date from injected `now`; sc-2-2) + `runner.ts` (`runResearchJob(job, deps={queryModel,findingSink,now,vaultRoot})` ⇒ resolve ≥2 blocks [throws `<2`], query each, write note [`mkdir`+`writeFile`], build **one** `kind:"watch"` Finding `id=sha256(domain\|title\|kind).slice(0,16)`/`evidence`=per-model snippets/`surfacedAt`=`now` validated by **canonical** `FindingSchema` from `src/hub/finding.ts`, await `findingSink` **exactly once** ⇒ `RunResult{notePath,models,finding}`; pluggable `registerAnalyzer`/`DomainAnalyzer` registry — generic default, **no** `src/medical/` import; clock-free, **no SDK import, no web egress**; sc-2-3) + `src/cli/commands/research.ts` `research run <jobId>` (reads job, stamps `now` at `.action()` boundary, binds `queryModel`→`createClient(...).chat()` + `findingSink`→`ingestFinding(store,f,{now})` over a `FactStore` closed in `finally`, prints note path, **never throws** — not-found/error ⇒ stderr + `exitCode=1`; optional `ResearchRunOverrides{queryModel?,findingSink?}` for test injection). commit `20d42cb`, 7 files (+807/−3), +21 tests (full suite **3540** green), no new deps; sc-2-1..sc-2-4 iter-1, typecheck/build/lint clean. **No FleetCoordinator/egress/cadence/digest — uses a lightweight tier-policy loop + injected deps only.** |
 
-User-facing usage for `bober research job add\|list\|remove` lives in
+User-facing usage for `bober research job add\|list\|remove` and `bober research run <jobId>` lives in
 [`COMMANDS.md`](../../COMMANDS.md) under **Research Commands** and the README CLI list.

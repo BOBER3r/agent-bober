@@ -620,6 +620,7 @@ npx agent-bober calendar apply <checkpointId>      # Write events for an approve
 npx agent-bober research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>] [--domain <d>] [--target-repo <r>] [--online-research]  # Define a recurring research job as JSON under .bober/research/jobs/ (validated by ResearchJobSchema; deterministic jobId=sha256(question|createdAt); --online-research stored but inert until egress lands)
 npx agent-bober research job list                  # List all defined research jobs (jobId, cadence, question, [domain])
 npx agent-bober research job remove <jobId>        # Delete a research job's JSON file (not-found → exitCode=1)
+npx agent-bober research run <jobId>               # Execute one stored job: query ≥2 distinct tier-policy provider/model blocks, write a vault research note (frontmatter jobId/question/models[]/generatedAt), emit exactly one kind:"watch" hub Finding; prints the note path. No web egress (Sprint 3); never throws (not-found → exitCode=1)
 ```
 
 #### Clarification gating
