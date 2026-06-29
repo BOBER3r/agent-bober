@@ -1714,15 +1714,16 @@ interval / shift the window) and **re-proposes** — again writing no events.
 ## Research Commands
 
 The **research scheduler** lets you define recurring **multi-model research jobs** — a question
-plus a cadence — once, so a later scheduler can rerun it across a model set, optionally retrieve
-online, and feed the results into the priority hub. Sprints 1–3 ship the **definition + execution +
-egress layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json` (not in
-`bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`, and
-the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
-clock — the CLI stamps `createdAt` once at the command boundary. `bober research run <jobId>`
+plus a cadence — once, then rerun them across a model set on a schedule, optionally retrieve
+online, and feed the results into the priority hub. Sprints 1–4 ship the **definition + execution +
+egress + scheduler layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json`
+(not in `bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`,
+and the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
+clock — the CLI stamps timestamps once at the command boundary. `bober research run <jobId>`
 executes one stored job on demand across ≥2 distinct models, writing a vault note and one hub
-Finding. A run is **offline by default**: web retrieval is gated behind the opt-in
-`research.egress.onlineResearch` config axis (default `false`, fail-closed — see below).
+Finding; `bober research tick` runs **every job that is due as of now** on the same path and advances
+each run job's cadence due-date (idempotent). A run is **offline by default**: web retrieval is gated
+behind the opt-in `research.egress.onlineResearch` config axis (default `false`, fail-closed — see below).
 
 ### `bober research job add --question "..." [options]`
 
@@ -1791,8 +1792,8 @@ bober research run 3f8a1c0b9d2e4f76
 - **Offline by default.** Web/online retrieval is gated behind the opt-in `research.egress.onlineResearch`
   config axis (default `false`). With the axis off the run uses only the injected provider clients and
   issues **zero outbound requests**; opting in permits web retrieval whose source URLs are threaded into
-  the note frontmatter (see **Online research egress** below). On-demand only; cadence/scheduling is a
-  later sprint. Prints the note path on success.
+  the note frontmatter (see **Online research egress** below). On-demand only — to run jobs on a
+  cadence use `bober research tick` (below). Prints the note path on success.
 
 #### Online research egress (opt-in, default off)
 
@@ -1817,14 +1818,59 @@ the runner retrieves sources and records their URLs in the note's frontmatter `s
 `run` does **not** itself bind a live web-search client yet — the axis is enforced and the slot is
 injectable; binding a real search provider is a later step.)
 
-> **Status.** **Sprint 3 of 5 — in progress.** `spec-20260628-research-scheduler` Sprints 1–3 ship
-> the **definition + execution + egress layers**: the `ResearchJob` schema, the clock-free JSON store
-> under `.bober/research/jobs/`, `bober research job add|list|remove`, `bober research run <jobId>`
-> (single-shot multi-model run → vault note + one hub Finding), and the opt-in
-> `research.egress.onlineResearch` egress axis (default `false`, fail-closed) that gates web retrieval.
-> **No cadence/scheduling or digest output exists yet** — those are Sprints 4–5. Defining a job with
-> `--online-research` stores the per-job flag; the *config* axis `research.egress.onlineResearch` is
-> what gates an actual `run`'s web retrieval.
+### `bober research tick [--watch] [--interval <ms>]`
+
+Run **every research job that is due as of now**, on the same path as `run` — and advance each run
+job's cadence due-date so re-running `tick` immediately runs nothing. This is the recurring entrypoint
+an external scheduler invokes.
+
+```bash
+bober research tick
+# research tick: ran 2 job(s): 3f8a1c0b9d2e4f76, a91c…   (or) research tick: no jobs due.
+```
+
+- **Due selection.** A job is due when its `nextDueAt` is unset (never scheduled ⇒ due on the first
+  tick) **or** `nextDueAt <= now` (boundary-inclusive). Future jobs are skipped.
+- **Idempotent.** After a job runs, its `nextDueAt` is advanced by its cadence
+  (`daily` +1 day, `weekly` +7 days, `monthly` +1 month) and its `lastRunAt` is set to `now`, then the
+  job JSON is rewritten in place (the deterministic `jobId` is unchanged, so the same file is updated).
+  A second `tick` at the same instant runs **zero** jobs.
+- **Cadence math** is deterministic and clock-free — the wall clock is read **only** at the command
+  boundary. The monthly cadence uses `setUTCMonth`, which rolls **forward** when the day overflows the
+  shorter month (e.g. `2026-01-31` + 1 month → `2026-03-03`); a monthly job is not clamped to
+  end-of-month.
+- **Failure leaves the job due.** Runs happen first, persistence after — if a job's run throws, its
+  due-date is **not** advanced, so it remains due on the next tick (there is no retry/backoff yet).
+- **Offline by default**, exactly like `run` — the `research.egress.onlineResearch` axis still gates
+  any web retrieval. Never throws (errors ⇒ stderr + `process.exitCode = 1`).
+
+#### Scheduling mechanism (pick a trigger)
+
+`tick` itself is a one-shot, idempotent command; **how often** it fires is your choice:
+
+- **`--watch`** runs `tick` on an in-process interval (`--interval <ms>`, default `3600000` = 1 hour,
+  floored at `1000` ms). Simple, but the loop **dies with the process** — fine for a foreground/dev
+  session, not for unattended production.
+- **OS cron / launchd calling `bober research tick`** survives reboots and sleep and is the
+  **recommended** unattended trigger. Example crontab entry (top of every hour):
+
+  ```cron
+  0 * * * * /usr/local/bin/bober research tick
+  ```
+
+- **harness scheduler** fires the CLI on a cadence from inside the agent harness.
+
+> Hosted-OAuth schedulers are unfit for unattended runs — use OS cron/launchd for unattended scheduling.
+
+> **Status.** **Sprint 4 of 5 — in progress.** `spec-20260628-research-scheduler` Sprints 1–4 ship
+> the **definition + execution + egress + scheduler layers**: the `ResearchJob` schema, the clock-free
+> JSON store under `.bober/research/jobs/`, `bober research job add|list|remove`,
+> `bober research run <jobId>` (single-shot multi-model run → vault note + one hub Finding), the opt-in
+> `research.egress.onlineResearch` egress axis (default `false`, fail-closed) that gates web retrieval,
+> and `bober research tick [--watch]` (idempotent cadence-driven scheduler advancing `nextDueAt`/
+> `lastRunAt`). **No digest output exists yet** — that is Sprint 5; failed runs leave the job due with
+> no retry/backoff. Defining a job with `--online-research` stores the per-job flag; the *config* axis
+> `research.egress.onlineResearch` is what gates an actual `run`/`tick`'s web retrieval.
 
 ---
 

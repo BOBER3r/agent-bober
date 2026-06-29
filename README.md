@@ -620,7 +620,8 @@ npx agent-bober calendar apply <checkpointId>      # Write events for an approve
 npx agent-bober research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>] [--domain <d>] [--target-repo <r>] [--online-research]  # Define a recurring research job as JSON under .bober/research/jobs/ (validated by ResearchJobSchema; deterministic jobId=sha256(question|createdAt); --online-research stored but inert until egress lands)
 npx agent-bober research job list                  # List all defined research jobs (jobId, cadence, question, [domain])
 npx agent-bober research job remove <jobId>        # Delete a research job's JSON file (not-found → exitCode=1)
-npx agent-bober research run <jobId>               # Execute one stored job: query ≥2 distinct tier-policy provider/model blocks, write a vault research note (frontmatter jobId/question/models[]/generatedAt), emit exactly one kind:"watch" hub Finding; prints the note path. No web egress (Sprint 3); never throws (not-found → exitCode=1)
+npx agent-bober research run <jobId>               # Execute one stored job: query ≥2 distinct tier-policy provider/model blocks, write a vault research note (frontmatter jobId/question/models[]/generatedAt), emit exactly one kind:"watch" hub Finding; prints the note path. Offline unless research.egress.onlineResearch; never throws (not-found → exitCode=1)
+npx agent-bober research tick [--watch] [--interval <ms>]  # Run every job due as of now (nextDueAt unset or <= now) on the same path; idempotent — advances each run job's nextDueAt by cadence (daily+1d/weekly+7d/monthly+1mo) + sets lastRunAt, so a 2nd tick runs nothing. Clock read only at the boundary. --watch = in-process setInterval (default 1h); for unattended runs use OS cron/launchd, e.g. `0 * * * * bober research tick`
 ```
 
 #### Clarification gating
@@ -991,7 +992,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
 > **Online research egress is opt-in and default-off.** The isolated `research.egress.onlineResearch`
 > axis (default `false`, **separate** from the `medical`/`taskInbox`/`calendar` axes) gates `bober
-> research run`'s web retrieval. With the axis off — the default — a research run uses only its injected
+> research run` (and `bober research tick`) web retrieval. With the axis off — the default — a research run uses only its injected
 > provider clients and makes **zero outbound retrieval requests**; the `ResearchEgressGuard`
 > (`src/research/egress.ts`, mirroring the medical `EgressGuard`) is fail-closed (`assertAllowed` throws
 > `Egress axis 'online-research' not enabled` when off), and the runner's gated branch skips retrieval
