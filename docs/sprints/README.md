@@ -1699,3 +1699,27 @@ write** (Sprint 4): the default `bober calendar plan` proposes through the exist
 and **never** on reject. **No auto-approve in any mode**, the whole gate reuses the existing
 approval-state machinery and slash-command handlers, and Google cloud egress stays opt-in/default-off. See
 the finale record [`sprint-spec-20260628-calendar-planner-4.md`](./sprint-spec-20260628-calendar-planner-4.md).
+
+## Research Scheduler — in progress (1 of 5)
+
+`spec-20260628-research-scheduler` — recurring **multi-model research jobs**: define a research
+question + cadence once, and a scheduler (later sprints) reruns it across a model set, optionally
+retrieves online, and feeds the results into the priority hub. Sprint 1 lands the **definition
+layer**: a new `src/research/` module with a `ResearchJob` Zod schema, a **clock-free, async-only**
+JSON file store under `.bober/research/jobs/<jobId>.json`, and a `bober research job add|list|remove`
+CLI registered alongside the existing top-level commands. `cadence` is a **closed enum**
+(`daily | weekly | monthly`) — deliberately not a cron string — and the deterministic
+`jobId = sha256(question|createdAt).slice(0,16)` is derived in the store while the wall-clock
+`createdAt` is stamped **only** at the CLI `.action()` boundary (the store never reads the clock).
+`onlineResearch` defaults **false** and is stored verbatim — it triggers **no** network call here
+(egress is Sprint 3). Jobs are JSON files (**not** `bober.config.json`, **not** the FactStore SQLite
+db); each round-trips through `ResearchJobSchema`, and `addJob` `safeParse`s before writing so an
+invalid job never reaches disk. **No execution, model querying, scheduling, egress, or digest output
+yet** — those are Sprints 2–5.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260628-research-scheduler-1.md](./sprint-spec-20260628-research-scheduler-1.md) | **Research job schema + JSON store + `bober research job` CLI:** new `src/research/` — `types.ts` (`CadenceSchema` closed enum `daily\|weekly\|monthly` + `ResearchJobSchema` `{ id, question(min 1), cadence, tier?, modelSet?, targetRepo?, domain?, onlineResearch(default false), createdAt(ISO) }`; empty `question` ⇒ Zod error, sc-1-1) + `job-store.ts` (**clock-free, async-only** — `jobId(question,createdAt)=sha256(...).slice(0,16)`, `addJob` `safeParse`-before-write to `.bober/research/jobs/<id>.json`, `listJobs` sorted + **silently skips** malformed files, `readJob`, `removeJob`⇒bool) + `src/cli/commands/research.ts` `registerResearchCommand` exposing `research job add --question "..." [--cadence --tier --domain --target-repo --online-research]` / `list` / `remove <jobId>` (clock stamped **only** at the `.action()` boundary, **never throws** — stderr + `process.exitCode=1`), wired via 4-line additive edit to `src/cli/index.ts` (import `:42`, call `:331`). `--online-research` is stored but inert (egress is Sprint 3). commit `0336e47`, 6 files (+739), **22 new tests** (4 schema, 15 store, 7 CLI minus overlap; full suite **3519** green), no new deps; sc-1-1..sc-1-4 iter-1, typecheck/build/lint clean. **Definition layer only — execution (S2), egress axis (S3), cadence due-date + tick runner (S4), and digest (S5) follow.** |
+
+User-facing usage for `bober research job add\|list\|remove` lives in
+[`COMMANDS.md`](../../COMMANDS.md) under **Research Commands** and the README CLI list.

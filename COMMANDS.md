@@ -1711,6 +1711,70 @@ interval / shift the window) and **re-proposes** — again writing no events.
 
 ---
 
+## Research Commands
+
+The **research scheduler** lets you define recurring **multi-model research jobs** — a question
+plus a cadence — once, so a later scheduler can rerun it across a model set, optionally retrieve
+online, and feed the results into the priority hub. Sprint 1 ships only the **definition layer**:
+jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json` (not in
+`bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`, and
+the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
+clock — the CLI stamps `createdAt` once at the command boundary.
+
+### `bober research job add --question "..." [options]`
+
+Validate the inputs and persist one recurring research job.
+
+```bash
+bober research job add --question "What changed in the GLP-1 literature this week?" --cadence weekly --domain medical
+```
+
+- `--question <q>` (**required**) — the research question. Must be **non-empty** (a blank question is
+  rejected with a Zod error).
+- `--cadence <c>` (optional, default `weekly`) — recurrence cadence, a **closed enum**:
+  `daily | weekly | monthly`. (It is deliberately not a cron string; next-due computation is a later
+  sprint.)
+- `--tier <t>` (optional) — a difficulty-tier hint for the executor (a later sprint).
+- `--domain <d>` (optional) — a domain tag (e.g. `medical`, `coding`) for priority-hub routing.
+- `--target-repo <r>` (optional) — a repository slug to scope the research against.
+- `--online-research` (optional) — stores `onlineResearch=true`. **This does not enable any network
+  call** — the online-research egress axis is not active yet; the flag is persisted for
+  forward-compatibility only.
+
+On success it prints the new `jobId`, the question, and the cadence. On a validation or IO error it
+prints a red message to stderr and exits non-zero **without throwing**.
+
+### `bober research job list`
+
+Print every defined job, one per line, as `<jobId>  <cadence>  <question>  [<domain>]`:
+
+```bash
+bober research job list
+# 3f8a1c0b9d2e4f76  weekly  What changed in the GLP-1 literature this week?  [medical]
+```
+
+When no jobs are defined it prints `No research jobs defined.`. Malformed/invalid JSON files in the
+store are silently skipped — the listing never throws.
+
+### `bober research job remove <jobId>`
+
+Delete a job's JSON file by id:
+
+```bash
+bober research job remove 3f8a1c0b9d2e4f76
+# Removed research job 3f8a1c0b9d2e4f76
+```
+
+A not-found id prints a yellow message and exits non-zero.
+
+> **Status.** **Sprint 1 of 5 — in progress.** `spec-20260628-research-scheduler` Sprint 1 ships the
+> **definition layer only**: the `ResearchJob` schema, the clock-free JSON store under
+> `.bober/research/jobs/`, and `bober research job add|list|remove`. **No execution, model querying,
+> scheduling, online egress, or digest output exists yet** — those are Sprints 2–5. Defining a job
+> with `--online-research` stores the flag but makes **no** network call.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |

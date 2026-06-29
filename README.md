@@ -615,6 +615,11 @@ npx agent-bober calendar plan --dry-run --findings <path> [--freebusy <path>]  #
 npx agent-bober calendar plan --export-ics <path> --findings <path> [--freebusy <path>]  # Same slot-fill, then write the plan to a local-first RFC 5545 .ics file (one VEVENT per scheduled item, UTC DTSTART/DTEND) with zero network egress — import it manually into your calendar app
 npx agent-bober calendar plan --findings <path> [--freebusy <path>]  # Live path: slot, then PROPOSE through the existing approval gate — writes a pending marker + plan sidecar and ZERO events; prints checkpointId (calendar-<id>) + how to approve. No auto-approve in any mode
 npx agent-bober calendar apply <checkpointId>      # Write events for an approved plan: detects the approved/rejected marker inline → connector.writeEvents EXACTLY once on approval / never on reject (Google still egress-gated). Approve first: bober approve <checkpointId> (or /approve in chat)
+
+# Research scheduler (recurring multi-model research jobs)
+npx agent-bober research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>] [--domain <d>] [--target-repo <r>] [--online-research]  # Define a recurring research job as JSON under .bober/research/jobs/ (validated by ResearchJobSchema; deterministic jobId=sha256(question|createdAt); --online-research stored but inert until egress lands)
+npx agent-bober research job list                  # List all defined research jobs (jobId, cadence, question, [domain])
+npx agent-bober research job remove <jobId>        # Delete a research job's JSON file (not-found → exitCode=1)
 ```
 
 #### Clarification gating
