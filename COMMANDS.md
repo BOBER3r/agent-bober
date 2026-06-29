@@ -1314,17 +1314,21 @@ always closed.
 ### `bober task list [--all] [--status <status>]`
 
 Print a table of tasks (columns `ID  STATUS  DOMAIN  TITLE`; the title is truncated at 36 chars).
-By **default** the list shows only **active** tasks — those whose status is `open` or `in-progress`
-— so finished work stays out of the way. Pass `--all` to include every status (including
-`done`/`dropped`), or `--status <s>` to show only one status (`--status` takes precedence over
-`--all`). When the filtered set is empty it prints `No tasks found.` The command is read-only; on any
-error it writes to stderr and sets a non-zero exit code **without throwing**.
+By **default** the list shows only **active** tasks — those whose status is `open` or `in-progress`,
+plus any **snoozed** task whose wake time has already passed — so finished and deferred work stays out
+of the way. Pass `--all` to include every status (including `done`/`dropped`/still-sleeping
+`snoozed`), or `--status <s>` to show only one status (`--status` takes precedence over `--all`).
+When the filtered set is empty it prints `No tasks found.` The command is read-only; on any error it
+writes to stderr and sets a non-zero exit code **without throwing**.
 
 ```bash
-bober task list                 # only open + in-progress
-bober task list --all           # every status, including done/dropped
+bober task list                 # open + in-progress + woken (past-wake) snoozed
+bober task list --all           # every status, including done/dropped/sleeping
 bober task list --status done   # only completed tasks
 ```
+
+Wake visibility is computed **lazily at list time** against the wall clock stamped when the command
+runs — there is no background timer. See `bober task snooze` below.
 
 ### `bober task start <id>` · `bober task done <id>` · `bober task drop <id>`
 
@@ -1345,9 +1349,34 @@ Because terminal tasks remain active rows (filtered out of the default list by t
 not by deletion), `bober task done <id>` removes a task from `bober task list` while
 `bober task list --all` still shows it with `status=done`.
 
+### `bober task snooze <id> --until <when>`
+
+Defer a task until a future time. The task moves to `status='snoozed'` and records its wake time on
+the Finding as a `snooze-until:<ISO>` tag, then **disappears from the default `bober task list`**
+until that wake time has passed — at which point it reappears for re-triage. `--until` is
+**required** and accepts an ISO date or datetime (e.g. `2026-12-01` or `2026-12-01T09:00:00Z`); the
+value is parsed and **normalized to a canonical ISO** at the CLI boundary before it is stored. There
+is **no schema change** — the wake time lives entirely in `tags[]`.
+
+```bash
+bober task snooze 1f3c9a0b2e4d6f80 --until 2026-12-01
+#   Task 1f3c9a0b2e4d6f80 snoozed until 2026-12-01T00:00:00.000Z
+
+bober task list                 # snoozed task is hidden until 2026-12-01
+bober task list --all           # …still present, status=snoozed
+```
+
+Visibility is computed **lazily at list time** against the `now` stamped when `task list` runs — a
+snoozed task "wakes" simply because a later list runs after its wake time, **not** via any background
+timer. **Re-snoozing replaces** the wake time (the prior `snooze-until:` tag is stripped, never
+stacked). **Terminal** (`done`/`dropped`) tasks cannot be snoozed, and a snoozed task can still be
+completed or dropped at any time. An invalid `--until`, an unknown id, or a terminal task prints to
+stderr and exits non-zero **without throwing**.
+
 > `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`; `list` and the
-> `start` / `done` / `drop` lifecycle transitions landed in Sprint 2. Snooze, ingest, and chat
-> capture remain owned by later sprints.
+> `start` / `done` / `drop` lifecycle transitions landed in Sprint 2; `snooze` and its wake-aware
+> list filter landed in Sprint 3. Domain-finding ingest and chat capture remain owned by later
+> sprints.
 
 ---
 
