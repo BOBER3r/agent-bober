@@ -8,6 +8,9 @@ import { Bot } from "grammy";
 import type { TelegramTransport } from "./outbound.js";
 import { sendSafe } from "./outbound.js";
 import { isAllowed, parseAllowedUsers, denialReply } from "./whitelist.js";
+import { classify } from "./router.js";
+import { handleCapture, defaultCapture } from "./handlers/capture.js";
+import type { InboxCapture } from "./handlers/capture.js";
 
 // ── Minimal update shape ──────────────────────────────────────────────
 
@@ -99,6 +102,7 @@ export function helpReply(): string {
 export async function startPollLoop(
   transport: BotTransport,
   signal: AbortSignal,
+  capture: InboxCapture = defaultCapture,
 ): Promise<void> {
   let offset = 0;
   const allowed = parseAllowedUsers(process.env);
@@ -132,8 +136,25 @@ export async function startPollLoop(
         continue;
       }
 
-      // Whitelisted sender: reply with the /start help stub.
-      await sendSafe(transport, chatId, helpReply());
+      // Whitelisted sender: route via classify → capture or command dispatch.
+      const text = msg.text;
+      if (text === undefined || text.trim() === "") {
+        // No text content (sticker, photo, etc.) — fall back to help stub.
+        await sendSafe(transport, chatId, helpReply());
+        continue;
+      }
+      const routed = classify(text);
+      if (routed.kind === "command") {
+        // Command dispatch: /start → help; everything else is a stub for Sprints 3-4.
+        // bober: single-level command switch; replace with a command registry map
+        //        when Sprint 3+ adds real commands (hub/inbox/calendar queries).
+        const reply = routed.name === "start" ? helpReply() : `Unknown command: /${routed.name}`;
+        await sendSafe(transport, chatId, reply);
+      } else {
+        // Plain text → zero-friction capture via the injected inbox sink.
+        const reply = await handleCapture(routed.text, capture);
+        await sendSafe(transport, chatId, reply);
+      }
     }
   }
 }
