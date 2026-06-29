@@ -1907,6 +1907,50 @@ bober research digest
 
 ---
 
+## Telegram Commands
+
+The **Telegram frontend** is a locally-run bot that lets a whitelisted operator talk to
+agent-bober from Telegram. Sprint 1 ships the **transport + access-control spine** only —
+getUpdates long-polling, a numeric user-id whitelist, and a single outbound funnel. It carries
+**no** task / hub / calendar / medical command logic yet (those are later sprints); an admitted
+sender currently gets a `/start` help stub. See [docs/telegram.md](./docs/telegram.md) for the
+adapter, the control-plane boundary, and the privacy posture.
+
+### `bober telegram`
+
+Start the local long-polling Telegram bot. Reads credentials from the environment and blocks
+until Ctrl+C.
+
+```bash
+export TELEGRAM_BOT_TOKEN=123456:ABC-your-bot-token
+export TELEGRAM_ALLOWED_USERS=11111111,22222222   # comma-separated numeric Telegram ids
+bober telegram
+# Telegram bot started — polling for updates (Ctrl+C to stop).
+```
+
+- **Long-polling only — no server, no webhook, no inbound port, no public URL.** The process
+  opens an outbound `getUpdates` loop (`timeout=30s`); `SIGINT`/`SIGTERM` stop it cleanly.
+- **Credentials from env** (never hardcoded): `TELEGRAM_BOT_TOKEN` is **required** — when it is
+  unset the command prints a message naming the variable to stderr and exits non-zero
+  **without** any network call. `TELEGRAM_ALLOWED_USERS` is a comma-separated list of numeric
+  Telegram user ids; whitespace is trimmed and non-numeric tokens are silently dropped, so an
+  empty/absent list denies **everyone** (fail-closed).
+- **Whitelist (control-plane boundary).** A sender whose numeric id is in
+  `TELEGRAM_ALLOWED_USERS` is admitted (and gets the `/start` help stub); every other account
+  receives **one** denial reply that echoes its own numeric id and is otherwise ignored.
+- **Single outbound funnel.** Every reply leaves through one `sendSafe` chokepoint; no handler
+  sends directly — the seam where later sprints add rate-limiting / audit / sanitisation.
+- **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
+- **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
+  wrapper — only `src/telegram/bot.ts` imports it.
+
+> **Status.** **Sprint 1 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
+> only. Task capture, hub/inbox/calendar actions, document upload, streaming, approvals, and
+> silent scheduled delivery of the research-scheduler morning digest
+> (`.bober/research/digests/<date>.json`) are later sprints.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |
