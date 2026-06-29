@@ -2,10 +2,12 @@
 
 The Telegram frontend (`src/telegram/`) is the **presentation adapter** for agent-bober: a
 locally-run bot that lets a whitelisted operator talk to the platform from Telegram. Sprint 1
-ships the **transport + access-control spine** only — a long-polling bot, a user-id whitelist,
-and a single outbound funnel. It carries **no** task / hub / calendar / medical domain logic
-yet; the reply to an admitted sender is a `/start` help stub that later sprints replace with
-real command dispatch.
+ships the **transport + access-control spine** — a long-polling bot, a user-id whitelist,
+and a single outbound funnel. Sprint 2 adds the **first domain behavior**: a message router
+plus **zero-friction task capture**, so plain text from an admitted sender lands as one open
+task in the shared inbox. Hub / calendar / medical command dispatch is still deferred; an
+admitted sender's `/start` (and any non-text update) still gets the help stub, and any other
+`/command` gets an `Unknown command` placeholder later sprints replace.
 
 ---
 
@@ -67,7 +69,7 @@ The poll loop reads the allow-set **once at start**. For each update:
 
 - **non-whitelisted sender** → reply with `denialReply(senderId)`, then ignore (no further
   processing);
-- **whitelisted sender** → reply with the `/start` `helpReply()` stub.
+- **whitelisted sender** → route the message (see **Message routing & capture** below).
 
 This whitelist is the control-plane boundary every later command sits behind: nothing reaches
 domain logic unless the sender is explicitly allow-listed.
@@ -103,6 +105,51 @@ boundary honest at the `sendSafe` seam.
 
 ---
 
+## Message routing & capture (Sprint 2)
+
+Once a sender is admitted, the loop classifies their message with a **pure** router and dispatches:
+
+`classify(message)` (`src/telegram/router.ts`) returns a `RoutedMessage` discriminated union — no
+side effects, no network, no clock:
+
+- a message whose first non-space character is `/` → `{ kind:"command", name, args }` (the leading
+  `/` is stripped, and `name` is split from `args` on the first whitespace; `"/todo buy milk"` →
+  `name:"todo"`, `args:"buy milk"`);
+- anything else → `{ kind:"text", text }`, returned **verbatim** (never trimmed/parsed) so capture
+  sees exactly what was typed.
+
+The whitelisted-sender branch of `startPollLoop` then dispatches:
+
+| Update | Reply |
+|--------|-------|
+| Non-text update (sticker, photo, empty) | `helpReply()` stub |
+| `/start` | `helpReply()` stub |
+| Any other `/command` | `Unknown command: /<name>` (Sprint 3–4 placeholder) |
+| Plain text | **capture** → one-line confirmation |
+
+### Zero-friction capture
+
+Plain text is captured as a task with **no required fields beyond the text itself** — the handler
+**never** prompts for a due date, domain, or anything else before capturing (a hard non-goal).
+`handleCapture(text, capture)` (`src/telegram/handlers/capture.ts`) routes the text through an
+**injected** `InboxCapture` sink and returns a confirmation that always contains the captured
+title (`Captured: <title> (#<id>)`). The handler has no transport access — the loop passes its
+return value to `sendSafe`.
+
+The production sink, `defaultCapture`, persists into the **existing** task inbox
+(`spec-20260628-task-inbox`) rather than reimplementing storage: it opens a `FactStore` for the
+project's **default pool** (`.bober/memory/`), stamps wall-clock `now` at this boundary (the pure
+`captureTask` never reads the clock), calls `captureTask(store, text, { now })` (domain omitted →
+the `"inbox"` pool), and closes the store. The result is one open hub `Finding`
+(`kind:"action"`, `status:"open"`, `domain:"inbox"`) — the same surface `agent-bober task list`
+reads. The text becomes the title verbatim (`captureTask` trims only surrounding whitespace);
+nothing parses or enriches it (AI triage stays owned by the task-inbox spec).
+
+Because the sink is injected, the router and capture handler are unit-testable with a fake that
+records calls and **never opens a `FactStore`** — no filesystem, no clock, no network.
+
+---
+
 ## SDK isolation: `grammy` behind the transport wrapper
 
 The chosen Telegram Bot API library is **[grammy](https://grammy.dev) (`^1.44.0`)** — the one
@@ -130,7 +177,9 @@ swapping the SDK is a `bot.ts`-only change.
 |------|------|
 | `src/telegram/whitelist.ts` | Pure authoriser: `parseAllowedUsers` / `isAllowed` / `denialReply` (+ `AllowedUsers` type). No I/O. |
 | `src/telegram/outbound.ts` | `TelegramTransport` interface + the `sendSafe` outbound funnel (single chokepoint). |
-| `src/telegram/bot.ts` | `BotTransport` + `GrammyTransport` adapter (sole grammy import), `helpReply` stub, and the `startPollLoop` getUpdates loop. |
+| `src/telegram/router.ts` | Pure `classify(message)` → `RoutedMessage` (`command` vs `text`). No I/O. |
+| `src/telegram/handlers/capture.ts` | `handleCapture` (zero-friction capture via an injected `InboxCapture` sink) + production `defaultCapture` (persists via `captureTask`). |
+| `src/telegram/bot.ts` | `BotTransport` + `GrammyTransport` adapter (sole grammy import), `helpReply` stub, and the `startPollLoop` getUpdates loop (now `classify` → capture / command dispatch). |
 | `src/cli/commands/telegram.ts` | `registerTelegramCommand` — the `agent-bober telegram` command (env credential read, SIGINT/SIGTERM shutdown, never-throw). |
 
 User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Commands**.
@@ -139,8 +188,9 @@ User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Comm
 
 ## Roadmap (deferred to later sprints)
 
-Sprint 1 is transport + whitelist + funnel only. Still to come (Sprints 2–6): task capture,
-hub/inbox/calendar actions, document upload, streaming replies, approvals, and **silent
-scheduled delivery of the research-scheduler morning digest**
+Sprint 1 shipped transport + whitelist + funnel; Sprint 2 added message routing + zero-friction
+task capture. Still to come (Sprints 3–6): real command dispatch for hub/inbox/calendar actions
+(replacing the `Unknown command` stub), document upload, streaming replies, approvals, and
+**silent scheduled delivery of the research-scheduler morning digest**
 (`.bober/research/digests/<date>.json`). Each new reply path must return content through
 `sendSafe`, and each new command must sit behind the `isAllowed` whitelist.

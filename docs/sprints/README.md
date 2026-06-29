@@ -1802,32 +1802,39 @@ provider is a later step); failed `tick` runs leave the job due with **no retry/
 spec / calendar layer. See the finale record
 [`sprint-spec-20260628-research-scheduler-5.md`](./sprint-spec-20260628-research-scheduler-5.md).
 
-## Telegram Frontend — in progress (Sprint 1)
+## Telegram Frontend — in progress (Sprint 2)
 
 `spec-20260628-telegram-frontend` — the **presentation adapter** (sequenced last in the
 knowledge-platform plan): a locally-run Telegram bot through which a whitelisted operator talks
 to agent-bober, and which will consume the research-scheduler's morning-digest JSON
 (`.bober/research/digests/<date>.json`) to push silent scheduled messages. Sprint 1 lays the
 **transport + access-control spine** — a new `src/telegram/` module + an `agent-bober telegram`
-CLI command — with **no** task / hub / calendar / medical domain logic yet (those are later
-sprints; an admitted sender currently gets a `/start` help stub). The bot uses **getUpdates
-long-polling only** — no server, no webhook, no inbound port, no public URL; `SIGINT`/`SIGTERM`
-stop it cleanly. Credentials come **only** from env (`TELEGRAM_BOT_TOKEN` required, absent ⇒
-clear message + exit 1 with no network; `TELEGRAM_ALLOWED_USERS` comma-separated numeric ids,
-empty ⇒ deny-all, fail-closed). A **pure** whitelist authoriser
-(`parseAllowedUsers`/`isAllowed`/`denialReply`) is the **control-plane boundary**: non-listed
-senders get **one** denial echoing their own numeric id, listed senders are admitted; and a
-**single `sendSafe` outbound funnel** is the only place a reply is sent (no handler sends
-directly) — the seam later sprints extend with rate-limiting / audit / sanitisation. The chosen
-library, **`grammy`** (the one new dependency the plan adds), is **isolated behind the transport
-wrapper** (only `bot.ts` imports it), mirroring the `providers/` adapter discipline, so the loop,
-funnel, and CLI are unit-testable with an injected fake transport and no network.
+CLI command — using **getUpdates long-polling only** (no server, no webhook, no inbound port, no
+public URL; `SIGINT`/`SIGTERM` stop it cleanly). Credentials come **only** from env
+(`TELEGRAM_BOT_TOKEN` required, absent ⇒ clear message + exit 1 with no network;
+`TELEGRAM_ALLOWED_USERS` comma-separated numeric ids, empty ⇒ deny-all, fail-closed). A **pure**
+whitelist authoriser (`parseAllowedUsers`/`isAllowed`/`denialReply`) is the **control-plane
+boundary**: non-listed senders get **one** denial echoing their own numeric id, listed senders are
+admitted; and a **single `sendSafe` outbound funnel** is the only place a reply is sent (no handler
+sends directly) — the seam later sprints extend with rate-limiting / audit / sanitisation. The
+chosen library, **`grammy`** (the one new dependency the plan adds), is **isolated behind the
+transport wrapper** (only `bot.ts` imports it), mirroring the `providers/` adapter discipline, so
+the loop, funnel, and CLI are unit-testable with an injected fake transport and no network. Sprint
+2 adds the **first domain behavior**: a **pure** message router (`classify` → `command` vs `text`)
+and a **zero-friction capture handler** that funnels plain text from an admitted sender into the
+existing task inbox (`spec-20260628-task-inbox`) via an **injected** `InboxCapture` sink — the
+message becomes the task title with **no other required field**, and the bot replies with a
+one-line confirmation **through `sendSafe`**. `/start` keeps the help stub, any other `/command`
+returns an `Unknown command` placeholder (Sprints 3–4), and a `/`-prefixed message is **never**
+captured.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260628-telegram-frontend-1.md](./sprint-spec-20260628-telegram-frontend-1.md) | **Long-polling bot transport + user-id whitelist + outbound funnel:** new `src/telegram/` — `whitelist.ts` (PURE `parseAllowedUsers(env)`⇒`ReadonlySet<number>` [trims, drops non-positive-int tokens] / `isAllowed(id,allowed)` / `denialReply(id)` echoing the id verbatim, sc-1-3/sc-1-4) + `outbound.ts` (`TelegramTransport` interface + `sendSafe(transport,chatId,content)` — the **single** chokepoint, the only `transport.sendMessage` caller, `outbound.ts:32`, sc-1-5) + `bot.ts` (`BotTransport extends TelegramTransport` w/ `getUpdates(offset)`; `GrammyTransport` — the **sole** `grammy` consumer wrapping `Bot.api.sendMessage`/`getUpdates({offset,timeout:30})`, `bot.ts:57`; local `TelegramUpdate` shape so grammy types never leak; `helpReply()` `/start` stub; `startPollLoop(transport,signal)` reading `TELEGRAM_ALLOWED_USERS` once, denying non-whitelisted [echo id] / help-replying whitelisted **all via `sendSafe`**, 5s back-off on transient `getUpdates` error, runs until `AbortSignal`) + `src/cli/commands/telegram.ts` `registerTelegramCommand` (`agent-bober telegram`; absent `TELEGRAM_BOT_TOKEN` ⇒ stderr msg naming the var + `exitCode=1`, **no network**; SIGINT/SIGTERM ⇒ `AbortController.abort()`; **never throws**) wired into `src/cli/index.ts` (import `:48`, call `:356`). **getUpdates long-polling only — no server/webhook/listen/inbound port** (grep-verified). One new dep `grammy ^1.44.0` (only `bot.ts` imports it). commit `eb680c2`, 10 files (+649), **+20 telegram tests** (full suite **3603** green, zero regressions); sc-1-1..sc-1-5 iter-1 (build/typecheck/lint clean), `sc-1-6` live smoke skipped. **Transport + whitelist + funnel only — task/hub/calendar/medical command dispatch, document upload, streaming, approvals, and digest delivery are later sprints.** |
+| 2 | [sprint-spec-20260628-telegram-frontend-2.md](./sprint-spec-20260628-telegram-frontend-2.md) | **Plain text → zero-friction task inbox capture:** PURE `classify(message)` (`router.ts:29`) ⇒ `RoutedMessage` union (`{kind:"command",name,args}` [leading `/` stripped, name split from args on first whitespace] \| `{kind:"text",text}` returned **verbatim**, no trim/parse; sc-2-2) + `handleCapture(text,capture)` (`handlers/capture.ts:60`) over an **injected** `InboxCapture` sink (`:18`) returning a confirmation that **always contains the title** (`Captured: <title> (#<id>)`; no transport access — caller sends via `sendSafe`; **never** prompts for due-date/domain/any field, sc-2-4) + production `defaultCapture` (`:35`) — Option A **imports `captureTask`** from `src/hub/task-inbox.ts` (no `execa`), opens a `FactStore` on the **default pool** (`.bober/memory/`), stamps `now` at the boundary (pure `captureTask` never reads the clock), persists (domain omitted ⇒ `"inbox"` pool) ⇒ one open hub `Finding` (`kind:"action"`/`status:"open"`) the same `agent-bober task list` reads, `close()` in `finally`; `startPollLoop` gains optional 3rd `capture=defaultCapture` param (`bot.ts:102`) and routes a whitelisted sender via `classify`: non-text/empty ⇒ `helpReply()`, `/start` ⇒ `helpReply()`, other `/cmd` ⇒ `Unknown command: /<name>` (Sprint 3–4 stub), plain text ⇒ capture — **all via `sendSafe`**; a `/`-prefixed message yields **zero** tasks. Reuses the task-inbox feature (no storage/dedup/FactStore reimpl); sink injection ⇒ router+capture unit-tested with a fake (no FactStore/clock/network). commit `e936eea`, 5 files (+242/-2), **no new dep**, **+10 telegram tests** (router 6 + capture 4; 30 telegram total); sc-2-1..sc-2-4 iter-1 (build/typecheck 0), manual `sc-2-5` (`task list` visibility) not run in CI; the lone `src/medical/engine.test.ts` MedlinePlus 5s-timeout failure confirmed **pre-existing** (not a regression). **Command dispatch beyond `/start` is still a stub — hub/inbox/calendar query commands are Sprints 3+.** |
 
 User-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md) under **Telegram Commands** and the
 README CLI list. The adapter, the control-plane privacy boundary, the env vars
-(`TELEGRAM_BOT_TOKEN` / `TELEGRAM_ALLOWED_USERS`), the long-polling/no-server posture, and the
-`grammy`-behind-the-wrapper SDK isolation are documented in [`docs/telegram.md`](../telegram.md).
+(`TELEGRAM_BOT_TOKEN` / `TELEGRAM_ALLOWED_USERS`), the long-polling/no-server posture, the
+`grammy`-behind-the-wrapper SDK isolation, and (Sprint 2) the **message router + zero-friction
+plain-text capture** are documented in [`docs/telegram.md`](../telegram.md).

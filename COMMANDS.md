@@ -1910,11 +1910,14 @@ bober research digest
 ## Telegram Commands
 
 The **Telegram frontend** is a locally-run bot that lets a whitelisted operator talk to
-agent-bober from Telegram. Sprint 1 ships the **transport + access-control spine** only —
-getUpdates long-polling, a numeric user-id whitelist, and a single outbound funnel. It carries
-**no** task / hub / calendar / medical command logic yet (those are later sprints); an admitted
-sender currently gets a `/start` help stub. See [docs/telegram.md](./docs/telegram.md) for the
-adapter, the control-plane boundary, and the privacy posture.
+agent-bober from Telegram. Sprint 1 ships the **transport + access-control spine** —
+getUpdates long-polling, a numeric user-id whitelist, and a single outbound funnel. Sprint 2 adds
+**zero-friction task capture**: plain text from an admitted sender is captured as one open task in
+the inbox (the same surface `bober task list` reads) and the bot replies with a confirmation.
+Hub / calendar / medical command dispatch is still a later sprint — `/start` returns a help stub
+and any other `/command` returns an `Unknown command` placeholder. See
+[docs/telegram.md](./docs/telegram.md) for the adapter, the message router, the control-plane
+boundary, and the privacy posture.
 
 ### `bober telegram`
 
@@ -1936,16 +1939,22 @@ bober telegram
   Telegram user ids; whitespace is trimmed and non-numeric tokens are silently dropped, so an
   empty/absent list denies **everyone** (fail-closed).
 - **Whitelist (control-plane boundary).** A sender whose numeric id is in
-  `TELEGRAM_ALLOWED_USERS` is admitted (and gets the `/start` help stub); every other account
-  receives **one** denial reply that echoes its own numeric id and is otherwise ignored.
+  `TELEGRAM_ALLOWED_USERS` is admitted; every other account receives **one** denial reply that
+  echoes its own numeric id and is otherwise ignored.
+- **Message routing (admitted senders).** Plain text is **captured** as one open inbox task — the
+  message becomes the task title with **no other required field** (no due-date/domain prompt) — and
+  the bot replies `Captured: <title> (#<id>)`. `/start` returns the help stub; any other
+  `/command` (and non-text updates such as stickers/photos) returns an `Unknown command`
+  placeholder reserved for later sprints. A `/`-prefixed message is **never** captured as a task.
 - **Single outbound funnel.** Every reply leaves through one `sendSafe` chokepoint; no handler
   sends directly — the seam where later sprints add rate-limiting / audit / sanitisation.
 - **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
 - **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
   wrapper — only `src/telegram/bot.ts` imports it.
 
-> **Status.** **Sprint 1 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
-> only. Task capture, hub/inbox/calendar actions, document upload, streaming, approvals, and
+> **Status.** **Sprint 2 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
+> (Sprint 1) + plain-text → zero-friction task capture (Sprint 2). Real hub/inbox/calendar command
+> dispatch (replacing the `Unknown command` stub), document upload, streaming, approvals, and
 > silent scheduled delivery of the research-scheduler morning digest
 > (`.bober/research/digests/<date>.json`) are later sprints.
 
