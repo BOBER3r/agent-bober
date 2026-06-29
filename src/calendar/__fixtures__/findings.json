@@ -1,0 +1,47 @@
+[
+  {
+    "id": "finding-alpha",
+    "domain": "coding",
+    "title": "Refactor authentication module",
+    "kind": "action",
+    "urgency": 5,
+    "severity": 4,
+    "evidence": ["Auth module has 3 known vulnerabilities from last audit"],
+    "surfacedAt": "2026-06-29T00:00:00.000Z",
+    "dueBy": "2099-12-31T23:59:59.000Z",
+    "tags": ["security", "refactor"],
+    "estDurationMin": 30,
+    "calendarSafeTitle": "Refactor auth module",
+    "status": "open"
+  },
+  {
+    "id": "finding-beta",
+    "domain": "coding",
+    "title": "Write integration tests for API endpoints",
+    "kind": "action",
+    "urgency": 4,
+    "severity": 3,
+    "evidence": ["API test coverage is below 60%"],
+    "surfacedAt": "2026-06-29T00:00:00.000Z",
+    "dueBy": "2099-12-31T23:59:59.000Z",
+    "tags": ["testing"],
+    "estDurationMin": 60,
+    "calendarSafeTitle": "Write API integration tests",
+    "status": "open"
+  },
+  {
+    "id": "finding-gamma",
+    "domain": "coding",
+    "title": "Deep dive into database query optimisation",
+    "kind": "watch",
+    "urgency": 3,
+    "severity": 2,
+    "evidence": ["Slow query log shows 12 queries over 500ms"],
+    "surfacedAt": "2026-06-29T00:00:00.000Z",
+    "dueBy": "2099-12-31T23:59:59.000Z",
+    "tags": ["performance", "database"],
+    "estDurationMin": 90,
+    "calendarSafeTitle": "DB query optimisation",
+    "status": "open"
+  }
+]
