@@ -23,6 +23,9 @@ import { codingPromoter } from "../../do-bridge/coding-promoter.js";
 import type { Launcher } from "../../do-bridge/launcher.js";
 import { RunSpawnerLauncher } from "../../do-bridge/launcher.js";
 import { runPromotionGate } from "../../do-bridge/promote.js";
+import type { Promoter } from "../../do-bridge/types.js";
+import { reconcilePromotionsForRoot } from "../../do-bridge/reconcile.js";
+import { logger } from "../../utils/logger.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
 
@@ -203,11 +206,15 @@ export async function runDo(
 
 export function registerDoCommand(program: Command): void {
   program
-    .command("do <findingId>")
-    .description("Promote a hub Finding into a bober run task")
+    .command("do [findingId]")
+    .description("Promote a hub Finding into a bober run task, or reconcile launched promotions")
     .option("--dry-run", "Preview the planned launch without spawning anything", false)
     .option("--yes", "Auto-approve the promotion without prompting", false)
-    .action(async (findingId: string, opts: { dryRun?: boolean; yes?: boolean }) => {
+    .option("--reconcile", "Reconcile launched promotions to their run outcome and exit", false)
+    .action(async (
+      findingId: string | undefined,
+      opts: { dryRun?: boolean; yes?: boolean; reconcile?: boolean },
+    ) => {
       const projectRoot = await resolveRoot();
       try {
         const ns = await resolveDefaultNamespace(projectRoot);
@@ -216,10 +223,66 @@ export function registerDoCommand(program: Command): void {
         const store = new FactStore(factsDbPath(projectRoot, ns));
         const findingStore = new FactStoreFindingStore(store);
 
-        // Build and populate the registry at the CLI boundary
+        // ── reconcile-only path (--reconcile flag) ──────────────────
+        if (opts.reconcile === true) {
+          try {
+            const summary = await reconcilePromotionsForRoot(
+              projectRoot,
+              findingStore,
+              () => new Date().toISOString(),
+            );
+            process.stdout.write(
+              chalk.green(
+                `do --reconcile: completed=${summary.completed} aborted=${summary.aborted} unchanged=${summary.unchanged}\n`,
+              ),
+            );
+          } finally {
+            store.close();
+          }
+          return;
+        }
+
+        // ── normal promote path (bober do <id>) ─────────────────────
+        if (findingId === undefined) {
+          store.close();
+          process.stderr.write(
+            chalk.red(`do: findingId is required (run \`bober do --reconcile\` to reconcile)\n`),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        // ── Registry: add promoters here to extend the do-bridge ──────
+        // See docs/do-bridge.md for the extension point documentation.
+        // Call site referenced from docs/do-bridge.md §The Promoter Registry Extension Point.
         const registry = new PromoterRegistry();
         registry.register({ domain: "coding" }, codingPromoter);
         registry.register({ domain: "projects" }, codingPromoter);
+        // STUB — not functional; registered here only to prove registry.register
+        // accepts a new PromoterKey {domain:'projects', kind:'action'}.
+        // Replace with a real projectsActionPromoter in a future sprint.
+        // bober: stub promoter; swap for a real implementation when the
+        // projects-action use case is defined.
+        const projectsActionStub: Promoter = (_f) => ({
+          kind: "bober-run",
+          task: "STUB — not functional",
+        });
+        registry.register({ domain: "projects", kind: "action" }, projectsActionStub);
+
+        // Best-effort start-of-command reconcile — mirrors seedProjectFacts in
+        // src/orchestrator/pipeline.ts:981. A reconcile failure MUST NOT abort
+        // `bober do`. Missing/corrupt run-state files are handled inside reconcile.
+        try {
+          await reconcilePromotionsForRoot(
+            projectRoot,
+            findingStore,
+            () => new Date().toISOString(),
+          );
+        } catch (err) {
+          logger.warn(
+            `Reconcile skipped: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
 
         // Build the real deps for the launch path
         const launcher = new RunSpawnerLauncher({

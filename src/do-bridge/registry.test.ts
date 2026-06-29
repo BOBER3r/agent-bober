@@ -89,3 +89,36 @@ describe("PromoterRegistry — sc-1-2 resolution precedence", () => {
     expect(resolved).toBe(domainOnlyPromoter);
   });
 });
+
+// ── sc-3-4: second stub promoter extensibility ────────────────────────
+
+describe("PromoterRegistry — sc-3-4: second stub promoter and fail-closed", () => {
+  // A NON-FUNCTIONAL stub — exists ONLY to prove the registry accepts a new
+  // PromoterKey {domain:'projects', kind:'action'}. Not intended for real use.
+  const projectsActionStub: Promoter = (_f) => ({
+    kind: "bober-run",
+    task: "STUB — not functional",
+  });
+
+  it("a second promoter under {domain:'projects', kind:'action'} resolves", () => {
+    const registry = new PromoterRegistry();
+    registry.register({ domain: "coding" }, domainOnlyPromoter);
+    registry.register({ domain: "projects", kind: "action" }, projectsActionStub);
+    expect(registry.resolve({ domain: "projects", kind: "action" })).toBe(projectsActionStub);
+  });
+
+  it("an unregistered (domain,kind) fails closed — returns undefined", () => {
+    const registry = new PromoterRegistry();
+    registry.register({ domain: "coding" }, domainOnlyPromoter);
+    registry.register({ domain: "projects", kind: "action" }, projectsActionStub);
+    expect(registry.resolve({ domain: "financial", kind: "action" })).toBeUndefined();
+  });
+
+  it("second stub under projects/action does not shadow domain-only projects promoter for other kinds", () => {
+    const registry = new PromoterRegistry();
+    registry.register({ domain: "projects" }, domainOnlyPromoter);
+    registry.register({ domain: "projects", kind: "action" }, projectsActionStub);
+    // 'watch' kind should fall back to the domain-only promoter
+    expect(registry.resolve({ domain: "projects", kind: "watch" })).toBe(domainOnlyPromoter);
+  });
+});

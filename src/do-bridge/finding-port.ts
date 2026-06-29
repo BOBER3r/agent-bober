@@ -50,6 +50,21 @@ export interface FindingStore {
     ref: PromotionRef,
     opts: { now: string },
   ): Promise<DoFinding | null>;
+
+  /** Return all findings that currently carry a PromotionRef (promotesTo defined). */
+  listPromoted(): Promise<DoFinding[]>;
+
+  /**
+   * Transition a finding to an arbitrary status AND overwrite its promotesTo ref,
+   * in one supersede-aware write. Used by reconcile for done/open outcomes.
+   * Returns the updated DoFinding, or null if the id does not exist.
+   */
+  applyOutcome(
+    id: string,
+    status: Finding["status"],
+    ref: PromotionRef,
+    opts: { now: string },
+  ): Promise<DoFinding | null>;
 }
 
 // ── FactStoreFindingStore ─────────────────────────────────────────────
@@ -79,6 +94,23 @@ export class FactStoreFindingStore implements FindingStore {
   ): Promise<DoFinding | null> {
     // Serialize the object ref to the string the hub schema expects on disk.
     const result = await transitionFinding(this.store, id, "in-progress", {
+      now,
+      mutate: { promotesTo: serializePromotionRef(ref) },
+    });
+    return result !== null ? toDoFinding(result) : null;
+  }
+
+  async listPromoted(): Promise<DoFinding[]> {
+    return readFindings(this.store).map(toDoFinding).filter((f) => f.promotesTo !== undefined);
+  }
+
+  async applyOutcome(
+    id: string,
+    status: Finding["status"],
+    ref: PromotionRef,
+    { now }: { now: string },
+  ): Promise<DoFinding | null> {
+    const result = await transitionFinding(this.store, id, status, {
       now,
       mutate: { promotesTo: serializePromotionRef(ref) },
     });
@@ -121,6 +153,24 @@ export class InMemoryFindingStore implements FindingStore {
     const cur = this.map.get(id);
     if (cur === undefined) return null;
     const next: DoFinding = { ...cur, status: "in-progress", promotesTo: ref };
+    this.map.set(id, next);
+    this.writes.push(next);
+    return next;
+  }
+
+  async listPromoted(): Promise<DoFinding[]> {
+    return [...this.map.values()].filter((f) => f.promotesTo !== undefined);
+  }
+
+  async applyOutcome(
+    id: string,
+    status: Finding["status"],
+    ref: PromotionRef,
+    _opts: { now: string },
+  ): Promise<DoFinding | null> {
+    const cur = this.map.get(id);
+    if (cur === undefined) return null;
+    const next: DoFinding = { ...cur, status, promotesTo: ref };
     this.map.set(id, next);
     this.writes.push(next);
     return next;
