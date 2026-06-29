@@ -25,9 +25,12 @@
  */
 
 import chalk from "chalk";
+import { join } from "node:path";
 import type { Command } from "commander";
 
 import { findProjectRoot } from "../../utils/fs.js";
+import { buildDigest, collectRunsFromVault } from "../../research/digest.js";
+import type { DigestRun } from "../../research/digest.js";
 import {
   addJob,
   listJobs,
@@ -64,6 +67,8 @@ async function resolveRoot(): Promise<string> {
 export interface ResearchRunOverrides {
   queryModel?: QueryModel;
   findingSink?: FindingSink;
+  /** Injected collector for `research digest` — skips real vault I/O in tests. */
+  digestCollectRuns?: (since: string, now: string) => Promise<DigestRun[]>;
 }
 
 // ── registerResearchCommand ───────────────────────────────────────────
@@ -383,6 +388,46 @@ export function registerResearchCommand(
         process.stderr.write(
           chalk.red(
             `research tick failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  // ── research digest [--since <iso>] ─────────────────────────────────
+
+  researchCmd
+    .command("digest")
+    .description(
+      "Aggregate research runs in [since, now] into a dual md+json digest artifact.\n\n" +
+        "Writes .bober/research/digests/<YYYY-MM-DD>.{md,json} under the project root.\n" +
+        "Empty window: emits an explicit no-new-research digest — never throws.\n" +
+        "Consumer: the Telegram bot (sibling spec) reads the JSON for silent scheduled messages.",
+    )
+    .option("--since <iso>", "Window start ISO string (default: 24h before now)")
+    .action(async (opts: { since?: string }) => {
+      const projectRoot = await resolveRoot();
+      try {
+        // Stamp wall-clock ONLY here — never inside digest.ts (clock discipline)
+        const now = new Date().toISOString();
+        const since =
+          opts.since ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const vaultRoot = projectRoot; // same default as `research run`
+        const digestsDir = join(projectRoot, ".bober", "research", "digests");
+
+        const res = await buildDigest(since, now, {
+          // Use injected collector (tests) or real vault-note reader (production)
+          collectRuns:
+            overrides?.digestCollectRuns ??
+            ((s, n) => collectRunsFromVault(vaultRoot, s, n)),
+          digestsDir,
+        });
+
+        process.stdout.write(res.mdPath + "\n" + res.jsonPath + "\n");
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `research digest failed: ${err instanceof Error ? err.message : String(err)}\n`,
           ),
         );
         process.exitCode = 1;
