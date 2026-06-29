@@ -45,6 +45,7 @@ import { registerVaultCommand } from "./commands/vault.js";
 import { registerBlackboardCommand } from "./commands/blackboard.js";
 import { registerHubCommand } from "./commands/hub.js";
 import { registerDoCommand } from "./commands/do.js";
+import { registerTelegramCommand } from "./commands/telegram.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -350,6 +351,9 @@ async function main(): Promise<void> {
 
   // ── do ────────────────────────────────────────────────────────────────
   registerDoCommand(program);
+
+  // ── telegram ──────────────────────────────────────────────────────────
+  registerTelegramCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
