@@ -601,6 +601,7 @@ npx agent-bober task start <id>                    # Move a task to in-progress 
 npx agent-bober task done <id>                     # Mark a task done (supersede; hidden from the default list, still in --all)
 npx agent-bober task drop <id>                     # Abandon a task → status=dropped via supersede (never deleted)
 npx agent-bober task snooze <id> --until <when>    # Defer a task: status=snoozed + snooze-until:<ISO> tag; hidden from default list until wake time passes (lazy, no timer)
+npx agent-bober task ingest [file]                 # Domain seam: ingest a Finding JSON (file or stdin) into the hub pool; content-id dedup (domain|title|kind), schema-validated, fail-closed exitCode=1
 ```
 
 #### Clarification gating

@@ -1373,10 +1373,40 @@ stacked). **Terminal** (`done`/`dropped`) tasks cannot be snoozed, and a snoozed
 completed or dropped at any time. An invalid `--until`, an unknown id, or a terminal task prints to
 stderr and exits non-zero **without throwing**.
 
+### `bober task ingest [file]`
+
+The seam **domains** write AUTO-surfaced Findings through. Read a **Finding JSON** from the optional
+`<file>` path, or from **stdin** when the arg is omitted, validate it against the Finding schema, and
+push it into the unified hub pool — where it becomes an ordinary active Finding visible to
+`bober task list`, `bober hub list`, and `priority` / `decide` / `chat hub`. Unlike `task add` (which
+captures a plain string), `task ingest` accepts a full structured Finding (any `kind`, e.g.
+`watch`/`action`) emitted by a domain's proactive pass.
+
+```bash
+echo '{"domain":"medical","title":"LDL trending up","kind":"watch","urgency":3,"severity":2,"summary":"3 of last 4 panels rising","tags":[]}' \
+  | bober task ingest
+#   Ingested finding (add)
+
+bober task ingest finding.json   # …or read the payload from a file
+#   Ingested finding (add)
+```
+
+**Content-addressed dedup.** When the payload omits an `id`, ingest derives a deterministic 16-char id
+from a hash of `domain|title|kind`. Re-ingesting a finding that agrees on those three fields **collides
+on the same id and reconciles to a single active row** — the command prints `Ingested finding (update)`
+or `(noop)` rather than adding a duplicate. A payload that supplies its own `id` keeps it. `surfacedAt`
+is filled with the current time when absent; the clock is stamped only at the CLI boundary.
+
+**Schema is never bypassed, and ingest is fail-closed.** The payload is validated against the Finding
+schema (with `id`/`surfacedAt` optional) and again as a fully-assembled Finding **before** any write.
+**Malformed JSON** or a payload **missing required Finding fields** prints a red message to stderr, sets
+a **non-zero exit code**, writes **nothing**, and **never throws**. Ingest reuses the same reconcile
+write path as `task add`, so supersede/dedup history works identically.
+
 > `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`; `list` and the
 > `start` / `done` / `drop` lifecycle transitions landed in Sprint 2; `snooze` and its wake-aware
-> list filter landed in Sprint 3. Domain-finding ingest and chat capture remain owned by later
-> sprints.
+> list filter landed in Sprint 3; the domain-finding `ingest` seam (with content-id dedup) landed in
+> Sprint 4. Chat capture remains owned by a later sprint.
 
 ---
 
