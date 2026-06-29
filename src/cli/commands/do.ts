@@ -110,9 +110,11 @@ export async function runDo(
   // Branch 2: resolve the promoter
   const promoter = registry.resolve({ domain: finding.domain, kind: finding.kind });
   if (promoter === undefined) {
+    // Name BOTH domain and kind so an operator can tell a missing domain-only
+    // registration apart from a missing kind-specific one.
     process.stderr.write(
       chalk.red(
-        `do: unsupported domain '${finding.domain}' — no promoter registered for this domain\n`,
+        `do: unsupported (${finding.domain}, ${finding.kind}) — no promoter registered for this domain+kind\n`,
       ),
     );
     process.exitCode = 1;

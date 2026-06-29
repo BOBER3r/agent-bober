@@ -106,12 +106,12 @@ Eval `eval-sprint-spec-20260628-do-bridge-3-1` → **pass** (5/5 required, itera
 
 ## Notes for maintainers
 
-- **Non-blocking follow-up (evaluator-raised, cosmetic).** The unsupported-promoter error in
-  `src/cli/commands/do.ts:111-119` names only the **domain** (`do: unsupported domain '<domain>' — no
-  promoter registered for this domain`), not the full `(domain, kind)` pair, even though `sc-3-4`'s intent
-  references naming the pair. The criterion **passed** (resolve returns `undefined` and the command exits
-  non-zero with a clear message); this is a wording-only improvement, not a behavior fix. Do not "fix" it
-  by reopening this sprint — fold it into a later touch of `do.ts` if desired.
+- **Follow-up RESOLVED (post-sprint, 2026-06-29).** The unsupported-promoter error in
+  `src/cli/commands/do.ts` now names the full `(domain, kind)` pair
+  (`do: unsupported (<domain>, <kind>) — no promoter registered for this domain+kind`), aligning the
+  message with `sc-3-4`'s intent so an operator can distinguish a missing domain-only registration from a
+  missing kind-specific one. The `sc-1-5` test was strengthened to assert the kind appears in the message
+  alongside the domain. Behavior is otherwise unchanged (resolve still returns `undefined`, exit code 1).
 - **`docs/do-bridge.md` is the durable extension-point doc.** It is the single place a maintainer adds a
   new domain promoter — it names the `register()` call site, the `Promoter` purity contract, and the
   fail-closed resolution precedence. Keep it in lockstep if the registry wiring in `do.ts` moves.

@@ -140,7 +140,7 @@ describe("runDo — sc-1-5: unsupported domain path", () => {
     expect(process.exitCode).toBe(1);
   });
 
-  it("names the unsupported domain in the error message", async () => {
+  it("names the unsupported (domain, kind) pair in the error message", async () => {
     const store = new InMemoryFindingStore([MEDICAL_FINDING]);
     const registry = buildCodingRegistry();
     const stderrWrites: string[] = [];
@@ -152,8 +152,10 @@ describe("runDo — sc-1-5: unsupported domain path", () => {
     await runDo(store, registry, MEDICAL_FINDING.id, { dryRun: true });
 
     const combined = stderrWrites.join("");
-    // Must name the domain (sc-1-5)
+    // Must name the domain (sc-1-5) AND the kind (sc-3-4) so an operator can
+    // distinguish a missing domain-only vs kind-specific registration.
     expect(combined).toContain("medical");
+    expect(combined).toContain(MEDICAL_FINDING.kind); // "action"
   });
 
   it("does not write anything to stdout on unsupported domain", async () => {
