@@ -46,3 +46,28 @@ export function readFindings(store: FactStore): Finding[] {
     .getActiveFacts(HUB_SCOPE, undefined, "finding")
     .map((r) => FindingSchema.parse(JSON.parse(r.value) as unknown));
 }
+
+// ── transitionFinding ─────────────────────────────────────────────────
+
+/**
+ * Read the active Finding for `id`, apply `newStatus` (+ optional field
+ * mutation), and write it back via writeFinding. Because subject=id and
+ * predicate='finding' are unchanged but the value differs, reconcileFact
+ * takes the UPDATE branch (supersede old + insert new), preserving the
+ * prior row as bitemporal history (reconcile.ts:70-78).
+ *
+ * Returns the new Finding, or null if no active Finding has that id.
+ * PURE: never reads the clock — `now` is injected at the CLI boundary.
+ */
+export async function transitionFinding(
+  store: FactStore,
+  id: string,
+  newStatus: Finding["status"],
+  { now, mutate }: { now: string; mutate?: Partial<Finding> },
+): Promise<Finding | null> {
+  const current = readFindings(store).find((f) => f.id === id);
+  if (current === undefined) return null;
+  const next: Finding = { ...current, ...mutate, status: newStatus };
+  await writeFinding(store, next, { now });
+  return next;
+}
