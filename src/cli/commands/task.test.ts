@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { FactStore } from "../../state/facts.js";
-import { runTaskAdd, runTaskList, runTaskTransition } from "./task.js";
+import { runTaskAdd, runTaskList, runTaskTransition, runTaskSnooze } from "./task.js";
 import { captureTask } from "../../hub/task-inbox.js";
 import { readFindings } from "../../hub/finding-store.js";
 
@@ -135,7 +135,7 @@ describe("runTaskList", () => {
 
     // Reset captures for the list call
     writes.length = 0;
-    runTaskList(store, {});
+    runTaskList(store, {}, T1);
     const output = writes.join("");
     // task2 (still open) is shown — assert by both id and title
     expect(output).toContain(task2.id);
@@ -158,7 +158,7 @@ describe("runTaskList", () => {
     await runTaskTransition(store, task.id, "done", T1);
 
     writes.length = 0;
-    runTaskList(store, { all: true });
+    runTaskList(store, { all: true }, T1);
     const output = writes.join("");
     expect(output).toMatch(/finished task/);
     expect(output).toMatch(/done/);
@@ -174,7 +174,7 @@ describe("runTaskList", () => {
       return true;
     });
 
-    runTaskList(store, {});
+    runTaskList(store, {}, T);
     expect(writes.join("")).toMatch(/No tasks found/);
 
     store.close();
@@ -217,6 +217,137 @@ describe("runTaskTransition", () => {
     const task = await captureTask(store, "do laundry", { now: T0 });
     await runTaskTransition(store, task.id, "done", T1);
     expect(process.exitCode).toBe(0);
+
+    store.close();
+  });
+});
+
+describe("runTaskSnooze", () => {
+  const T0 = "2026-06-28T00:00:00.000Z";
+  const T1 = "2026-06-29T00:00:00.000Z";
+  const T2 = "2026-06-30T00:00:00.000Z";
+  const FUTURE_ISO = "2026-12-01T00:00:00.000Z";
+
+  // sc-3-2: snooze sets status=snoozed and records exact snooze-until tag
+  it("sc-3-2: snooze sets status=snoozed and tag snooze-until:<ISO>", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const task = await captureTask(store, "submit tax return", { now: T0 });
+    await runTaskSnooze(store, task.id, FUTURE_ISO, T0);
+    expect(process.exitCode).toBe(0);
+
+    const active = readFindings(store).find((f) => f.id === task.id);
+    expect(active).toBeDefined();
+    expect(active!.status).toBe("snoozed");
+    expect(active!.tags).toContain(`snooze-until:${FUTURE_ISO}`);
+
+    store.close();
+  });
+
+  // sc-3-3: snoozed task hidden before wake, visible after
+  it("sc-3-3: snoozed task absent from list before wake, present after", async () => {
+    const store = new FactStore(":memory:");
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+
+    const task = await captureTask(store, "deferred task", { now: T0 });
+    // Snooze until T1
+    await runTaskSnooze(store, task.id, T1, T0);
+
+    // List with now = T0 (before wake) → task should be absent
+    writes.length = 0;
+    runTaskList(store, {}, T0);
+    expect(writes.join("")).not.toContain(task.id);
+
+    // List with now = T2 (after wake) → task should be present
+    writes.length = 0;
+    runTaskList(store, {}, T2);
+    expect(writes.join("")).toContain(task.id);
+
+    store.close();
+  });
+
+  // sc-3-4: done on a snoozed task → transition succeeds, task leaves list
+  it("sc-3-4: marking a snoozed task done succeeds and removes it from default list", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const task = await captureTask(store, "pay bills", { now: T0 });
+    await runTaskSnooze(store, task.id, FUTURE_ISO, T0);
+    expect(process.exitCode).toBe(0);
+
+    // Transition snoozed → done
+    await runTaskTransition(store, task.id, "done", T1);
+    expect(process.exitCode).toBe(0);
+
+    const active = readFindings(store).find((f) => f.id === task.id);
+    expect(active!.status).toBe("done");
+
+    // Task must not appear in the default list even with a now after the snooze wake
+    const writes: string[] = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      writes.push(String(chunk));
+      return true;
+    });
+    runTaskList(store, {}, T2);
+    expect(writes.join("")).not.toContain(task.id);
+
+    store.close();
+  });
+
+  // sc-3-5: unparseable --until → exitCode=1, no throw
+  it("sc-3-5: unparseable --until reports error on stderr and sets exitCode=1", async () => {
+    const store = new FactStore(":memory:");
+    const stderrWrites: string[] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
+
+    const task = await captureTask(store, "some task", { now: T0 });
+    await expect(
+      runTaskSnooze(store, task.id, "not-a-date", T0),
+    ).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
+    expect(stderrWrites.join("")).toMatch(/invalid --until/);
+
+    store.close();
+  });
+
+  // Re-snooze replaces the snooze-until tag (no stacking)
+  it("re-snooze replaces rather than stacks the snooze-until tag", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const task = await captureTask(store, "revisit proposal", { now: T0 });
+    // First snooze
+    await runTaskSnooze(store, task.id, T1, T0);
+    // Re-snooze to a different time
+    await runTaskSnooze(store, task.id, FUTURE_ISO, T0);
+
+    const active = readFindings(store).find((f) => f.id === task.id);
+    expect(active!.status).toBe("snoozed");
+    // Exactly one snooze-until tag and it is the latest one
+    const snoozeTags = active!.tags.filter((t) => t.startsWith("snooze-until:"));
+    expect(snoozeTags).toHaveLength(1);
+    expect(snoozeTags[0]).toBe(`snooze-until:${FUTURE_ISO}`);
+
+    store.close();
+  });
+
+  // Unknown id → exitCode=1, no throw
+  it("unknown id → exitCode=1 and resolves without throwing", async () => {
+    const store = new FactStore(":memory:");
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await expect(
+      runTaskSnooze(store, "nonexistent-id-xyz", FUTURE_ISO, T0),
+    ).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
 
     store.close();
   });

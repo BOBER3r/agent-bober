@@ -20,7 +20,12 @@ import {
   ensureFactsDir,
 } from "../../state/facts.js";
 import { captureTask } from "../../hub/task-inbox.js";
-import { readFindings, transitionFinding } from "../../hub/finding-store.js";
+import {
+  readFindings,
+  transitionFinding,
+  isVisibleInDefaultList,
+  SNOOZE_TAG_PREFIX,
+} from "../../hub/finding-store.js";
 import type { Finding } from "../../hub/finding.js";
 
 // ── Root resolver ─────────────────────────────────────────────────────
@@ -84,26 +89,26 @@ export async function runTaskAdd(
   }
 }
 
-// ── Task status constants ─────────────────────────────────────────────
-
-const ACTIVE_STATUSES: ReadonlyArray<Finding["status"]> = ["open", "in-progress"];
-
 // ── runTaskList (DI core) ─────────────────────────────────────────────
 
 /**
- * DI core for `task list`. Read-only; no `now` needed.
- * Default filter: status in {open, in-progress}. Never throws.
+ * DI core for `task list`. Default filter: wake-aware visibility (open,
+ * in-progress, or snoozed tasks whose wake time has passed). Never throws.
+ *
+ * `now` is injected at the CLI handler boundary so tests can pass a fixed
+ * clock. No Date.now() or new Date() inside this function.
  */
 export function runTaskList(
   store: FactStore,
   opts: { all?: boolean; status?: string },
+  now: string,
 ): void {
   try {
     let findings = readFindings(store);
     if (opts.status) {
       findings = findings.filter((f) => f.status === opts.status);
     } else if (!opts.all) {
-      findings = findings.filter((f) => ACTIVE_STATUSES.includes(f.status));
+      findings = findings.filter((f) => isVisibleInDefaultList(f, now));
     }
     if (findings.length === 0) {
       process.stdout.write(chalk.gray("No tasks found.\n"));
@@ -161,6 +166,75 @@ export async function runTaskTransition(
   }
 }
 
+// ── runTaskSnooze (DI core) ───────────────────────────────────────────
+
+/** Terminal statuses that cannot be re-snoozed. */
+const TERMINAL_STATUSES: ReadonlyArray<Finding["status"]> = ["done", "dropped"];
+
+/**
+ * DI core for `task snooze`. Parses `until` as an ISO date at the boundary
+ * (NaN → chalk.red + exitCode=1 + return), reads the active Finding, strips
+ * any prior snooze-until tag, appends the new one, and transitions to snoozed.
+ *
+ * Never throws: all errors use chalk + process.exitCode=1 + return.
+ */
+export async function runTaskSnooze(
+  store: FactStore,
+  id: string,
+  until: string,
+  now: string,
+): Promise<void> {
+  const d = new Date(until);
+  if (Number.isNaN(d.getTime())) {
+    process.stderr.write(
+      chalk.red(`task snooze: invalid --until value: ${until}\n`),
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const untilIso = d.toISOString();
+  try {
+    const current = readFindings(store).find((f) => f.id === id);
+    if (current === undefined) {
+      process.stderr.write(chalk.yellow(`task: no task found with id ${id}\n`));
+      process.exitCode = 1;
+      return;
+    }
+    if (TERMINAL_STATUSES.includes(current.status)) {
+      process.stderr.write(
+        chalk.yellow(`task: cannot snooze a ${current.status} task\n`),
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const tags = [
+      ...current.tags.filter((t) => !t.startsWith(SNOOZE_TAG_PREFIX)),
+      `${SNOOZE_TAG_PREFIX}${untilIso}`,
+    ];
+    const updated = await transitionFinding(store, id, "snoozed", {
+      now,
+      mutate: { tags },
+    });
+    if (updated === null) {
+      process.stderr.write(chalk.yellow(`task: no task found with id ${id}\n`));
+      process.exitCode = 1;
+      return;
+    }
+    process.stdout.write(
+      chalk.green(
+        `Task ${chalk.bold(id)} snoozed until ${chalk.bold(untilIso)}\n`,
+      ),
+    );
+  } catch (err) {
+    process.stderr.write(
+      chalk.red(
+        `Failed to snooze task: ${err instanceof Error ? err.message : String(err)}\n`,
+      ),
+    );
+    process.exitCode = 1;
+  }
+}
+
 // ── registerTaskCommand ───────────────────────────────────────────────
 
 export function registerTaskCommand(program: Command): void {
@@ -209,9 +283,11 @@ export function registerTaskCommand(program: Command): void {
       try {
         const ns = await resolveDefaultNamespace(projectRoot);
         await ensureFactsDir(projectRoot, ns);
+        // Stamp wall-clock time at handler boundary — NEVER inside the filter
+        const now = new Date().toISOString();
         const store = new FactStore(factsDbPath(projectRoot, ns));
         try {
-          runTaskList(store, opts);
+          runTaskList(store, opts, now);
         } finally {
           store.close();
         }
@@ -219,6 +295,34 @@ export function registerTaskCommand(program: Command): void {
         process.stderr.write(
           chalk.red(
             `task list failed: ${err instanceof Error ? err.message : String(err)}\n`,
+          ),
+        );
+        process.exitCode = 1;
+      }
+    });
+
+  // ── task snooze ──────────────────────────────────────────────────
+  taskCmd
+    .command("snooze <id>")
+    .description("Snooze a task until a future time (hides it from the default list)")
+    .requiredOption("--until <when>", "Wake time (ISO date or datetime, e.g. 2026-12-01)")
+    .action(async (id: string, opts: { until: string }) => {
+      const projectRoot = await resolveRoot();
+      try {
+        const ns = await resolveDefaultNamespace(projectRoot);
+        await ensureFactsDir(projectRoot, ns);
+        // Stamp wall-clock time at handler boundary — NEVER inside the helper
+        const now = new Date().toISOString();
+        const store = new FactStore(factsDbPath(projectRoot, ns));
+        try {
+          await runTaskSnooze(store, id, opts.until, now);
+        } finally {
+          store.close();
+        }
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(
+            `task snooze failed: ${err instanceof Error ? err.message : String(err)}\n`,
           ),
         );
         process.exitCode = 1;

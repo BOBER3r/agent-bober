@@ -71,3 +71,45 @@ export async function transitionFinding(
   await writeFinding(store, next, { now });
   return next;
 }
+
+// ── Snooze helpers ────────────────────────────────────────────────────
+
+/** Tag prefix used to encode the wake time on a snoozed Finding. */
+export const SNOOZE_TAG_PREFIX = "snooze-until:";
+
+/**
+ * Extract the wake-time ISO string from a Finding's tags, or null if absent
+ * or if no valid snooze-until tag exists.
+ * PURE: no clock read; tag parsing only.
+ */
+export function snoozeUntil(finding: Finding): string | null {
+  const tag = finding.tags.find((t) => t.startsWith(SNOOZE_TAG_PREFIX));
+  return tag !== undefined ? tag.slice(SNOOZE_TAG_PREFIX.length) : null;
+}
+
+/**
+ * Returns true when a Finding should appear in the default task list.
+ *
+ * Visibility rules:
+ *  - open / in-progress → always visible
+ *  - snoozed + valid wake time in the future (wake > now) → hidden
+ *  - snoozed + wake time <= now (past or present) → visible again
+ *  - snoozed + no snooze-until tag → visible (user must re-triage)
+ *  - done / dropped → not visible
+ *
+ * PURE: `now` is injected; no Date.now() or new Date() inside.
+ * Lexicographic ISO compare is safe because both sides are toISOString()
+ * output (YYYY-MM-DDTHH:mm:ss.sssZ — fixed-width, lexicographically ordered).
+ */
+export function isVisibleInDefaultList(finding: Finding, now: string): boolean {
+  if (finding.status === "open" || finding.status === "in-progress") {
+    return true;
+  }
+  if (finding.status === "snoozed") {
+    const wake = snoozeUntil(finding);
+    // No tag → treat as visible so the user can re-triage
+    if (wake === null) return true;
+    return wake <= now;
+  }
+  return false;
+}
