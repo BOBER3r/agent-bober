@@ -1277,6 +1277,45 @@ an informative no-op message and make **no** LLM call.
 
 ---
 
+## Task Inbox Commands
+
+The **task inbox** is the **zero-friction capture** front-end for the hub pool. A plain string
+becomes **one open `action` Finding** stored exactly where the hub commands read from — the same
+`hub`-scope, predicate `finding` FactStore rows described under **Hub Commands** above. Capture is
+**deterministic and synchronous** (no LLM, no prompts, never blocks); LLM-based triage is a later,
+separate concern.
+
+### `bober task add <text> [--domain <domain>]`
+
+Capture a plain task as a single **open `kind=action` Finding** in the unified hub pool. The title
+is `text` (trimmed); a deterministic 16-char id is derived from the title and capture time. Pass
+`--domain <d>` to set the Finding's `domain` (and add a `domain:<d>` tag); with no `--domain` the
+domain falls back to `inbox`. All unknown Finding fields are left empty/omitted, and the required
+`urgency`/`severity` fields take **neutral placeholder defaults** (`urgency=3`, `severity=1`) rather
+than prompting.
+
+```bash
+bober task add "renew passport"
+#   Captured task 1f3c9a0b2e4d6f80
+#     title:  renew passport
+#     domain: inbox
+
+bober task add "book annual physical" --domain medical
+#     domain: medical
+```
+
+A captured task is an ordinary Finding, so it immediately appears in `bober hub list` and is
+eligible for ranking by `bober hub priority` / `bober hub decide` / `bober chat hub`. The command
+opens the project's FactStore (the active team's namespace memory path) and writes via the reconcile
+layer so later dedup/supersede works. Empty text prints a red error and exits non-zero; on any error
+the command writes to stderr and sets a non-zero exit code **without throwing**, and the store is
+always closed.
+
+> `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`. Inbox management
+> (`list` / `done` / `snooze` / `drop`), ingest, and chat capture remain owned by later sprints.
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |

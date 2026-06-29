@@ -593,6 +593,9 @@ npx agent-bober vault reindex --scope <domain> [--vault <dir>]  # Rebuild the de
 npx agent-bober hub list                           # Print Findings from the project's own FactStore + sibling kb-* repos (read-only, deduped by id); title [kind] urgency/severity per line
 npx agent-bober hub priority [--domain <d>] [--due <days>] [--tag <t>]  # Rank pooled Findings (general, or filtered) and write priority.md into the kb-hub vault; prints a ranked summary
 npx agent-bober hub decide "X vs Y"                # Rank Findings under decision scope (only X/Y-relevant survive) and write priority.md
+
+# Task inbox (zero-friction capture into the hub pool)
+npx agent-bober task add "<text>" [--domain <d>]   # Capture a plain task as one open kind=action Finding in the hub pool; deterministic, never prompts/blocks
 ```
 
 #### Clarification gating
