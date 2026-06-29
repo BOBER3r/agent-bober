@@ -1700,7 +1700,7 @@ and **never** on reject. **No auto-approve in any mode**, the whole gate reuses 
 approval-state machinery and slash-command handlers, and Google cloud egress stays opt-in/default-off. See
 the finale record [`sprint-spec-20260628-calendar-planner-4.md`](./sprint-spec-20260628-calendar-planner-4.md).
 
-## Research Scheduler — in progress (4 of 5)
+## Research Scheduler — complete (5 of 5)
 
 `spec-20260628-research-scheduler` — recurring **multi-model research jobs**: define a research
 question + cadence once, and a scheduler (later sprints) reruns it across a model set, optionally
@@ -1748,9 +1748,25 @@ at the same `now` runs **zero** jobs). `ResearchJobSchema` gains optional `nextD
 when the scheduler writes those fields back. A new `bober research tick [--watch] [--interval <ms>]`
 CLI drives it (wall clock stamped **only** at the `.action()` boundary; `--watch` is an in-process
 `setInterval` loop, default 1 h), with help text documenting the scheduling-mechanism tradeoff
-(in-repo `--watch` vs OS cron/launchd [recommended for unattended] vs harness scheduler). **No digest
-(S5) yet; failed runs leave the job due with no retry/backoff; the CLI still binds no live web-search
-client.**
+(in-repo `--watch` vs OS cron/launchd [recommended for unattended] vs harness scheduler). Sprint 5
+**closes the plan** with the **morning digest artifact** — the content the Telegram bot (a sibling
+spec) will push as a silent scheduled message. `buildDigest(since, now, deps)` collects every research
+run produced in `[since, now]` via an **injected** `deps.collectRuns`, renders **both** a PURE markdown
+body (`renderDigestMarkdown` — heading + one bullet per run: title, top finding, source link) and a
+machine-readable JSON object (`{ since, now, generatedAt, runs[] }`), and writes them side by side to
+`.bober/research/digests/<YYYY-MM-DD>.{md,json}` (date sliced from the injected `now`; `ensureDir` from
+`src/state/helpers.ts`). An **empty window** is first-class — both files are still written, the markdown
+carrying an explicit `_No new research was produced in this window._` (never throws, never an empty
+file). The **real** `collectRunsFromVault` reads the **vault research notes** under
+`<vaultRoot>/research/` (`listNotes`/`readNote`, filtered by `frontmatter.generatedAt` ∈ `[since, now]`
+via ISO-lexicographic compare) — deliberately **not** hub `Finding`s, which are content-deduped by
+`sha256(domain|title|kind)` and historyless/path-less and so would undercount a window; vault notes are
+the 1:1 dated, path-linked run artifact. `topFinding` is derived from `frontmatter.question`/`title`
+only — **non-sensitive content** (Telegram is not E2E-encrypted; research doc L141). A new
+`bober research digest --since <iso>` (default last 24 h, clock read only at the `.action()` boundary)
+drives it. **Telegram transport, polling, the user whitelist, message rendering, and scheduling the
+send are explicitly out of scope** (the Telegram sibling spec / calendar layer own them) — this is the
+content artifact only. **The plan is complete (5 of 5); full suite 3583 green.**
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -1758,9 +1774,30 @@ client.**
 | 2 | [sprint-spec-20260628-research-scheduler-2.md](./sprint-spec-20260628-research-scheduler-2.md) | **Single-shot multi-model runner → vault note + hub Finding + `bober research run`:** `model-diversity.ts` (`diverseBlocks(tier?)` enumerates `cheap→standard→hard→frontier` via `tierPolicy.resolveTier(t)?.generator`, dedupes by `modelLabel`=`provider/model` ⇒ 4 distinct: `openai-compat/deepseek`, `openai-compat/grok`, `anthropic/sonnet`, `anthropic/opus`; PURE — no fs/net/clock; sc-2-1) + `note-writer.ts` (PURE `serializeResearchNote(job,labels,contributions,now)` ⇒ frontmatter `{ title, jobId, question, models[] (string labels — never blocks), generatedAt, domain, type, status }` + `### <label>` body sections via `serializeFrontmatter`, mirrors medical `research-note.ts`; `researchNotePath`=`<vault>/research/<YYYY-MM-DD>-<marker>.md` date from injected `now`; sc-2-2) + `runner.ts` (`runResearchJob(job, deps={queryModel,findingSink,now,vaultRoot})` ⇒ resolve ≥2 blocks [throws `<2`], query each, write note [`mkdir`+`writeFile`], build **one** `kind:"watch"` Finding `id=sha256(domain\|title\|kind).slice(0,16)`/`evidence`=per-model snippets/`surfacedAt`=`now` validated by **canonical** `FindingSchema` from `src/hub/finding.ts`, await `findingSink` **exactly once** ⇒ `RunResult{notePath,models,finding}`; pluggable `registerAnalyzer`/`DomainAnalyzer` registry — generic default, **no** `src/medical/` import; clock-free, **no SDK import, no web egress**; sc-2-3) + `src/cli/commands/research.ts` `research run <jobId>` (reads job, stamps `now` at `.action()` boundary, binds `queryModel`→`createClient(...).chat()` + `findingSink`→`ingestFinding(store,f,{now})` over a `FactStore` closed in `finally`, prints note path, **never throws** — not-found/error ⇒ stderr + `exitCode=1`; optional `ResearchRunOverrides{queryModel?,findingSink?}` for test injection). commit `20d42cb`, 7 files (+807/−3), +21 tests (full suite **3540** green), no new deps; sc-2-1..sc-2-4 iter-1, typecheck/build/lint clean. **No FleetCoordinator/egress/cadence/digest — uses a lightweight tier-policy loop + injected deps only.** |
 | 3 | [sprint-spec-20260628-research-scheduler-3.md](./sprint-spec-20260628-research-scheduler-3.md) | **Online-research egress axis (default off) + gated web retrieval:** new **research-owned** `online-research` egress axis (default **false**, fail-closed) — `ResearchSectionSchema` (`schema.ts:481`, `egress.onlineResearch` `z.boolean().default(false)`) registered **optional** `research: ResearchSectionSchema.optional()` (`schema.ts:532`) ⇒ no-`research` configs parse unchanged (sc-3-1) + `ResearchEgressGuard` (`src/research/egress.ts`, line-for-line on medical `egress.ts`: `EgressAxis="online-research"`, `fromConfig`⇒`config.research?.egress?.onlineResearch ?? false`, `isAllowed` exhaustive `never`-guarded `switch` false-by-default, `assertAllowed` **throws** exact `Egress axis 'online-research' not enabled` off / void on — sc-3-2) + injectable `RetrievalClient`/`RetrievalSource` + `retrieve(query,client)` (`src/research/online-retrieval.ts`, duck-typed `search`⇒`RetrievalSource[]`, returns `[]` on error, **never throws**, does **not** itself check egress) + gated runner branch (`runner.ts:176`, two new **optional** `RunDeps` `egress?`/`retrievalClient?`; gate `deps.egress?.isAllowed("online-research")===true && deps.retrievalClient!==undefined` ⇒ axis off **or** deps absent ⇒ `retrieve` never invoked, no client constructed, **0 outbound bytes**, Sprint-2 path byte-identical; axis on ⇒ 1 call + `sources.map(s=>s.url)` threaded into note — sc-3-3) + `serializeResearchNote` optional 5th `sources: string[] = []` (`note-writer.ts:56`, spread only when non-empty, URLs as `string[]` never objects ⇒ default `[]` byte-identical frontmatter). **Separate from the medical egress axes** (domains independent). commit `0150737`, 7 files (+265/−1), +13 tests (full suite **3553** green, zero regressions), no new deps; sc-3-1..sc-3-4 iter-1, typecheck/build/lint clean. **No cadence/tick (S4) or digest (S5); CLI does not yet bind a real web-search client.** |
 | 4 | [sprint-spec-20260628-research-scheduler-4.md](./sprint-spec-20260628-research-scheduler-4.md) | **Recurring scheduler — cadence due-dates + idempotent `bober research tick`:** `cadence.ts` (PURE, clock-free `computeNextDue(cadence,fromIso):string` — `daily`+1d/`weekly`+7d/`monthly`+1mo via `setUTCMonth`, exhaustive `never`-guard switch; parses the **injected** `fromIso` only — no argless `new Date()`/`Date.now()`; month-rollover intentional + documented e.g. `2026-01-31`+1mo → `2026-03-03`; sc-4-1, 9 tests incl 4 rollover edges) + `scheduler.ts` (`tick(deps:TickDeps{now,listJobs,saveJob,runJob}) ⇒ TickResult{ran[],skipped[]}` — selects `nextDueAt===undefined \|\| Date.parse(nextDueAt)<=Date.parse(now)` [boundary-inclusive], runs **first** via the **unchanged** Sprint-2 `runResearchJob`, then advances `lastRunAt=now`+`nextDueAt=computeNextDue(cadence,now)` and persists via `saveJob`=`addJob` upsert; run-throws ⇒ not advanced/persisted ⇒ stays due; **idempotent** — 2nd tick at same `now` ⇒ `ran.length 0`; single-process, no lock; sc-4-2/sc-4-3, 10 tests) + `types.ts` extends `ResearchJobSchema` with optional `nextDueAt`/`lastRunAt` (`z.string().datetime()`) so `addJob`'s `safeParse` no longer strips scheduler updates (briefing Finding A); `jobId` still hashes only `question\|createdAt` ⇒ **stable** id on update + `src/cli/commands/research.ts` `research tick [--watch] [--interval <ms>]` (clock stamped **only** at `.action()` boundary; `--watch`=in-process `setInterval`, default `3600000`ms=1h, `1000`ms floor, no `.unref()`; per-iteration `FactStore` open/close in `finally`; help documents in-repo `--watch` vs OS cron/launchd [recommended, sample crontab `0 * * * *`] vs harness-scheduler tradeoff + hosted-OAuth-unfit note; never throws — stderr+`exitCode=1`; sc-4-4). commit `c8c4b53`, 7 files (+688/−1), +22 tests (full suite **3575** green, zero regressions), no new deps; sc-4-1..sc-4-4 iter-1, typecheck/build/lint clean. **No digest (S5); no retry/backoff on failed runs; CLI still binds no live web-search client.** |
+| 5 | [sprint-spec-20260628-research-scheduler-5.md](./sprint-spec-20260628-research-scheduler-5.md) | **Finale — morning digest artifact + `bober research digest`:** `src/research/digest.ts` — PURE `renderDigestMarkdown(digest)` (heading + window/generated lines + one bullet per run `- **<title>** — <topFinding> ([source](<source>))`; empty ⇒ `_No new research was produced in this window._`; no I/O/clock; sc-5-3) + `buildDigest(since,now,deps={collectRuns,digestsDir})` (collect via **injected** `collectRuns` ⇒ `Digest{since,now,generatedAt=now,runs[]}`, `ensureDir` from `state/helpers.ts`, write `.bober/research/digests/<date>.md` + `<date>.json` where `date=now.slice(0,10)` from **injected** `now`, JSON = `JSON.stringify(_,null,2)+"\n"`; empty window writes **both** files, **never throws**; returns both paths; sc-5-1/sc-5-2) + real `collectRunsFromVault(vaultRoot,since,now)` (reads vault notes `<vaultRoot>/research/` via `listNotes`/`readNote`, filters `frontmatter.generatedAt` ∈ `[since,now]` ISO-lexicographic, maps → `DigestRun{title,topFinding,generatedAt,source}`; missing dir ⇒ `[]`; **vault-notes-not-Findings** — hub Findings content-deduped/historyless/path-less would undercount; `topFinding` from `frontmatter.question`/`title` only, **non-sensitive** — Telegram non-E2E, research doc L141) + `DigestRun`/`Digest`/`DigestDeps` types + `src/cli/commands/research.ts` `research digest [--since <iso>]` (default last 24 h, clock stamped **only** at `.action()`; binds real `collectRunsFromVault` or optional `ResearchRunOverrides.digestCollectRuns` for tests; prints both paths; **never throws** — stderr+`exitCode=1`; sc-5-4). **Telegram transport / polling / whitelist / render / send-scheduling out of scope** (sibling spec). commit `bebe2f5`, 3 files (+398), **+8 tests** (full suite **3583** green, zero regressions), no new deps; sc-5-1..sc-5-4 iter-1, typecheck/build/lint clean. **Plan complete (5/5) — content artifact only; the Telegram bot consumes the JSON.** |
 
-User-facing usage for `bober research job add\|list\|remove`, `bober research run <jobId>`, and
-`bober research tick [--watch]` lives in
+User-facing usage for `bober research job add\|list\|remove`, `bober research run <jobId>`,
+`bober research tick [--watch]`, and `bober research digest [--since <iso>]` lives in
 [`COMMANDS.md`](../../COMMANDS.md) under **Research Commands** and the README CLI list. The
 `online-research` opt-in lives at `research.egress.onlineResearch` (default false) in the README
 "Full Configuration Reference".
+
+### Plan close-out
+
+`spec-20260628-research-scheduler` is **complete (5 of 5)** on branch `bober/medical-team` — every
+sprint passed evaluation iteration 1 (zero reworks), full suite **3583** green. The plan delivers the
+full recurring-research pipeline end-to-end: **define** a research job (schema + clock-free JSON store +
+`research job add|list|remove`), **execute** it across ≥2 distinct provider/model blocks → vault note +
+one hub `Finding` (`research run`), gate web retrieval behind the opt-in, fail-closed
+`research.egress.onlineResearch` axis (default `false`, separate from the medical axes), **schedule** it
+on a cadence with the idempotent `research tick [--watch]` (deterministic `computeNextDue` advancing
+`nextDueAt`/`lastRunAt`), and **aggregate** a window of runs into the dual md+json morning digest under
+`.bober/research/digests/` (`research digest`). `runResearchJob`/`tick` are the **schedulable
+entrypoints** an external cron/launchd invokes; the digest JSON is the **content contract** the Telegram
+frontend (`spec-20260628-telegram-frontend`, sequenced last) will consume to push silent scheduled
+messages. **Carry-forward follow-ups (all out of scope here, not regressions):** the CLI still binds no
+live web-search `RetrievalClient` (the axis is enforced and the slot is injectable — a real search
+provider is a later step); failed `tick` runs leave the job due with **no retry/backoff**; scheduling is
+**single-process, no lock**; and Telegram transport / the digest *send* are owned by the sibling
+spec / calendar layer. See the finale record
+[`sprint-spec-20260628-research-scheduler-5.md`](./sprint-spec-20260628-research-scheduler-5.md).

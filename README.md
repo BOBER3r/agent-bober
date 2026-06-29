@@ -622,6 +622,7 @@ npx agent-bober research job list                  # List all defined research j
 npx agent-bober research job remove <jobId>        # Delete a research job's JSON file (not-found → exitCode=1)
 npx agent-bober research run <jobId>               # Execute one stored job: query ≥2 distinct tier-policy provider/model blocks, write a vault research note (frontmatter jobId/question/models[]/generatedAt), emit exactly one kind:"watch" hub Finding; prints the note path. Offline unless research.egress.onlineResearch; never throws (not-found → exitCode=1)
 npx agent-bober research tick [--watch] [--interval <ms>]  # Run every job due as of now (nextDueAt unset or <= now) on the same path; idempotent — advances each run job's nextDueAt by cadence (daily+1d/weekly+7d/monthly+1mo) + sets lastRunAt, so a 2nd tick runs nothing. Clock read only at the boundary. --watch = in-process setInterval (default 1h); for unattended runs use OS cron/launchd, e.g. `0 * * * * bober research tick`
+npx agent-bober research digest [--since <iso>]    # Aggregate research runs in [since, now] (default last 24h) into a morning digest under .bober/research/digests/<date>.{md,json} — markdown (one bullet per run: title/top finding/source) + JSON for the Telegram bot. Reads vault research notes (non-sensitive titles only); empty window writes both files with an explicit no-new-research body; never throws
 ```
 
 #### Clarification gating

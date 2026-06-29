@@ -1715,14 +1715,15 @@ interval / shift the window) and **re-proposes** — again writing no events.
 
 The **research scheduler** lets you define recurring **multi-model research jobs** — a question
 plus a cadence — once, then rerun them across a model set on a schedule, optionally retrieve
-online, and feed the results into the priority hub. Sprints 1–4 ship the **definition + execution +
-egress + scheduler layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json`
+online, and feed the results into the priority hub. All five sprints ship the **definition + execution +
+egress + scheduler + digest layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json`
 (not in `bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`,
 and the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
 clock — the CLI stamps timestamps once at the command boundary. `bober research run <jobId>`
 executes one stored job on demand across ≥2 distinct models, writing a vault note and one hub
 Finding; `bober research tick` runs **every job that is due as of now** on the same path and advances
-each run job's cadence due-date (idempotent). A run is **offline by default**: web retrieval is gated
+each run job's cadence due-date (idempotent); `bober research digest` aggregates a window of runs into a
+push-ready morning digest (markdown + JSON). A run is **offline by default**: web retrieval is gated
 behind the opt-in `research.egress.onlineResearch` config axis (default `false`, fail-closed — see below).
 
 ### `bober research job add --question "..." [options]`
@@ -1862,15 +1863,47 @@ bober research tick
 
 > Hosted-OAuth schedulers are unfit for unattended runs — use OS cron/launchd for unattended scheduling.
 
-> **Status.** **Sprint 4 of 5 — in progress.** `spec-20260628-research-scheduler` Sprints 1–4 ship
-> the **definition + execution + egress + scheduler layers**: the `ResearchJob` schema, the clock-free
-> JSON store under `.bober/research/jobs/`, `bober research job add|list|remove`,
+### `bober research digest [--since <iso>]`
+
+Aggregate every research run produced in the window `[since, now]` into a **morning digest artifact** —
+a human-readable markdown file **and** a machine-readable JSON file written side by side. This is the
+content the Telegram bot (a sibling spec) consumes to push a silent scheduled message; transport itself
+is out of scope here.
+
+```bash
+bober research digest
+# /path/to/project/.bober/research/digests/2026-06-30.md
+# /path/to/project/.bober/research/digests/2026-06-30.json
+```
+
+- **Window.** `--since <iso>` sets the window start (default: 24 h before now). The wall clock is read
+  **only** at the command boundary; the digest itself is deterministic.
+- **Output.** Writes `.bober/research/digests/<YYYY-MM-DD>.md` and `<YYYY-MM-DD>.json` (the date is
+  sliced from `now`), and prints both paths. The markdown has a heading plus one bullet per run —
+  title, top finding, and a source link; the JSON is `{ since, now, generatedAt, runs:[{ title,
+  topFinding, generatedAt, source }] }` for the bot to parse.
+- **Source = vault research notes.** It reads the dated research notes Sprint 2's runner writes under
+  `<vaultRoot>/research/` (filtered by their `generatedAt` frontmatter) — **not** hub Findings, which
+  are content-deduped and would undercount a window.
+- **Non-sensitive content only.** The top finding is derived from each note's question/title — never
+  raw body values. Telegram is **not** end-to-end encrypted, so the digest deliberately carries only
+  titles and non-sensitive summaries.
+- **Empty window is fine.** When no runs fall in the window, both files are still written and the
+  markdown body reads `_No new research was produced in this window._` — it never throws or leaves an
+  empty file. Never throws on error either (errors ⇒ stderr + `process.exitCode = 1`).
+
+> **Status.** **Complete — all 5 sprints.** `spec-20260628-research-scheduler` ships the full
+> **definition + execution + egress + scheduler + digest** pipeline: the `ResearchJob` schema, the
+> clock-free JSON store under `.bober/research/jobs/`, `bober research job add|list|remove`,
 > `bober research run <jobId>` (single-shot multi-model run → vault note + one hub Finding), the opt-in
 > `research.egress.onlineResearch` egress axis (default `false`, fail-closed) that gates web retrieval,
-> and `bober research tick [--watch]` (idempotent cadence-driven scheduler advancing `nextDueAt`/
-> `lastRunAt`). **No digest output exists yet** — that is Sprint 5; failed runs leave the job due with
-> no retry/backoff. Defining a job with `--online-research` stores the per-job flag; the *config* axis
-> `research.egress.onlineResearch` is what gates an actual `run`/`tick`'s web retrieval.
+> `bober research tick [--watch]` (idempotent cadence-driven scheduler advancing `nextDueAt`/
+> `lastRunAt`), and `bober research digest [--since <iso>]` (the morning digest artifact under
+> `.bober/research/digests/`). **Carry-forward (out of scope, not regressions):** the CLI binds no live
+> web-search client yet; failed `tick` runs leave the job due with no retry/backoff; Telegram transport
+> and *scheduling the digest send* are owned by the sibling spec / calendar layer. Defining a job with
+> `--online-research` stores the per-job flag; the *config* axis `research.egress.onlineResearch` is
+> what gates an actual `run`/`tick`'s web retrieval.
 
 ---
 
