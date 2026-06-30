@@ -19,9 +19,16 @@ chokepoint. Sprint 6 adds **two outbound delivery modes over the same funnel**: 
 long-running operation reports progress by editing **one** status message in place (one initial send
 via `sendSafeForEdit`, then N in-place edits via `sendSafeEdit` on the same id) instead of posting a
 message per tick — and a **silent scheduled digest** (`sendDigest`) sent with notifications disabled
-(`SendOptions{silent}` → `disable_notification`). Calendar / inbox command dispatch is still deferred;
-an admitted sender's `/start` (and any non-document, non-text update) still gets the help stub, and any
-other `/command` gets an `Unknown command` placeholder later sprints replace.
+(`SendOptions{silent}` → `disable_notification`). Sprint 7 — the **final** sprint — adds the
+**multi-LLM "secretary" `/fleet` view**: a read-only renderer (`renderFleetView`) that reads the
+head-written `.bober/fleet-synthesis.json` artifact, groups findings by per-agent `FactRecord.subject`,
+and emits one section per agent (label + one-line summary + round + confidence + count). The same
+renderer feeds **both** the on-demand `/fleet` command **and** the Sprint 6 streaming path
+(`streamFleetView`), and `SynthesisBundle` / `FactRecord` are **type-only** imports so the bot keeps
+zero runtime coupling to `src/fleet` / `better-sqlite3`. With Sprint 7 the plan is **complete (7/7
+sprints)** — see [**Plan complete**](#plan-complete-77-sprints) below. An admitted sender's `/start`
+(and any non-document, non-text update) still gets the help stub, and any other `/command` gets an
+`Unknown command` placeholder (full inbox/calendar action dispatch was deferred — see the close-out).
 
 ---
 
@@ -457,6 +464,86 @@ rate-limiting / audit / sanitisation.
 
 ---
 
+## Multi-LLM secretary `/fleet` view (Sprint 7)
+
+Sprint 7 adds a **read-only "secretary" view** of the most recent fleet run — what each LLM/agent
+produced — surfaced two ways from **one** renderer. It is a **thin read+render adapter**: **no run /
+fleet / scheduler logic** is added and **no npm dependency** is introduced (the diff stays inside
+`src/telegram/`).
+
+### The renderer: `renderFleetView` (PURE, one section per agent)
+
+`renderFleetView(bundle)` (`src/telegram/fleet-view.ts:67`) is **pure** — no IO, no throw, deterministic.
+It reads the head-written `SynthesisBundle { rounds, childResults, findings }` (the on-disk
+`.bober/fleet-synthesis.json` shape, from `src/fleet/synthesis.ts`) and returns `string[]`:
+
+- **index `0` is the header** — `Fleet Run — Rounds: <rounds> | Total findings: <n>` — which carries
+  `bundle.rounds` (`sc-7-4`);
+- **each subsequent element is one agent section**, produced by grouping `bundle.findings` by
+  `FactRecord.subject` (the per-agent `childFolder` set at `publish()` in `shared-blackboard.ts`). Each
+  section shows the subject (agent label), `Summary:` = the **latest** finding's value collapsed to one
+  line, then `Round: <rounds> | Confidence: <c> | Findings: <count>`.
+
+```
+Fleet Run — Rounds: 2 | Total findings: 3
+
+grok-child
+Summary: anomaly found in Q3 ledger
+Round: 2 | Confidence: 0.90 | Findings: 2
+
+deepseek-child
+Summary: schema mismatch detected
+Round: 2 | Confidence: 0.70 | Findings: 1
+```
+
+**The round comes from `bundle.rounds`** (the run-level count) for both the header and every section —
+`FactRecord` has **no `round` field** (round is dropped at `publish()`), so `finding.round` is never
+referenced. "Latest" within a group = max `tCreated` (ISO-8601 strings sort lexicographically). An empty
+`findings` array returns `[header]` only.
+
+### Type-only imports: zero runtime coupling to `src/fleet` / `better-sqlite3`
+
+`SynthesisBundle` (from `../fleet/synthesis.js`) and `FactRecord` (from `../state/facts.js`) are imported
+with `import type` and **erased at compile**. The evaluator confirmed the compiled
+`dist/telegram/fleet-view.js` has **zero** runtime references to `fleet/synthesis`, `state/facts`, or
+`better-sqlite3` — so the bot process never drags `better-sqlite3` in through the fleet view. The shape of
+`fleet-synthesis.json` is the on-disk contract; the adapter reads the JSON artifact, never the live
+blackboard.
+
+### The `/fleet` command: whitelist-gated before any read
+
+`handleFleet(senderId, allowed, reader?)` (`src/telegram/fleet-view.ts:115`) returns a plain string for the
+caller to pass through `sendSafe` (no transport access). The sequence:
+
+1. **Whitelist gate FIRST.** A non-whitelisted sender gets `denialReply(senderId)` and the injected reader
+   is **never called** (`sc-7-6`) — no synthesis file is read for a denied sender.
+2. **Read the bundle** via the injected `SynthesisReader` (`fleet-view.ts:30`, default
+   `defaultSynthesisReader`).
+3. **Absent or empty** (`null` or zero findings) ⇒ a friendly
+   `No recent fleet run. Run a fleet command with --blackboard to see per-agent findings here.` — **never a
+   throw** (`sc-7-3`).
+4. **Non-empty** ⇒ `renderFleetView(bundle).join("\n\n")`.
+
+`defaultSynthesisReader` (`fleet-view.ts:40`) reads `<projectRoot>/.bober/fleet-synthesis.json` via
+`node:fs/promises` + `JSON.parse`, returning `null` on `ENOENT` **or** parse failure (a non-blackboard run
+leaves the file absent by design). Because the reader is injected, the handler is unit-testable with a fake
+that drives fixtures or asserts it is never called — no disk, no SDK, no network. `startPollLoop` gains an
+**optional 7th** `fleetReader` param (default `defaultSynthesisReader`), so all existing callers compile
+unchanged.
+
+### One renderer feeds both `/fleet` and streaming
+
+`streamFleetView(transport, chatId, bundle)` (`src/telegram/streaming.ts:55`) streams the per-agent
+sections as in-place edits to **one** message. It calls the **same** `renderFleetView` to produce the
+sections, then feeds them into `streamProgress` via an **accumulating** async generator (each yield appends
+the next section, so the message grows from header to full summary in place). Because both surfaces share
+the renderer, the **one-line truncation** baked into `renderFleetView` (`oneLine()`, `MAX_LINE_LENGTH =
+120`) applies to **both** — a verbatim / over-long finding value is collapsed to its first line and capped,
+so it **never reaches the transport** via either `/fleet` or the streaming path (`sc-7-5`). All output
+still leaves through the `sendSafe` funnel.
+
+---
+
 ## SDK isolation: `grammy` behind the transport wrapper
 
 The chosen Telegram Bot API library is **[grammy](https://grammy.dev) (`^1.44.0`)** — the one
@@ -487,7 +574,8 @@ swapping the SDK is a `bot.ts`-only change.
 |------|------|
 | `src/telegram/whitelist.ts` | Pure authoriser: `parseAllowedUsers` / `isAllowed` / `denialReply` (+ `AllowedUsers` type). No I/O. |
 | `src/telegram/outbound.ts` | `TelegramTransport` / `KeyboardTransport` / `EditTransport` interfaces + `SendOptions{silent?}` + the **four** outbound funnel chokepoints: `sendSafe` (text; optional 4th `opts` arg) · `sendSafeKeyboard` (inline keyboards) · `sendSafeForEdit` (the one streaming send, returns the `message_id`) · `sendSafeEdit` (in-place edits). `KeyboardTransport`/`EditTransport` live here to avoid a circular import to `bot.ts`. |
-| `src/telegram/streaming.ts` | `streamProgress(transport, chatId, updates, opts?)` — Sprint 6 streaming sender: one `sendSafeForEdit` (initial header, default `"Working…"`) + N `sendSafeEdit` on the **same** message id, consuming an injected `AsyncIterable<string>` (no run logic, never a new message per tick). No grammy. |
+| `src/telegram/streaming.ts` | `streamProgress(transport, chatId, updates, opts?)` — Sprint 6 streaming sender: one `sendSafeForEdit` (initial header, default `"Working…"`) + N `sendSafeEdit` on the **same** message id, consuming an injected `AsyncIterable<string>` (no run logic, never a new message per tick). Sprint 7 adds `streamFleetView(transport, chatId, bundle)` — streams the per-agent fleet sections via the **shared** `renderFleetView` fed into `streamProgress` (accumulating generator). No grammy. |
+| `src/telegram/fleet-view.ts` | Sprint 7 read-only secretary `/fleet` view: PURE `renderFleetView(bundle)` (groups `bundle.findings` by `FactRecord.subject` → header w/ `bundle.rounds` + one section/agent: label + one-line summary + round + confidence + count; round from `bundle.rounds` — `FactRecord` has no round) + `handleFleet(senderId, allowed, reader?)` (whitelist-FIRST → `denialReply`, reader never called; null/empty ⇒ "no recent fleet run", never throws; else `renderFleetView(...).join`) + injected `SynthesisReader` type + production `defaultSynthesisReader` (reads `.bober/fleet-synthesis.json` via `node:fs/promises`, `null` on ENOENT/parse-fail). `SynthesisBundle`/`FactRecord` are **type-only** imports — `dist/telegram/fleet-view.js` has zero runtime coupling to `src/fleet`/`better-sqlite3`. `oneLine()` (`MAX_LINE_LENGTH=120`) truncation. No grammy, no new dep. |
 | `src/telegram/digest.ts` | `sendDigest(transport, chatId, text)` — Sprint 6 silent digest sender: `sendSafe` with `{ silent: true }` → `disable_notification`. Content/cadence owned by the research-scheduler, not here. No grammy. |
 | `src/telegram/router.ts` | Pure `classify(message)` → `RoutedMessage` (`command` vs `text`) + pure `parseScopeFromCommand(name, args)` → hub `Scope` \| `null` (`/today`/`/priority`/`/decide`). No I/O. |
 | `src/telegram/handlers/capture.ts` | `handleCapture` (zero-friction capture via an injected `InboxCapture` sink) + production `defaultCapture` (persists via `captureTask`). |
@@ -495,25 +583,59 @@ swapping the SDK is a `bot.ts`-only change.
 | `src/telegram/keyboard.ts` | Pure, **zero-grammy** inline-keyboard builder + callback_data codec: `CallbackAction` (`approve`/`adjust`/`reject` + Sprint 5 `confirm`/`cancel`), `InlineKeyboardSpec`, `encodeCallback`/`decodeCallback` (`"<code>:<checkpointId>"`, codes `a`/`j`/`r`/`y`/`n`, ≤ 64 bytes, never truncates), `buildApprovalKeyboard` + `buildUploadKeyboard` (`[Yes][No]`). |
 | `src/telegram/handlers/upload.ts` | Per-upload medical-ingest opt-in gate: `registerUpload` (stash + opt-in prompt, **no download**) + `handleUploadCallback` (Yes ⇒ download → injected ingest **once** → count-only reply → temp dir removed in `finally`; No/missing ⇒ ingests nothing; whitelist-first) + ephemeral `PendingUploadState` (`createPendingUploadState`) + injected `DownloadFn`/`MedicalIngest` types + production `defaultMedicalIngest` (execa → `medical import` subprocess; guards stay authoritative there) + `LOCAL_INGEST_DEST`/`buildUploadPrompt`. No grammy. |
 | `src/telegram/handlers/approvals.ts` | `handleApprovalCallback` (whitelist-first + `pendingExists` guard chain → `saveApproved`/`saveRejected`, **byte-identical markers**) + `handleApprovalFollowup` (resolves a stashed Adjust/Reject from the next text turn) + ephemeral `PendingCallbackState` map (`createPendingState`). No grammy, no new approval mechanism. |
-| `src/telegram/bot.ts` | `BotTransport` (`sendKeyboard`/`answerCallback` + Sprint 5 `downloadDocument` + Sprint 6 `EditTransport`: `sendReturningId`/`editMessage`) + `GrammyTransport` adapter (sole grammy import; `toGrammyKeyboard` + `downloadDocument` via `getFile`+`fetch` + `sendMessage` `silent`→`disable_notification` mapping + `editMessageText` here only), `helpReply` stub, and the `startPollLoop` getUpdates loop (callback_query branch decodes-first → upload vs approvals; document branch → `registerUpload`; `classify` → capture / prioritize / `/pending` / command dispatch). |
+| `src/telegram/bot.ts` | `BotTransport` (`sendKeyboard`/`answerCallback` + Sprint 5 `downloadDocument` + Sprint 6 `EditTransport`: `sendReturningId`/`editMessage`) + `GrammyTransport` adapter (sole grammy import; `toGrammyKeyboard` + `downloadDocument` via `getFile`+`fetch` + `sendMessage` `silent`→`disable_notification` mapping + `editMessageText` here only), `helpReply` stub (Sprint 7 adds the `/fleet` line), and the `startPollLoop` getUpdates loop (callback_query branch decodes-first → upload vs approvals; document branch → `registerUpload`; `classify` → capture / prioritize / `/pending` / `/fleet` → `handleFleet` / command dispatch). Sprint 7 adds an optional 7th `fleetReader = defaultSynthesisReader` param. |
 | `src/cli/commands/telegram.ts` | `registerTelegramCommand` — the `agent-bober telegram` command (env credential read, SIGINT/SIGTERM shutdown, never-throw). |
 
 User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Commands**.
 
 ---
 
-## Roadmap (deferred to later sprints)
+## Plan complete (7/7 sprints)
 
-Sprint 1 shipped transport + whitelist + funnel; Sprint 2 added message routing + zero-friction
-task capture; Sprint 3 added the scoped hub-priority commands (`/today`, `/priority`,
-`/decide X vs Y`); Sprint 4 added the inline-keyboard approve/adjust/reject gate (`/pending`) over
-the existing disk-marker approval store; Sprint 5 added document-upload medical ingest behind a
-mandatory per-upload opt-in **and unified the outbound keyboard funnel** (`sendSafeKeyboard`); Sprint 6
-added the **streaming** in-place-edit progress sender (`streamProgress` via `sendSafeForEdit` +
-`sendSafeEdit`) and the **silent scheduled digest** sender (`sendDigest` via `SendOptions{silent}` →
-`disable_notification`). Still to come (**Sprint 7**): the **`/fleet` view** and the remaining command
-dispatch for inbox/calendar actions (replacing the `Unknown command` stub), plus the **live do-bridge
-wire** that feeds `streamProgress` from a real run (left as a documented seam in Sprint 6). Each new
-reply path must return content through one of the four funnel chokepoints (`sendSafe` /
-`sendSafeKeyboard` / `sendSafeForEdit` / `sendSafeEdit`), and each new command must sit behind the
-`isAllowed` whitelist.
+`spec-20260628-telegram-frontend` is **complete** — all 7 sprints passed iteration 1 (zero reworks).
+The presentation adapter is the last spec of the knowledge-platform plan: a locally-run Telegram bot
+through which a whitelisted operator talks to agent-bober.
+
+### Full command / delivery surface
+
+- **CLI:** `agent-bober telegram` — start the local getUpdates long-polling bot (no server / webhook /
+  inbound port; env-only credentials; `SIGINT`/`SIGTERM` stop it cleanly; never throws).
+- **Plain text** → zero-friction inbox **capture** (message = task title, no other required field).
+- **`/today` · `/priority` · `/decide X vs Y`** → numbered ranked list from the priority hub
+  (ephemeral scope, delegated to the hub CLI subprocess, titles only).
+- **`/pending`** → inline `[Approve][Adjust][Reject]` over the **existing** disk-marker approval gate
+  (byte-identical markers; no new mechanism).
+- **Document upload** → medical ingest behind a **mandatory per-upload opt-in** (deferred download,
+  count-only reply, guards authoritative in the subprocess).
+- **`/fleet`** → read-only secretary view of the most recent fleet run (one section per agent),
+  shared with the streaming surface (`streamFleetView`).
+- **Outbound delivery:** `streamProgress` (in-place-edit progress) + `sendDigest` (silent scheduled
+  digest).
+
+### Safety invariants held across the plan
+
+- **Whitelist is the control-plane boundary** — every command sits behind `isAllowed`; non-whitelisted
+  senders get one id-echoing denial and `/fleet` reads nothing for them.
+- **One funnel, four chokepoints** — every reply leaves through `sendSafe` / `sendSafeKeyboard` /
+  `sendSafeForEdit` / `sendSafeEdit`; no handler sends directly. Raw payloads (PHI, fleet finding
+  values) are truncated/summarised at the seam — never sent verbatim.
+- **grammy stays `bot.ts`-only** — every other module imports zero grammy; swapping the SDK is a
+  `bot.ts`-only change.
+- **No runtime coupling leaks in** — the fleet view imports `SynthesisBundle`/`FactRecord` type-only, so
+  `better-sqlite3` never reaches the bot process; hub/medical model calls stay in their subprocesses.
+- **Telegram is not E2E-encrypted** — the medical-upload and digest paths deliberately carry only
+  non-sensitive counts/titles; keep that boundary honest at the `sendSafe` seam.
+
+### Deferred follow-ups (sibling specs / pending wiring)
+
+- **Live do-bridge streaming wire (`sc-6-5` seam).** Wiring a real long-running do-bridge promotion run
+  to `streamProgress` is still a **documented seam** at `src/do-bridge/do.ts` (after the promotion gate);
+  `streamProgress` / `streamFleetView` are source-agnostic and consume an injected iterable / bundle.
+- **Live smoke tests need a real bot token.** The manual criteria (`sc-1-6`, `sc-7-7`, etc.) were not run
+  in CI — exercising the live bot end-to-end requires a real `TELEGRAM_BOT_TOKEN`.
+- **Tier 2 / Tier 3 deferred to sibling specs.** Tier 2 (per-LLM bot identities / Bot API 10.0
+  bot-to-bot) and Tier 3 (Secretary Mode) are out of scope for this plan and tracked separately.
+- **Full inbox/calendar action dispatch.** Beyond capture and the hub-query commands, broader
+  inbox/calendar action commands remain a future addition — any other `/command` still returns the
+  `Unknown command` stub. New reply paths must return content through one of the four funnel chokepoints
+  and sit behind the `isAllowed` whitelist.

@@ -1926,10 +1926,13 @@ keyboard funnel** (one `sendSafeKeyboard` chokepoint). Sprint 6 adds **two outbo
 **streaming** — a long-running operation reports progress by editing **one** status message in place
 (one `sendSafeForEdit` send + N `sendSafeEdit` edits on the same message id) instead of a message per
 tick — and a **silent scheduled digest** sent with notifications disabled (`SendOptions{silent}` →
-`disable_notification`). Inbox / calendar command dispatch is still a later sprint — `/start` returns a
-help stub and any other `/command` returns an `Unknown command` placeholder. See
-[docs/telegram.md](./docs/telegram.md) for the adapter, the message router, the control-plane
-boundary, and the privacy posture.
+`disable_notification`). Sprint 7 — the **final** sprint — adds the **multi-LLM "secretary" `/fleet`
+view**: a read-only renderer reads the most recent fleet run's `.bober/fleet-synthesis.json`, groups
+findings by per-agent subject, and replies with one labeled section per agent (the same renderer also
+feeds the streaming surface). With Sprint 7 the plan is **complete (7/7 sprints)**. Broader inbox /
+calendar action dispatch remains a future addition — `/start` returns a help stub and any other
+`/command` returns an `Unknown command` placeholder. See [docs/telegram.md](./docs/telegram.md) for the
+adapter, the message router, the control-plane boundary, the privacy posture, and the plan close-out.
 
 ### `bober telegram`
 
@@ -2011,6 +2014,18 @@ bober telegram
   - **Silent digest** (`sendDigest`) delivers a scheduler-handed digest payload with notifications
     silenced — `sendSafe` with `{ silent: true }`, which `grammy` maps to `disable_notification`. The
     bot decides neither the digest's content nor its cadence (owned by the research-scheduler).
+- **Multi-LLM secretary `/fleet` view (Sprint 7, admitted senders).** `/fleet` shows what each LLM/agent
+  produced in the most recent fleet run. A **read-only** renderer reads the head-written
+  `.bober/fleet-synthesis.json` artifact, groups findings by per-agent subject, and replies with a header
+  (the run's round count) followed by **one labeled section per agent** — agent label + a one-line summary
+  of that agent's latest finding + round + confidence + finding count. The **same** renderer feeds a live
+  fleet run's **streaming** sections (in-place edits), so `/fleet` and the live stream never drift. Raw
+  finding values are **truncated to one line** and routed through `sendSafe` — verbatim payloads never
+  reach the transport. When no fleet has run with `--blackboard` (the artifact is absent), `/fleet` replies
+  `No recent fleet run.` (never an error). This is a thin read+render adapter — **no run/fleet/scheduler
+  logic** and **no new dependency**; the bot keeps zero runtime coupling to `src/fleet` / `better-sqlite3`
+  (the synthesis types are imported type-only). `/fleet` is whitelist-gated **first** — a non-whitelisted
+  tap reads nothing.
 - **Single outbound funnel — four chokepoints.** Every reply leaves through a chokepoint in
   `outbound.ts`: `sendSafe` (text), `sendSafeKeyboard` (inline keyboards; the sole
   `transport.sendKeyboard` caller), and the Sprint-6 streaming pair `sendSafeForEdit` (the one initial
@@ -2021,17 +2036,19 @@ bober telegram
 - **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
   wrapper — only `src/telegram/bot.ts` imports it.
 
-> **Status.** **Sprint 6 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
-> (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped hub-priority commands
-> `/today` / `/priority` / `/decide X vs Y` (Sprint 3) + inline-keyboard approve/adjust/reject gate
-> `/pending` over the existing disk-marker approval store (Sprint 4) + document-upload medical ingest
-> behind a mandatory per-upload opt-in, plus the unified `sendSafeKeyboard` outbound funnel (Sprint 5) +
-> streaming in-place-edit progress (`streamProgress`) and silent scheduled digest delivery (`sendDigest`
-> via `SendOptions{silent}` → `disable_notification`), growing the funnel to four chokepoints (Sprint 6).
-> Remaining (Sprint 7): the `/fleet` view + inbox/calendar command dispatch (replacing the
-> `Unknown command` stub) and the live do-bridge wire that feeds `streamProgress` from a real run (left
-> as a documented seam). The research-scheduler morning digest lives at
-> `.bober/research/digests/<date>.json`.
+> **Status.** **`spec-20260628-telegram-frontend` COMPLETE (7/7 sprints, all iter-1).** Transport +
+> whitelist + funnel (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped
+> hub-priority commands `/today` / `/priority` / `/decide X vs Y` (Sprint 3) + inline-keyboard
+> approve/adjust/reject gate `/pending` over the existing disk-marker approval store (Sprint 4) +
+> document-upload medical ingest behind a mandatory per-upload opt-in, plus the unified `sendSafeKeyboard`
+> outbound funnel (Sprint 5) + streaming in-place-edit progress (`streamProgress`) and silent scheduled
+> digest delivery (`sendDigest` via `SendOptions{silent}` → `disable_notification`), growing the funnel to
+> four chokepoints (Sprint 6) + the multi-LLM secretary `/fleet` view (shared by `/fleet` and the live
+> streaming surface, type-only zero-coupling to `src/fleet`, Sprint 7). The research-scheduler morning
+> digest lives at `.bober/research/digests/<date>.json`. **Deferred follow-ups:** the live do-bridge wire
+> that feeds `streamProgress` from a real run (a documented seam) and live smoke tests both need a real bot
+> token; broader inbox/calendar action dispatch (replacing the `Unknown command` stub), **Tier 2**
+> (per-LLM bot identities / bot-to-bot) and **Tier 3** (Secretary Mode) are deferred to sibling specs.
 
 ---
 
