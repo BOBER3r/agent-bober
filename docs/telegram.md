@@ -15,9 +15,13 @@ ingest behind a mandatory per-upload opt-in**: a document message defers the dow
 explicit Yes, names the local medical store in the prompt, hands the file to the existing
 `src/medical` ingest exactly once, and replies with a non-sensitive count only — and it **unifies
 the outbound keyboard funnel** so every keyboard message leaves through one `sendSafeKeyboard`
-chokepoint. Calendar / inbox command dispatch is still deferred; an admitted sender's `/start`
-(and any non-document, non-text update) still gets the help stub, and any other `/command` gets an
-`Unknown command` placeholder later sprints replace.
+chokepoint. Sprint 6 adds **two outbound delivery modes over the same funnel**: **streaming** — a
+long-running operation reports progress by editing **one** status message in place (one initial send
+via `sendSafeForEdit`, then N in-place edits via `sendSafeEdit` on the same id) instead of posting a
+message per tick — and a **silent scheduled digest** (`sendDigest`) sent with notifications disabled
+(`SendOptions{silent}` → `disable_notification`). Calendar / inbox command dispatch is still deferred;
+an admitted sender's `/start` (and any non-document, non-text update) still gets the help stub, and any
+other `/command` gets an `Unknown command` placeholder later sprints replace.
 
 ---
 
@@ -86,10 +90,12 @@ domain logic unless the sender is explicitly allow-listed.
 
 ---
 
-## The outbound funnel: `sendSafe` (text) + `sendSafeKeyboard` (keyboards)
+## The outbound funnel: four chokepoints in `outbound.ts`
 
-Every outbound reply leaves through a chokepoint — **text** through `sendSafe`, **inline
-keyboards** through `sendSafeKeyboard` (both in `src/telegram/outbound.ts`):
+Every outbound reply leaves through a chokepoint in `src/telegram/outbound.ts`. As of Sprint 6 there
+are **four**: **text** through `sendSafe`, **inline keyboards** through `sendSafeKeyboard`, and the
+**streaming** pair `sendSafeForEdit` (the one initial status send) + `sendSafeEdit` (the in-place
+edits). The first two:
 
 ```ts
 export async function sendSafe(
@@ -395,6 +401,62 @@ state) so the loop is testable with an injected map, and existing callers compil
 
 ---
 
+## Streaming progress + silent digest (Sprint 6)
+
+Sprint 6 adds **two outbound delivery modes** over the existing funnel — both pure presentation, with
+**no run, fleet, or scheduler logic** added (the diff stays inside `src/telegram/`).
+
+### Streaming: one status message, edited in place
+
+`streamProgress(transport, chatId, updates, opts?)` (`src/telegram/streaming.ts:25`) reports a
+long-running operation by editing **one** status message in place as progress arrives, instead of
+posting a new message per tick (a hard non-goal):
+
+- **one send** — `sendSafeForEdit` (`outbound.ts:76`) issues the initial header (`opts.header`, default
+  `"Working…"`) and returns its Telegram `message_id`;
+- **N edits** — for each item from the injected `updates: AsyncIterable<string>`, `sendSafeEdit`
+  (`outbound.ts:90`) replaces that **same** message in place. The last update is the final summary.
+
+The update source is **injected** as an `AsyncIterable<string>`, so unit tests drive a fixed sequence
+(the evaluator verified exactly **one** send + **N** edits on the same id for N=2 and N=3 via an injected
+`EditTransport` spy), and the real caller can back it with existing run-progress signals (e.g.
+`history.jsonl` events) **without** this module adding any run logic. `streamProgress` calls **only** the
+funnel functions — never `transport.sendReturningId` / `transport.editMessage` directly.
+
+> **Live do-bridge wiring is a documented seam, not built here.** Wiring a real long-running do-bridge
+> promotion run to `streamProgress` is left as a seam at `src/do-bridge/do.ts` (after the promotion gate).
+> The non-goal forbids run logic in this adapter, so the manual criterion (a live in-place-updating status
+> message) was not required and was skipped at evaluation. A follow-up sprint supplies the iterable
+> without touching `streaming.ts`.
+
+### Silent digest: notifications disabled
+
+`sendDigest(transport, chatId, text)` (`src/telegram/digest.ts:23`) delivers a scheduler-handed digest
+payload silently: it calls `sendSafe(transport, chatId, text, { silent: true })`, and `GrammyTransport`
+maps `silent` to Telegram's `disable_notification`. The adapter decides **neither content nor cadence** —
+those stay owned by the research-scheduler (`spec-20260628-research-scheduler`); this only delivers a
+payload handed to it, with the notification sound off.
+
+### `SendOptions` + `EditTransport`: the funnel grows two seams, stays backward-compatible
+
+- `SendOptions { silent?: boolean }` (`outbound.ts:7`) is the provider-neutral delivery-options type.
+  `sendSafe` gains it as an **optional 4th argument** (`outbound.ts:61`), so **every** Sprint 1–5 three-arg
+  caller compiles and behaves unchanged (`opts` is `undefined` ⇒ no behavior change; evaluator-verified
+  against the existing outbound tests). `GrammyTransport.sendMessage` maps `silent` →
+  `{ disable_notification: true }`.
+- `EditTransport { sendReturningId, editMessage }` (`outbound.ts:42`) is the streaming transport surface,
+  defined in `outbound.ts` (**not** `bot.ts`) so `streaming.ts` can import it without a circular
+  dependency. `BotTransport` now `extends TelegramTransport, EditTransport` (`bot.ts:69`), and
+  `GrammyTransport` gains `sendReturningId` (returns `msg.message_id`, `bot.ts:126`) and `editMessage`
+  (`bot.api.editMessageText`, `bot.ts:140`). grammy stays `bot.ts`-only throughout — `streaming.ts`,
+  `digest.ts`, and `outbound.ts` import **zero** grammy.
+
+So every outbound path now leaves through one of **four** funnel chokepoints —
+`sendSafe` · `sendSafeKeyboard` · `sendSafeForEdit` · `sendSafeEdit` — the seams later sprints extend with
+rate-limiting / audit / sanitisation.
+
+---
+
 ## SDK isolation: `grammy` behind the transport wrapper
 
 The chosen Telegram Bot API library is **[grammy](https://grammy.dev) (`^1.44.0`)** — the one
@@ -403,9 +465,10 @@ is kept **behind the transport wrapper**, exactly like the LLM `providers/` adap
 (`.bober/principles.md:28`):
 
 - `TelegramTransport` (`outbound.ts`) — outbound interface (`sendMessage`).
-- `BotTransport` (`bot.ts`) — `TelegramTransport` + `getUpdates(offset)` + `sendKeyboard(chatId,
-  text, keyboard)` + `answerCallback(callbackQueryId, text?)` (the Sprint 4 additions); the loop
-  depends on this.
+- `BotTransport` (`bot.ts`) — `TelegramTransport` + `EditTransport` + `getUpdates(offset)` +
+  `sendKeyboard(chatId, text, keyboard)` + `answerCallback(callbackQueryId, text?)` (Sprint 4) +
+  `downloadDocument` (Sprint 5); the Sprint 6 `EditTransport` adds `sendReturningId` / `editMessage`
+  for the streaming funnel. The loop depends on this.
 - `GrammyTransport` (`bot.ts`) — the **only** file that imports `grammy`; a concrete
   `BotTransport` wrapping `Bot.api`. `toGrammyKeyboard` here is the sole place grammy's
   `InlineKeyboard` is constructed.
@@ -423,14 +486,16 @@ swapping the SDK is a `bot.ts`-only change.
 | File | Role |
 |------|------|
 | `src/telegram/whitelist.ts` | Pure authoriser: `parseAllowedUsers` / `isAllowed` / `denialReply` (+ `AllowedUsers` type). No I/O. |
-| `src/telegram/outbound.ts` | `TelegramTransport` interface + the `sendSafe` (text) and `sendSafeKeyboard` (inline keyboards) outbound funnels — the **two** single chokepoints; `KeyboardTransport` interface (avoids a circular import to `bot.ts`). |
+| `src/telegram/outbound.ts` | `TelegramTransport` / `KeyboardTransport` / `EditTransport` interfaces + `SendOptions{silent?}` + the **four** outbound funnel chokepoints: `sendSafe` (text; optional 4th `opts` arg) · `sendSafeKeyboard` (inline keyboards) · `sendSafeForEdit` (the one streaming send, returns the `message_id`) · `sendSafeEdit` (in-place edits). `KeyboardTransport`/`EditTransport` live here to avoid a circular import to `bot.ts`. |
+| `src/telegram/streaming.ts` | `streamProgress(transport, chatId, updates, opts?)` — Sprint 6 streaming sender: one `sendSafeForEdit` (initial header, default `"Working…"`) + N `sendSafeEdit` on the **same** message id, consuming an injected `AsyncIterable<string>` (no run logic, never a new message per tick). No grammy. |
+| `src/telegram/digest.ts` | `sendDigest(transport, chatId, text)` — Sprint 6 silent digest sender: `sendSafe` with `{ silent: true }` → `disable_notification`. Content/cadence owned by the research-scheduler, not here. No grammy. |
 | `src/telegram/router.ts` | Pure `classify(message)` → `RoutedMessage` (`command` vs `text`) + pure `parseScopeFromCommand(name, args)` → hub `Scope` \| `null` (`/today`/`/priority`/`/decide`). No I/O. |
 | `src/telegram/handlers/capture.ts` | `handleCapture` (zero-friction capture via an injected `InboxCapture` sink) + production `defaultCapture` (persists via `captureTask`). |
 | `src/telegram/handlers/prioritize.ts` | `handlePrioritize` (numbered ranked list via an injected `HubQuery`, title-only render) + production `defaultPrioritize` (execa → `hub priority`/`hub decide` subprocess; the subprocess owns all LLM calls). |
 | `src/telegram/keyboard.ts` | Pure, **zero-grammy** inline-keyboard builder + callback_data codec: `CallbackAction` (`approve`/`adjust`/`reject` + Sprint 5 `confirm`/`cancel`), `InlineKeyboardSpec`, `encodeCallback`/`decodeCallback` (`"<code>:<checkpointId>"`, codes `a`/`j`/`r`/`y`/`n`, ≤ 64 bytes, never truncates), `buildApprovalKeyboard` + `buildUploadKeyboard` (`[Yes][No]`). |
 | `src/telegram/handlers/upload.ts` | Per-upload medical-ingest opt-in gate: `registerUpload` (stash + opt-in prompt, **no download**) + `handleUploadCallback` (Yes ⇒ download → injected ingest **once** → count-only reply → temp dir removed in `finally`; No/missing ⇒ ingests nothing; whitelist-first) + ephemeral `PendingUploadState` (`createPendingUploadState`) + injected `DownloadFn`/`MedicalIngest` types + production `defaultMedicalIngest` (execa → `medical import` subprocess; guards stay authoritative there) + `LOCAL_INGEST_DEST`/`buildUploadPrompt`. No grammy. |
 | `src/telegram/handlers/approvals.ts` | `handleApprovalCallback` (whitelist-first + `pendingExists` guard chain → `saveApproved`/`saveRejected`, **byte-identical markers**) + `handleApprovalFollowup` (resolves a stashed Adjust/Reject from the next text turn) + ephemeral `PendingCallbackState` map (`createPendingState`). No grammy, no new approval mechanism. |
-| `src/telegram/bot.ts` | `BotTransport` (`sendKeyboard`/`answerCallback` + Sprint 5 `downloadDocument`) + `GrammyTransport` adapter (sole grammy import; `toGrammyKeyboard` + `downloadDocument` via `getFile`+`fetch` here only), `helpReply` stub, and the `startPollLoop` getUpdates loop (callback_query branch decodes-first → upload vs approvals; document branch → `registerUpload`; `classify` → capture / prioritize / `/pending` / command dispatch). |
+| `src/telegram/bot.ts` | `BotTransport` (`sendKeyboard`/`answerCallback` + Sprint 5 `downloadDocument` + Sprint 6 `EditTransport`: `sendReturningId`/`editMessage`) + `GrammyTransport` adapter (sole grammy import; `toGrammyKeyboard` + `downloadDocument` via `getFile`+`fetch` + `sendMessage` `silent`→`disable_notification` mapping + `editMessageText` here only), `helpReply` stub, and the `startPollLoop` getUpdates loop (callback_query branch decodes-first → upload vs approvals; document branch → `registerUpload`; `classify` → capture / prioritize / `/pending` / command dispatch). |
 | `src/cli/commands/telegram.ts` | `registerTelegramCommand` — the `agent-bober telegram` command (env credential read, SIGINT/SIGTERM shutdown, never-throw). |
 
 User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Commands**.
@@ -443,9 +508,12 @@ Sprint 1 shipped transport + whitelist + funnel; Sprint 2 added message routing 
 task capture; Sprint 3 added the scoped hub-priority commands (`/today`, `/priority`,
 `/decide X vs Y`); Sprint 4 added the inline-keyboard approve/adjust/reject gate (`/pending`) over
 the existing disk-marker approval store; Sprint 5 added document-upload medical ingest behind a
-mandatory per-upload opt-in **and unified the outbound keyboard funnel** (`sendSafeKeyboard`). Still
-to come (Sprints 6–7): the remaining command dispatch for inbox/calendar actions (replacing the
-`Unknown command` stub), streaming replies, and **silent scheduled delivery of the research-scheduler
-morning digest** (`.bober/research/digests/<date>.json`). Each new reply path must return content
-through `sendSafe` (or `sendSafeKeyboard`), and each new command must sit behind the `isAllowed`
-whitelist.
+mandatory per-upload opt-in **and unified the outbound keyboard funnel** (`sendSafeKeyboard`); Sprint 6
+added the **streaming** in-place-edit progress sender (`streamProgress` via `sendSafeForEdit` +
+`sendSafeEdit`) and the **silent scheduled digest** sender (`sendDigest` via `SendOptions{silent}` →
+`disable_notification`). Still to come (**Sprint 7**): the **`/fleet` view** and the remaining command
+dispatch for inbox/calendar actions (replacing the `Unknown command` stub), plus the **live do-bridge
+wire** that feeds `streamProgress` from a real run (left as a documented seam in Sprint 6). Each new
+reply path must return content through one of the four funnel chokepoints (`sendSafe` /
+`sendSafeKeyboard` / `sendSafeForEdit` / `sendSafeEdit`), and each new command must sit behind the
+`isAllowed` whitelist.

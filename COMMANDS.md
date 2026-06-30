@@ -1922,9 +1922,12 @@ approve / adjust / reject gate**: `/pending` lists pending approval checkpoints 
 ingest behind a mandatory per-upload opt-in**: a document message defers the download until an
 explicit Yes, names the local medical store in the prompt, hands the file to the existing medical
 ingest exactly once, and replies with a non-sensitive count only — and **unifies the outbound
-keyboard funnel** (one `sendSafeKeyboard` chokepoint). Inbox / calendar command dispatch is still a
-later sprint — `/start` returns a help stub and any other `/command` returns an `Unknown command`
-placeholder. See
+keyboard funnel** (one `sendSafeKeyboard` chokepoint). Sprint 6 adds **two outbound delivery modes**:
+**streaming** — a long-running operation reports progress by editing **one** status message in place
+(one `sendSafeForEdit` send + N `sendSafeEdit` edits on the same message id) instead of a message per
+tick — and a **silent scheduled digest** sent with notifications disabled (`SendOptions{silent}` →
+`disable_notification`). Inbox / calendar command dispatch is still a later sprint — `/start` returns a
+help stub and any other `/command` returns an `Unknown command` placeholder. See
 [docs/telegram.md](./docs/telegram.md) for the adapter, the message router, the control-plane
 boundary, and the privacy posture.
 
@@ -1997,22 +2000,38 @@ bober telegram
   The medical egress / consent / audit guardrails stay **authoritative inside the ingest subprocess** —
   they are not duplicated or bypassed. Taps are whitelist-gated first. The pending upload is held in
   **ephemeral in-memory** state (no disk; cleared on restart; consumed single-shot).
-- **Single outbound funnel.** Every text reply leaves through one `sendSafe` chokepoint; every
-  keyboard message leaves through one `sendSafeKeyboard` chokepoint (Sprint 5; the sole
-  `transport.sendKeyboard` caller) — no handler sends directly. These are the seams where later
-  sprints add rate-limiting / audit / sanitisation.
+- **Streaming progress + silent digest delivery (Sprint 6).** Two outbound delivery modes layered
+  over the funnel — both presentation only, no run/fleet/scheduler logic:
+  - **Streaming** (`streamProgress`) reports a long-running operation by editing **one** status message
+    **in place** — one initial send (`sendSafeForEdit`, which captures the message id) followed by N
+    in-place edits (`sendSafeEdit`) on that **same** message, driven by an injected async iterable of
+    progress strings (the last one is the final summary). It **never** posts a new message per tick.
+    Live do-bridge wiring is a **documented seam** (`src/do-bridge/do.ts`, after the promotion gate) —
+    the streaming function itself is source-agnostic.
+  - **Silent digest** (`sendDigest`) delivers a scheduler-handed digest payload with notifications
+    silenced — `sendSafe` with `{ silent: true }`, which `grammy` maps to `disable_notification`. The
+    bot decides neither the digest's content nor its cadence (owned by the research-scheduler).
+- **Single outbound funnel — four chokepoints.** Every reply leaves through a chokepoint in
+  `outbound.ts`: `sendSafe` (text), `sendSafeKeyboard` (inline keyboards; the sole
+  `transport.sendKeyboard` caller), and the Sprint-6 streaming pair `sendSafeForEdit` (the one initial
+  send) + `sendSafeEdit` (the in-place edits) — no handler sends directly. `sendSafe` gained an optional
+  4th `silent` option without breaking any existing caller. These are the seams where later sprints add
+  rate-limiting / audit / sanitisation.
 - **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
 - **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
   wrapper — only `src/telegram/bot.ts` imports it.
 
-> **Status.** **Sprint 5 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
+> **Status.** **Sprint 6 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
 > (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped hub-priority commands
 > `/today` / `/priority` / `/decide X vs Y` (Sprint 3) + inline-keyboard approve/adjust/reject gate
 > `/pending` over the existing disk-marker approval store (Sprint 4) + document-upload medical ingest
-> behind a mandatory per-upload opt-in, plus the unified `sendSafeKeyboard` outbound funnel (Sprint 5).
-> Remaining inbox/calendar command dispatch (replacing the `Unknown command` stub), streaming, and
-> silent scheduled delivery of the research-scheduler morning digest
-> (`.bober/research/digests/<date>.json`) are later sprints.
+> behind a mandatory per-upload opt-in, plus the unified `sendSafeKeyboard` outbound funnel (Sprint 5) +
+> streaming in-place-edit progress (`streamProgress`) and silent scheduled digest delivery (`sendDigest`
+> via `SendOptions{silent}` → `disable_notification`), growing the funnel to four chokepoints (Sprint 6).
+> Remaining (Sprint 7): the `/fleet` view + inbox/calendar command dispatch (replacing the
+> `Unknown command` stub) and the live do-bridge wire that feeds `streamProgress` from a real run (left
+> as a documented seam). The research-scheduler morning digest lives at
+> `.bober/research/digests/<date>.json`.
 
 ---
 
