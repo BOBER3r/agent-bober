@@ -3,7 +3,7 @@
  * Telegram SDK: grammy (https://grammy.dev) — TypeScript-native, ESM-compatible,
  * no separate @types package required. This is the ONLY file that imports grammy.
  */
-import { Bot } from "grammy";
+import { Bot, InlineKeyboard } from "grammy";
 
 import type { TelegramTransport } from "./outbound.js";
 import { sendSafe } from "./outbound.js";
@@ -13,6 +13,12 @@ import { handleCapture, defaultCapture } from "./handlers/capture.js";
 import type { InboxCapture } from "./handlers/capture.js";
 import { handlePrioritize, defaultPrioritize } from "./handlers/prioritize.js";
 import type { PrioritizeFn } from "./handlers/prioritize.js";
+import { handleApprovalCallback, handleApprovalFollowup, createPendingState } from "./handlers/approvals.js";
+import type { PendingCallbackState } from "./handlers/approvals.js";
+import { buildApprovalKeyboard } from "./keyboard.js";
+import type { InlineKeyboardSpec } from "./keyboard.js";
+import { listPending } from "../state/approval-state.js";
+import { findProjectRoot } from "../utils/fs.js";
 
 // ── Minimal update shape ──────────────────────────────────────────────
 
@@ -30,20 +36,46 @@ export interface TelegramUpdate {
     chat: { id: number };
     text?: string;
   };
+  /** Inline-keyboard button tap — present when a user clicks an inline button. */
+  callback_query?: {
+    id: string;
+    from: { id: number };
+    message?: { chat: { id: number } };
+    data?: string;
+  };
 }
 
 // ── BotTransport ──────────────────────────────────────────────────────
 
 /**
  * Extended transport used by the poll loop: outbound TelegramTransport
- * plus a getUpdates polling method.
+ * plus a getUpdates polling method, inline-keyboard sender, and callback acknowledgement.
  * Tests inject a fake BotTransport so the loop is testable without any SDK dependency.
+ * Extensions stay here (not in outbound.ts) per outbound.ts:8-9.
  */
 export interface BotTransport extends TelegramTransport {
   getUpdates(offset: number): Promise<TelegramUpdate[]>;
+  /** Send a message with an inline keyboard. spec is the provider-neutral shape from keyboard.ts. */
+  sendKeyboard(chatId: number, text: string, keyboard: InlineKeyboardSpec): Promise<void>;
+  /** Acknowledge a callback query — dismisses the loading spinner on the client. */
+  answerCallback(callbackQueryId: string, text?: string): Promise<void>;
 }
 
 // ── GrammyTransport ───────────────────────────────────────────────────
+
+/**
+ * Convert a provider-neutral InlineKeyboardSpec to a grammy InlineKeyboard.
+ * This function is the only place grammy's InlineKeyboard is constructed;
+ * keyboard.ts and approvals.ts never import grammy (principles.md:28,41).
+ */
+function toGrammyKeyboard(spec: InlineKeyboardSpec): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  spec.forEach((row, i) => {
+    if (i > 0) kb.row();
+    for (const b of row) kb.text(b.text, b.data);
+  });
+  return kb;
+}
 
 /**
  * Concrete BotTransport backed by grammy's Bot.api.
@@ -63,8 +95,27 @@ export class GrammyTransport implements BotTransport {
   }
 
   /**
+   * Send a message with an inline keyboard. Converts the provider-neutral
+   * InlineKeyboardSpec to a grammy InlineKeyboard inside this class only.
+   */
+  async sendKeyboard(chatId: number, text: string, keyboard: InlineKeyboardSpec): Promise<void> {
+    await this.bot.api.sendMessage(chatId, text, {
+      reply_markup: toGrammyKeyboard(keyboard),
+    });
+  }
+
+  /**
+   * Acknowledge a callback query. Must be called for every tap to dismiss
+   * the loading spinner on the Telegram client, even on denied/ghost taps.
+   */
+  async answerCallback(callbackQueryId: string, text?: string): Promise<void> {
+    await this.bot.api.answerCallbackQuery(callbackQueryId, text ? { text } : undefined);
+  }
+
+  /**
    * Fetches the next batch of updates using getUpdates long-polling (timeout=30s).
    * offset ensures already-acknowledged updates are not returned again.
+   * callback_query updates are included by default (no allowed_updates filter needed).
    */
   async getUpdates(offset: number): Promise<TelegramUpdate[]> {
     const updates = await this.bot.api.getUpdates({ offset, timeout: 30 });
@@ -78,14 +129,16 @@ export class GrammyTransport implements BotTransport {
 /**
  * Returns the /start help reply sent to whitelisted senders.
  * Handlers return a content string; the loop passes it through sendSafe.
- * Later sprints replace this stub with real command dispatch.
  */
 export function helpReply(): string {
   return (
     "Welcome! I am agent-bober's Telegram interface.\n" +
     "Available commands:\n" +
-    "  /start — show this help\n" +
-    "(More commands arriving soon.)"
+    "  /start    — show this help\n" +
+    "  /pending  — list pending approval checkpoints with inline buttons\n" +
+    "  /today    — today's top priorities\n" +
+    "  /priority — ranked findings\n" +
+    "  /decide X vs Y — decision support"
   );
 }
 
@@ -97,6 +150,11 @@ export function helpReply(): string {
  *
  * Invariant: all outbound text goes through sendSafe — the loop never calls
  * transport.sendMessage directly (nonGoal #5, evaluatorNotes).
+ * Keyboard messages go through transport.sendKeyboard (also on BotTransport,
+ * still not bypassing the transport layer).
+ *
+ * New params are optional/defaulted so existing callers (telegram.ts:50) that
+ * pass only (transport, signal) continue to compile unchanged.
  *
  * bober: single-process synchronous poll; extend to concurrent processing or
  *        grammY's bot.start() if throughput becomes a bottleneck (later sprint).
@@ -106,6 +164,7 @@ export async function startPollLoop(
   signal: AbortSignal,
   capture: InboxCapture = defaultCapture,
   prioritize: PrioritizeFn = defaultPrioritize,
+  pending: PendingCallbackState = createPendingState(),
 ): Promise<void> {
   let offset = 0;
   const allowed = parseAllowedUsers(process.env);
@@ -126,6 +185,37 @@ export async function startPollLoop(
 
     for (const update of updates) {
       offset = update.update_id + 1;
+
+      // ── Callback-query branch (inline keyboard button taps) ───────────
+      // Must run BEFORE the message branch — callback_query and message are
+      // mutually exclusive in a single update, but the branch order matters
+      // for clarity and future extension.
+      const cb = update.callback_query;
+      if (cb) {
+        const cbChatId = cb.message?.chat.id;
+        if (cbChatId !== undefined) {
+          const projectRoot = (await findProjectRoot()) ?? process.cwd();
+          const { reply, answer } = await handleApprovalCallback({
+            projectRoot,
+            senderId: cb.from.id,
+            allowed,
+            chatId: cbChatId,
+            data: cb.data ?? "",
+            pending,
+          });
+          // Always ack to dismiss the spinner — even on denied/ghost taps
+          await transport.answerCallback(cb.id, answer);
+          if (reply !== null) {
+            await sendSafe(transport, cbChatId, reply);
+          }
+        } else {
+          // Inline-mode tap (no message context) — ack only, no reply possible
+          await transport.answerCallback(cb.id, "Error");
+        }
+        continue;
+      }
+
+      // ── Message branch ────────────────────────────────────────────────
       const msg = update.message;
       if (!msg) continue;
 
@@ -146,25 +236,60 @@ export async function startPollLoop(
         await sendSafe(transport, chatId, helpReply());
         continue;
       }
+
+      // ── Adjust/Reject follow-up interception ─────────────────────────
+      // Check BEFORE classify so multi-turn Adjust/Reject text is not captured
+      // as a new task. Returns null when no stash exists → fall through.
+      const projectRoot = (await findProjectRoot()) ?? process.cwd();
+      const followupReply = await handleApprovalFollowup({
+        projectRoot,
+        senderId,
+        allowed,
+        chatId,
+        text,
+        pending,
+      });
+      if (followupReply !== null) {
+        await sendSafe(transport, chatId, followupReply);
+        continue;
+      }
+
+      // ── Normal routing ────────────────────────────────────────────────
       const routed = classify(text);
       if (routed.kind === "command") {
-        // Command dispatch (Sprint 3): /start → help; hub-priority commands → prioritize handler;
+        // Command dispatch: /start → help; hub-priority commands → prioritize handler;
+        // /pending → list pending approvals with inline keyboards;
         // everything else → Unknown-command stub.
         // bober: single-level command switch; extend to a command registry map
-        //        if Sprint 4+ inbox/calendar commands grow this block further.
-        let reply: string;
+        //        if Sprint 5+ adds further commands to this block.
         if (routed.name === "start") {
-          reply = helpReply();
+          await sendSafe(transport, chatId, helpReply());
         } else if (
           routed.name === "today" ||
           routed.name === "priority" ||
           routed.name === "decide"
         ) {
-          reply = await handlePrioritize(routed.name, routed.args, prioritize);
+          const reply = await handlePrioritize(routed.name, routed.args, prioritize);
+          await sendSafe(transport, chatId, reply);
+        } else if (routed.name === "pending") {
+          const markers = await listPending(projectRoot);
+          if (markers.length === 0) {
+            await sendSafe(transport, chatId, "No pending approvals.");
+          } else {
+            for (const m of markers) {
+              const kbText = [
+                `[${m.checkpointId}]`,
+                m.prompt,
+                m.artifact.type ? `Artifact: ${m.artifact.type}` : "",
+              ]
+                .filter(Boolean)
+                .join("\n");
+              await transport.sendKeyboard(chatId, kbText, buildApprovalKeyboard(m.checkpointId));
+            }
+          }
         } else {
-          reply = `Unknown command: /${routed.name}`;
+          await sendSafe(transport, chatId, `Unknown command: /${routed.name}`);
         }
-        await sendSafe(transport, chatId, reply);
       } else {
         // Plain text → zero-friction capture via the injected inbox sink.
         const reply = await handleCapture(routed.text, capture);
