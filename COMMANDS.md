@@ -1918,9 +1918,13 @@ Sprint 3 adds the **scoped hub-priority commands** `/today`, `/priority`, and `/
 which reply with a numbered ranked list from the priority hub. Sprint 4 adds the **inline-keyboard
 approve / adjust / reject gate**: `/pending` lists pending approval checkpoints with
 `[Approve][Adjust][Reject]` buttons whose taps write the **same** disk markers the existing
-`approve`/`reject` CLI writes — no new approval mechanism. Inbox / calendar / medical command
-dispatch is still a later sprint — `/start` returns a help stub and any other `/command` returns an
-`Unknown command` placeholder. See
+`approve`/`reject` CLI writes — no new approval mechanism. Sprint 5 adds **document-upload medical
+ingest behind a mandatory per-upload opt-in**: a document message defers the download until an
+explicit Yes, names the local medical store in the prompt, hands the file to the existing medical
+ingest exactly once, and replies with a non-sensitive count only — and **unifies the outbound
+keyboard funnel** (one `sendSafeKeyboard` chokepoint). Inbox / calendar command dispatch is still a
+later sprint — `/start` returns a help stub and any other `/command` returns an `Unknown command`
+placeholder. See
 [docs/telegram.md](./docs/telegram.md) for the adapter, the message router, the control-plane
 boundary, and the privacy posture.
 
@@ -1980,19 +1984,34 @@ bober telegram
   Adjust/Reject follow-up uses an **ephemeral in-memory** per-chat state (no disk; cleared on
   restart) and is intercepted **before** capture, so the replacement/feedback text is not stored as a
   task.
-- **Single outbound funnel.** Every text reply leaves through one `sendSafe` chokepoint; keyboard
-  messages go through `sendKeyboard` (also on the transport) — no handler sends directly. This is the
-  seam where later sprints add rate-limiting / audit / sanitisation.
+- **Document upload → medical ingest, behind a per-upload opt-in (admitted senders).** Because
+  Telegram is **not** end-to-end encrypted, uploading a document **does not download anything** — the
+  bot replies with a `[Yes] [No]` prompt that **names the local medical store** (`.bober/medical`) and
+  states nothing is processed until you tap Yes:
+  - **Yes** ⇒ the bot downloads the file to a temp dir, hands it to the **existing** medical ingest
+    (`bober medical import`) **exactly once**, replies with a **non-sensitive count only**
+    (`Imported N results into local medical store.` — never raw marker values or names), and removes
+    the temp dir.
+  - **No** (or no confirmation) ⇒ nothing is downloaded and nothing is ingested.
+
+  The medical egress / consent / audit guardrails stay **authoritative inside the ingest subprocess** —
+  they are not duplicated or bypassed. Taps are whitelist-gated first. The pending upload is held in
+  **ephemeral in-memory** state (no disk; cleared on restart; consumed single-shot).
+- **Single outbound funnel.** Every text reply leaves through one `sendSafe` chokepoint; every
+  keyboard message leaves through one `sendSafeKeyboard` chokepoint (Sprint 5; the sole
+  `transport.sendKeyboard` caller) — no handler sends directly. These are the seams where later
+  sprints add rate-limiting / audit / sanitisation.
 - **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
 - **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
   wrapper — only `src/telegram/bot.ts` imports it.
 
-> **Status.** **Sprint 4 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
+> **Status.** **Sprint 5 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
 > (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped hub-priority commands
 > `/today` / `/priority` / `/decide X vs Y` (Sprint 3) + inline-keyboard approve/adjust/reject gate
-> `/pending` over the existing disk-marker approval store (Sprint 4). Remaining inbox/calendar
-> command dispatch (replacing the `Unknown command` stub), document upload, streaming, and silent
-> scheduled delivery of the research-scheduler morning digest
+> `/pending` over the existing disk-marker approval store (Sprint 4) + document-upload medical ingest
+> behind a mandatory per-upload opt-in, plus the unified `sendSafeKeyboard` outbound funnel (Sprint 5).
+> Remaining inbox/calendar command dispatch (replacing the `Unknown command` stub), streaming, and
+> silent scheduled delivery of the research-scheduler morning digest
 > (`.bober/research/digests/<date>.json`) are later sprints.
 
 ---

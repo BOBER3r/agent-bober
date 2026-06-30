@@ -10,9 +10,14 @@ task in the shared inbox. Sprint 3 adds the **first hub-query commands** — `/t
 reply with a numbered ranked list from the priority hub. Sprint 4 adds the **inline-keyboard
 approve / adjust / reject gate**: a `/pending` command surfaces pending approval checkpoints with
 `[Approve][Adjust][Reject]` buttons whose taps write the **same** disk markers the existing
-approve/reject CLI writes — no new approval mechanism. Calendar / medical command dispatch is
-still deferred; an admitted sender's `/start` (and any non-text update) still gets the help stub,
-and any other `/command` gets an `Unknown command` placeholder later sprints replace.
+approve/reject CLI writes — no new approval mechanism. Sprint 5 adds **document-upload medical
+ingest behind a mandatory per-upload opt-in**: a document message defers the download until an
+explicit Yes, names the local medical store in the prompt, hands the file to the existing
+`src/medical` ingest exactly once, and replies with a non-sensitive count only — and it **unifies
+the outbound keyboard funnel** so every keyboard message leaves through one `sendSafeKeyboard`
+chokepoint. Calendar / inbox command dispatch is still deferred; an admitted sender's `/start`
+(and any non-document, non-text update) still gets the help stub, and any other `/command` gets an
+`Unknown command` placeholder later sprints replace.
 
 ---
 
@@ -81,16 +86,23 @@ domain logic unless the sender is explicitly allow-listed.
 
 ---
 
-## The outbound funnel: `sendSafe`
+## The outbound funnel: `sendSafe` (text) + `sendSafeKeyboard` (keyboards)
 
-Every outbound reply leaves through **one** chokepoint, `sendSafe`
-(`src/telegram/outbound.ts`):
+Every outbound reply leaves through a chokepoint — **text** through `sendSafe`, **inline
+keyboards** through `sendSafeKeyboard` (both in `src/telegram/outbound.ts`):
 
 ```ts
 export async function sendSafe(
   transport: TelegramTransport,
   chatId: number,
   content: string,
+): Promise<void>;
+
+export async function sendSafeKeyboard(
+  transport: KeyboardTransport,
+  chatId: number,
+  content: string,
+  keyboard: InlineKeyboardSpec,
 ): Promise<void>;
 ```
 
@@ -100,6 +112,20 @@ later sprints add rate-limiting, audit logging, or Markdown sanitisation without
 handler. The invariant is enforced and checked — `transport.sendMessage` appears exactly once
 outside the SDK adapter (inside `sendSafe`, `outbound.ts:32`), and the raw grammy send
 (`bot.api.sendMessage`) appears only inside the adapter (`bot.ts:57`).
+
+### Keyboard funnel now unified (Sprint 5 — seam gap closed)
+
+Sprint 4 introduced the inline keyboard but sent it via `transport.sendKeyboard` **directly in the
+poll loop**, so keyboards bypassed a unified funnel (a seam gap the Sprint-4 record noted). **Sprint
+5 closes it:** `sendSafeKeyboard` (`outbound.ts:56`) is now the **sole** place
+`transport.sendKeyboard` is invoked. Both keyboard surfaces — the `/pending` approvals keyboard
+(retrofitted) and the new upload opt-in keyboard — route through it. So text **and** keyboards each
+have a single control-plane chokepoint (`sendSafe` / `sendSafeKeyboard`); later sprints can add
+keyboard-message filtering / audit / rate-limiting at `sendSafeKeyboard` without touching the loop or
+any handler. `KeyboardTransport` (`outbound.ts:23`) is a minimal `{ sendKeyboard }` interface defined
+in `outbound.ts` so `sendSafeKeyboard` can live there **without importing from `bot.ts`** (which would
+be a circular import — `bot.ts` already imports from `outbound.ts`); `BotTransport` satisfies it
+structurally.
 
 ### Privacy note
 
@@ -303,6 +329,72 @@ silently break the `pendingExists` lookup.
 
 ---
 
+## Document upload → medical ingest opt-in (Sprint 5)
+
+Sprint 5 lets a whitelisted operator upload a document (e.g. a lab PDF) and have it ingested into the
+**existing** `src/medical` store — but **only behind a mandatory per-upload consent gate**, because
+Telegram is **not** end-to-end encrypted.
+
+### The per-upload consent gate — download is deferred until Yes
+
+When a document message arrives, `registerUpload` (`src/telegram/handlers/upload.ts:92`) **does not
+download anything**. It stashes `{ fileId, fileName, chatId }` in an ephemeral in-memory map keyed by
+the message id, and returns an opt-in prompt that **names the local ingest destination and discloses
+the non-E2E nature of Telegram** (`buildUploadPrompt`, `upload.ts:77`):
+
+```
+Telegram is not end-to-end encrypted. Send "labs.pdf" to the LOCAL medical ingest
+(.bober/medical (local health store))? Nothing is processed until you tap Yes.
+            [ Yes ]   [ No ]
+```
+
+The prompt and a `[Yes][No]` keyboard (`buildUploadKeyboard`, `keyboard.ts:87`) are sent via
+`sendSafeKeyboard`. The file is fetched **only after an explicit Yes** — there is no download, no temp
+file, and no medical code reached until the operator confirms (`sc-5-2`).
+
+### Yes / No resolution
+
+`handleUploadCallback` (`upload.ts:126`) resolves the tap. The callback codec adds `confirm`→`y` and
+`cancel`→`n` to the existing `a`/`j`/`r` set, and the poll loop **decodes first** to route
+`confirm`/`cancel` taps here (and `a`/`j`/`r` taps to the approvals handler). The guard order is:
+
+1. **Whitelist re-check** on the callback sender id — a tap from a non-whitelisted account ingests
+   nothing (`{ reply:null, answer:"Denied" }`).
+2. **Decode + stash lookup** — the stash is consumed **single-shot** (a duplicate tap is a no-op); a
+   missing stash replies `Upload expired or already handled.` and ingests nothing.
+3. **No (`cancel`)** ⇒ `Discarded — nothing was ingested.` — **no download, no ingest** (`sc-5-4`).
+4. **Yes (`confirm`)** ⇒ `mkdtemp` a temp dir → download the file (injected `download`) → hand the
+   local path to the **existing medical ingest exactly once** (injected `ingest`) → reply with a
+   **count only** → remove the temp dir in a **`finally`**.
+
+### Count-only reply — no PHI leaves through Telegram
+
+The post-ingest reply is a **non-sensitive integer count** —
+`Imported <N> results into local medical store.` — parsed from the ingest result. **No marker values,
+names, or other raw PHI are ever echoed** (`nonGoal #3`, `sc-5-5`). The temp file is **always removed**
+in a `finally`, so no PHI bytes persist on disk after ingest (`nonGoal #4`).
+
+### Guards stay authoritative in the subprocess (not duplicated)
+
+The production ingest, `defaultMedicalIngest` (`upload.ts:190`), invokes the medical pipeline in a
+**subprocess** via `execa(process.execPath, [cliEntry, "medical", "import", filePath], …)` (mirroring
+`defaultPrioritize`). The medical `EgressGuard` / `ConsentGate` / `AuditLog` run **inside that child
+process** — they are **not** duplicated, bypassed, or weakened in `src/telegram/` (`nonGoal #5`). The
+adapter reimplements **no** medical parsing or storage; it just gates consent and shells out. The
+ingest and download functions are **injected**, so the handler is unit-testable with spies (no network,
+no disk, no real medical pipeline).
+
+### grammy stays `bot.ts`-only
+
+The download itself is the one new grammy surface: `BotTransport.downloadDocument(fileId, destPath)`
+(`bot.ts:79`, impl `:150`) resolves the file path via `bot.api.getFile`, fetches the Telegram file
+endpoint, and writes bytes via `node:fs/promises` — no `@grammyjs/files` plugin needed. It lives on
+`GrammyTransport` so grammy types never leak outside `bot.ts`. `TelegramUpdate.message` gains a minimal
+local `document` subset; `startPollLoop` gains an **optional** 6th `uploads` param (the pending-upload
+state) so the loop is testable with an injected map, and existing callers compile unchanged.
+
+---
+
 ## SDK isolation: `grammy` behind the transport wrapper
 
 The chosen Telegram Bot API library is **[grammy](https://grammy.dev) (`^1.44.0`)** — the one
@@ -331,13 +423,14 @@ swapping the SDK is a `bot.ts`-only change.
 | File | Role |
 |------|------|
 | `src/telegram/whitelist.ts` | Pure authoriser: `parseAllowedUsers` / `isAllowed` / `denialReply` (+ `AllowedUsers` type). No I/O. |
-| `src/telegram/outbound.ts` | `TelegramTransport` interface + the `sendSafe` outbound funnel (single chokepoint). |
+| `src/telegram/outbound.ts` | `TelegramTransport` interface + the `sendSafe` (text) and `sendSafeKeyboard` (inline keyboards) outbound funnels — the **two** single chokepoints; `KeyboardTransport` interface (avoids a circular import to `bot.ts`). |
 | `src/telegram/router.ts` | Pure `classify(message)` → `RoutedMessage` (`command` vs `text`) + pure `parseScopeFromCommand(name, args)` → hub `Scope` \| `null` (`/today`/`/priority`/`/decide`). No I/O. |
 | `src/telegram/handlers/capture.ts` | `handleCapture` (zero-friction capture via an injected `InboxCapture` sink) + production `defaultCapture` (persists via `captureTask`). |
 | `src/telegram/handlers/prioritize.ts` | `handlePrioritize` (numbered ranked list via an injected `HubQuery`, title-only render) + production `defaultPrioritize` (execa → `hub priority`/`hub decide` subprocess; the subprocess owns all LLM calls). |
-| `src/telegram/keyboard.ts` | Pure, **zero-grammy** inline-keyboard builder + callback_data codec: `CallbackAction`, `InlineKeyboardSpec`, `encodeCallback`/`decodeCallback` (`"<code>:<checkpointId>"`, ≤ 64 bytes, never truncates), `buildApprovalKeyboard`. |
+| `src/telegram/keyboard.ts` | Pure, **zero-grammy** inline-keyboard builder + callback_data codec: `CallbackAction` (`approve`/`adjust`/`reject` + Sprint 5 `confirm`/`cancel`), `InlineKeyboardSpec`, `encodeCallback`/`decodeCallback` (`"<code>:<checkpointId>"`, codes `a`/`j`/`r`/`y`/`n`, ≤ 64 bytes, never truncates), `buildApprovalKeyboard` + `buildUploadKeyboard` (`[Yes][No]`). |
+| `src/telegram/handlers/upload.ts` | Per-upload medical-ingest opt-in gate: `registerUpload` (stash + opt-in prompt, **no download**) + `handleUploadCallback` (Yes ⇒ download → injected ingest **once** → count-only reply → temp dir removed in `finally`; No/missing ⇒ ingests nothing; whitelist-first) + ephemeral `PendingUploadState` (`createPendingUploadState`) + injected `DownloadFn`/`MedicalIngest` types + production `defaultMedicalIngest` (execa → `medical import` subprocess; guards stay authoritative there) + `LOCAL_INGEST_DEST`/`buildUploadPrompt`. No grammy. |
 | `src/telegram/handlers/approvals.ts` | `handleApprovalCallback` (whitelist-first + `pendingExists` guard chain → `saveApproved`/`saveRejected`, **byte-identical markers**) + `handleApprovalFollowup` (resolves a stashed Adjust/Reject from the next text turn) + ephemeral `PendingCallbackState` map (`createPendingState`). No grammy, no new approval mechanism. |
-| `src/telegram/bot.ts` | `BotTransport` (now + `sendKeyboard`/`answerCallback`) + `GrammyTransport` adapter (sole grammy import; `toGrammyKeyboard` here only), `helpReply` stub, and the `startPollLoop` getUpdates loop (callback_query branch → approvals; `classify` → capture / prioritize / `/pending` / command dispatch). |
+| `src/telegram/bot.ts` | `BotTransport` (`sendKeyboard`/`answerCallback` + Sprint 5 `downloadDocument`) + `GrammyTransport` adapter (sole grammy import; `toGrammyKeyboard` + `downloadDocument` via `getFile`+`fetch` here only), `helpReply` stub, and the `startPollLoop` getUpdates loop (callback_query branch decodes-first → upload vs approvals; document branch → `registerUpload`; `classify` → capture / prioritize / `/pending` / command dispatch). |
 | `src/cli/commands/telegram.ts` | `registerTelegramCommand` — the `agent-bober telegram` command (env credential read, SIGINT/SIGTERM shutdown, never-throw). |
 
 User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Commands**.
@@ -349,8 +442,10 @@ User-facing usage lives in [`COMMANDS.md`](../COMMANDS.md) under **Telegram Comm
 Sprint 1 shipped transport + whitelist + funnel; Sprint 2 added message routing + zero-friction
 task capture; Sprint 3 added the scoped hub-priority commands (`/today`, `/priority`,
 `/decide X vs Y`); Sprint 4 added the inline-keyboard approve/adjust/reject gate (`/pending`) over
-the existing disk-marker approval store. Still to come (Sprints 5–6): the remaining command dispatch
-for inbox/calendar actions (replacing the `Unknown command` stub), document upload, streaming
-replies, and **silent scheduled delivery of the research-scheduler morning digest**
-(`.bober/research/digests/<date>.json`). Each new reply path must return content through
-`sendSafe` (or `sendKeyboard`), and each new command must sit behind the `isAllowed` whitelist.
+the existing disk-marker approval store; Sprint 5 added document-upload medical ingest behind a
+mandatory per-upload opt-in **and unified the outbound keyboard funnel** (`sendSafeKeyboard`). Still
+to come (Sprints 6–7): the remaining command dispatch for inbox/calendar actions (replacing the
+`Unknown command` stub), streaming replies, and **silent scheduled delivery of the research-scheduler
+morning digest** (`.bober/research/digests/<date>.json`). Each new reply path must return content
+through `sendSafe` (or `sendSafeKeyboard`), and each new command must sit behind the `isAllowed`
+whitelist.
