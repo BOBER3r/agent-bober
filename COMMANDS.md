@@ -1915,7 +1915,10 @@ getUpdates long-polling, a numeric user-id whitelist, and a single outbound funn
 **zero-friction task capture**: plain text from an admitted sender is captured as one open task in
 the inbox (the same surface `bober task list` reads) and the bot replies with a confirmation.
 Sprint 3 adds the **scoped hub-priority commands** `/today`, `/priority`, and `/decide X vs Y`,
-which reply with a numbered ranked list from the priority hub. Inbox / calendar / medical command
+which reply with a numbered ranked list from the priority hub. Sprint 4 adds the **inline-keyboard
+approve / adjust / reject gate**: `/pending` lists pending approval checkpoints with
+`[Approve][Adjust][Reject]` buttons whose taps write the **same** disk markers the existing
+`approve`/`reject` CLI writes — no new approval mechanism. Inbox / calendar / medical command
 dispatch is still a later sprint — `/start` returns a help stub and any other `/command` returns an
 `Unknown command` placeholder. See
 [docs/telegram.md](./docs/telegram.md) for the adapter, the message router, the control-plane
@@ -1960,16 +1963,35 @@ bober telegram
   ranking to the **hub CLI in a subprocess** (`bober hub priority` / `bober hub decide`), so all
   relevance filtering and any model calls happen inside the hub — the Telegram adapter never
   constructs an LLM client. The reply carries finding **titles only**.
-- **Single outbound funnel.** Every reply leaves through one `sendSafe` chokepoint; no handler
-  sends directly — the seam where later sprints add rate-limiting / audit / sanitisation.
+- **Approval gate — `/pending` (admitted senders).** `/pending` lists pending approval checkpoints,
+  rendering **one message per checkpoint** with an inline `[Approve] [Adjust] [Reject]` keyboard
+  (`No pending approvals.` when none). Button taps write the **same** `.approved.json` /
+  `.rejected.json` disk markers the `approve` / `reject` CLI writes — **no new approval mechanism** —
+  so calendar plans and do-bridge promotions resolve through the **one existing gate**:
+  - **Approve** writes `<id>.approved.json` (`approvedAt`, `approverId`; no `editDelta`) and the
+    waiting run proceeds.
+  - **Adjust** prompts `Send the replacement text.`; your next message is written as the marker's
+    `editDelta` (a steer).
+  - **Reject** prompts `Send rejection feedback.`; your next message is written as the
+    `<id>.rejected.json` marker's `feedback`.
+
+  Taps are **whitelist-gated first** (a tap from a non-whitelisted account writes nothing) and
+  **pendingExists-guarded** (a tap for a checkpoint with no `.pending.json` writes nothing). The
+  Adjust/Reject follow-up uses an **ephemeral in-memory** per-chat state (no disk; cleared on
+  restart) and is intercepted **before** capture, so the replacement/feedback text is not stored as a
+  task.
+- **Single outbound funnel.** Every text reply leaves through one `sendSafe` chokepoint; keyboard
+  messages go through `sendKeyboard` (also on the transport) — no handler sends directly. This is the
+  seam where later sprints add rate-limiting / audit / sanitisation.
 - **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
 - **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
   wrapper — only `src/telegram/bot.ts` imports it.
 
-> **Status.** **Sprint 3 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
+> **Status.** **Sprint 4 of `spec-20260628-telegram-frontend`.** Transport + whitelist + funnel
 > (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped hub-priority commands
-> `/today` / `/priority` / `/decide X vs Y` (Sprint 3). Remaining inbox/calendar command dispatch
-> (replacing the `Unknown command` stub), document upload, streaming, approvals, and silent
+> `/today` / `/priority` / `/decide X vs Y` (Sprint 3) + inline-keyboard approve/adjust/reject gate
+> `/pending` over the existing disk-marker approval store (Sprint 4). Remaining inbox/calendar
+> command dispatch (replacing the `Unknown command` stub), document upload, streaming, and silent
 > scheduled delivery of the research-scheduler morning digest
 > (`.bober/research/digests/<date>.json`) are later sprints.
 
