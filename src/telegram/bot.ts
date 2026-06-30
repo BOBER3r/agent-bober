@@ -8,7 +8,7 @@ import { writeFile } from "node:fs/promises";
 
 import { Bot, InlineKeyboard } from "grammy";
 
-import type { TelegramTransport } from "./outbound.js";
+import type { TelegramTransport, EditTransport, SendOptions } from "./outbound.js";
 import { sendSafe, sendSafeKeyboard } from "./outbound.js";
 import { isAllowed, parseAllowedUsers, denialReply } from "./whitelist.js";
 import { classify } from "./router.js";
@@ -60,12 +60,13 @@ export interface TelegramUpdate {
 // ── BotTransport ──────────────────────────────────────────────────────
 
 /**
- * Extended transport used by the poll loop: outbound TelegramTransport
+ * Extended transport used by the poll loop: outbound TelegramTransport + EditTransport
  * plus a getUpdates polling method, inline-keyboard sender, and callback acknowledgement.
  * Tests inject a fake BotTransport so the loop is testable without any SDK dependency.
  * Extensions stay here (not in outbound.ts) per outbound.ts:8-9.
+ * Sprint 6: extends EditTransport so GrammyTransport satisfies both text and edit funnels.
  */
-export interface BotTransport extends TelegramTransport {
+export interface BotTransport extends TelegramTransport, EditTransport {
   getUpdates(offset: number): Promise<TelegramUpdate[]>;
   /** Send a message with an inline keyboard. spec is the provider-neutral shape from keyboard.ts. */
   sendKeyboard(chatId: number, text: string, keyboard: InlineKeyboardSpec): Promise<void>;
@@ -108,8 +109,36 @@ export class GrammyTransport implements BotTransport {
     this.bot = new Bot(token);
   }
 
-  async sendMessage(chatId: number, text: string): Promise<void> {
-    await this.bot.api.sendMessage(chatId, text);
+  /**
+   * Send a plain-text message. Maps the provider-neutral `silent` option to
+   * grammy's `disable_notification` so callers (via sendSafe) stay SDK-agnostic.
+   */
+  async sendMessage(chatId: number, text: string, opts?: SendOptions): Promise<void> {
+    await this.bot.api.sendMessage(chatId, text, opts?.silent ? { disable_notification: true } : undefined);
+  }
+
+  /**
+   * Send a message and return its Telegram message_id.
+   * Used exclusively by the streaming funnel (sendSafeForEdit) to capture the id
+   * of the initial status message for subsequent in-place edits.
+   * grammy's sendMessage returns Message.TextMessage which carries message_id (api.d.ts:156).
+   */
+  async sendReturningId(chatId: number, text: string, opts?: SendOptions): Promise<number> {
+    const msg = await this.bot.api.sendMessage(
+      chatId,
+      text,
+      opts?.silent ? { disable_notification: true } : undefined,
+    );
+    return msg.message_id;
+  }
+
+  /**
+   * Edit an existing message in place. Used exclusively by the streaming funnel
+   * (sendSafeEdit) — never posts a new message, only updates the one sent by sendReturningId.
+   * grammy's editMessageText signature: editMessageText(chat_id, message_id, text, other?, signal?).
+   */
+  async editMessage(chatId: number, messageId: number, text: string): Promise<void> {
+    await this.bot.api.editMessageText(chatId, messageId, text);
   }
 
   /**
