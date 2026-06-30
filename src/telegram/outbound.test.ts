@@ -1,18 +1,18 @@
 /**
- * outbound.test.ts — Tests for the sendSafe outbound funnel (sc-1-5).
- * Verifies that transport.sendMessage is invoked solely inside sendSafe:
- * handlers return content strings; all sends go through the funnel.
+ * outbound.test.ts — Tests for the sendSafe and sendSafeKeyboard outbound funnels.
+ * Verifies that transport.sendMessage is invoked solely inside sendSafe and
+ * transport.sendKeyboard is invoked solely inside sendSafeKeyboard (§B).
  * Also tests the poll-loop funnel invariant using an injected BotTransport spy.
  * No network access; no SDK in this file.
  */
 import { describe, it, expect } from "vitest";
-import { sendSafe } from "./outbound.js";
-import type { TelegramTransport } from "./outbound.js";
+import { sendSafe, sendSafeKeyboard } from "./outbound.js";
+import type { TelegramTransport, KeyboardTransport } from "./outbound.js";
 import { startPollLoop, helpReply } from "./bot.js";
 import type { BotTransport, TelegramUpdate } from "./bot.js";
 import { denialReply } from "./whitelist.js";
 
-// ── Spy factory ───────────────────────────────────────────────────────
+// ── Spy factories ─────────────────────────────────────────────────────
 
 /** Duck-typed TelegramTransport spy that records all sendMessage calls. */
 function makeSpy(): TelegramTransport & { calls: Array<{ chatId: number; text: string }> } {
@@ -21,6 +21,19 @@ function makeSpy(): TelegramTransport & { calls: Array<{ chatId: number; text: s
     calls,
     async sendMessage(chatId: number, text: string): Promise<void> {
       calls.push({ chatId, text });
+    },
+  };
+}
+
+/** Duck-typed KeyboardTransport spy that records all sendKeyboard calls. */
+function makeKeyboardSpy(): KeyboardTransport & {
+  calls: Array<{ chatId: number; text: string; keyboard: unknown }>;
+} {
+  const calls: Array<{ chatId: number; text: string; keyboard: unknown }> = [];
+  return {
+    calls,
+    async sendKeyboard(chatId: number, text: string, keyboard: unknown): Promise<void> {
+      calls.push({ chatId, text, keyboard });
     },
   };
 }
@@ -62,6 +75,33 @@ describe("sendSafe — outbound funnel (sc-1-5)", () => {
     expect(spy.calls).toHaveLength(1);
     expect(spy.calls[0]?.chatId).toBe(88888);
     expect(spy.calls[0]?.text).toBe(content);
+  });
+});
+
+// ── sendSafeKeyboard funnel (§B — keyboard chokepoint) ───────────────
+
+describe("sendSafeKeyboard — keyboard funnel (§B)", () => {
+  it("calls transport.sendKeyboard exactly once with the correct chatId, text, and keyboard", async () => {
+    const spy = makeKeyboardSpy();
+    const keyboard = [[{ text: "Yes", data: "y:1" }, { text: "No", data: "n:1" }]];
+    await sendSafeKeyboard(spy, 123, "Send file to medical store?", keyboard);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.calls[0]).toMatchObject({
+      chatId: 123,
+      text: "Send file to medical store?",
+      keyboard,
+    });
+  });
+
+  it("each sendSafeKeyboard call produces exactly one transport.sendKeyboard call", async () => {
+    const spy = makeKeyboardSpy();
+    const kb1 = [[{ text: "Yes", data: "y:1" }]];
+    const kb2 = [[{ text: "Approve", data: "a:cp-1" }]];
+    await sendSafeKeyboard(spy, 1, "first keyboard", kb1);
+    await sendSafeKeyboard(spy, 2, "second keyboard", kb2);
+    expect(spy.calls).toHaveLength(2);
+    expect(spy.calls[0]).toMatchObject({ chatId: 1, text: "first keyboard", keyboard: kb1 });
+    expect(spy.calls[1]).toMatchObject({ chatId: 2, text: "second keyboard", keyboard: kb2 });
   });
 });
 

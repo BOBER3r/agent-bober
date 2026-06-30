@@ -3,10 +3,13 @@
  * Telegram SDK: grammy (https://grammy.dev) — TypeScript-native, ESM-compatible,
  * no separate @types package required. This is the ONLY file that imports grammy.
  */
+import { Buffer } from "node:buffer";
+import { writeFile } from "node:fs/promises";
+
 import { Bot, InlineKeyboard } from "grammy";
 
 import type { TelegramTransport } from "./outbound.js";
-import { sendSafe } from "./outbound.js";
+import { sendSafe, sendSafeKeyboard } from "./outbound.js";
 import { isAllowed, parseAllowedUsers, denialReply } from "./whitelist.js";
 import { classify } from "./router.js";
 import { handleCapture, defaultCapture } from "./handlers/capture.js";
@@ -15,7 +18,14 @@ import { handlePrioritize, defaultPrioritize } from "./handlers/prioritize.js";
 import type { PrioritizeFn } from "./handlers/prioritize.js";
 import { handleApprovalCallback, handleApprovalFollowup, createPendingState } from "./handlers/approvals.js";
 import type { PendingCallbackState } from "./handlers/approvals.js";
-import { buildApprovalKeyboard } from "./keyboard.js";
+import {
+  registerUpload,
+  handleUploadCallback,
+  defaultMedicalIngest,
+  createPendingUploadState,
+} from "./handlers/upload.js";
+import type { PendingUploadState } from "./handlers/upload.js";
+import { buildApprovalKeyboard, buildUploadKeyboard, decodeCallback } from "./keyboard.js";
 import type { InlineKeyboardSpec } from "./keyboard.js";
 import { listPending } from "../state/approval-state.js";
 import { findProjectRoot } from "../utils/fs.js";
@@ -35,6 +45,8 @@ export interface TelegramUpdate {
     from?: { id: number };
     chat: { id: number };
     text?: string;
+    /** Present when the update is a document upload (mirrors @grammyjs/types Document subset). */
+    document?: { file_id: string; file_name?: string; mime_type?: string };
   };
   /** Inline-keyboard button tap — present when a user clicks an inline button. */
   callback_query?: {
@@ -59,6 +71,12 @@ export interface BotTransport extends TelegramTransport {
   sendKeyboard(chatId: number, text: string, keyboard: InlineKeyboardSpec): Promise<void>;
   /** Acknowledge a callback query — dismisses the loading spinner on the client. */
   answerCallback(callbackQueryId: string, text?: string): Promise<void>;
+  /**
+   * Download a Telegram file to a local path.
+   * Uses grammy's getFile API then fetches via the Telegram file endpoint.
+   * Implemented only in GrammyTransport — grammy types stay in this file.
+   */
+  downloadDocument(fileId: string, destPath: string): Promise<void>;
 }
 
 // ── GrammyTransport ───────────────────────────────────────────────────
@@ -122,6 +140,25 @@ export class GrammyTransport implements BotTransport {
     // Cast: grammy's Update is a superset of TelegramUpdate; subset is all we consume.
     return updates as unknown as TelegramUpdate[];
   }
+
+  /**
+   * Download a Telegram document to a local path.
+   * Uses getFile (grammy api) to resolve file_path, then fetches from the Telegram
+   * file endpoint and writes bytes via node:fs/promises (no @grammyjs/files plugin needed).
+   * Stays in this class so grammy types never leak outside bot.ts (principles.md:28).
+   */
+  async downloadDocument(fileId: string, destPath: string): Promise<void> {
+    const file = await this.bot.api.getFile(fileId);
+    if (!file.file_path) {
+      throw new Error(`Telegram getFile returned no file_path for file_id: ${fileId}`);
+    }
+    const url = `https://api.telegram.org/file/bot${this.bot.token}/${file.file_path}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Telegram file download failed: ${res.status} ${res.statusText}`);
+    }
+    await writeFile(destPath, Buffer.from(await res.arrayBuffer()));
+  }
 }
 
 // ── Help reply ────────────────────────────────────────────────────────
@@ -165,6 +202,7 @@ export async function startPollLoop(
   capture: InboxCapture = defaultCapture,
   prioritize: PrioritizeFn = defaultPrioritize,
   pending: PendingCallbackState = createPendingState(),
+  uploads: PendingUploadState = createPendingUploadState(),
 ): Promise<void> {
   let offset = 0;
   const allowed = parseAllowedUsers(process.env);
@@ -190,23 +228,46 @@ export async function startPollLoop(
       // Must run BEFORE the message branch — callback_query and message are
       // mutually exclusive in a single update, but the branch order matters
       // for clarity and future extension.
+      // Decode-first routing: confirm/cancel → upload handler; a/j/r → approval handler.
       const cb = update.callback_query;
       if (cb) {
         const cbChatId = cb.message?.chat.id;
         if (cbChatId !== undefined) {
-          const projectRoot = (await findProjectRoot()) ?? process.cwd();
-          const { reply, answer } = await handleApprovalCallback({
-            projectRoot,
-            senderId: cb.from.id,
-            allowed,
-            chatId: cbChatId,
-            data: cb.data ?? "",
-            pending,
-          });
-          // Always ack to dismiss the spinner — even on denied/ghost taps
-          await transport.answerCallback(cb.id, answer);
-          if (reply !== null) {
-            await sendSafe(transport, cbChatId, reply);
+          const cbData = cb.data ?? "";
+          const cbDecoded = decodeCallback(cbData);
+          if (
+            cbDecoded &&
+            (cbDecoded.action === "confirm" || cbDecoded.action === "cancel")
+          ) {
+            // Upload opt-in tap: route to the upload callback handler
+            const { reply, answer } = await handleUploadCallback({
+              senderId: cb.from.id,
+              allowed,
+              data: cbData,
+              pending: uploads,
+              download: (fileId, dest) => transport.downloadDocument(fileId, dest),
+              ingest: defaultMedicalIngest,
+            });
+            await transport.answerCallback(cb.id, answer);
+            if (reply !== null) {
+              await sendSafe(transport, cbChatId, reply);
+            }
+          } else {
+            // Approval tap (approve/adjust/reject) — existing path unchanged
+            const projectRoot = (await findProjectRoot()) ?? process.cwd();
+            const { reply, answer } = await handleApprovalCallback({
+              projectRoot,
+              senderId: cb.from.id,
+              allowed,
+              chatId: cbChatId,
+              data: cbData,
+              pending,
+            });
+            // Always ack to dismiss the spinner — even on denied/ghost taps
+            await transport.answerCallback(cb.id, answer);
+            if (reply !== null) {
+              await sendSafe(transport, cbChatId, reply);
+            }
           }
         } else {
           // Inline-mode tap (no message context) — ack only, no reply possible
@@ -226,6 +287,25 @@ export async function startPollLoop(
       if (!isAllowed(senderId, allowed)) {
         // Non-whitelisted sender: reply with denial echoing their id, then ignore.
         await sendSafe(transport, chatId, denialReply(senderId));
+        continue;
+      }
+
+      // ── Document upload branch ────────────────────────────────────────
+      // Must run BEFORE the text branch — a document message has no text field,
+      // so without this branch it would fall through to the helpReply() fallback.
+      // The upload is NOT downloaded here; registerUpload only stashes + sends the
+      // per-upload opt-in keyboard. Download + ingest happen only on explicit Yes.
+      const doc = msg.document;
+      if (doc) {
+        const uploadId = String(msg.message_id);
+        const { reply } = registerUpload({
+          uploadId,
+          chatId,
+          fileId: doc.file_id,
+          fileName: doc.file_name ?? "upload.bin",
+          pending: uploads,
+        });
+        await sendSafeKeyboard(transport, chatId, reply, buildUploadKeyboard(uploadId));
         continue;
       }
 
@@ -284,7 +364,8 @@ export async function startPollLoop(
               ]
                 .filter(Boolean)
                 .join("\n");
-              await transport.sendKeyboard(chatId, kbText, buildApprovalKeyboard(m.checkpointId));
+              // §B: unified keyboard funnel — all keyboard sends go through sendSafeKeyboard
+              await sendSafeKeyboard(transport, chatId, kbText, buildApprovalKeyboard(m.checkpointId));
             }
           }
         } else {

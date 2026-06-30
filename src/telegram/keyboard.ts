@@ -1,28 +1,41 @@
 /**
  * keyboard.ts — Provider-neutral inline-keyboard spec builder and compact
- * callback_data codec for approval checkpoints.
+ * callback_data codec for approval checkpoints and upload opt-in.
  * No grammy import — provider-agnostic (principles.md:28). grammy types stay in bot.ts.
  *
  * Telegram callback_data limit: 64 bytes (UTF-8).
- * Codec: "<code>:<checkpointId>" where code ∈ {a=approve, j=adjust, r=reject}.
+ * Codec: "<code>:<checkpointId>" where code ∈ {a=approve, j=adjust, r=reject, y=confirm, n=cancel}.
  * Budget: 2 bytes for "<code>:" + byteLength(checkpointId).
  * Known checkpointId formats are well under budget:
  *   "promote-<16hex>"   = 24 bytes → 26 bytes total
  *   "calendar-<planId>" = well under 64 bytes for any realistic planId
+ *   message_id (int)    = ≤10 bytes → 12 bytes total
  * Never truncate checkpointId — truncation breaks pendingExists lookup silently.
  */
 
 // ── Types ─────────────────────────────────────────────────────────────
 
-export type CallbackAction = "approve" | "adjust" | "reject";
+export type CallbackAction = "approve" | "adjust" | "reject" | "confirm" | "cancel";
 
 /** Provider-neutral inline keyboard: rows of {text, data} buttons. */
 export type InlineKeyboardSpec = { text: string; data: string }[][];
 
 // ── Codec ─────────────────────────────────────────────────────────────
 
-const CODE: Record<CallbackAction, string> = { approve: "a", adjust: "j", reject: "r" };
-const ACTION: Record<string, CallbackAction> = { a: "approve", j: "adjust", r: "reject" };
+const CODE: Record<CallbackAction, string> = {
+  approve: "a",
+  adjust: "j",
+  reject: "r",
+  confirm: "y",
+  cancel: "n",
+};
+const ACTION: Record<string, CallbackAction> = {
+  a: "approve",
+  j: "adjust",
+  r: "reject",
+  y: "confirm",
+  n: "cancel",
+};
 
 /**
  * Encode {action, checkpointId} into a compact callback_data string.
@@ -49,7 +62,7 @@ export function decodeCallback(
   return { action, checkpointId };
 }
 
-// ── Keyboard builder ──────────────────────────────────────────────────
+// ── Keyboard builders ─────────────────────────────────────────────────
 
 /**
  * Build an approval inline keyboard for a single checkpoint.
@@ -62,6 +75,20 @@ export function buildApprovalKeyboard(checkpointId: string): InlineKeyboardSpec 
       { text: "Approve", data: encodeCallback("approve", checkpointId) },
       { text: "Adjust", data: encodeCallback("adjust", checkpointId) },
       { text: "Reject", data: encodeCallback("reject", checkpointId) },
+    ],
+  ];
+}
+
+/**
+ * Build a per-upload opt-in keyboard for document uploads.
+ * Returns a one-row spec with Yes / No buttons.
+ * uploadId should be the message_id string (short, well within the 64-byte limit).
+ */
+export function buildUploadKeyboard(uploadId: string): InlineKeyboardSpec {
+  return [
+    [
+      { text: "Yes", data: encodeCallback("confirm", uploadId) },
+      { text: "No", data: encodeCallback("cancel", uploadId) },
     ],
   ];
 }

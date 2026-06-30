@@ -88,6 +88,13 @@ export async function handleApprovalCallback(args: {
     return { reply: `Approved ${decoded.checkpointId}`, answer: "Approved" };
   }
 
+  // confirm/cancel are upload opt-in actions (Sprint 5) — not handled here.
+  // The poll loop routes them to handleUploadCallback before reaching this handler,
+  // but guard defensively so the type narrows to "adjust" | "reject" below.
+  if (decoded.action === "confirm" || decoded.action === "cancel") {
+    return { reply: null, answer: "Unknown" };
+  }
+
   // Adjust / Reject: stash and await the next text message from this chat
   args.pending.set(args.chatId, {
     action: decoded.action,
