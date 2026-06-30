@@ -29,6 +29,8 @@ import { buildApprovalKeyboard, buildUploadKeyboard, decodeCallback } from "./ke
 import type { InlineKeyboardSpec } from "./keyboard.js";
 import { listPending } from "../state/approval-state.js";
 import { findProjectRoot } from "../utils/fs.js";
+import { handleFleet, defaultSynthesisReader } from "./fleet-view.js";
+import type { SynthesisReader } from "./fleet-view.js";
 
 // ── Minimal update shape ──────────────────────────────────────────────
 
@@ -204,7 +206,8 @@ export function helpReply(): string {
     "  /pending  — list pending approval checkpoints with inline buttons\n" +
     "  /today    — today's top priorities\n" +
     "  /priority — ranked findings\n" +
-    "  /decide X vs Y — decision support"
+    "  /decide X vs Y — decision support\n" +
+    "  /fleet    — latest multi-LLM fleet run findings"
   );
 }
 
@@ -232,6 +235,7 @@ export async function startPollLoop(
   prioritize: PrioritizeFn = defaultPrioritize,
   pending: PendingCallbackState = createPendingState(),
   uploads: PendingUploadState = createPendingUploadState(),
+  fleetReader: SynthesisReader = defaultSynthesisReader,
 ): Promise<void> {
   let offset = 0;
   const allowed = parseAllowedUsers(process.env);
@@ -397,6 +401,9 @@ export async function startPollLoop(
               await sendSafeKeyboard(transport, chatId, kbText, buildApprovalKeyboard(m.checkpointId));
             }
           }
+        } else if (routed.name === "fleet") {
+          const reply = await handleFleet(senderId, allowed, fleetReader);
+          await sendSafe(transport, chatId, reply);
         } else {
           await sendSafe(transport, chatId, `Unknown command: /${routed.name}`);
         }

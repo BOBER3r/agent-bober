@@ -1,6 +1,8 @@
 /** streaming.ts — Stream long-running progress as in-place edits to ONE Telegram message. */
 import { sendSafeForEdit, sendSafeEdit } from "./outbound.js";
 import type { EditTransport } from "./outbound.js";
+import { renderFleetView } from "./fleet-view.js";
+import type { SynthesisBundle } from "../fleet/synthesis.js"; // TYPE-ONLY — erased at compile
 
 // ── streamProgress ────────────────────────────────────────────────────
 
@@ -35,4 +37,33 @@ export async function streamProgress(
   for await (const text of updates) {
     await sendSafeEdit(transport, chatId, messageId, text);
   }
+}
+
+// ── streamFleetView ───────────────────────────────────────────────────
+
+/**
+ * Stream the per-agent fleet sections as in-place edits to ONE message.
+ * Uses renderFleetView (the SHARED renderer) to produce sections, then feeds
+ * them into streamProgress as an accumulating AsyncIterable<string>.
+ *
+ * The shared renderer enforces the same one-line truncation used by /fleet (sc-7-5),
+ * so verbatim payloads never reach the transport via either surface.
+ *
+ * Accumulator pattern: each yield progressively appends the next section so the
+ * message grows from the header to the full summary in place (no new messages).
+ */
+export async function streamFleetView(
+  transport: EditTransport,
+  chatId: number,
+  bundle: SynthesisBundle,
+): Promise<void> {
+  const sections = renderFleetView(bundle); // header + one per agent
+  async function* gen(): AsyncIterable<string> {
+    let acc = "";
+    for (const s of sections) {
+      acc = acc ? `${acc}\n\n${s}` : s;
+      yield acc;
+    }
+  }
+  await streamProgress(transport, chatId, gen(), { header: sections[0] ?? "Fleet…" });
 }
