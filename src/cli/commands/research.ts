@@ -1,7 +1,7 @@
 /**
- * `bober research job add|list|remove` — manage recurring multi-model research jobs.
- * `bober research run <jobId>`          — execute a stored research job.
- * `bober research tick [--watch]`       — run every due job (idempotent).
+ * `agent-bober research job add|list|remove` — manage recurring multi-model research jobs.
+ * `agent-bober research run <jobId>`         — execute a stored research job.
+ * `agent-bober research tick [--watch]`      — run every due job (idempotent).
  *
  * Subcommands:
  *   research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>]
@@ -288,9 +288,9 @@ export function registerResearchCommand(
         "Scheduling mechanism tradeoff:\n" +
         "  --watch        in-process setInterval loop — simple, but DIES with the\n" +
         "                 process (not suitable for unattended production use).\n" +
-        "  OS cron/launchd calling `bober research tick` — survives reboots;\n" +
+        "  OS cron/launchd calling `agent-bober research tick` — survives reboots;\n" +
         "                 RECOMMENDED for unattended runs. Example crontab entry:\n" +
-        "                   0 * * * * /usr/local/bin/bober research tick\n" +
+        "                   0 * * * * /usr/local/bin/agent-bober research tick\n" +
         "  harness scheduler (/schedule) — fires the CLI on a cadence inside the\n" +
         "                 agent harness.\n\n" +
         "Note: hosted-OAuth schedulers are unfit for unattended runs (research\n" +

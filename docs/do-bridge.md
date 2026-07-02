@@ -1,12 +1,12 @@
 # Do-Bridge: Promote a Finding into Real Work
 
-`bober do <id>` promotes a hub Finding into a `bober run` task. It reads the
+`agent-bober do <id>` promotes a hub Finding into an `agent-bober run` task. It reads the
 Finding from the FactStore, picks the right Promoter from the PromoterRegistry,
 asks for human approval (TTY) or proceeds automatically (--yes), and launches
-a child `bober run` process. After launch, the Finding transitions to
+a child `agent-bober run` process. After launch, the Finding transitions to
 `in-progress` and carries a `PromotionRef` recording the run id. The
 `--reconcile` flag (or the automatic best-effort reconcile at the start of
-every `bober do`) closes the loop: it reads each launched run's
+every `agent-bober do`) closes the loop: it reads each launched run's
 `.bober/runs/<runId>/state.json` snapshot and advances the Finding to its
 terminal status.
 
@@ -40,7 +40,7 @@ registry.register({ domain: "projects", kind: "action" }, projectsActionStub);
 ```
 
 This is the single place to add new domain promoters. The registry is
-constructed fresh for every `bober do` invocation — there is no singleton.
+constructed fresh for every `agent-bober do` invocation — there is no singleton.
 
 ### The Promoter Interface
 
@@ -56,7 +56,7 @@ All context it needs must come from the finding itself (title, tags, evidence).
 ```typescript
 export interface PromotionPlan {
   kind: "bober-run";
-  /** The one-line task string passed to bober run. */
+  /** The one-line task string passed to agent-bober run. */
   task: string;
   /** Optional team id; undefined means the default team. */
   teamId?: string;
@@ -84,10 +84,10 @@ specific kind.
 registry.resolve({ domain, kind })
   1. domain+kind specific match   → used if registered
   2. domain-only fallback         → used if no specific match exists
-  3. undefined                    → bober do exits non-zero naming the domain
+  3. undefined                    → agent-bober do exits non-zero naming the domain
 ```
 
-An unregistered `(domain, kind)` **fails closed** — `bober do` sets
+An unregistered `(domain, kind)` **fails closed** — `agent-bober do` sets
 `process.exitCode = 1` and prints an error naming the domain. There is no
 default catch-all promoter.
 
@@ -115,7 +115,7 @@ and `finding.tags` (including `team:<id>` tags) to build the `PromotionPlan`.
 
 ## Reconciling Launched Promotions
 
-After `bober do <id>` launches a run, the Finding sits at `status: "in-progress"`
+After `agent-bober do <id>` launches a run, the Finding sits at `status: "in-progress"`
 with a `promotesTo` field carrying a JSON-serialized `PromotionRef`:
 
 ```typescript
@@ -127,8 +127,8 @@ export interface PromotionRef {
 }
 ```
 
-`bober do --reconcile` (or the automatic best-effort reconcile at the start
-of every `bober do`) reads each launched run's state file and advances the
+`agent-bober do --reconcile` (or the automatic best-effort reconcile at the start
+of every `agent-bober do`) reads each launched run's state file and advances the
 Finding:
 
 | Run `state.json` status | Finding transition | `promotesTo.status` |
@@ -156,7 +156,7 @@ try {
 
 A missing or corrupt `state.json` returns `null` from `readRunState` and is
 treated as "still running" — the Finding is left unchanged. A reconcile failure
-can **never** abort `bober do`.
+can **never** abort `agent-bober do`.
 
 ### Reconcile Implementation
 
@@ -184,7 +184,7 @@ status is inserted as a fresh active row.
 ## The FindingStore Port
 
 `src/do-bridge/finding-port.ts` defines the narrow port interface that
-`bober do` and `reconcilePromotions` use to read/write Findings. It hides the
+`agent-bober do` and `reconcilePromotions` use to read/write Findings. It hides the
 raw JSON string that `FindingSchema.promotesTo` stores on disk and exposes a
 structured `PromotionRef` object instead.
 
@@ -199,10 +199,10 @@ The port has two adapters:
 
 ## Related
 
-- `docs/chat-steer.md` — approval markers written by `bober do` and read by
+- `docs/chat-steer.md` — approval markers written by `agent-bober do` and read by
   the child run process at curated pipeline gates.
 - `docs/teams.md` — team ids referenced via `team:<id>` tags on Findings, and
-  how `bober run --team` routes the launched task to the right provider.
+  how `agent-bober run --team` routes the launched task to the right provider.
 - `src/do-bridge/coding-promoter.ts` — reference implementation of a Promoter.
 - `src/do-bridge/registry.ts` — PromoterRegistry with resolution precedence.
 - `src/state/run-state.ts` — `readRunState` null-safe reader used by reconcile.

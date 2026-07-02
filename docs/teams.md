@@ -104,22 +104,22 @@ Selects the orchestration engine for sprints driven by this team:
 > **deterministic data + numerics layer** (`HealthDataStore` +
 > `NumericsQueryLayer`) also exists — it keeps all arithmetic out of the LLM (see
 > "Numerics + data store" below). As of Phase 6 Sprint 5 the **streaming ingestion**
-> path that fills that store exists too — `bober medical import <file>`
+> path that fills that store exists too — `agent-bober medical import <file>`
 > stream-parses an Apple Health export into `HealthDataStore` (see "Ingestion"
 > below and [`COMMANDS.md`](../COMMANDS.md)). As of `spec-20260628-medical-ingest`
-> Sprint 3 a second ingestion entry point exists — `bober medical import-labs <pdf>`
+> Sprint 3 a second ingestion entry point exists — `agent-bober medical import-labs <pdf>`
 > parses a lab-report PDF (Sprint 1's `parseLabPdf`) into vault notes and reindexes
 > them into the same `HealthDataStore` (Sprint 2). It is **fail-closed behind the
 > `cloud-inference` egress axis (default off)**: with the axis off it prints a clear
 > message naming `medical.egress.cloudInference`, exits 1, and reads **no PDF bytes** —
 > it **ships nothing to cloud by default** (see "Ingestion" below and
 > [`COMMANDS.md`](../COMMANDS.md)). As of `spec-20260628-medical-ingest` Sprint 4 a
-> deterministic, no-LLM **supplements** path exists — `bober medical supplements add|list`
+> deterministic, no-LLM **supplements** path exists — `agent-bober medical supplements add|list`
 > records a `{ name, dose }` entry as a **FactStore fact** under the `medical` scope
 > (`subject=name`, `predicate="dose"`), with re-adding an identical entry an **idempotent
 > NOOP** (see "Supplements" below and [`COMMANDS.md`](../COMMANDS.md)). As of
 > `spec-20260628-medical-ingest` Sprint 5 (the finale, completing that spec **5 of 5**) a
-> **SOPS-encrypted personalization profile** exists — `bober medical profile show|set`
+> **SOPS-encrypted personalization profile** exists — `agent-bober medical profile show|set`
 > reads/writes a Zod-validated `profile.yaml` (age / sex / conditions / medications /
 > supplements / allergies / goals) behind an injectable cipher seam (default sops, age
 > backend, local — **no egress**); read and write **fail closed** (refuse, no plaintext
@@ -150,7 +150,7 @@ Selects the orchestration engine for sprints driven by this team:
 > file) — egress-gated and offline-by-default, no data persistence yet. As of
 > `spec-20260617-medical-whoop-guardrails` Sprint 3 (the final sprint of that spec) the
 > **WHOOP path persists end-to-end**: a `WhoopSyncAdapter` maps paged WHOOP records into
-> `source:"whoop"` observations and `bober medical whoop sync [--since <iso>]` writes them
+> `source:"whoop"` observations and `agent-bober medical whoop sync [--since <iso>]` writes them
 > into the same `HealthDataStore` — on-demand (no webhooks), idempotent on re-run, and
 > fail-closed on partial failure, all still behind the off-by-default `device-connection`
 > axis (see "WHOOP device-connection axis + authenticated transport" below and
@@ -171,7 +171,7 @@ Selects the orchestration engine for sprints driven by this team:
 
 ## CLI Usage
 
-### `bober run --team <id>`
+### `agent-bober run --team <id>`
 
 Select a team for the full autonomous pipeline run:
 
@@ -189,7 +189,7 @@ The team id is threaded to `runPipeline` as `opts.teamId`, which calls
 `loadTeam(config, teamId)` to resolve the full team object and select the
 appropriate pipeline engine.
 
-### `bober chat [team]`
+### `agent-bober chat [team]`
 
 Select a team for an interactive chat session:
 
@@ -199,7 +199,7 @@ npx agent-bober chat           # programming team (default)
 ```
 
 The session's `buildMemoryDistill` reads from the team's namespace so the LLM
-sees only that team's lessons as context. Spawned `bober run` children inherit
+sees only that team's lessons as context. Spawned `agent-bober run` children inherit
 the session's run-id but not yet the team id (see Deferred Features below).
 
 ---
@@ -209,8 +209,8 @@ the session's run-id but not yet the team id (see Deferred Features below).
 The programming team is always available and requires no config entry. It is
 the fallback when:
 
-- `--team` is omitted from `bober run`
-- `[team]` positional arg is omitted from `bober chat`
+- `--team` is omitted from `agent-bober run`
+- `[team]` positional arg is omitted from `agent-bober chat`
 - `config.defaultTeam` is unset
 
 Its properties:
@@ -235,8 +235,8 @@ without modifying the main config. Reference: research doc Phase 4, line 295.
 
 ### Spawned-Run Team Propagation (Deferred)
 
-`bober chat <team>` routes the chat session's `buildMemoryDistill` to the
-team's namespace. Spawned `bober run` children (triggered by chat) do not yet
+`agent-bober chat <team>` routes the chat session's `buildMemoryDistill` to the
+team's namespace. Spawned `agent-bober run` children (triggered by chat) do not yet
 carry `--team <id>` in their argv — they run on the programming team by
 default. A future sprint will thread `teamId` through `RunSpawnerOptions` so
 spawned children inherit the active chat team.
@@ -441,11 +441,11 @@ so new sources are additive (ADR-4): an adapter is a `new class` only.
   imports it). Whoop / CSV adapters are an explicit non-goal of Sprint 5 — they
   are additive later via the same registry.
 
-User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical
+User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `agent-bober medical
 import`. Full details:
 [`docs/sprints/sprint-spec-20260616-medical-team-5.md`](sprints/sprint-spec-20260616-medical-team-5.md).
 
-**Lab-PDF ingestion — `bober medical import-labs <pdf>` (`spec-20260628-medical-ingest`
+**Lab-PDF ingestion — `agent-bober medical import-labs <pdf>` (`spec-20260628-medical-ingest`
 Sprint 3).** A second ingestion entry point, for a different source: a lab-report PDF
 rather than a streamed device export. The exported, testable
 `runImportLabs(projectRoot, pdfPath, deps?, opts?)` (`src/cli/commands/medical.ts:153`,
@@ -468,11 +468,11 @@ order**:
   name, value, panel, or count reaches the audit log — and always `store.close()`s in
   `finally`; the `.action()` never throws.
 
-User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical import-labs`.
+User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `agent-bober medical import-labs`.
 Full details:
 [`docs/sprints/sprint-spec-20260628-medical-ingest-3.md`](sprints/sprint-spec-20260628-medical-ingest-3.md).
 
-**Supplements — `bober medical supplements add|list` (`spec-20260628-medical-ingest`
+**Supplements — `agent-bober medical supplements add|list` (`spec-20260628-medical-ingest`
 Sprint 4).** A deterministic, no-LLM capture path for supplements. Unlike the lab-PDF and
 device-export ingestion above, supplements are **FactStore facts under the `medical`
 scope**, not `HealthDataStore` rows. The testable cores `runSupplementAdd` /
@@ -494,11 +494,11 @@ medications are `subject="patient"` / `predicate="takes-medication"` (the bi-tem
 value-of-record the SOP reads via
 `getActiveFacts("medical","patient","takes-medication")`).
 
-User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `bober medical supplements`.
+User-facing usage is in [`COMMANDS.md`](../COMMANDS.md) under `agent-bober medical supplements`.
 Full details:
 [`docs/sprints/sprint-spec-20260628-medical-ingest-4.md`](sprints/sprint-spec-20260628-medical-ingest-4.md).
 
-**Personalization profile — `bober medical profile show|set` (`spec-20260628-medical-ingest`
+**Personalization profile — `agent-bober medical profile show|set` (`spec-20260628-medical-ingest`
 Sprint 5, the finale).** A small, Zod-validated personalization snapshot (age / sex /
 conditions / medications / supplements / allergies / goals) persisted as a
 **SOPS-encrypted `<vaultDir>/profile.yaml`** (default `.bober/medical/profile.yaml`). The
@@ -524,7 +524,7 @@ the suite.
 `src/medical/profile.ts` hand-rolls its flat-YAML emit/parse and does **not import
 `src/vault`** — like the Sprint 2 / Sprint 4 frontmatter readers, it stays independent of
 the sibling vault spec's timing. User-facing usage is in
-[`COMMANDS.md`](../COMMANDS.md) under `bober medical profile`. Full details:
+[`COMMANDS.md`](../COMMANDS.md) under `agent-bober medical profile`. Full details:
 [`docs/sprints/sprint-spec-20260628-medical-ingest-5.md`](sprints/sprint-spec-20260628-medical-ingest-5.md).
 **`spec-20260628-medical-ingest` is engineering-complete (5 of 5).**
 
@@ -783,7 +783,7 @@ answer. Full details:
 `spec-20260617-medical-whoop-guardrails` Sprint 2 adds a **third** egress axis,
 `device-connection` (default **false**, independent of the other two), and the
 **authenticated WHOOP transport** behind it; Sprint 3 adds the **sync adapter, record
-mapping, and the `bober medical whoop sync` CLI** that persist WHOOP data end-to-end (see
+mapping, and the `agent-bober medical whoop sync` CLI** that persist WHOOP data end-to-end (see
 "WHOOP sync adapter + CLI" below). With the axis off (the default), the WHOOP path makes
 **zero outbound bytes**, exactly like the other two axes.
 
@@ -845,11 +845,11 @@ Sprint 2 transport into a working ingestion path and exposes it as a CLI command
 no schema, `ObservationSink`, or `IngestionAdapter` changes, and **no webhooks** — sync is
 **on-demand only**.
 
-**`bober medical whoop sync [--since <iso>]`** — pulls WHOOP `recovery` / `sleep` /
+**`agent-bober medical whoop sync [--since <iso>]`** — pulls WHOOP `recovery` / `sleep` /
 `cycle` / `workout` over a window (default the last 7 days; `--since` overrides the start)
 and writes the records into the same `.bober/medical/health.db` the offline
-`bober medical import` path uses. WHOOP sync is the **on-demand networked** device path;
-`bober medical import <file>` remains the **offline** Apple Health SAX file-import path.
+`agent-bober medical import` path uses. WHOOP sync is the **on-demand networked** device path;
+`agent-bober medical import <file>` remains the **offline** Apple Health SAX file-import path.
 The two are complementary — both write `source`-tagged observations into the same store
 and both are idempotent on re-run. User-facing usage is in
 [`COMMANDS.md`](../COMMANDS.md).

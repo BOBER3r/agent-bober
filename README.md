@@ -55,9 +55,9 @@ agent-bober operates in four modes — pick the one that matches your situation.
 
 | Mode | When to Use | Entry Point |
 |------|-------------|-------------|
-| **Autopilot** | Feature spikes, greenfield work, no production risk | `bober run` |
-| **Careful-Flow** | Production behavior changes, want checkpoint approval | `bober run --mode careful` |
-| **Diagnose** | Production system is broken right now | `bober incident start` |
+| **Autopilot** | Feature spikes, greenfield work, no production risk | `agent-bober run` |
+| **Careful-Flow** | Production behavior changes, want checkpoint approval | `agent-bober run --mode careful` |
+| **Diagnose** | Production system is broken right now | `agent-bober incident start` |
 | **Postmortem** | After resolving an incident, generate a retrospective | `bober postmortem generate` |
 
 ---
@@ -425,7 +425,7 @@ Add to your Windsurf MCP configuration:
 
 ## Brownfield Auto-Discovery
 
-When you run `bober init brownfield` (or use the `bober_init` MCP tool with mode=brownfield), agent-bober deeply analyzes your existing codebase and automatically:
+When you run `agent-bober init brownfield` (or use the `bober_init` MCP tool with mode=brownfield), agent-bober deeply analyzes your existing codebase and automatically:
 
 ### What It Scans
 
@@ -501,7 +501,7 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 | `/bober-postmortem` | Synthesize an evidence-cited postmortem from incident artifacts |
 | `/bober-using-bober` | Establishes how to find and use bober skills (loaded at conversation start) |
 
-> **Preset-aware install:** `bober init <preset>` installs the universal commands above plus only the stack-specific commands matching your preset or mode -- e.g. `/bober-solidity` is added for a `solidity` project, `/bober-react` and `/bober-playwright` for `nextjs`/`react-vite`, and `/bober-brownfield` for an existing codebase. The Claude Code plugin (`/plugin install`) always ships the full set.
+> **Preset-aware install:** `agent-bober init <preset>` installs the universal commands above plus only the stack-specific commands matching your preset or mode -- e.g. `/bober-solidity` is added for a `solidity` project, `/bober-react` and `/bober-playwright` for `nextjs`/`react-vite`, and `/bober-brownfield` for an existing codebase. The Claude Code plugin (`/plugin install`) always ships the full set.
 
 ### CLI
 
@@ -523,7 +523,7 @@ npx agent-bober mcp                                      # Start MCP server (Cur
 
 #### Chat Steer Commands (Phase 2 — mid-flight HITL)
 
-Inside the `bober chat` REPL you can steer in-flight runs with these commands:
+Inside the `agent-bober chat` REPL you can steer in-flight runs with these commands:
 
 | Command | Description |
 |---|---|
@@ -604,24 +604,24 @@ npx agent-bober task snooze <id> --until <when>    # Defer a task: status=snooze
 npx agent-bober task ingest [file]                 # Domain seam: ingest a Finding JSON (file or stdin) into the hub pool; content-id dedup (domain|title|kind), schema-validated, fail-closed exitCode=1
 npx agent-bober task from-gmail <thread>           # Opt-in: capture one Gmail thread as an open action task. OFF by default (taskInbox.gmailEgress) — refuses with no MCP client/network when disabled; sanitizes connector errors (never leaks tokens)
 
-# Do-bridge (promote a Finding into a bober run)
-npx agent-bober do <findingId> --dry-run           # Preview the bober run task a coding/projects Finding would launch (read-only: no mutation, no approval marker, no spawn); unsupported domain → exitCode=1
-npx agent-bober do <findingId>                      # Real path: write a promote-<id> approval marker, gate (TTY confirm / non-TTY wait for bober approve|reject), then launch detached `agent-bober run` on approve — links Finding.promotesTo (runId, status launched) + moves it open→in-progress; reject leaves it unchanged
+# Do-bridge (promote a Finding into an agent-bober run)
+npx agent-bober do <findingId> --dry-run           # Preview the agent-bober run task a coding/projects Finding would launch (read-only: no mutation, no approval marker, no spawn); unsupported domain → exitCode=1
+npx agent-bober do <findingId>                      # Real path: write a promote-<id> approval marker, gate (TTY confirm / non-TTY wait for agent-bober approve|reject), then launch detached `agent-bober run` on approve — links Finding.promotesTo (runId, status launched) + moves it open→in-progress; reject leaves it unchanged
 npx agent-bober do <findingId> --yes               # Real path, auto-approve (skip the confirm prompt; still writes+clears the marker)
-npx agent-bober do --reconcile                     # Reconcile launched promotions: read each run's run-state.json snapshot → advance the Finding (completed→done, aborted/failed→open, running→unchanged); also runs best-effort at the start of every `bober do`
+npx agent-bober do --reconcile                     # Reconcile launched promotions: read each run's run-state.json snapshot → advance the Finding (completed→done, aborted/failed→open, running→unchanged); also runs best-effort at the start of every `agent-bober do`
 
 # Calendar planner (deterministic slot-fill from ranked Findings)
 npx agent-bober calendar plan --dry-run --findings <path> [--freebusy <path>]  # Place ranked Findings into open slots in priority order (pure JS, LLM never packs); print scheduled (ISO start/end) + unscheduled (reason) — dry-run writes nothing to any calendar
 npx agent-bober calendar plan --export-ics <path> --findings <path> [--freebusy <path>]  # Same slot-fill, then write the plan to a local-first RFC 5545 .ics file (one VEVENT per scheduled item, UTC DTSTART/DTEND) with zero network egress — import it manually into your calendar app
 npx agent-bober calendar plan --findings <path> [--freebusy <path>]  # Live path: slot, then PROPOSE through the existing approval gate — writes a pending marker + plan sidecar and ZERO events; prints checkpointId (calendar-<id>) + how to approve. No auto-approve in any mode
-npx agent-bober calendar apply <checkpointId>      # Write events for an approved plan: detects the approved/rejected marker inline → connector.writeEvents EXACTLY once on approval / never on reject (Google still egress-gated). Approve first: bober approve <checkpointId> (or /approve in chat)
+npx agent-bober calendar apply <checkpointId>      # Write events for an approved plan: detects the approved/rejected marker inline → connector.writeEvents EXACTLY once on approval / never on reject (Google still egress-gated). Approve first: agent-bober approve <checkpointId> (or /approve in chat)
 
 # Research scheduler (recurring multi-model research jobs)
 npx agent-bober research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>] [--domain <d>] [--target-repo <r>] [--online-research]  # Define a recurring research job as JSON under .bober/research/jobs/ (validated by ResearchJobSchema; deterministic jobId=sha256(question|createdAt); --online-research stored but inert until egress lands)
 npx agent-bober research job list                  # List all defined research jobs (jobId, cadence, question, [domain])
 npx agent-bober research job remove <jobId>        # Delete a research job's JSON file (not-found → exitCode=1)
 npx agent-bober research run <jobId>               # Execute one stored job: query ≥2 distinct tier-policy provider/model blocks, write a vault research note (frontmatter jobId/question/models[]/generatedAt), emit exactly one kind:"watch" hub Finding; prints the note path. Offline unless research.egress.onlineResearch; never throws (not-found → exitCode=1)
-npx agent-bober research tick [--watch] [--interval <ms>]  # Run every job due as of now (nextDueAt unset or <= now) on the same path; idempotent — advances each run job's nextDueAt by cadence (daily+1d/weekly+7d/monthly+1mo) + sets lastRunAt, so a 2nd tick runs nothing. Clock read only at the boundary. --watch = in-process setInterval (default 1h); for unattended runs use OS cron/launchd, e.g. `0 * * * * bober research tick`
+npx agent-bober research tick [--watch] [--interval <ms>]  # Run every job due as of now (nextDueAt unset or <= now) on the same path; idempotent — advances each run job's nextDueAt by cadence (daily+1d/weekly+7d/monthly+1mo) + sets lastRunAt, so a 2nd tick runs nothing. Clock read only at the boundary. --watch = in-process setInterval (default 1h); for unattended runs use OS cron/launchd, e.g. `0 * * * * agent-bober research tick`
 npx agent-bober research digest [--since <iso>]    # Aggregate research runs in [since, now] (default last 24h) into a morning digest under .bober/research/digests/<date>.{md,json} — markdown (one bullet per run: title/top finding/source) + JSON for the Telegram bot. Reads vault research notes (non-sensitive titles only); empty window writes both files with an explicit no-new-research body; never throws
 
 # Telegram frontend (local long-polling bot; transport + whitelist + funnel + zero-friction capture + scoped hub-priority commands + inline approve/adjust/reject gate + document-upload medical-ingest opt-in + streaming in-place progress + silent scheduled digest + multi-LLM /fleet secretary view) — spec COMPLETE (7/7 sprints)
@@ -917,7 +917,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
   // -- Task inbox Gmail egress (opt-in; isolated single axis, default false) --
   "taskInbox": {                          // Optional. Omit entirely => zero Gmail egress.
-    "gmailEgress": false                  // Permit `bober task from-gmail` to read a thread via the MCP connector. Default false.
+    "gmailEgress": false                  // Permit `agent-bober task from-gmail` to read a thread via the MCP connector. Default false.
   },
 
   // -- Calendar planner (Google Calendar egress, opt-in; default 'ics', zero-egress) --
@@ -932,7 +932,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
   // -- Research scheduler online egress (opt-in; isolated single axis, default false) --
   "research": {                           // Optional. Omit entirely => research runs are fully offline.
     "egress": {                           // Single opt-in axis; code-enforced fail-closed default.
-      "onlineResearch": false             // Permit `bober research run` web/online retrieval. Default false.
+      "onlineResearch": false             // Permit `agent-bober research run` web/online retrieval. Default false.
     }
   }
 }
@@ -946,7 +946,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > `mcpEnv` is treated as opaque secrets and is never logged. Tool names default to
 > cyanheads/obsidian-mcp-server and are overridable for other servers (e.g. the Obsidian Local
 > REST API plugin's built-in MCP). The adapter is an independent read/write surface — it is **not**
-> wired into `bober vault reindex`, which reads notes from the local filesystem. See
+> wired into `agent-bober vault reindex`, which reads notes from the local filesystem. See
 > [docs/sprints/sprint-spec-20260628-obsidian-vault-store-4.md](./docs/sprints/sprint-spec-20260628-obsidian-vault-store-4.md).
 
 > **Zero-egress is code-enforced for the medical team.** All three `medical.egress` axes
@@ -963,7 +963,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > **local** model (Ollama by default). Opting `deviceConnection` **in** turns on the
 > authenticated WHOOP transport (OAuth2 refresh + paginated v2 fetch; credentials from
 > `WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` env vars + a `0600` refresh-token sidecar, no
-> keychain) used by the on-demand `bober medical whoop sync [--since <iso>]` command,
+> keychain) used by the on-demand `agent-bober medical whoop sync [--since <iso>]` command,
 > which persists WHOOP recovery/sleep/cycle/workout into the medical health store
 > (idempotent, fail-closed). The three axes are **independent** — enabling one never
 > enables another. See
@@ -986,7 +986,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > "Critic verdict in the audit").
 
 > **Gmail capture is opt-in and default-off.** The isolated `taskInbox.gmailEgress` axis
-> (default `false`, separate from the `medical.egress` axes) gates `bober task from-gmail
+> (default `false`, separate from the `medical.egress` axes) gates `agent-bober task from-gmail
 > <thread>`. With the axis off — the default — the command **refuses with an opt-in message,
 > sets `exitCode=1`, and constructs no MCP client / makes no network call**, so the
 > out-of-the-box build performs **zero Gmail egress**. The gate fires fail-closed at two
@@ -996,7 +996,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 > `[redacted]`, the same regex as `src/mcp/external-client.ts`) so tokens never leak. When
 > enabled (plus an enabled `observability` provider named `gmail`), one thread is read on
 > demand and captured through the same `captureTask` write path as `task add`. See
-> [COMMANDS.md](./COMMANDS.md) (`bober task from-gmail <thread>`) and
+> [COMMANDS.md](./COMMANDS.md) (`agent-bober task from-gmail <thread>`) and
 > [docs/sprints/sprint-spec-20260628-task-inbox-6.md](./docs/sprints/sprint-spec-20260628-task-inbox-6.md).
 
 > **Google Calendar egress is opt-in and default-off.** The isolated `calendar.egress.cloudCalendar`
@@ -1013,7 +1013,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
 
 > **Online research egress is opt-in and default-off.** The isolated `research.egress.onlineResearch`
 > axis (default `false`, **separate** from the `medical`/`taskInbox`/`calendar` axes) gates `bober
-> research run` (and `bober research tick`) web retrieval. With the axis off — the default — a research run uses only its injected
+> research run` (and `agent-bober research tick`) web retrieval. With the axis off — the default — a research run uses only its injected
 > provider clients and makes **zero outbound retrieval requests**; the `ResearchEgressGuard`
 > (`src/research/egress.ts`, mirroring the medical `EgressGuard`) is fail-closed (`assertAllowed` throws
 > `Egress axis 'online-research' not enabled` when off), and the runner's gated branch skips retrieval
