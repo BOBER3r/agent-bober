@@ -739,6 +739,23 @@ namespace / pipeline shape), the built-in programming team, and the deferred
 
 ---
 
+## Documentation
+
+The `bober/medical-team` build turns agent-bober into a **local-first, multi-LLM personal
+knowledge platform** — recurring research + fleet runs produce Findings and vault notes, the
+priority hub ranks them, and a local Telegram bot is the read/act surface. Start with the umbrella
+guide, then drill into a subsystem:
+
+- **[docs/knowledge-platform.md](./docs/knowledge-platform.md)** — umbrella guide: how the pieces
+  connect, one-time setup, and end-to-end quick-starts. **Read this first.**
+- [docs/fleet.md](./docs/fleet.md) — multi-LLM fleet (heterogeneous children, difficulty tiers, blackboard, synthesis).
+- [docs/research-scheduler.md](./docs/research-scheduler.md) — recurring multi-model research jobs, vault notes, digests.
+- [docs/telegram.md](./docs/telegram.md) — the local long-polling Telegram frontend.
+- [docs/providers.md](./docs/providers.md) — provider/model selection and env-var setup.
+- [docs/storage.md](./docs/storage.md) — the local SQLite / JSON storage model and egress axes.
+
+---
+
 ## Configuration
 
 All configuration lives in `bober.config.json` at your project root. The `init` command creates this file from a template, and you can customize it afterward.
