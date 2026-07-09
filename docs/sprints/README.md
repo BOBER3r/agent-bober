@@ -1912,3 +1912,26 @@ four chokepoints, all Sprint 1–5 callers byte-identical), and (Sprint 7) the *
 `FactRecord.subject`, shared by `/fleet` and `streamFleetView`, type-only zero-coupling to `src/fleet`)
 plus the **plan close-out** (full command surface + safety invariants + deferred Tier 2/Tier 3) are
 documented in [`docs/telegram.md`](../telegram.md).
+
+## Agent-loop capability port — in progress
+
+`spec-20260709-agent-loop-capability-port` — ports the four highest-value agent-loop capabilities
+into agent-bober's **own** provider-agnostic `runAgenticLoop` (rather than adopting the Anthropic
+Agent SDK; see ADR-1), each **additive** and **default-off / byte-identical when absent**. Sprint 1
+lands **refusal detection end-to-end**: a provider refusal now propagates as `StopReason "refusal"`
+from both adapter families (Anthropic `stop_reason: "refusal"`; OpenAI-family
+`finish_reason: "content_filter"` **and** structured-output `message.refusal`), surfaces as an
+**optional** `refused: true` on `AgenticLoopResult` at the loop's completion branch (**never thrown** —
+ADR-5), and makes `parseGeneratorResult` **fail closed** — a refusal after partial writes is reported
+`success: false` before the `filesWritten`-implies-success shortcut. The `refused` key is **absent**
+(not `false`) on non-refusal runs, so the whole non-refusal path stays byte-identical.
+`openai-compat.ts` and `claude-code.ts` are untouched; no new dependency. Later sprints add per-role
+effort, a USD ceiling (`Budget.maxUsd`, `BudgetExceededError` kind `"usd"` — ADR-4), and parallel
+read-only tool execution.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260709-agent-loop-capability-port-1.md](./sprint-spec-20260709-agent-loop-capability-port-1.md) | Refusal detection end-to-end: `StopReason "refusal"` in the Anthropic + OpenAI-family adapters, optional `refused: true` on `AgenticLoopResult` (non-throwing, spread-conditional), fail-closed `parseGeneratorResult` guard (`success: false` before the `filesWritten` shortcut); byte-identical non-refusal path, no new dep. |
+
+Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics lives
+in [`docs/providers.md`](../providers.md).

@@ -35,6 +35,28 @@ claude-code is configured alongside another provider, the other provider is used
 claude-code is the **only** configured provider for a tool role, that is a configuration
 error surfaced at load time.
 
+### Provider refusals (`StopReason "refusal"`)
+
+A provider **refusal** is surfaced provider-agnostically as `StopReason "refusal"`
+(`src/providers/types.ts`) — a first-class outcome, never a silent success. Each adapter maps its
+own refusal signal onto that value:
+
+| Provider      | Refusal signal                                                                 |
+| ------------- | ------------------------------------------------------------------------------ |
+| `anthropic`   | `stop_reason: "refusal"`                                                        |
+| `openai`      | `finish_reason: "content_filter"` **or** a non-empty `message.refusal` (structured-output refusal; takes precedence over the normal content path) |
+| `openai-compat` (DeepSeek, Grok, Ollama, LM Studio) | inherits the OpenAI mapping via the shared adapter |
+| `claude-code` | not applicable (text-only boundary; untouched)                                 |
+
+`runAgenticLoop` detects a refusal at its completion branch and returns
+`AgenticLoopResult.refused: true` — it **never throws**. The `refused` key is **absent** (not
+`false`) on non-refusal runs, so ordinary completions are unchanged. **Write-capable roles**
+(generator, curator) treat `refused` as `success: false`: a sprint whose provider refuses is
+reported as a failed sprint (with the refusal excerpt in `notes`), even if some files were already
+written — the refusal guard runs **before** the "files written implies success" shortcut.
+**Read-only / advisory roles** (researcher, code-reviewer) surface the refusal text as their output
+without failing the run.
+
 ---
 
 ## Anthropic (default)
