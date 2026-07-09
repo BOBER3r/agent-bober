@@ -1925,13 +1925,17 @@ from both adapter families (Anthropic `stop_reason: "refusal"`; OpenAI-family
 ADR-5), and makes `parseGeneratorResult` **fail closed** — a refusal after partial writes is reported
 `success: false` before the `filesWritten`-implies-success shortcut. The `refused` key is **absent**
 (not `false`) on non-refusal runs, so the whole non-refusal path stays byte-identical.
-`openai-compat.ts` and `claude-code.ts` are untouched; no new dependency. Later sprints add per-role
-effort, a USD ceiling (`Budget.maxUsd`, `BudgetExceededError` kind `"usd"` — ADR-4), and parallel
-read-only tool execution.
+`openai-compat.ts` and `claude-code.ts` are untouched; no new dependency. Sprint 2 lands the
+**cost substrate** (dormant until Sprint 3): a pure `estimateCostUsd` + dated static price table, an
+optional `ChatResponse.costUsd` on every adapter (`claude-code` passes through its real
+`total_cost_usd`; others estimate), and the additive `Budget.maxUsd` ceiling with
+`BudgetExceededError` kind `"usd"` (ADR-4). Later sprints wire the ceiling into the loop and add
+per-role effort and parallel read-only tool execution.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260709-agent-loop-capability-port-1.md](./sprint-spec-20260709-agent-loop-capability-port-1.md) | Refusal detection end-to-end: `StopReason "refusal"` in the Anthropic + OpenAI-family adapters, optional `refused: true` on `AgenticLoopResult` (non-throwing, spread-conditional), fail-closed `parseGeneratorResult` guard (`success: false` before the `filesWritten` shortcut); byte-identical non-refusal path, no new dep. |
+| 2 | [sprint-spec-20260709-agent-loop-capability-port-2.md](./sprint-spec-20260709-agent-loop-capability-port-2.md) | Cost substrate (dormant): pure `estimateCostUsd` + dated static `PRICE_TABLE` (longest-prefix match, unknown → `undefined`); optional `ChatResponse.costUsd` on every adapter (`claude-code` real `total_cost_usd` passthrough per ADR-3, others estimate; `costProvider` discriminator prices DeepSeek/Grok via compat rows); additive `Budget.maxUsd` axis with `BudgetExceededError` kind `"usd"`. Byte-identical when absent, no new dep. |
 
 Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics lives
 in [`docs/providers.md`](../providers.md).

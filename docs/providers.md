@@ -57,6 +57,33 @@ written — the refusal guard runs **before** the "files written implies success
 **Read-only / advisory roles** (researcher, code-reviewer) surface the refusal text as their output
 without failing the run.
 
+### Per-request cost (`ChatResponse.costUsd`)
+
+Every adapter populates an **optional** `costUsd` field on `ChatResponse`
+(`src/providers/types.ts`) — the USD cost of that single request, when known. The field is
+**additive and default-absent**: a request whose cost cannot be determined omits the key entirely
+(it is **not** set to `undefined` or `0`), so callers must treat absence as **"unknown," never as
+free**.
+
+| Provider      | `costUsd` source                                                                 |
+| ------------- | -------------------------------------------------------------------------------- |
+| `claude-code` | the `claude` CLI's **real, vendor-authoritative** `total_cost_usd` — never an estimate (ADR-3). Absent when an older CLI doesn't report it. |
+| `anthropic`   | a static `CostMeter` estimate (`estimateCostUsd`, `src/providers/cost-meter.ts`) |
+| `openai`      | a `CostMeter` estimate                                                           |
+| `openai-compat` (DeepSeek, Grok, Ollama, LM Studio) | a `CostMeter` estimate priced via the `openai-compat:` rows (a `costProvider` discriminator ensures DeepSeek/Grok use their own prices, not OpenAI's) |
+| `google`      | not wired yet — the price rows exist but `GoogleAdapter` does not populate `costUsd` |
+
+The `CostMeter` is a **pure, static** price table (`PRICE_TABLE`, `src/providers/cost-meter.ts`) of
+best-known **list prices as of 2026-07** — a **guardrail estimate, not a bill**. Lookup is
+longest-prefix match on `` `${provider}:${model}` `` (a specific model family wins over a broader
+one); an unknown or unpriced model resolves to **absent** rather than a guessed number. The table is
+**not** config-overridable and is **not** fetched at runtime. Only `claude-code` reports *actual*
+spend.
+
+This field is substrate for the `Budget` USD ceiling (`Budget.maxUsd` /
+`BudgetExceededError` kind `"usd"`, `src/orchestrator/workflow/budget.ts`); nothing charges it into a
+budget yet (a later sprint wires it into the agentic loop).
+
 ---
 
 ## Anthropic (default)
