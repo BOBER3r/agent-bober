@@ -30,6 +30,12 @@ import type { ChatParams, ChatResponse, LLMClient } from "./types.js";
  */
 export class OpenAICompatAdapter extends OpenAIAdapter implements LLMClient {
   /**
+   * CostMeter lookups from the inherited `chat()` must use DeepSeek/Grok
+   * prices, not OpenAI's — override the discriminator (sc-2-3).
+   */
+  protected override readonly costProvider = "openai-compat" as const;
+
+  /**
    * @param endpoint - Required base URL of the OpenAI-compatible server
    *   (e.g. "http://localhost:11434/v1" for Ollama).
    * @param model - Model identifier to use with this server.

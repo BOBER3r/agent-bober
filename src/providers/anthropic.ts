@@ -9,6 +9,7 @@ import type {
   StopReason,
   Message,
 } from "./types.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Conversion helpers ──────────────────────────────────────────────
 
@@ -329,6 +330,11 @@ export class AnthropicAdapter implements LLMClient {
       outputTokens: response.usage.output_tokens,
     };
 
+    // Estimated USD cost (undefined when the model isn't in the static price
+    // table). Computed once and spread into both return sites below so the
+    // key is ABSENT — not `costUsd: undefined` — when unpriced (sc-2-3).
+    const costUsd = estimateCostUsd({ provider: "anthropic", model, usage });
+
     // ── Structured output normalisation ─────────────────────────────
     // Take the forced tool call's input, stringify it into text, and return
     // empty toolCalls with a clean "end" stop reason. If the forced tool call
@@ -342,6 +348,7 @@ export class AnthropicAdapter implements LLMClient {
           toolCalls: [],
           stopReason: "end",
           usage,
+          ...(costUsd !== undefined ? { costUsd } : {}),
         };
       }
     }
@@ -351,6 +358,7 @@ export class AnthropicAdapter implements LLMClient {
       toolCalls,
       stopReason: normalizeStopReason(response.stop_reason),
       usage,
+      ...(costUsd !== undefined ? { costUsd } : {}),
     };
   }
 }

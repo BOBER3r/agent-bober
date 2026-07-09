@@ -17,6 +17,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ChatParams } from "./types.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Fake Anthropic SDK ───────────────────────────────────────────────
 
@@ -455,5 +456,72 @@ describe("AnthropicAdapter prompt caching", () => {
 
     expect(result.stopReason).toBe("refusal");
     expect(result.text).toBe("I can't help with that.");
+  });
+
+  // ── costUsd (sc-2-3) ─────────────────────────────────────────────────────
+
+  it("sets costUsd from estimateCostUsd for a priced model", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-opus-4-8",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    const expected = estimateCostUsd({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      usage: { inputTokens: 5, outputTokens: 7 },
+    });
+    expect(expected).not.toBeUndefined();
+    expect(result.costUsd).toBe(expected);
+  });
+
+  it("omits costUsd entirely (Object.hasOwn false) for an unpriced model", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-nonexistent-99",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    expect(Object.hasOwn(result, "costUsd")).toBe(false);
+  });
+
+  it("attaches costUsd to the structured-output normalisation branch when priced", async () => {
+    createMock.mockResolvedValue({
+      content: [
+        { type: "tool_use", id: "t1", name: "structured_output", input: { ok: true } },
+      ],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 3, output_tokens: 4 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    const result = await adapter.chat({
+      model: "claude-opus-4-8",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      responseSchema: schema,
+    } satisfies ChatParams);
+
+    const expected = estimateCostUsd({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      usage: { inputTokens: 3, outputTokens: 4 },
+    });
+    expect(result.costUsd).toBe(expected);
   });
 });

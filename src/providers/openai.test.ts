@@ -20,6 +20,7 @@ import type {
   AssistantMessage,
   ToolResultMessage,
 } from "./types.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Fake OpenAI client factory ───────────────────────────────────────
 
@@ -564,6 +565,67 @@ describe("OpenAIAdapter", () => {
     });
     // Falls back to empty input object
     expect(result.toolCalls[0].input).toEqual({});
+  });
+
+  // ── costUsd (sc-2-3) ──────────────────────────────────────────────
+
+  it("sets costUsd from estimateCostUsd for a priced model", async () => {
+    createFn.mockResolvedValue(
+      makeOAIResponse({ content: "ok", promptTokens: 100, completionTokens: 50 }),
+    );
+    const adapter = await makeAdapter("gpt-4.1");
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const expected = estimateCostUsd({
+      provider: "openai",
+      model: "gpt-4.1",
+      usage: { inputTokens: 100, outputTokens: 50 },
+    });
+    expect(expected).not.toBeUndefined();
+    expect(result.costUsd).toBe(expected);
+  });
+
+  it("omits costUsd entirely (Object.hasOwn false) for an unpriced model", async () => {
+    createFn.mockResolvedValue(
+      makeOAIResponse({ content: "ok", promptTokens: 100, completionTokens: 50 }),
+    );
+    const adapter = await makeAdapter("totally-unpriced-model");
+    const result = await adapter.chat({
+      model: "totally-unpriced-model",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(Object.hasOwn(result, "costUsd")).toBe(false);
+  });
+
+  it("attaches costUsd to the refusal return branch when priced", async () => {
+    createFn.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: null, refusal: "I won't do that." },
+        },
+      ],
+      usage: { prompt_tokens: 3, completion_tokens: 4 },
+    });
+    const adapter = await makeAdapter("gpt-4.1");
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    });
+
+    const expected = estimateCostUsd({
+      provider: "openai",
+      model: "gpt-4.1",
+      usage: { inputTokens: 3, outputTokens: 4 },
+    });
+    expect(result.costUsd).toBe(expected);
   });
 });
 

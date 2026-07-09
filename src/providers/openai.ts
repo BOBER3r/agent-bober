@@ -18,6 +18,8 @@ import type {
   StopReason,
   Message,
 } from "./types.js";
+import type { ProviderName } from "./factory.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Inline OpenAI response shapes ───────────────────────────────────
 // These mirror only the fields we actually use from the openai SDK so
@@ -330,6 +332,13 @@ export class OpenAIAdapter implements LLMClient {
   private readonly baseURL: string | undefined;
   private readonly providerConfig: Record<string, unknown> | undefined;
 
+  /**
+   * Provider key used for CostMeter lookups. Defaults to "openai"; overridden
+   * to "openai-compat" by {@link OpenAICompatAdapter} so DeepSeek/Grok prices
+   * are looked up instead of OpenAI's (they share this class's `chat()`).
+   */
+  protected readonly costProvider: ProviderName = "openai";
+
   /** Lazily initialised after the dynamic import succeeds. */
   private client: OAIClientLike | null = null;
 
@@ -453,29 +462,43 @@ export class OpenAIAdapter implements LLMClient {
     // fail-closed generator guard has an excerpt to report.
     const refusalText = choice.message.refusal;
     if (refusalText) {
+      const refusalUsage = {
+        inputTokens: response.usage?.prompt_tokens ?? 0,
+        outputTokens: response.usage?.completion_tokens ?? 0,
+      };
+      const refusalCostUsd = estimateCostUsd({
+        provider: this.costProvider,
+        model: model || this.model,
+        usage: refusalUsage,
+      });
       return {
         text: refusalText,
         toolCalls: [],
         stopReason: "refusal",
-        usage: {
-          inputTokens: response.usage?.prompt_tokens ?? 0,
-          outputTokens: response.usage?.completion_tokens ?? 0,
-        },
+        usage: refusalUsage,
+        ...(refusalCostUsd !== undefined ? { costUsd: refusalCostUsd } : {}),
       };
     }
 
     const text = choice.message.content ?? "";
     const toolCalls = normalizeToolCalls(choice.message.tool_calls);
     const stopReason = normalizeStopReason(choice.finish_reason);
+    const usage = {
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+    };
+    const costUsd = estimateCostUsd({
+      provider: this.costProvider,
+      model: model || this.model,
+      usage,
+    });
 
     return {
       text,
       toolCalls,
       stopReason,
-      usage: {
-        inputTokens: response.usage?.prompt_tokens ?? 0,
-        outputTokens: response.usage?.completion_tokens ?? 0,
-      },
+      usage,
+      ...(costUsd !== undefined ? { costUsd } : {}),
     };
   }
 }
