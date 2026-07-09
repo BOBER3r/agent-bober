@@ -33,6 +33,24 @@ export const ContextResetSchema = z.enum([
 export type ContextReset = z.infer<typeof ContextResetSchema>;
 
 /**
+ * Reasoning/output effort level (Sprint 3 — agent-loop capability port).
+ * Mirrors `ChatParams.effort` (`src/providers/types.ts`) value-for-value;
+ * only the Anthropic adapter forwards it (as `output_config.effort`).
+ */
+export const EffortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
+export type Effort = z.infer<typeof EffortSchema>;
+
+/**
+ * Optional per-run USD spend ceiling (Sprint 3 — agent-loop capability port).
+ * `maxUsd: null` (or omitted) means uncapped — mirrors `Budget`'s own
+ * null-means-unlimited convention (`src/orchestrator/workflow/budget.ts`).
+ */
+export const BudgetSectionSchema = z.object({
+  maxUsd: z.number().positive().nullable().optional(),
+});
+export type BudgetSection = z.infer<typeof BudgetSectionSchema>;
+
+/**
  * Well-known built-in evaluator strategy types.
  * The type field also accepts ANY string — unknown types are resolved
  * by looking for a matching registered plugin or the `command` field.
@@ -87,6 +105,10 @@ export const PlannerSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type PlannerSection = z.infer<typeof PlannerSectionSchema>;
 
@@ -98,6 +120,10 @@ export const GeneratorSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type GeneratorSection = z.infer<typeof GeneratorSectionSchema>;
 
@@ -114,6 +140,10 @@ export const EvaluatorSectionSchema = z.object({
     lenses: z.array(z.string()).default([]),
     maxConcurrent: z.number().int().min(1).default(4),
   }).default({ enabled: false, lenses: [], maxConcurrent: 4 }),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 
@@ -142,6 +172,10 @@ export const CuratorSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type CuratorSection = z.infer<typeof CuratorSectionSchema>;
 

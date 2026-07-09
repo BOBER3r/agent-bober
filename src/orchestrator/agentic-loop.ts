@@ -1,6 +1,8 @@
 import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage, ToolResult } from "../providers/types.js";
 
 import type { ToolHandler } from "./tools/index.js";
+import type { Effort } from "../config/schema.js";
+import type { Budget } from "./workflow/budget.js";
 import { logger } from "../utils/logger.js";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -22,6 +24,14 @@ export interface AgenticLoopParams {
   maxTurns: number;
   /** Per-message max_tokens. Defaults to 16384. */
   maxTokens?: number;
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort?: Effort;
+  /**
+   * Optional per-run spend ceiling. Charged per turn (tokens + costUsd); a hit
+   * ceiling ends the run gracefully (stopReason 'budget_exceeded') rather than
+   * throwing — see ADR-4. `assertWithinBudget()` is never called from the loop.
+   */
+  budget?: Budget;
   /** Called when the model invokes a tool (for logging/progress). */
   onToolUse?: (name: string, input: unknown) => void;
   /** Called after each completed turn (for progress tracking). */
@@ -64,6 +74,12 @@ export interface AgenticLoopResult {
    * (generator/curator) MUST treat this as success:false (ADR-5).
    */
   refused?: boolean;
+  /**
+   * Cumulative USD cost summed across turns that reported a `costUsd`. Absent
+   * (not `undefined`-valued — the key itself is omitted) when no turn reported
+   * a cost, so cost-free runs stay byte-identical.
+   */
+  costUsd?: number;
 }
 
 // ── Transient-error retry ──────────────────────────────────────────
@@ -245,6 +261,8 @@ export async function runAgenticLoop(
     toolHandlers,
     maxTurns,
     maxTokens = 16384,
+    effort,
+    budget,
     onToolUse,
     onTurnComplete,
     completionCheck,
@@ -258,6 +276,7 @@ export async function runAgenticLoop(
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let totalCostUsd: number | undefined;
   const allToolsCalled: string[] = [];
   let finalText = "";
   let nudgesUsed = 0;
@@ -275,6 +294,7 @@ export async function runAgenticLoop(
           messages,
           tools: tools.length > 0 ? tools : undefined,
           maxTokens,
+          ...(effort !== undefined ? { effort } : {}),
         },
         turn,
       );
@@ -292,12 +312,40 @@ export async function runAgenticLoop(
           outputTokens: totalOutputTokens,
         },
         stopReason: "error",
+        ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
       };
     }
 
     // Accumulate usage
     totalInputTokens += response.usage.inputTokens;
     totalOutputTokens += response.usage.outputTokens;
+
+    // Accumulate cost (only tracks a sum when at least one turn reports cost)
+    if (response.costUsd !== undefined) {
+      totalCostUsd = (totalCostUsd ?? 0) + response.costUsd;
+    }
+
+    // Charge the budget (tokens + USD) once per turn. `chargeUsd`/`chargeTokens`
+    // are no-op-safe on missing/non-finite input. ADR-4: a hit ceiling ends the
+    // run gracefully — the loop NEVER throws and NEVER calls assertWithinBudget().
+    budget?.chargeTokens(response.usage);
+    budget?.chargeUsd(response.costUsd ?? 0);
+    if (budget?.exceeded()) {
+      logger.warn(`Agentic loop hit budget ceiling on turn ${turn}. Returning partial result.`);
+      return {
+        finalText:
+          finalText ||
+          "Budget ceiling reached before completion. Partial result returned.",
+        turnsUsed: turn,
+        toolsCalled: allToolsCalled,
+        usage: {
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+        },
+        stopReason: "budget_exceeded",
+        ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
+      };
+    }
 
     const turnStopReason = response.stopReason;
 
@@ -345,6 +393,7 @@ export async function runAgenticLoop(
         },
         stopReason: turnStopReason,
         ...(refused ? { refused: true } : {}),
+        ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
       };
     }
 
@@ -425,5 +474,6 @@ export async function runAgenticLoop(
       outputTokens: totalOutputTokens,
     },
     stopReason: "max_turns_exceeded",
+    ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
   };
 }

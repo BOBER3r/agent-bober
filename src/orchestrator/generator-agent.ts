@@ -7,6 +7,7 @@ import { resolveModel } from "./model-resolver.js";
 import { assembleSystemPrompt } from "./agent-loader.js";
 import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js";
 import { runAgenticLoop } from "./agentic-loop.js";
+import { budgetFromMaxUsd } from "./workflow/budget.js";
 import { PreflightContextInjector } from "../graph/preflight-injector.js";
 import { graphPipelineLifecycle } from "../graph/pipeline-lifecycle.js";
 import { emit } from "../telemetry/emit.js";
@@ -24,6 +25,8 @@ export interface GeneratorResult {
   toolsCalled?: string[];
   /** Token usage. */
   usage?: { inputTokens: number; outputTokens: number };
+  /** Cumulative USD cost for this generation run, when known. Absent otherwise. */
+  costUsd?: number;
 }
 
 // ── Main ───────────────────────────────────────────────────────────
@@ -51,6 +54,8 @@ export async function runGenerator(
 
   const model = resolveModel(config.generator.model);
   const maxTurns = config.generator.maxTurnsPerSprint;
+  const effort = config.generator.effort;
+  const budget = budgetFromMaxUsd(config.generator.budget?.maxUsd);
 
   // Build tool set (generator gets full access — UNION mode when gated:
   // all original tools retained AND graph_* tools added).
@@ -121,6 +126,8 @@ When you are done, your final response must contain ONLY a JSON object with this
     toolHandlers: toolSet.handlers,
     maxTurns,
     maxTokens: 16384,
+    ...(effort !== undefined ? { effort } : {}),
+    ...(budget !== undefined ? { budget } : {}),
     onToolUse: (name, input) => {
       const inp = input as Record<string, unknown>;
       if (name === "write_file" || name === "edit_file") {
@@ -189,6 +196,8 @@ export function parseGeneratorResult(
     usage: { inputTokens: number; outputTokens: number };
     /** Set by runAgenticLoop when the provider refused (ADR-5). */
     refused?: boolean;
+    /** Set by runAgenticLoop when at least one turn reported a cost. */
+    costUsd?: number;
   },
 ): GeneratorResult {
   // Fail closed on a refusal BEFORE any JSON parsing or the filesWritten
@@ -202,6 +211,7 @@ export function parseGeneratorResult(
       turnsUsed: loopResult.turnsUsed,
       toolsCalled: loopResult.toolsCalled,
       usage: loopResult.usage,
+      ...(loopResult.costUsd !== undefined ? { costUsd: loopResult.costUsd } : {}),
     };
   }
 
@@ -275,6 +285,7 @@ export function parseGeneratorResult(
       turnsUsed: loopResult.turnsUsed,
       toolsCalled: loopResult.toolsCalled,
       usage: loopResult.usage,
+      ...(loopResult.costUsd !== undefined ? { costUsd: loopResult.costUsd } : {}),
     };
   }
 
@@ -287,6 +298,7 @@ export function parseGeneratorResult(
       turnsUsed: loopResult.turnsUsed,
       toolsCalled: loopResult.toolsCalled,
       usage: loopResult.usage,
+      ...(loopResult.costUsd !== undefined ? { costUsd: loopResult.costUsd } : {}),
     };
   }
 
@@ -297,5 +309,6 @@ export function parseGeneratorResult(
     turnsUsed: loopResult.turnsUsed,
     toolsCalled: loopResult.toolsCalled,
     usage: loopResult.usage,
+    ...(loopResult.costUsd !== undefined ? { costUsd: loopResult.costUsd } : {}),
   };
 }

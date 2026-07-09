@@ -308,3 +308,34 @@ describe("C4: crash-safe rotation", () => {
     }
   });
 });
+
+// ── sc-3-5: sprint-passed history events additively carry costUsd ─────────
+
+describe("sc-3-5: sprint-passed history round-trip — additive costUsd", () => {
+  it("round-trips a sprint-passed entry whose details include costUsd", async () => {
+    await appendHistory(tmpDir, {
+      timestamp: new Date().toISOString(),
+      event: "sprint-passed",
+      phase: "complete",
+      sprintId: "s1",
+      details: { iteration: 1, feedback: "ok", costUsd: 0.42 },
+    });
+
+    const [entry] = await loadHistory(tmpDir);
+    expect(Object.hasOwn(entry.details, "costUsd")).toBe(true);
+    expect(entry.details.costUsd).toBe(0.42);
+  });
+
+  it("round-trips a sprint-passed entry whose details omit costUsd (byte-identical, no key)", async () => {
+    await appendHistory(tmpDir, {
+      timestamp: new Date().toISOString(),
+      event: "sprint-passed",
+      phase: "complete",
+      sprintId: "s2",
+      details: { iteration: 1, feedback: "ok" },
+    });
+
+    const [entry] = await loadHistory(tmpDir);
+    expect(Object.hasOwn(entry.details, "costUsd")).toBe(false);
+  });
+});

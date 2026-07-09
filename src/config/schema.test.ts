@@ -8,6 +8,11 @@ import {
   FleetSectionSchema,
   VaultSectionSchema,
   VaultObsidianSchema,
+  EffortSchema,
+  BudgetSectionSchema,
+  GeneratorSectionSchema,
+  PlannerSectionSchema,
+  CuratorSectionSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -231,6 +236,160 @@ describe("FleetSectionSchema — standalone validation (sc-2-3)", () => {
         maxRounds: 1.5,
       }),
     ).toThrow();
+  });
+});
+
+// ── EffortSchema / BudgetSectionSchema (sc-3-1) ───────────────────────
+
+describe("EffortSchema / BudgetSectionSchema — standalone (sc-3-1)", () => {
+  it.each(["low", "medium", "high", "xhigh", "max"])("accepts effort value %s", (value) => {
+    expect(EffortSchema.parse(value)).toBe(value);
+  });
+
+  it("rejects an unknown effort string", () => {
+    expect(EffortSchema.safeParse("bogus").success).toBe(false);
+  });
+
+  it("accepts a positive budget.maxUsd", () => {
+    expect(BudgetSectionSchema.parse({ maxUsd: 5 }).maxUsd).toBe(5);
+  });
+
+  it("accepts budget.maxUsd: null", () => {
+    expect(BudgetSectionSchema.parse({ maxUsd: null }).maxUsd).toBeNull();
+  });
+
+  it("accepts an empty budget object (maxUsd omitted)", () => {
+    expect(BudgetSectionSchema.parse({}).maxUsd).toBeUndefined();
+  });
+
+  it("rejects a non-positive budget.maxUsd (-1)", () => {
+    expect(BudgetSectionSchema.safeParse({ maxUsd: -1 }).success).toBe(false);
+  });
+
+  it("rejects a zero budget.maxUsd", () => {
+    expect(BudgetSectionSchema.safeParse({ maxUsd: 0 }).success).toBe(false);
+  });
+});
+
+describe("Per-role sections — optional effort/budget fields (sc-3-1)", () => {
+  it("GeneratorSectionSchema: effort/budget undefined when omitted (no defaults injected)", () => {
+    const parsed = GeneratorSectionSchema.parse({});
+    expect(parsed.effort).toBeUndefined();
+    expect(parsed.budget).toBeUndefined();
+  });
+
+  it("GeneratorSectionSchema: accepts effort + budget.maxUsd", () => {
+    const parsed = GeneratorSectionSchema.parse({ effort: "high", budget: { maxUsd: 5 } });
+    expect(parsed.effort).toBe("high");
+    expect(parsed.budget?.maxUsd).toBe(5);
+  });
+
+  it("GeneratorSectionSchema: rejects a bogus effort value", () => {
+    expect(GeneratorSectionSchema.safeParse({ effort: "bogus" }).success).toBe(false);
+  });
+
+  it("GeneratorSectionSchema: rejects a negative budget.maxUsd", () => {
+    expect(
+      GeneratorSectionSchema.safeParse({ budget: { maxUsd: -1 } }).success,
+    ).toBe(false);
+  });
+
+  it("PlannerSectionSchema: effort/budget undefined when omitted", () => {
+    const parsed = PlannerSectionSchema.parse({});
+    expect(parsed.effort).toBeUndefined();
+    expect(parsed.budget).toBeUndefined();
+  });
+
+  it("PlannerSectionSchema: accepts effort + budget.maxUsd: null", () => {
+    const parsed = PlannerSectionSchema.parse({ effort: "xhigh", budget: { maxUsd: null } });
+    expect(parsed.effort).toBe("xhigh");
+    expect(parsed.budget?.maxUsd).toBeNull();
+  });
+
+  it("CuratorSectionSchema: effort/budget undefined when omitted", () => {
+    const parsed = CuratorSectionSchema.parse({});
+    expect(parsed.effort).toBeUndefined();
+    expect(parsed.budget).toBeUndefined();
+  });
+
+  it("EvaluatorSectionSchema: effort/budget undefined when omitted", () => {
+    const parsed = EvaluatorSectionSchema.parse({ strategies: [] });
+    expect(parsed.effort).toBeUndefined();
+    expect(parsed.budget).toBeUndefined();
+  });
+
+  it("EvaluatorSectionSchema: accepts effort + budget.maxUsd", () => {
+    const parsed = EvaluatorSectionSchema.parse({
+      strategies: [],
+      effort: "max",
+      budget: { maxUsd: 12.5 },
+    });
+    expect(parsed.effort).toBe("max");
+    expect(parsed.budget?.maxUsd).toBe(12.5);
+  });
+});
+
+describe("BoberConfigSchema — every existing fixture parses unchanged with effort/budget added (sc-3-1)", () => {
+  const minimalBase = {
+    project: { name: "test-project", mode: "greenfield" },
+    planner: {},
+    generator: {},
+    evaluator: { strategies: [] },
+    sprint: {},
+    pipeline: {},
+    commands: {},
+  };
+
+  it("parses the minimal fixture unchanged — no effort/budget defaults injected", () => {
+    const result = BoberConfigSchema.safeParse(minimalBase);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.generator.effort).toBeUndefined();
+      expect(result.data.generator.budget).toBeUndefined();
+      expect(result.data.planner.effort).toBeUndefined();
+      expect(result.data.planner.budget).toBeUndefined();
+      expect(result.data.evaluator.effort).toBeUndefined();
+      expect(result.data.evaluator.budget).toBeUndefined();
+    }
+  });
+
+  it("parses a config with generator.effort + generator.budget.maxUsd set", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      generator: { effort: "high", budget: { maxUsd: 5 } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.generator.effort).toBe("high");
+      expect(result.data.generator.budget?.maxUsd).toBe(5);
+    }
+  });
+
+  it("rejects an invalid generator.effort value", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      generator: { effort: "bogus" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a negative generator.budget.maxUsd", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      generator: { budget: { maxUsd: -1 } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts generator.budget.maxUsd: null", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      generator: { budget: { maxUsd: null } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.generator.budget?.maxUsd).toBeNull();
+    }
   });
 });
 

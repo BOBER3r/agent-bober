@@ -137,3 +137,14 @@ export class Budget {
     }
   }
 }
+
+/**
+ * Construct a USD-only {@link Budget} from a role section's `budget.maxUsd`
+ * config value, or `undefined` when unset (Sprint 3 — agent-loop capability
+ * port). Shared helper so role entry points (generator, and future
+ * curator/evaluator/planner wiring) can adopt the same absent-means-no-budget
+ * convention without duplicating the `!= null` check.
+ */
+export function budgetFromMaxUsd(maxUsd: number | null | undefined): Budget | undefined {
+  return maxUsd != null ? new Budget({ maxUsd }) : undefined;
+}

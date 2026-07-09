@@ -446,7 +446,13 @@ export async function runSprintCycle(
         event: "sprint-passed",
         phase: "complete",
         sprintId: currentContract.contractId,
-        details: { iteration, feedback: evaluation.summary },
+        details: {
+          iteration,
+          feedback: evaluation.summary,
+          ...(lastGeneratorResult?.costUsd !== undefined
+            ? { costUsd: lastGeneratorResult.costUsd }
+            : {}),
+        },
       });
       // Sprint 28 — telemetry (fire-and-forget, never throws to pipeline)
       void emit(projectRoot, config, "sprint-pass", {
