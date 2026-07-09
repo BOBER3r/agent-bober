@@ -1,7 +1,7 @@
 /** AppleHealthAdapter — SAX streaming import of Apple Health export.xml (Phase 6, Sprint 5). */
 import { createReadStream } from "node:fs";
 import type { Readable } from "node:stream";
-import * as sax from "sax";
+import sax from "sax";
 import type {
   HealthObservation,
   IngestionAdapter,
