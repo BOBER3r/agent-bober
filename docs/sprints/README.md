@@ -1967,7 +1967,24 @@ session returns a typed `{ error }` and never silently starts an empty session. 
 layer from the run-scoped chat **`/resume`** (`src/chat/conversation-store.ts`, `.bober/chat/`) and
 do-bridge's spawned-run `sessionId` — different concepts, kept namewise distinct. **No pipeline role
 auto-enables sessions** (programmatic surface only, no config schema), omitting `session` writes
-nothing and is **byte-identical**, and transcript compaction/dedup is deferred to sprint 7.
+nothing and is **byte-identical**. Sprint 7 — the next extension — adds **opt-in in-context
+auto-compaction** so a long tool-using run stays inside the model's context window **without** the
+coarse cross-sprint handoff reset: `AgenticLoopParams` gains
+`compaction?: { maxContextTokens; keepRecentTurns?; instructions? }`, and when a `tool_use` turn's
+**per-request** `response.usage.inputTokens` crosses `maxContextTokens`, the loop makes **one** extra
+`client.chat` summarization call (new pure `src/orchestrator/compaction.ts#summarizeMessages` — no
+`tools`, bounded `maxTokens`, dedicated summary prompt) over the older ("head") messages, splices that
+head **in place** into a single `[Conversation summary] ...` message while keeping the last
+`keepRecentTurns * 2` (default 4) messages **verbatim**, charges the extra call's usage/cost to both
+`Budget` and the `AgenticLoopResult` totals, and emits the now-implemented `compact-boundary`
+`LoopEvent` (`{ messagesBefore, messagesAfter, inputTokensAtTrigger }`; only `text-delta` stays reserved).
+A failed summarization call **fails open** (logged, skipped for that turn, run continues uncompacted, no
+message dropped without a summary). The trigger is the **per-request** prompt size (a shrunken prompt
+naturally resets it — anti-thrash), and compaction only ever mutates `messages` — the system prompt and
+the turn's in-flight tool exchange are structurally excluded. This is a **distinct, unrelated layer**
+from the sprint-boundary `summarizeOlderSprints` / `contextReset` handoff compaction
+(`src/orchestrator/context-handoff.ts`), which is **untouched**. Programmatic-only (no config schema),
+**no pipeline role auto-enables it**, and omitting `compaction` is **byte-identical**.
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -1977,6 +1994,7 @@ nothing and is **byte-identical**, and transcript compaction/dedup is deferred t
 | 4 | [sprint-spec-20260709-agent-loop-capability-port-4.md](./sprint-spec-20260709-agent-loop-capability-port-4.md) | Parallel read-only tool execution: optional `ToolDef.readOnly` annotation (ADR-2 — exactly `read_file`/`glob`/`grep`, `bash` never; absent ⇒ serial); new `src/orchestrator/tools/executor.ts#executeToolBatch` runs maximal contiguous read-only runs concurrently via `Promise.all` (order preserved by original index, per-tool errors stay in-slot, never rejects) mirroring the serial block's three result shapes byte-for-byte; the loop delegates its per-tool block to it, gated by an optional generator-only `parallelReadOnlyTools` Zod flag (no default). Byte-identical serial fallback when off/absent, no new dep. **Completes the four architecture-backed sprints.** |
 | 5 | [sprint-spec-20260709-agent-loop-capability-port-5.md](./sprint-spec-20260709-agent-loop-capability-port-5.md) | Structured loop event stream + host-style hooks (first **extension**): new types-only `src/orchestrator/loop-events.ts` (`LoopEvent` union — `init`/`turn-start`/`tool-start`/`tool-end`/`turn-end`/`result`, `compact-boundary`+`text-delta` reserved by comment; `LoopHooks` `preToolUse`/`postToolUse`/`onStop`); `AgenticLoopParams` gains optional `onEvent` + `hooks`; a single `finish()` helper routes all four return paths so `result`+`onStop` fire exactly once per stop path; tool events + veto thread through the sprint-4 executor. `preToolUse` denial → `isError` rejection, loop continues; observe hooks caught-and-logged on throw; throwing `preToolUse` = fail-closed deny. **Programmatic-only** (no config schema), `onToolUse`/`onTurnComplete` untouched, byte-identical when absent, no new dep. |
 | 6 | [sprint-spec-20260709-agent-loop-capability-port-6.md](./sprint-spec-20260709-agent-loop-capability-port-6.md) | Opt-in loop **session persistence, resume & fork** (extension): new `src/orchestrator/session-store.ts` (`SessionRecord` Zod schema + authored `MessageSchema` mirror; `SessionStore` `save`/`load`/`fork`/`path` over `.bober/sessions/<id>.json`, mirroring `job-store.ts` — `safeParse` both ways, `null`-on-corrupt never-throw, injected clock, deterministic `sessionForkId`). `AgenticLoopParams` gains `session?`/`initialMessages?`; the loop saves the full `Message[]` + metadata after **every** turn (crash-resumable, includes the completion turn's final assistant text) via a no-op-when-absent `persistSession()`. Exported `resumeSession` (typed `{ error }` on missing/corrupt — never silently empty) + `forkSession` (original byte-untouched); barrel exports in `src/index.ts`. **No pipeline role auto-enables it**; distinct layer from chat `/resume` and do-bridge `sessionId`. Byte-identical when absent, no new dep. Compaction deferred to sprint 7. |
+| 7 | [sprint-spec-20260709-agent-loop-capability-port-7.md](./sprint-spec-20260709-agent-loop-capability-port-7.md) | Opt-in **in-context auto-compaction** (extension): new pure `src/orchestrator/compaction.ts#summarizeMessages` (one no-`tools`, bounded-`maxTokens` `client.chat` over a flattened head transcript, dedicated summary prompt, returns `CompactionOutcome`, **fails open → `undefined`**). `AgenticLoopParams` gains `compaction?: { maxContextTokens; keepRecentTurns?; instructions? }`; when a `tool_use` turn's **per-request** `response.usage.inputTokens` crosses the threshold, the loop splices the head **in place** into one `[Conversation summary]` message (keeping the last `keepRecentTurns*2`, default 4, **verbatim**), charges the extra call to `Budget` + result totals, and emits the now-implemented `compact-boundary` `LoopEvent` (`{ messagesBefore, messagesAfter, inputTokensAtTrigger }`). Summarizer failure fails open (uncompacted, never drops a message). **Distinct from the sprint-boundary `summarizeOlderSprints`/`contextReset` handoff layer** (untouched). Programmatic-only, no config schema, no role auto-enables it; byte-identical when absent, no new dep. |
 
 Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, for
 the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, and for the generator-only
