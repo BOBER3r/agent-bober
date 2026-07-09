@@ -1929,13 +1929,21 @@ ADR-5), and makes `parseGeneratorResult` **fail closed** — a refusal after par
 **cost substrate** (dormant until Sprint 3): a pure `estimateCostUsd` + dated static price table, an
 optional `ChatResponse.costUsd` on every adapter (`claude-code` passes through its real
 `total_cost_usd`; others estimate), and the additive `Budget.maxUsd` ceiling with
-`BudgetExceededError` kind `"usd"` (ADR-4). Later sprints wire the ceiling into the loop and add
-per-role effort and parallel read-only tool execution.
+`BudgetExceededError` kind `"usd"` (ADR-4). Sprint 3 **wires that ceiling into the loop** and adds a
+per-role **reasoning effort** knob: the `planner`/`curator`/`generator`/`evaluator` config sections
+gain optional `effort` (`low|medium|high|xhigh|max`) and `budget.maxUsd` fields; `runAgenticLoop`
+forwards `effort` (spread like `maxTokens`), charges an optional `Budget` per turn, and on a hit
+ceiling returns a graceful partial result with `stopReason "budget_exceeded"` — never throwing
+(ADR-4). `AgenticLoopResult` gains a cumulative optional `costUsd` that the generator surfaces and
+the pipeline persists onto the `sprint-passed` history event. Omitting both keys stays byte-identical
+end-to-end. A later sprint adds parallel read-only tool execution.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260709-agent-loop-capability-port-1.md](./sprint-spec-20260709-agent-loop-capability-port-1.md) | Refusal detection end-to-end: `StopReason "refusal"` in the Anthropic + OpenAI-family adapters, optional `refused: true` on `AgenticLoopResult` (non-throwing, spread-conditional), fail-closed `parseGeneratorResult` guard (`success: false` before the `filesWritten` shortcut); byte-identical non-refusal path, no new dep. |
 | 2 | [sprint-spec-20260709-agent-loop-capability-port-2.md](./sprint-spec-20260709-agent-loop-capability-port-2.md) | Cost substrate (dormant): pure `estimateCostUsd` + dated static `PRICE_TABLE` (longest-prefix match, unknown → `undefined`); optional `ChatResponse.costUsd` on every adapter (`claude-code` real `total_cost_usd` passthrough per ADR-3, others estimate; `costProvider` discriminator prices DeepSeek/Grok via compat rows); additive `Budget.maxUsd` axis with `BudgetExceededError` kind `"usd"`. Byte-identical when absent, no new dep. |
+| 3 | [sprint-spec-20260709-agent-loop-capability-port-3.md](./sprint-spec-20260709-agent-loop-capability-port-3.md) | Loop wiring: per-role `effort` + `budget.maxUsd` config on all four role sections (`EffortSchema`/`BudgetSectionSchema`, no defaults injected); `runAgenticLoop` forwards `effort`, charges `Budget` per turn, and returns a graceful `stopReason "budget_exceeded"` partial result (never throws — ADR-4); cumulative optional `AgenticLoopResult.costUsd` surfaced on `GeneratorResult` and persisted onto the `sprint-passed` history event; generator wired via the shared `budgetFromMaxUsd` helper. Byte-identical when both keys absent, no new dep. |
 
-Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics lives
-in [`docs/providers.md`](../providers.md).
+Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, and
+for the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, lives in
+[`docs/providers.md`](../providers.md).

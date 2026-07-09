@@ -81,8 +81,47 @@ one); an unknown or unpriced model resolves to **absent** rather than a guessed 
 spend.
 
 This field is substrate for the `Budget` USD ceiling (`Budget.maxUsd` /
-`BudgetExceededError` kind `"usd"`, `src/orchestrator/workflow/budget.ts`); nothing charges it into a
-budget yet (a later sprint wires it into the agentic loop).
+`BudgetExceededError` kind `"usd"`, `src/orchestrator/workflow/budget.ts`). The agentic loop **now
+charges it per turn** — see [Per-role reasoning effort & USD budget ceiling](#per-role-reasoning-effort--usd-budget-ceiling)
+below for the config that turns it on.
+
+### Per-role reasoning effort & USD budget ceiling
+
+Each per-role config section (`planner`, `curator`, `generator`, `evaluator`) accepts two
+**optional, additive** fields on top of `provider` / `model` / `providerConfig`:
+
+```jsonc
+// bober.config.json — optional per-role effort + budget ceiling
+{
+  "generator": {
+    "provider": "anthropic",
+    "model": "sonnet",
+    "effort": "high",            // low | medium | high | xhigh | max
+    "budget": { "maxUsd": 5 }    // per-run USD ceiling; null/omitted = uncapped
+  }
+}
+```
+
+- **`effort`** — one of `low | medium | high | xhigh | max`. Forwarded into the request as
+  `ChatParams.effort`, which the **Anthropic** adapter renders as `output_config.effort`.
+  **Non-Anthropic adapters never carry it on the wire** — the field is inert for
+  `openai` / `openai-compat` / `claude-code`.
+- **`budget: { maxUsd }`** — a positive number, or `null` / omitted for **uncapped** (the default).
+  The loop constructs a `Budget` from this value and **charges it once per turn** (tokens +
+  `costUsd`, fed by the per-request cost above). When the ceiling is crossed, the run ends
+  **gracefully at the next turn boundary** with `stopReason: "budget_exceeded"` and returns the
+  partial result so far — the loop **never throws** `BudgetExceededError` (ADR-4), and the ceiling
+  fires **between** turns, not mid-turn.
+
+Both fields are **default-absent**: omit them and config parsing, the request payload, and the loop
+invocation are all **byte-identical** to before (no defaults are injected). Per-run cost, when known,
+is summed onto the loop result and surfaces as an **optional `costUsd`** on the generator result and
+on the `sprint-passed` event in `.bober/history.jsonl` (absent when no cost was reported).
+
+> **Wiring status.** The **generator** role reads `effort` / `budget.maxUsd` from config today. The
+> other three sections accept the fields but do not yet wire them into their loop calls; the shared
+> `budgetFromMaxUsd` helper (`src/orchestrator/workflow/budget.ts`) is the adoption point when they
+> are. This repo's own `bober.config.json` sets neither field.
 
 ---
 
