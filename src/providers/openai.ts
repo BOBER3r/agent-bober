@@ -397,6 +397,9 @@ export class OpenAIAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // this adapter always uses the non-streaming completions endpoint, so
+    // there is nothing extra on the wire (documented no-op).
     const { model, system, messages, tools, maxTokens = 16384, responseSchema, jsonObjectMode } = params;
 
     const client = await this.getClient();

@@ -75,6 +75,14 @@ export interface AgenticLoopParams {
   /** The nudge text appended when `completionCheck` fails. A sensible default is used if omitted. */
   nudgeMessage?: string;
   /**
+   * Optional streaming text callback (sprint 8). Threaded into every chat call
+   * as ChatParams.onTextDelta; the Anthropic adapter invokes it per text delta.
+   * When onEvent is ALSO present, each delta additionally emits a
+   * { type:"text-delta", turn, delta } LoopEvent. Absent (and no onEvent) => no
+   * onTextDelta reaches chat, the adapter uses non-streaming create, byte-identical.
+   */
+  onTextDelta?: (delta: string) => void;
+  /**
    * Optional structured event stream (agent-loop-capability-port sprint 5).
    * Emits a typed `LoopEvent` at each natural loop point (init, turn-start,
    * tool-start/tool-end, turn-end, result) — a pure host-side observation
@@ -337,6 +345,7 @@ export async function runAgenticLoop(
     completionCheck,
     maxNudges = 2,
     nudgeMessage,
+    onTextDelta,
     onEvent,
     hooks,
     session,
@@ -421,6 +430,20 @@ export async function runAgenticLoop(
     logger.debug(`Agentic loop turn ${turn}/${maxTurns}...`);
     safeEmit({ type: "turn-start", turn });
 
+    // Combined per-turn delta callback: emits the text-delta LoopEvent FIRST
+    // (safeEmit self-catches), then the caller's onTextDelta (adapter wraps
+    // this in try/catch), so a throwing caller callback never suppresses the
+    // loop event. Defined INSIDE the loop so it captures the current `turn`.
+    // Left undefined when neither onTextDelta nor onEvent is set, so the
+    // no-callback path never carries an `onTextDelta` key (byte-identical).
+    const emitTextDelta =
+      onTextDelta !== undefined || onEvent !== undefined
+        ? (delta: string): void => {
+            safeEmit({ type: "text-delta", turn, delta });
+            onTextDelta?.(delta);
+          }
+        : undefined;
+
     let response;
     try {
       response = await chatWithRetry(
@@ -432,6 +455,7 @@ export async function runAgenticLoop(
           tools: tools.length > 0 ? tools : undefined,
           maxTokens,
           ...(effort !== undefined ? { effort } : {}),
+          ...(emitTextDelta ? { onTextDelta: emitTextDelta } : {}),
         },
         turn,
       );

@@ -105,6 +105,9 @@ export class ClaudeCodeAdapter implements LLMClient {
   ) {}
 
   async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // the `claude` CLI's text-only boundary stays; this adapter always shells
+    // out and parses the final JSON result (documented no-op).
     const { system, messages, tools, model } = params;
 
     // Hard fail on tools — see SPIKE SCOPE. Silent drop would corrupt the

@@ -1411,3 +1411,134 @@ describe("runAgenticLoop — in-context auto-compaction (sprint 7)", () => {
     expect(neverTriggeredClient.summarizerCalls).toBe(0);
   });
 });
+
+// ── sprint-8: streaming text-delta threading + events ────────────────────
+
+/**
+ * Simulates an adapter that streams: records the `onTextDelta` it received
+ * and invokes it with two deltas before resolving, so the loop's event
+ * emission + caller threading can be asserted end-to-end without a real
+ * network call.
+ */
+class DeltaRecordingClient implements LLMClient {
+  received: Array<((delta: string) => void) | undefined> = [];
+  lastParams?: ChatParams;
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    this.received.push(params.onTextDelta);
+    this.lastParams = params;
+    params.onTextDelta?.("a");
+    params.onTextDelta?.("b");
+    return { ...base, text: "ab", stopReason: "end" };
+  }
+}
+
+describe("runAgenticLoop — streaming text-delta threading (sc-8-4)", () => {
+  it("threads onTextDelta into chat() and emits a text-delta LoopEvent per delta when onEvent is present", async () => {
+    const events: LoopEvent[] = [];
+    const deltas: string[] = [];
+    const client = new DeltaRecordingClient();
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 1,
+      onTextDelta: (d) => deltas.push(d),
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(deltas).toEqual(["a", "b"]);
+    expect(events.filter((e) => e.type === "text-delta")).toEqual([
+      { type: "text-delta", turn: 1, delta: "a" },
+      { type: "text-delta", turn: 1, delta: "b" },
+    ]);
+    expect(result.finalText).toBe("ab");
+  });
+
+  it("threads onTextDelta into chat() even without onEvent (no LoopEvent emitted)", async () => {
+    const deltas: string[] = [];
+    const client = new DeltaRecordingClient();
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 1,
+      onTextDelta: (d) => deltas.push(d),
+    });
+
+    expect(deltas).toEqual(["a", "b"]);
+    expect(client.received[0]).toBeTypeOf("function");
+  });
+
+  it("emits text-delta LoopEvents even when the caller supplies no onTextDelta (onEvent alone is enough)", async () => {
+    const events: LoopEvent[] = [];
+    const client = new DeltaRecordingClient();
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 1,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(events.filter((e) => e.type === "text-delta")).toEqual([
+      { type: "text-delta", turn: 1, delta: "a" },
+      { type: "text-delta", turn: 1, delta: "b" },
+    ]);
+  });
+
+  it("byte-identical guard: with neither onTextDelta nor onEvent, chat() params carry NO onTextDelta key", async () => {
+    const client = new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]);
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 1,
+    });
+
+    expect(Object.hasOwn(client.lastParams as object, "onTextDelta")).toBe(false);
+  });
+
+  it("byte-identical guard: a paired run with vs. without onTextDelta/onEvent produces a deep-equal AgenticLoopResult", async () => {
+    const handlers = () => new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const withStreaming = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+      onTextDelta: () => {},
+      onEvent: () => {},
+    });
+
+    const withoutStreaming = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+    });
+
+    expect(withStreaming).toEqual(withoutStreaming);
+  });
+});

@@ -324,6 +324,9 @@ export class GoogleAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // this adapter always uses the non-streaming generateContent call, so
+    // there is nothing extra on the wire (documented no-op).
     const {
       model,
       system,

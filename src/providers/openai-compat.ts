@@ -57,6 +57,8 @@ export class OpenAICompatAdapter extends OpenAIAdapter implements LLMClient {
    * unchanged to OpenAIAdapter.
    */
   override async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // delegates to OpenAIAdapter.chat(), which never streams (documented no-op).
     if (params.documents && params.documents.length > 0) {
       throw new Error(
         "OpenAICompatAdapter does not support `documents` (PDF/file inputs): " +

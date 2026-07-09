@@ -23,11 +23,13 @@ import { estimateCostUsd } from "./cost-meter.js";
 
 // Shared mock function: captures the argument passed to messages.create.
 const createMock = vi.fn();
+// Shared mock function: captures the argument passed to messages.stream (sprint 8).
+const streamMock = vi.fn();
 
 // Static default-import mock (hoisted by vitest).
 vi.mock("@anthropic-ai/sdk", () => {
   class FakeAnthropic {
-    messages = { create: createMock };
+    messages = { create: createMock, stream: streamMock };
     constructor(_opts?: unknown) {}
   }
   return { default: FakeAnthropic };
@@ -46,12 +48,49 @@ function fakeResponse() {
   };
 }
 
+/**
+ * Fake `MessageStream` shaped to match the two surfaces the adapter touches:
+ * async-iterable of raw `content_block_delta` events, plus `finalMessage()`.
+ * No network is ever hit.
+ */
+function fakeStream(
+  deltas: string[],
+  finalMsg: {
+    content: unknown[];
+    stop_reason: string;
+    usage: { input_tokens: number; output_tokens: number };
+  },
+) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const text of deltas) {
+        yield { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } };
+      }
+    },
+    finalMessage: async () => finalMsg,
+  };
+}
+
+/** A fake stream whose iteration throws mid-way (sc-8-5 mid-stream error parity). */
+function erroringStream(message: string) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "par" } };
+      throw new Error(message);
+    },
+    finalMessage: async () => {
+      throw new Error(message);
+    },
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────────────
 
 describe("AnthropicAdapter prompt caching", () => {
   beforeEach(() => {
     createMock.mockReset();
     createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReset();
   });
 
   // ── C1: enabled -> system is a content-block array with ephemeral marker ─
@@ -523,5 +562,156 @@ describe("AnthropicAdapter prompt caching", () => {
       usage: { inputTokens: 3, outputTokens: 4 },
     });
     expect(result.costUsd).toBe(expected);
+  });
+});
+
+// ── Streaming text deltas (agent-loop-capability-port sprint 8) ─────────────
+
+describe("AnthropicAdapter streaming (onTextDelta)", () => {
+  beforeEach(() => {
+    createMock.mockReset();
+    streamMock.mockReset();
+  });
+
+  it("sc-8-1: delta join equals final text; streamed response is deep-equal to the non-streaming response", async () => {
+    const finalMsg = {
+      content: [{ type: "text", text: "Hello world" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    };
+    streamMock.mockReturnValue(fakeStream(["Hello", " world"], finalMsg));
+    createMock.mockResolvedValue(finalMsg);
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const seen: string[] = [];
+    const streamed = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: (d) => seen.push(d),
+    } satisfies ChatParams);
+    const plain = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    expect(seen.join("")).toBe(streamed.text);
+    expect(streamed).toEqual(plain);
+  });
+
+  it("sc-8-2: streaming a tool_use response normalizes toolCalls identically to the non-streaming path", async () => {
+    const finalMsg = {
+      content: [
+        { type: "tool_use", id: "t1", name: "search", input: { q: 1 } },
+      ],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 3, output_tokens: 4 },
+    };
+    streamMock.mockReturnValue(fakeStream([], finalMsg));
+    createMock.mockResolvedValue(finalMsg);
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const deltas: string[] = [];
+    const streamed = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: (d) => deltas.push(d),
+    } satisfies ChatParams);
+    const plain = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    // A pure tool_use response yields no text_delta events.
+    expect(deltas).toEqual([]);
+    expect(streamed.toolCalls).toEqual([{ id: "t1", name: "search", input: { q: 1 } }]);
+    expect(streamed).toEqual(plain);
+  });
+
+  it("sc-8-4 spy: with no onTextDelta, the adapter uses create() and never calls stream()", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it("with onTextDelta set, the adapter uses stream() and never calls create()", async () => {
+    const finalMsg = fakeResponse();
+    streamMock.mockReturnValue(fakeStream(["ok"], finalMsg));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {},
+    } satisfies ChatParams);
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("a throwing onTextDelta consumer does not kill the request; the call still resolves normally", async () => {
+    const finalMsg = fakeResponse();
+    streamMock.mockReturnValue(fakeStream(["ok"], finalMsg));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {
+        throw new Error("boom");
+      },
+    } satisfies ChatParams);
+
+    expect(result.text).toBe("ok");
+    expect(result.stopReason).toBe("end");
+  });
+
+  it("sc-8-5: a mid-stream error propagates as a rejection (not swallowed)", async () => {
+    streamMock.mockReturnValue(erroringStream("overloaded_error"));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await expect(
+      adapter.chat({
+        model: "claude-x",
+        system: "S",
+        messages: [{ role: "user", content: "hi" }],
+        onTextDelta: () => {},
+      } satisfies ChatParams),
+    ).rejects.toThrow("overloaded_error");
+  });
+
+  it("requestBody sent to stream() is identical in shape to the one sent to create()", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+    } satisfies ChatParams);
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+      onTextDelta: () => {},
+    } satisfies ChatParams);
+
+    expect(streamMock.mock.calls[0][0]).toEqual(createMock.mock.calls[0][0]);
   });
 });

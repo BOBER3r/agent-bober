@@ -206,6 +206,16 @@ export interface ChatParams {
    * behaviour.
    */
   documents?: { base64: string; mediaType: string }[];
+  /**
+   * Optional streaming callback. When set, adapters that support server-sent
+   * streaming (currently ONLY the Anthropic adapter) invoke it once per text
+   * delta as the response is generated; the concatenation of all deltas equals
+   * the final ChatResponse.text. This is a pure provider-agnostic own type —
+   * adapters MAY ignore it (openai/openai-compat/google/claude-code do; they
+   * return the identical non-streamed ChatResponse and put nothing extra on the
+   * wire). A throwing callback must never kill the request (adapter wraps it).
+   */
+  onTextDelta?: (delta: string) => void;
 }
 
 /**

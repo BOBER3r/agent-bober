@@ -14,6 +14,57 @@ import { estimateCostUsd } from "./cost-meter.js";
 // ── Conversion helpers ──────────────────────────────────────────────
 
 /**
+ * Normalize an Anthropic `Message` (from either `messages.create()` or a
+ * stream's `finalMessage()` — same shape, see anthropic.ts's streaming
+ * branch) into a `ChatResponse`. Extracted (agent-loop-capability-port
+ * sprint 8) so the non-streaming and streaming request paths produce
+ * byte-identical output — do NOT duplicate this logic inline elsewhere.
+ */
+function normalizeResponse(
+  response: Anthropic.Messages.Message,
+  model: string,
+  structured: boolean,
+): ChatResponse {
+  const { text, toolCalls } = normalizeContent(response.content);
+
+  const usage = {
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
+
+  // Estimated USD cost (undefined when the model isn't in the static price
+  // table). Computed once and spread into both return sites below so the
+  // key is ABSENT — not `costUsd: undefined` — when unpriced (sc-2-3).
+  const costUsd = estimateCostUsd({ provider: "anthropic", model, usage });
+
+  // ── Structured output normalisation ─────────────────────────────
+  // Take the forced tool call's input, stringify it into text, and return
+  // empty toolCalls with a clean "end" stop reason. If the forced tool call
+  // is somehow absent, fall back to the normal normalized result so the
+  // caller's coerce/repair can still try.
+  if (structured) {
+    const forced = toolCalls.find((tc) => tc.name === "structured_output");
+    if (forced !== undefined) {
+      return {
+        text: JSON.stringify(forced.input),
+        toolCalls: [],
+        stopReason: "end",
+        usage,
+        ...(costUsd !== undefined ? { costUsd } : {}),
+      };
+    }
+  }
+
+  return {
+    text,
+    toolCalls,
+    stopReason: normalizeStopReason(response.stop_reason),
+    usage,
+    ...(costUsd !== undefined ? { costUsd } : {}),
+  };
+}
+
+/**
  * Convert a provider-agnostic ToolDef to Anthropic's Tool format.
  *
  * ToolDef.input_schema maps directly to Anthropic's input_schema field,
@@ -306,7 +357,10 @@ export class AnthropicAdapter implements LLMClient {
       ? attachMessageBreakpoints(anthropicMessages)
       : anthropicMessages;
 
-    const response = await this.client.messages.create({
+    // Built ONCE so both the non-streaming create() call and the streaming
+    // stream() call (sprint 8) send an identical payload — no `stream` key
+    // needed; `.stream()` is the accumulating helper, not a flag on create().
+    const requestBody = {
       model,
       max_tokens: maxTokens,
       system: cachedSystem,
@@ -321,44 +375,31 @@ export class AnthropicAdapter implements LLMClient {
             },
           }
         : {}),
-    });
-
-    const { text, toolCalls } = normalizeContent(response.content);
-
-    const usage = {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
     };
 
-    // Estimated USD cost (undefined when the model isn't in the static price
-    // table). Computed once and spread into both return sites below so the
-    // key is ABSENT — not `costUsd: undefined` — when unpriced (sc-2-3).
-    const costUsd = estimateCostUsd({ provider: "anthropic", model, usage });
-
-    // ── Structured output normalisation ─────────────────────────────
-    // Take the forced tool call's input, stringify it into text, and return
-    // empty toolCalls with a clean "end" stop reason. If the forced tool call
-    // is somehow absent, fall back to the normal normalized result so the
-    // caller's coerce/repair can still try.
-    if (structured) {
-      const forced = toolCalls.find((tc) => tc.name === "structured_output");
-      if (forced !== undefined) {
-        return {
-          text: JSON.stringify(forced.input),
-          toolCalls: [],
-          stopReason: "end",
-          usage,
-          ...(costUsd !== undefined ? { costUsd } : {}),
-        };
-      }
+    // NON-STREAM PATH: byte-identical to the pre-sprint-8 behavior when
+    // onTextDelta is absent.
+    if (params.onTextDelta === undefined) {
+      const response = await this.client.messages.create(requestBody);
+      return normalizeResponse(response, model, structured);
     }
 
-    return {
-      text,
-      toolCalls,
-      stopReason: normalizeStopReason(response.stop_reason),
-      usage,
-      ...(costUsd !== undefined ? { costUsd } : {}),
-    };
+    // STREAM PATH: forward each text delta to the caller's callback, then
+    // normalize the SAME way from the stream's final accumulated message.
+    const stream = this.client.messages.stream(requestBody);
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        try {
+          params.onTextDelta(event.delta.text);
+        } catch {
+          // A throwing consumer must NOT kill the request.
+        }
+      }
+    }
+    // Let errors from iteration/finalMessage() propagate uncaught so
+    // chatWithRetry's isTransientError classification applies identically to
+    // a rejecting create() call (sc-8-5) — do not swallow them here.
+    const message = await stream.finalMessage();
+    return normalizeResponse(message, model, structured);
   }
 }

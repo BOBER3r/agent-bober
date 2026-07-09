@@ -27,14 +27,11 @@ export interface LoopToolCallInfo {
  * Host-side observability event stream emitted (in order) via the optional
  * `onEvent` callback on `AgenticLoopParams`. Consuming this stream never
  * changes loop behavior — it is a pure observation channel.
- *
- * `text-delta` (sprint 8) type name is RESERVED via this comment only — do
- * NOT emit it this sprint:
- *   | { type: "text-delta"; turn: number; delta: string }
  */
 export type LoopEvent =
   | { type: "init"; model: string; maxTurns: number }
   | { type: "turn-start"; turn: number }
+  | { type: "text-delta"; turn: number; delta: string }
   | { type: "tool-start"; turn: number; name: string; input: unknown; toolUseId: string }
   | { type: "tool-end"; turn: number; name: string; toolUseId: string; isError: boolean }
   | { type: "turn-end"; turn: number; toolsCalled: string[] }
