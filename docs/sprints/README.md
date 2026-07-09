@@ -1955,7 +1955,19 @@ result (`postToolUse`), and **observe the final result exactly once** across eve
 (`onStop`, via a new single `finish()` helper). Observe hooks are caught-and-logged on throw; a
 throwing `preToolUse` is a **fail-closed deny**. Both are **programmatic-only** `runAgenticLoop`
 params (no config schema), the existing `onToolUse` / `onTurnComplete` callbacks are untouched, and
-omitting both is **byte-identical**.
+omitting both is **byte-identical**. Sprint 6 — the next extension — adds **opt-in loop session
+persistence, resume & fork**: a new `src/orchestrator/session-store.ts` (`SessionStore`, mirroring
+`research/job-store.ts`) persists the loop's provider-agnostic `Message[]` transcript + metadata to
+`.bober/sessions/<sessionId>.json` **after every turn** when `AgenticLoopParams.session` is present
+(crash-resumable, capturing even the completion turn's final assistant text). `resumeSession()` loads
+a transcript as `initialMessages` seeded **ahead of** the new user message so a fresh
+`runAgenticLoop` call continues with full prior context; `forkSession()` copies a transcript to a new
+id so approaches branch **without mutating the original**. Both **fail soft** — a missing or corrupt
+session returns a typed `{ error }` and never silently starts an empty session. This is a distinct
+layer from the run-scoped chat **`/resume`** (`src/chat/conversation-store.ts`, `.bober/chat/`) and
+do-bridge's spawned-run `sessionId` — different concepts, kept namewise distinct. **No pipeline role
+auto-enables sessions** (programmatic surface only, no config schema), omitting `session` writes
+nothing and is **byte-identical**, and transcript compaction/dedup is deferred to sprint 7.
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -1964,6 +1976,7 @@ omitting both is **byte-identical**.
 | 3 | [sprint-spec-20260709-agent-loop-capability-port-3.md](./sprint-spec-20260709-agent-loop-capability-port-3.md) | Loop wiring: per-role `effort` + `budget.maxUsd` config on all four role sections (`EffortSchema`/`BudgetSectionSchema`, no defaults injected); `runAgenticLoop` forwards `effort`, charges `Budget` per turn, and returns a graceful `stopReason "budget_exceeded"` partial result (never throws — ADR-4); cumulative optional `AgenticLoopResult.costUsd` surfaced on `GeneratorResult` and persisted onto the `sprint-passed` history event; generator wired via the shared `budgetFromMaxUsd` helper. Byte-identical when both keys absent, no new dep. |
 | 4 | [sprint-spec-20260709-agent-loop-capability-port-4.md](./sprint-spec-20260709-agent-loop-capability-port-4.md) | Parallel read-only tool execution: optional `ToolDef.readOnly` annotation (ADR-2 — exactly `read_file`/`glob`/`grep`, `bash` never; absent ⇒ serial); new `src/orchestrator/tools/executor.ts#executeToolBatch` runs maximal contiguous read-only runs concurrently via `Promise.all` (order preserved by original index, per-tool errors stay in-slot, never rejects) mirroring the serial block's three result shapes byte-for-byte; the loop delegates its per-tool block to it, gated by an optional generator-only `parallelReadOnlyTools` Zod flag (no default). Byte-identical serial fallback when off/absent, no new dep. **Completes the four architecture-backed sprints.** |
 | 5 | [sprint-spec-20260709-agent-loop-capability-port-5.md](./sprint-spec-20260709-agent-loop-capability-port-5.md) | Structured loop event stream + host-style hooks (first **extension**): new types-only `src/orchestrator/loop-events.ts` (`LoopEvent` union — `init`/`turn-start`/`tool-start`/`tool-end`/`turn-end`/`result`, `compact-boundary`+`text-delta` reserved by comment; `LoopHooks` `preToolUse`/`postToolUse`/`onStop`); `AgenticLoopParams` gains optional `onEvent` + `hooks`; a single `finish()` helper routes all four return paths so `result`+`onStop` fire exactly once per stop path; tool events + veto thread through the sprint-4 executor. `preToolUse` denial → `isError` rejection, loop continues; observe hooks caught-and-logged on throw; throwing `preToolUse` = fail-closed deny. **Programmatic-only** (no config schema), `onToolUse`/`onTurnComplete` untouched, byte-identical when absent, no new dep. |
+| 6 | [sprint-spec-20260709-agent-loop-capability-port-6.md](./sprint-spec-20260709-agent-loop-capability-port-6.md) | Opt-in loop **session persistence, resume & fork** (extension): new `src/orchestrator/session-store.ts` (`SessionRecord` Zod schema + authored `MessageSchema` mirror; `SessionStore` `save`/`load`/`fork`/`path` over `.bober/sessions/<id>.json`, mirroring `job-store.ts` — `safeParse` both ways, `null`-on-corrupt never-throw, injected clock, deterministic `sessionForkId`). `AgenticLoopParams` gains `session?`/`initialMessages?`; the loop saves the full `Message[]` + metadata after **every** turn (crash-resumable, includes the completion turn's final assistant text) via a no-op-when-absent `persistSession()`. Exported `resumeSession` (typed `{ error }` on missing/corrupt — never silently empty) + `forkSession` (original byte-untouched); barrel exports in `src/index.ts`. **No pipeline role auto-enables it**; distinct layer from chat `/resume` and do-bridge `sessionId`. Byte-identical when absent, no new dep. Compaction deferred to sprint 7. |
 
 Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, for
 the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, and for the generator-only

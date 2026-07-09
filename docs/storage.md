@@ -134,6 +134,7 @@ by the fleet head and threaded into each child's config (never re-derived from t
 | Store | Path | Schema / owner |
 |-------|------|----------------|
 | **Research jobs** | `.bober/research/jobs/<jobId>.json` | `ResearchJobSchema` (`src/research/types.ts`), managed by `research/job-store.ts`. See [`./research-scheduler.md`](./research-scheduler.md). |
+| **Loop sessions** | `.bober/sessions/<sessionId>.json` | `SessionRecordSchema` (`src/orchestrator/session-store.ts`), managed by `SessionStore` (same `safeParse`-both-ways / `null`-on-corrupt pattern as `job-store.ts`). The own agentic loop's provider-agnostic `Message[]` transcript + metadata, persisted per turn **only when opt-in** `AgenticLoopParams.session` is set — **no pipeline role auto-enables it**. `resumeSession` / `forkSession` (loop model-context continuity). **Distinct** from the chat `/resume` store (`.bober/chat/`) and do-bridge's `sessionId`. |
 | **Approval markers** | `.bober/` checkpoint marker files (`.pending.json` / `.approved.json` / `.rejected.json`) | `src/state/approval-state.ts`. Written by **both** the `approve` / `reject` CLI **and** the Telegram `/pending` inline buttons — **the same markers**, no separate mechanism. See [`./telegram.md`](./telegram.md). |
 | **History / event log** | `.bober/history.jsonl` (+ `history.archive.jsonl`) | Append-only JSONL, **rotated**: the newest `history.maxActiveLines` (default **2000**) entries stay in `history.jsonl`; older overflow moves to `history.archive.jsonl`. |
 
@@ -217,6 +218,7 @@ config file carries provider *selection*, never secrets.
   memory/<namespace>/facts.db         # namespaced FactStore / fleet blackboard (WAL)
   research/jobs/<jobId>.json          # research job store
   research/digests/<date>.{md,json}   # research digests
+  sessions/<sessionId>.json           # own agentic-loop transcript (opt-in resume/fork)
   fleet-report.json                   # last fleet run summary (always written)
   fleet-synthesis.json                # last blackboard run (Telegram /fleet reads this)
   history.jsonl                       # event log (rotated → history.archive.jsonl)
