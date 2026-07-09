@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { runAgenticLoop, resumeSession, forkSession } from "./agentic-loop.js";
 import { Budget } from "./workflow/budget.js";
 import { SessionStore } from "./session-store.js";
-import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
+import type { LLMClient, ChatParams, ChatResponse, Message } from "../providers/types.js";
 import type { LoopEvent } from "./loop-events.js";
 
 // ── Fake LLMClient ───────────────────────────────────────────────────
@@ -1128,5 +1128,286 @@ describe("runAgenticLoop — session persistence, resume, fork (sprint 6)", () =
       const loaded = await store.load("ghost");
       expect(loaded).toBeNull();
     });
+  });
+});
+
+// ── sprint-7: in-context auto-compaction ──────────────────────────────
+
+const SUMMARY_SYSTEM_PREFIX = "Summarize this conversation preserving";
+
+/**
+ * A client that plays out `toolTurns` tool_use turns (escalating usage per
+ * `turnInputTokens`, indexed 1-based) followed by a final completion turn,
+ * AND separately recognizes + answers the compaction summarizer call by its
+ * distinctive system prompt (never confused with a normal turn call).
+ */
+class CompactionScriptedClient implements LLMClient {
+  chats: ChatParams[] = [];
+  summarizerCalls = 0;
+  private turnCallIdx = 0;
+
+  constructor(
+    private readonly turnInputTokens: number[],
+    private readonly summaryResponse: ChatResponse = {
+      text: "SUMMARY",
+      toolCalls: [],
+      stopReason: "end",
+      usage: { inputTokens: 5, outputTokens: 7 },
+      costUsd: 0.02,
+    },
+    private readonly summarizerImpl?: () => Promise<ChatResponse>,
+  ) {}
+
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    this.chats.push(params);
+    if (params.system.startsWith(SUMMARY_SYSTEM_PREFIX)) {
+      this.summarizerCalls += 1;
+      if (this.summarizerImpl) return this.summarizerImpl();
+      return this.summaryResponse;
+    }
+    this.turnCallIdx += 1;
+    const idx = Math.min(this.turnCallIdx, this.turnInputTokens.length) - 1;
+    const inputTokens = this.turnInputTokens[idx];
+    const isLast = this.turnCallIdx >= this.turnInputTokens.length;
+    if (isLast) {
+      return {
+        text: "all done",
+        toolCalls: [],
+        stopReason: "end",
+        usage: { inputTokens, outputTokens: 1 },
+      };
+    }
+    return {
+      text: "",
+      toolCalls: [{ id: `t${this.turnCallIdx}`, name: "noop", input: {} }],
+      stopReason: "tool_use",
+      usage: { inputTokens, outputTokens: 1 },
+    };
+  }
+}
+
+const COMPACTION_NOOP_TOOL = [
+  { name: "noop", description: "n", input_schema: { type: "object" as const, properties: {} } },
+];
+const compactionHandlers = () => new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+/**
+ * Shared escalating-usage script: 4 small tool_use turns, a 5th tool_use turn
+ * whose inputTokens (100_000) crosses a 50_000 threshold, then a final
+ * completion turn. With the default `keepRecentTurns: 2` (keep = 4 messages),
+ * this puts a non-trivial (5-message) head ahead of the trigger turn's own
+ * (never-compacted, still-pending) exchange — see the per-turn trace below.
+ *
+ * Trace of `messages` (1-indexed turn call order), all tool_use except the
+ * last ("end"): after turn 4, `messages` = [initial, t1-a, t1-r, t2-a, t2-r,
+ * t3-a, t3-r, t4-a, t4-r] (9 entries). Turn 5's response (100_000 tokens)
+ * triggers compaction BEFORE turn 5's own exchange is appended: head =
+ * slice(0, 9-4=5) = [initial, t1-a, t1-r, t2-a, t2-r] (5 msgs, replaced by 1
+ * summary); tail (last 4, preserved verbatim) = [t3-a, t3-r, t4-a, t4-r].
+ * Turn 5's own exchange (t5-a, t5-r) is then appended fresh, so the final
+ * completion turn (turn 6) sees: [summary, t3-a, t3-r, t4-a, t4-r, t5-a, t5-r]
+ * (7 messages).
+ */
+const ESCALATING_SCRIPT = [10, 10, 10, 10, 100_000, 10];
+
+function toolCallMessage(id: string): Message {
+  return { role: "assistant", content: "", toolCalls: [{ id, name: "noop", input: {} }] };
+}
+function toolResultMessage(id: string): Message {
+  return { role: "user", toolResults: [{ toolUseId: id, content: "ok", isError: false }] };
+}
+
+describe("runAgenticLoop — in-context auto-compaction (sprint 7)", () => {
+  it("sc-7-1: crossing maxContextTokens replaces the head with one summary message; recent turns survive verbatim", async () => {
+    const client = new CompactionScriptedClient(ESCALATING_SCRIPT);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+      compaction: { maxContextTokens: 50_000, keepRecentTurns: 2 },
+    });
+
+    expect(client.summarizerCalls).toBe(1);
+    expect(result.stopReason).toBe("end");
+
+    // The final (turn-6) chat call's `messages` reflects the post-compaction
+    // state: exactly one summary message where the 5-message head used to
+    // be, then the preserved turn-3/turn-4 tail, then turn-5's own
+    // (never-compacted, pending-at-trigger-time) exchange.
+    const nonSummarizerChats = client.chats.filter(
+      (c) => !c.system.startsWith(SUMMARY_SYSTEM_PREFIX),
+    );
+    const finalParams = nonSummarizerChats[nonSummarizerChats.length - 1];
+
+    expect(finalParams.messages).toEqual([
+      { role: "user", content: "[Conversation summary] SUMMARY" },
+      toolCallMessage("t3"),
+      toolResultMessage("t3"),
+      toolCallMessage("t4"),
+      toolResultMessage("t4"),
+      toolCallMessage("t5"),
+      toolResultMessage("t5"),
+    ]);
+  });
+
+  it("sc-7-2: emits compact-boundary with the documented payload when onEvent is present, and still compacts without it", async () => {
+    const events: LoopEvent[] = [];
+    const client = new CompactionScriptedClient(ESCALATING_SCRIPT);
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+      compaction: { maxContextTokens: 50_000, keepRecentTurns: 2 },
+      onEvent: (e) => events.push(e),
+    });
+
+    const boundaryEvents = events.filter((e) => e.type === "compact-boundary");
+    expect(boundaryEvents).toHaveLength(1);
+    const boundary = boundaryEvents[0] as Extract<LoopEvent, { type: "compact-boundary" }>;
+    expect(boundary).toEqual({
+      type: "compact-boundary",
+      turn: 5,
+      messagesBefore: 9,
+      messagesAfter: 5,
+      inputTokensAtTrigger: 100_000,
+    });
+
+    // Re-run identically WITHOUT onEvent — compaction must still occur
+    // (verified by message inspection, since there's no event stream now).
+    const clientNoEvent = new CompactionScriptedClient(ESCALATING_SCRIPT);
+    await runAgenticLoop({
+      client: clientNoEvent,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+      compaction: { maxContextTokens: 50_000, keepRecentTurns: 2 },
+    });
+    expect(clientNoEvent.summarizerCalls).toBe(1);
+    const sawSummary = clientNoEvent.chats.some((c) =>
+      c.messages.some((m) => "content" in m && m.content?.startsWith("[Conversation summary]")),
+    );
+    expect(sawSummary).toBe(true);
+  });
+
+  it("sc-7-3: charges the summarizer's usage/costUsd to Budget and to the result totals", async () => {
+    const client = new CompactionScriptedClient(ESCALATING_SCRIPT);
+    const budget = new Budget({ maxUsd: 100 });
+    const chargeTokensSpy = vi.spyOn(budget, "chargeTokens");
+    const chargeUsdSpy = vi.spyOn(budget, "chargeUsd");
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+      budget,
+      compaction: { maxContextTokens: 50_000, keepRecentTurns: 2 },
+    });
+
+    // The summarizer's usage { inputTokens: 5, outputTokens: 7 } and
+    // costUsd: 0.02 must appear among the chargeTokens/chargeUsd calls (in
+    // addition to each normal turn's own charge).
+    expect(
+      chargeTokensSpy.mock.calls.some(
+        ([usage]) => usage.inputTokens === 5 && usage.outputTokens === 7,
+      ),
+    ).toBe(true);
+    expect(chargeUsdSpy.mock.calls.some(([usd]) => usd === 0.02)).toBe(true);
+
+    // Result totals: sum of all 6 turn usages (10+10+10+10+100000+10 in,
+    // 1*6 out) PLUS the summarizer's (5 in, 7 out) and cost (0.02, the only
+    // cost any turn in this script reports).
+    expect(result.usage.inputTokens).toBe(10 + 10 + 10 + 10 + 100_000 + 10 + 5);
+    expect(result.usage.outputTokens).toBe(6 * 1 + 7);
+    expect(result.costUsd).toBe(0.02);
+  });
+
+  it("sc-7-4: a failed summarizer call fails open — no throw, no compaction, run continues uncompacted", async () => {
+    const client = new CompactionScriptedClient(ESCALATING_SCRIPT, undefined, () => {
+      throw new Error("summarizer boom");
+    });
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+      compaction: { maxContextTokens: 50_000, keepRecentTurns: 2 },
+    });
+
+    expect(result.stopReason).toBe("end");
+    expect(client.summarizerCalls).toBe(1); // attempted, but failed
+
+    // No summary message ever appears in any subsequent chat call — every
+    // message the loop ever sent remains a real, non-summary message.
+    const sawSummary = client.chats.some((c) =>
+      c.messages.some((m) => "content" in m && m.content?.includes("[Conversation summary]")),
+    );
+    expect(sawSummary).toBe(false);
+
+    // Nothing was dropped: the final request still carries all 9 messages
+    // that would exist pre-compaction, plus turn 5's own exchange (11 total).
+    const nonSummarizerChats = client.chats.filter(
+      (c) => !c.system.startsWith(SUMMARY_SYSTEM_PREFIX),
+    );
+    const finalParams = nonSummarizerChats[nonSummarizerChats.length - 1];
+    expect(finalParams.messages).toHaveLength(11);
+  });
+
+  it("sc-7-5: without compaction config, no summarizer call is ever made and behavior is byte-identical", async () => {
+    // Same escalating script that WOULD cross 50_000 if `compaction` were
+    // configured — but it is entirely absent here.
+    const bareClient = new CompactionScriptedClient(ESCALATING_SCRIPT);
+    const withoutCompaction = await runAgenticLoop({
+      client: bareClient,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+    });
+
+    expect(bareClient.summarizerCalls).toBe(0);
+    expect(bareClient.chats.every((c) => !c.system.startsWith(SUMMARY_SYSTEM_PREFIX))).toBe(true);
+    expect(bareClient.chats).toHaveLength(6); // one chat per turn, no extra summarizer call
+
+    // A run with `compaction` PRESENT but never triggered (threshold set far
+    // above anything this script reports) must be deep-equal to the run
+    // above — proving the gated code path is genuinely inert when unused,
+    // mirroring the sc-5-5 onEvent/hooks-absent precedent.
+    const neverTriggeredClient = new CompactionScriptedClient(ESCALATING_SCRIPT);
+    const withInertCompaction = await runAgenticLoop({
+      client: neverTriggeredClient,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: COMPACTION_NOOP_TOOL,
+      toolHandlers: compactionHandlers(),
+      maxTurns: 10,
+      compaction: { maxContextTokens: 999_999_999 },
+    });
+
+    expect(withoutCompaction).toEqual(withInertCompaction);
+    expect(neverTriggeredClient.summarizerCalls).toBe(0);
   });
 });

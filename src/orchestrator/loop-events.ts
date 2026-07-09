@@ -28,9 +28,8 @@ export interface LoopToolCallInfo {
  * `onEvent` callback on `AgenticLoopParams`. Consuming this stream never
  * changes loop behavior — it is a pure observation channel.
  *
- * `compact-boundary` (sprint 7) and `text-delta` (sprint 8) type names are
- * RESERVED via this comment only — do NOT emit them this sprint:
- *   | { type: "compact-boundary"; turn: number }
+ * `text-delta` (sprint 8) type name is RESERVED via this comment only — do
+ * NOT emit it this sprint:
  *   | { type: "text-delta"; turn: number; delta: string }
  */
 export type LoopEvent =
@@ -39,6 +38,16 @@ export type LoopEvent =
   | { type: "tool-start"; turn: number; name: string; input: unknown; toolUseId: string }
   | { type: "tool-end"; turn: number; name: string; toolUseId: string; isError: boolean }
   | { type: "turn-end"; turn: number; toolsCalled: string[] }
+  | {
+      type: "compact-boundary";
+      turn: number;
+      /** Message count in the transcript immediately before compaction. */
+      messagesBefore: number;
+      /** Message count immediately after (head replaced by one summary). */
+      messagesAfter: number;
+      /** The per-request `response.usage.inputTokens` that crossed the threshold. */
+      inputTokensAtTrigger: number;
+    }
   | { type: "result"; stopReason: string; turnsUsed: number };
 
 // ── Hooks ──────────────────────────────────────────────────────────

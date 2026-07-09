@@ -17,6 +17,13 @@ describe("LoopEvent", () => {
       { type: "tool-start", turn: 1, name: "read_file", input: { path: "a" }, toolUseId: "t1" },
       { type: "tool-end", turn: 1, name: "read_file", toolUseId: "t1", isError: false },
       { type: "turn-end", turn: 1, toolsCalled: ["read_file"] },
+      {
+        type: "compact-boundary",
+        turn: 1,
+        messagesBefore: 10,
+        messagesAfter: 5,
+        inputTokensAtTrigger: 60000,
+      },
       { type: "result", stopReason: "end", turnsUsed: 1 },
     ];
 
@@ -38,6 +45,11 @@ describe("LoopEvent", () => {
           break;
         case "turn-end":
           expect(event.toolsCalled).toEqual(["read_file"]);
+          break;
+        case "compact-boundary":
+          expect(event.messagesBefore).toBe(10);
+          expect(event.messagesAfter).toBe(5);
+          expect(event.inputTokensAtTrigger).toBe(60000);
           break;
         case "result":
           expect(event.stopReason).toBe("end");

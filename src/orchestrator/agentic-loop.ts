@@ -16,6 +16,7 @@ import type { SessionStore } from "./session-store.js";
 import { sessionForkId } from "./session-store.js";
 import { logger } from "../utils/logger.js";
 import { executeToolBatch } from "./tools/executor.js";
+import { summarizeMessages } from "./compaction.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -105,6 +106,20 @@ export interface AgenticLoopParams {
    * default) is byte-identical to omitting it entirely.
    */
   initialMessages?: Message[];
+  /**
+   * Opt-in in-context auto-compaction (agent-loop-capability-port sprint 7).
+   * When set and a turn's `response.usage.inputTokens` (the PER-REQUEST
+   * prompt size, not a running total — a shrunken prompt naturally resets
+   * this, avoiding thrash) exceeds `maxContextTokens`, the loop summarizes
+   * older messages via ONE extra `client.chat` call, replacing the head with
+   * a single summary message and keeping the last `keepRecentTurns * 2`
+   * messages (default `2 * 2 = 4`) verbatim. The system prompt and the
+   * turn's own pending tool exchange are never touched — compaction only
+   * ever mutates `messages`. A failed summarization call fails open: logged,
+   * skipped for that turn, the run continues uncompacted. Absent (the
+   * default) => never compacts, byte-identical (sc-7-5).
+   */
+  compaction?: { maxContextTokens: number; keepRecentTurns?: number; instructions?: string };
 }
 
 export interface AgenticLoopResult {
@@ -326,6 +341,7 @@ export async function runAgenticLoop(
     hooks,
     session,
     initialMessages,
+    compaction,
   } = params;
 
   // Derived once, from the caller-supplied tool schemas — the loop never
@@ -452,6 +468,59 @@ export async function runAgenticLoop(
     // run gracefully — the loop NEVER throws and NEVER calls assertWithinBudget().
     budget?.chargeTokens(response.usage);
     budget?.chargeUsd(response.costUsd ?? 0);
+
+    // In-context auto-compaction (agent-loop-capability-port sprint 7). Trigger
+    // on the PER-REQUEST prompt size (response.usage.inputTokens), never the
+    // running total — a shrunken prompt then naturally resets the trigger
+    // (anti-thrash). Only worth doing when the loop will make another request
+    // (tool_use); the final completion turn never pays for a useless summary.
+    // Placed BEFORE the exceeded() gate below so the summarizer's own charge is
+    // caught by the SAME post-turn budget check, with no new exit path.
+    if (
+      compaction &&
+      response.stopReason === "tool_use" &&
+      response.usage.inputTokens > compaction.maxContextTokens
+    ) {
+      const keep = (compaction.keepRecentTurns ?? 2) * 2;
+      if (messages.length > keep) {
+        const head = messages.slice(0, messages.length - keep);
+        const outcome = await summarizeMessages({
+          client,
+          model,
+          head,
+          instructions: compaction.instructions,
+        });
+        if (outcome) {
+          const before = messages.length;
+          // Replace the head in place with the single summary message; splice
+          // preserves the tail's object identity so the recent turns stay
+          // deep-equal (sc-7-1). `messages` is declared `const`.
+          messages.splice(0, head.length, outcome.summaryMessage);
+
+          // Charge the extra call to the SAME accumulators/Budget used for
+          // every other turn (sc-7-3).
+          totalInputTokens += outcome.usage.inputTokens;
+          totalOutputTokens += outcome.usage.outputTokens;
+          if (outcome.costUsd !== undefined) {
+            totalCostUsd = (totalCostUsd ?? 0) + outcome.costUsd;
+          }
+          budget?.chargeTokens(outcome.usage);
+          budget?.chargeUsd(outcome.costUsd ?? 0);
+
+          safeEmit({
+            type: "compact-boundary",
+            turn,
+            messagesBefore: before,
+            messagesAfter: messages.length,
+            inputTokensAtTrigger: response.usage.inputTokens,
+          });
+        }
+        // outcome === undefined => the summarizer failed; summarizeMessages
+        // already logged. Fail open: skip compaction this turn, continue
+        // uncompacted (sc-7-4) — no message is ever dropped without a summary.
+      }
+    }
+
     if (budget?.exceeded()) {
       logger.warn(`Agentic loop hit budget ceiling on turn ${turn}. Returning partial result.`);
       await persistSession(turn);
