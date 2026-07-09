@@ -5,10 +5,14 @@
  * mirroring the ScriptedClient pattern in `src/providers/structured.test.ts`.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { performance } from "node:perf_hooks";
-import { runAgenticLoop } from "./agentic-loop.js";
+import { mkdtemp, rm, readFile, writeFile, readdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { runAgenticLoop, resumeSession, forkSession } from "./agentic-loop.js";
 import { Budget } from "./workflow/budget.js";
+import { SessionStore } from "./session-store.js";
 import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
 import type { LoopEvent } from "./loop-events.js";
 
@@ -826,5 +830,303 @@ describe("runAgenticLoop — byte-identical when onEvent/hooks are absent (sc-5-
     });
 
     expect(withHooks).toEqual(withoutHooks);
+  });
+});
+
+// ── sprint-6: session persistence, resume, fork ───────────────────────
+
+/**
+ * A ScriptedLoopClient variant that runs a caller-supplied hook BEFORE
+ * resolving each `chat()` call, awaited by the caller (`chatWithRetry`
+ * inside the loop). Because the loop's `for` iteration only reaches turn
+ * N+1's `chat()` call after turn N's full body — including its awaited
+ * `persistSession` save — has completed, a hook that fires on call index N
+ * can deterministically assert the ON-DISK state left by turn N, with no
+ * race against the loop's own persistence write.
+ */
+class HookedLoopClient implements LLMClient {
+  private idx = 0;
+  constructor(
+    private readonly responses: ChatResponse[],
+    private readonly onBeforeCall: (callIndex: number) => Promise<void> | void,
+  ) {}
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    await this.onBeforeCall(this.idx);
+    const r = this.responses[Math.min(this.idx, this.responses.length - 1)];
+    this.idx += 1;
+    void params;
+    return r;
+  }
+}
+
+describe("runAgenticLoop — session persistence, resume, fork (sprint 6)", () => {
+  let tmpRoot: string;
+
+  beforeEach(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "bober-agentic-loop-session-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+  });
+
+  it("sc-6-1: the transcript file exists after turn 1 and is updated after every subsequent turn; final record has full metadata", async () => {
+    const store = new SessionStore({ projectRoot: tmpRoot, now: () => "2026-07-10T00:00:00.000Z" });
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const snapshotAfterCall: Record<number, { turnsUsed: number; messageCount: number } | null> = {};
+
+    const client = new HookedLoopClient(
+      [
+        { ...base, text: "", stopReason: "tool_use", toolCalls: [{ id: "t1", name: "noop", input: {} }] },
+        { ...base, text: "", stopReason: "tool_use", toolCalls: [{ id: "t2", name: "noop", input: {} }] },
+        { ...base, text: "final answer", stopReason: "end" },
+      ],
+      async (callIndex) => {
+        // Before the 2nd chat() call, turn 1's persistSession has already run.
+        if (callIndex === 1 || callIndex === 2) {
+          const record = await store.load("sess-abc");
+          snapshotAfterCall[callIndex] = record
+            ? { turnsUsed: record.turnsUsed, messageCount: record.messages.length }
+            : null;
+        }
+      },
+    );
+
+    const result = await runAgenticLoop({
+      client,
+      model: "test-model",
+      systemPrompt: "s",
+      userMessage: "do the thing",
+      tools: [
+        { name: "noop", description: "n", input_schema: { type: "object", properties: {} } },
+      ],
+      toolHandlers: handlers,
+      maxTurns: 5,
+      session: { store, sessionId: "sess-abc" },
+    });
+
+    // File exists (with turn-1 data) BEFORE the 2nd chat() call.
+    expect(snapshotAfterCall[1]).toEqual({ turnsUsed: 1, messageCount: 3 }); // user + assistant + toolResult
+    // Updated again (with turn-2 data) BEFORE the 3rd chat() call.
+    expect(snapshotAfterCall[2]).toEqual({ turnsUsed: 2, messageCount: 5 });
+
+    expect(result.turnsUsed).toBe(3);
+    expect(result.finalText).toBe("final answer");
+
+    const final = await store.load("sess-abc");
+    expect(final).not.toBeNull();
+    expect(final?.sessionId).toBe("sess-abc");
+    expect(final?.model).toBe("test-model");
+    expect(final?.turnsUsed).toBe(3);
+    expect(final?.createdAt).toBe("2026-07-10T00:00:00.000Z");
+    expect(final?.updatedAt).toBe("2026-07-10T00:00:00.000Z");
+    expect(final?.messages[0]).toEqual({ role: "user", content: "do the thing" });
+    // The completion turn's assistant text IS persisted even though the
+    // in-loop `messages` array never receives it (the loop returns instead).
+    expect(final?.messages.at(-1)).toEqual({ role: "assistant", content: "final answer" });
+  });
+
+  it("sc-6-2: resumeSession seeds prior messages ahead of the new user message; new turns append to the same file", async () => {
+    const store = new SessionStore({ projectRoot: tmpRoot, now: () => "2026-07-10T00:05:00.000Z" });
+
+    await store.save({
+      sessionId: "sess-resume",
+      model: "m",
+      turnsUsed: 1,
+      messages: [
+        { role: "user", content: "first task" },
+        { role: "assistant", content: "first answer" },
+      ],
+    });
+
+    const resumed = await resumeSession(store, "sess-resume");
+    if ("error" in resumed) {
+      throw new Error(`unexpected error result: ${resumed.error}`);
+    }
+    expect(resumed.initialMessages).toEqual([
+      { role: "user", content: "first task" },
+      { role: "assistant", content: "first answer" },
+    ]);
+
+    const client = new ScriptedLoopClient([{ ...base, text: "second answer", stopReason: "end" }]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "second task",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 3,
+      session: { store, sessionId: resumed.sessionId },
+      initialMessages: resumed.initialMessages,
+    });
+
+    // The client's (only, hence first) chat() call received the seeded
+    // messages ahead of the new user message.
+    expect(client.lastParams?.messages).toEqual([
+      { role: "user", content: "first task" },
+      { role: "assistant", content: "first answer" },
+      { role: "user", content: "second task" },
+    ]);
+    expect(result.stopReason).toBe("end");
+
+    const final = await store.load("sess-resume");
+    expect(final?.messages).toEqual([
+      { role: "user", content: "first task" },
+      { role: "assistant", content: "first answer" },
+      { role: "user", content: "second task" },
+      { role: "assistant", content: "second answer" },
+    ]);
+  });
+
+  it("sc-6-3: forkSession copies the transcript; continuing the fork leaves the original byte-identical while it diverges", async () => {
+    const store = new SessionStore({ projectRoot: tmpRoot, now: () => "2026-07-10T00:10:00.000Z" });
+
+    await store.save({
+      sessionId: "sess-orig",
+      model: "m",
+      turnsUsed: 1,
+      messages: [
+        { role: "user", content: "shared task" },
+        { role: "assistant", content: "shared answer" },
+      ],
+    });
+
+    const originalBytes = await readFile(store.path("sess-orig"), "utf-8");
+
+    const forkedId = await forkSession(store, "sess-orig", "sess-fork");
+    expect(forkedId).toBe("sess-fork");
+
+    const forkedBeforeRun = await store.load("sess-fork");
+    expect(forkedBeforeRun?.messages).toEqual([
+      { role: "user", content: "shared task" },
+      { role: "assistant", content: "shared answer" },
+    ]);
+
+    // Continue the fork with a response the ORIGINAL never received.
+    const client = new ScriptedLoopClient([{ ...base, text: "forked answer", stopReason: "end" }]);
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "diverging task",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 3,
+      session: { store, sessionId: "sess-fork" },
+      initialMessages: forkedBeforeRun?.messages,
+    });
+
+    const afterOriginalBytes = await readFile(store.path("sess-orig"), "utf-8");
+    expect(afterOriginalBytes).toBe(originalBytes);
+
+    const forkedFinal = await store.load("sess-fork");
+    expect(forkedFinal?.messages).toEqual([
+      { role: "user", content: "shared task" },
+      { role: "assistant", content: "shared answer" },
+      { role: "user", content: "diverging task" },
+      { role: "assistant", content: "forked answer" },
+    ]);
+  });
+
+  it("forkSession derives a deterministic id when newId is omitted (no argless randomness)", async () => {
+    const store = new SessionStore({ projectRoot: tmpRoot, now: () => "2026-07-10T00:15:00.000Z" });
+    await store.save({ sessionId: "sess-orig2", model: "m", turnsUsed: 0, messages: [] });
+
+    const forkedId1 = await forkSession(store, "sess-orig2");
+    // Re-fork the same source at the SAME injected clock reading — deterministic.
+    await store.save({ sessionId: "sess-orig2", model: "m", turnsUsed: 0, messages: [] });
+    const forkedId2 = await forkSession(store, "sess-orig2");
+
+    expect(forkedId1).toBe(forkedId2);
+    expect(forkedId1).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("sc-6-4: without a session option, no .bober/sessions/ file or directory is created (byte-identical no-session path)", async () => {
+    const client = new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 3,
+      // session intentionally omitted
+    });
+
+    expect(result.stopReason).toBe("end");
+    await expect(readdir(join(tmpRoot, ".bober", "sessions"))).rejects.toThrow();
+  });
+
+  it("sc-6-4: a paired run with vs. without `session` produces the SAME AgenticLoopResult (persistence never alters loop behavior)", async () => {
+    const store = new SessionStore({ projectRoot: tmpRoot, now: () => "2026-07-10T00:20:00.000Z" });
+    const handlers = () => new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const withSession = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+      session: { store, sessionId: "sess-parity" },
+    });
+
+    const withoutSession = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+    });
+
+    expect(withSession).toEqual(withoutSession);
+  });
+
+  describe("resumeSession — fail-soft (sc-6-5)", () => {
+    it("returns a typed error for a missing session (never throws, no empty session created)", async () => {
+      const store = new SessionStore({ projectRoot: tmpRoot });
+
+      const result = await resumeSession(store, "does-not-exist");
+      expect("error" in result).toBe(true);
+      if (!("error" in result)) throw new Error("expected an error result");
+      expect(result.error).toContain("does-not-exist");
+
+      // No session file was created as a side effect of the failed resume.
+      await expect(readFile(store.path("does-not-exist"), "utf-8")).rejects.toThrow();
+    });
+
+    it("returns a typed error for a corrupt session file and never overwrites it", async () => {
+      const store = new SessionStore({ projectRoot: tmpRoot });
+      await store.save({ sessionId: "sess-corrupt", model: "m", turnsUsed: 1, messages: [] });
+      await writeFile(store.path("sess-corrupt"), "{ this is not valid json", "utf-8");
+      const corruptBytesBefore = await readFile(store.path("sess-corrupt"), "utf-8");
+
+      const result = await resumeSession(store, "sess-corrupt");
+      expect("error" in result).toBe(true);
+
+      const corruptBytesAfter = await readFile(store.path("sess-corrupt"), "utf-8");
+      expect(corruptBytesAfter).toBe(corruptBytesBefore);
+    });
+
+    it("never silently starts an empty session in place of the requested one on error", async () => {
+      const store = new SessionStore({ projectRoot: tmpRoot });
+
+      const result = await resumeSession(store, "ghost");
+      expect("error" in result).toBe(true);
+
+      // A caller that (correctly) does NOT call runAgenticLoop on the error
+      // branch leaves no trace for 'ghost' — demonstrating no silent
+      // empty-session file is ever written by resumeSession itself.
+      const loaded = await store.load("ghost");
+      expect(loaded).toBeNull();
+    });
   });
 });

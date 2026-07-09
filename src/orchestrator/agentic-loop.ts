@@ -12,6 +12,8 @@ import type { ToolHandler } from "./tools/index.js";
 import type { Effort } from "../config/schema.js";
 import type { Budget } from "./workflow/budget.js";
 import type { LoopEvent, LoopHooks, HookDecision } from "./loop-events.js";
+import type { SessionStore } from "./session-store.js";
+import { sessionForkId } from "./session-store.js";
 import { logger } from "../utils/logger.js";
 import { executeToolBatch } from "./tools/executor.js";
 
@@ -89,6 +91,20 @@ export interface AgenticLoopParams {
    * Absent (the default) is byte-identical to omitting it entirely.
    */
   hooks?: LoopHooks;
+  /**
+   * Opt-in loop-transcript persistence (agent-loop-capability-port sprint 6).
+   * When present, the loop saves the full `Message[]` transcript + metadata
+   * to `.bober/sessions/<sessionId>.json` after every turn (crash-resumable).
+   * A save failure is caught and logged, never crashes the run. Absent (the
+   * default) is byte-identical — no files or directories are created.
+   */
+  session?: { store: SessionStore; sessionId: string };
+  /**
+   * A prior transcript to seed AHEAD of `userMessage` (loop resume). Use
+   * `resumeSession()` to load this from a persisted session. Absent (the
+   * default) is byte-identical to omitting it entirely.
+   */
+  initialMessages?: Message[];
 }
 
 export interface AgenticLoopResult {
@@ -308,6 +324,8 @@ export async function runAgenticLoop(
     nudgeMessage,
     onEvent,
     hooks,
+    session,
+    initialMessages,
   } = params;
 
   // Derived once, from the caller-supplied tool schemas — the loop never
@@ -318,6 +336,7 @@ export async function runAgenticLoop(
   );
 
   const messages: Message[] = [
+    ...(initialMessages ?? []),
     { role: "user", content: userMessage },
   ];
 
@@ -327,6 +346,31 @@ export async function runAgenticLoop(
   const allToolsCalled: string[] = [];
   let finalText = "";
   let nudgesUsed = 0;
+
+  // Persist the transcript to the opted-in session store, swallowing (and
+  // logging) any save failure — persistence is a convenience, and losing a
+  // transcript write must never fail an otherwise-successful run (sc-6-1).
+  // A no-op when `session` is absent, so calling this unconditionally at
+  // every turn boundary keeps the no-session path byte-identical (sc-6-4).
+  const persistSession = async (
+    turnsUsed: number,
+    extraMessages: Message[] = [],
+  ): Promise<void> => {
+    if (!session) return;
+    try {
+      await session.store.save({
+        sessionId: session.sessionId,
+        model,
+        turnsUsed,
+        messages: extraMessages.length > 0 ? [...messages, ...extraMessages] : messages,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        `Session persistence failed for '${session.sessionId}' (swallowed): ${message}`,
+      );
+    }
+  };
 
   // Emit a LoopEvent, swallowing (and logging) any throw from the consumer —
   // an observe-only channel must never crash the loop (sc-5-4).
@@ -380,6 +424,7 @@ export async function runAgenticLoop(
       const message = err instanceof Error ? err.message : String(err);
       logger.warn(`Agentic loop API error on turn ${turn}: ${message}`);
 
+      await persistSession(turn - 1);
       return finish({
         finalText: finalText || `Error on turn ${turn}: ${message}`,
         turnsUsed: turn - 1,
@@ -409,6 +454,7 @@ export async function runAgenticLoop(
     budget?.chargeUsd(response.costUsd ?? 0);
     if (budget?.exceeded()) {
       logger.warn(`Agentic loop hit budget ceiling on turn ${turn}. Returning partial result.`);
+      await persistSession(turn);
       return finish({
         finalText:
           finalText ||
@@ -463,6 +509,13 @@ export async function runAgenticLoop(
       // A tool-less completion turn calls no tools, but it is still "a turn"
       // — emit its turn-end symmetrically with the tool-turn case below.
       safeEmit({ type: "turn-end", turn, toolsCalled: [] });
+
+      // This completion path never pushes its assistant text onto `messages`
+      // (the loop is about to return, so there's no next turn to read it
+      // back) — pass it as an extra so the persisted transcript still
+      // captures the final answer (sc-6-1). `messages` itself is untouched,
+      // so the no-session path stays byte-identical.
+      await persistSession(turn, [{ role: "assistant", content: finalText }]);
 
       return finish({
         finalText,
@@ -561,6 +614,10 @@ export async function runAgenticLoop(
     };
     messages.push(toolResultMessage);
 
+    // Crash-resumable snapshot: `messages` now holds this turn's assistant
+    // message AND tool results (sc-6-1).
+    await persistSession(turn);
+
     onTurnComplete?.(turn, turnTools);
     safeEmit({ type: "turn-end", turn, toolsCalled: turnTools });
   }
@@ -569,6 +626,10 @@ export async function runAgenticLoop(
   logger.warn(
     `Agentic loop exceeded max turns (${maxTurns}). Returning partial result.`,
   );
+
+  // Covers the edge case where the last iteration ended via the nudge path
+  // (pushed messages but `continue`d without an intervening save).
+  await persistSession(maxTurns);
 
   return finish({
     finalText:
@@ -583,4 +644,48 @@ export async function runAgenticLoop(
     stopReason: "max_turns_exceeded",
     ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
   });
+}
+
+// ── Session resume / fork (sprint 6) ────────────────────────────────────
+
+/**
+ * Load a persisted transcript so a NEW `runAgenticLoop` call can continue it
+ * with full prior context: pass the returned `initialMessages` (seeded
+ * AHEAD of the new `userMessage`) alongside `session: { store, sessionId }`
+ * so new turns append to the same session file.
+ *
+ * Never throws. A missing or corrupt session file returns a typed
+ * `{ error }` result instead — conceptually aligned with the loop's own
+ * `stopReason: "error"` path, but this runs BEFORE the loop starts, so it is
+ * a separate discriminated-union return, not a shared code path. The loop is
+ * never started on the error branch, so no empty session ever silently
+ * replaces the requested one (sc-6-5).
+ */
+export async function resumeSession(
+  store: SessionStore,
+  sessionId: string,
+): Promise<{ initialMessages: Message[]; sessionId: string } | { error: string }> {
+  const record = await store.load(sessionId);
+  if (!record) {
+    return { error: `Session '${sessionId}' not found or corrupt.` };
+  }
+  return { initialMessages: record.messages, sessionId };
+}
+
+/**
+ * Copy the transcript at `sessionId` into a new session file so a new
+ * `runAgenticLoop` invocation can branch from it without mutating the
+ * original (sc-6-3). `newId` may be supplied explicitly (e.g. by tests);
+ * when omitted, a deterministic id is derived from `sessionId` + the
+ * store's injected clock (`sessionForkId` — no argless randomness).
+ *
+ * @returns The new session id (== `newId` when supplied).
+ */
+export async function forkSession(
+  store: SessionStore,
+  sessionId: string,
+  newId?: string,
+): Promise<string> {
+  const targetId = newId ?? sessionForkId(sessionId, store.now());
+  return store.fork(sessionId, targetId);
 }
