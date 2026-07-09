@@ -39,6 +39,8 @@ interface OAIMessage {
   role: string;
   content: string | null;
   tool_calls?: OAIToolCall[];
+  /** Present (non-empty) when the provider refused to fulfil the request. */
+  refusal?: string | null;
 }
 
 interface OAIChoice {
@@ -169,6 +171,8 @@ function normalizeStopReason(finishReason: string | null): StopReason {
       return "tool_use";
     case "length":
       return "max_tokens";
+    case "content_filter":
+      return "refusal";
     default:
       return finishReason ?? "end";
   }
@@ -441,6 +445,22 @@ export class OpenAIAdapter implements LLMClient {
         toolCalls: [],
         stopReason: "error",
         usage: { inputTokens: 0, outputTokens: 0 },
+      };
+    }
+
+    // A structured-output refusal (message.refusal) takes precedence over the
+    // normal content/finish_reason path — surface the refusal text so the
+    // fail-closed generator guard has an excerpt to report.
+    const refusalText = choice.message.refusal;
+    if (refusalText) {
+      return {
+        text: refusalText,
+        toolCalls: [],
+        stopReason: "refusal",
+        usage: {
+          inputTokens: response.usage?.prompt_tokens ?? 0,
+          outputTokens: response.usage?.completion_tokens ?? 0,
+        },
       };
     }
 

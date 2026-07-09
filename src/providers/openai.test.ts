@@ -499,6 +499,55 @@ describe("OpenAIAdapter", () => {
     expect(result.toolCalls).toEqual([]);
   });
 
+  // ── Refusal mapping (sc-1-2) ──────────────────────────────────────
+
+  it("maps finish_reason 'content_filter' -> stopReason 'refusal'", async () => {
+    createFn.mockResolvedValue(
+      makeOAIResponse({ content: null, finishReason: "content_filter" }),
+    );
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    });
+    expect(result.stopReason).toBe("refusal");
+  });
+
+  it("maps a message.refusal payload -> stopReason 'refusal' (overrides finish_reason)", async () => {
+    createFn.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: null, refusal: "I won't do that." },
+        },
+      ],
+      usage: { prompt_tokens: 3, completion_tokens: 4 },
+    });
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    });
+    expect(result.stopReason).toBe("refusal");
+    expect(result.text).toBe("I won't do that.");
+    expect(result.toolCalls).toEqual([]);
+    expect(result.usage).toEqual({ inputTokens: 3, outputTokens: 4 });
+  });
+
+  it("does not treat an absent/empty message.refusal as a refusal (byte-identical)", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hi", finishReason: "stop" }));
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(result.stopReason).toBe("end");
+    expect(result.text).toBe("hi");
+  });
+
   it("handles malformed tool call arguments gracefully", async () => {
     createFn.mockResolvedValue(
       makeOAIResponse({

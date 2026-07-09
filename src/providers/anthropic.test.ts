@@ -436,4 +436,24 @@ describe("AnthropicAdapter prompt caching", () => {
     expect(JSON.stringify(req)).not.toContain('"document"');
     expect(req["messages"]).toEqual([{ role: "user", content: "hi" }]);
   });
+
+  // ── Refusal mapping (sc-1-1) ─────────────────────────────────────────────
+
+  it("maps stop_reason 'refusal' -> stopReason 'refusal' via an explicit case", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "I can't help with that." }],
+      stop_reason: "refusal",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    } satisfies ChatParams);
+
+    expect(result.stopReason).toBe("refusal");
+    expect(result.text).toBe("I can't help with that.");
+  });
 });

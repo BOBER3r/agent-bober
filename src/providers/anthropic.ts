@@ -39,6 +39,10 @@ function normalizeStopReason(
       return "tool_use";
     case "max_tokens":
       return "max_tokens";
+    case "refusal":
+      // 'refusal' is part of the open StopReason union; surface it explicitly
+      // so the loop can fail closed rather than treat it as a normal completion.
+      return "refusal";
     default:
       return reason ?? "end";
   }

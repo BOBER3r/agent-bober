@@ -177,12 +177,34 @@ function looksLikeGeneratorReport(text: string): boolean {
 
 /**
  * Parse the generator response text into a GeneratorResult.
+ *
+ * Exported for direct unit testing of the refusal fail-closed guard (sc-1-4).
  */
-function parseGeneratorResult(
+export function parseGeneratorResult(
   text: string,
   filesWritten: Set<string>,
-  loopResult: { turnsUsed: number; toolsCalled: string[]; usage: { inputTokens: number; outputTokens: number } },
+  loopResult: {
+    turnsUsed: number;
+    toolsCalled: string[];
+    usage: { inputTokens: number; outputTokens: number };
+    /** Set by runAgenticLoop when the provider refused (ADR-5). */
+    refused?: boolean;
+  },
 ): GeneratorResult {
+  // Fail closed on a refusal BEFORE any JSON parsing or the filesWritten
+  // success shortcut below — a refusal after partial writes must never be
+  // reported as success:true (ADR-5).
+  if (loopResult.refused === true) {
+    return {
+      success: false,
+      notes: `model refused: ${text.slice(0, 300)}`,
+      filesChanged: [...filesWritten],
+      turnsUsed: loopResult.turnsUsed,
+      toolsCalled: loopResult.toolsCalled,
+      usage: loopResult.usage,
+    };
+  }
+
   let parsed: unknown;
 
   // Try direct parse

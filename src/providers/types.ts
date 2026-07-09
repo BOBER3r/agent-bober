@@ -203,6 +203,13 @@ export interface ChatParams {
 
 /**
  * Stop reason indicating why the model stopped generating.
+ *
+ * Known values: `"end"` (normal completion), `"tool_use"` (model requested a
+ * tool call), `"max_tokens"` (hit the token cap), `"error"` (adapter-level
+ * failure), and `"refusal"` (the provider declined to generate — surfaced by
+ * the Anthropic `stop_reason: "refusal"` and the OpenAI-family `finish_reason:
+ * "content_filter"` / `message.refusal` signals). This is an open union
+ * (`| string`) so adapters may pass through other provider-specific values.
  */
 export type StopReason = "end" | "tool_use" | "max_tokens" | "error" | string;
 

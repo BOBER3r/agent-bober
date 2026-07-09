@@ -58,6 +58,12 @@ export interface AgenticLoopResult {
   };
   /** The stop reason of the final API response. */
   stopReason: string;
+  /**
+   * True only when the provider refused. Absent (not `false`) when no refusal
+   * occurred, so non-refusal runs stay byte-identical. Write-capable roles
+   * (generator/curator) MUST treat this as success:false (ADR-5).
+   */
+  refused?: boolean;
 }
 
 // ── Transient-error retry ──────────────────────────────────────────
@@ -325,6 +331,10 @@ export async function runAgenticLoop(
         continue;
       }
 
+      // A refusal is a normal (non-throwing) response, not a transient error —
+      // detect it here at the completion branch, never in chatWithRetry.
+      const refused = turnStopReason === "refusal";
+
       return {
         finalText,
         turnsUsed: turn,
@@ -334,6 +344,7 @@ export async function runAgenticLoop(
           outputTokens: totalOutputTokens,
         },
         stopReason: turnStopReason,
+        ...(refused ? { refused: true } : {}),
       };
     }
 
