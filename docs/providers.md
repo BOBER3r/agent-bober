@@ -123,6 +123,37 @@ on the `sprint-passed` event in `.bober/history.jsonl` (absent when no cost was 
 > `budgetFromMaxUsd` helper (`src/orchestrator/workflow/budget.ts`) is the adoption point when they
 > are. This repo's own `bober.config.json` sets neither field.
 
+### Parallel read-only tool execution (`parallelReadOnlyTools`)
+
+The **`generator`** config section accepts one more **optional, additive** boolean:
+
+```jsonc
+// bober.config.json
+{
+  "generator": {
+    "provider": "anthropic",
+    "model": "sonnet",
+    "parallelReadOnlyTools": true   // overlap read-only tool calls in a turn; default off
+  }
+}
+```
+
+When `true`, within a single turn the agentic loop executes **maximal contiguous runs of
+read-only-annotated tool calls concurrently** (via `Promise.all`) instead of strictly serially;
+everything else stays serial. "Read-only" is a **`ToolDef.readOnly` annotation** that travels with
+each tool schema (ADR-2 — the loop never hard-codes a tool-name allow-list), marked on exactly
+`read_file`, `glob`, and `grep`. **`bash`, `write_file`, and `edit_file` are never annotated**, so a
+turn's writes and any mixed batch stay serial (a write breaks the run). Results always preserve the
+model's original tool-call order (keyed by `toolUseId`) and per-tool failures stay **in-slot** — the
+batch never rejects.
+
+- **Generator-only.** Unlike `effort` / `budget`, this flag lives **only** on `GeneratorSectionSchema`.
+- **No default.** Omit it (or set `false`) and tool execution is **byte-identical** to the pre-change
+  serial loop — same order, same error shapes, same `onToolUse` behaviour. `graph_*` and MCP-bridged
+  tools have no `readOnly` annotation, so they run serially until they opt in explicitly.
+- Delegated to `src/orchestrator/tools/executor.ts#executeToolBatch`; the loop derives its
+  `readOnlyTools` set from the tool schemas it was configured with.
+
 ---
 
 ## Anthropic (default)

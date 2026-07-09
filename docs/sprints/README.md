@@ -1936,14 +1936,24 @@ forwards `effort` (spread like `maxTokens`), charges an optional `Budget` per tu
 ceiling returns a graceful partial result with `stopReason "budget_exceeded"` — never throwing
 (ADR-4). `AgenticLoopResult` gains a cumulative optional `costUsd` that the generator surfaces and
 the pipeline persists onto the `sprint-passed` history event. Omitting both keys stays byte-identical
-end-to-end. A later sprint adds parallel read-only tool execution.
+end-to-end. Sprint 4 lands **parallel read-only tool execution**: a `ToolDef.readOnly` annotation
+(ADR-2, exactly `read_file`/`glob`/`grep` — **`bash` never**) plus a new
+`src/orchestrator/tools/executor.ts#executeToolBatch` that runs *maximal contiguous runs* of
+read-only tool calls concurrently via `Promise.all` while everything else stays serial, preserving
+original order and containing per-tool failures in-slot (the batch never rejects). The loop delegates
+its per-tool block to the executor, gated by an optional **generator-only `parallelReadOnlyTools`**
+config flag with no default — absent/`false` is byte-identical to the pre-change serial loop.
+
+Sprint 4 **completes the four architecture-backed sprints** (ADR-1 refusal · ADR-3/4 cost & budget ·
+ADR-2 parallel read-only tools). Sprints 5–10 are **extensions** on the same substrate.
 
 | # | Record | What it added |
 |---|--------|---------------|
 | 1 | [sprint-spec-20260709-agent-loop-capability-port-1.md](./sprint-spec-20260709-agent-loop-capability-port-1.md) | Refusal detection end-to-end: `StopReason "refusal"` in the Anthropic + OpenAI-family adapters, optional `refused: true` on `AgenticLoopResult` (non-throwing, spread-conditional), fail-closed `parseGeneratorResult` guard (`success: false` before the `filesWritten` shortcut); byte-identical non-refusal path, no new dep. |
 | 2 | [sprint-spec-20260709-agent-loop-capability-port-2.md](./sprint-spec-20260709-agent-loop-capability-port-2.md) | Cost substrate (dormant): pure `estimateCostUsd` + dated static `PRICE_TABLE` (longest-prefix match, unknown → `undefined`); optional `ChatResponse.costUsd` on every adapter (`claude-code` real `total_cost_usd` passthrough per ADR-3, others estimate; `costProvider` discriminator prices DeepSeek/Grok via compat rows); additive `Budget.maxUsd` axis with `BudgetExceededError` kind `"usd"`. Byte-identical when absent, no new dep. |
 | 3 | [sprint-spec-20260709-agent-loop-capability-port-3.md](./sprint-spec-20260709-agent-loop-capability-port-3.md) | Loop wiring: per-role `effort` + `budget.maxUsd` config on all four role sections (`EffortSchema`/`BudgetSectionSchema`, no defaults injected); `runAgenticLoop` forwards `effort`, charges `Budget` per turn, and returns a graceful `stopReason "budget_exceeded"` partial result (never throws — ADR-4); cumulative optional `AgenticLoopResult.costUsd` surfaced on `GeneratorResult` and persisted onto the `sprint-passed` history event; generator wired via the shared `budgetFromMaxUsd` helper. Byte-identical when both keys absent, no new dep. |
+| 4 | [sprint-spec-20260709-agent-loop-capability-port-4.md](./sprint-spec-20260709-agent-loop-capability-port-4.md) | Parallel read-only tool execution: optional `ToolDef.readOnly` annotation (ADR-2 — exactly `read_file`/`glob`/`grep`, `bash` never; absent ⇒ serial); new `src/orchestrator/tools/executor.ts#executeToolBatch` runs maximal contiguous read-only runs concurrently via `Promise.all` (order preserved by original index, per-tool errors stay in-slot, never rejects) mirroring the serial block's three result shapes byte-for-byte; the loop delegates its per-tool block to it, gated by an optional generator-only `parallelReadOnlyTools` Zod flag (no default). Byte-identical serial fallback when off/absent, no new dep. **Completes the four architecture-backed sprints.** |
 
-Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, and
-for the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, lives in
-[`docs/providers.md`](../providers.md).
+Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, for
+the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, and for the generator-only
+`parallelReadOnlyTools` tool-execution flag, lives in [`docs/providers.md`](../providers.md).
