@@ -228,6 +228,14 @@ export interface ChatResponse {
     inputTokens: number;
     outputTokens: number;
   };
+  /**
+   * USD cost of this request, when known. For `claude-code` this is the CLI's
+   * real, vendor-authoritative `total_cost_usd`; for other providers it is a
+   * `CostMeter` estimate derived from the static price table. Absent (not
+   * `undefined`-valued — the key itself is omitted) when the cost cannot be
+   * determined, e.g. an unpriced model or an older CLI that didn't report it.
+   */
+  costUsd?: number;
 }
 
 // ── LLMClient interface ─────────────────────────────────────────────
