@@ -1945,7 +1945,17 @@ its per-tool block to the executor, gated by an optional **generator-only `paral
 config flag with no default — absent/`false` is byte-identical to the pre-change serial loop.
 
 Sprint 4 **completes the four architecture-backed sprints** (ADR-1 refusal · ADR-3/4 cost & budget ·
-ADR-2 parallel read-only tools). Sprints 5–10 are **extensions** on the same substrate.
+ADR-2 parallel read-only tools). Sprints 5–10 are **extensions** on the same substrate. Sprint 5 —
+the first extension — ports the SDK's **observability + interception** surface onto the loop **without
+consuming model context**: an optional `onEvent` callback emits a typed `LoopEvent` stream (`init` /
+`turn-start` / `tool-start` / `tool-end` / `turn-end` / `result`; `compact-boundary` and `text-delta`
+reserved by name for sprints 7/8), and an optional `hooks` bag lets a host **veto** a tool call
+before it runs (`preToolUse` → model gets an `isError` rejection, loop continues), **observe** each
+result (`postToolUse`), and **observe the final result exactly once** across every stop path
+(`onStop`, via a new single `finish()` helper). Observe hooks are caught-and-logged on throw; a
+throwing `preToolUse` is a **fail-closed deny**. Both are **programmatic-only** `runAgenticLoop`
+params (no config schema), the existing `onToolUse` / `onTurnComplete` callbacks are untouched, and
+omitting both is **byte-identical**.
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -1953,6 +1963,7 @@ ADR-2 parallel read-only tools). Sprints 5–10 are **extensions** on the same s
 | 2 | [sprint-spec-20260709-agent-loop-capability-port-2.md](./sprint-spec-20260709-agent-loop-capability-port-2.md) | Cost substrate (dormant): pure `estimateCostUsd` + dated static `PRICE_TABLE` (longest-prefix match, unknown → `undefined`); optional `ChatResponse.costUsd` on every adapter (`claude-code` real `total_cost_usd` passthrough per ADR-3, others estimate; `costProvider` discriminator prices DeepSeek/Grok via compat rows); additive `Budget.maxUsd` axis with `BudgetExceededError` kind `"usd"`. Byte-identical when absent, no new dep. |
 | 3 | [sprint-spec-20260709-agent-loop-capability-port-3.md](./sprint-spec-20260709-agent-loop-capability-port-3.md) | Loop wiring: per-role `effort` + `budget.maxUsd` config on all four role sections (`EffortSchema`/`BudgetSectionSchema`, no defaults injected); `runAgenticLoop` forwards `effort`, charges `Budget` per turn, and returns a graceful `stopReason "budget_exceeded"` partial result (never throws — ADR-4); cumulative optional `AgenticLoopResult.costUsd` surfaced on `GeneratorResult` and persisted onto the `sprint-passed` history event; generator wired via the shared `budgetFromMaxUsd` helper. Byte-identical when both keys absent, no new dep. |
 | 4 | [sprint-spec-20260709-agent-loop-capability-port-4.md](./sprint-spec-20260709-agent-loop-capability-port-4.md) | Parallel read-only tool execution: optional `ToolDef.readOnly` annotation (ADR-2 — exactly `read_file`/`glob`/`grep`, `bash` never; absent ⇒ serial); new `src/orchestrator/tools/executor.ts#executeToolBatch` runs maximal contiguous read-only runs concurrently via `Promise.all` (order preserved by original index, per-tool errors stay in-slot, never rejects) mirroring the serial block's three result shapes byte-for-byte; the loop delegates its per-tool block to it, gated by an optional generator-only `parallelReadOnlyTools` Zod flag (no default). Byte-identical serial fallback when off/absent, no new dep. **Completes the four architecture-backed sprints.** |
+| 5 | [sprint-spec-20260709-agent-loop-capability-port-5.md](./sprint-spec-20260709-agent-loop-capability-port-5.md) | Structured loop event stream + host-style hooks (first **extension**): new types-only `src/orchestrator/loop-events.ts` (`LoopEvent` union — `init`/`turn-start`/`tool-start`/`tool-end`/`turn-end`/`result`, `compact-boundary`+`text-delta` reserved by comment; `LoopHooks` `preToolUse`/`postToolUse`/`onStop`); `AgenticLoopParams` gains optional `onEvent` + `hooks`; a single `finish()` helper routes all four return paths so `result`+`onStop` fire exactly once per stop path; tool events + veto thread through the sprint-4 executor. `preToolUse` denial → `isError` rejection, loop continues; observe hooks caught-and-logged on throw; throwing `preToolUse` = fail-closed deny. **Programmatic-only** (no config schema), `onToolUse`/`onTurnComplete` untouched, byte-identical when absent, no new dep. |
 
 Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, for
 the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, and for the generator-only
