@@ -10,6 +10,7 @@ import { performance } from "node:perf_hooks";
 import { runAgenticLoop } from "./agentic-loop.js";
 import { Budget } from "./workflow/budget.js";
 import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
+import type { LoopEvent } from "./loop-events.js";
 
 // ── Fake LLMClient ───────────────────────────────────────────────────
 
@@ -484,5 +485,346 @@ describe("runAgenticLoop — parallel read-only tool execution (sprint-4)", () =
     // the throw never propagates out of the tool-execution step.
     expect(result.stopReason).toBe("end");
     expect(result.toolsCalled).toEqual(["read_file", "glob", "grep"]);
+  });
+});
+
+// ── sprint-5: structured event stream + host-style hooks ──────────────
+
+/** A tool-turn (calling `noop`) followed by a completion turn. Fresh per run. */
+function makeToolThenEndClient(): ScriptedLoopClient {
+  return new ScriptedLoopClient([
+    {
+      ...base,
+      text: "",
+      stopReason: "tool_use",
+      toolCalls: [{ id: "t1", name: "noop", input: { x: 1 } }],
+    },
+    { ...base, text: "done", stopReason: "end" },
+  ]);
+}
+
+const NOOP_TOOL = [
+  { name: "noop", description: "n", input_schema: { type: "object" as const, properties: {} } },
+];
+
+describe("runAgenticLoop — structured event stream (sc-5-1)", () => {
+  it("emits ordered typed events with the documented payload for a tool-turn + completion-turn run", async () => {
+    const events: LoopEvent[] = [];
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const result = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 5,
+      onEvent: (e) => events.push(e),
+    });
+
+    expect(events.map((e) => e.type)).toEqual([
+      "init",
+      "turn-start",
+      "tool-start",
+      "tool-end",
+      "turn-end",
+      "turn-start",
+      "turn-end",
+      "result",
+    ]);
+
+    expect(events[0]).toEqual({ type: "init", model: "m", maxTurns: 5 });
+    expect(events[1]).toEqual({ type: "turn-start", turn: 1 });
+    expect(events[2]).toEqual({
+      type: "tool-start",
+      turn: 1,
+      name: "noop",
+      input: { x: 1 },
+      toolUseId: "t1",
+    });
+    expect(events[3]).toEqual({
+      type: "tool-end",
+      turn: 1,
+      name: "noop",
+      toolUseId: "t1",
+      isError: false,
+    });
+    expect(events[4]).toEqual({ type: "turn-end", turn: 1, toolsCalled: ["noop"] });
+    expect(events[5]).toEqual({ type: "turn-start", turn: 2 });
+    expect(events[6]).toEqual({ type: "turn-end", turn: 2, toolsCalled: [] });
+    expect(events[7]).toEqual({ type: "result", stopReason: "end", turnsUsed: 2 });
+
+    expect(result.stopReason).toBe("end");
+    expect(result.turnsUsed).toBe(2);
+  });
+});
+
+describe("runAgenticLoop — preToolUse veto (sc-5-2)", () => {
+  it("a deny decision skips the handler; the model gets an isError rejection and the loop continues", async () => {
+    const noopSpy = vi.fn(async () => ({ output: "ok", isError: false }));
+    const client = makeToolThenEndClient();
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: new Map([["noop", noopSpy]]),
+      maxTurns: 5,
+      hooks: {
+        preToolUse: ({ name }) =>
+          name === "noop" ? { allow: false, reason: "blocked" } : { allow: true },
+      },
+    });
+
+    expect(noopSpy).not.toHaveBeenCalled();
+    expect(result.stopReason).toBe("end");
+    expect(result.turnsUsed).toBe(2);
+
+    // The completion turn's chat call received the fed-back rejection result.
+    const toolResultMsg = client.lastParams?.messages.find((m) => "toolResults" in m);
+    expect(toolResultMsg).toBeDefined();
+    const toolResults = (
+      toolResultMsg as { toolResults: { isError?: boolean; content: string }[] }
+    ).toolResults;
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0].isError).toBe(true);
+    expect(toolResults[0].content).toContain("blocked");
+  });
+});
+
+describe("runAgenticLoop — postToolUse + onStop exactly once per stop path (sc-5-3)", () => {
+  it("completion path: postToolUse fires per call, onStop fires exactly once with the final result", async () => {
+    const onStop = vi.fn();
+    const postToolUse = vi.fn();
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const result = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 5,
+      hooks: { onStop, postToolUse },
+    });
+
+    expect(postToolUse).toHaveBeenCalledTimes(1);
+    expect(postToolUse).toHaveBeenCalledWith(
+      { name: "noop", input: { x: 1 }, toolUseId: "t1" },
+      { toolUseId: "t1", content: "ok", isError: false },
+    );
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledWith(result);
+  });
+
+  it("max-turns path: onStop fires exactly once with stopReason max_turns_exceeded", async () => {
+    const onStop = vi.fn();
+    const client = new ScriptedLoopClient([
+      {
+        ...base,
+        text: "still working",
+        toolCalls: [{ id: "t1", name: "noop", input: {} }],
+        stopReason: "tool_use",
+      },
+    ]);
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 2,
+      hooks: { onStop },
+    });
+
+    expect(result.stopReason).toBe("max_turns_exceeded");
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledWith(result);
+  });
+
+  it("refusal path: onStop fires exactly once with stopReason refusal", async () => {
+    const onStop = vi.fn();
+    const client = new ScriptedLoopClient([
+      { ...base, text: "I can't help with that.", stopReason: "refusal" },
+    ]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 3,
+      hooks: { onStop },
+    });
+
+    expect(result.refused).toBe(true);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledWith(result);
+  });
+
+  it("budget_exceeded path: onStop fires exactly once with stopReason budget_exceeded", async () => {
+    const onStop = vi.fn();
+    const client = new ScriptedLoopClient([
+      {
+        toolCalls: [{ id: "t1", name: "noop", input: {} }],
+        usage: { inputTokens: 1, outputTokens: 1 },
+        text: "",
+        stopReason: "tool_use",
+        costUsd: 0.6,
+      },
+      {
+        toolCalls: [{ id: "t2", name: "noop", input: {} }],
+        usage: { inputTokens: 1, outputTokens: 1 },
+        text: "",
+        stopReason: "tool_use",
+        costUsd: 0.6,
+      },
+      { ...base, text: "done", stopReason: "end", costUsd: 0.1 },
+    ]);
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+    const budget = new Budget({ maxUsd: 1.0 });
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 5,
+      budget,
+      hooks: { onStop },
+    });
+
+    expect(result.stopReason).toBe("budget_exceeded");
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledWith(result);
+  });
+});
+
+describe("runAgenticLoop — throwing hooks never crash the loop (sc-5-4)", () => {
+  it("a throwing onEvent is caught and logged; the run completes normally", async () => {
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    await expect(
+      runAgenticLoop({
+        client: makeToolThenEndClient(),
+        model: "m",
+        systemPrompt: "s",
+        userMessage: "u",
+        tools: NOOP_TOOL,
+        toolHandlers: handlers,
+        maxTurns: 5,
+        onEvent: () => {
+          throw new Error("boom");
+        },
+      }),
+    ).resolves.toMatchObject({ stopReason: "end" });
+  });
+
+  it("a throwing postToolUse is caught and logged; the run completes normally and the handler still ran", async () => {
+    const noopSpy = vi.fn(async () => ({ output: "ok", isError: false }));
+
+    const result = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: new Map([["noop", noopSpy]]),
+      maxTurns: 5,
+      hooks: {
+        postToolUse: () => {
+          throw new Error("boom");
+        },
+      },
+    });
+
+    expect(noopSpy).toHaveBeenCalledTimes(1);
+    expect(result.stopReason).toBe("end");
+  });
+
+  it("a throwing onStop is caught and logged; the run still resolves with the final result", async () => {
+    await expect(
+      runAgenticLoop({
+        client: new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]),
+        model: "m",
+        systemPrompt: "s",
+        userMessage: "u",
+        tools: [],
+        toolHandlers: new Map(),
+        maxTurns: 3,
+        hooks: {
+          onStop: () => {
+            throw new Error("boom");
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ stopReason: "end" });
+  });
+
+  it("a throwing preToolUse is treated as a fail-closed deny — handler skipped, loop continues", async () => {
+    const noopSpy = vi.fn(async () => ({ output: "ok", isError: false }));
+
+    const result = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: new Map([["noop", noopSpy]]),
+      maxTurns: 5,
+      hooks: {
+        preToolUse: () => {
+          throw new Error("boom");
+        },
+      },
+    });
+
+    expect(noopSpy).not.toHaveBeenCalled();
+    expect(result.stopReason).toBe("end");
+  });
+});
+
+describe("runAgenticLoop — byte-identical when onEvent/hooks are absent (sc-5-5)", () => {
+  it("a paired run with vs. without onEvent/hooks produces a deep-equal AgenticLoopResult", async () => {
+    const handlers = () => new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const withHooks = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+      onEvent: () => {},
+      hooks: {
+        preToolUse: () => ({ allow: true }),
+        postToolUse: () => {},
+        onStop: () => {},
+      },
+    });
+
+    const withoutHooks = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+    });
+
+    expect(withHooks).toEqual(withoutHooks);
   });
 });

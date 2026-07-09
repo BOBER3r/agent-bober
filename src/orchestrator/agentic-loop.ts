@@ -1,8 +1,17 @@
-import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage } from "../providers/types.js";
+import type {
+  LLMClient,
+  ToolDef,
+  ToolCall,
+  ToolResult,
+  Message,
+  AssistantMessage,
+  ToolResultMessage,
+} from "../providers/types.js";
 
 import type { ToolHandler } from "./tools/index.js";
 import type { Effort } from "../config/schema.js";
 import type { Budget } from "./workflow/budget.js";
+import type { LoopEvent, LoopHooks, HookDecision } from "./loop-events.js";
 import { logger } from "../utils/logger.js";
 import { executeToolBatch } from "./tools/executor.js";
 
@@ -62,6 +71,24 @@ export interface AgenticLoopParams {
   maxNudges?: number;
   /** The nudge text appended when `completionCheck` fails. A sensible default is used if omitted. */
   nudgeMessage?: string;
+  /**
+   * Optional structured event stream (agent-loop-capability-port sprint 5).
+   * Emits a typed `LoopEvent` at each natural loop point (init, turn-start,
+   * tool-start/tool-end, turn-end, result) — a pure host-side observation
+   * channel that adds zero tokens to the conversation and never changes loop
+   * behavior. A throwing `onEvent` is caught and logged, never crashes the
+   * loop. Absent (the default) is byte-identical to omitting it entirely.
+   */
+  onEvent?: (event: LoopEvent) => void;
+  /**
+   * Optional host-side hooks (agent-loop-capability-port sprint 5):
+   * `preToolUse` can veto a tool call (model gets an isError rejection, loop
+   * continues), `postToolUse` observes each tool result, `onStop` observes
+   * the final result exactly once. All observe-hooks are caught-and-logged
+   * on throw; a throwing `preToolUse` is treated as a fail-closed deny.
+   * Absent (the default) is byte-identical to omitting it entirely.
+   */
+  hooks?: LoopHooks;
 }
 
 export interface AgenticLoopResult {
@@ -279,6 +306,8 @@ export async function runAgenticLoop(
     completionCheck,
     maxNudges = 2,
     nudgeMessage,
+    onEvent,
+    hooks,
   } = params;
 
   // Derived once, from the caller-supplied tool schemas — the loop never
@@ -299,8 +328,38 @@ export async function runAgenticLoop(
   let finalText = "";
   let nudgesUsed = 0;
 
+  // Emit a LoopEvent, swallowing (and logging) any throw from the consumer —
+  // an observe-only channel must never crash the loop (sc-5-4).
+  const safeEmit = (event: LoopEvent): void => {
+    if (!onEvent) return;
+    try {
+      onEvent(event);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.warn(`onEvent hook threw (swallowed): ${message}`);
+    }
+  };
+
+  // Every stop path routes through here so `result` fires and `onStop` runs
+  // exactly once, regardless of which of the 4 returns below is taken.
+  async function finish(result: AgenticLoopResult): Promise<AgenticLoopResult> {
+    safeEmit({ type: "result", stopReason: result.stopReason, turnsUsed: result.turnsUsed });
+    if (hooks?.onStop) {
+      try {
+        await hooks.onStop(result);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logger.warn(`onStop hook threw (swallowed): ${message}`);
+      }
+    }
+    return result;
+  }
+
+  safeEmit({ type: "init", model, maxTurns });
+
   for (let turn = 1; turn <= maxTurns; turn++) {
     logger.debug(`Agentic loop turn ${turn}/${maxTurns}...`);
+    safeEmit({ type: "turn-start", turn });
 
     let response;
     try {
@@ -321,7 +380,7 @@ export async function runAgenticLoop(
       const message = err instanceof Error ? err.message : String(err);
       logger.warn(`Agentic loop API error on turn ${turn}: ${message}`);
 
-      return {
+      return finish({
         finalText: finalText || `Error on turn ${turn}: ${message}`,
         turnsUsed: turn - 1,
         toolsCalled: allToolsCalled,
@@ -331,7 +390,7 @@ export async function runAgenticLoop(
         },
         stopReason: "error",
         ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
-      };
+      });
     }
 
     // Accumulate usage
@@ -350,7 +409,7 @@ export async function runAgenticLoop(
     budget?.chargeUsd(response.costUsd ?? 0);
     if (budget?.exceeded()) {
       logger.warn(`Agentic loop hit budget ceiling on turn ${turn}. Returning partial result.`);
-      return {
+      return finish({
         finalText:
           finalText ||
           "Budget ceiling reached before completion. Partial result returned.",
@@ -362,7 +421,7 @@ export async function runAgenticLoop(
         },
         stopReason: "budget_exceeded",
         ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
-      };
+      });
     }
 
     const turnStopReason = response.stopReason;
@@ -401,7 +460,11 @@ export async function runAgenticLoop(
       // detect it here at the completion branch, never in chatWithRetry.
       const refused = turnStopReason === "refusal";
 
-      return {
+      // A tool-less completion turn calls no tools, but it is still "a turn"
+      // — emit its turn-end symmetrically with the tool-turn case below.
+      safeEmit({ type: "turn-end", turn, toolsCalled: [] });
+
+      return finish({
         finalText,
         turnsUsed: turn,
         toolsCalled: allToolsCalled,
@@ -412,7 +475,7 @@ export async function runAgenticLoop(
         stopReason: turnStopReason,
         ...(refused ? { refused: true } : {}),
         ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
-      };
+      });
     }
 
     // Model wants to use tools — append the assistant's full response
@@ -430,6 +493,50 @@ export async function runAgenticLoop(
     const turnTools = response.toolCalls.map((tc) => tc.name);
     allToolsCalled.push(...turnTools);
 
+    // Tool-level event/hook callbacks for this turn (sprint 5). Each is left
+    // `undefined` when its underlying capability (onEvent / hooks) is unset,
+    // so `executeToolBatch`/`executeOne` take their pre-sprint-5 code path
+    // exactly — byte-identical when nothing new is configured (sc-5-5).
+    const onToolStart = onEvent
+      ? (call: ToolCall): void => {
+          safeEmit({ type: "tool-start", turn, name: call.name, input: call.input, toolUseId: call.id });
+        }
+      : undefined;
+
+    const onToolEnd = onEvent
+      ? (call: ToolCall, result: ToolResult): void => {
+          safeEmit({ type: "tool-end", turn, name: call.name, toolUseId: call.id, isError: result.isError === true });
+        }
+      : undefined;
+
+    // Fail-closed: a throwing preToolUse is treated as a deny, never as a
+    // crash (sc-5-4). Veto-only — never transforms `call.input` (nonGoal).
+    const preToolUseHook = hooks?.preToolUse;
+    const preToolUse = preToolUseHook
+      ? async (call: ToolCall): Promise<HookDecision> => {
+          try {
+            return await preToolUseHook({ name: call.name, input: call.input, toolUseId: call.id });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn(`preToolUse hook threw (treated as fail-closed deny): ${message}`);
+            return { allow: false, reason: "hook error (fail-closed)" };
+          }
+        }
+      : undefined;
+
+    // Swallow-and-log: a throwing postToolUse never crashes the loop (sc-5-4).
+    const postToolUseHook = hooks?.postToolUse;
+    const postToolUse = postToolUseHook
+      ? async (call: ToolCall, result: ToolResult): Promise<void> => {
+          try {
+            await postToolUseHook({ name: call.name, input: call.input, toolUseId: call.id }, result);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            logger.warn(`postToolUse hook threw (swallowed): ${message}`);
+          }
+        }
+      : undefined;
+
     // Execute each tool and collect results — delegated to executeToolBatch,
     // which runs contiguous read-only-annotated runs concurrently when
     // `parallelReadOnlyTools` is true, and everything else strictly serially
@@ -440,6 +547,10 @@ export async function runAgenticLoop(
       readOnlyTools,
       parallel: parallelReadOnlyTools === true,
       onToolUse,
+      onToolStart,
+      onToolEnd,
+      preToolUse,
+      postToolUse,
     });
 
     // Append tool results as a ToolResultMessage (user role).
@@ -451,6 +562,7 @@ export async function runAgenticLoop(
     messages.push(toolResultMessage);
 
     onTurnComplete?.(turn, turnTools);
+    safeEmit({ type: "turn-end", turn, toolsCalled: turnTools });
   }
 
   // Max turns exceeded — return what we have
@@ -458,7 +570,7 @@ export async function runAgenticLoop(
     `Agentic loop exceeded max turns (${maxTurns}). Returning partial result.`,
   );
 
-  return {
+  return finish({
     finalText:
       finalText ||
       "Max turns exceeded. The agent ran out of tool-use budget before completing.",
@@ -470,5 +582,5 @@ export async function runAgenticLoop(
     },
     stopReason: "max_turns_exceeded",
     ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
-  };
+  });
 }

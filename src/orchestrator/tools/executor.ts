@@ -1,5 +1,6 @@
 import type { ToolCall, ToolResult } from "../../providers/types.js";
 import type { ToolHandler } from "./handlers.js";
+import type { HookDecision } from "../loop-events.js";
 import { logger } from "../../utils/logger.js";
 
 /**
@@ -29,50 +30,102 @@ export interface ToolBatch {
   parallel: boolean;
   /** Called when a tool is dispatched (for logging/progress). Fires for every call, including unknown tools, before the handler lookup. */
   onToolUse?: (name: string, input: unknown) => void;
+  /**
+   * Dispatch-time observability event (agent-loop-capability-port sprint 5).
+   * Fires synchronously, BEFORE any await — same timing guarantee as
+   * `onToolUse` — so dispatch order is unaffected whether this is set or not.
+   */
+  onToolStart?: (call: ToolCall) => void;
+  /**
+   * Settle-time observability event, fired after a result (allowed, denied,
+   * or errored) is built, for every call.
+   */
+  onToolEnd?: (call: ToolCall, result: ToolResult) => void;
+  /**
+   * Host-side veto gate. Evaluated BEFORE the handler runs; a `{allow:false}`
+   * decision skips the handler and produces an `isError` rejection result
+   * instead. Always resolves to a decision — the caller (the loop) already
+   * wraps a throwing hook into a fail-closed deny before passing it in here,
+   * so the executor never needs its own try/catch around this call.
+   */
+  preToolUse?: (call: ToolCall) => Promise<HookDecision>;
+  /**
+   * Observes the result after execution (allowed, denied, or errored). The
+   * caller (the loop) already wraps a throwing hook in try/catch before
+   * passing it in here, so the executor never needs its own try/catch
+   * around this call either.
+   */
+  postToolUse?: (call: ToolCall, result: ToolResult) => void | Promise<void>;
 }
+
+/** The subset of `ToolBatch` that carries sprint-5's per-call hook callbacks. */
+type ToolExecHooks = Pick<ToolBatch, "onToolStart" | "onToolEnd" | "preToolUse" | "postToolUse">;
 
 // ── Single tool-call execution ───────────────────────────────────────
 
 /**
  * Execute a single tool call, mirroring the three exact result shapes the
- * pre-change serial loop produced (unknown-tool / success / thrown-handler).
- * Never throws — every failure path returns an `isError: true` ToolResult.
+ * pre-change serial loop produced (unknown-tool / success / thrown-handler),
+ * plus a fourth (veto-rejection) shape introduced in sprint 5. Never throws
+ * — every failure/veto path returns an `isError: true` ToolResult.
  */
 async function executeOne(
   toolCall: ToolCall,
   toolHandlers: Map<string, ToolHandler>,
   onToolUse?: (name: string, input: unknown) => void,
+  execHooks?: ToolExecHooks,
 ): Promise<ToolResult> {
   const toolName = toolCall.name;
   const toolInput = toolCall.input;
 
   onToolUse?.(toolName, toolInput);
+  execHooks?.onToolStart?.(toolCall);
+
+  /** Fire the settle-time observers, then return the result as-is. */
+  const finalize = async (result: ToolResult): Promise<ToolResult> => {
+    execHooks?.onToolEnd?.(toolCall, result);
+    await execHooks?.postToolUse?.(toolCall, result);
+    return result;
+  };
+
+  if (execHooks?.preToolUse) {
+    const decision = await execHooks.preToolUse(toolCall);
+    if (!decision.allow) {
+      const reason = decision.reason ?? "no reason given";
+      logger.warn(`Tool call to "${toolName}" was denied by policy: ${reason}`);
+      return finalize({
+        toolUseId: toolCall.id,
+        content: `Error: Tool call to "${toolName}" was denied by policy: ${reason}`,
+        isError: true,
+      });
+    }
+  }
 
   const handler = toolHandlers.get(toolName);
   if (!handler) {
     logger.warn(`Unknown tool requested: "${toolName}"`);
-    return {
+    return finalize({
       toolUseId: toolCall.id,
       content: `Error: Unknown tool "${toolName}". Available tools: ${[...toolHandlers.keys()].join(", ")}`,
       isError: true,
-    };
+    });
   }
 
   try {
     const result = await handler(toolInput);
-    return {
+    return finalize({
       toolUseId: toolCall.id,
       content: result.output,
       isError: result.isError,
-    };
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.warn(`Tool "${toolName}" threw: ${message}`);
-    return {
+    return finalize({
       toolUseId: toolCall.id,
       content: `Error: Tool execution failed: ${message}`,
       isError: true,
-    };
+    });
   }
 }
 
@@ -91,7 +144,18 @@ async function executeOne(
  *   propagates past its own slot.
  */
 export async function executeToolBatch(batch: ToolBatch): Promise<ToolResult[]> {
-  const { toolCalls, toolHandlers, readOnlyTools, parallel, onToolUse } = batch;
+  const {
+    toolCalls,
+    toolHandlers,
+    readOnlyTools,
+    parallel,
+    onToolUse,
+    onToolStart,
+    onToolEnd,
+    preToolUse,
+    postToolUse,
+  } = batch;
+  const execHooks: ToolExecHooks = { onToolStart, onToolEnd, preToolUse, postToolUse };
   const results: ToolResult[] = new Array(toolCalls.length);
 
   let i = 0;
@@ -102,7 +166,7 @@ export async function executeToolBatch(batch: ToolBatch): Promise<ToolResult[]> 
     if (!isEligible(i)) {
       // Not eligible for concurrency (flag off, or an unmarked/write tool) —
       // execute exactly one call, in place, before moving on.
-      results[i] = await executeOne(toolCalls[i], toolHandlers, onToolUse);
+      results[i] = await executeOne(toolCalls[i], toolHandlers, onToolUse, execHooks);
       i += 1;
       continue;
     }
@@ -113,13 +177,13 @@ export async function executeToolBatch(batch: ToolBatch): Promise<ToolResult[]> 
       j += 1;
     }
 
-    // Dispatch every call in the run — onToolUse fires synchronously, in
-    // original order, for the whole run before any handler settles (each
-    // async call runs synchronously up to its first `await`).
+    // Dispatch every call in the run — onToolUse/onToolStart fire
+    // synchronously, in original order, for the whole run before any handler
+    // settles (each async call runs synchronously up to its first `await`).
     const runResults = await Promise.all(
       toolCalls
         .slice(i, j)
-        .map((call) => executeOne(call, toolHandlers, onToolUse)),
+        .map((call) => executeOne(call, toolHandlers, onToolUse, execHooks)),
     );
     for (let k = 0; k < runResults.length; k++) {
       results[i + k] = runResults[k];
