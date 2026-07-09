@@ -181,6 +181,55 @@ describe("ClaudeCodeAdapter.chat — binary/timeout overrides (sc-4-5)", () => {
   });
 });
 
+// ── sc-2-2: total_cost_usd passthrough (real vendor cost, never estimated) ──
+
+describe("ClaudeCodeAdapter.chat — costUsd passthrough (sc-2-2)", () => {
+  it("returns costUsd equal to the CLI's parsed total_cost_usd when present", async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        type: "result",
+        result: "hi",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 42, output_tokens: 7 },
+        total_cost_usd: 0.0123,
+      }),
+      stderr: "",
+    } as never);
+
+    const adapter = new ClaudeCodeAdapter();
+    const res = await adapter.chat({
+      model: "opus",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(res.costUsd).toBe(0.0123);
+  });
+
+  it("omits costUsd entirely (Object.hasOwn false) when the CLI output lacks total_cost_usd", async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        type: "result",
+        result: "hi",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 42, output_tokens: 7 },
+      }),
+      stderr: "",
+    } as never);
+
+    const adapter = new ClaudeCodeAdapter();
+    const res = await adapter.chat({
+      model: "opus",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(Object.hasOwn(res, "costUsd")).toBe(false);
+  });
+});
+
 // ── documents-guard throw without calling execa ──────────────────────────────
 
 describe("ClaudeCodeAdapter.chat — documents-guard", () => {

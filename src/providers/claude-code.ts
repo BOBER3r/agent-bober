@@ -187,6 +187,12 @@ export class ClaudeCodeAdapter implements LLMClient {
         inputTokens: parsed.usage?.input_tokens ?? 0,
         outputTokens: parsed.usage?.output_tokens ?? 0,
       },
+      // Vendor-authoritative real cost (ADR-3: claude-code never estimates
+      // via CostMeter). Conditional-spread so the key is ABSENT — not
+      // `costUsd: undefined` — when an older CLI omits total_cost_usd.
+      ...(typeof parsed.total_cost_usd === "number"
+        ? { costUsd: parsed.total_cost_usd }
+        : {}),
     };
   }
 }
