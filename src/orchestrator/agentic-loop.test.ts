@@ -317,8 +317,9 @@ describe("runAgenticLoop — parallel read-only tool execution (sprint-4)", () =
     ]);
   }
 
-  it("sc-4-2: with parallelReadOnlyTools:true, a turn's read-only calls overlap (elapsed < sum of delays)", async () => {
-    const client = new ScriptedLoopClient([
+  /** Build a fresh scripted client for one tool-use turn followed by an ending turn. */
+  function makeScriptedTurnClient(): ScriptedLoopClient {
+    return new ScriptedLoopClient([
       {
         ...base,
         text: "",
@@ -331,10 +332,29 @@ describe("runAgenticLoop — parallel read-only tool execution (sprint-4)", () =
       },
       { ...base, text: "done", stopReason: "end" },
     ]);
+  }
 
-    const t0 = performance.now();
-    const result = await runAgenticLoop({
-      client,
+  it("sc-4-2: with parallelReadOnlyTools:true, a turn's read-only calls overlap — meaningfully faster than the SAME turn serial", async () => {
+    // Measure serial and parallel back-to-back so both share the same
+    // machine-load conditions — self-calibrated comparison instead of a
+    // fixed absolute-ms threshold (real setTimeout delays are used, not fake
+    // timers, per Pattern 7 — a hardcoded upper bound can flake on a loaded box).
+    const tSerialStart = performance.now();
+    const serialResult = await runAgenticLoop({
+      client: makeScriptedTurnClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: READ_ONLY_TOOLS,
+      toolHandlers: makeDelayedHandlers(),
+      maxTurns: 3,
+      // parallelReadOnlyTools intentionally omitted — byte-identical serial baseline.
+    });
+    const serialElapsed = performance.now() - tSerialStart;
+
+    const tParallelStart = performance.now();
+    const parallelResult = await runAgenticLoop({
+      client: makeScriptedTurnClient(),
       model: "m",
       systemPrompt: "s",
       userMessage: "u",
@@ -343,11 +363,16 @@ describe("runAgenticLoop — parallel read-only tool execution (sprint-4)", () =
       maxTurns: 3,
       parallelReadOnlyTools: true,
     });
-    const elapsed = performance.now() - t0;
+    const parallelElapsed = performance.now() - tParallelStart;
 
-    expect(elapsed).toBeLessThan(120);
-    expect(result.toolsCalled).toEqual(["read_file", "glob", "grep"]);
-    expect(result.stopReason).toBe("end");
+    // Hard lower bound — three sequential 50ms waits can never resolve faster
+    // than ~150ms, regardless of machine load.
+    expect(serialElapsed).toBeGreaterThanOrEqual(140);
+    expect(parallelElapsed).toBeLessThan(serialElapsed * 0.7);
+
+    expect(parallelResult.toolsCalled).toEqual(["read_file", "glob", "grep"]);
+    expect(parallelResult.stopReason).toBe("end");
+    expect(serialResult.toolsCalled).toEqual(["read_file", "glob", "grep"]);
   });
 
   it("sc-4-4: with the flag absent, the SAME read-only-annotated batch stays serial (elapsed >= 140ms)", async () => {

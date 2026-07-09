@@ -76,61 +76,57 @@ const READ_ONLY_NAMES = new Set(["read_file", "glob", "grep"]);
 // ── sc-4-2: proven concurrency + order preservation ──────────────────
 
 describe("executeToolBatch — concurrency proof (sc-4-2)", () => {
-  it("overlaps delayed read-only handlers when parallel:true (elapsed << sum of delays)", async () => {
-    const callOrder: string[] = [];
-    const handlers = new Map<string, ToolHandler>([
-      ["read_file", delayedHandler(50, "a", callOrder, "read_file")],
-      ["glob", delayedHandler(50, "b", callOrder, "glob")],
-      ["grep", delayedHandler(50, "c", callOrder, "grep")],
+  const DELAY_MS = 50;
+
+  const makeDelayedHandlers = () =>
+    new Map<string, ToolHandler>([
+      ["read_file", delayedHandler(DELAY_MS, "a", [], "read_file")],
+      ["glob", delayedHandler(DELAY_MS, "b", [], "glob")],
+      ["grep", delayedHandler(DELAY_MS, "c", [], "grep")],
     ]);
-    const calls = [
-      { id: "t1", name: "read_file", input: {} },
-      { id: "t2", name: "glob", input: {} },
-      { id: "t3", name: "grep", input: {} },
-    ];
 
-    const t0 = performance.now();
-    const results = await executeToolBatch({
-      toolCalls: calls,
-      toolHandlers: handlers,
-      readOnlyTools: READ_ONLY_NAMES,
-      parallel: true,
-    });
-    const elapsed = performance.now() - t0;
+  const CALLS = [
+    { id: "t1", name: "read_file", input: {} },
+    { id: "t2", name: "glob", input: {} },
+    { id: "t3", name: "grep", input: {} },
+  ];
 
-    // Sum of delays is ~150ms; concurrent execution should finish well under that.
-    expect(elapsed).toBeLessThan(120);
-
-    // Order preserved by original position/toolUseId, regardless of completion order.
-    expect(results.map((r) => r.toolUseId)).toEqual(["t1", "t2", "t3"]);
-    expect(results.map((r) => r.content)).toEqual(["a", "b", "c"]);
-    expect(results.every((r) => r.isError === false)).toBe(true);
-  });
-
-  it("meaningful-fixture guard: the SAME batch run with parallel:false takes >= 140ms", async () => {
-    const callOrder: string[] = [];
-    const handlers = new Map<string, ToolHandler>([
-      ["read_file", delayedHandler(50, "a", callOrder, "read_file")],
-      ["glob", delayedHandler(50, "b", callOrder, "glob")],
-      ["grep", delayedHandler(50, "c", callOrder, "grep")],
-    ]);
-    const calls = [
-      { id: "t1", name: "read_file", input: {} },
-      { id: "t2", name: "glob", input: {} },
-      { id: "t3", name: "grep", input: {} },
-    ];
-
-    const t0 = performance.now();
-    const results = await executeToolBatch({
-      toolCalls: calls,
-      toolHandlers: handlers,
+  it("overlaps delayed read-only handlers when parallel:true — meaningfully faster than the SAME batch serial, and preserves order", async () => {
+    // Measure serial and parallel back-to-back so both share the same
+    // machine-load conditions — this self-calibrates the comparison instead
+    // of relying on a fixed absolute-ms threshold (which can flake on a
+    // loaded CI/dev box, since real setTimeout delays are used, not fake
+    // timers — see the file banner comment).
+    const tSerialStart = performance.now();
+    const serialResults = await executeToolBatch({
+      toolCalls: CALLS,
+      toolHandlers: makeDelayedHandlers(),
       readOnlyTools: READ_ONLY_NAMES,
       parallel: false,
     });
-    const elapsed = performance.now() - t0;
+    const serialElapsed = performance.now() - tSerialStart;
 
-    expect(elapsed).toBeGreaterThanOrEqual(140);
-    expect(results.map((r) => r.toolUseId)).toEqual(["t1", "t2", "t3"]);
+    const tParallelStart = performance.now();
+    const parallelResults = await executeToolBatch({
+      toolCalls: CALLS,
+      toolHandlers: makeDelayedHandlers(),
+      readOnlyTools: READ_ONLY_NAMES,
+      parallel: true,
+    });
+    const parallelElapsed = performance.now() - tParallelStart;
+
+    // Hard lower bound — setTimeout never fires early, so serial (3 sequential
+    // 50ms waits) can never be faster than ~3 x DELAY_MS regardless of load.
+    expect(serialElapsed).toBeGreaterThanOrEqual(DELAY_MS * 3 - 15);
+    // Parallel must be meaningfully faster than serial for the identical
+    // batch, measured moments apart under the same conditions.
+    expect(parallelElapsed).toBeLessThan(serialElapsed * 0.7);
+
+    // Order preserved by original position/toolUseId, regardless of completion order.
+    expect(parallelResults.map((r) => r.toolUseId)).toEqual(["t1", "t2", "t3"]);
+    expect(parallelResults.map((r) => r.content)).toEqual(["a", "b", "c"]);
+    expect(parallelResults.every((r) => r.isError === false)).toBe(true);
+    expect(serialResults.map((r) => r.toolUseId)).toEqual(["t1", "t2", "t3"]);
   });
 });
 
