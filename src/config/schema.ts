@@ -124,6 +124,13 @@ export const GeneratorSectionSchema = z.object({
   effort: EffortSchema.optional(),
   /** Optional per-run USD spend ceiling. */
   budget: BudgetSectionSchema.optional(),
+  /**
+   * When true, contiguous read-only tool calls (read_file/glob/grep) within a
+   * turn execute concurrently instead of strictly serially (ADR-2, agent-loop
+   * capability port sprint 4). Optional, no default — absent/false is
+   * byte-identical to the pre-change serial loop.
+   */
+  parallelReadOnlyTools: z.boolean().optional(),
 });
 export type GeneratorSection = z.infer<typeof GeneratorSectionSchema>;
 

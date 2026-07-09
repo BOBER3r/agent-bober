@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import { performance } from "node:perf_hooks";
 import { runAgenticLoop } from "./agentic-loop.js";
 import { Budget } from "./workflow/budget.js";
 import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
@@ -291,5 +292,172 @@ describe("runAgenticLoop — budget ceiling + cumulative cost (sc-3-3, sc-3-4)",
 
     expect(result.stopReason).toBe("end");
     expect(result.costUsd).toBe(200);
+  });
+});
+
+// ── sc-4-2 / sc-4-4 / sc-4-5: parallel read-only tool execution ───────
+
+describe("runAgenticLoop — parallel read-only tool execution (sprint-4)", () => {
+  const READ_ONLY_TOOLS = [
+    { name: "read_file", readOnly: true, description: "r", input_schema: { type: "object" as const, properties: {} } },
+    { name: "glob", readOnly: true, description: "g", input_schema: { type: "object" as const, properties: {} } },
+    { name: "grep", readOnly: true, description: "s", input_schema: { type: "object" as const, properties: {} } },
+  ];
+
+  const delayed = (ms: number, out: string) => async () => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    return { output: out, isError: false };
+  };
+
+  function makeDelayedHandlers(): Map<string, () => Promise<{ output: string; isError: boolean }>> {
+    return new Map([
+      ["read_file", delayed(50, "a")],
+      ["glob", delayed(50, "b")],
+      ["grep", delayed(50, "c")],
+    ]);
+  }
+
+  it("sc-4-2: with parallelReadOnlyTools:true, a turn's read-only calls overlap (elapsed < sum of delays)", async () => {
+    const client = new ScriptedLoopClient([
+      {
+        ...base,
+        text: "",
+        stopReason: "tool_use",
+        toolCalls: [
+          { id: "t1", name: "read_file", input: {} },
+          { id: "t2", name: "glob", input: {} },
+          { id: "t3", name: "grep", input: {} },
+        ],
+      },
+      { ...base, text: "done", stopReason: "end" },
+    ]);
+
+    const t0 = performance.now();
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: READ_ONLY_TOOLS,
+      toolHandlers: makeDelayedHandlers(),
+      maxTurns: 3,
+      parallelReadOnlyTools: true,
+    });
+    const elapsed = performance.now() - t0;
+
+    expect(elapsed).toBeLessThan(120);
+    expect(result.toolsCalled).toEqual(["read_file", "glob", "grep"]);
+    expect(result.stopReason).toBe("end");
+  });
+
+  it("sc-4-4: with the flag absent, the SAME read-only-annotated batch stays serial (elapsed >= 140ms)", async () => {
+    const client = new ScriptedLoopClient([
+      {
+        ...base,
+        text: "",
+        stopReason: "tool_use",
+        toolCalls: [
+          { id: "t1", name: "read_file", input: {} },
+          { id: "t2", name: "glob", input: {} },
+          { id: "t3", name: "grep", input: {} },
+        ],
+      },
+      { ...base, text: "done", stopReason: "end" },
+    ]);
+
+    const t0 = performance.now();
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: READ_ONLY_TOOLS,
+      toolHandlers: makeDelayedHandlers(),
+      maxTurns: 3,
+      // parallelReadOnlyTools intentionally omitted
+    });
+    const elapsed = performance.now() - t0;
+
+    expect(elapsed).toBeGreaterThanOrEqual(140);
+    expect(result.toolsCalled).toEqual(["read_file", "glob", "grep"]);
+  });
+
+  it("sc-4-4: with parallelReadOnlyTools:true but UNANNOTATED tools, execution stays serial", async () => {
+    const plainTools = [
+      { name: "read_file", description: "r", input_schema: { type: "object" as const, properties: {} } },
+      { name: "glob", description: "g", input_schema: { type: "object" as const, properties: {} } },
+    ];
+    const client = new ScriptedLoopClient([
+      {
+        ...base,
+        text: "",
+        stopReason: "tool_use",
+        toolCalls: [
+          { id: "t1", name: "read_file", input: {} },
+          { id: "t2", name: "glob", input: {} },
+        ],
+      },
+      { ...base, text: "done", stopReason: "end" },
+    ]);
+
+    const t0 = performance.now();
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: plainTools,
+      toolHandlers: new Map([
+        ["read_file", delayed(40, "a")],
+        ["glob", delayed(40, "b")],
+      ]),
+      maxTurns: 3,
+      parallelReadOnlyTools: true,
+    });
+    const elapsed = performance.now() - t0;
+
+    expect(elapsed).toBeGreaterThanOrEqual(70); // ~80ms serial, never overlaps unannotated tools
+    expect(result.toolsCalled).toEqual(["read_file", "glob"]);
+  });
+
+  it("sc-4-3: a thrown handler mid-batch produces an in-slot error result without aborting the turn", async () => {
+    const client = new ScriptedLoopClient([
+      {
+        ...base,
+        text: "",
+        stopReason: "tool_use",
+        toolCalls: [
+          { id: "t1", name: "read_file", input: {} },
+          { id: "t2", name: "glob", input: {} },
+          { id: "t3", name: "grep", input: {} },
+        ],
+      },
+      { ...base, text: "done", stopReason: "end" },
+    ]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: READ_ONLY_TOOLS,
+      toolHandlers: new Map([
+        ["read_file", async () => ({ output: "a", isError: false })],
+        [
+          "glob",
+          async () => {
+            throw new Error("boom");
+          },
+        ],
+        ["grep", async () => ({ output: "c", isError: false })],
+      ]),
+      maxTurns: 3,
+      parallelReadOnlyTools: true,
+    });
+
+    // The loop completes normally (turn continues, second turn ends it) —
+    // the throw never propagates out of the tool-execution step.
+    expect(result.stopReason).toBe("end");
+    expect(result.toolsCalled).toEqual(["read_file", "glob", "grep"]);
   });
 });

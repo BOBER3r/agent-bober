@@ -37,6 +37,13 @@ export interface JsonSchemaObject {
 export interface ToolDef {
   /** Unique tool name (snake_case). */
   name: string;
+  /**
+   * True for side-effect-free tools eligible for concurrent execution
+   * (ADR-2, agent-loop-capability-port sprint 4). Absent (not `false`) means
+   * "unknown/serial" — the loop only parallelizes tools explicitly marked
+   * `true`, so omitting this field keeps existing tool defs byte-identical.
+   */
+  readOnly?: boolean;
   /** Human-readable description of what the tool does. */
   description: string;
   /** JSON Schema object describing the tool's input parameters. */

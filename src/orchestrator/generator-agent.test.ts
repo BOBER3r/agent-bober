@@ -244,3 +244,44 @@ describe("runGenerator — effort/budget loop wiring (sc-3-6)", () => {
     expect(Object.hasOwn(passedParams, "budget")).toBe(false);
   });
 });
+
+// ── sc-4-5: parallelReadOnlyTools per-role config flag reaches AgenticLoopParams ──
+
+describe("runGenerator — parallelReadOnlyTools loop wiring (sc-4-5)", () => {
+  beforeEach(() => {
+    loopSpy.mockClear();
+    clientSpy.mockClear();
+  });
+
+  it("omits parallelReadOnlyTools entirely when config lacks it (byte-identical invocation)", async () => {
+    const config = makeConfig({});
+
+    await runGenerator(testHandoff, "/tmp/test-proj", config);
+
+    const passedParams = loopSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(Object.hasOwn(passedParams, "parallelReadOnlyTools")).toBe(false);
+  });
+
+  it("passes parallelReadOnlyTools:true when config.generator.parallelReadOnlyTools is true", async () => {
+    const config = makeConfig({ parallelReadOnlyTools: true });
+
+    await runGenerator(testHandoff, "/tmp/test-proj", config);
+
+    const passedParams = loopSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(passedParams.parallelReadOnlyTools).toBe(true);
+  });
+
+  it("passes parallelReadOnlyTools:false explicitly when config sets it false", async () => {
+    const config = makeConfig({ parallelReadOnlyTools: false });
+
+    await runGenerator(testHandoff, "/tmp/test-proj", config);
+
+    const passedParams = loopSpy.mock.calls[0][0] as Record<string, unknown>;
+    expect(passedParams.parallelReadOnlyTools).toBe(false);
+  });
+
+  it("existing configs without the field still parse via createDefaultConfig (sc-4-5)", () => {
+    const config = createDefaultConfig("x", "brownfield");
+    expect(Object.hasOwn(config.generator, "parallelReadOnlyTools")).toBe(false);
+  });
+});

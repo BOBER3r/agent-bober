@@ -1,9 +1,10 @@
-import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage, ToolResult } from "../providers/types.js";
+import type { LLMClient, ToolDef, Message, AssistantMessage, ToolResultMessage } from "../providers/types.js";
 
 import type { ToolHandler } from "./tools/index.js";
 import type { Effort } from "../config/schema.js";
 import type { Budget } from "./workflow/budget.js";
 import { logger } from "../utils/logger.js";
+import { executeToolBatch } from "./tools/executor.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -32,6 +33,15 @@ export interface AgenticLoopParams {
    * throwing — see ADR-4. `assertWithinBudget()` is never called from the loop.
    */
   budget?: Budget;
+  /**
+   * When true, contiguous runs of read-only-annotated tool calls (per-tool
+   * `ToolDef.readOnly === true`, derived once from `tools`) execute
+   * concurrently within a turn; everything else stays strictly serial
+   * (ADR-2). Absent/false (the default) is byte-identical to the pre-change
+   * serial for-await loop — order, error shapes, and `onToolUse` behavior
+   * are unchanged.
+   */
+  parallelReadOnlyTools?: boolean;
   /** Called when the model invokes a tool (for logging/progress). */
   onToolUse?: (name: string, input: unknown) => void;
   /** Called after each completed turn (for progress tracking). */
@@ -263,12 +273,20 @@ export async function runAgenticLoop(
     maxTokens = 16384,
     effort,
     budget,
+    parallelReadOnlyTools,
     onToolUse,
     onTurnComplete,
     completionCheck,
     maxNudges = 2,
     nudgeMessage,
   } = params;
+
+  // Derived once, from the caller-supplied tool schemas — the loop never
+  // hard-codes a tool-name allow-list (ADR-2). Absent `readOnly` => not in
+  // the set => always serial for that tool, regardless of the flag.
+  const readOnlyTools = new Set(
+    tools.filter((t) => t.readOnly === true).map((t) => t.name),
+  );
 
   const messages: Message[] = [
     { role: "user", content: userMessage },
@@ -406,46 +424,23 @@ export async function runAgenticLoop(
     };
     messages.push(assistantMessage);
 
-    // Execute each tool and collect results
-    const toolResults: ToolResult[] = [];
-    const turnTools: string[] = [];
+    // Name accumulation MUST follow input order regardless of parallelism —
+    // done up front, in a dedicated pass, so it's unaffected by the executor's
+    // internal concurrency.
+    const turnTools = response.toolCalls.map((tc) => tc.name);
+    allToolsCalled.push(...turnTools);
 
-    for (const toolCall of response.toolCalls) {
-      const toolName = toolCall.name;
-      const toolInput = toolCall.input;
-      turnTools.push(toolName);
-      allToolsCalled.push(toolName);
-
-      onToolUse?.(toolName, toolInput);
-
-      const handler = toolHandlers.get(toolName);
-      if (!handler) {
-        logger.warn(`Unknown tool requested: "${toolName}"`);
-        toolResults.push({
-          toolUseId: toolCall.id,
-          content: `Error: Unknown tool "${toolName}". Available tools: ${[...toolHandlers.keys()].join(", ")}`,
-          isError: true,
-        });
-        continue;
-      }
-
-      try {
-        const result = await handler(toolInput);
-        toolResults.push({
-          toolUseId: toolCall.id,
-          content: result.output,
-          isError: result.isError,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.warn(`Tool "${toolName}" threw: ${message}`);
-        toolResults.push({
-          toolUseId: toolCall.id,
-          content: `Error: Tool execution failed: ${message}`,
-          isError: true,
-        });
-      }
-    }
+    // Execute each tool and collect results — delegated to executeToolBatch,
+    // which runs contiguous read-only-annotated runs concurrently when
+    // `parallelReadOnlyTools` is true, and everything else strictly serially
+    // (byte-identical to the old for-await loop when the flag is off).
+    const toolResults = await executeToolBatch({
+      toolCalls: response.toolCalls,
+      toolHandlers,
+      readOnlyTools,
+      parallel: parallelReadOnlyTools === true,
+      onToolUse,
+    });
 
     // Append tool results as a ToolResultMessage (user role).
     // The adapter converts this to provider-specific format.

@@ -56,6 +56,7 @@ export async function runGenerator(
   const maxTurns = config.generator.maxTurnsPerSprint;
   const effort = config.generator.effort;
   const budget = budgetFromMaxUsd(config.generator.budget?.maxUsd);
+  const parallelReadOnly = config.generator.parallelReadOnlyTools;
 
   // Build tool set (generator gets full access — UNION mode when gated:
   // all original tools retained AND graph_* tools added).
@@ -128,6 +129,7 @@ When you are done, your final response must contain ONLY a JSON object with this
     maxTokens: 16384,
     ...(effort !== undefined ? { effort } : {}),
     ...(budget !== undefined ? { budget } : {}),
+    ...(parallelReadOnly !== undefined ? { parallelReadOnlyTools: parallelReadOnly } : {}),
     onToolUse: (name, input) => {
       const inp = input as Record<string, unknown>;
       if (name === "write_file" || name === "edit_file") {

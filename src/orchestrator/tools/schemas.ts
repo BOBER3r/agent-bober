@@ -29,6 +29,7 @@ export const bashTool: ToolDef = {
 
 export const readFileTool: ToolDef = {
   name: "read_file",
+  readOnly: true,
   description:
     "Read a file's contents. Returns the file content with line numbers. Use offset and limit to read specific sections of large files.",
   input_schema: {
@@ -101,6 +102,7 @@ export const editFileTool: ToolDef = {
 
 export const globTool: ToolDef = {
   name: "glob",
+  readOnly: true,
   description:
     'Find files matching a glob pattern. Returns a list of matching file paths relative to the search directory. Example patterns: "**/*.ts", "src/components/**/*.tsx", "*.json".',
   input_schema: {
@@ -122,6 +124,7 @@ export const globTool: ToolDef = {
 
 export const grepTool: ToolDef = {
   name: "grep",
+  readOnly: true,
   description:
     "Search file contents using a regular expression pattern. Returns matching lines with file paths and line numbers.",
   input_schema: {
