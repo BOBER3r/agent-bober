@@ -753,4 +753,23 @@ describe("OpenAIAdapter — documents (PDF) rendering", () => {
     };
     expect(callArgs.messages[1]).toEqual({ role: "user", content: "hi" });
   });
+
+  // ── onTextDelta no-op (sc-8-3) ─────────────────────────────────────
+
+  it("sc-8-3: accepts ChatParams.onTextDelta without error, never invokes it, and sends the byte-identical request", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hi" }));
+    const adapter = await makeAdapter();
+    const onTextDelta = vi.fn();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta,
+    });
+
+    expect(onTextDelta).not.toHaveBeenCalled();
+    const callArgs = createFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(callArgs)).not.toContain("onTextDelta");
+  });
 });

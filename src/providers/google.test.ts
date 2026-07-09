@@ -700,4 +700,23 @@ describe("GoogleAdapter — documents (PDF) rendering", () => {
     };
     expect(callArgs.contents[0]).toEqual({ role: "user", parts: [{ text: "hi" }] });
   });
+
+  // ── onTextDelta no-op (sc-8-3) ─────────────────────────────────────
+
+  it("sc-8-3: accepts ChatParams.onTextDelta without error, never invokes it, and sends the byte-identical request", async () => {
+    generateContentFn.mockResolvedValue(makeGeminiResponse({ textParts: ["ok"] }));
+    const adapter = await makeAdapter();
+    const onTextDelta = vi.fn();
+
+    await adapter.chat({
+      model: "gemini-2.5-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta,
+    });
+
+    expect(onTextDelta).not.toHaveBeenCalled();
+    const callArgs = generateContentFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(callArgs)).not.toContain("onTextDelta");
+  });
 });

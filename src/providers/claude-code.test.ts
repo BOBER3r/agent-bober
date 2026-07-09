@@ -248,3 +248,32 @@ describe("ClaudeCodeAdapter.chat — documents-guard", () => {
     expect(mockedExeca).not.toHaveBeenCalled();
   });
 });
+
+// ── onTextDelta no-op (sc-8-3) ──────────────────────────────────────────────
+
+describe("ClaudeCodeAdapter.chat — onTextDelta no-op (sc-8-3)", () => {
+  it("accepts ChatParams.onTextDelta without error and never invokes it (text-only CLI boundary)", async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        type: "result",
+        result: "hi",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      stderr: "",
+    } as never);
+
+    const adapter = new ClaudeCodeAdapter();
+    const onTextDelta = vi.fn();
+    const res = await adapter.chat({
+      model: "opus",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta,
+    });
+
+    expect(onTextDelta).not.toHaveBeenCalled();
+    expect(res.text).toBe("hi");
+  });
+});
