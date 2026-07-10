@@ -10,10 +10,10 @@ import { performance } from "node:perf_hooks";
 import { mkdtemp, rm, readFile, writeFile, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAgenticLoop, resumeSession, forkSession } from "./agentic-loop.js";
+import { runAgenticLoop, resumeSession, forkSession, type SubagentDef } from "./agentic-loop.js";
 import { Budget } from "./workflow/budget.js";
 import { SessionStore } from "./session-store.js";
-import type { LLMClient, ChatParams, ChatResponse, Message } from "../providers/types.js";
+import type { LLMClient, ChatParams, ChatResponse, Message, ToolResultMessage } from "../providers/types.js";
 import type { LoopEvent } from "./loop-events.js";
 
 // ── Fake LLMClient ───────────────────────────────────────────────────
@@ -1766,5 +1766,266 @@ describe("runAgenticLoop — mid-turn interrupt / AbortSignal (sprint 9)", () =>
     });
 
     expect(Object.hasOwn(client.lastParams as object, "abortSignal")).toBe(false);
+  });
+});
+
+// ── sprint 10: in-process scoped subagents (spawn_subagent) ───────────
+
+describe("runAgenticLoop — in-process scoped subagents (sprint 10)", () => {
+  /**
+   * Scripted client that branches on `params.system` so a single client
+   * instance can play both the parent AND the (fresh-context) child roles —
+   * mirroring the sprint-10 briefing's test recipe (§7).
+   */
+  class ParentChildScriptedClient implements LLMClient {
+    calls: ChatParams[] = [];
+    childCallCount = 0;
+    private parentIdx = 0;
+    constructor(
+      private readonly parentResponses: ChatResponse[],
+      private readonly childResponses: ChatResponse[],
+    ) {}
+    async chat(params: ChatParams): Promise<ChatResponse> {
+      this.calls.push(params);
+      if (params.system === "CHILD-PROMPT") {
+        const r = this.childResponses[Math.min(this.childCallCount, this.childResponses.length - 1)];
+        this.childCallCount += 1;
+        return r;
+      }
+      const r = this.parentResponses[Math.min(this.parentIdx, this.parentResponses.length - 1)];
+      this.parentIdx += 1;
+      return r;
+    }
+  }
+
+  const toolA = { name: "tool_a", description: "a", input_schema: { type: "object" as const, properties: {} } };
+  const toolB = { name: "tool_b", description: "b", input_schema: { type: "object" as const, properties: {} } };
+  const parentHandlers = (): Map<string, (input: Record<string, unknown>) => Promise<{ output: string; isError: boolean }>> =>
+    new Map([
+      ["tool_a", async () => ({ output: "a-ran", isError: false })],
+      ["tool_b", async () => ({ output: "b-ran", isError: false })],
+    ]);
+
+  const defs: SubagentDef[] = [
+    {
+      name: "writer",
+      description: "writes stuff",
+      systemPrompt: "CHILD-PROMPT",
+      tools: ["tool_a"],
+    },
+  ];
+
+  function findToolResultMessage(messages: Message[]): ToolResultMessage | undefined {
+    return messages.find((m): m is ToolResultMessage => "toolResults" in m);
+  }
+
+  it("sc-10-1: child sees ONLY scoped tools + fresh history; finalText returns as the parent's tool result", async () => {
+    const client = new ParentChildScriptedClient(
+      [
+        {
+          text: "",
+          toolCalls: [{ id: "t1", name: "spawn_subagent", input: { name: "writer", task: "do X" } }],
+          stopReason: "tool_use",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+        { text: "parent done", toolCalls: [], stopReason: "end", usage: { inputTokens: 1, outputTokens: 1 } },
+      ],
+      [{ text: "child summary", toolCalls: [], stopReason: "end", usage: { inputTokens: 2, outputTokens: 2 } }],
+    );
+
+    const result = await runAgenticLoop({
+      client,
+      model: "parent-model",
+      systemPrompt: "PARENT-PROMPT",
+      userMessage: "parent task",
+      tools: [toolA, toolB],
+      toolHandlers: parentHandlers(),
+      maxTurns: 5,
+      subagents: defs,
+    });
+
+    expect(result.finalText).toBe("parent done");
+    expect(result.stopReason).toBe("end");
+    expect(client.childCallCount).toBe(1);
+
+    const childCall = client.calls.find((c) => c.system === "CHILD-PROMPT");
+    expect(childCall).toBeDefined();
+    // ONLY the scoped subset (tool_a) — never tool_b or spawn_subagent itself.
+    expect(childCall!.tools?.map((t) => t.name)).toEqual(["tool_a"]);
+    // Fresh history: exactly the delegated task, no parent turns.
+    expect(childCall!.messages).toEqual([{ role: "user", content: "do X" }]);
+
+    // The parent's SECOND request carries the child's finalText as the tool result.
+    const parentCalls = client.calls.filter((c) => c.system === "PARENT-PROMPT");
+    expect(parentCalls).toHaveLength(2);
+    const toolResultMsg = findToolResultMessage(parentCalls[1].messages);
+    expect(toolResultMsg?.toolResults[0]).toEqual({
+      toolUseId: "t1",
+      content: "child summary",
+      isError: false,
+    });
+  });
+
+  it("sc-10-3: a child refusal surfaces as an isError tool result; the parent loop continues to completion", async () => {
+    const client = new ParentChildScriptedClient(
+      [
+        {
+          text: "",
+          toolCalls: [{ id: "t1", name: "spawn_subagent", input: { name: "writer", task: "do X" } }],
+          stopReason: "tool_use",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+        {
+          text: "parent handled it",
+          toolCalls: [],
+          stopReason: "end",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+      ],
+      [
+        {
+          text: "I can't help with that.",
+          toolCalls: [],
+          stopReason: "refusal",
+          usage: { inputTokens: 1, outputTokens: 1 },
+        },
+      ],
+    );
+
+    const result = await runAgenticLoop({
+      client,
+      model: "parent-model",
+      systemPrompt: "PARENT-PROMPT",
+      userMessage: "parent task",
+      tools: [toolA, toolB],
+      toolHandlers: parentHandlers(),
+      maxTurns: 5,
+      subagents: defs,
+    });
+
+    // Loop continues to a normal parent completion — never throws.
+    expect(result.finalText).toBe("parent handled it");
+    expect(result.stopReason).toBe("end");
+
+    const parentCalls = client.calls.filter((c) => c.system === "PARENT-PROMPT");
+    const toolResultMsg = findToolResultMessage(parentCalls[1].messages);
+    expect(toolResultMsg?.toolResults[0].isError).toBe(true);
+    expect(toolResultMsg?.toolResults[0].content).toContain("refused");
+  });
+
+  it("sc-10-2/sc-10-3: a shared Budget ceiling crossed by the child stops it with budget_exceeded, and the parent's own next turn is capped too (combined spend)", async () => {
+    const budget = new Budget({ maxUsd: 1.0 });
+
+    const client = new ParentChildScriptedClient(
+      [
+        {
+          text: "",
+          toolCalls: [{ id: "t1", name: "spawn_subagent", input: { name: "writer", task: "do X" } }],
+          stopReason: "tool_use",
+          usage: { inputTokens: 1, outputTokens: 1 },
+          costUsd: 0.3,
+        },
+        { text: "parent done", toolCalls: [], stopReason: "end", usage: { inputTokens: 1, outputTokens: 1 } },
+      ],
+      [
+        {
+          text: "child working...",
+          toolCalls: [],
+          stopReason: "end",
+          usage: { inputTokens: 2, outputTokens: 2 },
+          costUsd: 0.8,
+        },
+      ],
+    );
+
+    const result = await runAgenticLoop({
+      client,
+      model: "parent-model",
+      systemPrompt: "PARENT-PROMPT",
+      userMessage: "parent task",
+      tools: [toolA, toolB],
+      toolHandlers: parentHandlers(),
+      maxTurns: 5,
+      subagents: defs,
+      budget,
+    });
+
+    // Combined spend (parent 0.3 + child 0.8) crossed the 1.0 ceiling — the
+    // SAME Budget instance accounts for both (sc-10-2).
+    expect(budget.usdSpent).toBeCloseTo(1.1, 5);
+    expect(client.childCallCount).toBe(1);
+
+    // The child's own budget_exceeded stop surfaces to the parent as an
+    // isError tool result naming it — never a throw (sc-10-3).
+    const parentCalls = client.calls.filter((c) => c.system === "PARENT-PROMPT");
+    expect(parentCalls).toHaveLength(2);
+    const toolResultMsg = findToolResultMessage(parentCalls[1].messages);
+    expect(toolResultMsg?.toolResults[0].isError).toBe(true);
+    expect(toolResultMsg?.toolResults[0].content).toContain("budget_exceeded");
+
+    // A child cannot out-spend a parent ceiling: the parent's own subsequent
+    // turn is capped by the SAME (already-exceeded) shared budget too.
+    expect(result.stopReason).toBe("budget_exceeded");
+  });
+
+  it("sc-10-4: without a subagents param, the tool list is byte-identical (same array reference reaches chat())", async () => {
+    const client = new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]);
+    const tools = [toolA, toolB];
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools,
+      toolHandlers: parentHandlers(),
+      maxTurns: 3,
+    });
+
+    expect(client.lastParams?.tools).toBe(tools);
+    expect(client.lastParams?.tools?.some((t) => t.name === "spawn_subagent")).toBe(false);
+  });
+
+  it("sc-10-4: an EMPTY subagents array is also byte-identical (no spawn_subagent tool registered)", async () => {
+    const client = new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]);
+    const tools = [toolA, toolB];
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools,
+      toolHandlers: parentHandlers(),
+      maxTurns: 3,
+      subagents: [],
+    });
+
+    expect(client.lastParams?.tools).toBe(tools);
+  });
+
+  it("sc-10-4: a paired run with vs. without (unused) subagents produces a deep-equal AgenticLoopResult", async () => {
+    const withSubagents = await runAgenticLoop({
+      client: new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [toolA],
+      toolHandlers: new Map([["tool_a", async () => ({ output: "a-ran", isError: false })]]),
+      maxTurns: 3,
+      subagents: defs,
+    });
+
+    const withoutSubagents = await runAgenticLoop({
+      client: new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [toolA],
+      toolHandlers: new Map([["tool_a", async () => ({ output: "a-ran", isError: false })]]),
+      maxTurns: 3,
+    });
+
+    expect(withSubagents).toEqual(withoutSubagents);
   });
 });

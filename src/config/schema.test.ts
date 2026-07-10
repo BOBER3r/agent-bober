@@ -13,6 +13,8 @@ import {
   GeneratorSectionSchema,
   PlannerSectionSchema,
   CuratorSectionSchema,
+  ToolsSectionSchema,
+  McpBridgeServerSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -552,6 +554,79 @@ describe("VaultObsidianSchema — standalone validation", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.mcpEnv).toEqual({ TOKEN: "abc", VAULT_PATH: "/my/vault" });
+    }
+  });
+});
+
+// ── ToolsSectionSchema tests (sprint 10 — opt-in MCP tool bridge) ─────
+
+describe("BoberConfigSchema — tools section is optional (sc-10-4)", () => {
+  it("parses a config without a tools section (tools is undefined — byte-identical to pre-sprint-10 configs)", () => {
+    const result = BoberConfigSchema.safeParse(minimalBaseForVault);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tools).toBeUndefined();
+    }
+  });
+
+  it("createDefaultConfig never sets a tools section (default config stays byte-identical)", () => {
+    // Mirrors the egress-axis idiom (Pattern A): new opt-in sections are never
+    // added to createDefaultConfig's base — only BoberConfigSchema.optional().
+    expect(Object.hasOwn(BoberConfigSchema.parse(minimalBaseForVault), "tools")).toBe(false);
+  });
+
+  it("defaults tools.mcpBridge.enabled to false when omitted", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      tools: { mcpBridge: { server: { command: "node" } } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tools?.mcpBridge?.enabled).toBe(false);
+    }
+  });
+
+  it("parses a config with tools.mcpBridge fully specified and round-trips command/args", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      tools: {
+        mcpBridge: {
+          enabled: true,
+          server: { command: "npx", args: ["-y", "some-mcp-server"] },
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tools?.mcpBridge?.enabled).toBe(true);
+      expect(result.data.tools?.mcpBridge?.server.command).toBe("npx");
+      expect(result.data.tools?.mcpBridge?.server.args).toEqual(["-y", "some-mcp-server"]);
+    }
+  });
+
+  it("rejects tools.mcpBridge.server.command as empty string", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBaseForVault,
+      tools: { mcpBridge: { server: { command: "" } } },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("ToolsSectionSchema / McpBridgeServerSchema — standalone validation", () => {
+  it("parses an empty tools section (mcpBridge is undefined)", () => {
+    const result = ToolsSectionSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mcpBridge).toBeUndefined();
+    }
+  });
+
+  it("defaults McpBridgeServerSchema.args to an empty array when omitted", () => {
+    const result = McpBridgeServerSchema.safeParse({ command: "node" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.args).toEqual([]);
     }
   });
 });

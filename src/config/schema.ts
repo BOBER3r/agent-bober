@@ -530,6 +530,31 @@ export const ResearchSectionSchema = z.object({
 });
 export type ResearchSection = z.infer<typeof ResearchSectionSchema>;
 
+// ── Tools Section (Sprint 10 — opt-in MCP tool bridge, default off) ──
+
+/** One configured MCP server the opt-in bridge spawns to expose its tools as loop ToolDefs. */
+export const McpBridgeServerSchema = z.object({
+  /** Executable to spawn (e.g., "node", "npx", "/usr/local/bin/some-mcp-server"). */
+  command: z.string().min(1),
+  args: z.array(z.string()).default([]),
+});
+export type McpBridgeServer = z.infer<typeof McpBridgeServerSchema>;
+
+export const ToolsSectionSchema = z.object({
+  /** Opt-in bridge exposing a configured MCP server's tools as agentic-loop
+   *  ToolDefs (agent-loop-capability-port sprint 10). Default false —
+   *  disabled means no MCP process/transport is ever created and the loop's
+   *  tool list is unchanged. Only constructed by a consumer that reads
+   *  `enabled === true` at the call site (never at config parse time). */
+  mcpBridge: z
+    .object({
+      enabled: z.boolean().default(false),
+      server: McpBridgeServerSchema,
+    })
+    .optional(),
+});
+export type ToolsSection = z.infer<typeof ToolsSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -571,6 +596,8 @@ export const BoberConfigSchema = z.object({
   calendar: CalendarSectionSchema.optional(),
   // ── Sprint 3 (research-scheduler): online-research egress axis ──
   research: ResearchSectionSchema.optional(),
+  // ── Sprint 10 (agent-loop-capability-port): opt-in MCP tool bridge axis ──
+  tools: ToolsSectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

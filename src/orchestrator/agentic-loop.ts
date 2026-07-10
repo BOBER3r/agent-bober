@@ -17,6 +17,9 @@ import { sessionForkId } from "./session-store.js";
 import { logger } from "../utils/logger.js";
 import { executeToolBatch } from "./tools/executor.js";
 import { summarizeMessages } from "./compaction.js";
+import { buildSubagentTool, type SubagentDef } from "./subagents.js";
+
+export type { SubagentDef } from "./subagents.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -142,6 +145,17 @@ export interface AgenticLoopParams {
    * using it for a further turn. Absent (the default) is byte-identical.
    */
   abortSignal?: AbortSignal;
+  /**
+   * Opt-in in-process scoped subagents (agent-loop-capability-port sprint 10).
+   * When non-empty, a `spawn_subagent` ToolDef is registered whose handler
+   * runs a NESTED `runAgenticLoop` with fresh context, the def's scoped tool
+   * subset, per-agent model/effort/maxTurns, and the SAME `Budget` instance
+   * (combined spend visible; a child cannot out-spend a parent ceiling).
+   * One-level hard cap: children always get `subagents: undefined` — no
+   * recursive nesting. Absent/empty => the tool list is byte-identical
+   * (sc-10-4).
+   */
+  subagents?: SubagentDef[];
 }
 
 export interface AgenticLoopResult {
@@ -373,8 +387,6 @@ export async function runAgenticLoop(
     model,
     systemPrompt,
     userMessage,
-    tools,
-    toolHandlers,
     maxTurns,
     maxTokens = 16384,
     effort,
@@ -393,6 +405,24 @@ export async function runAgenticLoop(
     compaction,
     abortSignal,
   } = params;
+
+  // Locally-augmentable tool set (sprint 10). When `params.subagents` is
+  // absent/empty, `tools`/`toolHandlers` keep the SAME reference as
+  // `params.tools`/`params.toolHandlers` — so `readOnlyTools` below and every
+  // `chat` call's `tools` argument stay byte-identical to the pre-sprint-10
+  // behavior (sc-10-4). Registered BEFORE `readOnlyTools` is derived so the
+  // spawn_subagent tool itself participates in that derivation (it is never
+  // marked readOnly — ADR-2).
+  let tools = params.tools;
+  let toolHandlers = params.toolHandlers;
+  if (params.subagents && params.subagents.length > 0) {
+    const { tool, handler } = buildSubagentTool(params.subagents, params, {
+      runLoop: runAgenticLoop,
+    });
+    tools = [...params.tools, tool];
+    toolHandlers = new Map(params.toolHandlers);
+    toolHandlers.set(tool.name, handler);
+  }
 
   // Derived once, from the caller-supplied tool schemas — the loop never
   // hard-codes a tool-name allow-list (ADR-2). Absent `readOnly` => not in
