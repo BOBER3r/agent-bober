@@ -216,6 +216,49 @@ batch never executed) rather than driving a further turn. On the Anthropic path 
 the SDK's `APIUserAbortError`; the loop classifies it as an abort via the **signal's own `aborted`
 flag** (that error leaves `err.name` as `"Error"`, not `"AbortError"`) and **never retries** it.
 
+### In-process subagents & opt-in MCP tool bridge
+
+Two orchestrator-layer capabilities extend the loop's **tool set** rather than an adapter's request
+shape; both are **additive** and **default-off / byte-identical when absent**.
+
+**In-process scoped subagents** — `AgenticLoopParams.subagents?: SubagentDef[]` (programmatic; **no**
+config schema, no role auto-enables it). When present and non-empty, `runAgenticLoop` registers one
+`spawn_subagent` tool whose handler runs a **nested** loop with a **fresh** message history, a
+**scoped** subset of the parent's tools (`SubagentDef.tools` are the parent's tool **names**), optional
+per-agent `model` / `effort` / `maxTurns`, and the **SAME parent `Budget` instance** (a child cannot
+out-spend a parent ceiling). Only the child's `finalText` returns to the parent as the tool result;
+refusal / budget / error / abort come back as an `isError` result naming the stop reason — **never a
+throw**. Children always get `subagents: undefined` (a **one-level hard cap**). See
+[docs/sprints](./sprints/sprint-spec-20260709-agent-loop-capability-port-10.md) for the child param
+inherit/exclude table.
+
+**Opt-in MCP tool bridge** — the **only** loop-capability config surface added by the extensions:
+
+```jsonc
+// bober.config.json — opt-in MCP tool bridge (default OFF)
+{
+  "tools": {
+    "mcpBridge": {
+      "enabled": true,
+      "server": { "command": "npx", "args": ["-y", "some-mcp-server"] }
+    }
+  }
+}
+```
+
+When enabled, a consumer can expose the configured MCP server's tools as `mcp__`-prefixed loop
+`ToolDef`s (routed through the repo's **existing** `@modelcontextprotocol/sdk` transport — no new dep),
+via `createMcpToolBridge` + the `runWithMcpBridge` teardown helper
+(`src/orchestrator/tools/mcp-bridge.ts`). Bridged tools are **never** marked `readOnly` (unknown
+upstream side effects → serial per ADR-2). The `tools.mcpBridge` section is **not** in
+`createDefaultConfig`, so omitting it is byte-identical (`enabled` itself defaults to `false`).
+
+> **Wiring status.** `runAgenticLoop` stays **hermetic** — it never constructs the bridge, so **no
+> automated call site invokes `createMcpToolBridge` yet**. A future consumer sprint reads
+> `config.tools?.mcpBridge?.enabled === true` at its own call site and composes the bridge into the
+> loop's tool set. Disabled (the default) spawns no MCP process and leaves the tool list unchanged. The
+> config axis is catalogued in [`docs/storage.md`](./storage.md#tools-opt-in-mcp-bridge--tools).
+
 ---
 
 ## Anthropic (default)

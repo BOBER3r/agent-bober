@@ -1913,7 +1913,7 @@ four chokepoints, all Sprint 1–5 callers byte-identical), and (Sprint 7) the *
 plus the **plan close-out** (full command surface + safety invariants + deferred Tier 2/Tier 3) are
 documented in [`docs/telegram.md`](../telegram.md).
 
-## Agent-loop capability port — in progress
+## Agent-loop capability port — complete
 
 `spec-20260709-agent-loop-capability-port` — ports the four highest-value agent-loop capabilities
 into agent-bober's **own** provider-agnostic `runAgenticLoop` (rather than adopting the Anthropic
@@ -2017,7 +2017,46 @@ check** — their request completes, but the loop discards that response before 
 charging `Budget`, or running its tools. Abort is **terminal** (not pause/resume — a consumer resumes
 later via Sprint 6 sessions), and no consumer (chat `/pause`, Telegram) is wired to it yet — this is
 the loop surface only. Programmatic-only (no config schema, no role auto-enables it); absent the signal
-behavior is **byte-identical** everywhere (paired-run deep-equal), no new dep.
+behavior is **byte-identical** everywhere (paired-run deep-equal), no new dep. Sprint 10 — the final
+extension — lands the last two capability areas, both **opt-in**. **In-process scoped subagents:**
+`AgenticLoopParams.subagents` (a `SubagentDef[]`) registers a single `spawn_subagent` tool whose
+handler runs a **nested** `runAgenticLoop` with a **fresh** message history, a **scoped** tool subset
+(filtered from the parent's own `tools`/`toolHandlers` by name), optional per-agent `model`/`effort`/
+`maxTurns` overrides, and the **SAME parent `Budget` instance** — combined spend stays visible and a
+child can never out-spend a parent ceiling. Only the child's `finalText` returns to the parent (as the
+tool result), so the parent's context grows by that summary alone; a child that refuses / exceeds
+budget / errors / is aborted surfaces as an `isError` tool result naming the stop reason — **never a
+throw** — and the parent loop continues. Children always get `subagents: undefined` — a **one-level
+hard cap** (mirrors the Workflow rule). A runtime import cycle is avoided by importing the loop's
+**types only** into `subagents.ts` and injecting `runAgenticLoop` in via `BuildSubagentOpts.runLoop`.
+**Opt-in MCP tool bridge:** a new `config.tools.mcpBridge` axis (`ToolsSectionSchema`, default
+`false`, **not** in `createDefaultConfig`) can expose a configured MCP server's tools as
+`mcp__`-prefixed loop `ToolDef`s (never marked `readOnly` — ADR-2), routed through the repo's
+**existing** `@modelcontextprotocol/sdk` client transport (the same path as
+`src/mcp/external-client.ts`; no new dep). `createMcpToolBridge` + the `runWithMcpBridge` teardown
+helper keep `runAgenticLoop` itself **hermetic** — the loop never owns MCP lifecycle. **No automated
+call site invokes `createMcpToolBridge` yet** — a future consumer sprint reads
+`config.tools.mcpBridge.enabled` and composes the bridge in explicitly (the disabled default spawns
+nothing and changes nothing). Absent both features, behavior is **byte-identical**, no new dep.
+
+**Spec complete — 10/10 sprints, all iteration-1 passes, zero reworks; full suite 3686 → 3903.** The
+delivered capability surface, every piece **additive** and **default-off / byte-identical when
+absent**: (1) **refusal detection** end-to-end (`StopReason "refusal"`, fail-closed generator parse),
+(2) a **per-request cost substrate** + additive **USD `Budget` ceiling** (`Budget.maxUsd`,
+`stopReason "budget_exceeded"`), (3) **per-role reasoning `effort`** + budget config, (4) **parallel
+read-only tool execution** (`ToolDef.readOnly`, generator-only `parallelReadOnlyTools`), (5) a
+structured **loop event stream + host-style hooks** (`onEvent`/`hooks`, `finish()` single exit), (6)
+opt-in **session persistence, resume & fork** (`.bober/sessions/<id>.json`), (7) opt-in **in-context
+auto-compaction** (`compact-boundary` event, fail-open summarizer), (8) provider-agnostic **streaming
+text deltas** (`ChatParams.onTextDelta`, Anthropic streams; others no-op), (9) **mid-turn interrupt**
+(`abortSignal`, `StopReason "aborted"`, Anthropic cancels in-flight; others boundary-degrade), and
+(10) **in-process scoped subagents** + an **opt-in MCP tool bridge**. Sprints 1–4 are the four
+architecture-backed capabilities (ADR-1 refusal · ADR-3/4 cost & budget · ADR-2 parallel read-only
+tools); sprints 5–10 are extensions on the same substrate. The whole port stays on agent-bober's
+**own** `runAgenticLoop` (not the Anthropic Agent SDK — ADR-1), adds **no new dependency**, and — with
+the sole exception of the opt-in `config.tools.mcpBridge` axis — **no pipeline role auto-enables any of
+it**; consumers opt in programmatically. Provider-layer reference in [`docs/providers.md`](../providers.md);
+the `config.tools.mcpBridge` axis in [`docs/storage.md`](../storage.md#tools-opt-in-mcp-bridge--tools).
 
 | # | Record | What it added |
 |---|--------|---------------|
@@ -2030,10 +2069,13 @@ behavior is **byte-identical** everywhere (paired-run deep-equal), no new dep.
 | 7 | [sprint-spec-20260709-agent-loop-capability-port-7.md](./sprint-spec-20260709-agent-loop-capability-port-7.md) | Opt-in **in-context auto-compaction** (extension): new pure `src/orchestrator/compaction.ts#summarizeMessages` (one no-`tools`, bounded-`maxTokens` `client.chat` over a flattened head transcript, dedicated summary prompt, returns `CompactionOutcome`, **fails open → `undefined`**). `AgenticLoopParams` gains `compaction?: { maxContextTokens; keepRecentTurns?; instructions? }`; when a `tool_use` turn's **per-request** `response.usage.inputTokens` crosses the threshold, the loop splices the head **in place** into one `[Conversation summary]` message (keeping the last `keepRecentTurns*2`, default 4, **verbatim**), charges the extra call to `Budget` + result totals, and emits the now-implemented `compact-boundary` `LoopEvent` (`{ messagesBefore, messagesAfter, inputTokensAtTrigger }`). Summarizer failure fails open (uncompacted, never drops a message). **Distinct from the sprint-boundary `summarizeOlderSprints`/`contextReset` handoff layer** (untouched). Programmatic-only, no config schema, no role auto-enables it; byte-identical when absent, no new dep. |
 | 8 | [sprint-spec-20260709-agent-loop-capability-port-8.md](./sprint-spec-20260709-agent-loop-capability-port-8.md) | **Streaming text deltas** (extension): optional provider-agnostic `ChatParams.onTextDelta?: (delta: string) => void`; when set, the **Anthropic** adapter switches `messages.create()` → accumulating `messages.stream()`, forwards each `text_delta` (each callback wrapped in `try/catch` so a throwing consumer can't kill the request), then normalizes the stream's `finalMessage()` through a newly-extracted **shared `normalizeResponse()`** so streamed and non-streamed `ChatResponse`s (incl. `toolCalls`/`usage`/`costUsd`) are **deep-equal**. Mid-stream errors stay uncaught → identical `chatWithRetry`/`isTransientError` handling. `openai`/`openai-compat`/`google`/`claude-code` accept the field as a **documented no-op** (one comment + one explicit test each; nothing extra on the wire). `runAgenticLoop` threads `onTextDelta` into every `chat()` and emits a `{ type:"text-delta", turn, delta }` `LoopEvent` when `onEvent` is present — the **last reserved `LoopEvent` name; all are now implemented**. Programmatic-only, byte-identical when absent, no new dep. Follow-up: streaming + structured-output combo untested/undocumented (delta-join≠text under forced `tool_choice`). |
 | 9 | [sprint-spec-20260709-agent-loop-capability-port-9.md](./sprint-spec-20260709-agent-loop-capability-port-9.md) | **Mid-turn interrupt** (extension): optional web-standard `abortSignal?: AbortSignal` on **both** `ChatParams` and `AgenticLoopParams`; the loop checks it at **three** exit points (top-of-turn, post-response pre-tool-batch with full response discard, `chatWithRetry` catch), all routed through the Sprint 5 `finish()` helper so `onStop`/`result` fire **once** and accumulated `usage`/`costUsd`/`turnsUsed` (fully-completed turns only) survive — resolving with a new `StopReason "aborted"` partial result, **never a throw**. `chatWithRetry` special-cases aborts **before** `isTransientError`, keyed on `signal.aborted` (the SDK's `APIUserAbortError` leaves `err.name` as `"Error"`; `err.name === "AbortError"` is a secondary guard), rethrowing a typed `AbortedError` that is **never retried**. The **Anthropic** adapter forwards the signal as the SDK's `signal` request option on both `create()` and `stream()` (kept out of `requestBody` — Sprint 8 body-identity holds), cancelling in-flight; `openai`/`openai-compat`/`google`/`claude-code` ignore it and **degrade at the post-response boundary** (response discarded, tools not run, usage not accumulated). Abort is terminal (resume later via Sprint 6 sessions); no consumer wired yet. Programmatic-only, byte-identical when absent, no new dep. Follow-up: no permanent session+abort combined regression test (ad-hoc verified; add a durable guard later). |
+| 10 | [sprint-spec-20260709-agent-loop-capability-port-10.md](./sprint-spec-20260709-agent-loop-capability-port-10.md) | **In-process scoped subagents + opt-in MCP tool bridge** (final extension — **completes the spec, 10/10 iter-1**). **Subagents:** `AgenticLoopParams.subagents?: SubagentDef[]` registers one `spawn_subagent` tool whose handler runs a **nested** `runAgenticLoop` with a **fresh** history + a **scoped** tool subset (filtered from the parent's `tools`/`toolHandlers` by name), optional per-agent `model`/`effort`/`maxTurns`, and the **SAME parent `Budget`** (combined spend, a child can't out-spend a ceiling); only the child's `finalText` returns (summary-only context growth); refusal/budget/error/aborted → `isError` tool result naming the reason (**never a throw**), parent continues; child always gets `subagents: undefined` (**one-level hard cap**); type-only import + `BuildSubagentOpts.runLoop` DI breaks the cycle; absent/empty ⇒ `tools`/`toolHandlers` keep the **same reference** (sc-10-4). **MCP bridge:** new `config.tools.mcpBridge` axis (`ToolsSectionSchema`, default `false`, **not** in `createDefaultConfig`) → `createMcpToolBridge` exposes a configured server's tools as `mcp__`-prefixed, never-`readOnly` `ToolDef`s over the **existing** `@modelcontextprotocol/sdk` transport (mirrors `external-client.ts`; injectable `McpBridgeClientLike`); `runWithMcpBridge` closes in a `finally`, loop stays **hermetic**. **No call site invokes the bridge yet** — a future consumer wires it. Byte-identical when both absent, no new dep. |
 
 Provider-layer reference for the `refusal` `StopReason` and its fail-closed generator semantics, for
 the per-role `effort` / `budget.maxUsd` / `costUsd` config surfaces, for the generator-only
 `parallelReadOnlyTools` tool-execution flag, for the `ChatParams.onTextDelta` streaming callback
-(Anthropic streams; other adapters no-op), and for the `ChatParams.abortSignal` mid-turn interrupt
-(Anthropic cancels in-flight; other adapters degrade at the loop boundary), lives in
-[`docs/providers.md`](../providers.md).
+(Anthropic streams; other adapters no-op), for the `ChatParams.abortSignal` mid-turn interrupt
+(Anthropic cancels in-flight; other adapters degrade at the loop boundary), and for the in-process
+`subagents` surface + the opt-in `config.tools.mcpBridge` axis, lives in
+[`docs/providers.md`](../providers.md). The `config.tools.mcpBridge` axis is also catalogued in
+[`docs/storage.md`](../storage.md#tools-opt-in-mcp-bridge--tools).

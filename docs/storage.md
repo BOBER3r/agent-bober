@@ -195,6 +195,32 @@ Every outbound-network capability is a distinct, optional, boolean opt-in that d
 When an axis is off, the corresponding client is typically **never even constructed**, so there is
 no dormant network path to misfire.
 
+### Tools (opt-in MCP bridge) — `tools`
+
+The optional `tools` section (`ToolsSectionSchema`, `src/config/schema.ts`) carries one **default-off**
+axis, `tools.mcpBridge`, that lets the agentic loop's tool catalog be extended by a configured MCP
+server (agent-loop-capability-port sprint 10).
+
+```jsonc
+"tools": {
+  "mcpBridge": {
+    "enabled": false,                                  // default; opt-in only
+    "server": { "command": "npx", "args": ["-y", "some-mcp-server"] }
+  }
+}
+```
+
+| Config key | Default | Enables |
+|------------|---------|---------|
+| `tools.mcpBridge.enabled` | `false` | Expose a configured MCP server's tools as `mcp__`-prefixed loop `ToolDef`s |
+
+The bridge reuses the repo's existing `@modelcontextprotocol/sdk` client transport (no new dependency)
+and is **not** written by `createDefaultConfig`. Like the egress axes, when disabled **no MCP
+process/transport is ever created** and the loop's tool list is unchanged. The bridge is only ever
+constructed by a consumer that reads `tools.mcpBridge.enabled === true` at its call site (never at
+config parse time), keeping `runAgenticLoop` itself hermetic. See
+[`./providers.md`](./providers.md#in-process-subagents--opt-in-mcp-tool-bridge).
+
 ### Provider fields (on roles)
 
 Each agent role (`planner`, `generator`, `evaluator`, `curator`, `codeReview`, `documenter`,
