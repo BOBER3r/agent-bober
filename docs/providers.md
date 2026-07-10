@@ -190,6 +190,32 @@ the request payload + loop behavior are **byte-identical** to before.
 > final `text` is derived from the forced tool's JSON, so the delta-join-equals-`text` guarantee would
 > **not** hold. Don't rely on that combination until it is explicitly documented or guarded.
 
+### Mid-turn interrupt (`ChatParams.abortSignal`)
+
+`ChatParams` (`src/providers/types.ts`) carries an **optional, provider-agnostic**
+`abortSignal?: AbortSignal` — a **web-standard type, not an SDK type**, so it belongs on the
+provider-agnostic surface. It is how a caller **cancels an in-flight request**. The loop layer
+(`AgenticLoopParams.abortSignal`) threads the same signal into **every** `chat()` call, and
+`runAgenticLoop` additionally checks it at each turn boundary; an aborted run resolves gracefully with
+`StopReason "aborted"` plus accumulated partial telemetry — **never a throw** (see
+[docs/sprints](./sprints/README.md) for the loop-level behavior). Absent the field, every adapter's
+request is **byte-identical** — `create(body, undefined)` is identical to `create(body)`, and the
+signal is **never** part of the request payload / on the wire.
+
+| Provider      | `abortSignal` behavior                                                            |
+| ------------- | -------------------------------------------------------------------------------- |
+| `anthropic`   | **cancels in-flight** — forwarded as the SDK's `signal` request option (2nd arg) on **both** `messages.create()` and `messages.stream()`, so a streaming or non-streaming request is aborted the instant the signal fires (kept out of `requestBody`) |
+| `openai`      | **boundary-degrade** — field ignored; the request completes, and the loop discards that response at its next post-response check without running its tools |
+| `openai-compat` (DeepSeek, Grok, Ollama, LM Studio) | **boundary-degrade** — delegates to `OpenAIAdapter.chat()`, which ignores the signal |
+| `google`      | **boundary-degrade** — field ignored; loop degrades at the boundary as above     |
+| `claude-code` | **boundary-degrade** — the `claude` CLI path has no native cancellation; loop degrades at the boundary |
+
+Because non-cancellable adapters only degrade at the loop **boundary**, their in-flight request runs to
+completion but its response is **discarded** (usage never accumulated, `Budget` never charged, tool
+batch never executed) rather than driving a further turn. On the Anthropic path the abort surfaces as
+the SDK's `APIUserAbortError`; the loop classifies it as an abort via the **signal's own `aborted`
+flag** (that error leaves `err.name` as `"Error"`, not `"AbortError"`) and **never retries** it.
+
 ---
 
 ## Anthropic (default)
