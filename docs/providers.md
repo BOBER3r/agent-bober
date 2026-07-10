@@ -154,6 +154,42 @@ batch never rejects.
 - Delegated to `src/orchestrator/tools/executor.ts#executeToolBatch`; the loop derives its
   `readOnlyTools` set from the tool schemas it was configured with.
 
+### Streaming text deltas (`ChatParams.onTextDelta`)
+
+`ChatParams` (`src/providers/types.ts`) carries an **optional, provider-agnostic** streaming
+callback `onTextDelta?: (delta: string) => void`. When set, an adapter that supports server-sent
+streaming invokes it **once per text delta** as the response is generated; the **concatenation of
+all deltas equals the final `ChatResponse.text`**. It is an **own type, safe for any adapter to
+ignore** — a throwing callback **never kills the request** (the adapter wraps each invocation in
+`try/catch`), and the returned `ChatResponse` (`text`, `toolCalls`, `stopReason`, `usage`, `costUsd`)
+is **deep-equal** to what the same underlying response produces on the non-streaming path.
+
+| Provider      | `onTextDelta` behavior                                                            |
+| ------------- | -------------------------------------------------------------------------------- |
+| `anthropic`   | **streams** — switches from `messages.create()` to the SDK's accumulating `messages.stream()`, forwards each `text_delta`, then normalizes the stream's `finalMessage()` through the **same** `normalizeResponse()` helper the non-streamed path uses |
+| `openai`      | **no-op** — always uses the non-streaming completions endpoint; callback never invoked, nothing extra on the wire |
+| `openai-compat` (DeepSeek, Grok, Ollama, LM Studio) | **no-op** — delegates to `OpenAIAdapter.chat()`, which never streams |
+| `google`      | **no-op** — always uses the non-streaming `generateContent` call                 |
+| `claude-code` | **no-op** — the `claude` CLI's text-only boundary stays; always parses the final JSON result |
+
+Because streamed and non-streamed responses normalize identically, agentic **tool turns stream
+safely**: a streamed `tool_use` block surfaces the same `toolCalls` (with ids and parsed inputs) as
+the non-streaming path (tool calls surface only when complete — no partial-input streaming). A
+**mid-stream provider error is not swallowed** — only the per-delta callback is `try/catch`'d, so
+stream/`finalMessage()` errors propagate and get the **same `chatWithRetry` / `isTransientError`
+classification** as a rejecting non-streaming call (transient retried, else `stopReason "error"`).
+
+`runAgenticLoop` threads `onTextDelta` into **every** `chat()` call and, when its `onEvent` callback
+is also set, additionally emits a `{ type: "text-delta", turn, delta }` `LoopEvent` per delta (see
+[docs/sprints](./sprints/README.md) for the loop-event stream). The field is **default-absent**: omit
+it and no `onTextDelta` key reaches the adapter, the Anthropic path uses non-streaming `create()`, and
+the request payload + loop behavior are **byte-identical** to before.
+
+> **Not yet combined with structured output.** Streaming and forced structured output
+> (`responseSchema` / `tool_choice`) have no interaction guard: with both set, deltas fire while the
+> final `text` is derived from the forced tool's JSON, so the delta-join-equals-`text` guarantee would
+> **not** hold. Don't rely on that combination until it is explicitly documented or guarded.
+
 ---
 
 ## Anthropic (default)
