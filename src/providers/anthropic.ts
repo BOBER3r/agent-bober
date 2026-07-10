@@ -377,16 +377,25 @@ export class AnthropicAdapter implements LLMClient {
         : {}),
     };
 
+    // Request options (2nd arg to create/stream), built ONCE and kept OUT of
+    // requestBody so the create/stream body-identity invariant holds and the
+    // signal is never sent over the wire as part of the payload (sprint 9).
+    // `undefined` when no signal is supplied => `create(body, undefined)` is
+    // identical to `create(body)` (sc-9-5).
+    const requestOptions = params.abortSignal
+      ? { signal: params.abortSignal }
+      : undefined;
+
     // NON-STREAM PATH: byte-identical to the pre-sprint-8 behavior when
     // onTextDelta is absent.
     if (params.onTextDelta === undefined) {
-      const response = await this.client.messages.create(requestBody);
+      const response = await this.client.messages.create(requestBody, requestOptions);
       return normalizeResponse(response, model, structured);
     }
 
     // STREAM PATH: forward each text delta to the caller's callback, then
     // normalize the SAME way from the stream's final accumulated message.
-    const stream = this.client.messages.stream(requestBody);
+    const stream = this.client.messages.stream(requestBody, requestOptions);
     for await (const event of stream) {
       if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
         try {

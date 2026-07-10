@@ -216,6 +216,15 @@ export interface ChatParams {
    * wire). A throwing callback must never kill the request (adapter wraps it).
    */
   onTextDelta?: (delta: string) => void;
+  /**
+   * Optional abort signal (agent-loop-capability-port sprint 9). A
+   * web-standard `AbortSignal` — NOT an SDK type, so it belongs in this
+   * provider-agnostic surface. Only the Anthropic adapter forwards it (into
+   * the SDK `create`/`stream` request options); other adapters ignore it —
+   * the agentic loop's own turn-boundary checks cover their (non-cancellable)
+   * requests. Absent leaves every adapter's request byte-identical.
+   */
+  abortSignal?: AbortSignal;
 }
 
 /**
@@ -223,9 +232,11 @@ export interface ChatParams {
  *
  * Known values: `"end"` (normal completion), `"tool_use"` (model requested a
  * tool call), `"max_tokens"` (hit the token cap), `"error"` (adapter-level
- * failure), and `"refusal"` (the provider declined to generate — surfaced by
+ * failure), `"refusal"` (the provider declined to generate — surfaced by
  * the Anthropic `stop_reason: "refusal"` and the OpenAI-family `finish_reason:
- * "content_filter"` / `message.refusal` signals). This is an open union
+ * "content_filter"` / `message.refusal` signals), and `"aborted"` (the loop's
+ * own `AgenticLoopParams.abortSignal` fired — agent-loop-capability-port
+ * sprint 9; a graceful partial return, never a throw). This is an open union
  * (`| string`) so adapters may pass through other provider-specific values.
  */
 export type StopReason = "end" | "tool_use" | "max_tokens" | "error" | string;

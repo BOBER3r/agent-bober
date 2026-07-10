@@ -715,3 +715,112 @@ describe("AnthropicAdapter streaming (onTextDelta)", () => {
     expect(streamMock.mock.calls[0][0]).toEqual(createMock.mock.calls[0][0]);
   });
 });
+
+// ── Abort signal forwarding (agent-loop-capability-port sprint 9) ──────────
+
+describe("AnthropicAdapter abort signal forwarding", () => {
+  beforeEach(() => {
+    createMock.mockReset();
+    streamMock.mockReset();
+  });
+
+  it("non-stream: forwards abortSignal as the 2nd (options) arg's `signal` key", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect((createMock.mock.calls[0][1] as { signal?: AbortSignal }).signal).toBe(
+      controller.signal,
+    );
+  });
+
+  it("stream: forwards abortSignal as the 2nd (options) arg's `signal` key", async () => {
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {},
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect((streamMock.mock.calls[0][1] as { signal?: AbortSignal }).signal).toBe(
+      controller.signal,
+    );
+  });
+
+  it("sc-9-5: no abortSignal => the options arg is undefined for both create() and stream() (byte-identical)", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {},
+    } satisfies ChatParams);
+
+    expect(createMock.mock.calls[0][1]).toBeUndefined();
+    expect(streamMock.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it("the signal is carried ONLY in the options arg, never in requestBody — body identity holds with a signal set", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+      onTextDelta: () => {},
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+
+    expect(streamMock.mock.calls[0][0]).toEqual(createMock.mock.calls[0][0]);
+    expect(Object.hasOwn(createMock.mock.calls[0][0] as object, "signal")).toBe(false);
+  });
+
+  it("sc-9-2: a mid-flight abort's SDK rejection propagates uncaught, not swallowed (chatWithRetry classifies it, not this adapter)", async () => {
+    streamMock.mockReturnValue(erroringStream("Request was aborted."));
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await expect(
+      adapter.chat({
+        model: "claude-x",
+        system: "S",
+        messages: [{ role: "user", content: "hi" }],
+        onTextDelta: () => {},
+        abortSignal: controller.signal,
+      } satisfies ChatParams),
+    ).rejects.toThrow("Request was aborted.");
+  });
+});

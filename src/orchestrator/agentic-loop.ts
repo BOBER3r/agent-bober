@@ -128,6 +128,20 @@ export interface AgenticLoopParams {
    * default) => never compacts, byte-identical (sc-7-5).
    */
   compaction?: { maxContextTokens: number; keepRecentTurns?: number; instructions?: string };
+  /**
+   * Optional abort signal (agent-loop-capability-port sprint 9). A
+   * web-standard `AbortSignal`. Checked at the top of every turn AND right
+   * after each chat response (before tool execution) — an in-flight
+   * Anthropic request is additionally cancelled mid-flight (threaded into
+   * `ChatParams.abortSignal`). When it fires, the loop ends gracefully at
+   * the next boundary/cancellation point with `stopReason: "aborted"` plus
+   * accumulated partial usage/costUsd/turnsUsed — NEVER a throw or rejected
+   * promise. Adapters without native cancellation (openai/google/claude-code)
+   * simply ignore the field; their in-flight request completes, but the
+   * loop discards that response at the post-response check rather than
+   * using it for a further turn. Absent (the default) is byte-identical.
+   */
+  abortSignal?: AbortSignal;
 }
 
 export interface AgenticLoopResult {
@@ -197,6 +211,19 @@ const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Thrown by `chatWithRetry` (agent-loop-capability-port sprint 9) when a chat
+ * call fails because the run's `abortSignal` fired. Never retried and never
+ * escapes `runAgenticLoop` — the loop's chat catch maps it to a graceful
+ * `stopReason: "aborted"` return instead of `"error"`.
+ */
+export class AbortedError extends Error {
+  constructor() {
+    super("Run aborted.");
+    this.name = "AbortedError";
+  }
+}
+
+/**
  * Call client.chat() with exponential backoff on transient errors.
  * Non-transient errors are rethrown immediately (no point retrying a 401).
  */
@@ -210,6 +237,19 @@ async function chatWithRetry(
     try {
       return await client.chat(params);
     } catch (err) {
+      // An abort is terminal, never transient/retryable (sc-9-2). Checked
+      // FIRST, before isTransientError. The primary signal is the caller's
+      // own `abortSignal.aborted` flag — provider-agnostic and always true
+      // when OUR signal caused the cancel. The Anthropic SDK's real abort
+      // error (`APIUserAbortError`) does NOT set `err.name` to "AbortError"
+      // (it stays "Error"), so `err.name === "AbortError"` is kept only as a
+      // secondary guard for raw fetch/DOMException aborts and test doubles.
+      if (
+        params.abortSignal?.aborted === true ||
+        (err instanceof Error && err.name === "AbortError")
+      ) {
+        throw new AbortedError();
+      }
       lastErr = err;
       const message = err instanceof Error ? err.message : String(err);
       if (!isTransientError(message) || attempt === MAX_CHAT_RETRIES) {
@@ -351,6 +391,7 @@ export async function runAgenticLoop(
     session,
     initialMessages,
     compaction,
+    abortSignal,
   } = params;
 
   // Derived once, from the caller-supplied tool schemas — the loop never
@@ -424,9 +465,31 @@ export async function runAgenticLoop(
     return result;
   }
 
+  // Aborted-run result (sprint 9). Mirrors the `budget_exceeded` shape at
+  // line ~560 below, reusing the SAME usage/cost accumulators so partial
+  // telemetry is preserved (sc-9-3). `turnsUsed` is the count of FULLY
+  // completed turns — the in-progress/discarded turn is never counted, same
+  // discipline as the existing `stopReason: "error"` catch (which also uses
+  // `turn - 1`).
+  const abortedResult = (turnsUsed: number): AgenticLoopResult => ({
+    finalText: finalText || "Run aborted before completion. Partial result returned.",
+    turnsUsed,
+    toolsCalled: allToolsCalled,
+    usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
+    stopReason: "aborted",
+    ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
+  });
+
   safeEmit({ type: "init", model, maxTurns });
 
   for (let turn = 1; turn <= maxTurns; turn++) {
+    // Turn-boundary abort check (sc-9-1): fires BEFORE the next chat call is
+    // ever made, so an abort between turns costs zero further chat calls.
+    if (abortSignal?.aborted) {
+      await persistSession(turn - 1);
+      return finish(abortedResult(turn - 1));
+    }
+
     logger.debug(`Agentic loop turn ${turn}/${maxTurns}...`);
     safeEmit({ type: "turn-start", turn });
 
@@ -456,10 +519,21 @@ export async function runAgenticLoop(
           maxTokens,
           ...(effort !== undefined ? { effort } : {}),
           ...(emitTextDelta ? { onTextDelta: emitTextDelta } : {}),
+          ...(abortSignal !== undefined ? { abortSignal } : {}),
         },
         turn,
       );
     } catch (err) {
+      // An abort is terminal, not an error (sc-9-2/9-3): chatWithRetry
+      // rethrows AbortedError immediately (never retried) whenever the
+      // signal caused the failure. Also guard on the flag directly for
+      // provider-agnostic robustness (a non-Anthropic adapter might reject
+      // for its own reasons right as the signal fires).
+      if (err instanceof AbortedError || abortSignal?.aborted) {
+        await persistSession(turn - 1);
+        return finish(abortedResult(turn - 1));
+      }
+
       // Handle context window exhaustion or other API errors
       const message = err instanceof Error ? err.message : String(err);
       logger.warn(`Agentic loop API error on turn ${turn}: ${message}`);
@@ -476,6 +550,16 @@ export async function runAgenticLoop(
         stopReason: "error",
         ...(totalCostUsd !== undefined ? { costUsd: totalCostUsd } : {}),
       });
+    }
+
+    // Post-response abort check (sc-9-4): a non-cancellable adapter's request
+    // may have completed anyway after the signal fired mid-flight. Discard
+    // this response entirely — do not accumulate usage, do not compact, and
+    // do not execute its tool batch. `turnsUsed` only ever counts fully
+    // completed turns, so this uses `turn - 1`, same as the chat-catch above.
+    if (abortSignal?.aborted) {
+      await persistSession(turn - 1);
+      return finish(abortedResult(turn - 1));
     }
 
     // Accumulate usage

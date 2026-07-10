@@ -1542,3 +1542,229 @@ describe("runAgenticLoop — streaming text-delta threading (sc-8-4)", () => {
     expect(withStreaming).toEqual(withoutStreaming);
   });
 });
+
+// ── sprint-9: mid-turn interrupt (AbortSignal) ────────────────────────
+
+describe("runAgenticLoop — mid-turn interrupt / AbortSignal (sprint 9)", () => {
+  it("sc-9-1: abort between turns stops the loop before the next chat call — resolves 'aborted', turnsUsed 1, no further chat calls", async () => {
+    const controller = new AbortController();
+    const client = new ScriptedLoopClient([
+      { ...base, text: "", stopReason: "tool_use", toolCalls: [{ id: "t1", name: "noop", input: {} }] },
+      { ...base, text: "", stopReason: "tool_use", toolCalls: [{ id: "t2", name: "noop", input: {} }] },
+      { ...base, text: "done", stopReason: "end" },
+    ]);
+    // Fires between turn 1's tool execution and turn 2's boundary check — the
+    // abort is observed BEFORE any 2nd chat() call is ever made.
+    const handlers = new Map([
+      [
+        "noop",
+        async () => {
+          controller.abort();
+          return { output: "ok", isError: false };
+        },
+      ],
+    ]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 5,
+      abortSignal: controller.signal,
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(result.turnsUsed).toBe(1);
+    expect(client.callCount).toBe(1);
+  });
+
+  /** A fake client whose in-flight `chat()` call never resolves until the caller's abortSignal fires. */
+  class AbortingClient implements LLMClient {
+    callCount = 0;
+    async chat(params: ChatParams): Promise<ChatResponse> {
+      this.callCount += 1;
+      return new Promise((_res, rej) => {
+        params.abortSignal?.addEventListener("abort", () => {
+          const e = new Error("Request was aborted.");
+          e.name = "AbortError";
+          rej(e);
+        });
+      });
+    }
+  }
+
+  it("sc-9-2/sc-9-3: a mid-flight abort is never retried, resolves 'aborted', and fires onStop exactly once", async () => {
+    const client = new AbortingClient();
+    const onStop = vi.fn();
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 5);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 3,
+      abortSignal: controller.signal,
+      hooks: { onStop },
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(client.callCount).toBe(1); // NOT retried
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledWith(result);
+  });
+
+  /** Completes turn 1 normally (with usage/cost), then hangs on turn 2 until aborted. */
+  class TurnOneThenHangClient implements LLMClient {
+    private idx = 0;
+    callCount = 0;
+    async chat(params: ChatParams): Promise<ChatResponse> {
+      this.callCount += 1;
+      if (this.idx === 0) {
+        this.idx += 1;
+        return {
+          text: "",
+          toolCalls: [{ id: "t1", name: "noop", input: {} }],
+          stopReason: "tool_use",
+          usage: { inputTokens: 10, outputTokens: 20 },
+          costUsd: 0.5,
+        };
+      }
+      return new Promise((_res, rej) => {
+        params.abortSignal?.addEventListener("abort", () => {
+          const e = new Error("Request was aborted.");
+          e.name = "AbortError";
+          rej(e);
+        });
+      });
+    }
+  }
+
+  it("sc-9-3: preserves usage/costUsd/turnsUsed accumulated before a mid-flight abort on turn 2; onStop fires exactly once", async () => {
+    const controller = new AbortController();
+    const client = new TurnOneThenHangClient();
+    const onStop = vi.fn();
+    const handlers = new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+    setTimeout(() => controller.abort(), 10);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 5,
+      abortSignal: controller.signal,
+      hooks: { onStop },
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(result.turnsUsed).toBe(1);
+    expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
+    expect(result.costUsd).toBe(0.5);
+    expect(client.callCount).toBe(2);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(onStop).toHaveBeenCalledWith(result);
+  });
+
+  it("sc-9-4: a non-cancellable adapter's completed response is discarded — its tool batch is NOT executed and the result is 'aborted'", async () => {
+    const controller = new AbortController();
+    // Never reads params.abortSignal — simulates an adapter with no native
+    // cancellation (openai-family/google/claude-code). The signal fires
+    // WHILE the request is in flight, but the adapter has no way to cancel
+    // it, so its response completes normally.
+    class IgnoresSignalClient implements LLMClient {
+      callCount = 0;
+      async chat(): Promise<ChatResponse> {
+        this.callCount += 1;
+        controller.abort();
+        return {
+          text: "",
+          toolCalls: [{ id: "t1", name: "noop", input: {} }],
+          stopReason: "tool_use",
+          usage: { inputTokens: 5, outputTokens: 5 },
+        };
+      }
+    }
+
+    const client = new IgnoresSignalClient();
+    let ran = false;
+    const handlers = new Map([
+      [
+        "noop",
+        async () => {
+          ran = true;
+          return { output: "x", isError: false };
+        },
+      ],
+    ]);
+
+    const result = await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers,
+      maxTurns: 5,
+      abortSignal: controller.signal,
+    });
+
+    expect(result.stopReason).toBe("aborted");
+    expect(result.turnsUsed).toBe(0);
+    expect(ran).toBe(false); // the post-response check ran BEFORE the tool batch
+    expect(client.callCount).toBe(1);
+    // The discarded turn's usage is never accumulated.
+    expect(result.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
+  });
+
+  it("sc-9-5: a paired run with vs. without a never-fired abortSignal produces a deep-equal AgenticLoopResult", async () => {
+    const handlers = () => new Map([["noop", async () => ({ output: "ok", isError: false })]]);
+
+    const withSignal = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+      abortSignal: new AbortController().signal,
+    });
+
+    const withoutSignal = await runAgenticLoop({
+      client: makeToolThenEndClient(),
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: NOOP_TOOL,
+      toolHandlers: handlers(),
+      maxTurns: 5,
+    });
+
+    expect(withSignal).toEqual(withoutSignal);
+  });
+
+  it("sc-9-5: byte-identical guard — with no abortSignal, chat() params carry NO abortSignal key", async () => {
+    const client = new ScriptedLoopClient([{ ...base, text: "done", stopReason: "end" }]);
+
+    await runAgenticLoop({
+      client,
+      model: "m",
+      systemPrompt: "s",
+      userMessage: "u",
+      tools: [],
+      toolHandlers: new Map(),
+      maxTurns: 1,
+    });
+
+    expect(Object.hasOwn(client.lastParams as object, "abortSignal")).toBe(false);
+  });
+});
