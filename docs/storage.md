@@ -297,14 +297,25 @@ title, so retries are idempotent (proven against the real finding-store in a tem
 default-sink sequence (`ensureFactsDir` → `new FactStore` → emit → `close`) is wrapped in a single guard at
 both call sites, so a hub/fs failure is caught and logged and can **never** change the audit verdict or exit
 code (a clean audit or `hub:false` never even opens the store). `minor` findings and `approvedAreas` are
-never emitted. The **only** thing still unshipped after this sprint is the skill wrapper / dogfooding
-(sprint 7). See
+never emitted.
+
+As of **sprint 7** the operator surface is complete and the feature is fully shipped. An advisory
+**`bober.security-audit` skill** (`skills/bober.security-audit/SKILL.md`, mirroring `bober.code-review`)
+spawns the same `bober-security-auditor` subagent — or points at the CLI — for on-demand audits, presents
+severity-ranked findings, and persists to the same `.bober/security/` artifact (advisory-only: it never
+blocks and never writes code fixes). agent-bober's **own** `bober.config.json` now opts into **LLM-only
+dogfooding** (`security: { enabled: true, scanners: [] }`), so every future sprint of this repo runs the
+fail-closed gate on LLM judgment alone (no `slither`/`semgrep` binaries required). The whole feature —
+config reference for all 12 `SecuritySectionSchema` fields, gate semantics, CLI exit codes, scanners, hub
+emission, and fail-closed guarantees — is consolidated in
+[`docs/security-audit.md`](./security-audit.md). **spec-20260712 is complete (7/7 sprints).** See
 [sprint 1](./sprints/sprint-spec-20260712-security-audit-agent-team-1.md),
 [sprint 2](./sprints/sprint-spec-20260712-security-audit-agent-team-2.md),
 [sprint 3](./sprints/sprint-spec-20260712-security-audit-agent-team-3.md),
 [sprint 4](./sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
-[sprint 5](./sprints/sprint-spec-20260712-security-audit-agent-team-5.md), and
-[sprint 6](./sprints/sprint-spec-20260712-security-audit-agent-team-6.md).
+[sprint 5](./sprints/sprint-spec-20260712-security-audit-agent-team-5.md),
+[sprint 6](./sprints/sprint-spec-20260712-security-audit-agent-team-6.md), and
+[sprint 7](./sprints/sprint-spec-20260712-security-audit-agent-team-7.md).
 
 ### Provider fields (on roles)
 

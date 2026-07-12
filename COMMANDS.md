@@ -2054,12 +2054,18 @@ bober telegram
 
 ## Security Audit Commands
 
-The **security auditor** is a stack-aware `bober-security-auditor` role (spec-20260712) that reviews
-code for exploitable vulnerabilities and cites each finding with `path:line`. It has two entry points
-over **one** shared `runSecurityAudit` core: the fail-closed **in-pipeline gate** (runs on every passing
-sprint when `security.enabled === true`; critical-only veto) and the on-demand **standalone CLI** below.
-Both persist a human-readable artifact to `.bober/security/<id>-security-audit.md`. The `security` config
-section is **optional and default-off** — see the [Full Configuration Reference](./README.md#full-configuration-reference).
+The **security auditor** is a stack-aware `bober-security-auditor` role (spec-20260712, **complete —
+7/7 sprints**) that reviews code for exploitable vulnerabilities and cites each finding with `path:line`.
+It has **three** entry points over **one** shared `runSecurityAudit` core: the fail-closed **in-pipeline
+gate** (runs on every passing sprint when `security.enabled === true`; critical-only veto), the on-demand
+**standalone CLI** below, and the advisory **`bober.security-audit` skill** (`/bober-security-audit` in
+Claude Code — spawns the auditor subagent conversationally; advisory-only, never blocks and never writes
+code fixes). All three persist a human-readable artifact to `.bober/security/<id>-security-audit.md`. The
+`security` config section is **optional and default-off** — see the
+[Full Configuration Reference](./README.md#full-configuration-reference). agent-bober's own
+`bober.config.json` **dogfoods** the gate with `security: { enabled: true, scanners: [] }` (LLM-only, no
+scanner binaries required). The whole feature is documented end-to-end in
+[docs/security-audit.md](./docs/security-audit.md).
 
 ### `bober security-audit [target]`
 
@@ -2117,9 +2123,11 @@ bober security-audit
   **skipped entirely** when `security.hub` is `false` (zero hub writes) or the audit is clean. The
   in-pipeline gate emits identically (also guarded by `security.hub`).
 
-See [docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
+See [docs/security-audit.md](./docs/security-audit.md) for the consolidated reference, plus
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
 [docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md),
 [docs/sprints/sprint-spec-20260712-security-audit-agent-team-6.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-6.md),
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-7.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-7.md),
 and the security-auditor section of [docs/storage.md](./docs/storage.md).
 
 ---
