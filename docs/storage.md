@@ -151,7 +151,7 @@ These are outputs a subsystem writes for a human or a downstream reader to consu
 | **Fleet report** | `<rootDir>/.bober/fleet-report.json` | `{ total, completed, failed, other, generatedAt, children, rounds? }`. Written atomically (temp file + rename) on **every** fleet run; `rounds` present only on blackboard runs. |
 | **Fleet synthesis** | `<rootDir>/.bober/fleet-synthesis.json` | `{ rounds, childResults, findings[] }` (`src/fleet/synthesis.ts`). Written atomically (temp + rename, mode `0600`) **only on blackboard runs**. Consumed by the Telegram `/fleet` view. |
 | **Fleet manifest provenance** | `<out>.meta.json` sidecar + `<out>.bak` | Written by `fleet expand` / `fleet expand-deep`: a provenance sidecar next to the generated manifest, plus preservation of the prior manifest as `.bak` on overwrite. |
-| **Security audit** | `.bober/security/<contractId>-security-audit.md` | Human-readable audit artifact rendered by reusing `renderReviewMarkdown(result.review)` (`src/state/security-audit-state.ts`; `saveSecurityAudit`/`readSecurityAudit`/`listSecurityAudits`). **Separate** from the advisory reviewer's `.bober/reviews/` per ADR-3 (no filename collision). The store module exists now (spec-20260712 sprint 1); the `bober-security-auditor` role that writes it lands in later sprints. |
+| **Security audit** | `.bober/security/<contractId>-security-audit.md` | Human-readable audit artifact rendered by reusing `renderReviewMarkdown(result.review)` (`src/state/security-audit-state.ts`; `saveSecurityAudit`/`readSecurityAudit`/`listSecurityAudits`). **Separate** from the advisory reviewer's `.bober/reviews/` per ADR-3 (no filename collision). Written by the `runSecurityAudit` core (`src/orchestrator/security-auditor-agent.ts`), which persists here on every audit (spec-20260712 sprint 2); the pipeline gate / CLI that **invoke** that core land in later sprints. |
 
 ---
 
@@ -225,7 +225,7 @@ config parse time), keeping `runAgenticLoop` itself hermetic. See
 ### Security auditor (opt-in gate) — `security`
 
 The optional `security` section (`SecuritySectionSchema`, `src/config/schema.ts`) configures the
-forthcoming stack-aware `bober-security-auditor` role (spec-20260712). It is **opt-in and default-off**:
+stack-aware `bober-security-auditor` role (spec-20260712). It is **opt-in and default-off**:
 `enabled` defaults to `false` and the whole section is wired `.optional()` on `BoberConfigSchema` with no
 top-level default, so a config that omits `security` parses **byte-identically** to before (no key, no
 defaults). It is **not** written by `createDefaultConfig` or any preset.
@@ -243,13 +243,21 @@ defaults). It is **not** written by `createDefaultConfig` or any preset.
 }
 ```
 
-As of **spec-20260712 sprint 1** only the **foundation** exists: this schema section, the wrapper types
-(`SecurityFinding`/`VulnClass`/`SecurityAuditResult`/`deriveVerdict` in
-`src/orchestrator/security-audit-types.ts`, over the **locked** `ReviewResult`/`ReviewFinding` shapes), and
-the `.bober/security/` store above. The auditor role, the fail-closed pipeline gate, the standalone
+As of **spec-20260712 sprint 2** the **audit engine** exists: sprint 1's foundation (this schema
+section, the wrapper types `SecurityFinding`/`VulnClass`/`SecurityAuditResult`/`deriveVerdict` in
+`src/orchestrator/security-audit-types.ts` over the **locked** `ReviewResult`/`ReviewFinding` shapes,
+and the `.bober/security/` store), plus a callable provider-agnostic `runSecurityAudit` core
+(`src/orchestrator/security-auditor-agent.ts`), a **fail-closed** parser (unparseable output →
+`parsed:false`, verdict `blocked`, never a silent pass), a stack-knowledge injector
+(`resolveStackSecurityContext`, `src/orchestrator/stack-knowledge.ts`), and the read-only
+`agents/bober-security-auditor.md` subagent (`Read`/`Grep`/`Glob` only — no `Bash`/`Write`/`Edit`).
+`runSecurityAudit` reads `security.{model,provider,endpoint,providerConfig,maxTurns,budget}` and honors
+`config.project.stack`. **Not yet wired**: the fail-closed pipeline gate, the standalone
 `bober security-audit` CLI, the scanner pre-filter, and hub emission land in later sprints — so
-`standaloneBlockOn`/`hub`/`scanners` are declared now but not yet consumed. See
-[docs/sprints/sprint-spec-20260712-security-audit-agent-team-1.md](./sprints/sprint-spec-20260712-security-audit-agent-team-1.md).
+`standaloneBlockOn`/`hub`/`scanners` are declared now but not yet consumed, and `runSecurityAudit` has
+no entry point that invokes it yet. See
+[sprint 1](./sprints/sprint-spec-20260712-security-audit-agent-team-1.md) and
+[sprint 2](./sprints/sprint-spec-20260712-security-audit-agent-team-2.md).
 
 ### Provider fields (on roles)
 
@@ -275,7 +283,7 @@ config file carries provider *selection*, never secrets.
   research/jobs/<jobId>.json          # research job store
   research/digests/<date>.{md,json}   # research digests
   sessions/<sessionId>.json           # own agentic-loop transcript (opt-in resume/fork)
-  security/<contractId>-security-audit.md  # security-auditor artifact (store exists; auditor lands in later sprints)
+  security/<contractId>-security-audit.md  # security-auditor artifact (written by runSecurityAudit; gate/CLI that invoke it land in later sprints)
   fleet-report.json                   # last fleet run summary (always written)
   fleet-synthesis.json                # last blackboard run (Telegram /fleet reads this)
   history.jsonl                       # event log (rotated → history.archive.jsonl)
