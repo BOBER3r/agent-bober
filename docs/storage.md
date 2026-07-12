@@ -239,7 +239,7 @@ defaults). It is **not** written by `createDefaultConfig` or any preset.
   "maxTurns": 20,
   "scanners": [],                       // opt-in deterministic pre-filter strategies (EvalStrategy[]) — slither/semgrep parsed into priors (sprint 5)
   "standaloneBlockOn": "critical",      // 'critical' | 'important' — CI blocking threshold for `bober security-audit`
-  "hub": true                           // emit findings to the priority hub (later sprint)
+  "hub": true                           // emit critical/important findings to the priority hub (sprint 6). false => zero hub writes
 }
 ```
 
@@ -283,12 +283,28 @@ survive an abort). Scanner findings are **advisory priors** — they seed the au
 the LLM or drive the verdict. With `scanners` **absent or `[]`** no child process is spawned and behavior is
 byte-identical to sprint 2 (ADR-4). **Ceiling:** ANY nonzero exit yields `[]` for that scanner, so operators
 of tools whose convention is nonzero-on-findings (e.g. `semgrep --error`) must configure an **exit-0**
-command. **Not yet wired**: hub Finding emission (sprint 6) — so `hub` is declared but not yet consumed. See
+command.
+
+As of **sprint 6** the `hub` key is **live**: after an audit's verdict/exit code is computed, both the gate
+and the standalone CLI map the audit's confirmed **critical** (→ hub severity/urgency **5**) and **important**
+(→ **3**) findings into canonical hub `Finding` rows and ingest them into the default FactStore pool
+(`.bober/memory/facts.db`) — so audit results now appear in `bober hub list` / `hub priority`. The mapper
+(`mapAuditToFindings`, `src/orchestrator/security-hub.ts`) is **pure** and imports the canonical
+`FindingSchema` from `src/hub/finding.ts` (never redefined); dedup is delegated to the hub's existing
+content-hash id (`sha256(domain|title|kind)`) via a **stable** `[security] <vulnClass> at <path>:<line>`
+title, so retries are idempotent (proven against the real finding-store in a temp dir). Emission is gated by
+`security.hub` (default `true`; `false` → **zero** hub writes) and is strictly **best-effort** — the entire
+default-sink sequence (`ensureFactsDir` → `new FactStore` → emit → `close`) is wrapped in a single guard at
+both call sites, so a hub/fs failure is caught and logged and can **never** change the audit verdict or exit
+code (a clean audit or `hub:false` never even opens the store). `minor` findings and `approvedAreas` are
+never emitted. The **only** thing still unshipped after this sprint is the skill wrapper / dogfooding
+(sprint 7). See
 [sprint 1](./sprints/sprint-spec-20260712-security-audit-agent-team-1.md),
 [sprint 2](./sprints/sprint-spec-20260712-security-audit-agent-team-2.md),
 [sprint 3](./sprints/sprint-spec-20260712-security-audit-agent-team-3.md),
-[sprint 4](./sprints/sprint-spec-20260712-security-audit-agent-team-4.md), and
-[sprint 5](./sprints/sprint-spec-20260712-security-audit-agent-team-5.md).
+[sprint 4](./sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
+[sprint 5](./sprints/sprint-spec-20260712-security-audit-agent-team-5.md), and
+[sprint 6](./sprints/sprint-spec-20260712-security-audit-agent-team-6.md).
 
 ### Provider fields (on roles)
 

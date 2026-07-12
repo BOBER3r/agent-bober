@@ -2107,9 +2107,19 @@ bober security-audit
   or nonzero exit contributes `[]` for that scanner only. **Exit-0 convention**: ANY nonzero exit yields `[]`
   for that scanner, so tools whose convention is nonzero-on-findings (e.g. `semgrep --error`) must be wired as
   an exit-0 command. With `scanners: []` (default) no child process is spawned.
+- **Findings flow into the priority hub** (`security.hub`, default `true`): after the exit code is computed,
+  confirmed **critical** (→ hub severity/urgency `5`) and **important** (→ `3`) findings are mapped to
+  canonical hub `Finding` rows (`domain: security`, `kind: risk`, stable title
+  `[security] <vulnClass> at <path>:<line>`) and ingested into the default FactStore pool
+  (`.bober/memory/facts.db`), so they surface in `bober hub list` / `hub priority`. `minor` findings are
+  never emitted. Retries are deduped by the hub's `domain|title|kind` content hash. Emission is
+  **best-effort** — a hub/fs failure is caught and logged and **never** changes the exit code — and is
+  **skipped entirely** when `security.hub` is `false` (zero hub writes) or the audit is clean. The
+  in-pipeline gate emits identically (also guarded by `security.hub`).
 
 See [docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
 [docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md),
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-6.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-6.md),
 and the security-auditor section of [docs/storage.md](./docs/storage.md).
 
 ---
