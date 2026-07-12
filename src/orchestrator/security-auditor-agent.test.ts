@@ -21,11 +21,17 @@ import type * as ToolsIndexModule from "./tools/index.js";
 const loopSpy = vi.fn();
 const clientSpy = vi.fn(() => ({}) as never);
 const saveSecurityAuditSpy = vi.fn().mockResolvedValue(undefined);
+const scannerPreFilterSpy = vi.fn();
 
 vi.mock("./agentic-loop.js", () => ({ runAgenticLoop: loopSpy }));
 vi.mock("../providers/factory.js", () => ({ createClient: clientSpy }));
 vi.mock("./model-resolver.js", () => ({ resolveModel: () => "model-test" }));
 vi.mock("./agent-loader.js", () => ({ assembleSystemPrompt: vi.fn().mockResolvedValue("SYS") }));
+// Sprint-5 seam: mock the whole scanner-pre-filter module so the "zero calls
+// with scanners:[]" assertion is a genuine spy check, and so these tests
+// never touch execa/real child processes (that coverage lives in
+// security-scanners.test.ts).
+vi.mock("./security-scanners.js", () => ({ runScannerPreFilter: scannerPreFilterSpy }));
 // Uses the REAL resolveRoleTools/ROLE_TOOLS (only getGraphState/getGraphDeps are
 // stubbed, forcing the ungated/static tool set) so the nonGoal regression test
 // below exercises the genuine role -> tool-name mapping instead of a fixture
@@ -148,6 +154,8 @@ beforeEach(() => {
   loopSpy.mockReset();
   clientSpy.mockClear();
   saveSecurityAuditSpy.mockClear();
+  scannerPreFilterSpy.mockReset();
+  scannerPreFilterSpy.mockResolvedValue([]);
 });
 
 // ── sc-2-1: well-formed critical finding ───────────────────────────
@@ -442,5 +450,68 @@ describe("runSecurityAudit — nonGoal: no bash/write/edit tools", () => {
     expect(toolHandlers.has("write_file")).toBe(false);
     expect(toolHandlers.has("edit_file")).toBe(false);
     expect(toolHandlers.has("read_file")).toBe(true);
+  });
+});
+
+// ── sc-5-4: scanner pre-filter wiring ───────────────────────────────
+
+describe("runSecurityAudit — sc-5-4 scanner pre-filter wiring", () => {
+  it("scanners: [] never invokes the pre-filter (zero child processes) and preserves sprint-2 no-priors behavior", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({ security: { scanners: [] } });
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(scannerPreFilterSpy).not.toHaveBeenCalled();
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).not.toContain("Deterministic scanner findings");
+    expect(result.scannerRan).toBe(false);
+  });
+
+  it("scanners configured: invokes the pre-filter and folds its findings into the priors section with scannerRan:true", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+    scannerPreFilterSpy.mockResolvedValueOnce([
+      { description: "[High] reentrancy-eth: scanner-detected reentrancy", evidence: [], source: "slither" },
+    ]);
+
+    const config = makeConfig({
+      security: {
+        scanners: [{ type: "slither", command: "slither . --json -", required: false }],
+      },
+    });
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(scannerPreFilterSpy).toHaveBeenCalledTimes(1);
+    expect(scannerPreFilterSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scanners: [{ type: "slither", command: "slither . --json -", required: false }],
+        projectRoot: "/tmp/project",
+        signal: expect.any(AbortSignal),
+      }),
+    );
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).toContain("Deterministic scanner findings (ground truth priors)");
+    expect(userMessage).toContain("scanner-detected reentrancy");
+    expect(result.scannerRan).toBe(true);
+  });
+
+  it("combines caller-supplied priors with pre-filter findings when both are present", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+    scannerPreFilterSpy.mockResolvedValueOnce([
+      { description: "scanner finding", evidence: [], source: "semgrep" },
+    ]);
+
+    const config = makeConfig({
+      security: {
+        scanners: [{ type: "semgrep", command: "semgrep --config auto --json .", required: false }],
+      },
+    });
+    const callerPriors = [{ description: "caller-supplied prior", evidence: [] }];
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, callerPriors);
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).toContain("caller-supplied prior");
+    expect(userMessage).toContain("scanner finding");
   });
 });

@@ -12,6 +12,7 @@ import { runAgenticLoop } from "./agentic-loop.js";
 import { budgetFromMaxUsd } from "./workflow/budget.js";
 import { saveSecurityAudit } from "../state/security-audit-state.js";
 import { resolveStackSecurityContext, ALL_VULN_CLASSES } from "./stack-knowledge.js";
+import { runScannerPreFilter } from "./security-scanners.js";
 import { logger } from "../utils/logger.js";
 
 // ── Main ───────────────────────────────────────────────────────────
@@ -37,8 +38,11 @@ import { logger } from "../utils/logger.js";
  * @param projectRoot Absolute path to the project root.
  * @param config      The resolved bober configuration (reads `config.security` and
  *                    `config.project.stack`; both optional).
- * @param priors      Deterministic scanner findings (sprint-5 seam). When non-empty,
- *                    rendered into a "ground truth priors" prompt section. Defaults to [].
+ * @param priors      Deterministic scanner findings supplied directly by the caller.
+ *                    Combined with any findings produced internally by
+ *                    `runScannerPreFilter` when `config.security.scanners` is
+ *                    non-empty; the combined list is rendered into a "ground
+ *                    truth priors" prompt section when non-empty. Defaults to [].
  * @returns A SecurityAuditResult, already persisted via saveSecurityAudit.
  */
 export async function runSecurityAudit(
@@ -74,7 +78,40 @@ export async function runSecurityAudit(
 
   const ctx = await resolveStackSecurityContext(config.project.stack);
 
-  const userMessage = buildUserMessage(contract, evaluation, projectRoot, ctx.stackLabel, ctx.skillName, ctx.promptFragment, priors);
+  // Sprint-5 seam: when scanners are configured, run the deterministic
+  // pre-filter INSIDE the audit path (under its own AbortController keyed to
+  // the same timeout the gate time-boxes the whole audit against — ADR-4)
+  // and fold its findings in as additional priors. Absent scanners config,
+  // this is a pure no-op: zero child processes spawned.
+  const configuredScanners = config.security?.scanners ?? [];
+  let effectivePriors = priors;
+  if (configuredScanners.length > 0) {
+    const scannerAbort = new AbortController();
+    const scannerTimer = setTimeout(
+      () => scannerAbort.abort(),
+      config.security?.timeoutMs ?? 300_000,
+    );
+    try {
+      const scannerPriors = await runScannerPreFilter({
+        scanners: configuredScanners,
+        projectRoot,
+        signal: scannerAbort.signal,
+      });
+      effectivePriors = [...priors, ...scannerPriors];
+    } finally {
+      clearTimeout(scannerTimer);
+    }
+  }
+
+  const userMessage = buildUserMessage(
+    contract,
+    evaluation,
+    projectRoot,
+    ctx.stackLabel,
+    ctx.skillName,
+    ctx.promptFragment,
+    effectivePriors,
+  );
 
   logger.info(`Calling security auditor model (${securityModel} → ${model})...`);
 
@@ -111,7 +148,12 @@ export async function runSecurityAudit(
   const auditResult: SecurityAuditResult = {
     review,
     stack: ctx.stackLabel,
-    scannerRan: priors.length > 0,
+    // True when scanners were configured (even if they all yielded [], the
+    // deterministic pre-filter genuinely ran) OR when the caller-supplied
+    // `priors` were non-empty (sprint-2 formula — priors passed directly with
+    // no scanners configured still counts as "a scanner ran" from the
+    // caller's perspective).
+    scannerRan: configuredScanners.length > 0 || effectivePriors.length > 0,
     parsed,
     verdict,
   };
