@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { describe, it, expect } from "vitest";
 import {
   PipelineSectionSchema,
@@ -15,6 +17,7 @@ import {
   CuratorSectionSchema,
   ToolsSectionSchema,
   McpBridgeServerSchema,
+  SecuritySectionSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -628,5 +631,189 @@ describe("ToolsSectionSchema / McpBridgeServerSchema — standalone validation",
     if (result.success) {
       expect(result.data.args).toEqual([]);
     }
+  });
+});
+
+// ── SecuritySectionSchema tests (spec-20260712 sprint 1 — sc-1-1/sc-1-2) ──
+
+describe("SecuritySectionSchema — standalone validation (sc-1-1)", () => {
+  it("parses an empty object to the full documented default set", () => {
+    const parsed = SecuritySectionSchema.parse({});
+    expect(parsed).toEqual({
+      enabled: false,
+      failClosed: true,
+      timeoutMs: 300_000,
+      model: "opus",
+      maxTurns: 20,
+      scanners: [],
+      standaloneBlockOn: "critical",
+      hub: true,
+    });
+  });
+
+  it("round-trips a fully-specified section", () => {
+    const result = SecuritySectionSchema.safeParse({
+      enabled: true,
+      failClosed: false,
+      timeoutMs: 60_000,
+      model: "sonnet",
+      maxTurns: 5,
+      provider: "anthropic",
+      endpoint: null,
+      providerConfig: { foo: "bar" },
+      budget: { maxUsd: 3 },
+      scanners: [{ type: "slither", required: true }],
+      standaloneBlockOn: "important",
+      hub: false,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.enabled).toBe(true);
+      expect(result.data.failClosed).toBe(false);
+      expect(result.data.timeoutMs).toBe(60_000);
+      expect(result.data.model).toBe("sonnet");
+      expect(result.data.maxTurns).toBe(5);
+      expect(result.data.provider).toBe("anthropic");
+      expect(result.data.budget?.maxUsd).toBe(3);
+      expect(result.data.scanners).toEqual([{ type: "slither", required: true }]);
+      expect(result.data.standaloneBlockOn).toBe("important");
+      expect(result.data.hub).toBe(false);
+    }
+  });
+
+  it("rejects an invalid standaloneBlockOn value", () => {
+    expect(() => SecuritySectionSchema.parse({ standaloneBlockOn: "minor" })).toThrow();
+  });
+
+  it("rejects maxTurns < 1", () => {
+    expect(() => SecuritySectionSchema.parse({ maxTurns: 0 })).toThrow();
+  });
+
+  it("rejects a non-positive timeoutMs", () => {
+    expect(() => SecuritySectionSchema.parse({ timeoutMs: 0 })).toThrow();
+  });
+});
+
+describe("BoberConfigSchema — security section is optional, default-off (sc-1-1/sc-1-2)", () => {
+  const minimalBase = {
+    project: { name: "test-project", mode: "greenfield" },
+    planner: {},
+    generator: {},
+    evaluator: { strategies: [] },
+    sprint: {},
+    pipeline: {},
+    commands: {},
+  };
+
+  it("parses a config without a security section — security is undefined, not materialized", () => {
+    const result = BoberConfigSchema.safeParse(minimalBase);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.security).toBeUndefined();
+    }
+  });
+
+  it("the security key is entirely absent from the parsed object (not present-but-undefined)", () => {
+    // Object.hasOwn proves the key is never materialized — stronger than a
+    // `toBeUndefined()` assertion alone, per the byte-identity stop condition.
+    expect(Object.hasOwn(BoberConfigSchema.parse(minimalBase), "security")).toBe(false);
+  });
+
+  it("createDefaultConfig-shaped fixtures (no security key) are unaffected by adding the optional field", () => {
+    // Every pre-existing minimal fixture in this file omits `security`; parsing
+    // any of them must continue to omit the key entirely.
+    const parsed = BoberConfigSchema.parse(minimalBaseForVault);
+    expect(Object.hasOwn(parsed, "security")).toBe(false);
+  });
+
+  it("parses a config with a security section present and materializes its defaults", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      security: { enabled: true },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.security?.enabled).toBe(true);
+      expect(result.data.security?.failClosed).toBe(true);
+      expect(result.data.security?.standaloneBlockOn).toBe("critical");
+      expect(result.data.security?.hub).toBe(true);
+    }
+  });
+});
+
+describe("BoberConfigSchema — repo's own bober.config.json parses byte-identically (sc-1-2)", () => {
+  it("deep-equals an explicit expected snapshot, with no security key materialized", async () => {
+    const raw = await readFile(join(process.cwd(), "bober.config.json"), "utf-8");
+    const rawJson: Record<string, unknown> = JSON.parse(raw);
+    const parsed = BoberConfigSchema.parse(rawJson);
+
+    // The security key must be absent — this schema change never injects it.
+    expect(Object.hasOwn(parsed, "security")).toBe(false);
+
+    // Full deep-equal against an explicit expected object (not just an
+    // absence check) — proves the rest of the parse output is unperturbed.
+    expect(parsed).toEqual({
+      project: { name: "agent-bober", mode: "greenfield" },
+      planner: { maxClarifications: 5, model: "opus", provider: "anthropic" },
+      curator: { model: "opus", maxTurns: 25, enabled: true },
+      generator: {
+        model: "sonnet",
+        maxTurnsPerSprint: 50,
+        autoCommit: true,
+        branchPattern: "bober/{feature-name}",
+        provider: "anthropic",
+      },
+      evaluator: {
+        model: "sonnet",
+        strategies: [
+          { type: "typecheck", required: true },
+          { type: "lint", required: false },
+          { type: "unit-test", required: false },
+          { type: "build", required: true },
+          { type: "api-check", required: false },
+        ],
+        maxIterations: 3,
+        provider: "anthropic",
+        panel: { enabled: false, lenses: [], maxConcurrent: 4 },
+      },
+      sprint: { maxSprints: 10, requireContracts: true, sprintSize: "medium" },
+      pipeline: {
+        maxIterations: 20,
+        maxCheckpointIterations: 3,
+        requireApproval: false,
+        contextReset: "always",
+        researchPhase: true,
+        architectPhase: false,
+        mode: "autopilot",
+        checkpointOverrides: {},
+        approvalTimeoutMs: 86_400_000,
+        prPollMs: 30_000,
+        allowAutopilotRiskyActions: false,
+        eventQueueBound: 1000,
+        worktreeRoot: ".bober/worktrees",
+        cleanupWorktreeOnSuccess: true,
+        engine: "ts",
+      },
+      graph: {
+        enabled: true,
+        autoSync: true,
+        languageTier: "core",
+        manifestPath: ".bober/graph/manifest.json",
+        syncTimeoutMs: 2000,
+        queryTimeoutMs: 5000,
+        debounceMs: 750,
+        hookQueueMax: 50,
+        maxEngineRssMb: 512,
+        exposeOnExternalMcp: true,
+        preflightBudgets: {
+          architect: 4000,
+          curator: 2000,
+          generator: 1000,
+          evaluator: 1500,
+          researcherPhase2: 3000,
+        },
+      },
+      commands: {},
+    });
   });
 });

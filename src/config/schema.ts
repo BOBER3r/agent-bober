@@ -197,6 +197,37 @@ export const CodeReviewSectionSchema = z.object({
 });
 export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
 
+// ── Security Section (opt-in stack-aware audit; default-off) ─────────
+
+/**
+ * Configuration for the bober-security-auditor role (spec-20260712).
+ * Opt-in and default-off: `enabled: false` and the section itself is wired
+ * `.optional()` on BoberConfigSchema with no top-level default, so a config
+ * that omits `security` entirely stays byte-identical (no defaults leak in).
+ * `standaloneBlockOn`/`hub` are consumed by later sprints (gate + hub
+ * emission) but are declared here now to avoid re-touching this schema.
+ */
+export const SecuritySectionSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Fail-closed: unparseable auditor output or a timeout blocks. Default true. */
+  failClosed: z.boolean().default(true),
+  timeoutMs: z.number().int().positive().default(300_000),
+  model: ModelChoiceSchema.default("opus"),
+  maxTurns: z.number().int().min(1).default(20),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
+  /** Opt-in deterministic scanner pre-filter strategies (e.g. slither, semgrep). */
+  scanners: z.array(EvalStrategySchema).default([]),
+  /** Blocking threshold for the standalone `bober security-audit` CLI (sprint 4). */
+  standaloneBlockOn: z.enum(["critical", "important"]).default("critical"),
+  /** Whether findings are emitted to the priority hub (sprint 6). Default true. */
+  hub: z.boolean().default(true),
+});
+export type SecuritySection = z.infer<typeof SecuritySectionSchema>;
+
 /**
  * Per-sprint documenter — writes docs immediately after a sprint's evaluator
  * passes (instead of batching all docs into a final sprint). Advisory: a
@@ -598,6 +629,8 @@ export const BoberConfigSchema = z.object({
   research: ResearchSectionSchema.optional(),
   // ── Sprint 10 (agent-loop-capability-port): opt-in MCP tool bridge axis ──
   tools: ToolsSectionSchema.optional(),
+  // ── Security audit gate (opt-in, default-off) ──
+  security: SecuritySectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
