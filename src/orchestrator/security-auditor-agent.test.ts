@@ -14,6 +14,7 @@ import type { SprintContract } from "../contracts/sprint-contract.js";
 import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig, SecuritySection } from "../config/schema.js";
+import type * as ToolsIndexModule from "./tools/index.js";
 
 // ── Mock heavy dependencies ────────────────────────────────────────
 
@@ -25,11 +26,18 @@ vi.mock("./agentic-loop.js", () => ({ runAgenticLoop: loopSpy }));
 vi.mock("../providers/factory.js", () => ({ createClient: clientSpy }));
 vi.mock("./model-resolver.js", () => ({ resolveModel: () => "model-test" }));
 vi.mock("./agent-loader.js", () => ({ assembleSystemPrompt: vi.fn().mockResolvedValue("SYS") }));
-vi.mock("./tools/index.js", () => ({
-  resolveRoleTools: () => ({ schemas: [], handlers: new Map() }),
-  getGraphState: () => ({ enabled: false, engineHealth: "disabled" }),
-  getGraphDeps: () => undefined,
-}));
+// Uses the REAL resolveRoleTools/ROLE_TOOLS (only getGraphState/getGraphDeps are
+// stubbed, forcing the ungated/static tool set) so the nonGoal regression test
+// below exercises the genuine role -> tool-name mapping instead of a fixture
+// that could silently drift out of sync with tools/index.ts.
+vi.mock("./tools/index.js", async () => {
+  const actual = await vi.importActual<typeof ToolsIndexModule>("./tools/index.js");
+  return {
+    ...actual,
+    getGraphState: () => ({ graphEnabled: false, engineHealth: "disabled" }),
+    getGraphDeps: () => undefined,
+  };
+});
 vi.mock("../state/security-audit-state.js", () => ({
   saveSecurityAudit: saveSecurityAuditSpy,
 }));
@@ -400,5 +408,39 @@ describe("runSecurityAudit — sc-2-6 config.security wiring through createClien
     await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
 
     expect(loopSpy.mock.calls[0][0].budget).toBeUndefined();
+  });
+});
+
+// ── nonGoal regression: auditor must never get bash/write/edit tools ──
+
+describe("runSecurityAudit — nonGoal: no bash/write/edit tools", () => {
+  it("passes a tools array to runAgenticLoop that contains read_file/glob/grep and NO bash, write_file, or edit_file", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig();
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+    const toolNames = (loopSpy.mock.calls[0][0].tools as Array<{ name: string }>).map((t) => t.name);
+
+    expect(toolNames).toContain("read_file");
+    expect(toolNames).toContain("glob");
+    expect(toolNames).toContain("grep");
+    expect(toolNames).not.toContain("bash");
+    expect(toolNames).not.toContain("write_file");
+    expect(toolNames).not.toContain("edit_file");
+  });
+
+  it("has no 'bash' handler registered in the toolHandlers map passed to runAgenticLoop", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig();
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    const toolHandlers = loopSpy.mock.calls[0][0].toolHandlers as Map<string, unknown>;
+    expect(toolHandlers.has("bash")).toBe(false);
+    expect(toolHandlers.has("write_file")).toBe(false);
+    expect(toolHandlers.has("edit_file")).toBe(false);
+    expect(toolHandlers.has("read_file")).toBe(true);
   });
 });

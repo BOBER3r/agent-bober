@@ -55,12 +55,14 @@ export async function runSecurityAudit(
   const model = resolveModel(securityModel);
   const maxTurns = config.security?.maxTurns ?? 20;
 
-  // Security auditor reuses the "evaluator" role tool set — read-only
-  // (bash, read, grep, glob). It never gets write/edit tools (nonGoal).
+  // Security auditor reuses the "curator" role's tool set — read-only,
+  // no execution (read_file, glob, grep). It never gets bash, write, or
+  // edit tools (nonGoals[3]): unlike the evaluator/code-reviewer roles,
+  // the auditor must not be able to run shell commands at all.
   const graphState = getGraphState(config);
   const graphDeps = graphState.engineHealth === "ready" ? getGraphDeps() : undefined;
-  const toolSet = resolveRoleTools("evaluator", projectRoot, graphState, graphDeps ?? undefined);
-  const systemPrompt = await assembleSystemPrompt("evaluator", "bober-security-auditor", projectRoot, graphState);
+  const toolSet = resolveRoleTools("curator", projectRoot, graphState, graphDeps ?? undefined);
+  const systemPrompt = await assembleSystemPrompt("curator", "bober-security-auditor", projectRoot, graphState);
 
   const client = createClient(
     config.security?.provider ?? null,
@@ -182,11 +184,17 @@ ${projectRoot}
 
 # Your Task
 
-Audit the sprint's changes for exploitable security vulnerabilities. Use your tools to:
-1. Read .bober/contracts/${contractId}.json for scope
-2. Run git diff HEAD~1 --stat to see what changed (standalone mode: audit the current tree)
-3. Review each changed file against the vulnerability taxonomy and stack-specific checklist above
-4. Produce a ReviewResult JSON, findings organised by VulnClass, cited with path+line+snippet
+Audit the sprint's changes for exploitable security vulnerabilities. You have Read/Grep/Glob
+only (no Bash, no git) — use them to:
+1. Read .bober/contracts/${contractId}.json for scope, including its \`estimatedFiles\` list
+2. Use Glob to enumerate the in-scope files (the \`estimatedFiles\` patterns, or the relevant
+   project directories when that list is empty) and Read each one in full; there is no diff
+   available without Bash, so audit the CURRENT content of each in-scope file
+3. Use Grep to search across the codebase for suspicious patterns (hardcoded secrets, unsafe
+   string interpolation into a query/shell/template, missing auth checks) that Read alone
+   might miss
+4. Review each file against the vulnerability taxonomy and stack-specific checklist above
+5. Produce a ReviewResult JSON, findings organised by VulnClass, cited with path+line+snippet
 
 Output ONLY a JSON object (no markdown fences, no surrounding prose):
 {
