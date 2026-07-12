@@ -151,7 +151,7 @@ These are outputs a subsystem writes for a human or a downstream reader to consu
 | **Fleet report** | `<rootDir>/.bober/fleet-report.json` | `{ total, completed, failed, other, generatedAt, children, rounds? }`. Written atomically (temp file + rename) on **every** fleet run; `rounds` present only on blackboard runs. |
 | **Fleet synthesis** | `<rootDir>/.bober/fleet-synthesis.json` | `{ rounds, childResults, findings[] }` (`src/fleet/synthesis.ts`). Written atomically (temp + rename, mode `0600`) **only on blackboard runs**. Consumed by the Telegram `/fleet` view. |
 | **Fleet manifest provenance** | `<out>.meta.json` sidecar + `<out>.bak` | Written by `fleet expand` / `fleet expand-deep`: a provenance sidecar next to the generated manifest, plus preservation of the prior manifest as `.bak` on overwrite. |
-| **Security audit** | `.bober/security/<contractId>-security-audit.md` | Human-readable audit artifact rendered by reusing `renderReviewMarkdown(result.review)` (`src/state/security-audit-state.ts`; `saveSecurityAudit`/`readSecurityAudit`/`listSecurityAudits`). **Separate** from the advisory reviewer's `.bober/reviews/` per ADR-3 (no filename collision). Written by the `runSecurityAudit` core (`src/orchestrator/security-auditor-agent.ts`), which persists here on every audit (spec-20260712 sprint 2). As of **sprint 3** the fail-closed pipeline gate (`evaluateSecurityGate`, `src/orchestrator/security-gate.ts`) invokes that core on every passing sprint when `security.enabled === true`; the standalone `bober security-audit` CLI lands in sprint 4. |
+| **Security audit** | `.bober/security/<contractId>-security-audit.md` | Human-readable audit artifact rendered by reusing `renderReviewMarkdown(result.review)` (`src/state/security-audit-state.ts`; `saveSecurityAudit`/`readSecurityAudit`/`listSecurityAudits`). **Separate** from the advisory reviewer's `.bober/reviews/` per ADR-3 (no filename collision). Written by the `runSecurityAudit` core (`src/orchestrator/security-auditor-agent.ts`), which persists here on every audit (spec-20260712 sprint 2). As of **sprint 3** the fail-closed pipeline gate (`evaluateSecurityGate`, `src/orchestrator/security-gate.ts`) invokes that core on every passing sprint when `security.enabled === true`; as of **sprint 4** the standalone `bober security-audit [target]` CLI (`src/cli/commands/security-audit.ts`) invokes it on demand (no `enabled: true` required) and persists here too. |
 
 ---
 
@@ -237,8 +237,8 @@ defaults). It is **not** written by `createDefaultConfig` or any preset.
   "timeoutMs": 300000,
   "model": "opus",
   "maxTurns": 20,
-  "scanners": [],                       // opt-in deterministic pre-filter strategies (EvalStrategy[])
-  "standaloneBlockOn": "critical",      // 'critical' | 'important' (consumed by the standalone CLI, later sprint)
+  "scanners": [],                       // opt-in deterministic pre-filter strategies (EvalStrategy[]) — later sprint
+  "standaloneBlockOn": "critical",      // 'critical' | 'important' — CI blocking threshold for `bober security-audit`
   "hub": true                           // emit findings to the priority hub (later sprint)
 }
 ```
@@ -260,12 +260,21 @@ a `security-audit-blocked` history event; the findings routed into the next gene
 feedback; code-review + documenter skipped), while a clean audit records `security-audit-clean` and falls
 through unchanged. `runSecurityAudit` reads `security.{model,provider,endpoint,providerConfig,maxTurns,budget}`
 and honors `config.project.stack`. When `security` is **absent or `enabled !== true`** the branch is
-skipped entirely and the pipeline is **byte-identical** to before. **Not yet wired**: the standalone
-`bober security-audit` CLI, the scanner pre-filter, and hub emission land in later sprints — so
-`standaloneBlockOn`/`hub`/`scanners` are declared now but not yet consumed. See
+skipped entirely and the pipeline is **byte-identical** to before.
+
+As of **sprint 4** the same core has an on-demand entry point: the **standalone `bober security-audit
+[target]` CLI** (`src/cli/commands/security-audit.ts`, `runStandaloneSecurityAudit`). It runs
+`runSecurityAudit(descriptor, null, projectRoot, config)` against any local path (or the working tree),
+persists the same `.bober/security/` artifact, prints a cited summary, and exits `0`/`2` on a **configurable**
+threshold (`standaloneBlockOn` — `critical` default, or `important`; fail-closed on a thrown/unparseable
+audit). Unlike the gate, the standalone command does **not** require `enabled: true` (the invocation is the
+opt-in) and it reads `standaloneBlockOn`; the gate's critical-only veto is untouched (`thresholdVerdict`
+lives in the CLI module, never in `security-gate.ts`). **Not yet wired**: the scanner pre-filter and hub
+emission land in later sprints — so `hub`/`scanners` are declared now but not yet consumed. See
 [sprint 1](./sprints/sprint-spec-20260712-security-audit-agent-team-1.md),
-[sprint 2](./sprints/sprint-spec-20260712-security-audit-agent-team-2.md), and
-[sprint 3](./sprints/sprint-spec-20260712-security-audit-agent-team-3.md).
+[sprint 2](./sprints/sprint-spec-20260712-security-audit-agent-team-2.md),
+[sprint 3](./sprints/sprint-spec-20260712-security-audit-agent-team-3.md), and
+[sprint 4](./sprints/sprint-spec-20260712-security-audit-agent-team-4.md).
 
 ### Provider fields (on roles)
 
@@ -291,7 +300,7 @@ config file carries provider *selection*, never secrets.
   research/jobs/<jobId>.json          # research job store
   research/digests/<date>.{md,json}   # research digests
   sessions/<sessionId>.json           # own agentic-loop transcript (opt-in resume/fork)
-  security/<contractId>-security-audit.md  # security-auditor artifact (written by runSecurityAudit; invoked by the fail-closed pipeline gate when security.enabled; standalone CLI lands in sprint 4)
+  security/<contractId>-security-audit.md  # security-auditor artifact (written by runSecurityAudit; invoked by the fail-closed pipeline gate when security.enabled OR on demand via `bober security-audit`)
   fleet-report.json                   # last fleet run summary (always written)
   fleet-synthesis.json                # last blackboard run (Telegram /fleet reads this)
   history.jsonl                       # event log (rotated → history.archive.jsonl)

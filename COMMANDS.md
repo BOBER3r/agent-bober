@@ -2052,6 +2052,58 @@ bober telegram
 
 ---
 
+## Security Audit Commands
+
+The **security auditor** is a stack-aware `bober-security-auditor` role (spec-20260712) that reviews
+code for exploitable vulnerabilities and cites each finding with `path:line`. It has two entry points
+over **one** shared `runSecurityAudit` core: the fail-closed **in-pipeline gate** (runs on every passing
+sprint when `security.enabled === true`; critical-only veto) and the on-demand **standalone CLI** below.
+Both persist a human-readable artifact to `.bober/security/<id>-security-audit.md`. The `security` config
+section is **optional and default-off** — see the [Full Configuration Reference](./README.md#full-configuration-reference).
+
+### `bober security-audit [target]`
+
+Run an on-demand stack-aware security audit against a local path (or the working tree when `target` is
+omitted), print a cited findings summary, and exit with a CI-friendly code driven by a configurable
+severity threshold.
+
+```bash
+# Audit the whole working tree; block CI only on critical findings (default)
+bober security-audit
+
+# Audit a specific path
+bober security-audit src/payments
+
+# Also fail on important-bucket findings — set once in bober.config.json:
+#   "security": { "standaloneBlockOn": "important" }
+bober security-audit
+```
+
+- **The invocation is the opt-in.** Unlike the pipeline gate, the standalone command does **not** require
+  `security.enabled: true` — running it is the consent. When the `security` section is absent entirely, the
+  audit still runs using the schema defaults (`SecuritySectionSchema.parse({})`).
+- **Same core as the gate.** Calls `runSecurityAudit(descriptor, null, projectRoot, config)` with
+  `evaluation = null` (standalone mode). The descriptor's id is timestamped (`security-audit-<slug>`) so it
+  can never collide with a pipeline `sprint-*` contract and yields a stable, fs-safe artifact filename.
+- **Configurable blocking threshold** (`security.standaloneBlockOn`): `critical` (default) blocks only on
+  critical findings; `important` also blocks when only important-bucket findings exist. `minor` findings
+  never block. This threshold is **CLI-local** — the pipeline gate's critical-only veto is unaffected and
+  never reads this key.
+- **Exit codes** (`0` = pass, `2` = blocked): the process exits **`2`** when the configured threshold
+  bucket is non-empty **or** the audit throws **or** the auditor's output could not be parsed
+  (`parsed: false`) — i.e. **fail-closed**; otherwise **`0`**. The fail-closed checks run *before* the
+  threshold, so a parse failure is never read as "clean". (`1` is reserved for Commander usage errors.)
+- **Output.** Prints the verdict (`PASS` / `BLOCKED (threshold: …)`), the detected stack, per-bucket
+  counts (critical / important / minor), the audit summary, up to 20 top findings as
+  `<description> at <path>:<line>`, and the persisted artifact path. Errors go to stderr.
+- **Local paths only** — no remote URLs. No git-diff scoping; the auditor's read-only tools explore the
+  project root (or the target subpath).
+
+See [docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md)
+and the security-auditor section of [docs/storage.md](./docs/storage.md).
+
+---
+
 ## Environment Variables
 
 | Variable | Provider | Purpose |
