@@ -46,6 +46,7 @@ import { registerBlackboardCommand } from "./commands/blackboard.js";
 import { registerHubCommand } from "./commands/hub.js";
 import { registerDoCommand } from "./commands/do.js";
 import { registerTelegramCommand } from "./commands/telegram.js";
+import { registerSecurityAuditCommand } from "./commands/security-audit.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -354,6 +355,9 @@ async function main(): Promise<void> {
 
   // ── telegram ──────────────────────────────────────────────────────────
   registerTelegramCommand(program);
+
+  // ── security-audit ────────────────────────────────────────────────────
+  registerSecurityAuditCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
