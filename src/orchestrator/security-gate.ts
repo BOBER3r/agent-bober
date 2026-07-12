@@ -12,6 +12,11 @@
  * evaluateSecurityGate NEVER throws. Every failure mode (timeout, thrown
  * audit error, unparseable output) resolves to `blocked:true` — an
  * incomplete audit is never treated as clean (fail-closed).
+ *
+ * Sprint 6 additionally emits critical/important findings into the priority
+ * hub AFTER the verdict is computed and OUTSIDE the Promise.race time-box
+ * below, so a slow or failing hub ingest can never flip the verdict or
+ * manufacture a false timeout (see emitFindingsToHub).
  */
 import type { BoberConfig } from "../config/schema.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
@@ -20,6 +25,10 @@ import type { SecurityAuditResult, SecurityFinding } from "./security-audit-type
 import { runSecurityAudit } from "./security-auditor-agent.js";
 import { saveSecurityAudit } from "../state/security-audit-state.js";
 import { logger } from "../utils/logger.js";
+import type { SecurityFindingSink } from "./security-hub.js";
+import { emitSecurityFindings, mapAuditToFindings } from "./security-hub.js";
+import { ingestFinding } from "../hub/finding-store.js";
+import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -28,6 +37,8 @@ export interface SecurityGateInput {
   evaluation: EvaluationRunResult;
   projectRoot: string;
   config: BoberConfig;
+  /** Injected hub sink (tests only) — default binds ingestFinding to a real FactStore. */
+  findingSink?: SecurityFindingSink;
 }
 
 export type SecurityGateReason =
@@ -72,7 +83,7 @@ const TIMEOUT_MESSAGE = "security-audit timeout";
 export async function evaluateSecurityGate(
   input: SecurityGateInput,
 ): Promise<SecurityGateVerdict> {
-  const { contract, evaluation, projectRoot, config } = input;
+  const { contract, evaluation, projectRoot, config, findingSink } = input;
 
   // Disabled short-circuit — construct nothing, invoke nothing.
   if (config.security?.enabled !== true) {
@@ -105,6 +116,12 @@ export async function evaluateSecurityGate(
     return { blocked: true, reason: "audit-error", result };
   }
 
+  // Best-effort hub emission — result.verdict is already computed (above)
+  // and this call is OUTSIDE the Promise.race time-box, so a slow or
+  // failing ingest can never manufacture a false 'timeout' or flip the
+  // verdict (nonGoals[3]). Guarded by config.security.hub (default true).
+  await emitFindingsToHub(result, projectRoot, config, findingSink);
+
   // Best-effort persistence. runSecurityAudit already persisted internally
   // (security-auditor-agent.ts) — this is a deliberate, idempotent re-save
   // guarded independently so a store failure here can never flip the
@@ -120,6 +137,58 @@ export async function evaluateSecurityGate(
   return result.verdict === "blocked"
     ? { blocked: true, reason: "critical-finding", result }
     : { blocked: false, reason: "clean", result };
+}
+
+// ── Hub emission ─────────────────────────────────────────────────────
+
+/**
+ * Emit a SecurityAuditResult's critical/important findings into the
+ * priority hub. Best-effort: emitSecurityFindings already catches and logs
+ * sink failures internally, so this helper never throws and never affects
+ * the gate's verdict.
+ *
+ * - `config.security.hub === false` -> no-op (zero hub writes).
+ * - An injected `findingSink` (tests) is used as-is.
+ * - Otherwise, a FactStore is opened lazily — only when mapAuditToFindings
+ *   produces at least one finding to emit — so a clean audit (or a
+ *   `hub:false` config) never touches the filesystem.
+ *
+ * `now` is stamped here (not injected) — SecurityGateInput has no clock
+ * dependency today, and pipeline.ts already stamps `new Date()` at its own
+ * history-event boundaries (pipeline.ts:481,525), so this is a genuine,
+ * consistent side-effecting boundary.
+ */
+async function emitFindingsToHub(
+  result: SecurityAuditResult,
+  projectRoot: string,
+  config: BoberConfig,
+  findingSink: SecurityFindingSink | undefined,
+): Promise<void> {
+  if (config.security?.hub === false) return;
+
+  const now = new Date().toISOString();
+
+  if (findingSink !== undefined) {
+    await emitSecurityFindings(result, findingSink, logger, now);
+    return;
+  }
+
+  // Check emptiness BEFORE opening a store — a clean audit (mapAuditToFindings
+  // returns []) never touches the filesystem. mapAuditToFindings is pure and
+  // cheap, so computing it twice (here + inside emitSecurityFindings) is fine.
+  if (mapAuditToFindings(result, now).length === 0) return;
+
+  await ensureFactsDir(projectRoot);
+  const store = new FactStore(factsDbPath(projectRoot));
+  const defaultSink: SecurityFindingSink = async (finding) => {
+    await ingestFinding(store, finding, { now });
+  };
+
+  try {
+    await emitSecurityFindings(result, defaultSink, logger, now);
+  } finally {
+    store.close();
+  }
 }
 
 // ── Feedback rendering ─────────────────────────────────────────────

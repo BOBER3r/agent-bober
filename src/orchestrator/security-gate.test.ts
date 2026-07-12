@@ -1,26 +1,42 @@
 /**
  * Unit tests for the fail-closed SecurityAuditGate
- * (spec-20260712-security-audit-agent-team, sprint 3).
+ * (spec-20260712-security-audit-agent-team, sprint 3 + sprint 6 hub wiring).
  *
  * Covers sc-3-1 (all five SecurityGateVerdict reasons, table-tested,
  * including the disabled short-circuit invoking zero audit calls), the
  * fake-timer timeout test (reason:'timeout', not 'audit-error'), the
  * parsed:false→'audit-error' elevation, the sc-3-6 store-persistence-failure
- * guard (verdict unchanged in both a clean and a blocked scenario), and
- * renderSecurityFeedback's pure rendering (sc-3-3).
+ * guard (verdict unchanged in both a clean and a blocked scenario),
+ * renderSecurityFeedback's pure rendering (sc-3-3), and sprint 6's hub
+ * emission gating (sc-6-2: hub:true emits, hub:false emits nothing, verdict
+ * unaffected either way).
  *
  * Mocks runSecurityAudit and saveSecurityAudit directly — the gate is a
  * thin wrapper, so its own unit tests never invoke a real agentic loop.
+ * All sc-3-* calls pass a no-op `findingSink` so this fixture-driven suite
+ * (projectRoot: "/tmp/project" — not a real per-test temp dir) never
+ * constructs a real FactStore; the dedicated hub-emission describe block
+ * below injects its own spy/real sinks deliberately.
  * Colocated with security-gate.ts per the project convention
  * (security-auditor-agent.test.ts / code-reviewer-agent.test.ts).
  */
 
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SprintContract } from "../contracts/sprint-contract.js";
 import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig, SecuritySection } from "../config/schema.js";
 import type { SecurityAuditResult } from "./security-audit-types.js";
+import type { SecurityFindingSink } from "./security-hub.js";
+import { FactStore } from "../state/facts.js";
+import { readFindings } from "../hub/finding-store.js";
+
+/** No-op sink for tests that don't exercise hub emission directly — keeps
+ * the "/tmp/project" fixture suite from ever touching the real filesystem. */
+const noopSink: SecurityFindingSink = async () => {};
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
@@ -175,6 +191,7 @@ describe("evaluateSecurityGate — sc-3-1 all five reasons", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config: base,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: false, reason: "disabled" });
@@ -189,6 +206,7 @@ describe("evaluateSecurityGate — sc-3-1 all five reasons", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: false, reason: "disabled" });
@@ -204,6 +222,7 @@ describe("evaluateSecurityGate — sc-3-1 all five reasons", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: false, reason: "clean", result: cleanResult });
@@ -218,6 +237,7 @@ describe("evaluateSecurityGate — sc-3-1 all five reasons", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: true, reason: "critical-finding", result: criticalResult });
@@ -232,6 +252,7 @@ describe("evaluateSecurityGate — sc-3-1 all five reasons", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict.blocked).toBe(true);
@@ -250,6 +271,7 @@ describe("evaluateSecurityGate — sc-3-1 all five reasons", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: true, reason: "audit-error" });
@@ -277,6 +299,7 @@ describe("evaluateSecurityGate — timeout", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     await vi.runAllTimersAsync();
@@ -302,6 +325,7 @@ describe("evaluateSecurityGate — sc-3-6 store persistence failure", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: false, reason: "clean", result: cleanResult });
@@ -321,6 +345,7 @@ describe("evaluateSecurityGate — sc-3-6 store persistence failure", () => {
       evaluation: testEvaluation,
       projectRoot: "/tmp/project",
       config,
+      findingSink: noopSink,
     });
 
     expect(verdict).toEqual({ blocked: true, reason: "critical-finding", result: criticalResult });
@@ -416,5 +441,139 @@ describe("renderSecurityFeedback", () => {
 
     // 1 summary line + 20 capped finding lines
     expect(parts.length).toBe(21);
+  });
+});
+
+// ── sc-6-2 / sc-6-3: hub emission gating (caller-side) ─────────────────
+
+describe("evaluateSecurityGate — hub emission (sc-6-2, sc-6-3)", () => {
+  it("hub:true (default) invokes the injected findingSink once per finding; verdict unaffected", async () => {
+    runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+    const config = makeConfig({ hub: true });
+    const calls: unknown[] = [];
+    const spySink: SecurityFindingSink = async (f) => {
+      calls.push(f);
+    };
+
+    const verdict = await evaluateSecurityGate({
+      contract: testContract,
+      evaluation: testEvaluation,
+      projectRoot: "/tmp/project",
+      config,
+      findingSink: spySink,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(verdict).toEqual({ blocked: true, reason: "critical-finding", result: criticalResult });
+  });
+
+  it("hub:false emits zero findings even though the audit produced a critical finding; verdict unaffected", async () => {
+    runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+    const config = makeConfig({ hub: false });
+    const calls: unknown[] = [];
+    const spySink: SecurityFindingSink = async (f) => {
+      calls.push(f);
+    };
+
+    const verdict = await evaluateSecurityGate({
+      contract: testContract,
+      evaluation: testEvaluation,
+      projectRoot: "/tmp/project",
+      config,
+      findingSink: spySink,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(verdict).toEqual({ blocked: true, reason: "critical-finding", result: criticalResult });
+  });
+
+  it("a throwing findingSink never alters the verdict (best-effort emission)", async () => {
+    runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+    const config = makeConfig({ hub: true });
+    const throwingSink: SecurityFindingSink = async () => {
+      throw new Error("hub ingest exploded");
+    };
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const verdict = await evaluateSecurityGate({
+      contract: testContract,
+      evaluation: testEvaluation,
+      projectRoot: "/tmp/project",
+      config,
+      findingSink: throwingSink,
+    });
+
+    expect(verdict).toEqual({ blocked: true, reason: "critical-finding", result: criticalResult });
+    warnSpy.mockRestore();
+  });
+
+  it("clean audits emit zero findings (no sink calls) even with hub:true", async () => {
+    runSecurityAuditSpy.mockResolvedValueOnce(cleanResult);
+    const config = makeConfig({ hub: true });
+    const calls: unknown[] = [];
+    const spySink: SecurityFindingSink = async (f) => {
+      calls.push(f);
+    };
+
+    await evaluateSecurityGate({
+      contract: testContract,
+      evaluation: testEvaluation,
+      projectRoot: "/tmp/project",
+      config,
+      findingSink: spySink,
+    });
+
+    expect(calls).toHaveLength(0);
+  });
+
+  describe("default sink (no findingSink injected) against the REAL finding-store in a temp dir", () => {
+    let tmpRoot: string;
+
+    beforeEach(async () => {
+      tmpRoot = await mkdtemp(join(tmpdir(), "bober-sec-gate-hub-"));
+    });
+
+    afterEach(async () => {
+      await rm(tmpRoot, { recursive: true, force: true });
+    });
+
+    it("emitting the same critical finding across two gate evaluations leaves one active hub row (sc-6-3)", async () => {
+      const config = makeConfig({ hub: true });
+
+      runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+      await evaluateSecurityGate({
+        contract: testContract,
+        evaluation: testEvaluation,
+        projectRoot: tmpRoot,
+        config,
+      });
+
+      runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+      await evaluateSecurityGate({
+        contract: testContract,
+        evaluation: testEvaluation,
+        projectRoot: tmpRoot,
+        config,
+      });
+
+      const store = new FactStore(join(tmpRoot, ".bober", "memory", "facts.db"));
+      expect(readFindings(store)).toHaveLength(1);
+      store.close();
+    });
+
+    it("hub:false with no findingSink injected never touches the filesystem", async () => {
+      const config = makeConfig({ hub: false });
+      runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+
+      await evaluateSecurityGate({
+        contract: testContract,
+        evaluation: testEvaluation,
+        projectRoot: tmpRoot,
+        config,
+      });
+
+      // No .bober/memory/facts.db should have been created.
+      await expect(stat(join(tmpRoot, ".bober"))).rejects.toThrow();
+    });
   });
 });

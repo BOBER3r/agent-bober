@@ -12,7 +12,7 @@
  *    end and sets `process.exitCode` (sc-4-1 / sc-4-5 registration).
  */
 
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -29,6 +29,9 @@ import type { BoberConfig, SecuritySection } from "../../config/schema.js";
 import type { ReviewResult } from "../../orchestrator/code-reviewer-agent.js";
 import type { SecurityAuditResult } from "../../orchestrator/security-audit-types.js";
 import type { runSecurityAudit } from "../../orchestrator/security-auditor-agent.js";
+import type { SecurityFindingSink } from "../../orchestrator/security-hub.js";
+import { FactStore } from "../../state/facts.js";
+import { readFindings } from "../../hub/finding-store.js";
 
 // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -423,5 +426,123 @@ describe("registerSecurityAuditCommand: Commander wiring", () => {
     await parse(program, ["security-audit"]);
 
     expect(process.exitCode).toBe(2);
+  });
+});
+
+// ── sc-6-2 / sc-6-3: hub emission gating (standalone CLI) ───────────────
+
+describe("runStandaloneSecurityAudit: hub emission (sc-6-2, sc-6-3)", () => {
+  it("hub:true (default) invokes the injected findingSink once per finding; exitCode unaffected", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: true });
+    const calls: unknown[] = [];
+    const spySink: SecurityFindingSink = async (f) => {
+      calls.push(f);
+    };
+
+    const outcome = await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(criticalResult),
+      findingSink: spySink,
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(outcome.exitCode).toBe(2);
+  });
+
+  it("hub:false emits zero findings even though the audit produced a critical finding; exitCode unaffected", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: false });
+    const calls: unknown[] = [];
+    const spySink: SecurityFindingSink = async (f) => {
+      calls.push(f);
+    };
+
+    const outcome = await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(criticalResult),
+      findingSink: spySink,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(outcome.exitCode).toBe(2);
+  });
+
+  it("a throwing findingSink never alters the exit code (best-effort emission)", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: true });
+    const throwingSink: SecurityFindingSink = async () => {
+      throw new Error("hub ingest exploded");
+    };
+
+    const outcome = await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(criticalResult),
+      findingSink: throwingSink,
+    });
+
+    expect(outcome.exitCode).toBe(2);
+  });
+
+  it("clean audits emit zero findings (no sink calls) even with hub:true", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: true });
+    const calls: unknown[] = [];
+    const spySink: SecurityFindingSink = async (f) => {
+      calls.push(f);
+    };
+
+    const outcome = await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(cleanResult),
+      findingSink: spySink,
+    });
+
+    expect(calls).toHaveLength(0);
+    expect(outcome.exitCode).toBe(0);
+  });
+
+  it("default sink (no findingSink injected): emitting the same critical finding twice leaves one active hub row (sc-6-3)", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: true });
+
+    await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(criticalResult),
+    });
+    await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:05:00.000Z",
+      runAudit: fakeRunAuditResolving(criticalResult),
+    });
+
+    const store = new FactStore(join(tmpRoot, ".bober", "memory", "facts.db"));
+    expect(readFindings(store)).toHaveLength(1);
+    store.close();
+  });
+
+  it("hub:false with no findingSink injected never touches the filesystem", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: false });
+
+    await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(criticalResult),
+    });
+
+    await expect(stat(join(tmpRoot, ".bober"))).rejects.toThrow();
   });
 });

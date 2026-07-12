@@ -20,6 +20,8 @@
  * Clock discipline: `new Date().toISOString()` is called ONLY at the
  * `.action()` boundary — never inside `runStandaloneSecurityAudit` — mirrors
  * `research.ts`'s "stamp wall-clock time at handler boundary" convention.
+ * Hub emission (sprint 6) reuses `deps.now` for the same reason — it is
+ * never re-stamped inside this module.
  *
  * Error handling: CLI handlers MUST NOT throw. They set `process.exitCode`
  * and return on all errors (mirrors `research.ts` / `do.ts`).
@@ -31,11 +33,16 @@ import type { Command } from "commander";
 import { findProjectRoot } from "../../utils/fs.js";
 import { loadConfig } from "../../config/loader.js";
 import { SecuritySectionSchema } from "../../config/schema.js";
-import type { BoberConfig } from "../../config/schema.js";
+import type { BoberConfig, SecuritySection } from "../../config/schema.js";
 import type { SprintContract } from "../../contracts/sprint-contract.js";
 import type { ReviewResult } from "../../orchestrator/code-reviewer-agent.js";
 import type { SecurityAuditResult } from "../../orchestrator/security-audit-types.js";
 import { runSecurityAudit } from "../../orchestrator/security-auditor-agent.js";
+import type { SecurityFindingSink } from "../../orchestrator/security-hub.js";
+import { emitSecurityFindings, mapAuditToFindings } from "../../orchestrator/security-hub.js";
+import { ingestFinding } from "../../hub/finding-store.js";
+import { FactStore, factsDbPath, ensureFactsDir } from "../../state/facts.js";
+import { logger } from "../../utils/logger.js";
 
 // ── Pure threshold (lives HERE, never in security-gate.ts) — sc-4-4 ──
 
@@ -109,6 +116,8 @@ export interface StandaloneAuditDeps {
   now: string;
   /** Default = the real `runSecurityAudit` core; tests inject a fake. */
   runAudit?: typeof runSecurityAudit;
+  /** Injected hub sink (tests only) — default binds ingestFinding to a real FactStore. */
+  findingSink?: SecurityFindingSink;
 }
 
 export interface StandaloneAuditOutcome {
@@ -159,9 +168,61 @@ export async function runStandaloneSecurityAudit(
     return { result, exitCode: 2 };
   }
 
+  // Best-effort hub emission — AFTER a parseable result, BEFORE computing
+  // this command's own threshold verdict. A hub failure never changes the
+  // exit code (nonGoals[3]); emitSecurityFindings catches and logs
+  // internally. Reuses deps.now — never re-stamps the clock here.
+  await emitFindingsToHub(result, deps.projectRoot, security, deps.now, deps.findingSink);
+
   const blocked = thresholdVerdict(result.review, security.standaloneBlockOn);
   printSummary(descriptor, result, security.standaloneBlockOn, blocked);
   return { result, exitCode: blocked ? 2 : 0 };
+}
+
+// ── Hub emission ─────────────────────────────────────────────────────
+
+/**
+ * Emit a SecurityAuditResult's critical/important findings into the
+ * priority hub. Best-effort: emitSecurityFindings already catches and logs
+ * sink failures internally, so this helper never throws and never affects
+ * the CLI's exit code.
+ *
+ * - `security.hub === false` -> no-op (zero hub writes).
+ * - An injected `findingSink` (tests) is used as-is.
+ * - Otherwise, a FactStore is opened lazily — only when mapAuditToFindings
+ *   produces at least one finding to emit — so a clean audit (or a
+ *   `hub:false` config) never touches the filesystem.
+ */
+async function emitFindingsToHub(
+  result: SecurityAuditResult,
+  projectRoot: string,
+  security: SecuritySection,
+  now: string,
+  findingSink: SecurityFindingSink | undefined,
+): Promise<void> {
+  if (security.hub === false) return;
+
+  if (findingSink !== undefined) {
+    await emitSecurityFindings(result, findingSink, logger, now);
+    return;
+  }
+
+  // Check emptiness BEFORE opening a store — a clean audit (mapAuditToFindings
+  // returns []) never touches the filesystem. mapAuditToFindings is pure and
+  // cheap, so computing it twice (here + inside emitSecurityFindings) is fine.
+  if (mapAuditToFindings(result, now).length === 0) return;
+
+  await ensureFactsDir(projectRoot);
+  const store = new FactStore(factsDbPath(projectRoot));
+  const defaultSink: SecurityFindingSink = async (finding) => {
+    await ingestFinding(store, finding, { now });
+  };
+
+  try {
+    await emitSecurityFindings(result, defaultSink, logger, now);
+  } finally {
+    store.close();
+  }
 }
 
 // ── Summary rendering ───────────────────────────────────────────────────
