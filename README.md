@@ -857,7 +857,7 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "model": "opus",                      // Auditor model. Any model string or shorthand.
     "maxTurns": 20,                       // Max read-only tool-use turns for the audit.
     "standaloneBlockOn": "critical",      // CI threshold for `bober security-audit`: 'critical' | 'important'. Gate ignores this key.
-    "scanners": [],                       // Opt-in deterministic pre-filter strategies (EvalStrategy[]) — later sprint.
+    "scanners": [],                       // Opt-in deterministic pre-filter strategies (EvalStrategy[]). slither/semgrep JSON parsed into auditor priors; unknown scanners → raw-text excerpt. Nonzero exit ⇒ [] (use exit-0 commands). Empty ⇒ zero child processes.
     "hub": true                           // Emit findings to the priority hub — later sprint (declared, not yet consumed).
   },
 

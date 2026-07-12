@@ -237,7 +237,7 @@ defaults). It is **not** written by `createDefaultConfig` or any preset.
   "timeoutMs": 300000,
   "model": "opus",
   "maxTurns": 20,
-  "scanners": [],                       // opt-in deterministic pre-filter strategies (EvalStrategy[]) — later sprint
+  "scanners": [],                       // opt-in deterministic pre-filter strategies (EvalStrategy[]) — slither/semgrep parsed into priors (sprint 5)
   "standaloneBlockOn": "critical",      // 'critical' | 'important' — CI blocking threshold for `bober security-audit`
   "hub": true                           // emit findings to the priority hub (later sprint)
 }
@@ -269,12 +269,26 @@ persists the same `.bober/security/` artifact, prints a cited summary, and exits
 threshold (`standaloneBlockOn` — `critical` default, or `important`; fail-closed on a thrown/unparseable
 audit). Unlike the gate, the standalone command does **not** require `enabled: true` (the invocation is the
 opt-in) and it reads `standaloneBlockOn`; the gate's critical-only veto is untouched (`thresholdVerdict`
-lives in the CLI module, never in `security-gate.ts`). **Not yet wired**: the scanner pre-filter and hub
-emission land in later sprints — so `hub`/`scanners` are declared now but not yet consumed. See
+lives in the CLI module, never in `security-gate.ts`).
+
+As of **sprint 5** the `scanners` key is **live**: `runScannerPreFilter`
+(`src/orchestrator/security-scanners.ts`) runs each configured `EvalStrategy` command via `execa` under an
+`AbortSignal` derived from `timeoutMs`, parses **slither** and **semgrep** JSON output into typed
+`SecurityFinding` priors (`parseSlitherOutput` / `parseSemgrepOutput` — pure, fixture-tested, **no binaries
+required in CI**), degrades unknown scanners to a bounded raw-text excerpt, and folds the result into
+`runSecurityAudit`'s `priors` seam (signature unchanged) so both the gate and the standalone CLI inherit the
+priors for free. Each scanner is **isolated** (missing binary / nonzero exit / thrown error yields `[]` for
+that scanner only; the pre-filter never rejects) and time-boxed with `killSignal: "SIGKILL"` (partial findings
+survive an abort). Scanner findings are **advisory priors** — they seed the auditor prompt but never bypass
+the LLM or drive the verdict. With `scanners` **absent or `[]`** no child process is spawned and behavior is
+byte-identical to sprint 2 (ADR-4). **Ceiling:** ANY nonzero exit yields `[]` for that scanner, so operators
+of tools whose convention is nonzero-on-findings (e.g. `semgrep --error`) must configure an **exit-0**
+command. **Not yet wired**: hub Finding emission (sprint 6) — so `hub` is declared but not yet consumed. See
 [sprint 1](./sprints/sprint-spec-20260712-security-audit-agent-team-1.md),
 [sprint 2](./sprints/sprint-spec-20260712-security-audit-agent-team-2.md),
-[sprint 3](./sprints/sprint-spec-20260712-security-audit-agent-team-3.md), and
-[sprint 4](./sprints/sprint-spec-20260712-security-audit-agent-team-4.md).
+[sprint 3](./sprints/sprint-spec-20260712-security-audit-agent-team-3.md),
+[sprint 4](./sprints/sprint-spec-20260712-security-audit-agent-team-4.md), and
+[sprint 5](./sprints/sprint-spec-20260712-security-audit-agent-team-5.md).
 
 ### Provider fields (on roles)
 

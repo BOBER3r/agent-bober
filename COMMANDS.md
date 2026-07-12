@@ -2098,8 +2098,18 @@ bober security-audit
   `<description> at <path>:<line>`, and the persisted artifact path. Errors go to stderr.
 - **Local paths only** — no remote URLs. No git-diff scoping; the auditor's read-only tools explore the
   project root (or the target subpath).
+- **Optional scanner pre-filter** (`security.scanners`): configure `slither`/`semgrep` (or any) scanner
+  commands as `EvalStrategy` entries and their JSON output is parsed into deterministic priors that seed the
+  auditor prompt (they never bypass the LLM or drive the verdict). Both this command and the pipeline gate
+  inherit priors for free. **CI-offline**: the parsers are fixture-tested — no scanner binary need be
+  installed for the test suite. **Time-boxed**: scanner children run under an `AbortSignal` keyed to
+  `security.timeoutMs` and are SIGKILLed on abort (partial findings survive). **Isolated**: a missing binary
+  or nonzero exit contributes `[]` for that scanner only. **Exit-0 convention**: ANY nonzero exit yields `[]`
+  for that scanner, so tools whose convention is nonzero-on-findings (e.g. `semgrep --error`) must be wired as
+  an exit-0 command. With `scanners: []` (default) no child process is spawned.
 
-See [docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md)
+See [docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md),
 and the security-auditor section of [docs/storage.md](./docs/storage.md).
 
 ---
