@@ -12,7 +12,7 @@
  *    end and sets `process.exitCode` (sc-4-1 / sc-4-5 registration).
  */
 
-import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -32,6 +32,7 @@ import type { runSecurityAudit } from "../../orchestrator/security-auditor-agent
 import type { SecurityFindingSink } from "../../orchestrator/security-hub.js";
 import { FactStore } from "../../state/facts.js";
 import { readFindings } from "../../hub/finding-store.js";
+import { logger } from "../../utils/logger.js";
 
 // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -544,5 +545,28 @@ describe("runStandaloneSecurityAudit: hub emission (sc-6-2, sc-6-3)", () => {
     });
 
     await expect(stat(join(tmpRoot, ".bober"))).rejects.toThrow();
+  });
+
+  it("a mkdir failure in the default-sink setup (a FILE occupies .bober/memory) never rejects — resolves exitCode:0 for a non-blocking (important-only, standaloneBlockOn:'critical') audit (sc-6-2 regression, iteration 2 — reproduces the evaluator's exact repro)", async () => {
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const config = makeConfigWithSecurity({ hub: true, standaloneBlockOn: "critical" });
+    // Reproduces the evaluator's exact repro: a plain file occupies the path
+    // ensureFactsDir must mkdir as a directory, so `mkdir(..., {recursive:true})`
+    // rejects with EEXIST before a FactStore is ever constructed.
+    await mkdir(join(tmpRoot, ".bober"), { recursive: true });
+    await writeFile(join(tmpRoot, ".bober", "memory"), "");
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    const outcome = await runStandaloneSecurityAudit({
+      projectRoot: tmpRoot,
+      config,
+      now: "2026-07-12T12:00:00.000Z",
+      runAudit: fakeRunAuditResolving(importantOnlyResult),
+    });
+
+    expect(outcome.exitCode).toBe(0);
+    const warnCalls = warnSpy.mock.calls.map((args) => args[0] as string);
+    expect(warnCalls.some((m) => m.includes("Security hub emission failed"))).toBe(true);
+    warnSpy.mockRestore();
   });
 });

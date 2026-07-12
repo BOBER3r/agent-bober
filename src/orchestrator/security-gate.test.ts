@@ -21,7 +21,7 @@
  * (security-auditor-agent.test.ts / code-reviewer-agent.test.ts).
  */
 
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -574,6 +574,29 @@ describe("evaluateSecurityGate — hub emission (sc-6-2, sc-6-3)", () => {
 
       // No .bober/memory/facts.db should have been created.
       await expect(stat(join(tmpRoot, ".bober"))).rejects.toThrow();
+    });
+
+    it("a mkdir failure in the default-sink setup (a FILE occupies .bober/memory) never rejects — the verdict resolves unchanged and a warning is logged (sc-6-2 regression, iteration 2)", async () => {
+      const config = makeConfig({ hub: true });
+      // Reproduces the evaluator's exact repro: a plain file occupies the path
+      // ensureFactsDir must mkdir as a directory, so `mkdir(..., {recursive:true})`
+      // rejects with EEXIST before a FactStore is ever constructed.
+      await mkdir(join(tmpRoot, ".bober"), { recursive: true });
+      await writeFile(join(tmpRoot, ".bober", "memory"), "");
+      runSecurityAuditSpy.mockResolvedValueOnce(criticalResult);
+      const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      const verdict = await evaluateSecurityGate({
+        contract: testContract,
+        evaluation: testEvaluation,
+        projectRoot: tmpRoot,
+        config,
+      });
+
+      expect(verdict).toEqual({ blocked: true, reason: "critical-finding", result: criticalResult });
+      const warnCalls = warnSpy.mock.calls.map((args) => args[0] as string);
+      expect(warnCalls.some((m) => m.includes("Security hub emission failed"))).toBe(true);
+      warnSpy.mockRestore();
     });
   });
 });

@@ -212,16 +212,29 @@ async function emitFindingsToHub(
   // cheap, so computing it twice (here + inside emitSecurityFindings) is fine.
   if (mapAuditToFindings(result, now).length === 0) return;
 
-  await ensureFactsDir(projectRoot);
-  const store = new FactStore(factsDbPath(projectRoot));
-  const defaultSink: SecurityFindingSink = async (finding) => {
-    await ingestFinding(store, finding, { now });
-  };
-
+  // The ENTIRE default-sink sequence (dir creation, store open, emission,
+  // store close) is wrapped in one try/catch/finally: `emitSecurityFindings`
+  // only guards the emission loop itself — it does NOT cover `ensureFactsDir`
+  // or `new FactStore`, so an fs failure there (disk full, EACCES, a
+  // non-directory occupying `.bober`, a locked/corrupt sqlite file) must be
+  // caught here too, or it propagates as an unhandled rejection that the
+  // CLI's outer catch would report as exit 2 for an otherwise clean audit
+  // (sc-6-2 regression fix, iteration 2).
+  let store: FactStore | undefined;
   try {
+    await ensureFactsDir(projectRoot);
+    const opened = new FactStore(factsDbPath(projectRoot));
+    store = opened;
+    const defaultSink: SecurityFindingSink = async (finding) => {
+      await ingestFinding(opened, finding, { now });
+    };
     await emitSecurityFindings(result, defaultSink, logger, now);
+  } catch (err) {
+    logger.warn(
+      `Security hub emission failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   } finally {
-    store.close();
+    store?.close();
   }
 }
 
