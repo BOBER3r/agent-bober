@@ -72,5 +72,9 @@
     "enabled": true,
     "languageTier": "core"
   },
+  "security": {
+    "enabled": true,
+    "scanners": []
+  },
   "commands": {}
 }

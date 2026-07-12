@@ -741,14 +741,16 @@ describe("BoberConfigSchema — security section is optional, default-off (sc-1-
   });
 });
 
-describe("BoberConfigSchema — repo's own bober.config.json parses byte-identically (sc-1-2)", () => {
-  it("deep-equals an explicit expected snapshot, with no security key materialized", async () => {
+describe("BoberConfigSchema — repo's own bober.config.json parses byte-identically (sc-1-2, sc-7-2)", () => {
+  it("deep-equals an explicit expected snapshot, with the dogfood security key materialized (sc-7-2)", async () => {
     const raw = await readFile(join(process.cwd(), "bober.config.json"), "utf-8");
     const rawJson: Record<string, unknown> = JSON.parse(raw);
     const parsed = BoberConfigSchema.parse(rawJson);
 
-    // The security key must be absent — this schema change never injects it.
-    expect(Object.hasOwn(parsed, "security")).toBe(false);
+    // spec-20260712 sprint 7 opts the repo into LLM-only dogfooding
+    // (security: { enabled: true, scanners: [] }) — the security key IS now
+    // materialized, with every other field defaulted by SecuritySectionSchema.
+    expect(Object.hasOwn(parsed, "security")).toBe(true);
 
     // Full deep-equal against an explicit expected object (not just an
     // absence check) — proves the rest of the parse output is unperturbed.
@@ -812,6 +814,16 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
           evaluator: 1500,
           researcherPhase2: 3000,
         },
+      },
+      security: {
+        enabled: true,
+        failClosed: true,
+        timeoutMs: 300_000,
+        model: "opus",
+        maxTurns: 20,
+        scanners: [],
+        standaloneBlockOn: "critical",
+        hub: true,
       },
       commands: {},
     });
