@@ -1,0 +1,183 @@
+[
+  {
+    "id": "vuln-igaming-toctou",
+    "expected": "vulnerable",
+    "stack": "igaming",
+    "signatureId": "igaming.toctou-balance-double-spend",
+    "vulnClass": "race-condition",
+    "code": "const account = await db.query(\"SELECT balance FROM accounts WHERE id = $1\", [id]);\nif (account.balance >= amount) {\n  await db.query(\"UPDATE accounts SET balance = balance - $1 WHERE id = $2\", [amount, id]);\n}"
+  },
+  {
+    "id": "safe-igaming-toctou",
+    "expected": "safe",
+    "stack": "igaming",
+    "code": "const result = await db.query(\n  \"UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance\",\n  [amount, id],\n);\nif (result.rowCount === 0) throw new Error(\"insufficient balance\");"
+  },
+  {
+    "id": "vuln-igaming-client-odds",
+    "expected": "vulnerable",
+    "stack": "igaming",
+    "signatureId": "igaming.client-supplied-odds",
+    "vulnClass": "money-integrity",
+    "code": "const payout = req.body.stake * req.body.odds; // client controls the multiplier directly"
+  },
+  {
+    "id": "safe-igaming-client-odds",
+    "expected": "safe",
+    "stack": "igaming",
+    "code": "const currentOdds = await priceService.getOdds(req.body.selectionId); // server-resolved at acceptance\nconst payout = req.body.stake * currentOdds;"
+  },
+  {
+    "id": "vuln-igaming-negative-stake",
+    "expected": "vulnerable",
+    "stack": "igaming",
+    "signatureId": "igaming.negative-zero-stake",
+    "vulnClass": "money-integrity",
+    "code": "await debit(userId, req.body.stake); // stake = -1000 credits the account instead of debiting it"
+  },
+  {
+    "id": "safe-igaming-negative-stake",
+    "expected": "safe",
+    "stack": "igaming",
+    "code": "if (!Number.isInteger(req.body.stake) || req.body.stake <= 0) throw new Error(\"invalid stake\");\nawait debit(userId, req.body.stake);"
+  },
+  {
+    "id": "vuln-dex-withdrawal-race",
+    "expected": "vulnerable",
+    "stack": "dex-backend",
+    "signatureId": "dex.withdrawal-toctou-race",
+    "vulnClass": "race-condition",
+    "code": "const { balance } = await db.query(\"SELECT balance FROM wallets WHERE id = $1\", [id]);\nif (balance >= amount) await db.query(\"UPDATE wallets SET balance = balance - $1 WHERE id = $2\", [amount, id]);"
+  },
+  {
+    "id": "safe-dex-withdrawal-race",
+    "expected": "safe",
+    "stack": "dex-backend",
+    "code": "const result = await db.query(\n  \"UPDATE wallets SET balance = balance - $1 WHERE id = $2 AND balance >= $1 RETURNING balance\",\n  [amount, id],\n);\nif (result.rowCount === 0) throw new Error(\"insufficient balance\");"
+  },
+  {
+    "id": "vuln-dex-decimals",
+    "expected": "vulnerable",
+    "stack": "dex-backend",
+    "signatureId": "dex.token-decimals-mismatch",
+    "vulnClass": "money-integrity",
+    "code": "const humanAmount = Number(rawAmount) / 1e18; // wrong for USDC (6) and WBTC (8)"
+  },
+  {
+    "id": "safe-dex-decimals",
+    "expected": "safe",
+    "stack": "dex-backend",
+    "code": "const decimals = await tokenContract.decimals();\nconst humanAmount = ethers.formatUnits(rawAmount, decimals);"
+  },
+  {
+    "id": "vuln-dex-hotwallet-key",
+    "expected": "vulnerable",
+    "stack": "dex-backend",
+    "signatureId": "dex.hot-wallet-key-in-env",
+    "vulnClass": "secret-handling",
+    "code": "const wallet = new ethers.Wallet(process.env.PRIVATE_KEY); // key material in plaintext env"
+  },
+  {
+    "id": "safe-dex-hotwallet-key",
+    "expected": "safe",
+    "stack": "dex-backend",
+    "code": "const signer = new KmsSigner(process.env.KMS_KEY_ID); // key never leaves the KMS/HSM boundary"
+  },
+  {
+    "id": "vuln-dex-withdrawal-amount",
+    "expected": "vulnerable",
+    "stack": "dex-backend",
+    "signatureId": "dex.unvalidated-withdrawal-amount",
+    "vulnClass": "money-integrity",
+    "code": "await executeWithdrawal(userId, req.body.amount, req.body.address); // amount never bounds-checked"
+  },
+  {
+    "id": "safe-dex-withdrawal-amount",
+    "expected": "safe",
+    "stack": "dex-backend",
+    "code": "if (!Number.isInteger(req.body.amount) || req.body.amount <= 0 || req.body.amount > await getBalance(userId)) {\n  throw new Error(\"invalid withdrawal amount\");\n}\nawait executeWithdrawal(userId, req.body.amount, req.body.address);"
+  },
+  {
+    "id": "vuln-node-sqli",
+    "expected": "vulnerable",
+    "stack": "node",
+    "signatureId": "node.sql-injection",
+    "vulnClass": "injection",
+    "code": "const rows = await db.query(`SELECT * FROM users WHERE id = ${req.query.id}`);"
+  },
+  {
+    "id": "safe-node-sqli",
+    "expected": "safe",
+    "stack": "node",
+    "code": "const rows = await db.query(\"SELECT * FROM users WHERE id = $1\", [req.query.id]);"
+  },
+  {
+    "id": "vuln-node-command-injection",
+    "expected": "vulnerable",
+    "stack": "node",
+    "signatureId": "node.command-injection",
+    "vulnClass": "injection",
+    "code": "exec(`convert ${req.body.file} out.png`);"
+  },
+  {
+    "id": "safe-node-command-injection",
+    "expected": "safe",
+    "stack": "node",
+    "code": "execFile(\"convert\", [req.body.file, \"out.png\"]);"
+  },
+  {
+    "id": "vuln-node-ssrf",
+    "expected": "vulnerable",
+    "stack": "node",
+    "signatureId": "node.ssrf-outbound-fetch",
+    "vulnClass": "ssrf",
+    "code": "const res = await fetch(req.body.url);"
+  },
+  {
+    "id": "safe-node-ssrf",
+    "expected": "safe",
+    "stack": "node",
+    "code": "assertAllowedOutboundHost(req.body.url); // rejects RFC1918 / 169.254.169.254 / non-allowlisted hosts\nconst res = await fetch(req.body.url);"
+  },
+  {
+    "id": "vuln-node-bola",
+    "expected": "vulnerable",
+    "stack": "node",
+    "signatureId": "node.bola-missing-ownership",
+    "vulnClass": "idor-bola",
+    "code": "const doc = await db.query(\"SELECT * FROM documents WHERE id = $1\", [req.params.id]);"
+  },
+  {
+    "id": "safe-node-bola",
+    "expected": "safe",
+    "stack": "node",
+    "code": "const doc = await db.query(\n  \"SELECT * FROM documents WHERE id = $1 AND owner_id = $2\",\n  [req.params.id, req.session.userId],\n);"
+  },
+  {
+    "id": "vuln-node-jwt-alg-none",
+    "expected": "vulnerable",
+    "stack": "node",
+    "signatureId": "node.jwt-alg-none",
+    "vulnClass": "authn-authz",
+    "code": "const payload = jwt.verify(token, secret, { algorithms: [\"none\", \"HS256\"] });"
+  },
+  {
+    "id": "safe-node-jwt-alg-none",
+    "expected": "safe",
+    "stack": "node",
+    "code": "const payload = jwt.verify(token, strongSecret, { algorithms: [\"HS256\"] });\nreq.session.regenerate(() => { req.session.userId = payload.sub; }); // rotate on login"
+  },
+  {
+    "id": "vuln-supplychain-postinstall",
+    "expected": "vulnerable",
+    "stack": "node",
+    "vulnClass": "supply-chain",
+    "code": "\"scripts\": { \"postinstall\": \"node -e \\\"eval(Buffer.from(process.env.X,'base64').toString())\\\"\" }"
+  },
+  {
+    "id": "safe-supplychain-postinstall",
+    "expected": "safe",
+    "stack": "node",
+    "code": "\"scripts\": { \"build\": \"tsc\" }"
+  }
+]
