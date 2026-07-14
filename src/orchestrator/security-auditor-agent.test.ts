@@ -17,6 +17,7 @@ import type { BoberConfig, SecuritySection } from "../config/schema.js";
 import type * as ToolsIndexModule from "./tools/index.js";
 import type * as SecurityScannersModule from "./security-scanners.js";
 import type { AuditDiff, SecurityDiffProvider } from "./security-knowledge/diff-provider.js";
+import type { SecurityVerifier } from "./security-verifier-agent.js";
 
 // ── Mock heavy dependencies ────────────────────────────────────────
 
@@ -816,5 +817,221 @@ describe("runSecurityAudit — sc-7-5 supply-chain axis folds scanner + inspecto
     expect(scannerPreFilterSpy).toHaveBeenCalledTimes(1);
     const callArgs = scannerPreFilterSpy.mock.calls[0][0] as { scanners: unknown[] };
     expect(callArgs.scanners).toHaveLength(1);
+  });
+});
+
+// ── sc-8: adversarial finder->verifier stage (fresh, contract-free,
+//    downgrade-only, fail-closed) ────────────────────────────────────
+
+const fullFinderReviewText = JSON.stringify({
+  reviewId: "r-full",
+  contractId: "security-audit-test",
+  specId: "test-spec",
+  timestamp: "2026-01-01T00:00:00.000Z",
+  summary: "one critical, one important, one minor, one approved area",
+  critical: [
+    {
+      description: "Reentrancy in withdraw()",
+      evidence: [{ path: "contracts/Vault.sol", line: 42, snippet: 'call{value: amount}("")' }],
+      vulnClass: "privilege-escalation",
+    },
+  ],
+  important: [
+    {
+      description: "Weak input validation on amount",
+      evidence: [{ path: "contracts/Vault.sol", line: 20, snippet: "uint256 amount" }],
+    },
+  ],
+  minor: [{ description: "inconsistent naming", evidence: [] }],
+  approvedAreas: ["contracts/Vault.sol:safeTransfer"],
+});
+
+describe("runSecurityAudit — sc-8-3 verifier fail-closed (ran:false keeps finder criticals)", () => {
+  it("an unparseable verifier response (ran:false) keeps the finder's critical unchanged and verdict stays blocked", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn().mockResolvedValue({ verified: [], downgraded: [], dropped: [], ran: false }),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(fakeVerifier.verify).toHaveBeenCalledTimes(1);
+    expect(result.review.critical).toHaveLength(1);
+    expect(result.review.critical[0].description).toBe("Reentrancy in withdraw()");
+    expect(result.verdict).toBe("blocked");
+  });
+});
+
+describe("runSecurityAudit — sc-8-4 verifier fold (downgrade-only; approvedAreas/minor never touched)", () => {
+  it("only critical+important reach verify() — approvedAreas/minor are excluded from its input", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(fullFinderReviewText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn().mockResolvedValue({ verified: [], downgraded: [], dropped: [], ran: true }),
+    };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    const passedFindings = fakeVerifier.verify.mock.calls[0][0].findings;
+    expect(passedFindings).toHaveLength(2);
+    expect(passedFindings.map((f) => f.description)).toEqual([
+      "Reentrancy in withdraw()",
+      "Weak input validation on amount",
+    ]);
+  });
+
+  it("a downgraded critical moves to important, approvedAreas can never be re-opened, minor is untouched, and verdict flips to pass", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(fullFinderReviewText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn(async ({ findings }) => {
+        const criticalRef = findings.find((f) => f.description === "Reentrancy in withdraw()");
+        return {
+          verified: [],
+          downgraded: criticalRef ? [criticalRef] : [],
+          dropped: [],
+          ran: true,
+        };
+      }),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(result.review.critical).toEqual([]);
+    expect(result.review.important.map((f) => f.description)).toEqual(
+      expect.arrayContaining(["Reentrancy in withdraw()", "Weak input validation on amount"]),
+    );
+    // The verifier never received approvedAreas/minor, and the fold passes them through untouched:
+    expect(result.review.approvedAreas).toEqual(["contracts/Vault.sol:safeTransfer"]);
+    expect(result.review.minor).toHaveLength(1);
+    expect(result.review.minor[0].description).toBe("inconsistent naming");
+    expect(result.verdict).toBe("pass");
+  });
+
+  it("deriveVerdict is applied to the folded review, not the raw finder review", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn(async ({ findings }) => ({ verified: [], downgraded: [], dropped: [...findings], ran: true })),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    // The raw finder output had a critical (would derive 'blocked'); the
+    // FOLDED review has none, so the verdict must be 'pass'.
+    expect(result.review.critical).toEqual([]);
+    expect(result.verdict).toBe("pass");
+  });
+});
+
+describe("runSecurityAudit — sc-8-5 config.security.verifier optional + default-off byte-identical", () => {
+  it("config omitting verifier entirely => single-stage, loopSpy called ONCE, unchanged from a sprint-7 run", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig(); // no verifier key at all
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+    expect(result.review.critical).toHaveLength(1);
+    expect(result.verdict).toBe("blocked");
+  });
+
+  it("verifier.enabled:false explicitly => the injected verifier is never invoked, single-stage result", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig({ security: { verifier: { enabled: false, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = { verify: vi.fn() };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(fakeVerifier.verify).not.toHaveBeenCalled();
+    expect(loopSpy).toHaveBeenCalledTimes(1);
+    expect(result.review.critical).toHaveLength(1);
+    expect(result.verdict).toBe("blocked");
+  });
+
+  it("parsed:false (finder output unparseable) never invokes the verifier — nothing to verify without a genuine review", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult("garbage, not json at all"));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = { verify: vi.fn() };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(fakeVerifier.verify).not.toHaveBeenCalled();
+    expect(result.parsed).toBe(false);
+    expect(result.verdict).toBe("blocked");
+  });
+
+  it("an abort mid-verifier (verifier observes a real AbortSignal and resolves ran:false) is fail-closed: criticals kept, verdict blocked", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn(async ({ signal }) => {
+        expect(signal).toBeInstanceOf(AbortSignal);
+        // Simulate the shared time-box firing mid-verification.
+        return { verified: [], downgraded: [], dropped: [], ran: false };
+      }),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(fakeVerifier.verify).toHaveBeenCalledTimes(1);
+    expect(result.review.critical).toHaveLength(1);
+    expect(result.verdict).toBe("blocked");
+  });
+});
+
+describe("runSecurityAudit — sc-8-6 demonstrative FP-reduction (verdict flips on a disproved critical; a confirmed critical still blocks)", () => {
+  it("case A: verifier DISPROVES the finder critical => verdict flips blocked -> pass", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn(async ({ findings }) => ({ verified: [], downgraded: [], dropped: [...findings], ran: true })),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(result.review.critical).toEqual([]);
+    expect(result.verdict).toBe("pass");
+  });
+
+  it("case B: verifier CONFIRMS the finder critical => verdict stays blocked", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(wellFormedCriticalText));
+
+    const config = makeConfig({ security: { verifier: { enabled: true, model: "opus", maxTurns: 10 } } });
+    const fakeVerifier: SecurityVerifier = {
+      verify: vi.fn(async ({ findings }) => ({ verified: [...findings], downgraded: [], dropped: [], ran: true })),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      verifier: fakeVerifier,
+    });
+
+    expect(result.review.critical).toHaveLength(1);
+    expect(result.verdict).toBe("blocked");
   });
 });

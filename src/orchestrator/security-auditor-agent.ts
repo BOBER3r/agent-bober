@@ -18,15 +18,19 @@ import { runScannerPreFilter, isNetworkScanner } from "./security-scanners.js";
 import type { AuditDiff, SecurityDiffProvider } from "./security-knowledge/diff-provider.js";
 import { securityDiffProvider, extractDiffKeywords } from "./security-knowledge/diff-provider.js";
 import { inspectSupplyChain } from "./security-knowledge/supply-chain-inspector.js";
+import type { SecurityVerifier, VerifierResult } from "./security-verifier-agent.js";
+import { runSecurityVerifier } from "./security-verifier-agent.js";
 import { logger } from "../utils/logger.js";
 
 /**
- * Injectable dependencies for `runSecurityAudit` (sprint 6). Currently
- * exposes only the diff provider so tests never shell real git; the
- * default resolves to the real `securityDiffProvider`.
+ * Injectable dependencies for `runSecurityAudit`. `diffProvider` (sprint 6)
+ * and `verifier` (sprint 8) so tests never shell real git or spawn a second
+ * real LLM loop; both default to the real implementations. Appended so all
+ * existing positional callers stay byte-compatible.
  */
 export interface SecurityAuditDeps {
   diffProvider?: SecurityDiffProvider;
+  verifier?: SecurityVerifier;
 }
 
 // bober: one memoised index per process (ADR-7, no runtime invalidation) —
@@ -68,10 +72,10 @@ function getSecurityKnowledgeIndex(): SecurityKnowledgeIndex {
  *                    `runScannerPreFilter` when `config.security.scanners` is
  *                    non-empty; the combined list is rendered into a "ground
  *                    truth priors" prompt section when non-empty. Defaults to [].
- * @param deps        Injectable dependencies (sprint 6) — currently just the
- *                    diff provider, defaulting to the real `securityDiffProvider`.
- *                    Appended last so all existing positional callers stay
- *                    byte-compatible.
+ * @param deps        Injectable dependencies — the diff provider (sprint 6,
+ *                    defaults to `securityDiffProvider`) and the verifier
+ *                    (sprint 8, defaults to `runSecurityVerifier`). Appended
+ *                    last so all existing positional callers stay byte-compatible.
  * @returns A SecurityAuditResult, already persisted via saveSecurityAudit.
  */
 export async function runSecurityAudit(
@@ -245,11 +249,47 @@ export async function runSecurityAudit(
     `Security auditor completed in ${result.turnsUsed} turns (${result.toolsCalled.length} tool calls)`,
   );
 
-  const { review, parsed } = parseSecurityAuditResult(result.finalText, contractId, contract.specId);
+  const { review: finderReview, parsed } = parseSecurityAuditResult(
+    result.finalText,
+    contractId,
+    contract.specId,
+  );
+
+  // Sprint-8 seam (adversarial finder->verifier stage, ADR-2/ADR-6
+  // default-off): when enabled, a SECOND read-only LLM pass in a fresh,
+  // contract-free context is fed ONLY finderReview.critical+important and
+  // told to disprove each one. It may only downgrade/drop — never promote.
+  // The verifier owns its OWN AbortController keyed to the same
+  // config.security.timeoutMs the rest of this audit's sub-stages use —
+  // that is the "shared time-box" in practice (both live inside the gate's
+  // own Promise.race). A parse-failure/error/abort in the verifier is
+  // fail-closed: `review` stays `finderReview`, criticals unchanged.
+  let review = finderReview;
+  if (parsed && config.security?.verifier?.enabled === true) {
+    const verifier = deps.verifier ?? runSecurityVerifier;
+    const verifierAbort = new AbortController();
+    const verifierTimer = setTimeout(
+      () => verifierAbort.abort(),
+      config.security?.timeoutMs ?? 300_000,
+    );
+    try {
+      const verifierResult = await verifier.verify({
+        findings: [...finderReview.critical, ...finderReview.important],
+        diff: auditDiff,
+        projectRoot,
+        config,
+        signal: verifierAbort.signal,
+      });
+      review = foldVerifierResult(finderReview, verifierResult);
+    } finally {
+      clearTimeout(verifierTimer);
+    }
+  }
 
   // THE inversion (sc-2-2): verdict is only ever derived from a genuinely
   // parsed review. A parse failure forces 'blocked' — never a silent pass
-  // from an empty fallback review.
+  // from an empty fallback review. Derived on the (possibly verifier-folded)
+  // review — deriveVerdict itself is UNCHANGED.
   const verdict: "pass" | "blocked" = parsed ? deriveVerdict(review) : "blocked";
 
   const auditResult: SecurityAuditResult = {
@@ -272,6 +312,45 @@ export async function runSecurityAudit(
   );
 
   return auditResult;
+}
+
+// ── Sprint-8: verifier fold (downgrade-only, fail-closed) ──────────
+
+/**
+ * Folds a `VerifierResult` into the finder's `ReviewResult`.
+ *
+ * Fail-closed: `v.ran === false` (parse-failure/error/refusal/abort) returns
+ * `finderReview` completely UNCHANGED — the finder's criticals are kept.
+ *
+ * Downgrade-only on success: `verified` findings stay at their original
+ * severity; `downgraded` findings move `critical`->`important`; `dropped`
+ * findings are removed from wherever they were (critical or important). The
+ * new `critical` set is therefore always a strict SUBSET of the finder's
+ * `critical` — nothing is ever promoted or added. `minor` and
+ * `approvedAreas` pass through byte-untouched: the verifier is never shown
+ * them, so an `approvedArea` can never be re-opened (sc-8-4).
+ *
+ * Matches by object identity: `verifier.verify` is fed and returns the SAME
+ * `SecurityFinding` object references it was given (see
+ * `security-verifier-agent.ts:resolveFindingRef`), so a `Set` membership
+ * check against `finderReview.critical`/`.important` is exact.
+ */
+function foldVerifierResult(finderReview: ReviewResult, v: VerifierResult): ReviewResult {
+  if (!v.ran) return finderReview;
+
+  const dropped = new Set(v.dropped);
+  const downgraded = new Set(v.downgraded);
+
+  return {
+    ...finderReview,
+    critical: finderReview.critical.filter((c) => !dropped.has(c) && !downgraded.has(c)),
+    important: [
+      ...finderReview.important.filter((i) => !dropped.has(i)),
+      ...finderReview.critical.filter((c) => downgraded.has(c)),
+    ],
+    minor: finderReview.minor,
+    approvedAreas: finderReview.approvedAreas,
+  };
 }
 
 // ── Prompt assembly ────────────────────────────────────────────────

@@ -792,6 +792,41 @@ describe("SecuritySectionSchema.supplyChain / .egress — opt-in supply-chain ax
   });
 });
 
+// ── SecuritySectionSchema.verifier tests (sprint 8 — sc-8-5) ────────
+
+describe("SecuritySectionSchema.verifier — opt-in adversarial verifier config (sc-8-5)", () => {
+  it("parse({}) still has NO verifier key — byte-identical to pre-sprint-8 behavior", () => {
+    const parsed = SecuritySectionSchema.parse({});
+    expect(parsed).toEqual({
+      enabled: false,
+      failClosed: true,
+      timeoutMs: 300_000,
+      model: "opus",
+      maxTurns: 20,
+      scanners: [],
+      standaloneBlockOn: "critical",
+      hub: true,
+    });
+    expect(Object.hasOwn(parsed, "verifier")).toBe(false);
+  });
+
+  it("parse({ verifier: {} }) defaults enabled:false, model:'opus', maxTurns:10", () => {
+    const parsed = SecuritySectionSchema.parse({ verifier: {} });
+    expect(parsed.verifier).toEqual({ enabled: false, model: "opus", maxTurns: 10 });
+  });
+
+  it("round-trips a fully-specified verifier config", () => {
+    const parsed = SecuritySectionSchema.parse({
+      verifier: { enabled: true, model: "sonnet", maxTurns: 3 },
+    });
+    expect(parsed.verifier).toEqual({ enabled: true, model: "sonnet", maxTurns: 3 });
+  });
+
+  it("rejects maxTurns < 1 on the verifier sub-object", () => {
+    expect(() => SecuritySectionSchema.parse({ verifier: { maxTurns: 0 } })).toThrow();
+  });
+});
+
 describe("BoberConfigSchema — security section is optional, default-off (sc-1-1/sc-1-2)", () => {
   const minimalBase = {
     project: { name: "test-project", mode: "greenfield" },

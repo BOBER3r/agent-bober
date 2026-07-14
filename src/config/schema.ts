@@ -278,6 +278,21 @@ export const SecuritySectionSchema = z.object({
    * OPTIONAL with no outer default (same byte-identical guarantee as above).
    */
   egress: SecurityEgressConfigSchema.optional(),
+  /**
+   * Sprint-8: opt-in adversarial finder->verifier stage config. OPTIONAL
+   * with no outer default — a config that omits `verifier` entirely stays
+   * byte-identical (no defaults leak in), same guarantee as `diff` /
+   * `supplyChain` / `egress` above (sc-8-5). `maxTurns` defaults lower than
+   * the finder's (10 vs 20) — refutation needs fewer turns than the
+   * original audit.
+   */
+  verifier: z
+    .object({
+      enabled: z.boolean().default(false),
+      model: ModelChoiceSchema.default("opus"),
+      maxTurns: z.number().int().min(1).default(10),
+    })
+    .optional(),
 });
 export type SecuritySection = z.infer<typeof SecuritySectionSchema>;
 
