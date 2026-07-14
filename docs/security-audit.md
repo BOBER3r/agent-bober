@@ -83,7 +83,7 @@ itself — the verdict comes straight from the core's `deriveVerdict` output.
 
 | Reason | Trigger |
 |---|---|
-| `critical-finding` | The auditor's `review.critical` array is non-empty — a real, cited vulnerability. |
+| `critical-finding` | The auditor's `review.critical` array is non-empty — a real, cited vulnerability. When the [verifier stage](#finder--verifier-stage) is enabled, this is the *verified* `review.critical` (post-fold); a critical the verifier disproves/downgrades no longer counts. |
 | `timeout` | `runSecurityAudit` did not resolve within `security.timeoutMs`. |
 | `audit-error` | `runSecurityAudit` rejected (thrown error), OR its output could not be parsed into a valid `ReviewResult` (`result.parsed === false`) — checked before `result.verdict` so a parse failure is never mistaken for a genuine critical finding. |
 
@@ -125,6 +125,51 @@ sets `enabled: true`.
 
 ---
 
+## Finder → verifier stage
+
+When `security.verifier.enabled === true` (sprint 8, default off), the audit becomes a
+two-stage **finder → verifier** pipeline — both stages inside the gate's single
+`Promise.race` time-box:
+
+1. **Finder** — the `bober-security-auditor` runs exactly as before and produces a
+   `ReviewResult` with `critical`/`important`/`minor`/`approvedAreas` buckets.
+2. **Verifier** — the `bober-security-verifier`
+   (`src/orchestrator/security-verifier-agent.ts`) runs **sequentially after** the finder
+   (never concurrently — its input *is* the finder's output). It is spawned in a **fresh,
+   isolated context** fed **only** the finder's `critical`+`important` findings and the
+   relevant diff hunks. It is told to **disprove** each finding and emits a JSON array of
+   per-finding verdicts (`confirmed`/`downgraded`/`disproved`).
+3. The verdicts are **folded** into the review (`foldVerifierResult`) and the **unchanged**
+   `deriveVerdict` derives `pass`/`blocked` on the *verified* review.
+
+The verifier exists to **control false positives** — the earlier sprints push recall up
+(widened taxonomy, per-stack signatures, real diff, supply-chain axis), and because every
+false positive is a hard sprint block, a stage that provably only *reduces* blocks (never
+adds them) is what keeps that higher recall usable. Two properties make it safe:
+
+- **The sprint contract is provably absent.** The verifier's user message deliberately
+  excludes everything the finder is shown — no `# Sprint Contract` JSON, no
+  `# Evaluation Result (Already Passed)` section, no priors. A favorably-worded contract
+  ("here's what this sprint set out to build") is sycophancy bait that makes a reviewer
+  wave real issues through; the verifier is a genuinely fresh second opinion precisely
+  because it never sees that framing. It is also never shown `minor` or `approvedAreas`,
+  so an approved area can never be re-opened.
+- **Downgrade-only and fail-closed.** The verifier may only move a finding **down** —
+  confirm (keep at original severity), downgrade (`critical`→`important`), or drop — never
+  promote, add, or manufacture a clean pass; the folded `critical` set is always a strict
+  subset of the finder's. And it is fail-closed: an unparseable/truncated response, a JSON
+  *object* instead of an *array*, a provider error, a refusal, or an abort all resolve
+  `ran:false`, which **keeps the finder's criticals unchanged** — a broken verification can
+  never silently weaken a block. (A finding the verifier leaves unaddressed defaults to
+  `verified` for the same reason.)
+
+The net effect: a finder `critical` the verifier **disproves** stops blocking (verdict
+flips `blocked`→`pass` for that finding), while a genuine `critical` the verifier
+**confirms** still blocks. With `verifier` omitted, none of this runs and the audit is
+single-stage — byte-identical to sprint 7.
+
+---
+
 ## Configuration Reference
 
 All fields live under the optional top-level `security` key
@@ -151,8 +196,9 @@ materialized-but-disabled section.
 | `diff` | `{ mode, baseRef?, expandWithGraph }` (optional) | unset | Opt-in real-diff provider (sprint 6). Omitted entirely ⇒ byte-identical to `estimated-files` behavior. See the sub-table below. |
 | `supplyChain` | `{ enabled, scanners }` (optional) | unset | Opt-in supply-chain/dependency/secret axis (sprint 7). Omitted entirely ⇒ byte-identical (nothing runs). See the sub-table below. |
 | `egress` | `{ onlineResearch }` (optional) | unset | Egress axis gating network-capable supply-chain scanners (sprint 7). Omitted entirely ⇒ byte-identical; network scanners stay off. See the sub-table below. |
+| `verifier` | `{ enabled, model, maxTurns }` (optional) | unset | Opt-in adversarial **finder → verifier** stage (sprint 8) — a second read-only LLM pass that tries to *disprove* the finder's findings. Omitted entirely ⇒ byte-identical (single-stage audit). See the sub-table below. |
 
-`provider`/`endpoint`/`providerConfig`/`budget`/`diff`/`supplyChain`/`egress` are the
+`provider`/`endpoint`/`providerConfig`/`budget`/`diff`/`supplyChain`/`egress`/`verifier` are the
 only fields with **no** default — a config that sets `security: { enabled: true }` (or
 any subset that omits these) parses without them present in the materialized object at
 all; every other field always materializes to its default.
@@ -194,6 +240,22 @@ The optional `security.egress` object (`SecurityEgressConfigSchema`, sprint 7) g
 |---|---|---|---|
 | `onlineResearch` | `boolean` | `false` | Fail-safe opt-in. Only when `true` are the network-capable supply-chain scanners (`npm-audit`/`osv-scanner`, which hit a remote registry / vulnerability DB) invoked. Default `false` keeps every supply-chain code path offline (the inspector and `gitleaks` never touch the network anyway). |
 
+The optional `security.verifier` object (sprint 8) turns on the adversarial
+**finder → verifier** stage (see [Finder → verifier stage](#finder--verifier-stage)):
+
+| Field | Type | Default | Effect |
+|---|---|---|---|
+| `enabled` | `boolean` | `false` | When `true`, a second read-only LLM pass (`bober-security-verifier`) runs sequentially **after** the finder, in a fresh contract-free context, and is told to *disprove* each of the finder's `critical`+`important` findings. When `false`/omitted, the audit is single-stage — byte-identical to sprint 7. |
+| `model` | `ModelChoice` (string) | `"opus"` | The model the verifier subagent runs on. Same shorthand/full-string forms as `security.model`. |
+| `maxTurns` | `number` (int ≥ 1) | `10` | Maximum read-only tool-use turns for the verifier (`Read`/`Grep`/`Glob` only). Defaults **lower** than the finder's `20` — refutation of a bounded finding list needs fewer turns than the original audit. |
+
+The verifier may only ever move a finding **down** (confirm → keep, downgrade →
+`critical`→`important`, disprove → drop) — it can never promote, add, or manufacture a
+finding, and it is **never shown** `minor`, `approvedAreas`, or the sprint contract. Any
+parse-failure, provider error, refusal, or abort is **fail-closed** (`ran:false` ⇒ the
+finder's criticals are kept unchanged), and the **unchanged** `deriveVerdict` runs on the
+folded review.
+
 **Annotated example** (mirrors the README's config-reference block):
 
 ```jsonc
@@ -216,6 +278,11 @@ The optional `security.egress` object (`SecurityEgressConfigSchema`, sprint 7) g
   },
   "egress": {                           // Optional (sprint 7). Omit entirely => network scanners stay off (byte-identical).
     "onlineResearch": false             // Fail-safe opt-in. Only when true are the network-capable supply-chain scanners (npm-audit/osv-scanner) invoked. The offline inspector + gitleaks never touch the network.
+  },
+  "verifier": {                         // Optional (sprint 8). Omit entirely => single-stage audit (byte-identical). Adversarial finder->verifier stage. Downgrade-only + fail-closed.
+    "enabled": false,                   // When true: after the finder, a fresh contract-free read-only pass tries to DISPROVE each critical/important finding. May only downgrade (critical->important) or drop; parse-failure/error/abort => criticals kept.
+    "model": "opus",                    // Verifier model. Any model string or shorthand.
+    "maxTurns": 10                      // Max read-only tool-use turns for the verifier (lower than the finder's 20 — refutation needs fewer turns).
   }
 }
 ```
@@ -423,9 +490,19 @@ still yields `[]`), while `semgrep` stays `"zero-clean"`. Three new pure/total p
 lifecycle scripts, lockfile host mismatch, `.npmrc` overrides, a new dep with no import, CI
 `npm install` vs `npm ci`, and tag-vs-SHA-pinned GitHub Actions. All findings feed the finder's
 priors (ADR-4 — not a new LLM role); network-capable scanners run only behind
-`config.security.egress.onlineResearch` (default off). The fresh-context finding **verifier**
-(sprint 8) remains the last major feature. See the [sprint records](./sprints/README.md)
-for the authoring format and per-sprint detail.
+`config.security.egress.onlineResearch` (default off).
+
+**As of sprint 8 the fresh-context finding verifier is built** (`config.security.verifier`, default
+off) — the **keystone false-positive control** that completes the spec's core feature set. It adds an
+adversarial **finder → verifier** stage: a second read-only LLM pass
+(`bober-security-verifier`) runs sequentially after the finder, in a fresh context fed **only** the
+finder's `critical`+`important` findings and the diff hunks — **never the sprint contract** (the
+sycophancy strip) — and is told to *disprove* each one. It is strictly **downgrade-only** (confirm /
+`critical`→`important` / drop; never promote or re-open `approvedAreas`) and **fail-closed** (any
+parse-failure/error/abort ⇒ the finder's criticals are kept), with the **unchanged** `deriveVerdict`
+run on the folded review. See [Finder → verifier stage](#finder--verifier-stage) above. Only the
+benchmark corpus (sprint 9) and the dogfood/docs close-out remain. See the
+[sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
 
 ---
 
@@ -449,10 +526,16 @@ stderr message. Fail-closed applies here too — a budget-exhausted audit is nev
 treated as a silent pass.
 
 **What if the auditor reports a false positive?**
-The auditor is advisory in the sense that a human (or a subsequent generator
-iteration) can dispute a finding, but the gate itself has no dispute mechanism — a
-critical finding blocks regardless of confidence. The retry path is the same as any
-other block: the generator sees the finding's `path:line` evidence in its next
+There is an opt-in automated control: the [finder → verifier stage](#finder--verifier-stage)
+(`security.verifier.enabled`, default off). When enabled, a second read-only LLM pass runs in a
+fresh contract-free context, is told to *disprove* each `critical`/`important` finding against the
+cited evidence, and can **downgrade** (`critical`→`important`) or **drop** a finding it disproves —
+so a false-positive critical stops blocking without any human intervention. It is downgrade-only and
+fail-closed, so it can only ever *reduce* blocks, never add them.
+
+Beyond that, the gate itself has no per-finding dispute mechanism — with the verifier off (or for a
+critical the verifier confirms), a critical finding blocks regardless of confidence. The retry path
+is the same as any other block: the generator sees the finding's `path:line` evidence in its next
 iteration's feedback and can either fix the flagged code or (if truly a false
 positive) leave a `bober:` ceiling-style comment documenting why the pattern is safe,
 which the auditor's "what NOT to flag" guidance already treats as an intentional,
