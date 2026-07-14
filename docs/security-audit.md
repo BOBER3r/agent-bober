@@ -248,10 +248,21 @@ and ingest them into the default `FactStore` pool (`.bober/memory/facts.db`) via
 | `review.important[]` | `3` (mid) | `3` | Yes |
 | `review.minor[]` / `approvedAreas` | — | — | **Never** — the LLM auditor did not confirm these into a blocking or notable bucket. |
 
-Each emitted `Finding`'s title is **stable**: `[security] <vulnClass> at <path>:<line>`
-(never the free-text description, which can vary across retries) — this feeds the
-hub's existing content-hash id (`sha256(domain|title|kind)`), so re-auditing the same
-vulnerability is idempotent rather than minting duplicate hub rows.
+Each emitted `Finding`'s title is **stable**: `[security] <vulnClass> #<discriminator>
+at <path>:<line>` (never the free-text description verbatim, which can vary across
+retries) — this feeds the hub's existing content-hash id (`sha256(domain|title|kind)`),
+so re-auditing the same vulnerability is idempotent rather than minting duplicate hub
+rows.
+
+The `#<discriminator>` segment fixes a title collision (**G10**): two **different**
+vulnerabilities of the same `vulnClass` at the same `path:line` used to hash to the
+**same** id and silently overwrite each other. The discriminator prefers the finding's
+`signatureId`, then its `cwe`, then falls back to a short stable `sha256` of the
+finding's own `description` — content-derived, so an identical retry (same description)
+still resolves to the same discriminator and dedups, while two distinct findings diverge
+into two hub rows. Structured metadata rides the existing `tags[]` when present
+(`cwe:<id>`, `severity:<level>`, `confidence:<level>`, `sig:<signatureId>`) — the hub
+`Finding` schema (`hub/finding.ts`) is unchanged.
 
 Emission is gated by `security.hub` (default `true`; `false` means zero hub writes —
 no `FactStore` is even opened) and is strictly **best-effort**: the entire default-sink

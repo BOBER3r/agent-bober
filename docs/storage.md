@@ -291,8 +291,12 @@ and the standalone CLI map the audit's confirmed **critical** (→ hub severity/
 (`.bober/memory/facts.db`) — so audit results now appear in `bober hub list` / `hub priority`. The mapper
 (`mapAuditToFindings`, `src/orchestrator/security-hub.ts`) is **pure** and imports the canonical
 `FindingSchema` from `src/hub/finding.ts` (never redefined); dedup is delegated to the hub's existing
-content-hash id (`sha256(domain|title|kind)`) via a **stable** `[security] <vulnClass> at <path>:<line>`
-title, so retries are idempotent (proven against the real finding-store in a temp dir). Emission is gated by
+content-hash id (`sha256(domain|title|kind)`) via a **stable** `[security] <vulnClass> #<discriminator>
+at <path>:<line>` title, so retries are idempotent (proven against the real finding-store in a temp dir).
+The `#<discriminator>` (prefers `signatureId`, then `cwe`, then a short `sha256` of the finding's own
+`description`) was added by **spec-20260714 sprint 1** to fix a title collision (**G10**) where two
+distinct vulns of the same `vulnClass` at the same `path:line` hashed to one id; new metadata rides the
+`Finding` tags (`cwe:`/`severity:`/`confidence:`/`sig:`) rather than new schema fields. Emission is gated by
 `security.hub` (default `true`; `false` → **zero** hub writes) and is strictly **best-effort** — the entire
 default-sink sequence (`ensureFactsDir` → `new FactStore` → emit → `close`) is wrapped in a single guard at
 both call sites, so a hub/fs failure is caught and logged and can **never** change the audit verdict or exit
