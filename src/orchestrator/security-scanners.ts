@@ -91,31 +91,33 @@ function inferVulnClass(checkId: string): VulnClass | undefined {
   const id = checkId.toLowerCase();
 
   const candidate: string | undefined =
-    /sql-?injection|sqli|command-injection|code-injection|\bxss\b|\binjection\b/.test(id)
+    /sql-?injection|sqli|command-injection|code-injection|\binjection\b/.test(id)
       ? "injection"
-      : /path-traversal|directory-traversal/.test(id)
-        ? "path-traversal"
-        : /hardcoded|secret|credential|api-key/.test(id)
-          ? "secret-handling"
-          : /tx-origin|access-control|\bauth\b|authn|authz|authentication|authorization|privilege/.test(id)
-            ? "authn-authz"
-            : /unvalidated|input-validation|missing-validation|sanitiz/.test(id)
-              ? "input-validation"
-              : /\brace\b|toctou|time-of-check/.test(id)
-                ? "race-condition"
-                : /\bssrf\b|server-side-request/.test(id)
-                  ? "ssrf"
-                  : /weak-random|insecure-random|predictable-random/.test(id)
-                    ? "insecure-randomness"
-                    : /\bmd5\b|\bsha1\b|weak-crypto|weak-hash|weak-cipher/.test(id)
-                      ? "crypto-weakness"
-                      : /deserial|unmarshal|pickle/.test(id)
-                        ? "deserialization"
-                        : /\bidor\b|\bbola\b|broken-object-level/.test(id)
-                          ? "idor-bola"
-                          : /\bdos\b|denial-of-service|resource-exhaustion/.test(id)
-                            ? "denial-of-service"
-                            : undefined;
+      : /\bxss\b|cross-site-scripting/.test(id)
+        ? "xss"
+        : /path-traversal|directory-traversal/.test(id)
+          ? "path-traversal"
+          : /hardcoded|secret|credential|api-key/.test(id)
+            ? "secret-handling"
+            : /tx-origin|access-control|\bauth\b|authn|authz|authentication|authorization|privilege/.test(id)
+              ? "authn-authz"
+              : /unvalidated|input-validation|missing-validation|sanitiz/.test(id)
+                ? "input-validation"
+                : /\brace\b|toctou|time-of-check/.test(id)
+                  ? "race-condition"
+                  : /\bssrf\b|server-side-request/.test(id)
+                    ? "ssrf"
+                    : /weak-random|insecure-random|predictable-random/.test(id)
+                      ? "insecure-randomness"
+                      : /\bmd5\b|\bsha1\b|weak-crypto|weak-hash|weak-cipher/.test(id)
+                        ? "crypto-weakness"
+                        : /deserial|unmarshal|pickle/.test(id)
+                          ? "deserialization"
+                          : /\bidor\b|\bbola\b|broken-object-level/.test(id)
+                            ? "idor-bola"
+                            : /\bdos\b|denial-of-service|resource-exhaustion/.test(id)
+                              ? "denial-of-service"
+                              : undefined;
 
   return candidate !== undefined && isVulnClass(candidate) ? candidate : undefined;
 }

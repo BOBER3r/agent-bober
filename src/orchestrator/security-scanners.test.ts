@@ -126,6 +126,8 @@ function semgrepFor(checkId: string): unknown {
 
 describe("inferVulnClass — sc-1-3 new taxonomy mappings", () => {
   it.each<[string, VulnClass]>([
+    ["generic.xss.reflected-xss-rule", "xss"],
+    ["javascript.browser.security.cross-site-scripting", "xss"],
     ["generic.race-condition.rule", "race-condition"],
     ["security.toctou-check", "race-condition"],
     ["generic.ssrf.rule", "ssrf"],
