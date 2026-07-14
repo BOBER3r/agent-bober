@@ -207,6 +207,19 @@ export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
  * `standaloneBlockOn`/`hub` are consumed by later sprints (gate + hub
  * emission) but are declared here now to avoid re-touching this schema.
  */
+/**
+ * Sprint-6: opt-in real-diff configuration (ADR-5 — the orchestrator, not
+ * the auditor, owns the diff). `mode` defaults to `"estimated-files"`,
+ * today's exact behavior; `git-diff` is never the default (fail-safe
+ * opt-in, nonGoals[1]).
+ */
+export const SecurityDiffConfigSchema = z.object({
+  mode: z.enum(["estimated-files", "git-diff"]).default("estimated-files"),
+  baseRef: z.string().optional(),
+  expandWithGraph: z.boolean().default(false),
+});
+export type SecurityDiffConfig = z.infer<typeof SecurityDiffConfigSchema>;
+
 export const SecuritySectionSchema = z.object({
   enabled: z.boolean().default(false),
   /** Fail-closed: unparseable auditor output or a timeout blocks. Default true. */
@@ -225,6 +238,12 @@ export const SecuritySectionSchema = z.object({
   standaloneBlockOn: z.enum(["critical", "important"]).default("critical"),
   /** Whether findings are emitted to the priority hub (sprint 6). Default true. */
   hub: z.boolean().default(true),
+  /**
+   * Opt-in real-diff provider config (sprint 6). OPTIONAL with no outer
+   * default — a config that omits `diff` entirely stays byte-identical
+   * (no defaults leak in), same guarantee as `security` itself (sc-6-3).
+   */
+  diff: SecurityDiffConfigSchema.optional(),
 });
 export type SecuritySection = z.infer<typeof SecuritySectionSchema>;
 

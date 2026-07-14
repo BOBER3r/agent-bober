@@ -15,7 +15,18 @@ import { ALL_VULN_CLASSES } from "./stack-knowledge.js";
 import { resolveStackSecurityContext } from "./security-knowledge/resolver.js";
 import { SecurityKnowledgeIndex } from "./security-knowledge/index.js";
 import { runScannerPreFilter } from "./security-scanners.js";
+import type { AuditDiff, SecurityDiffProvider } from "./security-knowledge/diff-provider.js";
+import { securityDiffProvider, extractDiffKeywords } from "./security-knowledge/diff-provider.js";
 import { logger } from "../utils/logger.js";
+
+/**
+ * Injectable dependencies for `runSecurityAudit` (sprint 6). Currently
+ * exposes only the diff provider so tests never shell real git; the
+ * default resolves to the real `securityDiffProvider`.
+ */
+export interface SecurityAuditDeps {
+  diffProvider?: SecurityDiffProvider;
+}
 
 // bober: one memoised index per process (ADR-7, no runtime invalidation) —
 // swap for an injectable dependency if per-request skill reloading is ever needed.
@@ -56,6 +67,10 @@ function getSecurityKnowledgeIndex(): SecurityKnowledgeIndex {
  *                    `runScannerPreFilter` when `config.security.scanners` is
  *                    non-empty; the combined list is rendered into a "ground
  *                    truth priors" prompt section when non-empty. Defaults to [].
+ * @param deps        Injectable dependencies (sprint 6) — currently just the
+ *                    diff provider, defaulting to the real `securityDiffProvider`.
+ *                    Appended last so all existing positional callers stay
+ *                    byte-compatible.
  * @returns A SecurityAuditResult, already persisted via saveSecurityAudit.
  */
 export async function runSecurityAudit(
@@ -64,6 +79,7 @@ export async function runSecurityAudit(
   projectRoot: string,
   config: BoberConfig,
   priors: SecurityFinding[] = [],
+  deps: SecurityAuditDeps = {},
 ): Promise<SecurityAuditResult> {
   const contractId = contract.contractId;
   logger.sprint(contractId, `Security audit: ${contract.title}`);
@@ -91,13 +107,43 @@ export async function runSecurityAudit(
 
   const knowledgeIndex = getSecurityKnowledgeIndex();
   await knowledgeIndex.load();
+
+  // Sprint-6: compute the real diff ONCE (opt-in via config.security.diff.mode
+  // === 'git-diff'; default 'estimated-files' keeps today's exact behavior).
+  // The diff is read-only input to the resolver/selector/finder — git runs
+  // ONLY here, in orchestrator Node, never as an auditor tool (ADR-5).
+  let changedPaths = contract.estimatedFiles;
+  let diffKeywords: string[] = [];
+  let auditDiff: AuditDiff | undefined;
+  if (config.security?.diff?.mode === "git-diff") {
+    const provider = deps.diffProvider ?? securityDiffProvider;
+    const diffAbort = new AbortController();
+    const diffTimer = setTimeout(() => diffAbort.abort(), config.security?.timeoutMs ?? 300_000);
+    try {
+      auditDiff = await provider.compute({
+        projectRoot,
+        baseRef: config.security.diff.baseRef,
+        expandWithGraph: config.security.diff.expandWithGraph,
+        signal: diffAbort.signal,
+        config,
+      });
+    } finally {
+      clearTimeout(diffTimer);
+    }
+
+    // Empty diff (no changes / provider failure) falls back to estimatedFiles
+    // — no regression from today's behavior (sc-6-5).
+    const files = auditDiff.changedFiles.map((f) => f.path);
+    if (files.length > 0) {
+      changedPaths = files;
+      diffKeywords = extractDiffKeywords(auditDiff.changedFiles);
+    }
+  }
+
   const ctx = await resolveStackSecurityContext({
     stack: config.project.stack,
-    // Sprint-6 seam: the git diff provider lands next sprint. For now the
-    // finder's retrieved signatures are ranked against the sprint's
-    // estimated-files scope rather than a real diff.
-    changedPaths: contract.estimatedFiles,
-    diffKeywords: [],
+    changedPaths,
+    diffKeywords,
     index: knowledgeIndex,
   });
 
@@ -134,6 +180,7 @@ export async function runSecurityAudit(
     ctx.skillName,
     ctx.promptFragment,
     effectivePriors,
+    auditDiff,
   );
 
   logger.info(`Calling security auditor model (${securityModel} → ${model})...`);
@@ -192,6 +239,33 @@ export async function runSecurityAudit(
 
 // ── Prompt assembly ────────────────────────────────────────────────
 
+/**
+ * Renders the "# Changed files (real diff)" section (Pattern D — empty
+ * string when there's no diff, so git-diff-mode-with-no-changes produces a
+ * prompt byte-identical to estimated-files mode, sc-6-5).
+ */
+function renderChangedFilesSection(auditDiff: AuditDiff | undefined): string {
+  if (!auditDiff || auditDiff.changedFiles.length === 0) return "";
+
+  const filesText = auditDiff.changedFiles
+    .map((f) => {
+      const hunksText = f.hunks.length > 0 ? f.hunks.map((h) => h.content).join("\n\n") : "(no hunks captured)";
+      return `## ${f.path} (${f.status})\n\n${hunksText}`;
+    })
+    .join("\n\n");
+
+  const neighborhoodText =
+    auditDiff.neighborhoodFiles.length > 0
+      ? `\n\nCall-graph neighborhood (files affected by the changes above):\n${auditDiff.neighborhoodFiles.join("\n")}`
+      : "";
+
+  const truncatedText = auditDiff.truncated
+    ? "\n\n(diff truncated — showing a bounded subset of changed files/hunks)"
+    : "";
+
+  return `# Changed files (real diff)\n\n${filesText}${neighborhoodText}${truncatedText}\n\n`;
+}
+
 function buildUserMessage(
   contract: SprintContract,
   evaluation: EvaluationRunResult | null,
@@ -200,6 +274,7 @@ function buildUserMessage(
   skillName: string | null,
   promptFragment: string,
   priors: SecurityFinding[],
+  auditDiff?: AuditDiff,
 ): string {
   const contractId = contract.contractId;
   const contractJson = JSON.stringify(contract, null, 2);
@@ -226,11 +301,23 @@ function buildUserMessage(
       ? `# Deterministic scanner findings (ground truth priors)\n\n${JSON.stringify(priors, null, 2)}\n\n`
       : "";
 
+  // Sprint-6 seam: real changed files/hunks, rendered only when present.
+  const changedFilesSection = renderChangedFilesSection(auditDiff);
+  const hasRealDiff = (auditDiff?.changedFiles.length ?? 0) > 0;
+
+  const scopeInstruction = hasRealDiff
+    ? 'Use the "# Changed files (real diff)" section above — it lists the ACTUAL changed files/hunks for ' +
+      "this sprint; Read each changed file in full for surrounding context, and ground findings in the " +
+      "real diff rather than guessing from `estimatedFiles`"
+    : "Use Glob to enumerate the in-scope files (the `estimatedFiles` patterns, or the relevant\n" +
+      "   project directories when that list is empty) and Read each one in full; there is no diff\n" +
+      "   available without Bash, so audit the CURRENT content of each in-scope file";
+
   return `# Sprint Contract
 
 ${contractJson}
 
-${evalSection}${priorsSection}# Stack Security Context
+${evalSection}${priorsSection}${changedFilesSection}# Stack Security Context
 
 Stack: ${stackLabel}
 Skill: ${skillName ?? "none (generic taxonomy only)"}
@@ -250,11 +337,9 @@ ${projectRoot}
 # Your Task
 
 Audit the sprint's changes for exploitable security vulnerabilities. You have Read/Grep/Glob
-only (no Bash, no git) — use them to:
+only (no Bash, no git)${hasRealDiff ? ' — a real diff IS provided inline above ("# Changed files (real diff)" section)' : ""} — use them to:
 1. Read .bober/contracts/${contractId}.json for scope, including its \`estimatedFiles\` list
-2. Use Glob to enumerate the in-scope files (the \`estimatedFiles\` patterns, or the relevant
-   project directories when that list is empty) and Read each one in full; there is no diff
-   available without Bash, so audit the CURRENT content of each in-scope file
+2. ${scopeInstruction}
 3. Use Grep to search across the codebase for suspicious patterns (hardcoded secrets, unsafe
    string interpolation into a query/shell/template, missing auth checks) that Read alone
    might miss

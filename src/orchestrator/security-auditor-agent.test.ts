@@ -15,6 +15,7 @@ import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig, SecuritySection } from "../config/schema.js";
 import type * as ToolsIndexModule from "./tools/index.js";
+import type { AuditDiff, SecurityDiffProvider } from "./security-knowledge/diff-provider.js";
 
 // ── Mock heavy dependencies ────────────────────────────────────────
 
@@ -511,5 +512,142 @@ describe("runSecurityAudit — sc-5-4 scanner pre-filter wiring", () => {
     const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
     expect(userMessage).toContain("caller-supplied prior");
     expect(userMessage).toContain("scanner finding");
+  });
+});
+
+// ── sc-6-4: real-diff provider feeds the resolver + finder prompt ──
+
+describe("runSecurityAudit — sc-6-4 injected diffProvider surfaces a real hunk to the prompt", () => {
+  it("a changed hunk containing 'ecrecover' reaches the userMessage AND causes the matching solidity.signature-replay signature to be selected", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      stack: { blockchain: "solidity" },
+      security: { diff: { mode: "git-diff", expandWithGraph: false } },
+    });
+
+    const fakeAuditDiff: AuditDiff = {
+      changedFiles: [
+        {
+          path: "contracts/Vault.sol",
+          status: "modified",
+          hunks: [
+            {
+              startLine: 10,
+              lineCount: 5,
+              content:
+                "@@ -10,3 +10,5 @@\n function claim(bytes memory signature) external {\n" +
+                "+    address signer = ecrecover(hash, v, r, s);\n }",
+            },
+          ],
+        },
+      ],
+      neighborhoodFiles: [],
+      truncated: false,
+    };
+    const fakeDiffProvider: SecurityDiffProvider = { compute: vi.fn().mockResolvedValue(fakeAuditDiff) };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    expect(fakeDiffProvider.compute).toHaveBeenCalledTimes(1);
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).toContain("# Changed files (real diff)");
+    expect(userMessage).toContain("contracts/Vault.sol");
+    expect(userMessage).toContain("ecrecover");
+    // Without the diff, this signature (12th of 12 solidity signatures, topK=8)
+    // does not rank into the default prompt — its presence here proves the
+    // real diff's keywords genuinely drove selection, not stack membership alone.
+    expect(userMessage).toContain("solidity.signature-replay");
+  });
+
+  it("does NOT select solidity.signature-replay when diffKeywords is empty (estimated-files mode) — proves the sc-6-4 assertion above is diff-driven", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({ stack: { blockchain: "solidity" } }); // no diff config -> estimated-files
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).not.toContain("solidity.signature-replay");
+  });
+});
+
+// ── sc-6-5: diff computed once; empty diff falls back; toolset stays read-only ──
+
+describe("runSecurityAudit — sc-6-5 diff computed once, empty-diff fallback, read-only toolset preserved", () => {
+  it("calls diffProvider.compute exactly once per audit", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({ security: { diff: { mode: "git-diff" } } });
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue({ changedFiles: [], neighborhoodFiles: [], truncated: false }),
+    };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    expect(fakeDiffProvider.compute).toHaveBeenCalledTimes(1);
+  });
+
+  it("an empty diff (no changes / provider failure) in git-diff mode falls back to estimated-files behavior — no regression", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      stack: { blockchain: "solidity" },
+      security: { diff: { mode: "git-diff" } },
+    });
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue({ changedFiles: [], neighborhoodFiles: [], truncated: false }),
+    };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).not.toContain("# Changed files (real diff)");
+    expect(userMessage).toContain("Stack: solidity");
+  });
+
+  it("stays read-only (no bash/write/edit tools, no bash handler) even when git-diff mode is enabled", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({ security: { diff: { mode: "git-diff" } } });
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue({
+        changedFiles: [{ path: "src/foo.ts", status: "modified", hunks: [] }],
+        neighborhoodFiles: [],
+        truncated: false,
+      }),
+    };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    const toolNames = (loopSpy.mock.calls[0][0].tools as Array<{ name: string }>).map((t) => t.name);
+    expect(toolNames).not.toContain("bash");
+    expect(toolNames).not.toContain("write_file");
+    expect(toolNames).not.toContain("edit_file");
+
+    const toolHandlers = loopSpy.mock.calls[0][0].toolHandlers as Map<string, unknown>;
+    expect(toolHandlers.has("bash")).toBe(false);
+  });
+
+  it("estimated-files mode (default, no config.security.diff) never invokes any diff provider", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig();
+    const fakeDiffProvider: SecurityDiffProvider = { compute: vi.fn() };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    expect(fakeDiffProvider.compute).not.toHaveBeenCalled();
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).not.toContain("# Changed files (real diff)");
   });
 });

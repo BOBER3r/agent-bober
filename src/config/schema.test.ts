@@ -18,6 +18,7 @@ import {
   ToolsSectionSchema,
   McpBridgeServerSchema,
   SecuritySectionSchema,
+  SecurityDiffConfigSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -691,6 +692,48 @@ describe("SecuritySectionSchema — standalone validation (sc-1-1)", () => {
 
   it("rejects a non-positive timeoutMs", () => {
     expect(() => SecuritySectionSchema.parse({ timeoutMs: 0 })).toThrow();
+  });
+});
+
+// ── SecurityDiffConfigSchema tests (sprint 6 — sc-6-3) ──────────────
+
+describe("SecuritySectionSchema.diff — opt-in real-diff config (sc-6-3)", () => {
+  it("parse({}) still has NO diff key — byte-identical to pre-sprint-6 behavior", () => {
+    const parsed = SecuritySectionSchema.parse({});
+    expect(parsed).toEqual({
+      enabled: false,
+      failClosed: true,
+      timeoutMs: 300_000,
+      model: "opus",
+      maxTurns: 20,
+      scanners: [],
+      standaloneBlockOn: "critical",
+      hub: true,
+    });
+    expect(Object.hasOwn(parsed, "diff")).toBe(false);
+  });
+
+  it("parse({ diff: {} }) defaults mode to 'estimated-files' and expandWithGraph to false", () => {
+    const parsed = SecuritySectionSchema.parse({ diff: {} });
+    expect(parsed.diff).toEqual({ mode: "estimated-files", expandWithGraph: false });
+  });
+
+  it("round-trips a fully-specified diff config", () => {
+    const parsed = SecuritySectionSchema.parse({
+      diff: { mode: "git-diff", baseRef: "main", expandWithGraph: true },
+    });
+    expect(parsed.diff).toEqual({ mode: "git-diff", baseRef: "main", expandWithGraph: true });
+  });
+
+  it("rejects a bogus diff.mode value", () => {
+    expect(() => SecuritySectionSchema.parse({ diff: { mode: "bogus" } })).toThrow();
+  });
+
+  it("SecurityDiffConfigSchema.parse({}) defaults standalone", () => {
+    expect(SecurityDiffConfigSchema.parse({})).toEqual({
+      mode: "estimated-files",
+      expandWithGraph: false,
+    });
   });
 });
 
