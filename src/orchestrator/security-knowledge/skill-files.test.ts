@@ -1,15 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { SecuritySignatureParser } from "./parser.js";
 import { ALL_VULN_CLASSES } from "../stack-knowledge.js";
 import { parseFrontmatter } from "../../vault/frontmatter.js";
 import type { SecurityStackId } from "./signature.js";
 
-// ── Real-asset table test: parses the four money/crypto per-stack skill
-// files (spec-20260714-security-auditor-per-stack-skills, sprint 3) and
-// asserts zero dropped blocks — the load-bearing guard against an invalid
-// VulnClass (e.g. the non-existent "access-control") silently dropping a
-// signature block. ────────────────────────────────────────────────────
+// ── Real-asset table test: parses the seven per-stack skill files authored
+// across sprint 3 (money/crypto: solidity, anchor, igaming, dex-backend) and
+// sprint 4 (web/backend: node, payments, react) of
+// spec-20260714-security-auditor-per-stack-skills, and asserts zero dropped
+// blocks — the load-bearing guard against an invalid VulnClass (e.g. the
+// non-existent "access-control") silently dropping a signature block.
+// Together with bober.security-generic (sprint 2), this completes all 8
+// per-stack security skill files. ───────────────────────────────────────
 
 interface FileCase {
   stackId: SecurityStackId;
@@ -63,6 +66,39 @@ const CASES: FileCase[] = [
       "dex.siwe-replay",
     ],
   },
+  {
+    stackId: "node",
+    relPath: "skills/bober.security-node/SKILL.md",
+    minBlocks: 10,
+    expectedIdsOrKeywords: [
+      "node.sql-injection",
+      "node.command-injection",
+      "node.bola-missing-ownership",
+      "node.ssrf-outbound-fetch",
+    ],
+  },
+  {
+    stackId: "payments",
+    relPath: "skills/bober.security-payments/SKILL.md",
+    minBlocks: 8,
+    expectedIdsOrKeywords: [
+      "payments.webhook-missing-hmac",
+      "payments.missing-idempotency-key",
+      "payments.duplicate-credit-webhook-replay",
+      "payments.withdraw-different-method",
+    ],
+  },
+  {
+    stackId: "react",
+    relPath: "skills/bober.security-react/SKILL.md",
+    minBlocks: 6,
+    expectedIdsOrKeywords: [
+      "react.dangerously-set-inner-html",
+      "react.secret-in-client-bundle",
+      "react.client-trusted-authz",
+      "react.postmessage-no-origin",
+    ],
+  },
 ];
 
 describe("SecuritySignatureParser — real money/crypto per-stack skill files", () => {
@@ -111,13 +147,33 @@ describe("SecuritySignatureParser — real money/crypto per-stack skill files", 
     });
   }
 
-  it("never uses the non-existent 'access-control' VulnClass across any of the four files", async () => {
+  it("never uses the non-existent 'access-control' VulnClass across any of the seven files", async () => {
     for (const testCase of CASES) {
       const md = await readFile(new URL(`../../../${testCase.relPath}`, import.meta.url), "utf-8");
       const signatures = SecuritySignatureParser.parse(testCase.stackId, md, testCase.relPath);
       for (const signature of signatures) {
         expect(signature.vulnClass).not.toBe("access-control");
       }
+    }
+  });
+
+  it("enumerates exactly the 8 expected security stack skill files (excludes the audit workflow skill)", async () => {
+    const skillsDir = new URL("../../../skills/", import.meta.url);
+    const names = await readdir(skillsDir);
+    const stacks = names
+      .filter((n) => n.startsWith("bober.security-"))
+      .map((n) => n.slice("bober.security-".length))
+      .filter((n) => n !== "audit"); // audit = the workflow skill, not a signature stack
+
+    const EXPECTED = ["solidity", "anchor", "react", "node", "payments", "igaming", "dex-backend", "generic"];
+    expect(new Set(stacks)).toEqual(new Set(EXPECTED));
+    expect(stacks.length).toBe(8);
+
+    for (const stack of EXPECTED) {
+      const rel = `skills/bober.security-${stack}/SKILL.md`;
+      const md = await readFile(new URL(`../../../${rel}`, import.meta.url), "utf-8");
+      const sigs = SecuritySignatureParser.parse(stack as SecurityStackId, md, rel);
+      expect(sigs.length).toBeGreaterThanOrEqual(6);
     }
   });
 });
