@@ -308,8 +308,8 @@ a `skills/bober.security-<stack>/SKILL.md` file of discrete labelled **signature
 (`signatureId`, title, CWE, severity, `VulnClass`, invariant, unsafe/safe examples,
 keywords), read by a pure, total `SecuritySignatureParser`
 (`src/orchestrator/security-knowledge/`). As of the current sprints, the widened
-taxonomy, the `SecuritySignature` type + parser, and **all eight** authored libraries exist
-and are tested:
+taxonomy, the `SecuritySignature` type + parser, **all eight** authored libraries, **and
+the retrieval pipeline that feeds them to the auditor** all exist and are tested:
 
 - [`bober.security-generic`](../skills/bober.security-generic/SKILL.md) — shared OWASP/CWE library (14 blocks).
 - [`bober.security-solidity`](../skills/bober.security-solidity/SKILL.md) — on-chain EVM contract signatures (12 blocks).
@@ -321,10 +321,29 @@ and are tested:
 - [`bober.security-react`](../skills/bober.security-react/SKILL.md) — React client-side signatures (8 blocks).
 
 An enumeration test locks this exact 8-stack set (excluding `bober.security-audit`, the
-audit *workflow* skill). All authored libraries are **tested but not yet wired into
-`runSecurityAudit`** — the audit behavior described above is unchanged until the
-index/selector sprint (sprint 5) lands. See the [sprint records](./sprints/README.md) for
-the authoring format and per-sprint detail.
+audit *workflow* skill).
+
+**As of sprint 5, these libraries are WIRED** — the auditor now retrieves per-stack
+signatures at audit time via a four-stage pipeline under
+`src/orchestrator/security-knowledge/`:
+
+1. `SecurityStackRegistry.resolve` maps the project's declared/detected stack
+   (`config.project.stack`) to one of the 8 stack ids + its skill name; an
+   unknown/absent/null stack degrades to `generic` (never null, never a throw).
+2. `SecurityKnowledgeIndex` parses all 8 `SKILL.md` files **once per process** (ADR-7 —
+   no runtime cache invalidation; edit a skill file and restart to pick it up) and serves
+   each stack's `SecuritySignature[]`.
+3. `selectSignatures` ranks that stack's signatures top-K by stack membership + keyword/path
+   overlap and **always** includes the shared `generic` floor.
+4. `resolveStackSecurityContext` renders the selected signatures (id/title/CWE/invariant +
+   unsafe/safe examples) into a **never-empty** prompt fragment that is folded into the
+   finder's user message. This closes **G3**: `unknown`/`anchor`/`react` no longer inject
+   frontmatter filler, and an unrecognised stack falls through to the generic floor.
+
+Ranking currently scores against the sprint's `estimatedFiles` scope; the **real git-diff
+provider lands in sprint 6**, and the supply-chain scanners + finding **verifier** are
+sprints 7–8. See the [sprint records](./sprints/README.md) for the authoring format and
+per-sprint detail.
 
 ---
 
