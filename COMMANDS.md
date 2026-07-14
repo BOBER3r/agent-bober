@@ -868,6 +868,82 @@ bober onboard
 
 ---
 
+## Configuration & Introspection Commands
+
+Inspect and manage bober's local configuration, telemetry, worktree runs,
+self-improvement lessons, and semantic facts.
+
+### `bober config`
+
+Inspect and migrate `bober.config.json`. The `config` group is a container
+with no action of its own — run a subcommand.
+
+```bash
+bober config migrate             # Add all new schema fields with default values to bober.config.json
+bober config migrate --dry-run   # Print the merged config without writing
+```
+
+---
+
+### `bober telemetry`
+
+Inspect, export, or purge local telemetry events (opt-in, local-only). The
+`telemetry` group is a container with no action of its own — run a subcommand.
+
+```bash
+bober telemetry status    # Print whether telemetry is enabled and recent event counts by type
+bober telemetry purge     # Delete all .bober/telemetry/ files (requires confirmation)
+bober telemetry export    # Print all telemetry events as JSONL to stdout for offline analysis
+```
+
+---
+
+### `bober worktree`
+
+Launch and manage worktree-isolated pipeline runs. The `worktree` group is a
+container with no action of its own — run a subcommand.
+
+```bash
+bober worktree run <task>                     # Run the full Bober pipeline in an isolated git worktree on a new branch
+bober worktree run <task> --allow-dirty       # Allow worktree creation even when the working tree has uncommitted changes
+bober worktree run <task> --keep-on-success   # Retain the worktree after a successful pipeline run (default is to clean up)
+```
+
+---
+
+### `bober memory`
+
+Inspect and distill self-improvement lessons. The `memory` group is a
+container with no action of its own — run a subcommand.
+
+```bash
+bober memory distill                # Distill sprint history into deterministic lessons (idempotent)
+bober memory list                   # Print the bounded lesson index
+bober memory list --limit <n>       # Maximum number of lessons to show (default: 50)
+bober memory show <lessonId>        # Print one lesson with its sourceEntryRefs provenance
+bober memory prune                  # Quarantine stale and conflicting lessons from INDEX.md into QUARANTINE.md (never deletes per-lesson .md files)
+```
+
+---
+
+### `bober facts`
+
+Inspect and manage semantic bi-temporal facts. The `facts` group is a
+container with no action of its own — run a subcommand.
+
+```bash
+bober facts add --subject <subject> --predicate <predicate> --value <value>   # Insert a new semantic fact into the store (--scope defaults to "programming")
+bober facts add --scope <scope> --subject <s> --predicate <p> --value <v> --confidence <n> --run-id <runId>   # --confidence defaults to "1"; --run-id is optional
+bober facts list                          # Print active (non-invalidated) facts
+bober facts list --scope <scope>          # Filter by scope (default: programming)
+bober facts list --subject <subject>      # Filter by subject
+bober facts list --predicate <predicate>  # Filter by predicate
+bober facts show <id>                     # Print one fact with full provenance and temporal fields
+bober facts invalidate <id>               # Soft-delete a fact (sets t_invalidated; row is kept)
+```
+
+---
+
 ## Medical Team Commands
 
 Utilities for the built-in `medical` team (Phase 6). See
