@@ -500,8 +500,22 @@ finder's `critical`+`important` findings and the diff hunks — **never the spri
 sycophancy strip) — and is told to *disprove* each one. It is strictly **downgrade-only** (confirm /
 `critical`→`important` / drop; never promote or re-open `approvedAreas`) and **fail-closed** (any
 parse-failure/error/abort ⇒ the finder's criticals are kept), with the **unchanged** `deriveVerdict`
-run on the folded review. See [Finder → verifier stage](#finder--verifier-stage) above. Only the
-benchmark corpus (sprint 9) and the dogfood/docs close-out remain. See the
+run on the folded review. See [Finder → verifier stage](#finder--verifier-stage) above.
+
+**As of sprint 9, detection quality is measurable offline** — the finder→verifier pipeline's
+effect is now *measured, not asserted* (architecture success criterion #3). A labelled
+vulnerable/safe **benchmark corpus** (`src/orchestrator/security-knowledge/benchmark/fixtures/manifest.json`
+— 13 vulnerable + 13 safe fixtures whose code is inlined as JSON strings, drawn verbatim from the
+shipped skill unsafe/safe examples so nothing compiles) plus a pure, deterministic `measure()`
+harness (`benchmark/harness.ts`) run a finder-only path versus a finder+verifier path over the
+corpus and report **recall** on the vulnerable set (detection retained) and **false-positive block
+rate** on the safe set. The required CI test drives the harness with deterministic injected fakes
+(no live LLM, no network, no `Math.random`/`Date`) and independently recomputes the reduction —
+`fpBlockRate` 2/13 → 0 while `recall` stays 1 → 1 — while a two-arm test grounds every vulnerable
+label against the real parsed signature index (or the `ALL_VULN_CLASSES` union for the scanner-only
+supply-chain case). It is a measurement + regression guard, **not** a new blocking gate, and is not
+wired into `runSecurityAudit`; a documented, skipped-by-default block records how to run it against a
+real provider locally. Only the dogfood/docs close-out remains. See the
 [sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
 
 ---
