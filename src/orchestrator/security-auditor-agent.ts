@@ -14,9 +14,10 @@ import { saveSecurityAudit } from "../state/security-audit-state.js";
 import { ALL_VULN_CLASSES } from "./stack-knowledge.js";
 import { resolveStackSecurityContext } from "./security-knowledge/resolver.js";
 import { SecurityKnowledgeIndex } from "./security-knowledge/index.js";
-import { runScannerPreFilter } from "./security-scanners.js";
+import { runScannerPreFilter, isNetworkScanner } from "./security-scanners.js";
 import type { AuditDiff, SecurityDiffProvider } from "./security-knowledge/diff-provider.js";
 import { securityDiffProvider, extractDiffKeywords } from "./security-knowledge/diff-provider.js";
+import { inspectSupplyChain } from "./security-knowledge/supply-chain-inspector.js";
 import { logger } from "../utils/logger.js";
 
 /**
@@ -169,6 +170,42 @@ export async function runSecurityAudit(
       effectivePriors = [...priors, ...scannerPriors];
     } finally {
       clearTimeout(scannerTimer);
+    }
+  }
+
+  // Sprint-7 seam (supply-chain axis, ADR-4): when supplyChain.enabled, fold
+  // both the (network-gated) scanner pre-filter and the always-available
+  // OFFLINE diff inspector into effectivePriors. Network-capable scanner
+  // kinds (npm-audit/osv-scanner) only run when egress.onlineResearch is
+  // explicitly true (default false); gitleaks and the offline inspector run
+  // regardless of egress — neither one touches the network. The offline
+  // inspector runs even when zero external scanners are configured; it is
+  // itself the "always-available" half of the axis.
+  const supplyChain = config.security?.supplyChain;
+  if (supplyChain?.enabled) {
+    const scAbort = new AbortController();
+    const scTimer = setTimeout(
+      () => scAbort.abort(),
+      config.security?.timeoutMs ?? 300_000,
+    );
+    try {
+      const onlineOk = config.security?.egress?.onlineResearch === true;
+      const scScanners = onlineOk
+        ? (supplyChain.scanners ?? [])
+        : (supplyChain.scanners ?? []).filter((s) => !isNetworkScanner(s));
+
+      const scannerPriors =
+        scScanners.length > 0
+          ? await runScannerPreFilter({ scanners: scScanners, projectRoot, signal: scAbort.signal })
+          : [];
+
+      const inspectorPriors = auditDiff
+        ? await inspectSupplyChain({ projectRoot, diff: auditDiff, signal: scAbort.signal })
+        : [];
+
+      effectivePriors = [...effectivePriors, ...scannerPriors, ...inspectorPriors];
+    } finally {
+      clearTimeout(scTimer);
     }
   }
 

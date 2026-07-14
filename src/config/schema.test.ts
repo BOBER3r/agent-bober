@@ -19,6 +19,8 @@ import {
   McpBridgeServerSchema,
   SecuritySectionSchema,
   SecurityDiffConfigSchema,
+  SecuritySupplyChainConfigSchema,
+  SecurityEgressConfigSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -734,6 +736,59 @@ describe("SecuritySectionSchema.diff — opt-in real-diff config (sc-6-3)", () =
       mode: "estimated-files",
       expandWithGraph: false,
     });
+  });
+});
+
+// ── SecuritySupplyChainConfigSchema / SecurityEgressConfigSchema tests (sprint 7 — sc-7-3) ──
+
+describe("SecuritySectionSchema.supplyChain / .egress — opt-in supply-chain axis config (sc-7-3)", () => {
+  it("parse({}) still has NO supplyChain/egress key — byte-identical to pre-sprint-7 behavior", () => {
+    const parsed = SecuritySectionSchema.parse({});
+    expect(parsed).toEqual({
+      enabled: false,
+      failClosed: true,
+      timeoutMs: 300_000,
+      model: "opus",
+      maxTurns: 20,
+      scanners: [],
+      standaloneBlockOn: "critical",
+      hub: true,
+    });
+    expect(Object.hasOwn(parsed, "supplyChain")).toBe(false);
+    expect(Object.hasOwn(parsed, "egress")).toBe(false);
+  });
+
+  it("parse({ supplyChain: {} }) defaults enabled:false, scanners:[]", () => {
+    const parsed = SecuritySectionSchema.parse({ supplyChain: {} });
+    expect(parsed.supplyChain).toEqual({ enabled: false, scanners: [] });
+  });
+
+  it("parse({ egress: {} }) defaults onlineResearch:false", () => {
+    const parsed = SecuritySectionSchema.parse({ egress: {} });
+    expect(parsed.egress).toEqual({ onlineResearch: false });
+  });
+
+  it("round-trips a fully-specified supplyChain + egress config", () => {
+    const parsed = SecuritySectionSchema.parse({
+      supplyChain: {
+        enabled: true,
+        scanners: [{ type: "npm-audit", command: "npm audit --json", required: false }],
+      },
+      egress: { onlineResearch: true },
+    });
+    expect(parsed.supplyChain).toEqual({
+      enabled: true,
+      scanners: [{ type: "npm-audit", command: "npm audit --json", required: false }],
+    });
+    expect(parsed.egress).toEqual({ onlineResearch: true });
+  });
+
+  it("SecuritySupplyChainConfigSchema.parse({}) defaults standalone", () => {
+    expect(SecuritySupplyChainConfigSchema.parse({})).toEqual({ enabled: false, scanners: [] });
+  });
+
+  it("SecurityEgressConfigSchema.parse({}) defaults standalone", () => {
+    expect(SecurityEgressConfigSchema.parse({})).toEqual({ onlineResearch: false });
   });
 });
 

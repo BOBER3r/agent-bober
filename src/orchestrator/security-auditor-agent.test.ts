@@ -15,6 +15,7 @@ import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig, SecuritySection } from "../config/schema.js";
 import type * as ToolsIndexModule from "./tools/index.js";
+import type * as SecurityScannersModule from "./security-scanners.js";
 import type { AuditDiff, SecurityDiffProvider } from "./security-knowledge/diff-provider.js";
 
 // ── Mock heavy dependencies ────────────────────────────────────────
@@ -28,11 +29,16 @@ vi.mock("./agentic-loop.js", () => ({ runAgenticLoop: loopSpy }));
 vi.mock("../providers/factory.js", () => ({ createClient: clientSpy }));
 vi.mock("./model-resolver.js", () => ({ resolveModel: () => "model-test" }));
 vi.mock("./agent-loader.js", () => ({ assembleSystemPrompt: vi.fn().mockResolvedValue("SYS") }));
-// Sprint-5 seam: mock the whole scanner-pre-filter module so the "zero calls
-// with scanners:[]" assertion is a genuine spy check, and so these tests
-// never touch execa/real child processes (that coverage lives in
-// security-scanners.test.ts).
-vi.mock("./security-scanners.js", () => ({ runScannerPreFilter: scannerPreFilterSpy }));
+// Sprint-5 seam: mock only runScannerPreFilter so the "zero calls with
+// scanners:[]" assertion is a genuine spy check, and so these tests never
+// touch execa/real child processes (that coverage lives in
+// security-scanners.test.ts). isNetworkScanner (sprint 7) stays REAL so the
+// egress-gating wiring test below exercises genuine kind detection, not a
+// stub that could silently drift out of sync with security-scanners.ts.
+vi.mock("./security-scanners.js", async () => {
+  const actual = await vi.importActual<typeof SecurityScannersModule>("./security-scanners.js");
+  return { ...actual, runScannerPreFilter: scannerPreFilterSpy };
+});
 // Uses the REAL resolveRoleTools/ROLE_TOOLS (only getGraphState/getGraphDeps are
 // stubbed, forcing the ungated/static tool set) so the nonGoal regression test
 // below exercises the genuine role -> tool-name mapping instead of a fixture
@@ -649,5 +655,166 @@ describe("runSecurityAudit — sc-6-5 diff computed once, empty-diff fallback, r
     expect(fakeDiffProvider.compute).not.toHaveBeenCalled();
     const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
     expect(userMessage).not.toContain("# Changed files (real diff)");
+  });
+});
+
+// ── sc-7-5: supply-chain axis fold (scanner priors + offline inspector) ──
+
+const maliciousPostinstallDiff: AuditDiff = {
+  changedFiles: [
+    {
+      path: "package.json",
+      status: "modified",
+      hunks: [
+        {
+          startLine: 5,
+          lineCount: 2,
+          content:
+            '@@ -5,1 +5,2 @@\n   "scripts": {\n' +
+            "+    \"postinstall\": \"node -e \\\"eval(Buffer.from('aGVsbG8=','base64').toString())\\\"\"",
+        },
+      ],
+    },
+  ],
+  neighborhoodFiles: [],
+  truncated: false,
+};
+
+describe("runSecurityAudit — sc-7-5 supply-chain axis folds scanner + inspector priors", () => {
+  it("a diff adding a malicious postinstall produces a supply-chain prior reaching the finder when supplyChain.enabled", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      security: {
+        diff: { mode: "git-diff" },
+        supplyChain: { enabled: true, scanners: [] },
+      },
+    });
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue(maliciousPostinstallDiff),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).toContain("Deterministic scanner findings (ground truth priors)");
+    expect(userMessage).toContain("postinstall");
+    expect(userMessage).toContain("supply-chain-inspector");
+    expect(result.scannerRan).toBe(true);
+  });
+
+  it("supplyChain absent — no scanner/inspector fold occurs, default-off path is byte-identical", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({ security: { diff: { mode: "git-diff" } } }); // no supplyChain key at all
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue(maliciousPostinstallDiff),
+    };
+
+    const result = await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).not.toContain("Deterministic scanner findings (ground truth priors)");
+    expect(result.scannerRan).toBe(false);
+  });
+
+  it("supplyChain.enabled:false — the offline inspector never runs even with a real diff present", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      security: { diff: { mode: "git-diff" }, supplyChain: { enabled: false, scanners: [] } },
+    });
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue(maliciousPostinstallDiff),
+    };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).not.toContain("Deterministic scanner findings (ground truth priors)");
+  });
+
+  it("the offline inspector runs even with zero external scanners configured (always-available half of the axis)", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      security: { diff: { mode: "git-diff" }, supplyChain: { enabled: true, scanners: [] } },
+    });
+    const fakeDiffProvider: SecurityDiffProvider = {
+      compute: vi.fn().mockResolvedValue(maliciousPostinstallDiff),
+    };
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config, [], {
+      diffProvider: fakeDiffProvider,
+    });
+
+    expect(scannerPreFilterSpy).not.toHaveBeenCalled();
+    const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
+    expect(userMessage).toContain("supply-chain-inspector");
+  });
+
+  it("network-capable supplyChain.scanners (npm-audit) are filtered out when egress.onlineResearch is absent — never reach runScannerPreFilter", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      security: {
+        supplyChain: {
+          enabled: true,
+          scanners: [{ type: "npm-audit", command: "npm audit --json", required: false }],
+        },
+      },
+    });
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(scannerPreFilterSpy).not.toHaveBeenCalled();
+  });
+
+  it("network-capable supplyChain.scanners run when egress.onlineResearch is explicitly true", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+    scannerPreFilterSpy.mockResolvedValueOnce([
+      { description: "npm-audit finding", evidence: [], source: "npm-audit", vulnClass: "supply-chain" as const },
+    ]);
+
+    const config = makeConfig({
+      security: {
+        supplyChain: {
+          enabled: true,
+          scanners: [{ type: "npm-audit", command: "npm audit --json", required: false }],
+        },
+        egress: { onlineResearch: true },
+      },
+    });
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(scannerPreFilterSpy).toHaveBeenCalledTimes(1);
+    const callArgs = scannerPreFilterSpy.mock.calls[0][0] as { scanners: unknown[] };
+    expect(callArgs.scanners).toHaveLength(1);
+  });
+
+  it("gitleaks (offline, non-network) is not filtered even when egress.onlineResearch is absent", async () => {
+    loopSpy.mockResolvedValueOnce(loopResult(cleanAuditText));
+
+    const config = makeConfig({
+      security: {
+        supplyChain: {
+          enabled: true,
+          scanners: [{ type: "gitleaks", command: "gitleaks detect --report-format json", required: false }],
+        },
+      },
+    });
+
+    await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
+
+    expect(scannerPreFilterSpy).toHaveBeenCalledTimes(1);
+    const callArgs = scannerPreFilterSpy.mock.calls[0][0] as { scanners: unknown[] };
+    expect(callArgs.scanners).toHaveLength(1);
   });
 });

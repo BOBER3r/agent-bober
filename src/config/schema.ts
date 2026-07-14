@@ -220,6 +220,29 @@ export const SecurityDiffConfigSchema = z.object({
 });
 export type SecurityDiffConfig = z.infer<typeof SecurityDiffConfigSchema>;
 
+/**
+ * Sprint-7: opt-in supply-chain/dependency/secret scanner axis. `enabled`
+ * defaults false and `scanners` reuses `EvalStrategySchema` (the same shape
+ * `security.scanners` uses) — the supply-chain parser kinds (npm-audit,
+ * osv-scanner, gitleaks) are detected the same way as any other scanner.
+ */
+export const SecuritySupplyChainConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  scanners: z.array(EvalStrategySchema).default([]),
+});
+export type SecuritySupplyChainConfig = z.infer<typeof SecuritySupplyChainConfigSchema>;
+
+/**
+ * Sprint-7: egress axis gating network-capable supply-chain scanners
+ * (npm-audit/osv-scanner hit a remote registry/vulnerability DB).
+ * `onlineResearch` defaults false (fail-safe opt-in), mirroring the
+ * research/medical online-research egress precedent.
+ */
+export const SecurityEgressConfigSchema = z.object({
+  onlineResearch: z.boolean().default(false),
+});
+export type SecurityEgressConfig = z.infer<typeof SecurityEgressConfigSchema>;
+
 export const SecuritySectionSchema = z.object({
   enabled: z.boolean().default(false),
   /** Fail-closed: unparseable auditor output or a timeout blocks. Default true. */
@@ -244,6 +267,17 @@ export const SecuritySectionSchema = z.object({
    * (no defaults leak in), same guarantee as `security` itself (sc-6-3).
    */
   diff: SecurityDiffConfigSchema.optional(),
+  /**
+   * Sprint-7: opt-in supply-chain axis config. OPTIONAL with no outer
+   * default — a config that omits `supplyChain` entirely stays
+   * byte-identical (no defaults leak in), same guarantee as `diff` (sc-7-3).
+   */
+  supplyChain: SecuritySupplyChainConfigSchema.optional(),
+  /**
+   * Sprint-7: egress axis gating network-capable supply-chain scanners.
+   * OPTIONAL with no outer default (same byte-identical guarantee as above).
+   */
+  egress: SecurityEgressConfigSchema.optional(),
 });
 export type SecuritySection = z.infer<typeof SecuritySectionSchema>;
 

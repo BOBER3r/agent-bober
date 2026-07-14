@@ -15,7 +15,11 @@ import type { ScannerRunner, ScannerRunResult } from "./security-scanners.js";
 import {
   parseSlitherOutput,
   parseSemgrepOutput,
+  parseNpmAuditOutput,
+  parseOsvOutput,
+  parseGitleaksOutput,
   runScannerPreFilter,
+  isNetworkScanner,
 } from "./security-scanners.js";
 
 // ── Fixture loading ────────────────────────────────────────────────
@@ -331,4 +335,264 @@ describe("runScannerPreFilter — abort mid-scan (sc-5-3)", () => {
     expect(findings).toHaveLength(2);
     expect(findings.every((f) => f.source === "slither")).toBe(true);
   }, 10_000);
+});
+
+// ── sc-7-1: G9 nonzero-exit fix ──────────────────────────────────────
+
+const npmAuditV7Payload = {
+  vulnerabilities: {
+    minimist: {
+      name: "minimist",
+      severity: "critical",
+      via: [
+        {
+          title: "Prototype Pollution",
+          url: "https://github.com/advisories/GHSA-xxxx",
+          severity: "critical",
+        },
+      ],
+      range: "<1.2.6",
+      nodes: ["node_modules/minimist"],
+      fixAvailable: true,
+    },
+  },
+  metadata: { vulnerabilities: { critical: 1 } },
+};
+
+describe("runScannerPreFilter — G9 nonzero-exit fix (sc-7-1)", () => {
+  it("an npm-audit scanner exiting nonzero WITH findings on stdout survives — the findings are parsed, not discarded", async () => {
+    const runner: ScannerRunner = vi.fn(async (): Promise<ScannerRunResult> => ({
+      exitCode: 1,
+      stdout: JSON.stringify(npmAuditV7Payload),
+      failed: true,
+    }));
+
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "npm-audit", command: "npm audit --json" })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings[0].source).toBe("npm-audit");
+    expect(findings[0].vulnClass).toBe("supply-chain");
+  });
+
+  it("an npm-audit scanner that fails to spawn (exitCode undefined, ENOENT) yields [] — spawn failure is still discarded", async () => {
+    const runner: ScannerRunner = vi.fn(async (): Promise<ScannerRunResult> => ({
+      exitCode: undefined,
+      stdout: "",
+      failed: true,
+    }));
+
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "npm-audit", command: "npm audit --json" })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+
+    expect(findings).toEqual([]);
+  });
+
+  it("an npm-audit scanner whose runner THROWS (real ENOENT) still yields [] — the outer catch is unchanged", async () => {
+    const runner: ScannerRunner = vi.fn(async () => {
+      throw new Error("spawn npm ENOENT");
+    });
+
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "npm-audit", command: "npm audit --json" })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+
+    expect(findings).toEqual([]);
+  });
+
+  it("a nonzero semgrep exit STILL yields [] — the G9 fix does not flip semgrep's zero-clean policy", async () => {
+    const runner: ScannerRunner = vi.fn(async (): Promise<ScannerRunResult> => ({
+      exitCode: 1,
+      stdout: JSON.stringify({ results: [{ check_id: "x", path: "a.ts", start: { line: 1 }, extra: {} }] }),
+      failed: true,
+    }));
+
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "semgrep", command: "semgrep --config auto --error --json ." })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+
+    expect(findings).toEqual([]);
+  });
+});
+
+// ── sc-7-2: parseNpmAuditOutput / parseOsvOutput / parseGitleaksOutput ─
+
+describe("parseNpmAuditOutput — sc-7-2", () => {
+  it("maps a real-shaped npm audit v7+ payload to a supply-chain finding", () => {
+    const findings = parseNpmAuditOutput(npmAuditV7Payload);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].vulnClass).toBe("supply-chain");
+    expect(findings[0].source).toBe("npm-audit");
+    expect(findings[0].description).toContain("minimist");
+    expect(findings[0].description).toContain("Prototype Pollution");
+    expect(findings[0].evidence[0].path).toBe("node_modules/minimist");
+  });
+
+  it("falls back to the v6 advisories shape when vulnerabilities is absent", () => {
+    const findings = parseNpmAuditOutput({
+      advisories: {
+        "1179": {
+          module_name: "minimist",
+          severity: "high",
+          title: "Prototype Pollution",
+          url: "https://npmjs.com/advisories/1179",
+        },
+      },
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0].vulnClass).toBe("supply-chain");
+    expect(findings[0].source).toBe("npm-audit");
+    expect(findings[0].description).toContain("minimist");
+  });
+
+  it.each([undefined, null, "{trunc", {}, [1, 2, 3], { vulnerabilities: "nope" }, { advisories: "nope" }])(
+    "garbage %j -> []",
+    (g) => {
+      expect(parseNpmAuditOutput(g)).toEqual([]);
+    },
+  );
+});
+
+describe("parseOsvOutput — sc-7-2", () => {
+  it("maps a real-shaped osv-scanner payload to a supply-chain finding", () => {
+    const findings = parseOsvOutput({
+      results: [
+        {
+          source: { path: "/repo/package-lock.json", type: "lockfile" },
+          packages: [
+            {
+              package: { name: "lodash", ecosystem: "npm", version: "4.17.20" },
+              vulnerabilities: [
+                {
+                  id: "GHSA-p6mc-m468-83gg",
+                  summary: "Prototype pollution in lodash",
+                  severity: [{ type: "CVSS_V3", score: "7.4" }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0].vulnClass).toBe("supply-chain");
+    expect(findings[0].source).toBe("osv-scanner");
+    expect(findings[0].description).toContain("GHSA-p6mc-m468-83gg");
+    expect(findings[0].description).toContain("lodash");
+    expect(findings[0].evidence[0].path).toBe("/repo/package-lock.json");
+  });
+
+  it.each([undefined, null, "{trunc", {}, [1, 2, 3], { results: "nope" }])("garbage %j -> []", (g) => {
+    expect(parseOsvOutput(g)).toEqual([]);
+  });
+});
+
+describe("parseGitleaksOutput — sc-7-2", () => {
+  it("maps a real-shaped gitleaks payload (top-level array) to a secret-handling finding, never echoing the raw Secret", () => {
+    const findings = parseGitleaksOutput([
+      {
+        Description: "AWS Access Key",
+        File: "src/config.ts",
+        StartLine: 12,
+        EndLine: 12,
+        RuleID: "aws-access-token",
+        Secret: "AKIALIVE_CREDENTIAL_DO_NOT_LEAK",
+        Match: "const k = 'AKIA...'",
+        Commit: "abc123",
+      },
+    ]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].vulnClass).toBe("secret-handling");
+    expect(findings[0].source).toBe("gitleaks");
+    expect(findings[0].evidence[0].path).toBe("src/config.ts");
+    expect(findings[0].evidence[0].line).toBe(12);
+    expect(findings[0].evidence[0].snippet).not.toContain("AKIALIVE_CREDENTIAL_DO_NOT_LEAK");
+  });
+
+  it.each([undefined, null, "{trunc", {}, { Description: "not an array" }])("garbage %j -> []", (g) => {
+    expect(parseGitleaksOutput(g)).toEqual([]);
+  });
+});
+
+// ── sc-7-2: detectScannerKind recognizes the 3 new kinds ─────────────
+
+describe("runScannerPreFilter — new scanner kind detection (sc-7-2)", () => {
+  it("selects the npm-audit parser by type name", async () => {
+    const runner: ScannerRunner = vi.fn(async (): Promise<ScannerRunResult> => ({
+      exitCode: 0,
+      stdout: JSON.stringify(npmAuditV7Payload),
+      failed: false,
+    }));
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "npm-audit", command: "npm audit --json" })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+    expect(findings[0].source).toBe("npm-audit");
+  });
+
+  it("selects the osv-scanner parser by command substring", async () => {
+    const runner: ScannerRunner = vi.fn(async (): Promise<ScannerRunResult> => ({
+      exitCode: 0,
+      stdout: JSON.stringify({ results: [] }),
+      failed: false,
+    }));
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "custom", command: "osv-scanner --format json ." })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+    expect(findings).toEqual([]); // empty results -> [] findings, but no exception/fallback
+    expect(runner).toHaveBeenCalledWith("osv-scanner", ["--format", "json", "."], expect.any(Object));
+  });
+
+  it("selects the gitleaks parser by type name", async () => {
+    const runner: ScannerRunner = vi.fn(async (): Promise<ScannerRunResult> => ({
+      exitCode: 1, // gitleaks exits nonzero when it finds secrets (G9)
+      stdout: JSON.stringify([
+        { Description: "Generic Secret", File: "a.ts", StartLine: 1, RuleID: "generic", Match: "x" },
+      ]),
+      failed: true,
+    }));
+    const findings = await runScannerPreFilter({
+      scanners: [makeScanner({ type: "gitleaks", command: "gitleaks detect --report-format json" })],
+      projectRoot: "/tmp/project",
+      signal: new AbortController().signal,
+      runner,
+    });
+    expect(findings).toHaveLength(1);
+    expect(findings[0].source).toBe("gitleaks");
+    expect(findings[0].vulnClass).toBe("secret-handling");
+  });
+});
+
+// ── isNetworkScanner (sc-7-5 support) ─────────────────────────────────
+
+describe("isNetworkScanner", () => {
+  it("returns true for npm-audit and osv-scanner", () => {
+    expect(isNetworkScanner(makeScanner({ type: "npm-audit", command: "npm audit --json" }))).toBe(true);
+    expect(isNetworkScanner(makeScanner({ type: "custom", command: "osv-scanner --format json ." }))).toBe(true);
+  });
+
+  it("returns false for gitleaks (local secret scan) and other kinds", () => {
+    expect(isNetworkScanner(makeScanner({ type: "gitleaks", command: "gitleaks detect" }))).toBe(false);
+    expect(isNetworkScanner(makeScanner({ type: "slither", command: "slither . --json -" }))).toBe(false);
+    expect(isNetworkScanner(makeScanner({ type: "semgrep", command: "semgrep --json ." }))).toBe(false);
+  });
 });

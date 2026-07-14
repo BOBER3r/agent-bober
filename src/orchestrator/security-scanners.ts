@@ -250,6 +250,178 @@ export function parseSemgrepOutput(json: unknown): SecurityFinding[] {
 }
 
 /**
+ * Parse `npm audit --json` output into SecurityFinding[].
+ *
+ * v7+ shape: `{ vulnerabilities: { <pkgName>: { name, severity, via: [...],
+ * range, nodes: [...], fixAvailable } }, metadata: {...} }`. `via` entries
+ * mix plain advisory-source strings and objects `{ title, url, severity }`
+ * in the same array — real npm output does this.
+ *
+ * v6 fallback shape: `{ advisories: { <id>: { module_name, severity, title,
+ * url } } }`. Both shapes are supported (whichever key is a well-formed
+ * object wins); neither present, or malformed -> [].
+ *
+ * All findings map to `vulnClass: "supply-chain"` (sc-7-2). Defensive
+ * narrowing at every level (Pattern A) — never throws.
+ */
+export function parseNpmAuditOutput(json: unknown): SecurityFinding[] {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return [];
+  const root = json as Record<string, unknown>;
+
+  const vulnerabilities = root.vulnerabilities;
+  if (vulnerabilities && typeof vulnerabilities === "object" && !Array.isArray(vulnerabilities)) {
+    const findings: SecurityFinding[] = [];
+    for (const [pkgName, raw] of Object.entries(vulnerabilities as Record<string, unknown>)) {
+      if (!raw || typeof raw !== "object") continue;
+      const v = raw as Record<string, unknown>;
+
+      const name = typeof v.name === "string" ? v.name : pkgName;
+      const severity = typeof v.severity === "string" ? v.severity : "unknown";
+      const range = typeof v.range === "string" ? v.range : "";
+
+      const via = Array.isArray(v.via) ? v.via : [];
+      const titles = via
+        .map((entry) => {
+          if (typeof entry === "string") return entry;
+          if (entry && typeof entry === "object" && typeof (entry as Record<string, unknown>).title === "string") {
+            return (entry as Record<string, unknown>).title as string;
+          }
+          return undefined;
+        })
+        .filter((t): t is string => typeof t === "string");
+      const summary = titles.length > 0 ? titles.join("; ") : `vulnerable range ${range || "unknown"}`;
+
+      const nodes = Array.isArray(v.nodes)
+        ? v.nodes.filter((n): n is string => typeof n === "string")
+        : [];
+      const path = nodes[0] ?? "package.json";
+
+      findings.push({
+        description: `[${severity}] ${name}: ${summary}`,
+        evidence: [{ path, line: 0, snippet: range || name }],
+        source: "npm-audit",
+        vulnClass: "supply-chain",
+      });
+    }
+    return findings;
+  }
+
+  const advisories = root.advisories;
+  if (advisories && typeof advisories === "object" && !Array.isArray(advisories)) {
+    const findings: SecurityFinding[] = [];
+    for (const raw of Object.values(advisories as Record<string, unknown>)) {
+      if (!raw || typeof raw !== "object") continue;
+      const a = raw as Record<string, unknown>;
+
+      const name = typeof a.module_name === "string" ? a.module_name : "unknown-package";
+      const severity = typeof a.severity === "string" ? a.severity : "unknown";
+      const title = typeof a.title === "string" ? a.title : "vulnerability";
+
+      findings.push({
+        description: `[${severity}] ${name}: ${title}`,
+        evidence: [{ path: "package.json", line: 0, snippet: name }],
+        source: "npm-audit",
+        vulnClass: "supply-chain",
+      });
+    }
+    return findings;
+  }
+
+  return [];
+}
+
+/**
+ * Parse `osv-scanner --format json` output into SecurityFinding[].
+ *
+ * Real shape: `{ results: [ { source: { path, type }, packages: [ {
+ * package: { name, ecosystem, version }, vulnerabilities: [ { id, summary,
+ * severity } ] } ] } ] }`. Every finding maps to `vulnClass: "supply-chain"`
+ * (sc-7-2). Defensive narrowing at every level (Pattern A) — never throws.
+ */
+export function parseOsvOutput(json: unknown): SecurityFinding[] {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return [];
+  const root = json as Record<string, unknown>;
+  const results = root.results;
+  if (!Array.isArray(results)) return [];
+
+  const findings: SecurityFinding[] = [];
+
+  for (const result of results) {
+    if (!result || typeof result !== "object") continue;
+    const r = result as Record<string, unknown>;
+
+    const source = r.source && typeof r.source === "object" ? (r.source as Record<string, unknown>) : {};
+    const path = typeof source.path === "string" ? source.path : "unknown";
+
+    const packages = Array.isArray(r.packages) ? r.packages : [];
+    for (const pkg of packages) {
+      if (!pkg || typeof pkg !== "object") continue;
+      const p = pkg as Record<string, unknown>;
+
+      const pkgInfo = p.package && typeof p.package === "object" ? (p.package as Record<string, unknown>) : {};
+      const pkgName = typeof pkgInfo.name === "string" ? pkgInfo.name : "unknown-package";
+
+      const vulns = Array.isArray(p.vulnerabilities) ? p.vulnerabilities : [];
+      for (const vuln of vulns) {
+        if (!vuln || typeof vuln !== "object") continue;
+        const vv = vuln as Record<string, unknown>;
+
+        const id = typeof vv.id === "string" ? vv.id : "unknown-id";
+        const summary = typeof vv.summary === "string" ? vv.summary : "no summary";
+
+        findings.push({
+          description: `[${id}] ${pkgName}: ${summary}`,
+          evidence: [{ path, line: 0, snippet: pkgName }],
+          source: "osv-scanner",
+          vulnClass: "supply-chain",
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Parse `gitleaks --report-format json` output into SecurityFinding[]. Its
+ * report is a TOP-LEVEL ARRAY (unlike npm-audit/osv-scanner's object root)
+ * of `{ Description, File, StartLine, EndLine, RuleID, Secret, Match,
+ * Commit }`.
+ *
+ * The raw `Secret` field is a live credential — it is NEVER echoed into a
+ * finding; `Match` (or a redacted placeholder) is used for the evidence
+ * snippet instead. Every finding maps to `vulnClass: "secret-handling"`
+ * (sc-7-2). Defensive narrowing at every level (Pattern A) — never throws.
+ */
+export function parseGitleaksOutput(json: unknown): SecurityFinding[] {
+  if (!Array.isArray(json)) return [];
+
+  const findings: SecurityFinding[] = [];
+
+  for (const item of json) {
+    if (!item || typeof item !== "object") continue;
+    const g = item as Record<string, unknown>;
+
+    const description = typeof g.Description === "string" ? g.Description : "Secret detected";
+    const ruleId = typeof g.RuleID === "string" ? g.RuleID : "unknown-rule";
+    const path = typeof g.File === "string" ? g.File : "unknown";
+    const line = typeof g.StartLine === "number" ? g.StartLine : 0;
+    // Never the raw `Secret` — `Match` is the closest thing to a redacted
+    // excerpt gitleaks provides; fall back to a placeholder if absent.
+    const snippet = typeof g.Match === "string" ? g.Match : "(redacted)";
+
+    findings.push({
+      description: `[${ruleId}] ${description}`,
+      evidence: [{ path, line, snippet }],
+      source: "gitleaks",
+      vulnClass: "secret-handling",
+    });
+  }
+
+  return findings;
+}
+
+/**
  * Fallback for unrecognized scanners: a single finding carrying a bounded
  * excerpt of the raw stdout, so an unmapped tool still contributes SOME
  * ground truth to the auditor prompt instead of being silently dropped.
@@ -273,12 +445,15 @@ function rawTextFallback(name: string, output: string): SecurityFinding[] {
 
 // ── Parser selection by scanner type/label/command ───────────────────
 
-type ScannerKind = "slither" | "semgrep" | "unknown";
+type ScannerKind = "slither" | "semgrep" | "npm-audit" | "osv-scanner" | "gitleaks" | "unknown";
 
 /**
- * Name/command-based parser selection (sc-5-4): a "slither" or "semgrep"
+ * Name/command-based parser selection (sc-5-4, widened sc-7-2): a
+ * "slither"/"semgrep"/"npm audit"/"npm-audit"/"osv-scanner"/"gitleaks"
  * substring anywhere in the strategy's type/label/command selects the
- * matching parser; anything else falls back to raw-text excerpting.
+ * matching parser; anything else falls back to raw-text excerpting. The
+ * longer "osv-scanner" literal is checked before the bare "osv" substring
+ * so a command like `osv-scanner --format json` matches unambiguously.
  */
 function detectScannerKind(scanner: EvalStrategy): ScannerKind {
   const haystack = [scanner.type, scanner.label, scanner.command]
@@ -288,6 +463,9 @@ function detectScannerKind(scanner: EvalStrategy): ScannerKind {
 
   if (haystack.includes("slither")) return "slither";
   if (haystack.includes("semgrep")) return "semgrep";
+  if (haystack.includes("npm audit") || haystack.includes("npm-audit")) return "npm-audit";
+  if (haystack.includes("osv-scanner") || haystack.includes("osv")) return "osv-scanner";
+  if (haystack.includes("gitleaks")) return "gitleaks";
   return "unknown";
 }
 
@@ -298,13 +476,60 @@ function parseScannerStdout(kind: ScannerKind, label: string, stdout: string): S
   try {
     json = JSON.parse(stdout);
   } catch {
-    // A scanner named "slither"/"semgrep" that didn't emit valid JSON (e.g.
+    // A scanner with a recognized kind that didn't emit valid JSON (e.g.
     // --json flag omitted, or a banner printed before the payload) degrades
     // to the raw-text fallback rather than silently dropping its output.
     return rawTextFallback(label, stdout);
   }
 
-  return kind === "slither" ? parseSlitherOutput(json) : parseSemgrepOutput(json);
+  switch (kind) {
+    case "slither":
+      return parseSlitherOutput(json);
+    case "npm-audit":
+      return parseNpmAuditOutput(json);
+    case "osv-scanner":
+      return parseOsvOutput(json);
+    case "gitleaks":
+      return parseGitleaksOutput(json);
+    case "semgrep":
+    default:
+      return parseSemgrepOutput(json);
+  }
+}
+
+// ── Exit-code convention per scanner kind (G9, sprint 7) ──────────────
+
+type ScannerExitPolicy = "zero-clean" | "nonzero-means-findings";
+
+/**
+ * Exit-code convention for a given scanner kind (G9). Most scanners (the
+ * default semgrep invocation, and unknown kinds) exit 0 on a clean run and
+ * nonzero on an internal error — nonzero legitimately means "discard, don't
+ * trust the output" (`'zero-clean'`). `npm-audit`/`osv-scanner`/`gitleaks`
+ * invert this: their OWN convention is to exit nonzero precisely WHEN they
+ * find something (vulnerabilities/secrets present), so a nonzero exit with
+ * valid stdout must still be parsed (`'nonzero-means-findings'`). semgrep
+ * has an optional `--error` flag with the same nonzero-on-findings
+ * convention, but it stays `'zero-clean'` by default here — flipping it
+ * would break the existing sc-5-2 isolation test, which asserts a nonzero
+ * semgrep exit yields no findings.
+ */
+function scannerExitPolicy(kind: ScannerKind): ScannerExitPolicy {
+  return kind === "npm-audit" || kind === "osv-scanner" || kind === "gitleaks"
+    ? "nonzero-means-findings"
+    : "zero-clean";
+}
+
+/**
+ * Whether a configured scanner requires network access to run (hits a
+ * remote registry or vulnerability database). Used by the supply-chain axis
+ * (sprint 7, security-auditor-agent.ts) to gate network-capable scanner
+ * kinds behind `config.security.egress.onlineResearch` — `gitleaks` is a
+ * purely local secret scan and is NOT gated.
+ */
+export function isNetworkScanner(scanner: EvalStrategy): boolean {
+  const kind = detectScannerKind(scanner);
+  return kind === "npm-audit" || kind === "osv-scanner";
 }
 
 // ── runScannerPreFilter ────────────────────────────────────────────────
@@ -363,14 +588,23 @@ async function runOneScanner(
   try {
     const result = await runner(cmd, args, { cwd: projectRoot, signal });
 
-    // bober: nonzero exit -> [] for this scanner, even for a tool whose own
-    // convention treats nonzero as "findings present" (e.g. semgrep --error).
-    // Operators wiring such a scanner should configure the command so the
-    // process itself exits 0; revisit per-scanner exit-code conventions if
-    // this proves too coarse.
-    if (result.exitCode !== 0 || result.failed) {
+    // G9 fix: distinguish "the process could not even be spawned"
+    // (exitCode undefined -- ENOENT/spawn failure) from "the process ran
+    // and exited nonzero". Only the former is unconditionally discarded.
+    const spawnFailed = result.exitCode === undefined;
+    if (spawnFailed) {
+      logger.debug(`[security-scanners] scanner "${label}" failed to spawn — no findings contributed`);
+      return [];
+    }
+
+    // Scanners whose OWN convention treats nonzero as "findings present"
+    // (npm-audit/osv-scanner/gitleaks — scannerExitPolicy) still have their
+    // stdout parsed on a nonzero-but-defined exit code; everything else
+    // (including semgrep's default 0-clean convention) is discarded on any
+    // nonzero/failed exit, exactly as before.
+    if (scannerExitPolicy(kind) === "zero-clean" && (result.exitCode !== 0 || result.failed)) {
       logger.debug(
-        `[security-scanners] scanner "${label}" exited ${result.exitCode ?? "unknown"} (failed=${result.failed}) — no findings contributed`,
+        `[security-scanners] scanner "${label}" exited ${result.exitCode} (failed=${result.failed}) — no findings contributed`,
       );
       return [];
     }
