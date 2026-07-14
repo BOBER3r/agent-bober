@@ -12,16 +12,48 @@ export type VulnClass =
   | "secret-handling"
   | "input-validation"
   | "path-traversal"
-  | "privilege-escalation";
+  | "privilege-escalation"
+  | "race-condition"
+  | "money-integrity"
+  | "ssrf"
+  | "xss"
+  | "insecure-randomness"
+  | "crypto-weakness"
+  | "deserialization"
+  | "supply-chain"
+  | "idor-bola"
+  | "denial-of-service"
+  | "audit-logging";
+
+// ── Structured finding metadata ────────────────────────────────────────
+
+/** Severity rating an auditor/scanner may attach to a SecurityFinding. */
+export type FindingSeverity = "critical" | "high" | "medium" | "low" | "info";
+
+/** How confident the auditor/scanner is that the finding is a true positive. */
+export type FindingConfidence = "confirmed" | "firm" | "tentative";
+
+/** A source-to-sink taint path backing a finding, when one was traced. */
+export interface TaintPath {
+  source: string;
+  sink: string;
+  sanitizerPresent: boolean;
+}
 
 // ── Wrapper types over the LOCKED ReviewResult/ReviewFinding ──────────
 
 /**
  * A security-specific finding. Extends the locked ReviewFinding shape with
- * an optional vulnClass tag — never redefines ReviewFinding's fields.
+ * an optional vulnClass tag plus optional structured metadata — never
+ * redefines ReviewFinding's fields.
  */
 export interface SecurityFinding extends ReviewFinding {
   vulnClass?: VulnClass;
+  cwe?: string;
+  severity?: FindingSeverity;
+  confidence?: FindingConfidence;
+  taint?: TaintPath;
+  signatureId?: string;
 }
 
 /**

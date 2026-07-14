@@ -31,9 +31,11 @@ export interface StackSecurityContext {
 // ── Taxonomy ───────────────────────────────────────────────────────
 
 /**
- * Every VulnClass value (sprint-1 union, security-audit-types.ts:9-15).
- * The taxonomy does not vary by stack — it is the fixed classification
- * backbone every audit is organised against.
+ * Every VulnClass value (security-audit-types.ts:9-25, widened sprint-1 of
+ * spec-20260714-security-auditor-per-stack-skills). The taxonomy does not
+ * vary by stack — it is the fixed classification backbone every audit is
+ * organised against. Must stay in lockstep with the VulnClass union — see
+ * security-audit-types.test.ts's lockstep assertion.
  */
 export const ALL_VULN_CLASSES: VulnClass[] = [
   "injection",
@@ -42,6 +44,17 @@ export const ALL_VULN_CLASSES: VulnClass[] = [
   "input-validation",
   "path-traversal",
   "privilege-escalation",
+  "race-condition",
+  "money-integrity",
+  "ssrf",
+  "xss",
+  "insecure-randomness",
+  "crypto-weakness",
+  "deserialization",
+  "supply-chain",
+  "idor-bola",
+  "denial-of-service",
+  "audit-logging",
 ];
 
 // ── Stack detection ────────────────────────────────────────────────

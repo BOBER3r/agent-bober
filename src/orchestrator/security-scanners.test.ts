@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { readFile } from "node:fs/promises";
 import type { EvalStrategy } from "../config/schema.js";
+import type { VulnClass } from "./security-audit-types.js";
 import type { ScannerRunner, ScannerRunResult } from "./security-scanners.js";
 import {
   parseSlitherOutput,
@@ -109,6 +110,50 @@ describe("parseSemgrepOutput — sc-5-1", () => {
     expect(parseSemgrepOutput({})).toEqual([]);
     expect(parseSemgrepOutput([1, 2, 3])).toEqual([]);
     expect(parseSemgrepOutput({ results: "nope" })).toEqual([]);
+  });
+});
+
+// ── sc-1-3: inferVulnClass — new taxonomy mappings ───────────────────
+
+/** Minimal semgrep-shaped payload driving inferVulnClass through the exported parser. */
+function semgrepFor(checkId: string): unknown {
+  return {
+    results: [
+      { check_id: checkId, path: "a.ts", start: { line: 1 }, extra: {} },
+    ],
+  };
+}
+
+describe("inferVulnClass — sc-1-3 new taxonomy mappings", () => {
+  it.each<[string, VulnClass]>([
+    ["generic.race-condition.rule", "race-condition"],
+    ["security.toctou-check", "race-condition"],
+    ["generic.ssrf.rule", "ssrf"],
+    ["security.server-side-request-forgery", "ssrf"],
+    ["generic.insecure-random.rule", "insecure-randomness"],
+    ["generic.weak-random.rule", "insecure-randomness"],
+    ["generic.weak-crypto-md5", "crypto-weakness"],
+    ["generic.weak-crypto-sha1", "crypto-weakness"],
+    ["generic.weak-cipher.rule", "crypto-weakness"],
+    ["generic.deserialization.unsafe", "deserialization"],
+    ["python.pickle.unmarshal", "deserialization"],
+    ["generic.idor.rule", "idor-bola"],
+    ["generic.bola.rule", "idor-bola"],
+    ["generic.dos.resource-exhaustion", "denial-of-service"],
+    ["generic.denial-of-service.rule", "denial-of-service"],
+  ])("check_id %j -> vulnClass %j", (checkId, expected) => {
+    const [finding] = parseSemgrepOutput(semgrepFor(checkId));
+    expect(finding.vulnClass).toBe(expected);
+  });
+
+  it("an unrecognized check id maps to undefined (never a forced wrong class)", () => {
+    const [finding] = parseSemgrepOutput(semgrepFor("generic.totally-unmapped-rule"));
+    expect(finding.vulnClass).toBeUndefined();
+  });
+
+  it("reentrancy stays unmapped even with the widened taxonomy (not forced)", () => {
+    const [finding] = parseSemgrepOutput(semgrepFor("generic.reentrancy-eth.rule"));
+    expect(finding.vulnClass).toBeUndefined();
   });
 });
 

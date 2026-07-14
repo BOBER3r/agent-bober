@@ -63,14 +63,24 @@ const IMPORTANT_URGENCY = 3;
 /**
  * Build one hub Finding per SecurityFinding in a bucket.
  *
- * `title` is STABLE — vulnClass + the first evidence entry's path:line
- * only. It must NEVER embed the free-text description: the Finding `id` is
- * derived from `domain|title|kind`, so a title that varies across retries
- * would mint a new id every time and defeat the hub's content-hash dedup
- * (sc-6-3). The description instead lands in `evidence[]` — FindingSchema
- * has no `body` field, and its `evidence` is `z.array(z.string())` (finding.
- * ts:17), NOT the `{path,line,snippet}[]` shape a SecurityFinding carries —
- * so each evidence entry is flattened to a string.
+ * `title` is STABLE — vulnClass + a discriminator + the first evidence
+ * entry's path:line. It must NEVER embed the free-text description
+ * verbatim: the Finding `id` is derived from `domain|title|kind`, so a
+ * title that varies across retries would mint a new id every time and
+ * defeat the hub's content-hash dedup (sc-6-3).
+ *
+ * The discriminator (`#${...}`) fixes a title collision (G10): two
+ * DIFFERENT vulnerabilities of the same vulnClass at the same path:line
+ * used to hash to the SAME id and silently overwrite each other. It
+ * prefers `signatureId`, then `cwe`, then falls back to a short stable
+ * hash of the finding's own `description` — content-derived so identical
+ * retries (same description) still resolve to the same discriminator and
+ * dedup, while two distinct descriptions diverge into distinct ids.
+ *
+ * The description itself still lands in `evidence[]` — FindingSchema has
+ * no `body` field, and its `evidence` is `z.array(z.string())` (finding.
+ * ts:17), NOT the `{path,line,snippet}[]` shape a SecurityFinding
+ * carries — so each evidence entry is flattened to a string.
  */
 function mapBucket(
   findings: SecurityFinding[],
@@ -83,7 +93,11 @@ function mapBucket(
     const primaryEvidence = finding.evidence[0];
     const path = primaryEvidence?.path ?? "unknown";
     const line = primaryEvidence?.line ?? 0;
-    const title = `[security] ${finding.vulnClass ?? "vulnerability"} at ${path}:${line}`;
+    const discriminator =
+      finding.signatureId ??
+      finding.cwe ??
+      createHash("sha256").update(finding.description).digest("hex").slice(0, 8);
+    const title = `[security] ${finding.vulnClass ?? "vulnerability"} #${discriminator} at ${path}:${line}`;
 
     const evidence: string[] = [
       finding.description,
@@ -103,6 +117,10 @@ function mapBucket(
         "security",
         ...(finding.vulnClass ? [`vuln:${finding.vulnClass}`] : []),
         `stack:${stack}`,
+        ...(finding.cwe ? [`cwe:${finding.cwe}`] : []),
+        ...(finding.severity ? [`severity:${finding.severity}`] : []),
+        ...(finding.confidence ? [`confidence:${finding.confidence}`] : []),
+        ...(finding.signatureId ? [`sig:${finding.signatureId}`] : []),
       ],
       status: "open",
     };

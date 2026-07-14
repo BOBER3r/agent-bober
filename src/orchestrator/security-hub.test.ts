@@ -19,6 +19,7 @@
  *   step, not a unit test — see the sprint's verification commands.)
  */
 
+import { createHash } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -114,7 +115,11 @@ describe("mapAuditToFindings — sc-6-1", () => {
       NOW,
     );
     expect(finding).toBeDefined();
-    expect(finding!.title).toBe("[security] injection at src/db.ts:88");
+    const discriminator = createHash("sha256")
+      .update(criticalFinding.description)
+      .digest("hex")
+      .slice(0, 8);
+    expect(finding!.title).toBe(`[security] injection #${discriminator} at src/db.ts:88`);
     expect(finding!.title).not.toContain(criticalFinding.description);
     expect(finding!.evidence).toContain(criticalFinding.description);
     expect(finding!.evidence.some((e) => e.includes("src/db.ts:88"))).toBe(true);
@@ -137,7 +142,8 @@ describe("mapAuditToFindings — sc-6-1", () => {
     const bare: SecurityFinding = { description: "Unclassified issue", evidence: [] };
     const [finding] = mapAuditToFindings(makeResult({ review: { critical: [bare] } }), NOW);
     expect(finding).toBeDefined();
-    expect(finding!.title).toBe("[security] vulnerability at unknown:0");
+    const discriminator = createHash("sha256").update(bare.description).digest("hex").slice(0, 8);
+    expect(finding!.title).toBe(`[security] vulnerability #${discriminator} at unknown:0`);
     expect(finding!.tags).toEqual(["security", "stack:node"]);
     expect(finding!.evidence).toEqual(["Unclassified issue"]);
   });
@@ -154,6 +160,72 @@ describe("mapAuditToFindings — sc-6-1", () => {
       },
     });
     expect(mapAuditToFindings(result, NOW)).toEqual([]);
+  });
+});
+
+// ── sc-1-4: hub id collision fix (G10) ──────────────────────────────────
+
+describe("mapAuditToFindings — sc-1-4 hub id collision fix", () => {
+  it("two DIFFERENT vulns of the same vulnClass at the same path:line produce two DISTINCT ids", () => {
+    const findingA: SecurityFinding = {
+      description: "SQL injection in the login handler",
+      evidence: [{ path: "src/db.ts", line: 88, snippet: "query(a)" }],
+      vulnClass: "injection",
+      signatureId: "sig-aaa",
+    };
+    const findingB: SecurityFinding = {
+      description: "SQL injection in the search handler",
+      evidence: [{ path: "src/db.ts", line: 88, snippet: "query(b)" }],
+      vulnClass: "injection",
+      signatureId: "sig-bbb",
+    };
+
+    const findings = mapAuditToFindings(
+      makeResult({ review: { critical: [findingA, findingB] } }),
+      NOW,
+    );
+
+    expect(findings).toHaveLength(2);
+    expect(findings[0]!.id).not.toBe(findings[1]!.id);
+    expect(findings[0]!.title).toContain("#sig-aaa");
+    expect(findings[1]!.title).toContain("#sig-bbb");
+    expect(findings[0]!.tags).toContain("sig:sig-aaa");
+    expect(findings[1]!.tags).toContain("sig:sig-bbb");
+  });
+
+  it("a retried identical finding (no signatureId/cwe) still dedups to the same id via the description hash", () => {
+    const finding: SecurityFinding = {
+      description: "SQL injection in the login handler",
+      evidence: [{ path: "src/db.ts", line: 88, snippet: "query(a)" }],
+      vulnClass: "injection",
+    };
+
+    const [first] = mapAuditToFindings(makeResult({ review: { critical: [finding] } }), NOW);
+    const [retried] = mapAuditToFindings(makeResult({ review: { critical: [finding] } }), LATER);
+
+    expect(first!.id).toBe(retried!.id);
+  });
+
+  it("cwe/severity/confidence tags are appended only when present, preserving the 3-tag shape otherwise", () => {
+    const finding: SecurityFinding = {
+      description: "SSRF via unvalidated outbound URL",
+      evidence: [{ path: "src/fetch.ts", line: 20, snippet: "fetch(userUrl)" }],
+      vulnClass: "ssrf",
+      cwe: "CWE-918",
+      severity: "high",
+      confidence: "firm",
+    };
+
+    const [mapped] = mapAuditToFindings(makeResult({ review: { critical: [finding] } }), NOW);
+
+    expect(mapped!.tags).toEqual([
+      "security",
+      "vuln:ssrf",
+      "stack:node",
+      "cwe:CWE-918",
+      "severity:high",
+      "confidence:firm",
+    ]);
   });
 });
 
