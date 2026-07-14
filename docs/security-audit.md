@@ -149,11 +149,13 @@ materialized-but-disabled section.
 | `standaloneBlockOn` | `"critical" \| "important"` | `"critical"` | CLI-only blocking threshold for `bober security-audit`'s exit code. The pipeline gate ignores this key entirely — its veto is always critical-only. |
 | `hub` | `boolean` | `true` | Whether critical/important findings are emitted into the priority hub after the verdict is computed (see "Hub Emission" below). `false` means zero hub writes. |
 | `diff` | `{ mode, baseRef?, expandWithGraph }` (optional) | unset | Opt-in real-diff provider (sprint 6). Omitted entirely ⇒ byte-identical to `estimated-files` behavior. See the sub-table below. |
+| `supplyChain` | `{ enabled, scanners }` (optional) | unset | Opt-in supply-chain/dependency/secret axis (sprint 7). Omitted entirely ⇒ byte-identical (nothing runs). See the sub-table below. |
+| `egress` | `{ onlineResearch }` (optional) | unset | Egress axis gating network-capable supply-chain scanners (sprint 7). Omitted entirely ⇒ byte-identical; network scanners stay off. See the sub-table below. |
 
-`provider`/`endpoint`/`providerConfig`/`budget`/`diff` are the only fields with **no**
-default — a config that sets `security: { enabled: true }` (or any subset that omits
-these) parses without them present in the materialized object at all; every
-other field always materializes to its default.
+`provider`/`endpoint`/`providerConfig`/`budget`/`diff`/`supplyChain`/`egress` are the
+only fields with **no** default — a config that sets `security: { enabled: true }` (or
+any subset that omits these) parses without them present in the materialized object at
+all; every other field always materializes to its default.
 
 The optional `security.diff` object (`SecurityDiffConfigSchema`) has its own fields:
 
@@ -167,6 +169,30 @@ Even in `git-diff` mode the auditor toolset stays read-only — `git` runs only 
 orchestrator Node ([ADR-5](../.bober/architecture/arch-20260714-security-auditor-per-stack-skills-adr-5.md)) —
 and any git failure or an empty diff degrades to `estimated-files` behavior (never
 throws, no regression).
+
+The optional `security.supplyChain` object (`SecuritySupplyChainConfigSchema`, sprint 7)
+turns on the supply-chain / dependency / secret axis:
+
+| Field | Type | Default | Effect |
+|---|---|---|---|
+| `enabled` | `boolean` | `false` | When `true`, `runSecurityAudit` folds the supply-chain scanner pre-filter **and** the always-available offline diff inspector into the finder's priors. When `false`/omitted, none of the axis runs. |
+| `scanners` | `EvalStrategy[]` | `[]` | Opt-in supply-chain scanner strategies, reusing the same `EvalStrategy` shape as `security.scanners`. `npm-audit`/`osv-scanner`/`gitleaks` are recognized by a `type`/`label`/`command` substring. Network-capable kinds (`npm-audit`/`osv-scanner`) run **only** when `egress.onlineResearch` is `true`; `gitleaks` (local) runs regardless. |
+
+The offline **`SupplyChainDiffInspector`** (`src/orchestrator/security-knowledge/supply-chain-inspector.ts`)
+runs whenever `supplyChain.enabled` and a real `AuditDiff` is present — **even with zero
+scanners configured**. It is a pure, never-throwing, **zero-network, zero-`node:fs`** fold
+over the diff's added lines and flags six patterns: obfuscated `package.json` lifecycle
+scripts (`preinstall`/`install`/`postinstall`/`prepare` with base64/hex/eval/`child_process`/
+`curl`/`wget`), a lockfile `resolved` host that is not a known registry, a `.npmrc` registry
+override or `ignore-scripts=false`, a new dependency with no matching import in the diff, CI
+using `npm install` instead of `npm ci`, and a GitHub Action pinned by tag/branch instead of a
+full commit SHA.
+
+The optional `security.egress` object (`SecurityEgressConfigSchema`, sprint 7) gates network:
+
+| Field | Type | Default | Effect |
+|---|---|---|---|
+| `onlineResearch` | `boolean` | `false` | Fail-safe opt-in. Only when `true` are the network-capable supply-chain scanners (`npm-audit`/`osv-scanner`, which hit a remote registry / vulnerability DB) invoked. Default `false` keeps every supply-chain code path offline (the inspector and `gitleaks` never touch the network anyway). |
 
 **Annotated example** (mirrors the README's config-reference block):
 
@@ -183,6 +209,13 @@ throws, no regression).
   "diff": {                             // Optional (sprint 6). Omit entirely => byte-identical estimated-files behavior. git runs ONLY in orchestrator Node (ADR-5) — auditor stays read-only.
     "mode": "estimated-files",          // 'git-diff' computes a real AuditDiff (60-file/256KB caps) and feeds the actual changed hunks to the selector + finder. Never the default; empty diff / git failure ⇒ estimated-files fallback.
     "expandWithGraph": false            // 'git-diff' only: when true AND the tokensave graph is ready, add a call-graph neighborhood. baseRef?: optional ref (default: merge-base w/ default branch, else HEAD~1).
+  },
+  "supplyChain": {                      // Optional (sprint 7). Omit entirely => the whole axis is off (byte-identical). Findings fold into the finder's priors (ADR-4), not a new LLM role.
+    "enabled": false,                   // When true: fold the supply-chain scanner pre-filter + the always-available OFFLINE diff inspector (6 checks, zero network) into priors.
+    "scanners": []                      // Supply-chain scanner EvalStrategy[] (npm-audit/osv-scanner/gitleaks, detected by substring). npm-audit/osv-scanner run ONLY when egress.onlineResearch=true; gitleaks (local) runs regardless.
+  },
+  "egress": {                           // Optional (sprint 7). Omit entirely => network scanners stay off (byte-identical).
+    "onlineResearch": false             // Fail-safe opt-in. Only when true are the network-capable supply-chain scanners (npm-audit/osv-scanner) invoked. The offline inspector + gitleaks never touch the network.
   }
 }
 ```
@@ -243,13 +276,21 @@ Both parsers (`parseSlitherOutput` / `parseSemgrepOutput`) are pure and
 fixture-tested — no binaries are required in CI to exercise the parsing logic itself,
 only to actually run a live scan.
 
-**Per-scanner isolation:** a missing binary, a thrown error, or **any** nonzero exit
-code yields `[]` for that scanner only and never affects the others or aborts the
-audit. This means tools whose own convention treats nonzero exit as "findings found"
-(e.g. `semgrep --error`) must be configured to exit `0` — otherwise their output is
-silently discarded rather than parsed. Scanners run under the shared audit
-`AbortSignal` with `killSignal: "SIGKILL"`, so an aborted/timed-out scan cannot linger
-and partial findings from already-finished scanners are preserved.
+**Per-scanner isolation:** a missing binary (ENOENT), a thrown error, or an abort yields
+`[]` for that scanner only and never affects the others or aborts the audit. Scanners run
+under the shared audit `AbortSignal` with `killSignal: "SIGKILL"`, so an aborted/timed-out
+scan cannot linger and partial findings from already-finished scanners are preserved.
+
+**Exit-code convention (G9, sprint 7):** the handling of a *nonzero* exit is now
+per-scanner-kind (`scannerExitPolicy`). For `slither`, the default `semgrep` invocation,
+and any unrecognized kind (`"zero-clean"`), a nonzero/failed exit still discards the output
+— so `semgrep --error` (whose own convention treats nonzero as "findings found") must still
+be configured to exit `0`. For `npm-audit`/`osv-scanner`/`gitleaks` (`"nonzero-means-findings"`),
+whose OWN convention is to exit nonzero precisely when they find something, the stdout is
+parsed even on a nonzero-but-defined exit — only a genuine spawn failure (`exitCode` undefined:
+ENOENT / could-not-spawn) is discarded. These three kinds are wired through the sprint-7
+supply-chain axis (`security.supplyChain`, see the Configuration Reference); `semgrep` is left
+`"zero-clean"` by design so the existing isolation behavior is unchanged.
 
 ---
 
@@ -369,8 +410,21 @@ prompt. The provider **never throws** — any git failure (no repo, no `git` bin
 output) degrades to an empty diff, which falls back to `estimatedFiles` behavior with no regression.
 Crucially the auditor toolset stays read-only: **git runs only in orchestrator Node, never as an
 auditor tool** ([ADR-5](../.bober/architecture/arch-20260714-security-auditor-per-stack-skills-adr-5.md)).
-This closes **G4**. The supply-chain scanners + offline inspector (sprint 7) and the fresh-context
-finding **verifier** (sprint 8) remain the next items. See the [sprint records](./sprints/README.md)
+This closes **G4**.
+
+**As of sprint 7 the supply-chain / dependency / secret axis exists** (`config.security.supplyChain`,
+default off), closing **G5** and **G9**. A per-kind `scannerExitPolicy` fixes **G9**:
+`npm-audit`/`osv-scanner`/`gitleaks` — whose own convention is to exit nonzero *precisely when they
+find something* — now have their stdout parsed on a nonzero-but-defined exit (a genuine spawn failure
+still yields `[]`), while `semgrep` stays `"zero-clean"`. Three new pure/total parsers
+(`parseNpmAuditOutput`/`parseOsvOutput`/`parseGitleaksOutput`) map into `supply-chain` (or
+`secret-handling` for gitleaks) findings. An always-available **offline `SupplyChainDiffInspector`**
+(zero network, zero `node:fs`, never throws) folds six risk patterns over the diff — obfuscated
+lifecycle scripts, lockfile host mismatch, `.npmrc` overrides, a new dep with no import, CI
+`npm install` vs `npm ci`, and tag-vs-SHA-pinned GitHub Actions. All findings feed the finder's
+priors (ADR-4 — not a new LLM role); network-capable scanners run only behind
+`config.security.egress.onlineResearch` (default off). The fresh-context finding **verifier**
+(sprint 8) remains the last major feature. See the [sprint records](./sprints/README.md)
 for the authoring format and per-sprint detail.
 
 ---
