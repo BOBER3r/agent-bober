@@ -298,6 +298,24 @@ clean one:
 
 ---
 
+## Roadmap: per-stack signature libraries (in progress)
+
+An in-progress upgrade (`spec-20260714-security-auditor-per-stack-skills`) is building a
+registry of hand-authored, per-stack **security signature libraries** to give the auditor
+concrete vulnerable/safe code exemplars per technology (Solidity, Anchor, React, Node,
+payments, iGaming, DEX-backend, plus a shared `generic` OWASP/CWE library). Each library is
+a `skills/bober.security-<stack>/SKILL.md` file of discrete labelled **signature blocks**
+(`signatureId`, title, CWE, severity, `VulnClass`, invariant, unsafe/safe examples,
+keywords), read by a pure, total `SecuritySignatureParser`
+(`src/orchestrator/security-knowledge/`). As of the foundation sprints, the widened
+taxonomy, the `SecuritySignature` type + parser, and the first
+[`bober.security-generic`](../skills/bober.security-generic/SKILL.md) library exist and
+are tested, **but are not yet wired into `runSecurityAudit`** — the audit behavior described
+above is unchanged until the index/selector sprint lands. See the
+[sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
+
+---
+
 ## FAQ
 
 **What happens if the audit times out?**
