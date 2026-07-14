@@ -1,4 +1,8 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, it, expect } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import Database from "better-sqlite3";
 import { FactStore, factId } from "./facts.js";
 
 // ── FactStore (in-memory) ─────────────────────────────────────────────
@@ -101,5 +105,101 @@ describe("FactStore (in-memory)", () => {
     expect(store.invalidateFact(id, "2026-06-17T00:00:00.000Z")).toBe(false);
     // Unknown id → false
     expect(store.invalidateFact("nonexistent-id-1234", "2026-06-17T00:00:00.000Z")).toBe(false);
+  });
+});
+
+// ── FactStore (readonly flag — sc-2-1) ───────────────────────────────
+
+describe("FactStore (readonly flag)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-facts-ro-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("readonly:true opens read-only and skips CREATE TABLE (sc-2-1)", () => {
+    const p = join(tmpDir, "ro.db");
+    const T = "2026-06-28T00:00:00.000Z";
+    // seed via writable store first
+    const w = new FactStore(p);
+    w.insertFact({
+      scope: "s",
+      subject: "x",
+      predicate: "finding",
+      value: "v",
+      confidence: 1,
+      sourceRunId: null,
+      tValid: T,
+      tCreated: T,
+    });
+    w.close();
+    // open readonly
+    const ro = new FactStore(p, { readonly: true });
+    // reads succeed
+    expect(ro.getActiveFacts("s")).toHaveLength(1);
+    // writes are rejected by better-sqlite3 (SQLITE_READONLY)
+    expect(() =>
+      ro.invalidateFact("nope", T),
+    ).toThrow();
+    ro.close();
+  });
+
+  it("no-flag path is byte-identical: default FactStore still creates the table (sc-2-1)", () => {
+    const p = join(tmpDir, "default.db");
+    const T = "2026-06-28T00:00:00.000Z";
+    const store = new FactStore(p);
+    // table was created — insert succeeds
+    const rec = store.insertFact({
+      scope: "s",
+      subject: "y",
+      predicate: "finding",
+      value: "w",
+      confidence: 1,
+      sourceRunId: null,
+      tValid: T,
+      tCreated: T,
+    });
+    expect(rec).toBeDefined();
+    store.close();
+  });
+});
+
+// ── FactStore (default journal mode regression — sc-1-7) ──────────────
+
+describe("FactStore (default journal mode regression)", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-facts-jm-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("default FactStore (no opts) does NOT enable WAL mode", () => {
+    const dbPath = join(tmpDir, "default.db");
+    const store = new FactStore(dbPath);
+    // Read journal_mode via a second raw connection to avoid needing a getter
+    const raw = new Database(dbPath);
+    const mode = raw.pragma("journal_mode", { simple: true });
+    raw.close();
+    store.close();
+    // Default SQLite journal mode is 'delete'; must not be 'wal'
+    expect(mode).not.toBe("wal");
+  });
+
+  it("FactStore with journalModeWal:true reports WAL mode", () => {
+    const dbPath = join(tmpDir, "wal.db");
+    const store = new FactStore(dbPath, { journalModeWal: true });
+    const raw = new Database(dbPath);
+    const mode = raw.pragma("journal_mode", { simple: true });
+    raw.close();
+    store.close();
+    expect(mode).toBe("wal");
   });
 });

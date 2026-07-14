@@ -50,7 +50,19 @@ interface GeminiFunctionResponsePart {
   };
 }
 
-type GeminiPart = GeminiTextPart | GeminiFunctionCallPart | GeminiFunctionResponsePart;
+/** Inline binary data (e.g. a base64 PDF) carried as a Gemini content part. */
+interface GeminiInlineDataPart {
+  inlineData: {
+    mimeType: string;
+    data: string;
+  };
+}
+
+type GeminiPart =
+  | GeminiTextPart
+  | GeminiFunctionCallPart
+  | GeminiFunctionResponsePart
+  | GeminiInlineDataPart;
 
 interface GeminiContent {
   role: "user" | "model" | "function";
@@ -193,6 +205,31 @@ function toGeminiContents(message: Message): GeminiContent[] {
 }
 
 /**
+ * Attach `documents` to the FIRST user content as Gemini `inlineData` parts.
+ *
+ * The existing text parts are preserved after the data parts. Mutates
+ * `contents` in place. When `documents` is empty the caller skips this
+ * entirely, leaving the request byte-identical.
+ */
+function attachGeminiDocuments(
+  contents: GeminiContent[],
+  documents: { base64: string; mediaType: string }[],
+): void {
+  const firstUserIdx = contents.findIndex((c) => c.role === "user");
+  if (firstUserIdx === -1) {
+    return;
+  }
+  const firstUser = contents[firstUserIdx];
+  const dataParts: GeminiInlineDataPart[] = documents.map((doc) => ({
+    inlineData: { mimeType: doc.mediaType, data: doc.base64 },
+  }));
+  contents[firstUserIdx] = {
+    ...firstUser,
+    parts: [...dataParts, ...firstUser.parts],
+  };
+}
+
+/**
  * Extract normalized text and tool calls from Gemini response parts.
  */
 function normalizeResponseParts(parts: GeminiPart[]): {
@@ -287,6 +324,9 @@ export class GoogleAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // this adapter always uses the non-streaming generateContent call, so
+    // there is nothing extra on the wire (documented no-op).
     const {
       model,
       system,
@@ -316,6 +356,12 @@ export class GoogleAdapter implements LLMClient {
 
     // Convert provider-agnostic Message[] to Gemini contents format
     const contents: GeminiContent[] = messages.flatMap(toGeminiContents);
+
+    // Documents (PDFs/files) → `inlineData` part on the first user content.
+    // Omitting documents leaves the rendered request byte-identical.
+    if (params.documents && params.documents.length > 0) {
+      attachGeminiDocuments(contents, params.documents);
+    }
 
     // Convert ToolDef[] to Gemini tools format (all declarations in one tool).
     // responseSchema is mutually exclusive with tools — when set, user tools

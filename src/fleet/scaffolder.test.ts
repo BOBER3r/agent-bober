@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BoberConfigSchema } from "../config/schema.js";
+import { buildChildConfig } from "./child-config.js";
 import { ChildScaffolder } from "./scaffolder.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -75,6 +76,51 @@ describe("ChildScaffolder.scaffold() — non-empty pre-existing folder", () => {
       configStat = undefined;
     }
     expect(configStat).toBeUndefined();
+  });
+});
+
+// ── Blackboard injection (sc-2-5) ────────────────────────────────────
+
+describe("ChildScaffolder.scaffold() — blackboard injection (sc-2-5)", () => {
+  it("writes fleet section with correct subject and abs path when blackboard is provided", async () => {
+    const scaffolder = new ChildScaffolder();
+    const blackboard = {
+      dbPath: "/abs/shared/.bober/memory/ns/facts.db",
+      namespace: "ns",
+      maxRounds: 3,
+    };
+    const testChild = { folder: "child-blackboard", task: "build feature" };
+    const result = await scaffolder.scaffold(tmpDir, testChild, blackboard);
+
+    expect(result.configWritten).toBe(true);
+
+    const raw = await readFile(join(result.absPath, "bober.config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    const config = BoberConfigSchema.parse(parsed);
+
+    expect(config.fleet).toBeDefined();
+    expect(config.fleet?.blackboardSubject).toBe("child-blackboard");
+    expect(config.fleet?.blackboardDbPath).toBe("/abs/shared/.bober/memory/ns/facts.db");
+    expect(config.fleet?.blackboardNamespace).toBe("ns");
+    expect(config.fleet?.maxRounds).toBe(3);
+  });
+
+  it("omits fleet key entirely (byte-identical to prior) when no blackboard is provided (sc-2-8)", async () => {
+    const scaffolder = new ChildScaffolder();
+    const testChild = { folder: "child-no-blackboard", task: "build feature" };
+    const result = await scaffolder.scaffold(tmpDir, testChild);
+
+    expect(result.configWritten).toBe(true);
+
+    const raw = await readFile(join(result.absPath, "bober.config.json"), "utf-8");
+    const parsedRaw = JSON.parse(raw) as Record<string, unknown>;
+
+    // No fleet key written
+    expect(parsedRaw["fleet"]).toBeUndefined();
+
+    // Byte-identical to JSON.stringify(buildChildConfig(child), null, 2)
+    const expected = JSON.stringify(buildChildConfig(testChild), null, 2);
+    expect(raw).toBe(expected);
   });
 });
 

@@ -21,6 +21,8 @@ export interface BudgetOptions {
   maxTokens?: number | null;
   /** Max agent executions charged to this budget. `null`/omitted = unlimited. */
   maxAgents?: number | null;
+  /** Max total USD cost charged to this budget. `null`/omitted = unlimited. */
+  maxUsd?: number | null;
 }
 
 /** Raised by {@link Budget.assertWithinBudget} when a ceiling is exceeded. */
@@ -28,7 +30,7 @@ export class BudgetExceededError extends Error {
   constructor(
     message: string,
     /** Which ceiling was hit. */
-    readonly kind: "tokens" | "agents",
+    readonly kind: "tokens" | "agents" | "usd",
   ) {
     super(message);
     this.name = "BudgetExceededError";
@@ -39,6 +41,7 @@ export class Budget {
   private inputTokens = 0;
   private outputTokens = 0;
   private agents = 0;
+  private usd = 0;
 
   constructor(private readonly opts: BudgetOptions = {}) {}
 
@@ -53,6 +56,17 @@ export class Budget {
     this.agents += n;
   }
 
+  /**
+   * Record a USD charge. Non-finite (`NaN`, `Infinity`, `-Infinity`) or
+   * negative values are treated as 0 (no-op) rather than corrupting the
+   * running total — a malformed/absent `costUsd` must never crash or
+   * silently under/over-charge the budget.
+   */
+  chargeUsd(usd: number): void {
+    if (!Number.isFinite(usd) || usd < 0) return;
+    this.usd += usd;
+  }
+
   /** Total tokens spent (input + output). */
   get tokensSpent(): number {
     return this.inputTokens + this.outputTokens;
@@ -61,6 +75,11 @@ export class Budget {
   /** Agent executions charged so far. */
   get agentsSpent(): number {
     return this.agents;
+  }
+
+  /** Total USD charged so far. */
+  get usdSpent(): number {
+    return this.usd;
   }
 
   /** Remaining token headroom, or `Infinity` when uncapped. */
@@ -77,9 +96,20 @@ export class Budget {
     return Math.max(0, max - this.agents);
   }
 
+  /** Remaining USD headroom, or `Infinity` when uncapped. */
+  remainingUsd(): number {
+    const max = this.opts.maxUsd;
+    if (max === null || max === undefined) return Infinity;
+    return Math.max(0, max - this.usd);
+  }
+
   /** True once any configured ceiling has been reached or passed. */
   exceeded(): boolean {
-    return this.remainingTokens() === 0 || this.remainingAgents() === 0;
+    return (
+      this.remainingTokens() === 0 ||
+      this.remainingAgents() === 0 ||
+      this.remainingUsd() === 0
+    );
   }
 
   /**
@@ -99,5 +129,22 @@ export class Budget {
         "agents",
       );
     }
+    if (this.remainingUsd() === 0) {
+      throw new BudgetExceededError(
+        `USD budget exhausted ($${String(this.opts.maxUsd ?? 0)}).`,
+        "usd",
+      );
+    }
   }
+}
+
+/**
+ * Construct a USD-only {@link Budget} from a role section's `budget.maxUsd`
+ * config value, or `undefined` when unset (Sprint 3 — agent-loop capability
+ * port). Shared helper so role entry points (generator, and future
+ * curator/evaluator/planner wiring) can adopt the same absent-means-no-budget
+ * convention without duplicating the `!= null` check.
+ */
+export function budgetFromMaxUsd(maxUsd: number | null | undefined): Budget | undefined {
+  return maxUsd != null ? new Budget({ maxUsd }) : undefined;
 }

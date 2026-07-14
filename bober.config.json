@@ -1,7 +1,8 @@
 {
   "project": {
     "name": "agent-bober",
-    "mode": "greenfield"
+    "mode": "greenfield",
+    "stack": { "language": "typescript", "backend": "node" }
   },
   "planner": {
     "maxClarifications": 5,
@@ -71,6 +72,14 @@
   "graph": {
     "enabled": true,
     "languageTier": "core"
+  },
+  "security": {
+    "enabled": true,
+    "scanners": [],
+    "diff": { "mode": "git-diff" },
+    "supplyChain": { "enabled": true },
+    "egress": { "onlineResearch": false },
+    "verifier": { "enabled": true }
   },
   "commands": {}
 }

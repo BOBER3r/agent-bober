@@ -180,3 +180,100 @@ describe("ClaudeCodeAdapter.chat — binary/timeout overrides (sc-4-5)", () => {
     expect(args).not.toContain("--append-system-prompt");
   });
 });
+
+// ── sc-2-2: total_cost_usd passthrough (real vendor cost, never estimated) ──
+
+describe("ClaudeCodeAdapter.chat — costUsd passthrough (sc-2-2)", () => {
+  it("returns costUsd equal to the CLI's parsed total_cost_usd when present", async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        type: "result",
+        result: "hi",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 42, output_tokens: 7 },
+        total_cost_usd: 0.0123,
+      }),
+      stderr: "",
+    } as never);
+
+    const adapter = new ClaudeCodeAdapter();
+    const res = await adapter.chat({
+      model: "opus",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(res.costUsd).toBe(0.0123);
+  });
+
+  it("omits costUsd entirely (Object.hasOwn false) when the CLI output lacks total_cost_usd", async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        type: "result",
+        result: "hi",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 42, output_tokens: 7 },
+      }),
+      stderr: "",
+    } as never);
+
+    const adapter = new ClaudeCodeAdapter();
+    const res = await adapter.chat({
+      model: "opus",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(Object.hasOwn(res, "costUsd")).toBe(false);
+  });
+});
+
+// ── documents-guard throw without calling execa ──────────────────────────────
+
+describe("ClaudeCodeAdapter.chat — documents-guard", () => {
+  it("throws when documents are supplied, stating the CLI accepts only text", async () => {
+    const adapter = new ClaudeCodeAdapter();
+
+    await expect(
+      adapter.chat({
+        model: "claude",
+        system: "sys",
+        messages: [{ role: "user", content: "parse this" }],
+        documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+      }),
+    ).rejects.toThrow(/does not support `documents`/);
+
+    expect(mockedExeca).not.toHaveBeenCalled();
+  });
+});
+
+// ── onTextDelta no-op (sc-8-3) ──────────────────────────────────────────────
+
+describe("ClaudeCodeAdapter.chat — onTextDelta no-op (sc-8-3)", () => {
+  it("accepts ChatParams.onTextDelta without error and never invokes it (text-only CLI boundary)", async () => {
+    mockedExeca.mockResolvedValue({
+      exitCode: 0,
+      stdout: JSON.stringify({
+        type: "result",
+        result: "hi",
+        stop_reason: "end_turn",
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+      stderr: "",
+    } as never);
+
+    const adapter = new ClaudeCodeAdapter();
+    const onTextDelta = vi.fn();
+    const res = await adapter.chat({
+      model: "opus",
+      system: "",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta,
+    });
+
+    expect(onTextDelta).not.toHaveBeenCalled();
+    expect(res.text).toBe("hi");
+  });
+});

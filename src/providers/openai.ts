@@ -18,6 +18,8 @@ import type {
   StopReason,
   Message,
 } from "./types.js";
+import type { ProviderName } from "./factory.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Inline OpenAI response shapes ───────────────────────────────────
 // These mirror only the fields we actually use from the openai SDK so
@@ -39,6 +41,8 @@ interface OAIMessage {
   role: string;
   content: string | null;
   tool_calls?: OAIToolCall[];
+  /** Present (non-empty) when the provider refused to fulfil the request. */
+  refusal?: string | null;
 }
 
 interface OAIChoice {
@@ -63,9 +67,28 @@ interface OAISystemMessage {
   content: string;
 }
 
+// ── User content parts (multimodal) ─────────────────────────────────
+// A user message is either a plain string or an array of content parts.
+// PDFs/files ride as a `file` part with a base64 `file_data` data-URL.
+
+interface OAITextPart {
+  type: "text";
+  text: string;
+}
+
+interface OAIFilePart {
+  type: "file";
+  file: {
+    filename: string;
+    file_data: string;
+  };
+}
+
+type OAIContentPart = OAITextPart | OAIFilePart;
+
 interface OAIUserMessage {
   role: "user";
-  content: string;
+  content: string | OAIContentPart[];
 }
 
 interface OAIAssistantMessage {
@@ -150,6 +173,8 @@ function normalizeStopReason(finishReason: string | null): StopReason {
       return "tool_use";
     case "length":
       return "max_tokens";
+    case "content_filter":
+      return "refusal";
     default:
       return finishReason ?? "end";
   }
@@ -204,6 +229,60 @@ function toOpenAIMessages(message: Message): OAIRequestMessage[] {
 }
 
 /**
+ * Map a document MIME type to a filename extension. OpenAI requires a
+ * `filename` alongside inline `file_data`; the extension is cosmetic (the
+ * data-URL MIME is authoritative), so an unknown type falls back to `bin`.
+ */
+function extensionForMediaType(mediaType: string): string {
+  switch (mediaType) {
+    case "application/pdf":
+      return "pdf";
+    case "image/png":
+      return "png";
+    case "image/jpeg":
+      return "jpg";
+    default:
+      return "bin";
+  }
+}
+
+/**
+ * Attach `documents` to the FIRST user message as OpenAI `file` content parts.
+ *
+ * The string content of that message is preserved as a trailing `text` part.
+ * Mutates `messages` in place. No-op semantics for callers: when `documents`
+ * is empty the caller skips this entirely, leaving the request byte-identical.
+ */
+function attachOpenAIDocuments(
+  messages: OAIRequestMessage[],
+  documents: { base64: string; mediaType: string }[],
+): void {
+  const firstUserIdx = messages.findIndex((m) => m.role === "user");
+  if (firstUserIdx === -1) {
+    return;
+  }
+  const firstUser = messages[firstUserIdx] as OAIUserMessage;
+
+  const fileParts: OAIFilePart[] = documents.map((doc, i) => ({
+    type: "file" as const,
+    file: {
+      filename: `document-${i + 1}.${extensionForMediaType(doc.mediaType)}`,
+      file_data: `data:${doc.mediaType};base64,${doc.base64}`,
+    },
+  }));
+
+  const existing: OAIContentPart[] =
+    typeof firstUser.content === "string"
+      ? [{ type: "text" as const, text: firstUser.content }]
+      : firstUser.content;
+
+  messages[firstUserIdx] = {
+    ...firstUser,
+    content: [...fileParts, ...existing],
+  };
+}
+
+/**
  * Parse tool_calls from an OAI response message into ToolCall[].
  *
  * Guards against an empty array (treated as no tool calls) and handles
@@ -252,6 +331,13 @@ export class OpenAIAdapter implements LLMClient {
   private readonly apiKey: string | undefined;
   private readonly baseURL: string | undefined;
   private readonly providerConfig: Record<string, unknown> | undefined;
+
+  /**
+   * Provider key used for CostMeter lookups. Defaults to "openai"; overridden
+   * to "openai-compat" by {@link OpenAICompatAdapter} so DeepSeek/Grok prices
+   * are looked up instead of OpenAI's (they share this class's `chat()`).
+   */
+  protected readonly costProvider: ProviderName = "openai";
 
   /** Lazily initialised after the dynamic import succeeds. */
   private client: OAIClientLike | null = null;
@@ -311,6 +397,9 @@ export class OpenAIAdapter implements LLMClient {
   }
 
   async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // this adapter always uses the non-streaming completions endpoint, so
+    // there is nothing extra on the wire (documented no-op).
     const { model, system, messages, tools, maxTokens = 16384, responseSchema, jsonObjectMode } = params;
 
     const client = await this.getClient();
@@ -320,6 +409,12 @@ export class OpenAIAdapter implements LLMClient {
       { role: "system", content: system },
       ...messages.flatMap(toOpenAIMessages),
     ];
+
+    // Documents (PDFs/files) → `file` content part on the first user message.
+    // Omitting documents leaves the rendered request byte-identical.
+    if (params.documents && params.documents.length > 0) {
+      attachOpenAIDocuments(oaiMessages, params.documents);
+    }
 
     // Structured output via response_format. `responseSchema` (strict json_schema)
     // wins when set; otherwise `jsonObjectMode` requests the loose json_object
@@ -365,18 +460,48 @@ export class OpenAIAdapter implements LLMClient {
       };
     }
 
+    // A structured-output refusal (message.refusal) takes precedence over the
+    // normal content/finish_reason path — surface the refusal text so the
+    // fail-closed generator guard has an excerpt to report.
+    const refusalText = choice.message.refusal;
+    if (refusalText) {
+      const refusalUsage = {
+        inputTokens: response.usage?.prompt_tokens ?? 0,
+        outputTokens: response.usage?.completion_tokens ?? 0,
+      };
+      const refusalCostUsd = estimateCostUsd({
+        provider: this.costProvider,
+        model: model || this.model,
+        usage: refusalUsage,
+      });
+      return {
+        text: refusalText,
+        toolCalls: [],
+        stopReason: "refusal",
+        usage: refusalUsage,
+        ...(refusalCostUsd !== undefined ? { costUsd: refusalCostUsd } : {}),
+      };
+    }
+
     const text = choice.message.content ?? "";
     const toolCalls = normalizeToolCalls(choice.message.tool_calls);
     const stopReason = normalizeStopReason(choice.finish_reason);
+    const usage = {
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+    };
+    const costUsd = estimateCostUsd({
+      provider: this.costProvider,
+      model: model || this.model,
+      usage,
+    });
 
     return {
       text,
       toolCalls,
       stopReason,
-      usage: {
-        inputTokens: response.usage?.prompt_tokens ?? 0,
-        outputTokens: response.usage?.completion_tokens ?? 0,
-      },
+      usage,
+      ...(costUsd !== undefined ? { costUsd } : {}),
     };
   }
 }

@@ -7,6 +7,7 @@ export const FleetChildSchema = z.object({
   folder: z.string().min(1),
   task: z.string().min(1),
   config: z.record(z.string(), z.unknown()).optional(),
+  tier: z.enum(["default", "cheap", "standard", "hard", "frontier"]).optional(),
 });
 export type FleetChild = z.infer<typeof FleetChildSchema>;
 
@@ -14,6 +15,13 @@ export const FleetManifestSchema = z.object({
   rootDir: z.string().default("."),
   concurrency: z.number().int().min(1).default(3),
   children: z.array(FleetChildSchema).min(1),
+  // ── Phase B: optional inter-agent blackboard configuration ──
+  blackboard: z
+    .object({
+      namespace: z.string().min(1),
+      maxRounds: z.number().int().min(1).max(3).default(3),
+    })
+    .optional(),
 });
 export type FleetManifest = z.infer<typeof FleetManifestSchema>;
 

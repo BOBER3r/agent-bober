@@ -17,16 +17,19 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ChatParams } from "./types.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Fake Anthropic SDK ───────────────────────────────────────────────
 
 // Shared mock function: captures the argument passed to messages.create.
 const createMock = vi.fn();
+// Shared mock function: captures the argument passed to messages.stream (sprint 8).
+const streamMock = vi.fn();
 
 // Static default-import mock (hoisted by vitest).
 vi.mock("@anthropic-ai/sdk", () => {
   class FakeAnthropic {
-    messages = { create: createMock };
+    messages = { create: createMock, stream: streamMock };
     constructor(_opts?: unknown) {}
   }
   return { default: FakeAnthropic };
@@ -45,12 +48,49 @@ function fakeResponse() {
   };
 }
 
+/**
+ * Fake `MessageStream` shaped to match the two surfaces the adapter touches:
+ * async-iterable of raw `content_block_delta` events, plus `finalMessage()`.
+ * No network is ever hit.
+ */
+function fakeStream(
+  deltas: string[],
+  finalMsg: {
+    content: unknown[];
+    stop_reason: string;
+    usage: { input_tokens: number; output_tokens: number };
+  },
+) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const text of deltas) {
+        yield { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } };
+      }
+    },
+    finalMessage: async () => finalMsg,
+  };
+}
+
+/** A fake stream whose iteration throws mid-way (sc-8-5 mid-stream error parity). */
+function erroringStream(message: string) {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "par" } };
+      throw new Error(message);
+    },
+    finalMessage: async () => {
+      throw new Error(message);
+    },
+  };
+}
+
 // ── Tests ────────────────────────────────────────────────────────────
 
 describe("AnthropicAdapter prompt caching", () => {
   beforeEach(() => {
     createMock.mockReset();
     createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReset();
   });
 
   // ── C1: enabled -> system is a content-block array with ephemeral marker ─
@@ -362,5 +402,425 @@ describe("AnthropicAdapter prompt caching", () => {
     const req = createMock.mock.calls[0][0] as Record<string, unknown>;
     expect(req).not.toHaveProperty("tool_choice");
     expect(JSON.stringify(req)).not.toContain("tool_choice");
+  });
+
+  // ── Document blocks (sc-1-5) ────────────────────────────────────────────────
+
+  it("renders ChatParams.documents as a base64 application/pdf document block on the first user message", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "extract this" }],
+      documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const firstUserBlocks = req.messages[0].content;
+    expect(Array.isArray(firstUserBlocks)).toBe(true);
+    expect(firstUserBlocks[0]).toMatchObject({
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: "QkFTRTY0" },
+    });
+    // The original text content is preserved as the second block
+    expect(firstUserBlocks[1]).toMatchObject({ type: "text", text: "extract this" });
+  });
+
+  it("prepends multiple document blocks when documents has more than one entry", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "compare" }],
+      documents: [
+        { base64: "AAAA", mediaType: "application/pdf" },
+        { base64: "BBBB", mediaType: "application/pdf" },
+      ],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const blocks = req.messages[0].content;
+    expect(blocks[0]).toMatchObject({ type: "document", source: { data: "AAAA" } });
+    expect(blocks[1]).toMatchObject({ type: "document", source: { data: "BBBB" } });
+    expect(blocks[2]).toMatchObject({ type: "text", text: "compare" });
+  });
+
+  it("omits the document block (request unchanged) when documents is absent", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as Record<string, unknown>;
+    // Byte-identical guard: no "document" key anywhere in the serialised request.
+    expect(JSON.stringify(req)).not.toContain('"document"');
+    expect(req["messages"]).toEqual([{ role: "user", content: "hi" }]);
+  });
+
+  it("omits the document block (request unchanged) when documents is an empty array", async () => {
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    } satisfies ChatParams);
+
+    const req = createMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(req)).not.toContain('"document"');
+    expect(req["messages"]).toEqual([{ role: "user", content: "hi" }]);
+  });
+
+  // ── Refusal mapping (sc-1-1) ─────────────────────────────────────────────
+
+  it("maps stop_reason 'refusal' -> stopReason 'refusal' via an explicit case", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "I can't help with that." }],
+      stop_reason: "refusal",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-x",
+      system: "SYS",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    } satisfies ChatParams);
+
+    expect(result.stopReason).toBe("refusal");
+    expect(result.text).toBe("I can't help with that.");
+  });
+
+  // ── costUsd (sc-2-3) ─────────────────────────────────────────────────────
+
+  it("sets costUsd from estimateCostUsd for a priced model", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-opus-4-8",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    const expected = estimateCostUsd({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      usage: { inputTokens: 5, outputTokens: 7 },
+    });
+    expect(expected).not.toBeUndefined();
+    expect(result.costUsd).toBe(expected);
+  });
+
+  it("omits costUsd entirely (Object.hasOwn false) for an unpriced model", async () => {
+    createMock.mockResolvedValue({
+      content: [{ type: "text", text: "ok" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-nonexistent-99",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    expect(Object.hasOwn(result, "costUsd")).toBe(false);
+  });
+
+  it("attaches costUsd to the structured-output normalisation branch when priced", async () => {
+    createMock.mockResolvedValue({
+      content: [
+        { type: "tool_use", id: "t1", name: "structured_output", input: { ok: true } },
+      ],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 3, output_tokens: 4 },
+    });
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    const result = await adapter.chat({
+      model: "claude-opus-4-8",
+      system: "SYS",
+      messages: [{ role: "user", content: "hi" }],
+      responseSchema: schema,
+    } satisfies ChatParams);
+
+    const expected = estimateCostUsd({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      usage: { inputTokens: 3, outputTokens: 4 },
+    });
+    expect(result.costUsd).toBe(expected);
+  });
+});
+
+// ── Streaming text deltas (agent-loop-capability-port sprint 8) ─────────────
+
+describe("AnthropicAdapter streaming (onTextDelta)", () => {
+  beforeEach(() => {
+    createMock.mockReset();
+    streamMock.mockReset();
+  });
+
+  it("sc-8-1: delta join equals final text; streamed response is deep-equal to the non-streaming response", async () => {
+    const finalMsg = {
+      content: [{ type: "text", text: "Hello world" }],
+      stop_reason: "end_turn",
+      usage: { input_tokens: 5, output_tokens: 7 },
+    };
+    streamMock.mockReturnValue(fakeStream(["Hello", " world"], finalMsg));
+    createMock.mockResolvedValue(finalMsg);
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const seen: string[] = [];
+    const streamed = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: (d) => seen.push(d),
+    } satisfies ChatParams);
+    const plain = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    expect(seen.join("")).toBe(streamed.text);
+    expect(streamed).toEqual(plain);
+  });
+
+  it("sc-8-2: streaming a tool_use response normalizes toolCalls identically to the non-streaming path", async () => {
+    const finalMsg = {
+      content: [
+        { type: "tool_use", id: "t1", name: "search", input: { q: 1 } },
+      ],
+      stop_reason: "tool_use",
+      usage: { input_tokens: 3, output_tokens: 4 },
+    };
+    streamMock.mockReturnValue(fakeStream([], finalMsg));
+    createMock.mockResolvedValue(finalMsg);
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const deltas: string[] = [];
+    const streamed = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: (d) => deltas.push(d),
+    } satisfies ChatParams);
+    const plain = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    // A pure tool_use response yields no text_delta events.
+    expect(deltas).toEqual([]);
+    expect(streamed.toolCalls).toEqual([{ id: "t1", name: "search", input: { q: 1 } }]);
+    expect(streamed).toEqual(plain);
+  });
+
+  it("sc-8-4 spy: with no onTextDelta, the adapter uses create() and never calls stream()", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it("with onTextDelta set, the adapter uses stream() and never calls create()", async () => {
+    const finalMsg = fakeResponse();
+    streamMock.mockReturnValue(fakeStream(["ok"], finalMsg));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {},
+    } satisfies ChatParams);
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect(createMock).not.toHaveBeenCalled();
+  });
+
+  it("a throwing onTextDelta consumer does not kill the request; the call still resolves normally", async () => {
+    const finalMsg = fakeResponse();
+    streamMock.mockReturnValue(fakeStream(["ok"], finalMsg));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    const result = await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {
+        throw new Error("boom");
+      },
+    } satisfies ChatParams);
+
+    expect(result.text).toBe("ok");
+    expect(result.stopReason).toBe("end");
+  });
+
+  it("sc-8-5: a mid-stream error propagates as a rejection (not swallowed)", async () => {
+    streamMock.mockReturnValue(erroringStream("overloaded_error"));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await expect(
+      adapter.chat({
+        model: "claude-x",
+        system: "S",
+        messages: [{ role: "user", content: "hi" }],
+        onTextDelta: () => {},
+      } satisfies ChatParams),
+    ).rejects.toThrow("overloaded_error");
+  });
+
+  it("requestBody sent to stream() is identical in shape to the one sent to create()", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+    } satisfies ChatParams);
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+      onTextDelta: () => {},
+    } satisfies ChatParams);
+
+    expect(streamMock.mock.calls[0][0]).toEqual(createMock.mock.calls[0][0]);
+  });
+});
+
+// ── Abort signal forwarding (agent-loop-capability-port sprint 9) ──────────
+
+describe("AnthropicAdapter abort signal forwarding", () => {
+  beforeEach(() => {
+    createMock.mockReset();
+    streamMock.mockReset();
+  });
+
+  it("non-stream: forwards abortSignal as the 2nd (options) arg's `signal` key", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect((createMock.mock.calls[0][1] as { signal?: AbortSignal }).signal).toBe(
+      controller.signal,
+    );
+  });
+
+  it("stream: forwards abortSignal as the 2nd (options) arg's `signal` key", async () => {
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {},
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    expect((streamMock.mock.calls[0][1] as { signal?: AbortSignal }).signal).toBe(
+      controller.signal,
+    );
+  });
+
+  it("sc-9-5: no abortSignal => the options arg is undefined for both create() and stream() (byte-identical)", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+    } satisfies ChatParams);
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta: () => {},
+    } satisfies ChatParams);
+
+    expect(createMock.mock.calls[0][1]).toBeUndefined();
+    expect(streamMock.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it("the signal is carried ONLY in the options arg, never in requestBody — body identity holds with a signal set", async () => {
+    createMock.mockResolvedValue(fakeResponse());
+    streamMock.mockReturnValue(fakeStream(["ok"], fakeResponse()));
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: true });
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+    await adapter.chat({
+      model: "claude-x",
+      system: "S",
+      messages: [{ role: "user", content: "hi" }],
+      effort: "high",
+      onTextDelta: () => {},
+      abortSignal: controller.signal,
+    } satisfies ChatParams);
+
+    expect(streamMock.mock.calls[0][0]).toEqual(createMock.mock.calls[0][0]);
+    expect(Object.hasOwn(createMock.mock.calls[0][0] as object, "signal")).toBe(false);
+  });
+
+  it("sc-9-2: a mid-flight abort's SDK rejection propagates uncaught, not swallowed (chatWithRetry classifies it, not this adapter)", async () => {
+    streamMock.mockReturnValue(erroringStream("Request was aborted."));
+    const controller = new AbortController();
+
+    const adapter = new AnthropicAdapter("k", { promptCaching: false });
+    await expect(
+      adapter.chat({
+        model: "claude-x",
+        system: "S",
+        messages: [{ role: "user", content: "hi" }],
+        onTextDelta: () => {},
+        abortSignal: controller.signal,
+      } satisfies ChatParams),
+    ).rejects.toThrow("Request was aborted.");
   });
 });

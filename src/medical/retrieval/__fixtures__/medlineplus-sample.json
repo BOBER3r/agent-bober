@@ -1,0 +1,34 @@
+{
+  "nlmSearchResult": {
+    "webservice": "2.0",
+    "db": "healthTopics",
+    "term": "metformin",
+    "total": "2",
+    "from": "0",
+    "to": "2",
+    "list": {
+      "document": [
+        {
+          "@url": "https://medlineplus.gov/druginfo/meds/a696005.html",
+          "@rank": "1",
+          "@score": "900",
+          "content": [
+            { "@name": "title", "#text": "Metformin" },
+            { "@name": "organizationName", "#text": "MedlinePlus" },
+            { "@name": "FullSummary", "#text": "Metformin is used to treat type 2 diabetes. It works by decreasing the amount of sugar that the liver makes and that the intestines absorb. Common side effects include nausea, diarrhea, and stomach pain. Metformin can cause a rare but serious condition called lactic acidosis." }
+          ]
+        },
+        {
+          "@url": "https://medlineplus.gov/ency/article/000313.htm",
+          "@rank": "2",
+          "@score": "800",
+          "content": [
+            { "@name": "title", "#text": "Type 2 diabetes treatment" },
+            { "@name": "organizationName", "#text": "MedlinePlus" },
+            { "@name": "FullSummary", "#text": "Metformin is typically the first medicine prescribed for type 2 diabetes. It lowers blood sugar levels by improving the way the body handles insulin. Gastrointestinal side effects such as nausea, vomiting, and diarrhea are the most common adverse effects of metformin." }
+          ]
+        }
+      ]
+    }
+  }
+}

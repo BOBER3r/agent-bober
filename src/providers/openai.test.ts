@@ -20,6 +20,7 @@ import type {
   AssistantMessage,
   ToolResultMessage,
 } from "./types.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Fake OpenAI client factory ───────────────────────────────────────
 
@@ -499,6 +500,55 @@ describe("OpenAIAdapter", () => {
     expect(result.toolCalls).toEqual([]);
   });
 
+  // ── Refusal mapping (sc-1-2) ──────────────────────────────────────
+
+  it("maps finish_reason 'content_filter' -> stopReason 'refusal'", async () => {
+    createFn.mockResolvedValue(
+      makeOAIResponse({ content: null, finishReason: "content_filter" }),
+    );
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    });
+    expect(result.stopReason).toBe("refusal");
+  });
+
+  it("maps a message.refusal payload -> stopReason 'refusal' (overrides finish_reason)", async () => {
+    createFn.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: null, refusal: "I won't do that." },
+        },
+      ],
+      usage: { prompt_tokens: 3, completion_tokens: 4 },
+    });
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    });
+    expect(result.stopReason).toBe("refusal");
+    expect(result.text).toBe("I won't do that.");
+    expect(result.toolCalls).toEqual([]);
+    expect(result.usage).toEqual({ inputTokens: 3, outputTokens: 4 });
+  });
+
+  it("does not treat an absent/empty message.refusal as a refusal (byte-identical)", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hi", finishReason: "stop" }));
+    const adapter = await makeAdapter();
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+    expect(result.stopReason).toBe("end");
+    expect(result.text).toBe("hi");
+  });
+
   it("handles malformed tool call arguments gracefully", async () => {
     createFn.mockResolvedValue(
       makeOAIResponse({
@@ -515,6 +565,67 @@ describe("OpenAIAdapter", () => {
     });
     // Falls back to empty input object
     expect(result.toolCalls[0].input).toEqual({});
+  });
+
+  // ── costUsd (sc-2-3) ──────────────────────────────────────────────
+
+  it("sets costUsd from estimateCostUsd for a priced model", async () => {
+    createFn.mockResolvedValue(
+      makeOAIResponse({ content: "ok", promptTokens: 100, completionTokens: 50 }),
+    );
+    const adapter = await makeAdapter("gpt-4.1");
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const expected = estimateCostUsd({
+      provider: "openai",
+      model: "gpt-4.1",
+      usage: { inputTokens: 100, outputTokens: 50 },
+    });
+    expect(expected).not.toBeUndefined();
+    expect(result.costUsd).toBe(expected);
+  });
+
+  it("omits costUsd entirely (Object.hasOwn false) for an unpriced model", async () => {
+    createFn.mockResolvedValue(
+      makeOAIResponse({ content: "ok", promptTokens: 100, completionTokens: 50 }),
+    );
+    const adapter = await makeAdapter("totally-unpriced-model");
+    const result = await adapter.chat({
+      model: "totally-unpriced-model",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(Object.hasOwn(result, "costUsd")).toBe(false);
+  });
+
+  it("attaches costUsd to the refusal return branch when priced", async () => {
+    createFn.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { role: "assistant", content: null, refusal: "I won't do that." },
+        },
+      ],
+      usage: { prompt_tokens: 3, completion_tokens: 4 },
+    });
+    const adapter = await makeAdapter("gpt-4.1");
+    const result = await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "do something disallowed" }],
+    });
+
+    const expected = estimateCostUsd({
+      provider: "openai",
+      model: "gpt-4.1",
+      usage: { inputTokens: 3, outputTokens: 4 },
+    });
+    expect(result.costUsd).toBe(expected);
   });
 });
 
@@ -537,5 +648,128 @@ describe("OpenAIAdapter missing openai package", () => {
         messages: [{ role: "user", content: "hi" }],
       }),
     ).rejects.toThrow('OpenAI provider requires the "openai" package. Run: npm install openai');
+  });
+});
+
+// ── Documents (provider-agnostic PDF rendering) ──────────────────────
+
+describe("OpenAIAdapter — documents (PDF) rendering", () => {
+  let createFn: FakeCreateFn;
+
+  beforeEach(() => {
+    createFn = vi.fn();
+    vi.doMock("openai", () => ({ default: makeFakeOpenAI(createFn) }));
+  });
+
+  async function makeAdapter(model = "gpt-4.1") {
+    const { OpenAIAdapter } = await import("./openai.js?v=docs-" + Date.now());
+    return new OpenAIAdapter(model, "test-api-key");
+  }
+
+  it("renders ChatParams.documents as a `file` content part on the first user message", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "Parse the PDF.",
+      messages: [{ role: "user", content: "extract markers" }],
+      documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    const userMsg = callArgs.messages[1];
+    expect(userMsg.role).toBe("user");
+    expect(Array.isArray(userMsg.content)).toBe(true);
+
+    const parts = userMsg.content as Array<Record<string, unknown>>;
+    const filePart = parts.find((p) => p["type"] === "file") as
+      | { file: { filename: string; file_data: string } }
+      | undefined;
+    expect(filePart).toBeDefined();
+    expect(filePart?.file.file_data).toBe("data:application/pdf;base64,QkFTRTY0");
+    expect(filePart?.file.filename).toBe("document-1.pdf");
+    // The original text is preserved as a trailing text part.
+    expect(
+      parts.some((p) => p["type"] === "text" && p["text"] === "extract markers"),
+    ).toBe(true);
+  });
+
+  it("prepends a file part for each document, before the text part", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [
+        { base64: "QQ==", mediaType: "application/pdf" },
+        { base64: "Qg==", mediaType: "application/pdf" },
+      ],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: Array<Record<string, unknown>> }>;
+    };
+    const parts = callArgs.messages[1].content;
+    expect(parts[0]["type"]).toBe("file");
+    expect(parts[1]["type"]).toBe("file");
+    expect(parts[2]).toEqual({ type: "text", text: "hi" });
+  });
+
+  it("leaves the request byte-identical (string content, no `file`) when documents is absent", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(callArgs.messages[1]).toEqual({ role: "user", content: "hi" });
+    expect(JSON.stringify(callArgs)).not.toContain('"file"');
+  });
+
+  it("is a no-op when documents is an empty array", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "ok" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    });
+
+    const callArgs = createFn.mock.calls[0][0] as {
+      messages: Array<{ role: string; content: unknown }>;
+    };
+    expect(callArgs.messages[1]).toEqual({ role: "user", content: "hi" });
+  });
+
+  // ── onTextDelta no-op (sc-8-3) ─────────────────────────────────────
+
+  it("sc-8-3: accepts ChatParams.onTextDelta without error, never invokes it, and sends the byte-identical request", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hi" }));
+    const adapter = await makeAdapter();
+    const onTextDelta = vi.fn();
+
+    await adapter.chat({
+      model: "gpt-4.1",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta,
+    });
+
+    expect(onTextDelta).not.toHaveBeenCalled();
+    const callArgs = createFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(callArgs)).not.toContain("onTextDelta");
   });
 });

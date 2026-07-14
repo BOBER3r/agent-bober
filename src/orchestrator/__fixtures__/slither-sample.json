@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "error": null,
+  "results": {
+    "detectors": [
+      {
+        "elements": [
+          {
+            "type": "function",
+            "name": "withdraw",
+            "source_mapping": {
+              "start": 1180,
+              "length": 210,
+              "filename_relative": "contracts/Vault.sol",
+              "filename_absolute": "/project/contracts/Vault.sol",
+              "filename_short": "contracts/Vault.sol",
+              "is_dependency": false,
+              "lines": [42, 43, 44],
+              "starting_column": 5,
+              "ending_column": 6
+            }
+          }
+        ],
+        "description": "Reentrancy in Vault.withdraw() (contracts/Vault.sol#42-44):\n\tExternal calls:\n\t- (success) = msg.sender.call{value: amount}(\"\") (contracts/Vault.sol#43)\n\tState variables written after the call(s):\n\t- balances[msg.sender] = 0 (contracts/Vault.sol#44)\n",
+        "markdown": "Reentrancy in [Vault.withdraw()](contracts/Vault.sol#L42-L44)",
+        "first_markdown_element": "contracts/Vault.sol#42-44",
+        "id": "9f1c2b7a4e6d3f0a1b2c3d4e5f60718293a4b5c6",
+        "check": "reentrancy-eth",
+        "impact": "High",
+        "confidence": "Medium"
+      },
+      {
+        "elements": [
+          {
+            "type": "function",
+            "name": "isOwner",
+            "source_mapping": {
+              "start": 420,
+              "length": 96,
+              "filename_relative": "contracts/Auth.sol",
+              "filename_absolute": "/project/contracts/Auth.sol",
+              "filename_short": "contracts/Auth.sol",
+              "is_dependency": false,
+              "lines": [15],
+              "starting_column": 9,
+              "ending_column": 34
+            }
+          }
+        ],
+        "description": "Auth.isOwner() (contracts/Auth.sol#15) uses tx.origin for authorization: require(bool,string)(tx.origin == owner,Auth: not owner) (contracts/Auth.sol#15)\n",
+        "markdown": "[Auth.isOwner()](contracts/Auth.sol#L15) uses `tx.origin` for authorization",
+        "first_markdown_element": "contracts/Auth.sol#15",
+        "id": "1a2b3c4d5e6f70819203a4b5c6d7e8f901a2b3c4",
+        "check": "tx-origin",
+        "impact": "Medium",
+        "confidence": "Medium"
+      }
+    ]
+  }
+}

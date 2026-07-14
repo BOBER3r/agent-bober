@@ -21,7 +21,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createClient, validateApiKey, preflightClaudeBinary } from "./factory.js";
+import { createClient, validateApiKey, preflightClaudeBinary, isXaiEndpoint } from "./factory.js";
 import { ClaudeCodeAdapter } from "./claude-code.js";
 import { GoogleAdapter } from "./google.js";
 import { OpenAICompatAdapter } from "./openai-compat.js";
@@ -455,5 +455,132 @@ describe("validateApiKey", () => {
 
   it("does not throw for unknown providers", () => {
     expect(() => validateApiKey("some-future-provider")).not.toThrow();
+  });
+
+  // ── Grok/xAI key validation (sc-1-4) ─────────────────────────────────────
+
+  it("throws with XAI_API_KEY in message for openai-compat at api.x.ai when key absent (sc-1-4)", () => {
+    const saved = process.env["XAI_API_KEY"];
+    delete process.env["XAI_API_KEY"];
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", "generator", undefined, "https://api.x.ai/v1"),
+      ).toThrow(/XAI_API_KEY/);
+    } finally {
+      if (saved !== undefined) process.env["XAI_API_KEY"] = saved;
+    }
+  });
+
+  it("error message names Grok/xAI when XAI_API_KEY is absent (sc-1-4)", () => {
+    const saved = process.env["XAI_API_KEY"];
+    delete process.env["XAI_API_KEY"];
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", "generator", undefined, "https://api.x.ai/v1"),
+      ).toThrow(/Grok\/xAI/);
+    } finally {
+      if (saved !== undefined) process.env["XAI_API_KEY"] = saved;
+    }
+  });
+
+  it("does not throw for openai-compat at api.x.ai when XAI_API_KEY is set (sc-1-4)", () => {
+    const saved = process.env["XAI_API_KEY"];
+    process.env["XAI_API_KEY"] = "xai-fake-test-key";
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", "generator", undefined, "https://api.x.ai/v1"),
+      ).not.toThrow();
+    } finally {
+      if (saved !== undefined) {
+        process.env["XAI_API_KEY"] = saved;
+      } else {
+        delete process.env["XAI_API_KEY"];
+      }
+    }
+  });
+
+  it("deepseek still throws DEEPSEEK_API_KEY when key absent (no-regression, sc-1-4)", () => {
+    const saved = process.env["DEEPSEEK_API_KEY"];
+    delete process.env["DEEPSEEK_API_KEY"];
+
+    try {
+      expect(() =>
+        validateApiKey("openai-compat", undefined, undefined, "https://api.deepseek.com"),
+      ).toThrow(/DEEPSEEK_API_KEY/);
+    } finally {
+      if (saved !== undefined) process.env["DEEPSEEK_API_KEY"] = saved;
+    }
+  });
+
+  it("Ollama endpoint still requires no key after xAI arm added (no-regression, sc-1-4)", () => {
+    expect(() => validateApiKey("openai-compat")).not.toThrow();
+  });
+});
+
+// ── isXaiEndpoint predicate (sc-1-6) ─────────────────────────────────────────
+
+describe("isXaiEndpoint", () => {
+  it("returns true for https://api.x.ai/v1 (sc-1-6)", () => {
+    expect(isXaiEndpoint("https://api.x.ai/v1")).toBe(true);
+  });
+
+  it("returns false for api.deepseek.com (sc-1-6)", () => {
+    expect(isXaiEndpoint("https://api.deepseek.com")).toBe(false);
+  });
+
+  it("returns false for undefined (sc-1-6)", () => {
+    expect(isXaiEndpoint(undefined)).toBe(false);
+  });
+
+  it("returns false for ollama endpoint (sc-1-6)", () => {
+    expect(isXaiEndpoint("http://localhost:11434/v1")).toBe(false);
+  });
+
+  it("returns false for empty string (sc-1-6)", () => {
+    expect(isXaiEndpoint("")).toBe(false);
+  });
+});
+
+// ── createClient xAI key injection (sc-1-5) ──────────────────────────────────
+
+describe("createClient xAI key injection", () => {
+  it("throws with XAI_API_KEY in message for grok endpoint when key absent (sc-1-5)", () => {
+    const saved = process.env["XAI_API_KEY"];
+    delete process.env["XAI_API_KEY"];
+
+    try {
+      expect(() => createClient(null, null, undefined, "grok")).toThrow(/XAI_API_KEY/);
+    } finally {
+      if (saved !== undefined) process.env["XAI_API_KEY"] = saved;
+    }
+  });
+
+  it("constructs OpenAICompatAdapter when XAI_API_KEY is set (sc-1-5)", () => {
+    const saved = process.env["XAI_API_KEY"];
+    process.env["XAI_API_KEY"] = "xai-fake-test-key";
+
+    try {
+      const client = createClient(null, null, undefined, "grok");
+      expect(client).toBeInstanceOf(OpenAICompatAdapter);
+    } finally {
+      if (saved !== undefined) {
+        process.env["XAI_API_KEY"] = saved;
+      } else {
+        delete process.env["XAI_API_KEY"];
+      }
+    }
+  });
+
+  it("Ollama endpoint keeps no-key behavior after xAI arm added (no-regression, sc-1-5)", () => {
+    const client = createClient(
+      "openai-compat",
+      "http://localhost:11434/v1",
+      undefined,
+      "llama3",
+    );
+    expect(client).toBeInstanceOf(OpenAICompatAdapter);
   });
 });

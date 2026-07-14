@@ -33,6 +33,24 @@ export const ContextResetSchema = z.enum([
 export type ContextReset = z.infer<typeof ContextResetSchema>;
 
 /**
+ * Reasoning/output effort level (Sprint 3 — agent-loop capability port).
+ * Mirrors `ChatParams.effort` (`src/providers/types.ts`) value-for-value;
+ * only the Anthropic adapter forwards it (as `output_config.effort`).
+ */
+export const EffortSchema = z.enum(["low", "medium", "high", "xhigh", "max"]);
+export type Effort = z.infer<typeof EffortSchema>;
+
+/**
+ * Optional per-run USD spend ceiling (Sprint 3 — agent-loop capability port).
+ * `maxUsd: null` (or omitted) means uncapped — mirrors `Budget`'s own
+ * null-means-unlimited convention (`src/orchestrator/workflow/budget.ts`).
+ */
+export const BudgetSectionSchema = z.object({
+  maxUsd: z.number().positive().nullable().optional(),
+});
+export type BudgetSection = z.infer<typeof BudgetSectionSchema>;
+
+/**
  * Well-known built-in evaluator strategy types.
  * The type field also accepts ANY string — unknown types are resolved
  * by looking for a matching registered plugin or the `command` field.
@@ -87,6 +105,10 @@ export const PlannerSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type PlannerSection = z.infer<typeof PlannerSectionSchema>;
 
@@ -98,6 +120,17 @@ export const GeneratorSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
+  /**
+   * When true, contiguous read-only tool calls (read_file/glob/grep) within a
+   * turn execute concurrently instead of strictly serially (ADR-2, agent-loop
+   * capability port sprint 4). Optional, no default — absent/false is
+   * byte-identical to the pre-change serial loop.
+   */
+  parallelReadOnlyTools: z.boolean().optional(),
 });
 export type GeneratorSection = z.infer<typeof GeneratorSectionSchema>;
 
@@ -114,6 +147,10 @@ export const EvaluatorSectionSchema = z.object({
     lenses: z.array(z.string()).default([]),
     maxConcurrent: z.number().int().min(1).default(4),
   }).default({ enabled: false, lenses: [], maxConcurrent: 4 }),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type EvaluatorSection = z.infer<typeof EvaluatorSectionSchema>;
 
@@ -142,6 +179,10 @@ export const CuratorSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Reasoning/output effort forwarded to ChatParams.effort (Anthropic only). */
+  effort: EffortSchema.optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
 });
 export type CuratorSection = z.infer<typeof CuratorSectionSchema>;
 
@@ -155,6 +196,105 @@ export const CodeReviewSectionSchema = z.object({
   providerConfig: z.record(z.string(), z.unknown()).optional(),
 });
 export type CodeReviewSection = z.infer<typeof CodeReviewSectionSchema>;
+
+// ── Security Section (opt-in stack-aware audit; default-off) ─────────
+
+/**
+ * Configuration for the bober-security-auditor role (spec-20260712).
+ * Opt-in and default-off: `enabled: false` and the section itself is wired
+ * `.optional()` on BoberConfigSchema with no top-level default, so a config
+ * that omits `security` entirely stays byte-identical (no defaults leak in).
+ * `standaloneBlockOn`/`hub` are consumed by later sprints (gate + hub
+ * emission) but are declared here now to avoid re-touching this schema.
+ */
+/**
+ * Sprint-6: opt-in real-diff configuration (ADR-5 — the orchestrator, not
+ * the auditor, owns the diff). `mode` defaults to `"estimated-files"`,
+ * today's exact behavior; `git-diff` is never the default (fail-safe
+ * opt-in, nonGoals[1]).
+ */
+export const SecurityDiffConfigSchema = z.object({
+  mode: z.enum(["estimated-files", "git-diff"]).default("estimated-files"),
+  baseRef: z.string().optional(),
+  expandWithGraph: z.boolean().default(false),
+});
+export type SecurityDiffConfig = z.infer<typeof SecurityDiffConfigSchema>;
+
+/**
+ * Sprint-7: opt-in supply-chain/dependency/secret scanner axis. `enabled`
+ * defaults false and `scanners` reuses `EvalStrategySchema` (the same shape
+ * `security.scanners` uses) — the supply-chain parser kinds (npm-audit,
+ * osv-scanner, gitleaks) are detected the same way as any other scanner.
+ */
+export const SecuritySupplyChainConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  scanners: z.array(EvalStrategySchema).default([]),
+});
+export type SecuritySupplyChainConfig = z.infer<typeof SecuritySupplyChainConfigSchema>;
+
+/**
+ * Sprint-7: egress axis gating network-capable supply-chain scanners
+ * (npm-audit/osv-scanner hit a remote registry/vulnerability DB).
+ * `onlineResearch` defaults false (fail-safe opt-in), mirroring the
+ * research/medical online-research egress precedent.
+ */
+export const SecurityEgressConfigSchema = z.object({
+  onlineResearch: z.boolean().default(false),
+});
+export type SecurityEgressConfig = z.infer<typeof SecurityEgressConfigSchema>;
+
+export const SecuritySectionSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Fail-closed: unparseable auditor output or a timeout blocks. Default true. */
+  failClosed: z.boolean().default(true),
+  timeoutMs: z.number().int().positive().default(300_000),
+  model: ModelChoiceSchema.default("opus"),
+  maxTurns: z.number().int().min(1).default(20),
+  provider: z.string().optional(),
+  endpoint: z.string().nullable().optional(),
+  providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /** Optional per-run USD spend ceiling. */
+  budget: BudgetSectionSchema.optional(),
+  /** Opt-in deterministic scanner pre-filter strategies (e.g. slither, semgrep). */
+  scanners: z.array(EvalStrategySchema).default([]),
+  /** Blocking threshold for the standalone `bober security-audit` CLI (sprint 4). */
+  standaloneBlockOn: z.enum(["critical", "important"]).default("critical"),
+  /** Whether findings are emitted to the priority hub (sprint 6). Default true. */
+  hub: z.boolean().default(true),
+  /**
+   * Opt-in real-diff provider config (sprint 6). OPTIONAL with no outer
+   * default — a config that omits `diff` entirely stays byte-identical
+   * (no defaults leak in), same guarantee as `security` itself (sc-6-3).
+   */
+  diff: SecurityDiffConfigSchema.optional(),
+  /**
+   * Sprint-7: opt-in supply-chain axis config. OPTIONAL with no outer
+   * default — a config that omits `supplyChain` entirely stays
+   * byte-identical (no defaults leak in), same guarantee as `diff` (sc-7-3).
+   */
+  supplyChain: SecuritySupplyChainConfigSchema.optional(),
+  /**
+   * Sprint-7: egress axis gating network-capable supply-chain scanners.
+   * OPTIONAL with no outer default (same byte-identical guarantee as above).
+   */
+  egress: SecurityEgressConfigSchema.optional(),
+  /**
+   * Sprint-8: opt-in adversarial finder->verifier stage config. OPTIONAL
+   * with no outer default — a config that omits `verifier` entirely stays
+   * byte-identical (no defaults leak in), same guarantee as `diff` /
+   * `supplyChain` / `egress` above (sc-8-5). `maxTurns` defaults lower than
+   * the finder's (10 vs 20) — refutation needs fewer turns than the
+   * original audit.
+   */
+  verifier: z
+    .object({
+      enabled: z.boolean().default(false),
+      model: ModelChoiceSchema.default("opus"),
+      maxTurns: z.number().int().min(1).default(10),
+    })
+    .optional(),
+});
+export type SecuritySection = z.infer<typeof SecuritySectionSchema>;
 
 /**
  * Per-sprint documenter — writes docs immediately after a sprint's evaluator
@@ -217,7 +357,7 @@ export const PipelineSectionSchema = z.object({
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
   /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines (sprint 6+). Default: 'ts'. */
-  engine: z.enum(["ts", "skill", "workflow"]).default("ts"),
+  engine: z.enum(["ts", "skill", "workflow", "medical-sop"]).default("ts"),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -336,6 +476,15 @@ export const TelemetrySectionSchema = z.object({
 });
 export type TelemetrySection = z.infer<typeof TelemetrySectionSchema>;
 
+// ── Task Inbox Section (Sprint 6 — opt-in Gmail egress axis) ─────────
+
+export const TaskInboxSectionSchema = z.object({
+  /** When true, `bober task from-gmail` may read a Gmail thread via the MCP
+   *  connector. Default false — zero Gmail egress unless explicitly opted in. */
+  gmailEgress: z.boolean().default(false),
+});
+export type TaskInboxSection = z.infer<typeof TaskInboxSectionSchema>;
+
 // ── History Section (Sprint 1 — scale-safe rotation) ─────────────────
 
 export const HistorySectionSchema = z.object({
@@ -363,13 +512,147 @@ export const TeamConfigSchema = z.object({
   /** Memory namespace segment — restricted to a safe path segment. */
   memoryNamespace: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
   /** Orchestration engine shape for this team. Mirrors the z.enum in PipelineSectionSchema. */
-  pipelineShape: z.enum(["ts", "skill", "workflow"]).optional(),
+  pipelineShape: z.enum(["ts", "skill", "workflow", "medical-sop"]).optional(),
   /** Partial role -> provider override. Keys SHOULD be RoleName values. */
   providers: z.record(z.string(), z.string()).optional(),
   roles: z.array(z.object({ name: z.string(), displayName: z.string() })).optional(),
   guardrails: z.unknown().optional(),
 });
 export type TeamConfig = z.infer<typeof TeamConfigSchema>;
+
+// ── Medical Section (Phase 6, Sprint 6 — two egress axes default off) ──
+
+export const MedicalSectionSchema = z.object({
+  /** Egress opt-in axes (ADR-6). Both default false — zero outbound bytes by default. */
+  egress: z
+    .object({
+      /** When true, cloud inference synthesis is permitted. Default false. */
+      cloudInference: z.boolean().default(false),
+      /** When true, literature retrieval (MedlinePlus) is permitted. Default false. */
+      literatureRetrieval: z.boolean().default(false),
+      /** When true, WHOOP device-connection egress is permitted (ADR-1). Default false. */
+      deviceConnection: z.boolean().default(false),
+    })
+    .optional(),
+  /**
+   * Optional synthesis/critic model override (Sprint 3 — grounding-critic).
+   * Absent => local Ollama default (openai-compat http://localhost:11434/v1, llama3).
+   * A CLOUD provider here is only honoured when egress.cloudInference is true (fail-closed otherwise).
+   */
+  inference: z
+    .object({
+      provider: z.string().optional(),
+      endpoint: z.string().optional(),
+      model: z.string().optional(),
+    })
+    .optional(),
+  /** Optional vault dir for medical Findings/notes. Default: <projectRoot>/.bober/medical/vault. */
+  vaultDir: z.string().optional(),
+});
+export type MedicalSection = z.infer<typeof MedicalSectionSchema>;
+
+// ── Fleet Section (Phase B — inter-agent blackboard, child-visible) ──
+
+export const FleetSectionSchema = z.object({
+  /** Absolute path to the shared WAL facts.db file. */
+  blackboardDbPath: z.string(),
+  /** Namespace scoping all findings for this fleet run. */
+  blackboardNamespace: z.string(),
+  /** This child's own subject identifier (equals the child folder name). */
+  blackboardSubject: z.string(),
+  /** Maximum number of exchange rounds (1–3). */
+  maxRounds: z.number().int().min(1).max(3),
+});
+export type FleetSection = z.infer<typeof FleetSectionSchema>;
+
+// ── Vault Section (Sprint 4 — on-device Obsidian MCP) ────────────────
+
+/**
+ * Configuration for one on-device Obsidian MCP server.
+ * Mirrors ObservabilityProviderSchema but drops `kind` and adds `toolNames`.
+ * mcpEnv may contain secrets — treat as opaque (never log, never stringify).
+ */
+export const VaultObsidianSchema = z.object({
+  /** Unique server name (used in error messages — never secrets). */
+  name: z.string().min(1).regex(/^[a-z0-9_]+$/i, "name must be alphanumeric/underscore"),
+  /** Executable to spawn (e.g., "npx", "/usr/local/bin/obsidian-mcp"). */
+  mcpCommand: z.string().min(1),
+  mcpArgs: z.array(z.string()).optional(),
+  /** Env vars passed to the child — may contain SECRETS (treat as opaque, never log). */
+  mcpEnv: z.record(z.string(), z.string()).optional(),
+  enabled: z.boolean().default(true),
+  /**
+   * Override the server tool names per logical operation.
+   * When absent, cyanheads/obsidian-mcp-server defaults are used (see DEFAULT_VAULT_TOOL_NAMES).
+   * Provide overrides when using a different MCP server (e.g., Obsidian Local REST API).
+   */
+  toolNames: z
+    .object({
+      readNote: z.string().optional(),
+      writeNote: z.string().optional(),
+      listNotes: z.string().optional(),
+    })
+    .optional(),
+});
+export type VaultObsidian = z.infer<typeof VaultObsidianSchema>;
+
+export const VaultSectionSchema = z.object({ obsidian: VaultObsidianSchema.optional() });
+export type VaultSection = z.infer<typeof VaultSectionSchema>;
+
+// ── Calendar Section (Sprint 3 — cloud-calendar egress axis default off) ──
+
+export const CalendarSectionSchema = z.object({
+  /** Egress opt-in axis (Sprint 3). Default false — zero cloud egress by default. */
+  egress: z
+    .object({
+      /** When true, Google Calendar (cloud) egress is permitted. Default false (fail-closed). */
+      cloudCalendar: z.boolean().default(false),
+    })
+    .optional(),
+  /** Which connector to use. Default 'ics' (local, zero-egress). */
+  connector: z.enum(["ics", "google"]).default("ics"),
+  /** Optional IANA timezone (informational only; not used in epoch-ms math). */
+  timezone: z.string().optional(),
+});
+export type CalendarSection = z.infer<typeof CalendarSectionSchema>;
+
+// ── Research Section (Sprint 3 — online-research egress axis default off) ──
+
+export const ResearchSectionSchema = z.object({
+  /** Egress opt-in axis. Default false — zero outbound bytes by default (fail-closed, ADR-6 lineage). */
+  egress: z
+    .object({
+      /** When true, online/web research retrieval is permitted. Default false. */
+      onlineResearch: z.boolean().default(false),
+    })
+    .optional(),
+});
+export type ResearchSection = z.infer<typeof ResearchSectionSchema>;
+
+// ── Tools Section (Sprint 10 — opt-in MCP tool bridge, default off) ──
+
+/** One configured MCP server the opt-in bridge spawns to expose its tools as loop ToolDefs. */
+export const McpBridgeServerSchema = z.object({
+  /** Executable to spawn (e.g., "node", "npx", "/usr/local/bin/some-mcp-server"). */
+  command: z.string().min(1),
+  args: z.array(z.string()).default([]),
+});
+export type McpBridgeServer = z.infer<typeof McpBridgeServerSchema>;
+
+export const ToolsSectionSchema = z.object({
+  /** Opt-in bridge exposing a configured MCP server's tools as agentic-loop
+   *  ToolDefs (agent-loop-capability-port sprint 10). Default false —
+   *  disabled means no MCP process/transport is ever created and the loop's
+   *  tool list is unchanged. Only constructed by a consumer that reads
+   *  `enabled === true` at the call site (never at config parse time). */
+  mcpBridge: z
+    .object({
+      enabled: z.boolean().default(false),
+      server: McpBridgeServerSchema,
+    })
+    .optional(),
+});
+export type ToolsSection = z.infer<typeof ToolsSectionSchema>;
 
 // ── Full Config ─────────────────────────────────────────────────────
 
@@ -400,6 +683,22 @@ export const BoberConfigSchema = z.object({
   // ── Phase 4: domain-agnostic team abstraction ──
   teams: z.record(z.string(), TeamConfigSchema).optional(),
   defaultTeam: z.string().optional(),
+  // ── Phase 6: medical team egress config ──
+  medical: MedicalSectionSchema.optional(),
+  // ── Phase B: fleet blackboard (child-visible channel) ──
+  fleet: FleetSectionSchema.optional(),
+  // ── Sprint 4: on-device Obsidian MCP adapter ──
+  vault: VaultSectionSchema.optional(),
+  // ── Sprint 6: task-inbox Gmail egress axis ──
+  taskInbox: TaskInboxSectionSchema.optional(),
+  // ── Sprint 3: calendar planner cloud-calendar egress axis ──
+  calendar: CalendarSectionSchema.optional(),
+  // ── Sprint 3 (research-scheduler): online-research egress axis ──
+  research: ResearchSectionSchema.optional(),
+  // ── Sprint 10 (agent-loop-capability-port): opt-in MCP tool bridge axis ──
+  tools: ToolsSectionSchema.optional(),
+  // ── Security audit gate (opt-in, default-off) ──
+  security: SecuritySectionSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 

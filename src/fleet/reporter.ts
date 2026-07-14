@@ -21,6 +21,7 @@ export interface PortfolioReport {
   other: number;
   generatedAt: string;
   children: ChildOutcome[];
+  rounds?: number;
 }
 
 // ── PortfolioReporter ─────────────────────────────────────────────────
@@ -36,7 +37,7 @@ export class PortfolioReporter {
    * - other:     anything else (running / aborted / unknown)
    * - generatedAt: ISO-8601 timestamp at call time
    */
-  build(outcomes: ChildOutcome[]): PortfolioReport {
+  build(outcomes: ChildOutcome[], opts?: { rounds?: number }): PortfolioReport {
     let completed = 0;
     let failed = 0;
     let other = 0;
@@ -58,6 +59,7 @@ export class PortfolioReporter {
       other,
       generatedAt: new Date().toISOString(),
       children: outcomes,
+      ...(opts?.rounds !== undefined ? { rounds: opts.rounds } : {}),
     };
   }
 

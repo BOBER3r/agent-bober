@@ -156,6 +156,42 @@ describe("resolveProviderModel", () => {
     });
   });
 
+  // ── Grok/xAI shorthands (sc-1-3) ────────────────────────────────────────────
+
+  describe("Grok/xAI shorthands", () => {
+    it("resolves grok to openai-compat/grok-4 at api.x.ai/v1 (sc-1-3)", () => {
+      expect(resolveProviderModel("grok")).toEqual({
+        provider: "openai-compat",
+        modelId: "grok-4",
+        endpoint: "https://api.x.ai/v1",
+      });
+    });
+
+    it("resolves grok-4 to openai-compat/grok-4 at api.x.ai/v1 (sc-1-3)", () => {
+      expect(resolveProviderModel("grok-4")).toEqual({
+        provider: "openai-compat",
+        modelId: "grok-4",
+        endpoint: "https://api.x.ai/v1",
+      });
+    });
+
+    it("resolves grok-4-fast to openai-compat/grok-4-fast at api.x.ai/v1 (sc-1-3)", () => {
+      expect(resolveProviderModel("grok-4-fast")).toEqual({
+        provider: "openai-compat",
+        modelId: "grok-4-fast",
+        endpoint: "https://api.x.ai/v1",
+      });
+    });
+
+    it("deepseek still resolves to api.deepseek.com (no-regression, sc-1-3)", () => {
+      expect(resolveProviderModel("deepseek")).toEqual({
+        provider: "openai-compat",
+        modelId: "deepseek-v4-pro",
+        endpoint: "https://api.deepseek.com",
+      });
+    });
+  });
+
   // ── No-regression: existing shorthands unaffected (sc-2-3) ──────────────────
 
   describe("no-regression: existing shorthands unaffected", () => {

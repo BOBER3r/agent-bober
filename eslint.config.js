@@ -23,6 +23,7 @@ export default [
         Response: "readonly",
         fetch: "readonly",
         AbortController: "readonly",
+        AbortSignal: "readonly",
       },
     },
     plugins: {
@@ -65,6 +66,43 @@ export default [
         "error",
         { name: "fetch", message: "Network access forbidden in telemetry module" },
       ],
+    },
+  },
+  {
+    // Sprint 6 (ADR-6): code-enforced zero-egress for the medical tree.
+    // Any network/socket import inside src/medical/ is a lint error EXCEPT in the one
+    // sanctioned retrieval file (src/medical/retrieval/medline-source.ts) — see override below.
+    files: ["src/medical/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            { name: "undici",     message: "Network access forbidden in medical module (ADR-6 — zero-egress default)" },
+            { name: "got",        message: "Network access forbidden in medical module" },
+            { name: "axios",      message: "Network access forbidden in medical module" },
+            { name: "node-fetch", message: "Network access forbidden in medical module" },
+          ],
+          patterns: [
+            {
+              group: ["http", "https", "net", "tls", "dgram", "node:http", "node:https", "node:net", "node:tls", "node:dgram"],
+              message: "Network/socket imports forbidden in src/medical/ — ADR-6 egress only via the sanctioned retrieval file",
+            },
+          ],
+        },
+      ],
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "Network access forbidden in medical module — egress only via the sanctioned retrieval file" },
+      ],
+    },
+  },
+  {
+    // ADR-6 exceptions: the TWO designated network files (medline-source.ts for MedlinePlus; whoop-client.ts for WHOOP).
+    files: ["src/medical/retrieval/medline-source.ts", "src/medical/whoop/whoop-client.ts"],
+    rules: {
+      "no-restricted-imports": "off",
+      "no-restricted-globals": "off",
     },
   },
   {

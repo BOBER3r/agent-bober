@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { FleetCoordinator } from "./coordinator.js";
+import { SharedBlackboard } from "./shared-blackboard.js";
 import type { Scaffolder, Runner } from "./coordinator.js";
 import type { ScaffoldResult } from "./scaffolder.js";
 import type { ChildSpawnResult } from "./runner.js";
@@ -30,8 +34,12 @@ function makeRunner(overrides?: Partial<Runner>): Runner {
   };
 }
 
-function makeManifest(children: Array<{ folder: string; task: string }>, concurrency = 3): FleetManifest {
-  return { rootDir: ".", concurrency, children };
+function makeManifest(
+  children: Array<{ folder: string; task: string }>,
+  concurrency = 3,
+  blackboard?: FleetManifest["blackboard"],
+): FleetManifest {
+  return { rootDir: ".", concurrency, children, ...(blackboard ? { blackboard } : {}) };
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
@@ -172,5 +180,205 @@ describe("FleetCoordinator", () => {
     expect(results[0].spawn).toBeUndefined();
     expect(results[0].scaffold.error).toBe("mkdir failed: permission denied");
     expect(runCalled).toBe(false);
+  });
+});
+
+// ── executeRounds tests ───────────────────────────────────────────────
+
+describe("FleetCoordinator.executeRounds", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "bober-coordinator-rounds-"));
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("sc-3-3: scaffold called once per child; runner called once per round per child (maxRounds=3)", async () => {
+    const dbPath = join(tmpDir, "facts-sc-3-3.db");
+    const now = new Date().toISOString();
+    const bb = await SharedBlackboard.open({ dbPath, namespace: "ns-sc-3-3", maxRounds: 3 });
+
+    const scaffoldCalls: string[] = [];
+    const runCalls: string[] = [];
+    // Track total runner calls to derive the current round (2 children per round)
+    let totalRunCalls = 0;
+
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+        _bbArg?: { dbPath: string; namespace: string; maxRounds: number },
+      ): Promise<ScaffoldResult> {
+        scaffoldCalls.push(child.folder);
+        return { folder: child.folder, absPath: "/tmp/" + child.folder, configWritten: true, gitInitialized: true };
+      },
+    };
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string }): Promise<ChildSpawnResult> {
+        runCalls.push(spec.cwd);
+        totalRunCalls++;
+        // Publish a distinct finding on each runner call so count grows every round
+        bb.publish(
+          { childFolder: spec.task, round: Math.min(totalRunCalls, 3), payload: `finding-${String(totalRunCalls)}` },
+          now,
+        );
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+    const children = [
+      { folder: "a", task: "task-a" },
+      { folder: "b", task: "task-b" },
+    ];
+    const manifest = makeManifest(children, 2, { namespace: "ns-sc-3-3", maxRounds: 3 });
+
+    const { executions: results, roundsRun } = await coord.executeRounds(manifest, bb, { maxRounds: 3, dbPath });
+    bb.close();
+
+    // scaffold called ONCE per child (2 children × 1 = 2)
+    expect(scaffoldCalls).toHaveLength(2);
+    // runner called once per child per round (2 children × 3 rounds = 6)
+    expect(runCalls).toHaveLength(6);
+    expect(results).toHaveLength(2);
+    // full run, no early-stop → roundsRun equals maxRounds
+    expect(roundsRun).toBe(3);
+  });
+
+  it("sc-3-4: early-stop — round 2 adds zero new findings → loop runs exactly 2 rounds", async () => {
+    const scaffoldCalls: string[] = [];
+    const runCalls: string[] = [];
+
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+        _bb?: { dbPath: string; namespace: string; maxRounds: number },
+      ): Promise<ScaffoldResult> {
+        scaffoldCalls.push(child.folder);
+        return { folder: child.folder, absPath: "/tmp/" + child.folder, configWritten: true, gitInitialized: true };
+      },
+    };
+
+    const dbPath = join(tmpDir, "early-stop-facts.db");
+    const now = new Date().toISOString();
+    const bb = await SharedBlackboard.open({ dbPath, namespace: "ns-early-stop", maxRounds: 3 });
+
+    // Track which round we're in by counting runner calls per child
+    let runnerCallCount = 0;
+    const numChildren = 2;
+
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string }): Promise<ChildSpawnResult> {
+        runCalls.push(spec.cwd);
+        runnerCallCount++;
+        const currentRound = Math.ceil(runnerCallCount / numChildren);
+        // Only publish in round 1 (not round 2) so early-stop fires after round 2
+        if (currentRound === 1) {
+          bb.publish({ childFolder: spec.cwd, round: 1, payload: "finding-round1" }, now);
+        }
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+    const children = [
+      { folder: "x", task: "task-x" },
+      { folder: "y", task: "task-y" },
+    ];
+    const manifest = makeManifest(children, 2, { namespace: "ns-early-stop", maxRounds: 3 });
+
+    const { roundsRun } = await coord.executeRounds(manifest, bb, { maxRounds: 3, dbPath });
+    bb.close();
+
+    // Should have run exactly 2 rounds: round 1 added findings, round 2 added none → early-stop
+    // 2 children × 2 rounds = 4 runner calls
+    expect(runCalls).toHaveLength(4);
+    // scaffold called once per child
+    expect(scaffoldCalls).toHaveLength(2);
+    // early-stop fires after round 2, so roundsRun === 2 (NOT maxRounds=3)
+    expect(roundsRun).toBe(2);
+  });
+
+  it("sc-3-5: no-blackboard manifest → execute() runs ONE mapBounded pass, no blackboard opened", async () => {
+    const scaffoldCalls: string[] = [];
+    const runCalls: string[] = [];
+
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+      ): Promise<ScaffoldResult> {
+        scaffoldCalls.push(child.folder);
+        return { folder: child.folder, absPath: "/tmp/" + child.folder, configWritten: true, gitInitialized: true };
+      },
+    };
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string }): Promise<ChildSpawnResult> {
+        runCalls.push(spec.cwd);
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+    // No blackboard field on manifest
+    const manifest = makeManifest([
+      { folder: "p", task: "task-p" },
+      { folder: "q", task: "task-q" },
+    ]);
+
+    const results = await coord.execute(manifest);
+
+    // Single pass: each child scaffold and run called exactly once
+    expect(scaffoldCalls).toHaveLength(2);
+    expect(runCalls).toHaveLength(2);
+    expect(results).toHaveLength(2);
+  });
+
+  it("sc-3-7: failing child inside executeRounds does not throw; report still built with error as data", async () => {
+    const scaffolder: Scaffolder = {
+      async scaffold(
+        _root: string,
+        child: { folder: string },
+      ): Promise<ScaffoldResult> {
+        return { folder: child.folder, absPath: "/tmp/" + child.folder, configWritten: true, gitInitialized: true };
+      },
+    };
+    const runner: Runner = {
+      async run(spec: { cwd: string; task: string }): Promise<ChildSpawnResult> {
+        if (spec.task === "BOOM") throw new Error("child exploded");
+        return { cwd: spec.cwd, exitCode: 0, stdout: "", stderr: "" };
+      },
+    };
+
+    const dbPath = join(tmpDir, "failing-child-facts.db");
+    const bb = await SharedBlackboard.open({ dbPath, namespace: "ns-fail", maxRounds: 3 });
+
+    const coord = new FleetCoordinator({ scaffolder, runner });
+    const manifest = makeManifest(
+      [
+        { folder: "ok", task: "task-ok" },
+        { folder: "fail", task: "BOOM" },
+      ],
+      2,
+      { namespace: "ns-fail", maxRounds: 1 },
+    );
+
+    // Must NOT reject
+    const { executions: results, roundsRun } = await coord.executeRounds(manifest, bb, { maxRounds: 1, dbPath });
+    bb.close();
+
+    expect(results).toHaveLength(2);
+    expect(roundsRun).toBe(1);
+    // The failing child carries error as data, not a throw
+    const failResult = results.find((r) => r.folder === "fail");
+    expect(failResult?.spawn).toBeUndefined();
+    expect(failResult?.scaffold.error).toContain("child exploded");
+    // The good child still completed
+    const okResult = results.find((r) => r.folder === "ok");
+    expect(okResult?.spawn).toBeDefined();
   });
 });

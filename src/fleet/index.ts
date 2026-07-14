@@ -9,24 +9,71 @@
 
 import chalk from "chalk";
 import type { Command } from "commander";
-import { join } from "node:path";
+import { join, resolve, dirname } from "node:path";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 
 import { load } from "./manifest.js";
 import { buildChildConfig } from "./child-config.js";
+import { assertManifest } from "./tool-role-guard.js";
 import { FleetCoordinator } from "./coordinator.js";
 import { OutcomeAggregator } from "./aggregator.js";
 import { PortfolioReporter } from "./reporter.js";
+import { SharedBlackboard } from "./shared-blackboard.js";
+import { collect } from "./synthesis.js";
 import { validateApiKey, createClient } from "../providers/factory.js";
 import { logger } from "../utils/logger.js";
 import { decomposeGoal } from "./decomposer.js";
 import { decomposeGoalDeep } from "./decomposer-deep.js";
 import { writeManifestWithProvenance } from "./manifest-write.js";
+import { ensureDir } from "../state/helpers.js";
 import type { FleetManifest } from "./manifest.js";
-import type { ChildOutcome } from "./types.js";
+import type { ChildOutcome, ChildExecution } from "./types.js";
 import type { PortfolioReport } from "./reporter.js";
+import type { SynthesisBundle } from "./synthesis.js";
 import type { LLMClient } from "../providers/types.js";
 
 export type { PortfolioReport };
+
+// ── resolveBlackboardPath ─────────────────────────────────────────────
+
+/**
+ * Resolve the ABSOLUTE shared blackboard path for a fleet run.
+ * Returns undefined when no blackboard is configured.
+ *
+ * ADR-5: the caller bears the absolute-path responsibility — resolve() is
+ * applied here so downstream modules receive an absolute path directly.
+ */
+export function resolveBlackboardPath(manifest: FleetManifest): string | undefined {
+  if (!manifest.blackboard) return undefined;
+  return join(resolve(manifest.rootDir), ".bober", "memory", manifest.blackboard.namespace, "facts.db");
+}
+
+// ── writeSynthesis ────────────────────────────────────────────────────
+
+/**
+ * Atomically write a SynthesisBundle to <rootDir>/.bober/fleet-synthesis.json.
+ * Mirrors PortfolioReporter.write (reporter.ts:76-91): tmp+rename with a
+ * randomBytes suffix, mode 0o600, and trailing newline.
+ *
+ * @returns The absolute path of the written file.
+ */
+async function writeSynthesis(rootDir: string, bundle: SynthesisBundle): Promise<string> {
+  const dir = resolve(join(rootDir, ".bober"));
+  await mkdir(dir, { recursive: true });
+
+  const filePath = join(dir, "fleet-synthesis.json");
+  const rnd = randomBytes(4).toString("hex");
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.${rnd}.tmp`;
+
+  await writeFile(tmp, JSON.stringify(bundle, null, 2) + "\n", {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
+  await rename(tmp, filePath);
+
+  return filePath;
+}
 
 // ── DI seam ───────────────────────────────────────────────────────────
 
@@ -105,7 +152,8 @@ export async function runFleet(
     ...(options?.rootDir !== undefined ? { rootDir: options.rootDir } : {}),
   };
 
-  // 3. Credential fail-fast BEFORE any spawn
+  // 3. Build-time + credential fail-fast BEFORE any spawn
+  assertManifest(effectiveManifest);                // throws if claude-code on a tool role
   validateManifestCredentials(effectiveManifest);
 
   // 4. Execute → aggregate
@@ -113,16 +161,54 @@ export async function runFleet(
   const aggregator = deps?.aggregator ?? new OutcomeAggregator();
   const reporter = deps?.reporter ?? new PortfolioReporter();
 
-  const executions = await coordinator.execute(effectiveManifest);
-  const outcomes: ChildOutcome[] = await Promise.all(
-    executions.map((e) => aggregator.aggregate(e)),
-  );
+  // ── Blackboard-aware execution branch ────────────────────────────
+  const dbPath = resolveBlackboardPath(effectiveManifest);
+  let executions: ChildExecution[];
+  let bb: SharedBlackboard | null = null; // hoisted so it survives the if-block
+  let roundsRun = 0; // capture the configured round cap
 
-  // 5. Build + write report
-  const report = reporter.build(outcomes);
-  await reporter.write(effectiveManifest.rootDir, report);
+  try {
+    if (dbPath) {
+      // Blackboard path: open a shared WAL facts.db, run bounded rounds.
+      // bb is hoisted to the outer scope so collect() can call bb.readAll()
+      // BEFORE bb.close() (which moves to the outer finally below).
+      await ensureDir(dirname(dbPath));
+      bb = await SharedBlackboard.open({
+        dbPath,
+        namespace: effectiveManifest.blackboard!.namespace,
+        maxRounds: effectiveManifest.blackboard!.maxRounds,
+      });
+      const { executions: roundExecutions, roundsRun: rr } = await coordinator.executeRounds(effectiveManifest, bb, {
+        maxRounds: effectiveManifest.blackboard!.maxRounds,
+        dbPath,
+      });
+      executions = roundExecutions;
+      roundsRun = rr;
+    } else {
+      // No-blackboard path: single mapBounded pass, byte-identical to pre-Phase-B.
+      executions = await coordinator.execute(effectiveManifest);
+    }
 
-  return report;
+    const outcomes: ChildOutcome[] = await Promise.all(
+      executions.map((e) => aggregator.aggregate(e)),
+    );
+
+    // 5. Build + write report (UNCHANGED — always written on every run)
+    const report = reporter.build(outcomes, bb ? { rounds: roundsRun } : undefined);
+    await reporter.write(effectiveManifest.rootDir, report);
+
+    // 6. Synthesis (ADDITIVE — only on a blackboard run; AFTER the report write)
+    // bb is still OPEN here so collect() → bb.readAll() works correctly.
+    if (bb) {
+      const bundle = collect(bb, report, roundsRun);
+      await writeSynthesis(effectiveManifest.rootDir, bundle);
+    }
+
+    return report;
+  } finally {
+    // Close moved here: runs AFTER synthesis collect+write, and on any error path.
+    if (bb) bb.close();
+  }
 }
 
 // ── runFleetExpand ────────────────────────────────────────────────────

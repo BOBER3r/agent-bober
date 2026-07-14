@@ -105,6 +105,9 @@ export class ClaudeCodeAdapter implements LLMClient {
   ) {}
 
   async chat(params: ChatParams): Promise<ChatResponse> {
+    // params.onTextDelta (sprint 8, streaming): accepted but never invoked —
+    // the `claude` CLI's text-only boundary stays; this adapter always shells
+    // out and parses the final JSON result (documented no-op).
     const { system, messages, tools, model } = params;
 
     // Hard fail on tools — see SPIKE SCOPE. Silent drop would corrupt the
@@ -115,6 +118,17 @@ export class ClaudeCodeAdapter implements LLMClient {
           "CLI runs its own tool loop and cannot return custom tool_use blocks. " +
           "Use this provider only for prompt→text roles (e.g. planner), or use " +
           "the anthropic/openai-compat providers for tool-driven roles.",
+      );
+    }
+
+    // Hard fail on documents — the `claude` CLI accepts only a text prompt, so a
+    // PDF/file would be silently dropped (the model would answer from nothing).
+    if (params.documents && params.documents.length > 0) {
+      throw new Error(
+        "ClaudeCodeAdapter does not support `documents` (PDF/file inputs): the " +
+          "`claude` CLI accepts only a text prompt, so a document would be " +
+          "silently dropped. Use the anthropic, openai, or google provider for " +
+          "document parsing.",
       );
     }
 
@@ -176,6 +190,12 @@ export class ClaudeCodeAdapter implements LLMClient {
         inputTokens: parsed.usage?.input_tokens ?? 0,
         outputTokens: parsed.usage?.output_tokens ?? 0,
       },
+      // Vendor-authoritative real cost (ADR-3: claude-code never estimates
+      // via CostMeter). Conditional-spread so the key is ABSENT — not
+      // `costUsd: undefined` — when an older CLI omits total_cost_usd.
+      ...(typeof parsed.total_cost_usd === "number"
+        ? { costUsd: parsed.total_cost_usd }
+        : {}),
     };
   }
 }

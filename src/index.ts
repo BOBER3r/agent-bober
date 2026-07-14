@@ -116,9 +116,16 @@ export {
 
 export {
   runAgenticLoop,
+  resumeSession,
+  forkSession,
   type AgenticLoopParams,
   type AgenticLoopResult,
 } from "./orchestrator/agentic-loop.js";
+
+export {
+  SessionStore,
+  type SessionRecord,
+} from "./orchestrator/session-store.js";
 
 // ── Evaluators ─────────────────────────────────────────────────────
 

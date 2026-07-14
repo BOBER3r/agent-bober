@@ -37,6 +37,13 @@ export interface JsonSchemaObject {
 export interface ToolDef {
   /** Unique tool name (snake_case). */
   name: string;
+  /**
+   * True for side-effect-free tools eligible for concurrent execution
+   * (ADR-2, agent-loop-capability-port sprint 4). Absent (not `false`) means
+   * "unknown/serial" — the loop only parallelizes tools explicitly marked
+   * `true`, so omitting this field keeps existing tool defs byte-identical.
+   */
+  readOnly?: boolean;
   /** Human-readable description of what the tool does. */
   description: string;
   /** JSON Schema object describing the tool's input parameters. */
@@ -181,10 +188,56 @@ export interface ChatParams {
    * lack the knob. When both are set, `responseSchema` takes precedence.
    */
   jsonObjectMode?: boolean;
+  /**
+   * Optional documents (e.g. PDFs) to attach to the request. Each entry is a
+   * base64-encoded payload plus its MIME type. This is a provider-agnostic
+   * input shape: each adapter renders it in that provider's native document
+   * format, prepended to the FIRST user message —
+   *
+   *   - Anthropic → `document` content block (base64 source)
+   *   - OpenAI    → `file` content part (`file_data` base64 data-URL)
+   *   - Gemini    → `inlineData` part (`mimeType` + base64 `data`)
+   *
+   * Adapters whose provider has NO document-input surface (`openai-compat`
+   * endpoints such as DeepSeek/Grok/Ollama, and the `claude-code` CLI) THROW a
+   * clear error when documents are supplied rather than silently dropping them —
+   * a dropped PDF would let the model hallucinate from nothing. Omitting this
+   * field leaves every adapter's rendered request byte-identical to prior
+   * behaviour.
+   */
+  documents?: { base64: string; mediaType: string }[];
+  /**
+   * Optional streaming callback. When set, adapters that support server-sent
+   * streaming (currently ONLY the Anthropic adapter) invoke it once per text
+   * delta as the response is generated; the concatenation of all deltas equals
+   * the final ChatResponse.text. This is a pure provider-agnostic own type —
+   * adapters MAY ignore it (openai/openai-compat/google/claude-code do; they
+   * return the identical non-streamed ChatResponse and put nothing extra on the
+   * wire). A throwing callback must never kill the request (adapter wraps it).
+   */
+  onTextDelta?: (delta: string) => void;
+  /**
+   * Optional abort signal (agent-loop-capability-port sprint 9). A
+   * web-standard `AbortSignal` — NOT an SDK type, so it belongs in this
+   * provider-agnostic surface. Only the Anthropic adapter forwards it (into
+   * the SDK `create`/`stream` request options); other adapters ignore it —
+   * the agentic loop's own turn-boundary checks cover their (non-cancellable)
+   * requests. Absent leaves every adapter's request byte-identical.
+   */
+  abortSignal?: AbortSignal;
 }
 
 /**
  * Stop reason indicating why the model stopped generating.
+ *
+ * Known values: `"end"` (normal completion), `"tool_use"` (model requested a
+ * tool call), `"max_tokens"` (hit the token cap), `"error"` (adapter-level
+ * failure), `"refusal"` (the provider declined to generate — surfaced by
+ * the Anthropic `stop_reason: "refusal"` and the OpenAI-family `finish_reason:
+ * "content_filter"` / `message.refusal` signals), and `"aborted"` (the loop's
+ * own `AgenticLoopParams.abortSignal` fired — agent-loop-capability-port
+ * sprint 9; a graceful partial return, never a throw). This is an open union
+ * (`| string`) so adapters may pass through other provider-specific values.
  */
 export type StopReason = "end" | "tool_use" | "max_tokens" | "error" | string;
 
@@ -203,6 +256,14 @@ export interface ChatResponse {
     inputTokens: number;
     outputTokens: number;
   };
+  /**
+   * USD cost of this request, when known. For `claude-code` this is the CLI's
+   * real, vendor-authoritative `total_cost_usd`; for other providers it is a
+   * `CostMeter` estimate derived from the static price table. Absent (not
+   * `undefined`-valued — the key itself is omitted) when the cost cannot be
+   * determined, e.g. an unpriced model or an older CLI that didn't report it.
+   */
+  costUsd?: number;
 }
 
 // ── LLMClient interface ─────────────────────────────────────────────

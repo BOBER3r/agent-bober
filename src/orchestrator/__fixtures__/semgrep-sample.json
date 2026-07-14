@@ -1,0 +1,41 @@
+{
+  "version": "1.78.0",
+  "results": [
+    {
+      "check_id": "javascript.lang.security.audit.sqli.tainted-sql-string",
+      "path": "src/db/query.js",
+      "start": { "line": 12, "col": 14, "offset": 312 },
+      "end": { "line": 12, "col": 61, "offset": 359 },
+      "extra": {
+        "message": "Detected string concatenation with a non-literal variable in a SQL statement. This could lead to SQL injection if the variable is user-controlled and not properly sanitized.",
+        "metavars": {},
+        "severity": "ERROR",
+        "metadata": {
+          "cwe": ["CWE-89: Improper Neutralization of Special Elements used in an SQL Command"],
+          "owasp": ["A03:2021 - Injection"]
+        },
+        "lines": "const q = `SELECT * FROM users WHERE id = ${userId}`;"
+      }
+    },
+    {
+      "check_id": "generic.secrets.security.detected-generic-api-key.detected-generic-api-key",
+      "path": "src/config.js",
+      "start": { "line": 5, "col": 1, "offset": 61 },
+      "end": { "line": 5, "col": 42, "offset": 102 },
+      "extra": {
+        "message": "Generic API Key detected. Avoid hardcoding secrets in source; load them from environment variables or a secrets manager instead.",
+        "metavars": {},
+        "severity": "WARNING",
+        "metadata": {
+          "cwe": ["CWE-798: Use of Hard-coded Credentials"],
+          "owasp": ["A07:2021 - Identification and Authentication Failures"]
+        },
+        "lines": "const API_KEY = \"sk-live-4242424242424242\";"
+      }
+    }
+  ],
+  "errors": [],
+  "paths": {
+    "scanned": ["src/db/query.js", "src/config.js"]
+  }
+}

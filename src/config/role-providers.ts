@@ -38,6 +38,14 @@ const PROMPT_ROLES: RoleName[] = ["planner", "researcher", "chat"];
 const ALL_ROLES: RoleName[] = [...PROMPT_ROLES, ...TOOL_ROLES];
 
 /**
+ * Returns true when role is a TOOL_ROLE (curator/generator/evaluator/codeReview).
+ * Derived from the authoritative TOOL_ROLES constant — not a re-declaration.
+ */
+export function isToolRole(role: RoleName): boolean {
+  return TOOL_ROLES.includes(role);
+}
+
+/**
  * Compute the raw effective provider for a single role from the config.
  *
  * Resolution:
@@ -46,7 +54,7 @@ const ALL_ROLES: RoleName[] = [...PROMPT_ROLES, ...TOOL_ROLES];
  * - For the resolved section: resolveProviderModel(model, provider).provider
  *   (explicitProvider wins; otherwise model shorthand → provider)
  */
-function effectiveProvider(role: RoleName, config: BoberConfig): string {
+export function effectiveProvider(role: RoleName, config: BoberConfig): string {
   let model: string | undefined;
   let provider: string | undefined;
 

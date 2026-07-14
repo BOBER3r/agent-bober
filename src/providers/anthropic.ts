@@ -9,8 +9,60 @@ import type {
   StopReason,
   Message,
 } from "./types.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Conversion helpers ──────────────────────────────────────────────
+
+/**
+ * Normalize an Anthropic `Message` (from either `messages.create()` or a
+ * stream's `finalMessage()` — same shape, see anthropic.ts's streaming
+ * branch) into a `ChatResponse`. Extracted (agent-loop-capability-port
+ * sprint 8) so the non-streaming and streaming request paths produce
+ * byte-identical output — do NOT duplicate this logic inline elsewhere.
+ */
+function normalizeResponse(
+  response: Anthropic.Messages.Message,
+  model: string,
+  structured: boolean,
+): ChatResponse {
+  const { text, toolCalls } = normalizeContent(response.content);
+
+  const usage = {
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  };
+
+  // Estimated USD cost (undefined when the model isn't in the static price
+  // table). Computed once and spread into both return sites below so the
+  // key is ABSENT — not `costUsd: undefined` — when unpriced (sc-2-3).
+  const costUsd = estimateCostUsd({ provider: "anthropic", model, usage });
+
+  // ── Structured output normalisation ─────────────────────────────
+  // Take the forced tool call's input, stringify it into text, and return
+  // empty toolCalls with a clean "end" stop reason. If the forced tool call
+  // is somehow absent, fall back to the normal normalized result so the
+  // caller's coerce/repair can still try.
+  if (structured) {
+    const forced = toolCalls.find((tc) => tc.name === "structured_output");
+    if (forced !== undefined) {
+      return {
+        text: JSON.stringify(forced.input),
+        toolCalls: [],
+        stopReason: "end",
+        usage,
+        ...(costUsd !== undefined ? { costUsd } : {}),
+      };
+    }
+  }
+
+  return {
+    text,
+    toolCalls,
+    stopReason: normalizeStopReason(response.stop_reason),
+    usage,
+    ...(costUsd !== undefined ? { costUsd } : {}),
+  };
+}
 
 /**
  * Convert a provider-agnostic ToolDef to Anthropic's Tool format.
@@ -39,6 +91,10 @@ function normalizeStopReason(
       return "tool_use";
     case "max_tokens":
       return "max_tokens";
+    case "refusal":
+      // 'refusal' is part of the open StopReason union; surface it explicitly
+      // so the loop can fail closed rather than treat it as a normal completion.
+      return "refusal";
     default:
       return reason ?? "end";
   }
@@ -225,6 +281,43 @@ export class AnthropicAdapter implements LLMClient {
     const anthropicMessages: Anthropic.Messages.MessageParam[] =
       messages.map(toAnthropicMessage);
 
+    // ── Document blocks ─────────────────────────────────────────────
+    // When params.documents is present, prepend a document content block for
+    // each entry to the FIRST user message. Inject BEFORE attachMessageBreakpoints
+    // so the cache breakpoint lands on the last (text) block. Omitting documents
+    // leaves the rendered request byte-identical to prior behaviour (sc-1-5).
+    if (params.documents && params.documents.length > 0) {
+      const firstUserIdx = anthropicMessages.findIndex((m) => m.role === "user");
+      if (firstUserIdx !== -1) {
+        const firstUser = anthropicMessages[firstUserIdx];
+        const docBlocks: Anthropic.Messages.DocumentBlockParam[] =
+          params.documents.map((doc) => ({
+            type: "document" as const,
+            source: {
+              type: "base64" as const,
+              media_type: doc.mediaType as Anthropic.Messages.Base64PDFSource["media_type"],
+              data: doc.base64,
+            },
+          }));
+
+        if (typeof firstUser.content === "string") {
+          // Convert plain-string content to a content-block array with doc blocks prepended.
+          anthropicMessages[firstUserIdx] = {
+            ...firstUser,
+            content: [
+              ...docBlocks,
+              { type: "text" as const, text: firstUser.content },
+            ],
+          };
+        } else if (Array.isArray(firstUser.content)) {
+          anthropicMessages[firstUserIdx] = {
+            ...firstUser,
+            content: [...docBlocks, ...firstUser.content],
+          };
+        }
+      }
+    }
+
     // ── Structured output branch ────────────────────────────────────
     // When responseSchema is set, force a single "structured_output" tool
     // whose input_schema IS the schema, and do NOT forward the user's tools.
@@ -264,7 +357,10 @@ export class AnthropicAdapter implements LLMClient {
       ? attachMessageBreakpoints(anthropicMessages)
       : anthropicMessages;
 
-    const response = await this.client.messages.create({
+    // Built ONCE so both the non-streaming create() call and the streaming
+    // stream() call (sprint 8) send an identical payload — no `stream` key
+    // needed; `.stream()` is the accumulating helper, not a flag on create().
+    const requestBody = {
       model,
       max_tokens: maxTokens,
       system: cachedSystem,
@@ -279,37 +375,40 @@ export class AnthropicAdapter implements LLMClient {
             },
           }
         : {}),
-    });
-
-    const { text, toolCalls } = normalizeContent(response.content);
-
-    const usage = {
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
     };
 
-    // ── Structured output normalisation ─────────────────────────────
-    // Take the forced tool call's input, stringify it into text, and return
-    // empty toolCalls with a clean "end" stop reason. If the forced tool call
-    // is somehow absent, fall back to the normal normalized result so the
-    // caller's coerce/repair can still try.
-    if (structured) {
-      const forced = toolCalls.find((tc) => tc.name === "structured_output");
-      if (forced !== undefined) {
-        return {
-          text: JSON.stringify(forced.input),
-          toolCalls: [],
-          stopReason: "end",
-          usage,
-        };
-      }
+    // Request options (2nd arg to create/stream), built ONCE and kept OUT of
+    // requestBody so the create/stream body-identity invariant holds and the
+    // signal is never sent over the wire as part of the payload (sprint 9).
+    // `undefined` when no signal is supplied => `create(body, undefined)` is
+    // identical to `create(body)` (sc-9-5).
+    const requestOptions = params.abortSignal
+      ? { signal: params.abortSignal }
+      : undefined;
+
+    // NON-STREAM PATH: byte-identical to the pre-sprint-8 behavior when
+    // onTextDelta is absent.
+    if (params.onTextDelta === undefined) {
+      const response = await this.client.messages.create(requestBody, requestOptions);
+      return normalizeResponse(response, model, structured);
     }
 
-    return {
-      text,
-      toolCalls,
-      stopReason: normalizeStopReason(response.stop_reason),
-      usage,
-    };
+    // STREAM PATH: forward each text delta to the caller's callback, then
+    // normalize the SAME way from the stream's final accumulated message.
+    const stream = this.client.messages.stream(requestBody, requestOptions);
+    for await (const event of stream) {
+      if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+        try {
+          params.onTextDelta(event.delta.text);
+        } catch {
+          // A throwing consumer must NOT kill the request.
+        }
+      }
+    }
+    // Let errors from iteration/finalMessage() propagate uncaught so
+    // chatWithRetry's isTransientError classification applies identically to
+    // a rejecting create() call (sc-8-5) — do not swallow them here.
+    const message = await stream.finalMessage();
+    return normalizeResponse(message, model, structured);
   }
 }

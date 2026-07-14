@@ -23,21 +23,112 @@ import type {
   SearchHit,
   StalenessVerdict,
 } from "./types.js";
+import { assertNever } from "./types.js";
 import { sandboxNodePath } from "./sandbox.js";
 
 // Tokensave MCP tool catalog → GraphClient method mapping.
-// Names match the canonical tool catalog (per the project CLAUDE.md);
-// no `tokensave_` prefix.
+// All tools use the `tokensave_` prefix as emitted by tokensave 6.1.1's tools/list.
 const TOOL = {
-  search: "semantic_search_nodes",
-  query: "query_graph",
-  impact: "get_impact_radius",
-  reviewContext: "get_review_context",
-  overview: "get_architecture_overview",
-  changes: "detect_changes",
+  search: "tokensave_search",
+  impact: "tokensave_impact",
+  reviewContext: "tokensave_context",
+  overview: "tokensave_module_api",
+  changes: "tokensave_changelog",
+} as const;
+
+// Per-pattern query tool map: each QueryPattern maps to a distinct tokensave 6.1.1 tool.
+const QUERY_TOOL = {
+  callers_of: "tokensave_callers",
+  callees_of: "tokensave_callees",
+  imports_of: "tokensave_file_dependents",
+  tests_for: "tokensave_test_map",
 } as const;
 
 type QueryPattern = "callers_of" | "callees_of" | "imports_of" | "tests_for";
+
+// ── Raw 6.1.1 row types (adapter-internal only) ────────────────────
+
+/** Raw row returned by tokensave_search */
+type TsSearchRow = {
+  file: string;
+  id: string;
+  kind: string;
+  line: number;
+  name: string;
+  score: number;
+  signature?: string;
+};
+
+/** Raw row returned by tokensave_callers / tokensave_callees */
+type TsEdgeRow = {
+  edge_kind: string;
+  file: string;
+  kind: string;
+  line: number;
+  name: string;
+  node_id: string;
+  dispatch_via_trait?: boolean;
+};
+
+/** Raw object returned by tokensave_file_dependents */
+type TsFileDependentsResult = {
+  count: number;
+  dependents: string[];
+  file: string;
+};
+
+/** Raw object returned by tokensave_test_map */
+type TsTestMapResult = {
+  coverage: unknown[];
+  covered_symbols: number;
+  test_files: string[];
+  uncovered: Array<{ file: string; id: string; line: number; name: string }>;
+};
+
+/** Raw object returned by tokensave_impact */
+type TsImpactResult = {
+  edge_count: number;
+  node_count: number;
+  nodes: Array<{ file: string; id: string; kind: string; line: number; name: string }>;
+};
+
+/** Raw object returned by tokensave_module_api */
+type TsModuleApiResult = {
+  path: string;
+  public_symbol_count: number;
+  symbols: Array<{ file: string; id: string; kind: string; line: number; name: string; signature?: string }>;
+};
+
+/** Raw object returned by tokensave_changelog */
+type TsChangelogResult = {
+  changed_file_count: number;
+  changed_files: string[];
+  files_not_indexed: string[];
+  from_ref: string;
+  symbols_in_changed_files: Array<{ file: string; id: string; kind: string; line: number; name: string; signature?: string }>;
+};
+
+// ── Kind coercion ──────────────────────────────────────────────────
+
+/** Valid NodeRef.kind values — 6.1.1 emits wider kinds; coerce unknowns to "symbol". */
+const NODE_KINDS = new Set<string>(["function", "class", "module", "symbol"]);
+
+function toNodeRef(row: {
+  id?: string;
+  node_id?: string;
+  name: string;
+  file: string;
+  line: number;
+  kind?: string;
+}): NodeRef {
+  return {
+    id: row.id ?? row.node_id ?? "",
+    kind: NODE_KINDS.has(row.kind ?? "") ? (row.kind as NodeRef["kind"]) : "symbol",
+    file: row.file,
+    line: row.line,
+    symbol: row.name,
+  };
+}
 
 export interface SearchOpts {
   limit?: number;
@@ -75,43 +166,131 @@ export class GraphClient {
   // ── Public API ──────────────────────────────────────────────────
 
   async search(q: string, opts?: SearchOpts): Promise<GraphResult<SearchHit[]>> {
-    return this.runWithSandbox(TOOL.search, { query: q, ...opts }, (raw) => {
-      const hits = (raw as SearchHit[]).filter((h) => this.keepNode(h.node, "search"));
-      return hits;
-    });
+    return this.runWithSandbox(
+      TOOL.search,
+      { query: q, ...(opts?.limit !== undefined ? { limit: opts.limit } : {}) },
+      (raw) => {
+        const rows = raw as TsSearchRow[];
+        const hits: SearchHit[] = rows.map((row) => ({
+          node: toNodeRef(row),
+          score: row.score,
+          snippet: row.signature ?? "",
+        }));
+        // Post-filter by kind if requested (tokensave_search has no kind param).
+        const filtered = opts?.kind
+          ? hits.filter((h) => h.node.kind === opts.kind)
+          : hits;
+        return filtered.filter((h) => this.keepNode(h.node, "search"));
+      },
+    );
   }
 
   async query(pattern: QueryPattern, target: NodeRef): Promise<GraphResult<NodeRef[]>> {
-    return this.runWithSandbox(TOOL.query, { pattern, target }, (raw) => {
-      return (raw as NodeRef[]).filter((n) => this.keepNode(n, "query"));
-    });
+    switch (pattern) {
+      case "callers_of":
+      case "callees_of": {
+        const tool = QUERY_TOOL[pattern];
+        return this.runWithSandbox(tool, { node_id: target.id }, (raw) => {
+          const rows = raw as TsEdgeRow[];
+          return rows
+            .map((row) => toNodeRef({ ...row, id: row.node_id }))
+            .filter((n) => this.keepNode(n, "query"));
+        });
+      }
+      case "imports_of": {
+        return this.runWithSandbox(
+          QUERY_TOOL.imports_of,
+          { file: target.file },
+          (raw) => {
+            const result = raw as TsFileDependentsResult;
+            return result.dependents
+              .map((path): NodeRef => ({
+                id: path,
+                kind: "module",
+                file: path,
+                line: 0,
+                symbol: path,
+              }))
+              .filter((n) => this.keepNode(n, "query"));
+          },
+        );
+      }
+      case "tests_for": {
+        return this.runWithSandbox(
+          QUERY_TOOL.tests_for,
+          { file: target.file },
+          (raw) => {
+            const result = raw as TsTestMapResult;
+            if (result.test_files.length > 0) {
+              return result.test_files
+                .map((path): NodeRef => ({
+                  id: path,
+                  kind: "module",
+                  file: path,
+                  line: 0,
+                  symbol: path,
+                }))
+                .filter((n) => this.keepNode(n, "query"));
+            }
+            // Fall back to uncovered symbol rows if test_files is empty.
+            return result.uncovered
+              .map((row) => toNodeRef(row))
+              .filter((n) => this.keepNode(n, "query"));
+          },
+        );
+      }
+      default:
+        return assertNever(pattern);
+    }
   }
 
   async impact(target: NodeRef | string): Promise<GraphResult<ImpactReport>> {
-    return this.runWithSandbox(TOOL.impact, { target }, (raw) => {
-      const report = raw as ImpactReport;
+    const nodeId = typeof target === "string" ? target : target.id;
+    return this.runWithSandbox(TOOL.impact, { node_id: nodeId }, (raw) => {
+      const result = raw as TsImpactResult;
+      const allNodes = result.nodes.map((row) => toNodeRef(row));
+      const root = allNodes[0] ?? toNodeRef({
+        id: nodeId,
+        name: nodeId,
+        file: typeof target === "string" ? "" : target.file,
+        line: 0,
+        kind: "symbol",
+      });
+      const rest = allNodes.slice(1);
+      const testsAffected = rest.filter((n) => /test|spec/i.test(n.file));
+      const affected = rest.filter((n) => !/test|spec/i.test(n.file));
       return {
-        root: report.root, // root may be out-of-sandbox but is informational only
-        affected: report.affected.filter((n) => this.keepNode(n, "impact")),
-        testsAffected: report.testsAffected.filter((n) =>
-          this.keepNode(n, "impact"),
-        ),
+        root, // root may be out-of-sandbox but is informational only
+        affected: affected.filter((n) => this.keepNode(n, "impact")),
+        testsAffected: testsAffected.filter((n) => this.keepNode(n, "impact")),
       };
     });
   }
 
   async reviewContext(nodes: NodeRef[]): Promise<GraphResult<string>> {
-    return this.runRaw<string>(TOOL.reviewContext, { nodes });
+    const task = nodes.map((n) => n.symbol).join(", ");
+    return this.runRaw<string>(TOOL.reviewContext, { task });
   }
 
   async overview(): Promise<GraphResult<string>> {
-    return this.runRaw<string>(TOOL.overview, {});
+    return this.runWithSandbox<string>(TOOL.overview, { path: "src" }, (raw) => {
+      // tokensave_module_api returns a JSON object; stringify for string callers.
+      const result = raw as TsModuleApiResult;
+      return JSON.stringify(result);
+    });
   }
 
   async changes(since?: string): Promise<GraphResult<NodeRef[]>> {
-    return this.runWithSandbox(TOOL.changes, { since }, (raw) => {
-      return (raw as NodeRef[]).filter((n) => this.keepNode(n, "changes"));
-    });
+    return this.runWithSandbox(
+      TOOL.changes,
+      { from_ref: since ?? "HEAD~1", to_ref: "HEAD" },
+      (raw) => {
+        const result = raw as TsChangelogResult;
+        return result.symbols_in_changed_files
+          .map((row) => toNodeRef(row))
+          .filter((n) => this.keepNode(n, "changes"));
+      },
+    );
   }
 
   async prefetch(

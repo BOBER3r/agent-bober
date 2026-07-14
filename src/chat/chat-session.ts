@@ -30,6 +30,18 @@ import type { ApprovedMarker, RejectedMarker } from "../state/approval-state.js"
 import { resolveApprover } from "../cli/commands/approve.js";
 import { cleanupTerminalRun } from "./steer-cleanup.js";
 import { seedProjectFacts } from "../orchestrator/memory/fact-detector.js";
+import { writeFile } from "node:fs/promises";
+import { collectFindings } from "../hub/collector.js";
+import { rankFindings } from "../hub/judge.js";
+import { renderPriorityMd } from "../hub/priority-md.js";
+import { resolveSiblingRepos } from "../hub/repo-resolver.js";
+import { resolveOutVault, priorityMdPath } from "../hub/hub-config.js";
+import { HUB_SCOPE } from "../hub/finding-source.js";
+import { parseScope } from "../hub/scope.js";
+import type { Scope } from "../hub/scope.js";
+import { fileExists } from "../utils/fs.js";
+import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
+import { captureTask } from "../hub/task-inbox.js";
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -208,6 +220,8 @@ export class ChatSession {
       (runId, text) => this.handleTell(runId, text),
       (runId) => this.handlePause(runId),
       (runId) => this.handleResume(runId),
+      () => this.handleHubPriority(),
+      (expr) => this.handleHubDecide(expr),
     );
     if (slashResult.handled) {
       if (slashResult.exit) return null;
@@ -273,6 +287,8 @@ export class ChatSession {
       reply = await this.handlePause(action.runId);
     } else if (action.action === "resume") {
       reply = await this.handleResume(action.runId);
+    } else if (action.action === "capture-task") {
+      reply = await this.handleCaptureTask(action.task);
     } else {
       // Unknown action — should not happen given the classifier union
       reply = `Unrecognised action. For now, try /help for available commands.`;
@@ -437,6 +453,93 @@ export class ChatSession {
       await writeRunState(this.projectRoot, { ...rest, status: "running" });
     }
     return `Resumed run ${runId}.`;
+  }
+
+  /**
+   * Capture a plain task statement as an open action Finding in the hub pool.
+   * Reuses captureTask (sprint 1) — the single write path; never re-implements it.
+   * `now` is stamped here at the chat handler boundary (the only permitted
+   * new Date() per principles); captureTask/the store stay clock-free.
+   * Never throws: a persistence failure becomes an error reply, not an exception.
+   */
+  private async handleCaptureTask(task: string): Promise<string> {
+    const title = task.trim();
+    if (title.length === 0) {
+      return "Nothing to capture — the task text was empty.";
+    }
+    try {
+      await ensureFactsDir(this.projectRoot, this.memoryNamespace);
+      const now = new Date().toISOString();
+      const store = new FactStore(factsDbPath(this.projectRoot, this.memoryNamespace));
+      try {
+        const finding = await captureTask(store, title, { now });
+        return `Captured task: ${finding.title}`;
+      } finally {
+        store.close();
+      }
+    } catch (err) {
+      return `Failed to capture task: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  // ── Hub slash commands ────────────────────────────────────────────────
+
+  /**
+   * Handle /priority in a hub chat session.
+   *
+   * Gated on this.memoryNamespace === "hub" — returns an informative no-op
+   * string for any other team without calling this.llm.
+   */
+  private async handleHubPriority(): Promise<string> {
+    if (this.memoryNamespace !== "hub") {
+      return "The /priority command is only available in the hub team. Start it with `bober chat hub`.";
+    }
+    const scope = parseScope({ mode: "general" });
+    return this.rankAndRenderHub(scope, "general");
+  }
+
+  /**
+   * Handle /decide <X> vs <Y> in a hub chat session.
+   *
+   * Gated on this.memoryNamespace === "hub" — returns an informative no-op
+   * string for any other team without calling this.llm.
+   */
+  private async handleHubDecide(expr: string): Promise<string> {
+    if (this.memoryNamespace !== "hub") {
+      return "The /decide command is only available in the hub team. Start it with `bober chat hub`.";
+    }
+    const parts = expr.split(/\s+vs\s+/i);
+    if (parts.length !== 2 || !parts[0]!.trim() || !parts[1]!.trim()) {
+      return `Expected 'X vs Y', got: ${expr}`;
+    }
+    const scope = parseScope({
+      mode: "decision",
+      optionA: parts[0]!.trim(),
+      optionB: parts[1]!.trim(),
+    });
+    return this.rankAndRenderHub(scope, `decide: ${parts[0]!.trim()} vs ${parts[1]!.trim()}`);
+  }
+
+  /**
+   * Collect sibling findings, rank via the hub judge, best-effort write priority.md,
+   * and return a ranked summary string ("rank. title" per line).
+   */
+  private async rankAndRenderHub(scope: Scope, label: string): Promise<string> {
+    const siblings = await resolveSiblingRepos(this.projectRoot);
+    const findings = collectFindings(siblings, HUB_SCOPE);
+    const now = new Date();
+    const ranked = await rankFindings(findings, scope, this.llm, now);
+    // Best-effort write of priority.md (skip silently if the vault is absent).
+    try {
+      const outVault = await resolveOutVault(this.projectRoot);
+      if (await fileExists(outVault)) {
+        await writeFile(priorityMdPath(outVault), renderPriorityMd(ranked, label, now), "utf-8");
+      }
+    } catch {
+      // A write failure must never break the chat turn.
+    }
+    if (ranked.length === 0) return "No findings to prioritize.";
+    return ranked.map((f, i) => `${i + 1}. ${f.title}`).join("\n");
   }
 
   /**

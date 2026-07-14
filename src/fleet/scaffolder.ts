@@ -17,7 +17,11 @@ export interface ScaffoldResult {
 // ── Scaffolder ───────────────────────────────────────────────────────
 
 export class ChildScaffolder {
-  async scaffold(rootDir: string, child: FleetChild): Promise<ScaffoldResult> {
+  async scaffold(
+    rootDir: string,
+    child: FleetChild,
+    blackboard?: { dbPath: string; namespace: string; maxRounds: number },
+  ): Promise<ScaffoldResult> {
     const absPath = resolve(rootDir, child.folder);
 
     // 1. Non-empty safety check — bail untouched if folder exists and has entries
@@ -54,7 +58,16 @@ export class ChildScaffolder {
 
     // 3. Write bober.config.json using the Zod-valid config from buildChildConfig
     try {
-      const configJson = JSON.stringify(buildChildConfig(child), null, 2);
+      const config = buildChildConfig(child);
+      if (blackboard) {
+        config.fleet = {
+          blackboardDbPath: blackboard.dbPath,
+          blackboardNamespace: blackboard.namespace,
+          blackboardSubject: child.folder,
+          maxRounds: blackboard.maxRounds,
+        };
+      }
+      const configJson = JSON.stringify(config, null, 2);
       await writeFile(join(absPath, "bober.config.json"), configJson, "utf-8");
     } catch (err) {
       return {

@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import type { ChatParams, ToolDef } from "./types.js";
 import { createClient } from "./factory.js";
+import { estimateCostUsd } from "./cost-meter.js";
 
 // ── Fake OpenAI client factory ───────────────────────────────────────
 
@@ -316,5 +317,153 @@ describe("OpenAICompatAdapter", () => {
         delete process.env["DEEPSEEK_API_KEY"];
       }
     }
+  });
+
+  // ── costUsd uses the openai-compat price key, not openai's (sc-2-3) ─────────
+
+  it("sets costUsd from the DeepSeek (openai-compat) row, not the OpenAI row", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "deepseek reply" }));
+
+    const adapter = await makeAdapter({
+      endpoint: "https://api.deepseek.com",
+      model: "deepseek-v4-pro",
+    });
+    const result = await adapter.chat({
+      model: "deepseek-v4-pro",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const expectedCompat = estimateCostUsd({
+      provider: "openai-compat",
+      model: "deepseek-v4-pro",
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    const wouldBeOpenai = estimateCostUsd({
+      provider: "openai",
+      model: "deepseek-v4-pro",
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    expect(expectedCompat).not.toBeUndefined();
+    expect(wouldBeOpenai).toBeUndefined(); // "openai" has no deepseek row — proves it's NOT the openai key
+    expect(result.costUsd).toBe(expectedCompat);
+  });
+
+  it("sets costUsd from the Grok (openai-compat) row for grok-4-fast", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "grok reply" }));
+
+    const adapter = await makeAdapter({
+      endpoint: "https://api.x.ai/v1",
+      model: "grok-4-fast",
+    });
+    const result = await adapter.chat({
+      model: "grok-4-fast",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    const expected = estimateCostUsd({
+      provider: "openai-compat",
+      model: "grok-4-fast",
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    expect(expected).not.toBeUndefined();
+    expect(result.costUsd).toBe(expected);
+  });
+
+  it("omits costUsd entirely for an unpriced openai-compat model (e.g. local Ollama)", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "local reply" }));
+
+    const adapter = await makeAdapter({
+      endpoint: "http://localhost:11434/v1",
+      model: "llama3",
+    });
+    const result = await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(Object.hasOwn(result, "costUsd")).toBe(false);
+  });
+});
+
+// ── Documents (fail-loud: no file-input surface) ─────────────────────
+
+describe("OpenAICompatAdapter — documents (fail-loud)", () => {
+  let createFn: FakeCreateFn;
+
+  beforeEach(() => {
+    createFn = vi.fn();
+    vi.doMock("openai", () => ({ default: makeFakeOpenAI(createFn) }));
+  });
+
+  async function makeAdapter() {
+    const { OpenAICompatAdapter } = await import(
+      "./openai-compat.js?v=docs-" + Date.now()
+    );
+    return new OpenAICompatAdapter("http://localhost:11434/v1", "llama3");
+  }
+
+  it("throws a clear error when documents are supplied (never calls the endpoint)", async () => {
+    const adapter = await makeAdapter();
+
+    await expect(
+      adapter.chat({
+        model: "llama3",
+        system: "sys",
+        messages: [{ role: "user", content: "parse this" }],
+        documents: [{ base64: "QkFTRTY0", mediaType: "application/pdf" }],
+      }),
+    ).rejects.toThrow(/does not support `documents`/);
+
+    expect(createFn).not.toHaveBeenCalled();
+  });
+
+  it("delegates to OpenAIAdapter unchanged when documents is absent", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hello" }));
+    const adapter = await makeAdapter();
+
+    const res = await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+    });
+
+    expect(res.text).toBe("hello");
+    expect(createFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("delegates unchanged when documents is an empty array", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hello" }));
+    const adapter = await makeAdapter();
+
+    await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      documents: [],
+    });
+
+    expect(createFn).toHaveBeenCalledTimes(1);
+  });
+
+  // ── onTextDelta no-op (sc-8-3) ─────────────────────────────────────
+
+  it("sc-8-3: accepts ChatParams.onTextDelta without error, never invokes it, and sends the byte-identical request", async () => {
+    createFn.mockResolvedValue(makeOAIResponse({ content: "hello" }));
+    const adapter = await makeAdapter();
+    const onTextDelta = vi.fn();
+
+    await adapter.chat({
+      model: "llama3",
+      system: "sys",
+      messages: [{ role: "user", content: "hi" }],
+      onTextDelta,
+    });
+
+    expect(onTextDelta).not.toHaveBeenCalled();
+    const callArgs = createFn.mock.calls[0][0] as Record<string, unknown>;
+    expect(JSON.stringify(callArgs)).not.toContain("onTextDelta");
   });
 });

@@ -9,6 +9,7 @@ import type { BoberConfig } from "../config/schema.js";
 import { resolveRoleProviders } from "../config/role-providers.js";
 import type { RoleName } from "../config/role-providers.js";
 import { resolveEngineName } from "../orchestrator/workflow/selector.js";
+import { buildMedicalTeam } from "../medical/team.js";
 import type { Role, Team } from "./types.js";
 
 // ── Role descriptors ─────────────────────────────────────────────────
@@ -35,6 +36,24 @@ export function loadTeam(config: BoberConfig, teamId?: string): Team {
   // Built-in default path: no id or 'programming' -> programming team
   if (teamId === undefined || teamId === "programming") {
     return buildProgrammingTeam(config);
+  }
+
+  // Built-in medical team
+  if (teamId === "medical") {
+    return buildMedicalTeam(config);
+  }
+
+  // Built-in hub team (data): default pipeline, dedicated 'hub' memory namespace.
+  if (teamId === "hub") {
+    return {
+      id: "hub",
+      displayName: "Priority hub",
+      memoryNamespace: "hub",
+      providers: resolveRoleProviders(config),
+      pipelineShape: resolveEngineName(config),
+      roles: DEFAULT_ROLES,
+      guardrails: undefined,
+    };
   }
 
   const entry = config.teams?.[teamId];

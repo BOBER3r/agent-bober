@@ -179,6 +179,7 @@ Inside the session:
 ```
 > build a settings page        # spawns a detached `bober run`, returns immediately
 > what runs are active?         # answered using roster + memory context
+> renew passport                # plain task statement → captured as an open hub task
 > stop the settings page run    # natural language → stops the matching running run
 > /runs                         # list active/recent runs (deterministic, no LLM call)
 > /stop <runId>                 # HARD stop: kill the run's process by id (deterministic, no LLM call)
@@ -257,6 +258,18 @@ state persists across a REPL restart via `.bober/chat/<sessionId>.cursor.json`, 
 announced exactly once. The notice is rotation-safe — it still fires correctly if
 `.bober/history.jsonl` was rotated or truncated between turns.
 
+**Capturing a task.** A plain task statement — an imperative like `renew passport`,
+`book dentist`, `call the bank` — is recognised by the turn classifier as a **new-task intent** and
+**captured into the hub pool** as a single open `action` Finding, with the reply being a short
+`Captured task: <text>` confirmation rather than an LLM answer. This is the chat front-end for
+`bober task add`: it reuses the **same `captureTask` write path**, so the captured item shows up in
+`bober task list`, `bober hub list`, and is eligible for `priority` / `decide` / `bober chat hub`. A
+**question** ("what is X?", "how do I Y?") still routes to the answerer, and a **decision/scope
+statement** ("I'm deciding between X and Y", "should I do A or B?") is **not** captured as a task — it
+is answered — so prioritization phrasing is never mistaken for a to-do. Capture is deterministic and
+**never throws**: a persistence failure becomes a `Failed to capture task: …` reply, not a crash, and
+a malformed classifier response falls back to a normal answer turn.
+
 **Steering runs.** You can stop a run two ways, both deterministic (no LLM call):
 the `/stop <runId>` slash command, or natural language ("stop the settings page run")
 which the classifier routes to the same handler. Stop is a real **hard** stop — distinct
@@ -278,8 +291,10 @@ resolved from the `chat` role in `bober.config.json` (defaults to `opus` on
 
 The fleet orchestrator runs **N isolated `agent-bober` child runs in bulk** from a manifest.
 A manifest is a JSON file describing a `rootDir`, a `concurrency`, and a list of `children`,
-each `{ "folder", "task" }` (children may carry an optional per-child `config`). These
-commands are invoked as `agent-bober …` (not `bober …`).
+each `{ "folder", "task" }` (children may carry an optional per-child `config` and an optional
+per-child `tier`). A manifest may also carry an optional top-level `blackboard` block to opt the
+run into the cross-child blackboard (see "Inter-child blackboard" below). These commands are
+invoked as `agent-bober …` (not `bober …`).
 
 ### `agent-bober fleet <manifest>`
 
@@ -307,6 +322,52 @@ A manifest looks like:
   ]
 }
 ```
+
+#### Per-child difficulty tier (optional)
+
+Each child may carry an optional `tier` that routes its three roles (planner,
+generator, evaluator) onto a provider block. A child with **no `tier`** (or `tier:
+"default"`) runs exactly as before — the **DeepSeek default**, byte-for-byte unchanged:
+
+```json
+{
+  "rootDir": ".",
+  "concurrency": 3,
+  "children": [
+    { "folder": "api-server",  "task": "Build a REST API server with auth" },
+    { "folder": "web-frontend", "task": "Build a React frontend", "tier": "standard" },
+    { "folder": "billing",     "task": "Implement Stripe billing", "tier": "frontier" }
+  ]
+}
+```
+
+The `tier` value is a closed enum — anything outside it is rejected when the manifest
+is parsed:
+
+| `tier` | Provider | Model | Endpoint |
+|---|---|---|---|
+| `default` (or omitted) | — *(no overlay)* | — | DeepSeek default, unchanged |
+| `cheap` | `openai-compat` | `deepseek` | `https://api.deepseek.com` |
+| `standard` | `openai-compat` | `grok` | `https://api.x.ai/v1` *(Grok / xAI)* |
+| `hard` | `anthropic` | `sonnet` | *(default)* |
+| `frontier` | `anthropic` | `opus` | *(default)* |
+
+Notes:
+
+- All three roles of a tiered child get the **same** provider block.
+- A child's explicit `config` still **wins** over the tier — the tier is applied
+  first, then `config` shallow-merges over it. So `{ "tier": "standard", "config": {
+  "generator": { "provider": "anthropic", "model": "sonnet" } } }` puts the generator
+  on Anthropic and the planner/evaluator on Grok.
+- `claude-code` is **never** a tier — it is reserved for the head/orchestrator, never a
+  fleet child role. Tiers only name LLM providers. A builder child (`curator` /
+  `generator` / `evaluator` / `codeReview`) **must** use an api-key provider
+  (`anthropic` / `openai-compat`): if a child's `config` places `claude-code` on one of
+  those tool roles, `agent-bober fleet` **rejects the manifest at launch, before any
+  child is spawned**, naming the offending child and role.
+- The non-DeepSeek tiers need the matching key in the environment: `standard` needs
+  `XAI_API_KEY`, `hard` / `frontier` need `ANTHROPIC_API_KEY` (and `cheap` / default
+  need `DEEPSEEK_API_KEY`). The model ids are config-overridable per role.
 
 ### `agent-bober fleet expand <goal>`
 
@@ -435,6 +496,114 @@ decomposition step calls DeepSeek via the `openai-compat` provider.
 reach for `fleet expand-deep` when the goal is broad or vague and the single-shot pass produces a
 poor split. Both write the same manifest format and feed the same `agent-bober fleet <manifest>`
 runner. The `--critique` self-judged gate is available on `fleet expand-deep` only.
+
+### `bober blackboard`
+
+Publish and read findings on the shared inter-agent fleet blackboard (Phase B). The
+`blackboard` group is a container with no action of its own — run a subcommand. Both
+subcommands read the shared db path from the current directory's `bober.config.json`
+`fleet` section **only** (never re-derived from the cwd); if that section is absent —
+i.e. this is not a child of a blackboard-enabled fleet run — they print an error and
+exit `1` (they never throw).
+
+```bash
+bober blackboard publish <value>              # Publish a finding to the shared fleet blackboard, under this child's subject (its folder name)
+bober blackboard publish <value> --round <n>  # Round number to publish under (default: 1)
+bober blackboard read                         # Print findings from the shared fleet blackboard (default: siblings only, i.e. every child except this one)
+bober blackboard read --all                   # Print every child's findings (default: siblings only)
+```
+
+See [Inter-child blackboard (Phase B)](#inter-child-blackboard-phase-b) below for the manifest
+`blackboard` block that enables this and the bounded-rounds fleet behavior it drives.
+
+---
+
+### Inter-child blackboard (Phase B)
+
+A fleet run can opt into a **bounded inter-agent blackboard** — a single shared `facts.db` (opened
+in WAL mode) by which the isolated children publish and read each other's findings. Add an optional
+top-level `blackboard` block to the manifest:
+
+```jsonc
+{
+  "rootDir": ".",
+  "concurrency": 3,
+  "blackboard": {
+    "namespace": "fleet-run-123",   // Required. Scopes all findings for this run.
+    "maxRounds": 3                   // Optional. Exchange rounds, 1–3, default 3 (hard-capped at 3).
+  },
+  "children": [
+    { "folder": "api-server",  "task": "Build a REST API server with auth" },
+    { "folder": "web-frontend", "task": "Build a React frontend for the API" }
+  ]
+}
+```
+
+When a `blackboard` block is present, the head resolves **one absolute** shared db path —
+`<rootDir>/.bober/memory/<namespace>/facts.db` — and writes it verbatim into each child's
+`bober.config.json` (a child-internal `fleet` section). Children, running in separate working
+directories, all open that **same** absolute path, so they share one blackboard. With **no**
+`blackboard` block the manifest behaves exactly as before and the children's configs are
+byte-identical to a non-blackboard run.
+
+**Bounded rounds + early-stop.** With a `blackboard` block, `agent-bober fleet` runs the children
+for **up to `maxRounds` rounds** over that one shared blackboard, instead of the single pass a
+no-blackboard run does. The head scaffolds each child's config **once** (on round 1) and **re-spawns
+`agent-bober run` every round** — re-spawning is how a child gets to *read* the prior round's
+siblings' findings (via `agent-bober blackboard read`) before its next attempt. After each round the
+head counts the findings on the blackboard and **stops early** the moment a completed round adds
+**zero new findings** (so a converged run finishes in fewer than `maxRounds` rounds; the loop always
+runs at least 2 rounds before it can early-stop). Round 1's config is never re-written on later
+rounds, the run still exits `0` on per-child failures, and `fleet-report.json` is written from the
+**final** round's outcomes. With **no** `blackboard` block the run is a single pass, byte-for-byte
+as before.
+
+**Synthesis artifact (`fleet-synthesis.json`).** On a blackboard run only, after the unchanged
+`fleet-report.json` write, the head also writes a second file `<rootDir>/.bober/fleet-synthesis.json`
+— a **pure data bundle** for the head / dynamic-workflow to synthesize over. `agent-bober` itself
+**does not synthesize**; it only collects the bundle. The file is the JSON serialization of:
+
+```jsonc
+{
+  "rounds": 3,                  // the number of rounds actually executed (≤ maxRounds; lower if the run early-stopped)
+  "childResults": { /* … */ },  // the same PortfolioReport written to fleet-report.json
+  "findings": [ /* … */ ]       // every finding on the blackboard (FactRecord[], from readAll())
+}
+```
+
+With **no** `blackboard` block, **no** `fleet-synthesis.json` is written and the run output is
+byte-for-byte identical to a non-blackboard fleet. `rounds` is the **real executed round count** —
+it equals `maxRounds` on a full run and is **lower** when the run early-stops (e.g. `2` when a
+`maxRounds: 3` run converges and stops at round 2). On a blackboard run the **same** count also
+appears as an optional top-level `rounds` field on `fleet-report.json` (it equals
+`fleet-synthesis.json.rounds`); a no-blackboard `fleet-report.json` has **no** `rounds` key, so it
+stays byte-for-byte identical to a non-blackboard fleet.
+
+#### `agent-bober blackboard publish <value> [--round N]`
+
+Publish a finding to the shared fleet blackboard. Run from inside a child's working directory (its
+`bober.config.json` must carry the head-injected `fleet` section). The finding is published under
+this child's subject (its folder name); `--round` defaults to `1`.
+
+```bash
+agent-bober blackboard publish "auth bug is in token refresh"
+agent-bober blackboard publish "retrying with backoff fixed it" --round 2
+```
+
+#### `agent-bober blackboard read [--all]`
+
+Print findings from the shared fleet blackboard, one `[<subject>] <value>` line each. By default it
+prints **siblings'** findings (every child except this one); `--all` prints every child's findings.
+
+```bash
+agent-bober blackboard read          # siblings only
+agent-bober blackboard read --all    # all children's findings
+```
+
+Both subcommands read the shared db path from the child's `config.fleet` section **only** (never
+re-derived from the cwd). If the current directory's `bober.config.json` has **no** `fleet` section
+— i.e. it is not part of a blackboard fleet run — both print a clear message and exit `1` (they
+never throw). An empty read prints nothing and exits `0`.
 
 ---
 
@@ -717,6 +886,1346 @@ Generate `.bober/onboarding/` documentation from the code graph.
 ```bash
 bober onboard
 ```
+
+---
+
+## Configuration & Introspection Commands
+
+Inspect and manage bober's local configuration, telemetry, worktree runs,
+self-improvement lessons, and semantic facts.
+
+### `bober config`
+
+Inspect and migrate `bober.config.json`. The `config` group is a container
+with no action of its own — run a subcommand.
+
+```bash
+bober config migrate             # Add all new schema fields with default values to bober.config.json
+bober config migrate --dry-run   # Print the merged config without writing
+```
+
+---
+
+### `bober telemetry`
+
+Inspect, export, or purge local telemetry events (opt-in, local-only). The
+`telemetry` group is a container with no action of its own — run a subcommand.
+
+```bash
+bober telemetry status    # Print whether telemetry is enabled and recent event counts by type
+bober telemetry purge     # Delete all .bober/telemetry/ files (requires confirmation)
+bober telemetry export    # Print all telemetry events as JSONL to stdout for offline analysis
+```
+
+---
+
+### `bober worktree`
+
+Launch and manage worktree-isolated pipeline runs. The `worktree` group is a
+container with no action of its own — run a subcommand.
+
+```bash
+bober worktree run <task>                     # Run the full Bober pipeline in an isolated git worktree on a new branch
+bober worktree run <task> --allow-dirty       # Allow worktree creation even when the working tree has uncommitted changes
+bober worktree run <task> --keep-on-success   # Retain the worktree after a successful pipeline run (default is to clean up)
+```
+
+---
+
+### `bober memory`
+
+Inspect and distill self-improvement lessons. The `memory` group is a
+container with no action of its own — run a subcommand.
+
+```bash
+bober memory distill                # Distill sprint history into deterministic lessons (idempotent)
+bober memory list                   # Print the bounded lesson index
+bober memory list --limit <n>       # Maximum number of lessons to show (default: 50)
+bober memory show <lessonId>        # Print one lesson with its sourceEntryRefs provenance
+bober memory prune                  # Quarantine stale and conflicting lessons from INDEX.md into QUARANTINE.md (never deletes per-lesson .md files)
+```
+
+---
+
+### `bober facts`
+
+Inspect and manage semantic bi-temporal facts. The `facts` group is a
+container with no action of its own — run a subcommand.
+
+```bash
+bober facts add --subject <subject> --predicate <predicate> --value <value>   # Insert a new semantic fact into the store (--scope defaults to "programming")
+bober facts add --scope <scope> --subject <s> --predicate <p> --value <v> --confidence <n> --run-id <runId>   # --confidence defaults to "1"; --run-id is optional
+bober facts list                          # Print active (non-invalidated) facts
+bober facts list --scope <scope>          # Filter by scope (default: programming)
+bober facts list --subject <subject>      # Filter by subject
+bober facts list --predicate <predicate>  # Filter by predicate
+bober facts show <id>                     # Print one fact with full provenance and temporal fields
+bober facts invalidate <id>               # Soft-delete a fact (sets t_invalidated; row is kept)
+```
+
+---
+
+## Medical Team Commands
+
+Utilities for the built-in `medical` team (Phase 6). See
+[docs/teams.md](./docs/teams.md) for the medical SOP and data model.
+
+### `bober medical import <file>`
+
+Stream-import a health export file into the medical health store
+(`.bober/medical/health.db`).
+
+```bash
+bober medical import ~/apple_health_export/export.xml
+```
+
+Currently supports the Apple Health `export.xml` format, stream-parsed via SAX in
+bounded batches so the whole (potentially multi-GB) file is never loaded into
+memory. On completion it prints `records parsed` and `new rows`. Re-importing the
+same file is **idempotent** — the store dedups on a deterministic id, so the second
+run reports `new rows: 0`. An unsupported file type exits non-zero with a clear
+message naming the file.
+
+### `bober medical import-labs <pdf>`
+
+Parse a lab-report PDF and ingest its results into the medical health store. Each parsed
+marker is written as a markdown-with-frontmatter note in the canonical vault and reindexed
+into `.bober/medical/health.db`.
+
+```bash
+bober medical import-labs ~/labs/cbc-2026-06-01.pdf
+bober medical import-labs ~/labs/cbc-2026-06-01.pdf --vault ~/health-vault   # custom note dir
+```
+
+Requires the `cloud-inference` egress axis to be enabled
+(`medical.egress.cloudInference: true`, **default false**) — the PDF is parsed by a cloud
+model. With the axis **off (the default)** the command prints a clear message naming
+`medical.egress.cloudInference`, exits non-zero, and reads **no PDF bytes** and builds **no
+inference client** — it is **fail-closed and ships nothing to cloud by default**. With the
+axis on it prints `records parsed` and `new rows`. Re-importing the same report is
+**idempotent** — the derived index dedups on a deterministic id, so the second run reports
+`new rows: 0`. `--vault <dir>` overrides the note directory (default: under
+`.bober/medical`).
+
+### `bober medical supplements add <name> [--dose <d>]`
+
+Record a supplement (a name plus an optional dose) as a fact in the medical FactStore
+(the same `facts.db` that `bober facts` reads). This is **not** the lab-ingest path —
+supplements are FactStore facts under the `medical` scope, not `HealthDataStore` lab
+rows.
+
+```bash
+bober medical supplements add "Vitamin D" --dose "1000 IU"
+bober medical supplements add Magnesium                       # dose optional (stored as "unspecified")
+```
+
+Each entry flattens into a fact with `subject = <name>`, `predicate = dose`, and the
+dose as its value (the placeholder `unspecified` when `--dose` is omitted). Reconcile is
+**deterministic** — no LLM, no judge, no network. Re-adding the **same name and dose** is
+an **idempotent NOOP** (it prints `Supplement unchanged: <name>` and the active-fact count
+does not grow); supplying a **different** dose for the same name updates the existing fact
+(`Updated supplement: <name> -> <dose>`). The command never throws — on error it prints a
+clear message and exits non-zero.
+
+> Supplements deliberately use a different FactStore shape from medications. A supplement
+> is `subject=<name>` / `predicate=dose` (its own subject row), whereas medications are
+> `subject=patient` / `predicate=takes-medication` (the value-of-record the SOP reads).
+
+### `bober medical supplements list [--file <path>]`
+
+Print the supplements recorded in a markdown-frontmatter file.
+
+```bash
+bober medical supplements list
+bober medical supplements list --file ~/health-vault/supplements.md   # custom file
+```
+
+`--file` defaults to `.bober/medical/supplements.md`. The file is a YAML-frontmatter list,
+one `Name | dose` item per line:
+
+```
+---
+supplements:
+  - Vitamin D | 1000 IU
+  - Magnesium | 200 mg
+---
+```
+
+Each entry prints as `name: dose` (`unspecified` when no dose is given). An empty list
+prints `No supplements found.`; the command never throws.
+
+### `bober medical profile show`
+
+Decrypt and print the personalization profile stored at `<vaultDir>/profile.yaml`
+(default `.bober/medical/profile.yaml`; `--vault <dir>` overrides). The profile holds
+`age` / `sex` / `conditions` / `medications` / `supplements` / `allergies` / `goals`.
+
+```bash
+bober medical profile show
+bober medical profile show --vault ~/health-vault   # custom vault dir
+```
+
+The profile is **SOPS-encrypted** (age backend, local — **no egress**). Reading is
+**fail-closed**: if `sops` is not available, the command prints a clear message and exits
+non-zero **without** reading or decrypting anything — it never throws.
+
+### `bober medical profile set <key> <value>`
+
+Update a single profile field, then re-validate and re-encrypt the whole profile.
+
+```bash
+bober medical profile set age 42
+bober medical profile set sex female
+bober medical profile set goals "lower ldl, improve sleep"   # array key: comma-separated
+bober medical profile set allergies "penicillin, shellfish"
+```
+
+Valid keys are `age` / `sex` / `conditions` / `medications` / `supplements` / `allergies`
+/ `goals`. `age` must be a non-negative integer and `sex` one of `male` / `female` /
+`other` — an invalid value is rejected (Zod) before anything is written. Array keys take a
+comma-separated value. The command starts from a safe default if no profile exists yet,
+updates the one field, and writes the re-encrypted `profile.yaml`.
+
+> The profile is **SOPS-encrypted** (age backend, local — **no egress**). Writing is
+> **fail-closed**: if `sops` is unavailable the command refuses and exits non-zero, and
+> **no plaintext profile is ever written to disk** — only ciphertext reaches the file.
+> `--vault <dir>` overrides the vault dir (default `.bober/medical`).
+
+### `bober medical whoop sync [--since <iso>]`
+
+Pull WHOOP `recovery` / `sleep` / `cycle` / `workout` records over a window and write
+them into the same medical health store (`.bober/medical/health.db`). This is the
+**on-demand networked** device-connection path (no webhooks); `medical import` is the
+offline file-import path.
+
+```bash
+bober medical whoop sync                                  # last 7 days (default window)
+bober medical whoop sync --since 2026-06-01T00:00:00Z     # custom window start
+```
+
+Requires the `device-connection` egress axis to be enabled
+(`medical.egress.deviceConnection: true`, **default false**) plus `WHOOP_CLIENT_ID` /
+`WHOOP_CLIENT_SECRET` env vars and a stored refresh token in
+`.bober/medical/whoop-token.json`. With the axis off, or with credentials/token missing,
+it prints a clear message and exits non-zero **without** making any network call — it
+never throws. On success it prints `records parsed` and `new rows`. Syncing is
+**idempotent** (the store dedups on a content-derived id, so a re-run over an overlapping
+window reports `new rows: 0`) and **fail-closed** (a mid-sync failure leaves already-
+written rows intact and is recovered by re-running).
+
+### `bober medical review [--dig-deeper <id>]`
+
+Run the **deterministic, offline** proactive trend review pass. It scans the lab series in
+the medical health store (`.bober/medical/health.db`), applies reference-range, slope,
+**re-test cadence**, and **cross-marker** rules, and writes one **Finding** markdown note per
+detection into the vault `findings/` directory plus a `findings/dashboard.md` Dataview note.
+
+```bash
+bober medical review
+#   findings written: 4
+#   dashboard:        /abs/.bober/medical/vault/findings/dashboard.md
+```
+
+A single offline pass now emits three kinds of finding:
+
+- **trend** — a biomarker crossing a reference range or trending toward its nearer edge;
+- **test-gap (cadence)** — a `kind: "question"` finding when a biomarker is **overdue for
+  re-testing** versus a **closed, code-reviewed cadence table** (`ldl`, `hba1c`, `tsh`,
+  `vitamin_d`, `ferritin`). Biomarkers **absent** from the table are skipped — no cadence is
+  guessed;
+- **cross-marker offer** — a `kind: "question"` *"want me to dig deeper?"* finding when **both**
+  markers of a configured pair (e.g. `ldl` + `triglycerides`) are out of range. It only **offers**
+  the deeper analysis; it does **not** run it, and makes **no LLM call**.
+
+The pass involves **no LLM and no network** — all trend/cadence/cross-marker detection is
+deterministic (trend math delegated to the numerics layer), so it is safe to schedule. Findings
+are written into the vault, which is the canonical markdown sink (default
+`<projectRoot>/.bober/medical/vault`, overridable with the `medical.vaultDir` config key). Finding
+ids are derived from `domain|biomarker|rule` (not the clock), so **re-running over an unchanged
+store overwrites the same notes without creating duplicates**. On success it prints the number of
+findings written and the dashboard path and exits 0; on error it prints a clear message and exits
+non-zero **without throwing**. The reactive medical SOP / Q&A engine is not involved.
+
+**`--dig-deeper <id>`** is the **only** path that crosses the LLM gate. Pass the id of a
+cross-marker offer finding and it recovers the marker pair from the note's frontmatter and runs the
+deeper analysis by **delegating to the 4-lens recommendation panel** (the same gated path as
+`bober medical recommend`, inheriting its red-flag short-circuit and **cloud-inference fail-closed**
+model selection). It prints whether the deep analysis was **accepted** / **flagged for review** /
+**escalated** / **refused** and exits 0 on every normal outcome:
+
+```bash
+bober medical review --dig-deeper <offer-finding-id>
+#   Deep analysis accepted
+#     finding: /abs/.bober/medical/vault/findings/<id>.md
+```
+
+### `bober medical recommend <question> [--goal <g>]`
+
+Generate a medical recommendation by gating a candidate through the **4-lens judge panel** and
+writing a **Finding** note. The pass assembles the patient context (medications + supplements from
+the medical FactStore, conditions/allergies/goals from the SOPS profile — defaulting to empty when
+absent), builds four per-lens LLM clients, generates a candidate, and reconciles the panel by strict
+majority with an absolute contraindication veto.
+
+```bash
+bober medical recommend --goal "optimize energy" "what should I do about my high LDL"
+#   Recommendation accepted
+#     finding: /abs/.bober/medical/vault/findings/<id>.md
+```
+
+The panel outcome decides what is written:
+
+- **accepted** → a `kind: "action"` Finding stating the recommendation **directly** (no refer-out
+  hedging) with an **LLM-assigned urgency/severity (clamped 1..5) and a `confidence:<x>` tag**;
+- **flagged for review** → a `kind: "question"` Finding titled *"flagged for your review"* carrying
+  the per-lens dissent (the panel could not reach consensus);
+- **escalated** → the canned red-flag escalation is printed and **no Finding is written**;
+- **refused** → a content-policy refusal reason is printed and **no Finding is written**.
+
+**Cloud inference is fail-closed.** Per-lens provider diversity (tier-policy: cheap / standard /
+hard / frontier) is used **only when the `cloud-inference` egress axis is enabled**; with it off (the
+default), all four lenses **and** the candidate generator resolve to the **local Ollama model** and
+**no cloud client is constructed**. The audit log records IDs/enums only (no recommendation text, no
+health values). Finding ids are derived from `domain|question|rule` (not the clock), so re-asking the
+same question overwrites the same note. The command prints the outcome and the finding path and
+exits 0 on every normal outcome; on an unexpected error it prints a message and sets a non-zero exit
+code **without throwing**.
+
+### `bober medical research [--marker <m>]`
+
+Run the **online** research job — the networked complement to the offline `bober medical review` pass.
+For each marker it retrieves latest **MedlinePlus** evidence, **grounds** a note through the fail-closed
+grounding critic, and writes a citation-bearing **research note** (`research/<date>-<marker>.md`) into the
+vault plus an optional `kind: "watch"` "new evidence" Finding. When `--marker` is omitted it researches a
+default marker set (`ldl`, `hdl`, `a1c`).
+
+```bash
+bober medical research                 # default markers: ldl, hdl, a1c
+bober medical research --marker ldl    # single marker
+#   Research complete
+#     notes written:    1
+#     findings written: 1
+```
+
+**This command is gated behind the `literature-retrieval` egress axis and ships zero outbound bytes until
+it is explicitly enabled.** With the axis **off** (the default) the job is a **no-op with zero egress** — it
+returns immediately, contacts no network, and writes nothing:
+
+```bash
+bober medical research
+#   literature-retrieval egress not enabled — research skipped (zero egress)
+```
+
+Three guarantees hold by construction (evaluator-verified in source):
+
+- **Zero egress when off** — the axis is checked **first**, returning before any retriever / MedlinePlus
+  source is even constructed.
+- **Fail-closed abstain** — if the grounding critic rejects (or there is no supporting passage), that
+  topic **abstains**: no research note and no finding are written. **No uncited synthesis is ever
+  persisted.**
+- **Cloud inference is independently fail-closed** — synthesis uses the **local Ollama model** unless the
+  separate `cloud-inference` axis is enabled; enabling `literature-retrieval` does **not** enable cloud
+  inference.
+
+Citations are stored as **flattened** frontmatter (`citationTitles[]` / `citationUrls[]` + a scalar
+`source: medlineplus`) so the notes stay queryable. The clock is read only at the CLI boundary; on error the
+command prints a message and sets a non-zero exit code **without throwing**. `runResearchJob` (the function
+behind this command) is also the **schedulable entrypoint** that a future research scheduler drives on a
+cadence.
+
+---
+
+## Vault Commands
+
+Utilities for the domain-agnostic **vault storage layer**, where an Obsidian vault
+(markdown + YAML frontmatter) is the canonical source of truth and the FactStore is a
+derived, rebuildable index over note frontmatter.
+
+### `bober vault reindex --scope <domain> [--vault <dir>]`
+
+Walk a vault directory, parse every note, and rebuild the derived FactStore at the active
+team's namespace memory path from the notes' frontmatter.
+
+```bash
+bober vault reindex --scope medical --vault ./kb-medical
+bober vault reindex --scope finance                     # --vault defaults to the project root
+```
+
+`--scope` is **required** (the fact scope label, e.g. `medical`, `finance`); `--vault` is
+optional and **defaults to the project root**. The command resolves the **same `facts.db`**
+that `bober facts` uses (the team/namespace memory path) and writes through the existing
+reconcile-at-ingest path, so the FactStore stays a rebuildable projection of the markdown:
+re-running over unchanged notes changes nothing (every fact is unchanged), a changed
+frontmatter value supersedes the prior fact, and a note flagged `status: superseded`
+contributes no active facts. On completion it prints `notes parsed`, `facts added`,
+`facts superseded`, and `facts unchanged`. The command is **read-only over the vault** (it
+never mutates notes or touches git); a missing/invalid `--vault` directory prints a clear
+red message and exits non-zero **without throwing**, and the store is always closed.
+
+---
+
+## Hub Commands
+
+The **priority hub** is the cross-domain surface that collects **Findings** — actionable items,
+watches, risks, and open questions surfaced by the various domains (medical, and later others). The
+hub **owns the one canonical `Finding` schema** (`src/hub/finding.ts`); every producer and consumer
+imports it from there. Findings are stored as FactStore rows at predicate `finding` in the `hub`
+scope, with each `Finding` serialized as the row's JSON value.
+
+### `bober hub list`
+
+Print the Findings held in the **project's own FactStore** (the active team's namespace memory
+path — the same `facts.db` that `bober facts` and `bober vault reindex` resolve) **plus Findings
+aggregated across resolved sibling repos**. Each sibling's derived `facts.db` is opened
+**read-only** (never mutated) and its findings are pooled into one list **deduplicated by
+`Finding.id`** — the project's own findings come first and win dedup ties. One line per finding
+shows its title, kind, urgency, and severity.
+
+Siblings are resolved from a `hub.repos` array in `bober.config.json` or `.bober/config.json`
+(paths resolved relative to the project root); when that key is absent the hub instead discovers
+directories named `kb-*` sitting beside the project root. A configured path that does not exist,
+or a sibling with no/corrupt `facts.db`, is silently skipped — resolution never throws.
+
+```bash
+bober hub list
+# Lipid panel overdue       [question]  urgency=4  severity=2   # own store
+# Portfolio rebalance due   [action]    urgency=3  severity=2   # from a sibling kb-* repo (read-only)
+```
+
+When no resolved store holds findings it prints a gray `No findings found.` Rows whose stored value
+is **malformed JSON or fails Finding validation are silently skipped** — the read path never throws,
+so one bad row never breaks the listing. On error the command prints a red message and sets a
+non-zero exit code **without throwing**, and the store is always closed.
+
+A `Finding` carries: `id`, `domain`, `title`, `kind` (`action` | `watch` | `risk` | `question`),
+`urgency` (1–5), `severity` (1–5), `evidence[]`, `surfacedAt` (ISO), optional `dueBy` (ISO),
+`tags[]`, optional `estDurationMin`, optional `calendarSafeTitle`, `status`
+(`open` | `in-progress` | `snoozed` | `done` | `dropped`), and optional `promotesTo`.
+
+> Cross-repo aggregation landed in Sprint 2 (`bober hub list` now pools sibling repos read-only,
+> deduplicated by id). Note: `hub.repos` (and `hub.outVault`, below) are read from the **raw** config
+> file because the Zod config schema strips unknown keys — they are not yet typed config fields.
+
+### `bober hub priority`
+
+Collect findings across the resolved siblings, **rank** them, and write a Dataview-friendly
+`priority.md` note into the **kb-hub output vault**. With no options the ranking runs under
+**general** scope; passing any of `--domain <d>`, `--due <days>`, or `--tag <t>` switches it to a
+**filtered** scope (a finding must match **all** specified constraints). After writing the note the
+command prints a `<rank>. <title>` summary to stdout.
+
+```bash
+bober hub priority                       # general scope → <kb-hub>/priority.md
+bober hub priority --domain medical --due 14   # filtered: medical findings due within 14 days
+```
+
+The ranking is the two-pass judge from Sprint 3 (LLM relevance + per-lens scores, then a
+deterministic JS sort — **the LLM never emits the order**); the LLM client is built from the active
+`chat` provider. The renderer is **pure** and **never re-ranks**: `priority.md` carries a flat YAML
+frontmatter block (`generatedAt` / `scope` / `count`), a table
+`| rank | title | domain | kind | urgency | severity | dueBy |` with one row per finding, and a
+per-finding evidence/rationale section. Sibling source stores are opened **read-only** and never
+modified — only `priority.md` is written.
+
+### `bober hub decide <expr>`
+
+Rank findings under **decision** scope. Pass an `"X vs Y"` expression (split case-insensitively on
+` vs `); only findings the judge marks relevant to **either** option survive, ranked within that
+frame, and the result is written to `priority.md` exactly as `hub priority` does. A malformed
+expression (not two non-empty sides) prints a usage error and exits non-zero **without throwing**.
+
+```bash
+bober hub decide "take the job offer vs stay"
+```
+
+#### Output vault resolution
+
+`priority.md` is written to the **kb-hub output vault**, resolved to an **absolute** path:
+`hub.outVault` from `bober.config.json` / `.bober/config.json` if present (resolved against the
+project root), otherwise the documented default `<parentOfProjectRoot>/kb-hub` — the kb-hub sibling
+vault beside the project root. The target file is `<outVault>/priority.md`. If the output vault
+directory does **not** exist, both commands print a clear red error and set a non-zero exit code
+**without throwing** and **without auto-creating** another repo's vault root — create the vault (or
+set `hub.outVault`) first.
+
+> `priority.md` rendering + the `priority` / `decide` commands landed in Sprint 4 of
+> `spec-20260628-priority-hub`; the `bober chat hub` surface (below) landed in Sprint 5. The
+> do-bridge (`Finding.promotesTo`), calendar slot-fill, the scheduler, and the Telegram adapter
+> remain owned by sibling specs.
+
+### `bober chat hub`
+
+Open an interactive chat REPL bound to the built-in **`hub`** team (memory namespace `hub`).
+This is the conversational sibling of `bober hub priority` / `bober hub decide` — same collect
+→ rank → render pipeline, but it keeps you in the REPL and returns the ranked summary inline.
+The `hub` team is registered **as data** (no guardrails, default pipeline shape), so
+`bober chat hub` routes through the ordinary `bober chat [team]` command.
+
+```bash
+bober chat hub
+```
+
+Inside a hub session, two extra slash commands are available **only in the hub team**:
+
+```
+> /priority                 # rank all pooled findings (general scope), print "rank. title" per line
+> /decide <X> vs <Y>        # rank only findings relevant to X or Y (decision scope)
+```
+
+`/priority` and `/decide` collect findings across the resolved sibling repos, rank them with
+the Sprint 3 two-pass judge (using the session's configured `chat` LLM client), print a
+`rank. title` summary, and **best-effort** write the same Dataview-friendly `priority.md` to the
+resolved kb-hub output vault (a write failure never breaks the chat turn). `/decide` expects an
+`X vs Y` expression (split case-insensitively on ` vs `); a malformed expression returns
+`Expected 'X vs Y', got: <expr>`. Both commands are **hub-only** — in any other team they return
+an informative no-op message and make **no** LLM call.
+
+> These two commands are intentionally **not** listed by `/help` (the `/help` output is
+> unchanged from before Sprint 5). All the other deterministic slash commands (`/runs`, `/stop`,
+> `/pause`, `/resume`, `/careful`, `/approve`, `/reject`, `/tell`, `/help`, `/exit`) behave
+> exactly as documented under `bober chat [team]` above.
+
+---
+
+## Task Inbox Commands
+
+The **task inbox** is the **zero-friction capture** front-end for the hub pool. A plain string
+becomes **one open `action` Finding** stored exactly where the hub commands read from — the same
+`hub`-scope, predicate `finding` FactStore rows described under **Hub Commands** above. Capture is
+**deterministic and synchronous** (no LLM, no prompts, never blocks); LLM-based triage is a later,
+separate concern.
+
+### `bober task add <text> [--domain <domain>]`
+
+Capture a plain task as a single **open `kind=action` Finding** in the unified hub pool. The title
+is `text` (trimmed); a deterministic 16-char id is derived from the title and capture time. Pass
+`--domain <d>` to set the Finding's `domain` (and add a `domain:<d>` tag); with no `--domain` the
+domain falls back to `inbox`. All unknown Finding fields are left empty/omitted, and the required
+`urgency`/`severity` fields take **neutral placeholder defaults** (`urgency=3`, `severity=1`) rather
+than prompting.
+
+```bash
+bober task add "renew passport"
+#   Captured task 1f3c9a0b2e4d6f80
+#     title:  renew passport
+#     domain: inbox
+
+bober task add "book annual physical" --domain medical
+#     domain: medical
+```
+
+A captured task is an ordinary Finding, so it immediately appears in `bober hub list` and is
+eligible for ranking by `bober hub priority` / `bober hub decide` / `bober chat hub`. The command
+opens the project's FactStore (the active team's namespace memory path) and writes via the reconcile
+layer so later dedup/supersede works. Empty text prints a red error and exits non-zero; on any error
+the command writes to stderr and sets a non-zero exit code **without throwing**, and the store is
+always closed.
+
+### `bober task list [--all] [--status <status>]`
+
+Print a table of tasks (columns `ID  STATUS  DOMAIN  TITLE`; the title is truncated at 36 chars).
+By **default** the list shows only **active** tasks — those whose status is `open` or `in-progress`,
+plus any **snoozed** task whose wake time has already passed — so finished and deferred work stays out
+of the way. Pass `--all` to include every status (including `done`/`dropped`/still-sleeping
+`snoozed`), or `--status <s>` to show only one status (`--status` takes precedence over `--all`).
+When the filtered set is empty it prints `No tasks found.` The command is read-only; on any error it
+writes to stderr and sets a non-zero exit code **without throwing**.
+
+```bash
+bober task list                 # open + in-progress + woken (past-wake) snoozed
+bober task list --all           # every status, including done/dropped/sleeping
+bober task list --status done   # only completed tasks
+```
+
+Wake visibility is computed **lazily at list time** against the wall clock stamped when the command
+runs — there is no background timer. See `bober task snooze` below.
+
+### `bober task start <id>` · `bober task done <id>` · `bober task drop <id>`
+
+Move a task through its lifecycle. `start` sets `status='in-progress'`, `done` sets `status='done'`,
+and `drop` abandons the task by setting `status='dropped'`. Each transition **supersedes** the task's
+active Finding with a new-status copy through the reconcile UPDATE path (supersede old row + insert
+new active row), so the prior status survives as **bitemporal history** — **no row is ever deleted**,
+not even on `drop`. A successful transition prints `Task <id> → <status>`. An **unknown id** prints a
+yellow "no task found" message and exits non-zero **without throwing**.
+
+```bash
+bober task start 1f3c9a0b2e4d6f80   # → in-progress
+bober task done  1f3c9a0b2e4d6f80   # → done (now hidden from the default list)
+bober task drop  1f3c9a0b2e4d6f80   # → dropped (superseded, never deleted)
+```
+
+Because terminal tasks remain active rows (filtered out of the default list by their `status` field,
+not by deletion), `bober task done <id>` removes a task from `bober task list` while
+`bober task list --all` still shows it with `status=done`.
+
+### `bober task snooze <id> --until <when>`
+
+Defer a task until a future time. The task moves to `status='snoozed'` and records its wake time on
+the Finding as a `snooze-until:<ISO>` tag, then **disappears from the default `bober task list`**
+until that wake time has passed — at which point it reappears for re-triage. `--until` is
+**required** and accepts an ISO date or datetime (e.g. `2026-12-01` or `2026-12-01T09:00:00Z`); the
+value is parsed and **normalized to a canonical ISO** at the CLI boundary before it is stored. There
+is **no schema change** — the wake time lives entirely in `tags[]`.
+
+```bash
+bober task snooze 1f3c9a0b2e4d6f80 --until 2026-12-01
+#   Task 1f3c9a0b2e4d6f80 snoozed until 2026-12-01T00:00:00.000Z
+
+bober task list                 # snoozed task is hidden until 2026-12-01
+bober task list --all           # …still present, status=snoozed
+```
+
+Visibility is computed **lazily at list time** against the `now` stamped when `task list` runs — a
+snoozed task "wakes" simply because a later list runs after its wake time, **not** via any background
+timer. **Re-snoozing replaces** the wake time (the prior `snooze-until:` tag is stripped, never
+stacked). **Terminal** (`done`/`dropped`) tasks cannot be snoozed, and a snoozed task can still be
+completed or dropped at any time. An invalid `--until`, an unknown id, or a terminal task prints to
+stderr and exits non-zero **without throwing**.
+
+### `bober task ingest [file]`
+
+The seam **domains** write AUTO-surfaced Findings through. Read a **Finding JSON** from the optional
+`<file>` path, or from **stdin** when the arg is omitted, validate it against the Finding schema, and
+push it into the unified hub pool — where it becomes an ordinary active Finding visible to
+`bober task list`, `bober hub list`, and `priority` / `decide` / `chat hub`. Unlike `task add` (which
+captures a plain string), `task ingest` accepts a full structured Finding (any `kind`, e.g.
+`watch`/`action`) emitted by a domain's proactive pass.
+
+```bash
+echo '{"domain":"medical","title":"LDL trending up","kind":"watch","urgency":3,"severity":2,"summary":"3 of last 4 panels rising","tags":[]}' \
+  | bober task ingest
+#   Ingested finding (add)
+
+bober task ingest finding.json   # …or read the payload from a file
+#   Ingested finding (add)
+```
+
+**Content-addressed dedup.** When the payload omits an `id`, ingest derives a deterministic 16-char id
+from a hash of `domain|title|kind`. Re-ingesting a finding that agrees on those three fields **collides
+on the same id and reconciles to a single active row** — the command prints `Ingested finding (update)`
+or `(noop)` rather than adding a duplicate. A payload that supplies its own `id` keeps it. `surfacedAt`
+is filled with the current time when absent; the clock is stamped only at the CLI boundary.
+
+**Schema is never bypassed, and ingest is fail-closed.** The payload is validated against the Finding
+schema (with `id`/`surfacedAt` optional) and again as a fully-assembled Finding **before** any write.
+**Malformed JSON** or a payload **missing required Finding fields** prints a red message to stderr, sets
+a **non-zero exit code**, writes **nothing**, and **never throws**. Ingest reuses the same reconcile
+write path as `task add`, so supersede/dedup history works identically.
+
+### `bober task from-gmail <thread>` (opt-in Gmail egress)
+
+Turn a single Gmail thread into a captured task. This command is **off by default** and gated behind
+an explicit opt-in egress axis — `taskInbox.gmailEgress` in `bober.config.json` (default `false`).
+
+```bash
+# Default posture — the axis is unset/false: zero Gmail egress.
+bober task from-gmail 18f0a1b2c3d4
+#   task from-gmail: Gmail egress not enabled — set taskInbox.gmailEgress: true in bober.config.json to opt in.
+#   (exitCode=1, and NO MCP client is constructed — no network call is made)
+```
+
+With the axis off (the default) the command **refuses with an opt-in message, sets `exitCode=1`, and
+constructs no MCP client / makes no network call**. To enable it, set the axis **and** declare an
+enabled `observability` provider named `gmail` (it reuses the existing external-MCP connector):
+
+```jsonc
+{
+  "taskInbox": { "gmailEgress": true },
+  "observability": {
+    "providers": [
+      { "name": "gmail", "kind": "custom", "mcpCommand": "npx",
+        "mcpArgs": ["-y", "some-gmail-mcp-server"], "enabled": true }
+    ]
+  }
+}
+```
+
+```bash
+bober task from-gmail 18f0a1b2c3d4
+#   Captured task 1f3c9a0b2e4d6f80 from Gmail
+#     title: Pay invoice
+```
+
+When enabled, the command reads **one thread on demand** through the MCP connector, parses it
+**locally** into an open `action` Finding (title from the thread subject), and captures it through the
+**same `captureTask` write path** as `task add` — so it shows up in `bober task list`, `bober hub
+list`, and is eligible for `priority` / `decide` / `chat hub`. The captured Finding carries
+`domain=gmail` and a `source:gmail` tag.
+
+**Fail-closed and secret-safe.** A missing or invalid config resolves the axis to **disabled** (never
+enabled-by-accident). Any connector failure is **caught**, surfaced on stderr with `exitCode=1`, and
+**sanitized** — `KEY=VALUE` env assignments (e.g. a connector token) are stripped to `[redacted]`
+(the same regex as `src/mcp/external-client.ts`), so env vars / tokens never leak into a message or
+log. This reads one thread on demand — there is **no** Gmail polling, label automation, or general
+sync.
+
+> `bober task add` landed in Sprint 1 of `spec-20260628-task-inbox`; `list` and the
+> `start` / `done` / `drop` lifecycle transitions landed in Sprint 2; `snooze` and its wake-aware
+> list filter landed in Sprint 3; the domain-finding `ingest` seam (with content-id dedup) landed in
+> Sprint 4; **chat intent-detection capture** — typing a plain task into `bober chat` to file it
+> through the same `captureTask` write path — landed in Sprint 5 (see **`bober chat [team]` →
+> Capturing a task** above); and the opt-in, egress-gated `from-gmail` source landed in Sprint 6,
+> completing the plan (6/6).
+
+---
+
+## Do-Bridge Commands
+
+The **do-bridge** turns a hub **Finding** into a launchable unit of work. A *promoter* (resolved by the
+finding's `domain`, and optionally its `kind`) maps the finding to a *promotion plan* — for coding /
+projects findings that is a `bober run` task.
+
+### `bober do <findingId>`
+
+Promote a hub Finding into a `bober run` task. The command reads the finding from the project's FactStore
+(the active team's namespace `facts.db` — the same store `bober hub list` and `bober task list` read),
+resolves the promoter for its `domain`/`kind`, and either **previews** the launch (`--dry-run`) or
+**requests approval and launches** it. Only `coding` / `projects` findings are promotable (they map to a
+`bober run` task; the target team comes from an optional `team:<id>` tag, otherwise the default team).
+
+```bash
+bober do 1f3c9a0b2e4d6f80 --dry-run    # Preview only — read-only, no marker, no spawn
+bober do 1f3c9a0b2e4d6f80              # Real path — write an approval marker, gate, then launch on approve
+bober do 1f3c9a0b2e4d6f80 --yes        # Real path, auto-approve (skip the confirm prompt)
+bober do --reconcile                   # Reconcile launched promotions to their run outcome, then exit (no findingId)
+```
+
+**Dry-run (`--dry-run`)** is read-only: it mutates no state, writes nothing under `.bober/approvals/`,
+and spawns no process:
+
+```text
+[dry-run] would launch: bober run "Fix flaky auth test — token refresh races on expiry" (team: default team)
+```
+
+**Real path** (no `--dry-run`) writes a pending approval marker and **gates** on it before launching
+anything:
+
+```text
+do: requesting approval to launch bober run "Fix flaky auth test …" (team: default team)
+? Approve promotion for finding '1f3c9a0b2e4d6f80'? (y/N)
+do: launched bober run "Fix flaky auth test …" — runId: do-1f3c9a0b2e4d6f80-<ts> (pid 40912)
+```
+
+The gate resolves one of three ways:
+
+- **`--yes`** — auto-approve without prompting (still writes then clears the marker).
+- **TTY** — an interactive confirm prompt; decline → reject (nothing launches, the Finding is unchanged).
+- **Non-TTY** (CI, pipes) — the command writes the marker and **waits**, polling until an operator
+  resolves it out-of-band.
+
+The approval marker reuses the **same `.bober/approvals/` mechanism the run pipeline uses** — no new
+format. The marker's checkpointId is `promote-<findingId>`, so it is resolved with the standard
+[`bober approve <checkpointId>`](#bober-approve-checkpointid) / [`bober reject <checkpointId>`](#bober-reject-checkpointid)
+commands:
+
+```bash
+bober approve promote-1f3c9a0b2e4d6f80   # Approve a waiting promotion → launch proceeds
+bober reject  promote-1f3c9a0b2e4d6f80   # Reject it → no launch, Finding untouched
+```
+
+On **approval**, the work is launched **detached** (`agent-bober run <task> --run-id do-<id>-<ts>`; the
+pipeline is not run in-process), the Finding is linked (`promotesTo` records the new `runId` with status
+`launched`), and its status transitions `open → in-progress`. On **rejection**, the pending marker is
+deleted and the Finding is left unchanged. Failure branches are non-throwing and exit non-zero (`1`): an
+unknown id prints `do: no finding with id '<id>'`, and a finding whose domain has **no registered
+promoter** prints a clear message naming the unsupported domain.
+
+### `bober do --reconcile`
+
+Close the loop after a promoted run finishes. `bober do --reconcile` (no `findingId`) reads each launched
+promotion's `run-state.json` **snapshot** and advances the linked Finding to its terminal status, then
+prints a summary and exits:
+
+```bash
+bober do --reconcile                   # → do --reconcile: completed=1 aborted=0 unchanged=2
+```
+
+| Run state | Finding transition | `promotesTo.status` |
+|-----------|--------------------|---------------------|
+| `completed` | `in-progress → done` | `completed` |
+| `aborted` / `failed` | `in-progress → open` | `aborted` |
+| `running` (or missing/corrupt state) | unchanged | unchanged |
+
+Reconcile is **snapshot-based** (it reads the current state and returns immediately — it never polls or
+blocks waiting for a run to finish) and **best-effort** (a missing/corrupt `run-state.json` is treated as
+"still running" and the Finding is left untouched). The same reconcile also runs automatically at the
+**start of every `bober do <id>`**, wrapped so a reconcile failure can never abort the command.
+
+> **Status.** Complete — `spec-20260628-do-bridge` is **done (3 of 3)**: dry-run preview (Sprint 1),
+> approve-gated real launch + `--yes` (Sprint 2), and terminal reconciliation (`--reconcile`) + the
+> consolidated [`docs/do-bridge.md`](docs/do-bridge.md) extension-point guide (Sprint 3).
+
+---
+
+## Calendar Commands
+
+The **calendar planner** takes the ranked **Findings** from the priority hub (with `dueBy` and
+`estDurationMin`) plus a free/busy model and runs a **deterministic, LLM-free slot-fill** that places
+tasks into open slots **in priority order** — the LLM never packs slots. Placement is pure synchronous
+TypeScript: identical input produces deep-equal output, with no async, filesystem, network, or model
+call inside the algorithm.
+
+### `bober calendar plan --dry-run`
+
+Propose a schedule from a ranked findings file and a free/busy file, and print it. In `--dry-run` the
+command is **read-only** — it writes **nothing** to any calendar or `.ics` file (use `--export-ics`
+below to write the plan to disk).
+
+```bash
+bober calendar plan --dry-run --findings ./ranked-findings.json --freebusy ./freebusy.json
+```
+
+- `--findings <path>` (**required**) — a ranked `Finding[]` JSON file, ordered by priority (index 0 =
+  highest). Each `Finding` has the same shape `bober hub list` emits; the slotter reads `estDurationMin`
+  (default 30 min if absent), optional `dueBy`, and `calendarSafeTitle` (falling back to `title`).
+- `--freebusy <path>` (optional) — a `BusyInterval[]` JSON file (`{ startIso, endIso }` entries). Omit it
+  to plan against a fully open window.
+
+The planning window is **7 days** from now, computed at the command boundary. Findings are placed into
+the earliest free slot that fits their duration before their `dueBy`; each placed item prints with its
+ISO start/end and title, and anything that could not be placed prints in an **Unscheduled** list with a
+reason (`does-not-fit` or `no-free-slot-before-dueBy`):
+
+```text
+Proposed calendar plan
+Window: 2026-06-29T00:00:00.000Z → 2026-07-06T00:00:00.000Z
+
+Scheduled (2):
+  [2026-06-29T00:00:00.000Z → 2026-06-29T00:30:00.000Z]  Renew prescription
+  [2026-06-29T00:30:00.000Z → 2026-06-29T01:30:00.000Z]  Book dentist
+
+Unscheduled (1):
+  f-90  reason: does-not-fit
+
+(dry-run — nothing written to any calendar)
+```
+
+A missing `--findings` path, an unreadable file, or a finding/interval that fails validation prints a
+red message to stderr and sets a non-zero exit code **without throwing**.
+
+### `bober calendar plan --export-ics <path>`
+
+Slot the findings exactly as the dry-run does, then **write the scheduled plan to an RFC 5545 `.ics`
+file** with **zero network egress** — a local-first export you import manually into your calendar app.
+This is the user-invoked path; there is no approval gate (the manual import is the human review).
+
+```bash
+bober calendar plan --export-ics out.ics --findings ./ranked-findings.json --freebusy ./freebusy.json
+```
+
+- `--export-ics <path>` — the destination `.ics` file. The written file is a `VCALENDAR` with **one
+  `VEVENT` per scheduled item**: `UID` (`<findingId>@agent-bober`), `DTSTAMP`, `DTSTART`/`DTEND` in UTC
+  basic format (`YYYYMMDDTHHMMSSZ`), and `SUMMARY` (the item title, RFC 5545 TEXT-escaped). Lines use CRLF
+  endings.
+- `--findings` / `--freebusy` behave exactly as in `--dry-run`. The slot-fill algorithm is unchanged; the
+  only difference is that the resulting plan is written to disk via the local `.ics` connector instead of
+  only printed.
+
+On success the command prints `Wrote N event(s) to <path>`. The write is the **only** filesystem write
+on the calendar path and lives entirely in the `.ics` connector — there is no live calendar or network
+access. Validation/I/O failures still set a non-zero exit code **without throwing**.
+
+```text
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//agent-bober//calendar-planner//EN
+BEGIN:VEVENT
+UID:f-1@agent-bober
+DTSTAMP:20260629T000000Z
+DTSTART:20260629T000000Z
+DTEND:20260629T003000Z
+SUMMARY:Renew prescription
+END:VEVENT
+END:VCALENDAR
+```
+
+### `bober calendar plan` (live — propose through the approval gate)
+
+With **neither** `--dry-run` **nor** `--export-ics`, `bober calendar plan` is the **live path**: it slots
+the findings, **proposes** the schedule through the **existing** approval gate, and writes **zero**
+calendar events until the checkpoint is approved. It writes a pending approval marker
+(`.bober/approvals/<checkpointId>.pending.json`) plus a plan sidecar
+(`.bober/calendar/<checkpointId>.plan.json`) and prints the `checkpointId` (= `calendar-<planId>`) and how
+to approve it. There is **no auto-approve in any mode** — approval is strictly out-of-band.
+
+```bash
+bober calendar plan --findings ./ranked-findings.json --freebusy ./freebusy.json
+```
+
+```text
+Proposed calendar plan
+Window: 2026-06-29T00:00:00.000Z → 2026-07-06T00:00:00.000Z
+
+Scheduled (2):
+  [2026-06-29T00:00:00.000Z → 2026-06-29T00:30:00.000Z]  Renew prescription
+  [2026-06-29T00:30:00.000Z → 2026-06-29T01:30:00.000Z]  Book dentist
+
+Proposal saved. Approve to write events:
+  bober approve calendar-<planId>
+  /approve calendar-<planId>  (in chat)
+
+Checkpoint ID: calendar-<planId>
+```
+
+`--findings` / `--freebusy` behave exactly as in `--dry-run`. The connector that will write the events is
+read from `calendar.connector` (default `ics`) and recorded in the marker summary.
+
+### `bober calendar apply <checkpointId>`
+
+Write the events for a calendar plan **once it has been approved**. It detects the approved/rejected
+marker for the checkpoint and calls the chosen connector's `writeEvents` **exactly once** on approval,
+**never** on rejection.
+
+```bash
+bober approve calendar-<planId>            # or  /approve calendar-<planId>  in chat
+bober calendar apply calendar-<planId>
+```
+
+- If the checkpoint is **approved** → reloads the plan sidecar and writes the proposed events once, then
+  prints `Applied: N event(s) written.` and clears the pending marker.
+- If the checkpoint is **rejected** (`/reject calendar-<planId> [feedback]`) → aborts with the feedback
+  and exit 1; **no** events are written.
+- If **neither** marker exists yet → prints a `Pending approval` hint and writes nothing.
+- `--out <path>` overrides the `.ics` output path (ics connector only). When `calendar.connector` is
+  `google`, apply refuses with an actionable message + exit 1 unless OAuth is provisioned — the Sprint 3
+  `calendar.egress.cloudCalendar` axis is **not** bypassed; use the `--export-ics` fallback for
+  unattended runs.
+
+A `/tell`-style correction re-runs the deterministic slotter under the new constraint (exclude an
+interval / shift the window) and **re-proposes** — again writing no events.
+
+> **Status.** **Sprints 1–4 of 4 — COMPLETE.** `spec-20260628-calendar-planner`: the deterministic
+> slotter + `bober calendar plan --dry-run` (Sprint 1), the local-first, zero-egress `.ics` export via
+> `--export-ics` (Sprint 2), the **egress-gated Google Calendar MCP connector** (Sprint 3, off by default;
+> writes require `calendar.egress.cloudCalendar: true` **and** a provisioned 0600 OAuth token sidecar, and
+> only a non-sensitive `calendarSafeTitle` ever leaves the device), and the **approve-gated live write**
+> (Sprint 4): the default `bober calendar plan` proposes through the existing approval gate (zero events
+> written) and `bober calendar apply <checkpointId>` writes the events exactly once on approval / never on
+> reject. Hosted Google OAuth is **unfit for unattended/cron runs** (tokens expire, re-auth is
+> interactive), so the local `.ics` path stays the recommended choice for scheduled/automated use.
+> Config + privacy details: [`docs/calendar.md`](docs/calendar.md).
+
+---
+
+## Research Commands
+
+The **research scheduler** lets you define recurring **multi-model research jobs** — a question
+plus a cadence — once, then rerun them across a model set on a schedule, optionally retrieve
+online, and feed the results into the priority hub. All five sprints ship the **definition + execution +
+egress + scheduler + digest layers**: jobs are persisted as JSON files under `.bober/research/jobs/<jobId>.json`
+(not in `bober.config.json`, not in the FactStore). Each job round-trips through `ResearchJobSchema`,
+and the job id is the deterministic `sha256(question|createdAt).slice(0,16)`. The store never reads the
+clock — the CLI stamps timestamps once at the command boundary. `bober research run <jobId>`
+executes one stored job on demand across ≥2 distinct models, writing a vault note and one hub
+Finding; `bober research tick` runs **every job that is due as of now** on the same path and advances
+each run job's cadence due-date (idempotent); `bober research digest` aggregates a window of runs into a
+push-ready morning digest (markdown + JSON). A run is **offline by default**: web retrieval is gated
+behind the opt-in `research.egress.onlineResearch` config axis (default `false`, fail-closed — see below).
+
+### `bober research job add --question "..." [options]`
+
+Validate the inputs and persist one recurring research job.
+
+```bash
+bober research job add --question "What changed in the GLP-1 literature this week?" --cadence weekly --domain medical
+```
+
+- `--question <q>` (**required**) — the research question. Must be **non-empty** (a blank question is
+  rejected with a Zod error).
+- `--cadence <c>` (optional, default `weekly`) — recurrence cadence, a **closed enum**:
+  `daily | weekly | monthly`. (It is deliberately not a cron string; next-due computation is a later
+  sprint.)
+- `--tier <t>` (optional) — a difficulty-tier hint for the executor (a later sprint).
+- `--domain <d>` (optional) — a domain tag (e.g. `medical`, `coding`) for priority-hub routing.
+- `--target-repo <r>` (optional) — a repository slug to scope the research against.
+- `--online-research` (optional) — stores `onlineResearch=true`. **This does not enable any network
+  call** — the online-research egress axis is not active yet; the flag is persisted for
+  forward-compatibility only.
+
+On success it prints the new `jobId`, the question, and the cadence. On a validation or IO error it
+prints a red message to stderr and exits non-zero **without throwing**.
+
+### `bober research job list`
+
+Print every defined job, one per line, as `<jobId>  <cadence>  <question>  [<domain>]`:
+
+```bash
+bober research job list
+# 3f8a1c0b9d2e4f76  weekly  What changed in the GLP-1 literature this week?  [medical]
+```
+
+When no jobs are defined it prints `No research jobs defined.`. Malformed/invalid JSON files in the
+store are silently skipped — the listing never throws.
+
+### `bober research job remove <jobId>`
+
+Delete a job's JSON file by id:
+
+```bash
+bober research job remove 3f8a1c0b9d2e4f76
+# Removed research job 3f8a1c0b9d2e4f76
+```
+
+A not-found id prints a yellow message and exits non-zero.
+
+### `bober research run <jobId>`
+
+Execute a stored research job **once, on demand**: query ≥2 distinct provider/model blocks, write a
+markdown research note into the vault, and emit one Finding to the priority hub.
+
+```bash
+bober research run 3f8a1c0b9d2e4f76
+# /path/to/vault/research/2026-06-29-3f8a1c0b9d2e.md
+```
+
+- Loads the job by id (a not-found id prints a red message and exits non-zero **without throwing**).
+- Resolves **≥2 distinct provider/model blocks** from `src/fleet/tier-policy.ts` (across different
+  difficulty tiers — `cheap`/`standard`/`hard`/`frontier`) and asks each the job's `question`.
+- Writes a markdown note to `<vaultRoot>/research/<YYYY-MM-DD>-<marker>.md` whose frontmatter records
+  `jobId`, `question`, the list of `models` queried, and a `generatedAt` timestamp; the body has one
+  `### <provider>/<model>` section per model answer.
+- Emits **exactly one** `kind: "watch"` Finding to the hub (`domain` from the job, default
+  `research`; `evidence` = per-model contribution snippets), via the hub's `ingestFinding` writer.
+- **Offline by default.** Web/online retrieval is gated behind the opt-in `research.egress.onlineResearch`
+  config axis (default `false`). With the axis off the run uses only the injected provider clients and
+  issues **zero outbound requests**; opting in permits web retrieval whose source URLs are threaded into
+  the note frontmatter (see **Online research egress** below). On-demand only — to run jobs on a
+  cadence use `bober research tick` (below). Prints the note path on success.
+
+#### Online research egress (opt-in, default off)
+
+A research run is **fully offline** unless you opt the `online-research` egress axis in. It is a
+**research-owned** axis — separate from the medical egress axes — and is **fail-closed**: absent or
+`false` ⇒ no web retrieval, zero outbound bytes.
+
+```jsonc
+// bober.config.json
+{
+  "research": {
+    "egress": {
+      "onlineResearch": true   // default false — permit online/web research retrieval
+    }
+  }
+}
+```
+
+With the axis off (or the config section absent), `runResearchJob` skips retrieval entirely — the
+retrieval client is never constructed and the note is byte-identical to the offline run. With it on,
+the runner retrieves sources and records their URLs in the note's frontmatter `sources` list. (A
+`run` does **not** itself bind a live web-search client yet — the axis is enforced and the slot is
+injectable; binding a real search provider is a later step.)
+
+### `bober research tick [--watch] [--interval <ms>]`
+
+Run **every research job that is due as of now**, on the same path as `run` — and advance each run
+job's cadence due-date so re-running `tick` immediately runs nothing. This is the recurring entrypoint
+an external scheduler invokes.
+
+```bash
+bober research tick
+# research tick: ran 2 job(s): 3f8a1c0b9d2e4f76, a91c…   (or) research tick: no jobs due.
+```
+
+- **Due selection.** A job is due when its `nextDueAt` is unset (never scheduled ⇒ due on the first
+  tick) **or** `nextDueAt <= now` (boundary-inclusive). Future jobs are skipped.
+- **Idempotent.** After a job runs, its `nextDueAt` is advanced by its cadence
+  (`daily` +1 day, `weekly` +7 days, `monthly` +1 month) and its `lastRunAt` is set to `now`, then the
+  job JSON is rewritten in place (the deterministic `jobId` is unchanged, so the same file is updated).
+  A second `tick` at the same instant runs **zero** jobs.
+- **Cadence math** is deterministic and clock-free — the wall clock is read **only** at the command
+  boundary. The monthly cadence uses `setUTCMonth`, which rolls **forward** when the day overflows the
+  shorter month (e.g. `2026-01-31` + 1 month → `2026-03-03`); a monthly job is not clamped to
+  end-of-month.
+- **Failure leaves the job due.** Runs happen first, persistence after — if a job's run throws, its
+  due-date is **not** advanced, so it remains due on the next tick (there is no retry/backoff yet).
+- **Offline by default**, exactly like `run` — the `research.egress.onlineResearch` axis still gates
+  any web retrieval. Never throws (errors ⇒ stderr + `process.exitCode = 1`).
+
+#### Scheduling mechanism (pick a trigger)
+
+`tick` itself is a one-shot, idempotent command; **how often** it fires is your choice:
+
+- **`--watch`** runs `tick` on an in-process interval (`--interval <ms>`, default `3600000` = 1 hour,
+  floored at `1000` ms). Simple, but the loop **dies with the process** — fine for a foreground/dev
+  session, not for unattended production.
+- **OS cron / launchd calling `bober research tick`** survives reboots and sleep and is the
+  **recommended** unattended trigger. Example crontab entry (top of every hour):
+
+  ```cron
+  0 * * * * /usr/local/bin/bober research tick
+  ```
+
+- **harness scheduler** fires the CLI on a cadence from inside the agent harness.
+
+> Hosted-OAuth schedulers are unfit for unattended runs — use OS cron/launchd for unattended scheduling.
+
+### `bober research digest [--since <iso>]`
+
+Aggregate every research run produced in the window `[since, now]` into a **morning digest artifact** —
+a human-readable markdown file **and** a machine-readable JSON file written side by side. This is the
+content the Telegram bot (a sibling spec) consumes to push a silent scheduled message; transport itself
+is out of scope here.
+
+```bash
+bober research digest
+# /path/to/project/.bober/research/digests/2026-06-30.md
+# /path/to/project/.bober/research/digests/2026-06-30.json
+```
+
+- **Window.** `--since <iso>` sets the window start (default: 24 h before now). The wall clock is read
+  **only** at the command boundary; the digest itself is deterministic.
+- **Output.** Writes `.bober/research/digests/<YYYY-MM-DD>.md` and `<YYYY-MM-DD>.json` (the date is
+  sliced from `now`), and prints both paths. The markdown has a heading plus one bullet per run —
+  title, top finding, and a source link; the JSON is `{ since, now, generatedAt, runs:[{ title,
+  topFinding, generatedAt, source }] }` for the bot to parse.
+- **Source = vault research notes.** It reads the dated research notes Sprint 2's runner writes under
+  `<vaultRoot>/research/` (filtered by their `generatedAt` frontmatter) — **not** hub Findings, which
+  are content-deduped and would undercount a window.
+- **Non-sensitive content only.** The top finding is derived from each note's question/title — never
+  raw body values. Telegram is **not** end-to-end encrypted, so the digest deliberately carries only
+  titles and non-sensitive summaries.
+- **Empty window is fine.** When no runs fall in the window, both files are still written and the
+  markdown body reads `_No new research was produced in this window._` — it never throws or leaves an
+  empty file. Never throws on error either (errors ⇒ stderr + `process.exitCode = 1`).
+
+> **Status.** **Complete — all 5 sprints.** `spec-20260628-research-scheduler` ships the full
+> **definition + execution + egress + scheduler + digest** pipeline: the `ResearchJob` schema, the
+> clock-free JSON store under `.bober/research/jobs/`, `bober research job add|list|remove`,
+> `bober research run <jobId>` (single-shot multi-model run → vault note + one hub Finding), the opt-in
+> `research.egress.onlineResearch` egress axis (default `false`, fail-closed) that gates web retrieval,
+> `bober research tick [--watch]` (idempotent cadence-driven scheduler advancing `nextDueAt`/
+> `lastRunAt`), and `bober research digest [--since <iso>]` (the morning digest artifact under
+> `.bober/research/digests/`). **Carry-forward (out of scope, not regressions):** the CLI binds no live
+> web-search client yet; failed `tick` runs leave the job due with no retry/backoff; Telegram transport
+> and *scheduling the digest send* are owned by the sibling spec / calendar layer. Defining a job with
+> `--online-research` stores the per-job flag; the *config* axis `research.egress.onlineResearch` is
+> what gates an actual `run`/`tick`'s web retrieval.
+
+---
+
+## Telegram Commands
+
+The **Telegram frontend** is a locally-run bot that lets a whitelisted operator talk to
+agent-bober from Telegram. Sprint 1 ships the **transport + access-control spine** —
+getUpdates long-polling, a numeric user-id whitelist, and a single outbound funnel. Sprint 2 adds
+**zero-friction task capture**: plain text from an admitted sender is captured as one open task in
+the inbox (the same surface `bober task list` reads) and the bot replies with a confirmation.
+Sprint 3 adds the **scoped hub-priority commands** `/today`, `/priority`, and `/decide X vs Y`,
+which reply with a numbered ranked list from the priority hub. Sprint 4 adds the **inline-keyboard
+approve / adjust / reject gate**: `/pending` lists pending approval checkpoints with
+`[Approve][Adjust][Reject]` buttons whose taps write the **same** disk markers the existing
+`approve`/`reject` CLI writes — no new approval mechanism. Sprint 5 adds **document-upload medical
+ingest behind a mandatory per-upload opt-in**: a document message defers the download until an
+explicit Yes, names the local medical store in the prompt, hands the file to the existing medical
+ingest exactly once, and replies with a non-sensitive count only — and **unifies the outbound
+keyboard funnel** (one `sendSafeKeyboard` chokepoint). Sprint 6 adds **two outbound delivery modes**:
+**streaming** — a long-running operation reports progress by editing **one** status message in place
+(one `sendSafeForEdit` send + N `sendSafeEdit` edits on the same message id) instead of a message per
+tick — and a **silent scheduled digest** sent with notifications disabled (`SendOptions{silent}` →
+`disable_notification`). Sprint 7 — the **final** sprint — adds the **multi-LLM "secretary" `/fleet`
+view**: a read-only renderer reads the most recent fleet run's `.bober/fleet-synthesis.json`, groups
+findings by per-agent subject, and replies with one labeled section per agent (the same renderer also
+feeds the streaming surface). With Sprint 7 the plan is **complete (7/7 sprints)**. Broader inbox /
+calendar action dispatch remains a future addition — `/start` returns a help stub and any other
+`/command` returns an `Unknown command` placeholder. See [docs/telegram.md](./docs/telegram.md) for the
+adapter, the message router, the control-plane boundary, the privacy posture, and the plan close-out.
+
+### `bober telegram`
+
+Start the local long-polling Telegram bot. Reads credentials from the environment and blocks
+until Ctrl+C.
+
+```bash
+export TELEGRAM_BOT_TOKEN=123456:ABC-your-bot-token
+export TELEGRAM_ALLOWED_USERS=11111111,22222222   # comma-separated numeric Telegram ids
+bober telegram
+# Telegram bot started — polling for updates (Ctrl+C to stop).
+```
+
+- **Long-polling only — no server, no webhook, no inbound port, no public URL.** The process
+  opens an outbound `getUpdates` loop (`timeout=30s`); `SIGINT`/`SIGTERM` stop it cleanly.
+- **Credentials from env** (never hardcoded): `TELEGRAM_BOT_TOKEN` is **required** — when it is
+  unset the command prints a message naming the variable to stderr and exits non-zero
+  **without** any network call. `TELEGRAM_ALLOWED_USERS` is a comma-separated list of numeric
+  Telegram user ids; whitespace is trimmed and non-numeric tokens are silently dropped, so an
+  empty/absent list denies **everyone** (fail-closed).
+- **Whitelist (control-plane boundary).** A sender whose numeric id is in
+  `TELEGRAM_ALLOWED_USERS` is admitted; every other account receives **one** denial reply that
+  echoes its own numeric id and is otherwise ignored.
+- **Message routing (admitted senders).** Plain text is **captured** as one open inbox task — the
+  message becomes the task title with **no other required field** (no due-date/domain prompt) — and
+  the bot replies `Captured: <title> (#<id>)`. `/start` returns the help stub; any other
+  `/command` (and non-text updates such as stickers/photos) returns an `Unknown command`
+  placeholder reserved for later sprints. A `/`-prefixed message is **never** captured as a task.
+- **Scoped prioritization commands (admitted senders).** Three commands ask the priority hub to
+  rank findings and reply with a **numbered ranked list of titles** in the hub's order:
+  - `/priority` — rank all pooled findings (general scope).
+  - `/today` — rank findings due within one day (filtered scope).
+  - `/decide X vs Y` — rank only findings relevant to X or Y (decision scope; requires a literal
+    case-insensitive ` vs ` separator yielding exactly two options, else falls through to the
+    `Unknown command` stub).
+
+  The scope is parsed from the command text only and **never persisted**. The bot delegates the
+  ranking to the **hub CLI in a subprocess** (`bober hub priority` / `bober hub decide`), so all
+  relevance filtering and any model calls happen inside the hub — the Telegram adapter never
+  constructs an LLM client. The reply carries finding **titles only**.
+- **Approval gate — `/pending` (admitted senders).** `/pending` lists pending approval checkpoints,
+  rendering **one message per checkpoint** with an inline `[Approve] [Adjust] [Reject]` keyboard
+  (`No pending approvals.` when none). Button taps write the **same** `.approved.json` /
+  `.rejected.json` disk markers the `approve` / `reject` CLI writes — **no new approval mechanism** —
+  so calendar plans and do-bridge promotions resolve through the **one existing gate**:
+  - **Approve** writes `<id>.approved.json` (`approvedAt`, `approverId`; no `editDelta`) and the
+    waiting run proceeds.
+  - **Adjust** prompts `Send the replacement text.`; your next message is written as the marker's
+    `editDelta` (a steer).
+  - **Reject** prompts `Send rejection feedback.`; your next message is written as the
+    `<id>.rejected.json` marker's `feedback`.
+
+  Taps are **whitelist-gated first** (a tap from a non-whitelisted account writes nothing) and
+  **pendingExists-guarded** (a tap for a checkpoint with no `.pending.json` writes nothing). The
+  Adjust/Reject follow-up uses an **ephemeral in-memory** per-chat state (no disk; cleared on
+  restart) and is intercepted **before** capture, so the replacement/feedback text is not stored as a
+  task.
+- **Document upload → medical ingest, behind a per-upload opt-in (admitted senders).** Because
+  Telegram is **not** end-to-end encrypted, uploading a document **does not download anything** — the
+  bot replies with a `[Yes] [No]` prompt that **names the local medical store** (`.bober/medical`) and
+  states nothing is processed until you tap Yes:
+  - **Yes** ⇒ the bot downloads the file to a temp dir, hands it to the **existing** medical ingest
+    (`bober medical import`) **exactly once**, replies with a **non-sensitive count only**
+    (`Imported N results into local medical store.` — never raw marker values or names), and removes
+    the temp dir.
+  - **No** (or no confirmation) ⇒ nothing is downloaded and nothing is ingested.
+
+  The medical egress / consent / audit guardrails stay **authoritative inside the ingest subprocess** —
+  they are not duplicated or bypassed. Taps are whitelist-gated first. The pending upload is held in
+  **ephemeral in-memory** state (no disk; cleared on restart; consumed single-shot).
+- **Streaming progress + silent digest delivery (Sprint 6).** Two outbound delivery modes layered
+  over the funnel — both presentation only, no run/fleet/scheduler logic:
+  - **Streaming** (`streamProgress`) reports a long-running operation by editing **one** status message
+    **in place** — one initial send (`sendSafeForEdit`, which captures the message id) followed by N
+    in-place edits (`sendSafeEdit`) on that **same** message, driven by an injected async iterable of
+    progress strings (the last one is the final summary). It **never** posts a new message per tick.
+    Live do-bridge wiring is a **documented seam** (`src/do-bridge/do.ts`, after the promotion gate) —
+    the streaming function itself is source-agnostic.
+  - **Silent digest** (`sendDigest`) delivers a scheduler-handed digest payload with notifications
+    silenced — `sendSafe` with `{ silent: true }`, which `grammy` maps to `disable_notification`. The
+    bot decides neither the digest's content nor its cadence (owned by the research-scheduler).
+- **Multi-LLM secretary `/fleet` view (Sprint 7, admitted senders).** `/fleet` shows what each LLM/agent
+  produced in the most recent fleet run. A **read-only** renderer reads the head-written
+  `.bober/fleet-synthesis.json` artifact, groups findings by per-agent subject, and replies with a header
+  (the run's round count) followed by **one labeled section per agent** — agent label + a one-line summary
+  of that agent's latest finding + round + confidence + finding count. The **same** renderer feeds a live
+  fleet run's **streaming** sections (in-place edits), so `/fleet` and the live stream never drift. Raw
+  finding values are **truncated to one line** and routed through `sendSafe` — verbatim payloads never
+  reach the transport. When no fleet has run with `--blackboard` (the artifact is absent), `/fleet` replies
+  `No recent fleet run.` (never an error). This is a thin read+render adapter — **no run/fleet/scheduler
+  logic** and **no new dependency**; the bot keeps zero runtime coupling to `src/fleet` / `better-sqlite3`
+  (the synthesis types are imported type-only). `/fleet` is whitelist-gated **first** — a non-whitelisted
+  tap reads nothing.
+- **Single outbound funnel — four chokepoints.** Every reply leaves through a chokepoint in
+  `outbound.ts`: `sendSafe` (text), `sendSafeKeyboard` (inline keyboards; the sole
+  `transport.sendKeyboard` caller), and the Sprint-6 streaming pair `sendSafeForEdit` (the one initial
+  send) + `sendSafeEdit` (the in-place edits) — no handler sends directly. `sendSafe` gained an optional
+  4th `silent` option without breaking any existing caller. These are the seams where later sprints add
+  rate-limiting / audit / sanitisation.
+- **Never throws.** A startup error is caught, written to stderr, and turned into `exitCode = 1`.
+- **Library:** `grammy` (the one new dependency this plan adds), kept behind the transport
+  wrapper — only `src/telegram/bot.ts` imports it.
+
+> **Status.** **`spec-20260628-telegram-frontend` COMPLETE (7/7 sprints, all iter-1).** Transport +
+> whitelist + funnel (Sprint 1) + plain-text → zero-friction task capture (Sprint 2) + scoped
+> hub-priority commands `/today` / `/priority` / `/decide X vs Y` (Sprint 3) + inline-keyboard
+> approve/adjust/reject gate `/pending` over the existing disk-marker approval store (Sprint 4) +
+> document-upload medical ingest behind a mandatory per-upload opt-in, plus the unified `sendSafeKeyboard`
+> outbound funnel (Sprint 5) + streaming in-place-edit progress (`streamProgress`) and silent scheduled
+> digest delivery (`sendDigest` via `SendOptions{silent}` → `disable_notification`), growing the funnel to
+> four chokepoints (Sprint 6) + the multi-LLM secretary `/fleet` view (shared by `/fleet` and the live
+> streaming surface, type-only zero-coupling to `src/fleet`, Sprint 7). The research-scheduler morning
+> digest lives at `.bober/research/digests/<date>.json`. **Deferred follow-ups:** the live do-bridge wire
+> that feeds `streamProgress` from a real run (a documented seam) and live smoke tests both need a real bot
+> token; broader inbox/calendar action dispatch (replacing the `Unknown command` stub), **Tier 2**
+> (per-LLM bot identities / bot-to-bot) and **Tier 3** (Secretary Mode) are deferred to sibling specs.
+
+---
+
+## Security Audit Commands
+
+The **security auditor** is a stack-aware `bober-security-auditor` role (spec-20260712, **complete —
+7/7 sprints**) that reviews code for exploitable vulnerabilities and cites each finding with `path:line`.
+It has **three** entry points over **one** shared `runSecurityAudit` core: the fail-closed **in-pipeline
+gate** (runs on every passing sprint when `security.enabled === true`; critical-only veto), the on-demand
+**standalone CLI** below, and the advisory **`bober.security-audit` skill** (`/bober-security-audit` in
+Claude Code — spawns the auditor subagent conversationally; advisory-only, never blocks and never writes
+code fixes). All three persist a human-readable artifact to `.bober/security/<id>-security-audit.md`. The
+`security` config section is **optional and default-off** — see the
+[Full Configuration Reference](./README.md#full-configuration-reference). agent-bober's own
+`bober.config.json` **dogfoods** the gate with `security: { enabled: true, scanners: [] }` (LLM-only, no
+scanner binaries required). The whole feature is documented end-to-end in
+[docs/security-audit.md](./docs/security-audit.md).
+
+### `bober security-audit [target]`
+
+Run an on-demand stack-aware security audit against a local path (or the working tree when `target` is
+omitted), print a cited findings summary, and exit with a CI-friendly code driven by a configurable
+severity threshold.
+
+```bash
+# Audit the whole working tree; block CI only on critical findings (default)
+bober security-audit
+
+# Audit a specific path
+bober security-audit src/payments
+
+# Also fail on important-bucket findings — set once in bober.config.json:
+#   "security": { "standaloneBlockOn": "important" }
+bober security-audit
+```
+
+- **The invocation is the opt-in.** Unlike the pipeline gate, the standalone command does **not** require
+  `security.enabled: true` — running it is the consent. When the `security` section is absent entirely, the
+  audit still runs using the schema defaults (`SecuritySectionSchema.parse({})`).
+- **Same core as the gate.** Calls `runSecurityAudit(descriptor, null, projectRoot, config)` with
+  `evaluation = null` (standalone mode). The descriptor's id is timestamped (`security-audit-<slug>`) so it
+  can never collide with a pipeline `sprint-*` contract and yields a stable, fs-safe artifact filename.
+- **Configurable blocking threshold** (`security.standaloneBlockOn`): `critical` (default) blocks only on
+  critical findings; `important` also blocks when only important-bucket findings exist. `minor` findings
+  never block. This threshold is **CLI-local** — the pipeline gate's critical-only veto is unaffected and
+  never reads this key.
+- **Exit codes** (`0` = pass, `2` = blocked): the process exits **`2`** when the configured threshold
+  bucket is non-empty **or** the audit throws **or** the auditor's output could not be parsed
+  (`parsed: false`) — i.e. **fail-closed**; otherwise **`0`**. The fail-closed checks run *before* the
+  threshold, so a parse failure is never read as "clean". (`1` is reserved for Commander usage errors.)
+- **Output.** Prints the verdict (`PASS` / `BLOCKED (threshold: …)`), the detected stack, per-bucket
+  counts (critical / important / minor), the audit summary, up to 20 top findings as
+  `<description> at <path>:<line>`, and the persisted artifact path. Errors go to stderr.
+- **Local paths only** — no remote URLs. No git-diff scoping; the auditor's read-only tools explore the
+  project root (or the target subpath).
+- **Optional scanner pre-filter** (`security.scanners`): configure `slither`/`semgrep` (or any) scanner
+  commands as `EvalStrategy` entries and their JSON output is parsed into deterministic priors that seed the
+  auditor prompt (they never bypass the LLM or drive the verdict). Both this command and the pipeline gate
+  inherit priors for free. **CI-offline**: the parsers are fixture-tested — no scanner binary need be
+  installed for the test suite. **Time-boxed**: scanner children run under an `AbortSignal` keyed to
+  `security.timeoutMs` and are SIGKILLed on abort (partial findings survive). **Isolated**: a missing binary
+  or nonzero exit contributes `[]` for that scanner only. **Exit-0 convention**: ANY nonzero exit yields `[]`
+  for that scanner, so tools whose convention is nonzero-on-findings (e.g. `semgrep --error`) must be wired as
+  an exit-0 command. With `scanners: []` (default) no child process is spawned.
+- **Findings flow into the priority hub** (`security.hub`, default `true`): after the exit code is computed,
+  confirmed **critical** (→ hub severity/urgency `5`) and **important** (→ `3`) findings are mapped to
+  canonical hub `Finding` rows (`domain: security`, `kind: risk`, stable title
+  `[security] <vulnClass> at <path>:<line>`) and ingested into the default FactStore pool
+  (`.bober/memory/facts.db`), so they surface in `bober hub list` / `hub priority`. `minor` findings are
+  never emitted. Retries are deduped by the hub's `domain|title|kind` content hash. Emission is
+  **best-effort** — a hub/fs failure is caught and logged and **never** changes the exit code — and is
+  **skipped entirely** when `security.hub` is `false` (zero hub writes) or the audit is clean. The
+  in-pipeline gate emits identically (also guarded by `security.hub`).
+
+See [docs/security-audit.md](./docs/security-audit.md) for the consolidated reference, plus
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-4.md),
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-5.md),
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-6.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-6.md),
+[docs/sprints/sprint-spec-20260712-security-audit-agent-team-7.md](./docs/sprints/sprint-spec-20260712-security-audit-agent-team-7.md),
+and the security-auditor section of [docs/storage.md](./docs/storage.md).
 
 ---
 

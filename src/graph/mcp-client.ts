@@ -20,7 +20,7 @@ import { logger } from "../utils/logger.js";
 
 const BREAKER_WINDOW_MS = 60_000;
 const BREAKER_MAX_RESTARTS = 3;
-const HANDSHAKE_TIMEOUT_MS = 1_000;
+const HANDSHAKE_TIMEOUT_MS = 5_000;
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -62,6 +62,43 @@ function makeGraphError(reason: string, detail: string): Error {
   return err;
 }
 
+// ── MCP content unwrap ─────────────────────────────────────────────
+
+/**
+ * Unwrap a tools/call MCP result into the actual payload.
+ *
+ * tokensave 6.1.1 returns result.content as a MULTI-ENTRY array where
+ * content[0] may be a plain-text staleness WARNING (not JSON) and the
+ * actual JSON payload is a later entry. We scan ALL text entries and
+ * return the first one that JSON.parses; if none parse, return the
+ * first text entry as a raw string.
+ *
+ * Also handles the MCP in-band isError shape per spec (sc-1-5).
+ * bober: naive linear scan over content[]; upgrade if content grows large.
+ */
+function unwrapMcpContent(result: unknown): unknown {
+  const r = result as {
+    isError?: boolean;
+    content?: Array<{ type?: string; text?: string }>;
+  };
+  const texts = (r?.content ?? [])
+    .filter((c) => c?.type === "text")
+    .map((c) => c.text ?? "");
+  const joined = texts.join("");
+  if (r?.isError === true) {
+    throw makeGraphError("GRAPH_ERROR", joined || "tool returned isError");
+  }
+  // Prefer the first text entry that parses as JSON; fall back to first text.
+  for (const t of texts) {
+    try {
+      return JSON.parse(t);
+    } catch {
+      // not JSON — keep looking
+    }
+  }
+  return texts[0] ?? "";
+}
+
 // ── TokensaveMcpClient ─────────────────────────────────────────────
 
 export class TokensaveMcpClient {
@@ -69,6 +106,7 @@ export class TokensaveMcpClient {
   childPid: number | null = null;
 
   private child: Subprocess | null = null;
+  private handshakeId = 0;
   private healthState: EngineHealth = "starting";
   private nextId = 1;
   private readonly pending = new Map<number, PendingCall>();
@@ -165,7 +203,7 @@ export class TokensaveMcpClient {
     const id = this.nextId++;
     const timeoutMs = this.cfg.queryTimeoutMs ?? 5_000;
 
-    return new Promise<T>((resolve, reject) => {
+    const rawResult = await new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(makeGraphError("GRAPH_TIMEOUT", `call to ${tool} timed out after ${timeoutMs}ms`));
@@ -180,8 +218,8 @@ export class TokensaveMcpClient {
       const request: JsonRpcRequest = {
         jsonrpc: "2.0",
         id,
-        method: tool,
-        params,
+        method: "tools/call",
+        params: { name: tool, arguments: params },
       };
 
       try {
@@ -192,6 +230,8 @@ export class TokensaveMcpClient {
         reject(makeGraphError("GRAPH_ERROR", `stdin write failed: ${err instanceof Error ? err.message : String(err)}`));
       }
     });
+
+    return unwrapMcpContent(rawResult) as T;
   }
 
   // ── Private: spawn + handshake ─────────────────────────────────
@@ -208,6 +248,22 @@ export class TokensaveMcpClient {
       this.child = child;
       this.childPid = child.pid ?? null;
       this.stdoutBuf = "";
+
+      // Reserve an id for the initialize request from the same counter as
+      // call() so ids never collide.
+      this.handshakeId = this.nextId++;
+      child.stdin?.write(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: this.handshakeId,
+          method: "initialize",
+          params: {
+            protocolVersion: "2024-11-05",
+            capabilities: {},
+            clientInfo: { name: "agent-bober", version: "0" },
+          },
+        }) + "\n",
+      );
 
       // Route stderr to debug log — never to user stdout
       child.stderr?.on("data", (chunk: unknown) => {
@@ -259,13 +315,18 @@ export class TokensaveMcpClient {
             continue;
           }
 
-          // Handshake: accept any valid JSON-RPC 2.0 message that indicates
-          // the server is ready (notification with no id, or any response)
-          if (!settled) {
+          // Handshake: resolve ONLY when the correlated initialize response
+          // (same id as our initialize request) arrives — NOT on any first line.
+          if (!settled && typeof msg.id === "number" && msg.id === this.handshakeId) {
             clearTimeout(handshakeTimer);
             settled = true;
             this.healthState = "ready";
             resolve();
+            // Send the notifications/initialized notification AFTER resolving
+            child.stdin?.write(
+              JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n",
+            );
+            continue; // skip handleResponse for the handshake response
           }
 
           // Correlation: if it has an id, it's a response to a pending call

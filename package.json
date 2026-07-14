@@ -1,7 +1,7 @@
 {
   "name": "agent-bober",
   "version": "0.18.0",
-  "description": "Multi-agent harness for building applications autonomously with any LLM. Researcher, Planner, Curator, Generator, Evaluator, Documenter pipeline. Supports Claude, GPT, Gemini, DeepSeek, Ollama, and Claude Code subscriptions. MCP server for Cursor/Windsurf.",
+  "description": "Multi-agent, multi-provider harness for building software autonomously with any LLM. Researcher, Planner, Curator, Generator, Evaluator, Documenter pipeline with a fail-closed security-audit gate, a fleet orchestrator for bulk multi-agent runs, and a cross-domain knowledge platform (medical, vault, priority hub). Supports Claude, GPT, Gemini, DeepSeek, Ollama, and Claude Code subscriptions. MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,11 @@
     "gemini",
     "deepseek",
     "ollama",
-    "plugin"
+    "plugin",
+    "security-audit",
+    "fleet",
+    "incident-response",
+    "knowledge-platform"
   ],
   "author": "BOBER3r",
   "license": "MIT",
@@ -67,8 +71,10 @@
     "commander": "^13.1.0",
     "execa": "^9.5.2",
     "glob": "^11.0.1",
+    "grammy": "^1.44.0",
     "ora": "^8.1.1",
     "prompts": "^2.4.2",
+    "sax": "^1.6.0",
     "semver": "^7.8.1",
     "zod": "^3.24.2",
     "zod-to-json-schema": "^3.25.2"
@@ -90,6 +96,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.13.0",
     "@types/prompts": "^2.4.9",
+    "@types/sax": "^1.2.7",
     "@types/semver": "^7.7.1",
     "@typescript-eslint/eslint-plugin": "^8.22.0",
     "@typescript-eslint/parser": "^8.22.0",

@@ -34,6 +34,8 @@ import type { GeneratorResult } from "./generator-agent.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
 import { runCodeReviewer } from "./code-reviewer-agent.js";
 import { runDocumenter } from "./documenter-agent.js";
+import { evaluateSecurityGate, renderSecurityFeedback } from "./security-gate.js";
+import type { SecurityFinding } from "./security-audit-types.js";
 import { getCheckpointMechanismFor } from "./checkpoints/index.js";
 // NOTE (Sprint 12): The feedback-router (src/orchestrator/checkpoints/feedback-router.ts)
 // provides runCheckpointWithFeedback() for full iteration + abort semantics.
@@ -152,15 +154,20 @@ export function injectGuidanceIntoHandoff(
 
 // ── Sprint cycle ───────────────────────────────────────────────────
 
+export interface RunSprintCycleParams {
+  contract: SprintContract;
+  spec: PlanSpec;
+  completedContracts: SprintContract[];
+  projectRoot: string;
+  config: BoberConfig;
+  projectContext: ProjectContext;
+  pipelineRunId?: string;
+}
+
 export async function runSprintCycle(
-  contract: SprintContract,
-  spec: PlanSpec,
-  completedContracts: SprintContract[],
-  projectRoot: string,
-  config: BoberConfig,
-  projectContext: ProjectContext,
-  pipelineRunId?: string,
+  params: RunSprintCycleParams,
 ): Promise<SprintCycleResult> {
+  const { contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId } = params;
   const maxIterations = config.evaluator.maxIterations;
   let currentContract = updateContractStatus(contract, "in-progress");
   await updateContract(projectRoot, currentContract);
@@ -176,6 +183,10 @@ export async function runSprintCycle(
 
   let lastEvaluation: EvaluationRunResult | undefined;
   let lastGeneratorResult: GeneratorResult | undefined;
+  // Sprint 3 — security-audit-agent-team: findings from a blocked security
+  // round, routed into the NEXT iteration's evalFeedbackParts (ADR-5). Stays
+  // empty when the gate never runs (config.security absent/disabled).
+  let pendingSecurityFeedback: string[] = [];
 
   // ── Curate (once, before the first generator attempt) ─────────
   // The curator explores the codebase and saves a Sprint Briefing to
@@ -267,6 +278,14 @@ export async function runSprintCycle(
           evalFeedbackParts.push(`  Feedback: ${result.feedback}`);
         }
       }
+    }
+
+    // Sprint 3 — feed a prior blocked security round's findings into THIS
+    // iteration's generator handoff via the same channel evaluator feedback
+    // uses (ADR-5). No-op when the gate has never blocked.
+    if (pendingSecurityFeedback.length > 0) {
+      evalFeedbackParts.push(...pendingSecurityFeedback);
+      pendingSecurityFeedback = [];
     }
 
     // Summarize older sprints to save context
@@ -427,6 +446,90 @@ export async function runSprintCycle(
     );
 
     if (evaluation.passed) {
+      // Sprint 3 — fail-closed SecurityAuditGate (ADR-2). Attached BEFORE the
+      // sprint is marked passed. When config.security is absent (the common
+      // case) or enabled !== true, this branch never executes — the pipeline
+      // is byte-identical to the pre-gate behavior (sc-3-4).
+      if (config.security?.enabled === true) {
+        const securityVerdict = await evaluateSecurityGate({
+          contract: currentContract,
+          evaluation,
+          projectRoot,
+          config,
+        });
+
+        if (securityVerdict.blocked) {
+          logger.error(
+            `Sprint ${currentContract.contractId} blocked by security audit (${securityVerdict.reason}).`,
+          );
+
+          const securityFeedback = renderSecurityFeedback(securityVerdict);
+          currentContract = {
+            ...currentContract,
+            evaluatorFeedback:
+              securityFeedback.join("\n") ||
+              `Security audit blocked this sprint (${securityVerdict.reason}).`,
+          };
+          await updateContract(projectRoot, currentContract);
+
+          // The auditor always constructs review.critical from SecurityFinding
+          // objects (security-auditor-agent.ts), a superset of the locked
+          // ReviewFinding shape — safe to narrow here to read vulnClass.
+          const criticalFindings = (securityVerdict.result?.review.critical ??
+            []) as SecurityFinding[];
+          await appendHistory(projectRoot, {
+            timestamp: new Date().toISOString(),
+            event: "security-audit-blocked",
+            phase: "rework",
+            sprintId: currentContract.contractId,
+            details: {
+              reason: securityVerdict.reason,
+              critical: criticalFindings.length,
+              findings: criticalFindings.slice(0, 20).map((f) => ({
+                path: f.evidence[0]?.path ?? "unknown",
+                line: f.evidence[0]?.line ?? 0,
+                ...(f.vulnClass ? { vulnClass: f.vulnClass } : {}),
+              })),
+            },
+          });
+
+          // ADR-5: route findings into the generator's NEXT iteration via the
+          // same feedback channel evaluator feedback uses (evalFeedbackParts).
+          pendingSecurityFeedback = securityFeedback;
+
+          // Mirror the evaluation-failed retry tail (pipeline.ts eval-failed
+          // block below): retry telemetry when iterations remain, otherwise
+          // needs-rework at maxIterations. Documenter/code-review are NEVER
+          // reached on a block — control returns/continues before :465 (ADR-6).
+          if (iteration < maxIterations) {
+            void emit(projectRoot, config, "sprint-fail-retry", {
+              runId: sprintRunId,
+              sprintId: currentContract.contractId,
+              iteration,
+              retryCount: iteration,
+            });
+          }
+
+          if (iteration >= maxIterations) {
+            currentContract = updateContractStatus(currentContract, "needs-rework");
+            await updateContract(projectRoot, currentContract);
+            return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
+          }
+
+          logger.info("Feeding security audit feedback into next iteration...");
+          continue;
+        }
+
+        // Clean — record and fall through to the existing passed block.
+        await appendHistory(projectRoot, {
+          timestamp: new Date().toISOString(),
+          event: "security-audit-clean",
+          phase: "complete",
+          sprintId: currentContract.contractId,
+          details: { reason: securityVerdict.reason },
+        });
+      }
+
       logger.success(`Sprint ${currentContract.contractId} passed all evaluations!`);
 
       currentContract = updateContractStatus(currentContract, "passed");
@@ -441,7 +544,13 @@ export async function runSprintCycle(
         event: "sprint-passed",
         phase: "complete",
         sprintId: currentContract.contractId,
-        details: { iteration, feedback: evaluation.summary },
+        details: {
+          iteration,
+          feedback: evaluation.summary,
+          ...(lastGeneratorResult?.costUsd !== undefined
+            ? { costUsd: lastGeneratorResult.costUsd }
+            : {}),
+        },
       });
       // Sprint 28 — telemetry (fire-and-forget, never throws to pipeline)
       void emit(projectRoot, config, "sprint-pass", {
@@ -875,15 +984,15 @@ export async function runTsPipeline(
       const contract = contracts[i];
       logger.progress(i + 1, maxSprints, contract.title);
 
-      const result = await runSprintCycle(
+      const result = await runSprintCycle({
         contract,
         spec,
-        completedSprints,
+        completedContracts: completedSprints,
         projectRoot,
         config,
         projectContext,
         pipelineRunId,
-      );
+      });
 
       if (result.contract.status === "passed") {
         completedSprints.push(result.contract);

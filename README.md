@@ -55,9 +55,9 @@ agent-bober operates in four modes — pick the one that matches your situation.
 
 | Mode | When to Use | Entry Point |
 |------|-------------|-------------|
-| **Autopilot** | Feature spikes, greenfield work, no production risk | `bober run` |
-| **Careful-Flow** | Production behavior changes, want checkpoint approval | `bober run --mode careful` |
-| **Diagnose** | Production system is broken right now | `bober incident start` |
+| **Autopilot** | Feature spikes, greenfield work, no production risk | `agent-bober run` |
+| **Careful-Flow** | Production behavior changes, want checkpoint approval | `agent-bober run --mode careful` |
+| **Diagnose** | Production system is broken right now | `agent-bober incident start` |
 | **Postmortem** | After resolving an incident, generate a retrospective | `bober postmortem generate` |
 
 ---
@@ -425,7 +425,7 @@ Add to your Windsurf MCP configuration:
 
 ## Brownfield Auto-Discovery
 
-When you run `bober init brownfield` (or use the `bober_init` MCP tool with mode=brownfield), agent-bober deeply analyzes your existing codebase and automatically:
+When you run `agent-bober init brownfield` (or use the `bober_init` MCP tool with mode=brownfield), agent-bober deeply analyzes your existing codebase and automatically:
 
 ### What It Scans
 
@@ -489,6 +489,7 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 | `/bober-brownfield` | Existing codebase workflow |
 | `/bober-playwright` | Set up Playwright E2E testing, generate tests, debug failures |
 | `/bober-code-review` | Advisory review of the sprint diff against the contract + anti-pattern catalog |
+| `/bober-security-audit` | On-demand stack-aware security audit of a path (or the working tree) -- spawns the `bober-security-auditor` subagent, presents severity-ranked findings; advisory-only |
 | `/bober-verify` | Verification-before-completion -- run checks and confirm output before claiming success |
 | `/bober-debug` | Systematic debugging -- reproduce, isolate, hypothesize, fix, verify |
 | `/bober-graph` | Manage the code graph index -- init, sync, status (requires tokensave) |
@@ -501,7 +502,7 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 | `/bober-postmortem` | Synthesize an evidence-cited postmortem from incident artifacts |
 | `/bober-using-bober` | Establishes how to find and use bober skills (loaded at conversation start) |
 
-> **Preset-aware install:** `bober init <preset>` installs the universal commands above plus only the stack-specific commands matching your preset or mode -- e.g. `/bober-solidity` is added for a `solidity` project, `/bober-react` and `/bober-playwright` for `nextjs`/`react-vite`, and `/bober-brownfield` for an existing codebase. The Claude Code plugin (`/plugin install`) always ships the full set.
+> **Preset-aware install:** `agent-bober init <preset>` installs the universal commands above plus only the stack-specific commands matching your preset or mode -- e.g. `/bober-solidity` is added for a `solidity` project, `/bober-react` and `/bober-playwright` for `nextjs`/`react-vite`, and `/bober-brownfield` for an existing codebase. The Claude Code plugin (`/plugin install`) always ships the full set.
 
 ### CLI
 
@@ -517,12 +518,13 @@ npx agent-bober run "feature"                            # Full autonomous loop
 npx agent-bober run "feature" --team example             # Full autonomous loop using the 'example' team
 npx agent-bober chat                                     # Interactive chat REPL (roster + memory aware)
 npx agent-bober chat example                             # Interactive chat REPL using the 'example' team
+npx agent-bober chat hub                                 # Priority-hub chat REPL (in-session /priority + /decide)
 npx agent-bober mcp                                      # Start MCP server (Cursor/Windsurf)
 ```
 
 #### Chat Steer Commands (Phase 2 — mid-flight HITL)
 
-Inside the `bober chat` REPL you can steer in-flight runs with these commands:
+Inside the `agent-bober chat` REPL you can steer in-flight runs with these commands:
 
 | Command | Description |
 |---|---|
@@ -572,6 +574,74 @@ npx agent-bober postmortem show <incidentId>       # Print retrospective
 npx agent-bober playbook list                      # List all playbooks
 npx agent-bober playbook show <name>               # Show playbook content
 npx agent-bober playbook search '<symptom>'        # Search by symptom
+
+# Medical team (Phase 6)
+npx agent-bober medical import <file>              # Stream-import a health export (e.g. Apple Health export.xml)
+npx agent-bober medical import-labs <pdf>          # Parse a lab PDF into vault notes + health store (cloud-inference axis; fail-closed off)
+npx agent-bober medical supplements add <name> [--dose <d>]  # Record a supplement as a FactStore fact (medical scope; idempotent re-add)
+npx agent-bober medical supplements list           # Print supplements from the markdown-frontmatter file
+npx agent-bober medical profile show               # Decrypt + show the SOPS-encrypted personalization profile (fail-closed if sops missing)
+npx agent-bober medical profile set <key> <value>  # Update one profile field (age/sex/conditions/...); re-encrypts via sops (age backend, local)
+npx agent-bober medical whoop sync [--since <iso>] # Sync WHOOP recovery/sleep/cycle/workout (device-connection axis)
+npx agent-bober medical review [--dig-deeper <id>] # Deterministic offline proactive pass -> trend + cadence-gap + cross-marker-offer Finding notes; --dig-deeper runs the gated 4-lens deep analysis for an offer
+npx agent-bober medical recommend <question> [--goal <g>]  # 4-lens judge panel -> action/question Finding (cloud-inference axis; fail-closed local)
+npx agent-bober medical research [--marker <m>]    # Online MedlinePlus research -> grounded vault research notes + watch findings (literature-retrieval axis; zero egress off)
+
+# Vault knowledge base
+npx agent-bober vault reindex --scope <domain> [--vault <dir>]  # Rebuild the derived FactStore from a vault's note frontmatter
+
+# Priority hub (cross-domain Findings)
+npx agent-bober hub list                           # Print Findings from the project's own FactStore + sibling kb-* repos (read-only, deduped by id); title [kind] urgency/severity per line
+npx agent-bober hub priority [--domain <d>] [--due <days>] [--tag <t>]  # Rank pooled Findings (general, or filtered) and write priority.md into the kb-hub vault; prints a ranked summary
+npx agent-bober hub decide "X vs Y"                # Rank Findings under decision scope (only X/Y-relevant survive) and write priority.md
+
+# Task inbox (zero-friction capture into the hub pool)
+npx agent-bober task add "<text>" [--domain <d>]   # Capture a plain task as one open kind=action Finding in the hub pool; deterministic, never prompts/blocks
+npx agent-bober task list [--all] [--status <s>]   # List tasks (open + in-progress + woken snoozed by default; --all or --status widens to done/dropped)
+npx agent-bober task start <id>                    # Move a task to in-progress (supersede; prior status kept as history)
+npx agent-bober task done <id>                     # Mark a task done (supersede; hidden from the default list, still in --all)
+npx agent-bober task drop <id>                     # Abandon a task → status=dropped via supersede (never deleted)
+npx agent-bober task snooze <id> --until <when>    # Defer a task: status=snoozed + snooze-until:<ISO> tag; hidden from default list until wake time passes (lazy, no timer)
+npx agent-bober task ingest [file]                 # Domain seam: ingest a Finding JSON (file or stdin) into the hub pool; content-id dedup (domain|title|kind), schema-validated, fail-closed exitCode=1
+npx agent-bober task from-gmail <thread>           # Opt-in: capture one Gmail thread as an open action task. OFF by default (taskInbox.gmailEgress) — refuses with no MCP client/network when disabled; sanitizes connector errors (never leaks tokens)
+
+# Do-bridge (promote a Finding into an agent-bober run)
+npx agent-bober do <findingId> --dry-run           # Preview the agent-bober run task a coding/projects Finding would launch (read-only: no mutation, no approval marker, no spawn); unsupported domain → exitCode=1
+npx agent-bober do <findingId>                      # Real path: write a promote-<id> approval marker, gate (TTY confirm / non-TTY wait for agent-bober approve|reject), then launch detached `agent-bober run` on approve — links Finding.promotesTo (runId, status launched) + moves it open→in-progress; reject leaves it unchanged
+npx agent-bober do <findingId> --yes               # Real path, auto-approve (skip the confirm prompt; still writes+clears the marker)
+npx agent-bober do --reconcile                     # Reconcile launched promotions: read each run's run-state.json snapshot → advance the Finding (completed→done, aborted/failed→open, running→unchanged); also runs best-effort at the start of every `agent-bober do`
+
+# Calendar planner (deterministic slot-fill from ranked Findings)
+npx agent-bober calendar plan --dry-run --findings <path> [--freebusy <path>]  # Place ranked Findings into open slots in priority order (pure JS, LLM never packs); print scheduled (ISO start/end) + unscheduled (reason) — dry-run writes nothing to any calendar
+npx agent-bober calendar plan --export-ics <path> --findings <path> [--freebusy <path>]  # Same slot-fill, then write the plan to a local-first RFC 5545 .ics file (one VEVENT per scheduled item, UTC DTSTART/DTEND) with zero network egress — import it manually into your calendar app
+npx agent-bober calendar plan --findings <path> [--freebusy <path>]  # Live path: slot, then PROPOSE through the existing approval gate — writes a pending marker + plan sidecar and ZERO events; prints checkpointId (calendar-<id>) + how to approve. No auto-approve in any mode
+npx agent-bober calendar apply <checkpointId>      # Write events for an approved plan: detects the approved/rejected marker inline → connector.writeEvents EXACTLY once on approval / never on reject (Google still egress-gated). Approve first: agent-bober approve <checkpointId> (or /approve in chat)
+
+# Research scheduler (recurring multi-model research jobs)
+npx agent-bober research job add --question "..." [--cadence daily|weekly|monthly] [--tier <t>] [--domain <d>] [--target-repo <r>] [--online-research]  # Define a recurring research job as JSON under .bober/research/jobs/ (validated by ResearchJobSchema; deterministic jobId=sha256(question|createdAt); --online-research stored but inert until egress lands)
+npx agent-bober research job list                  # List all defined research jobs (jobId, cadence, question, [domain])
+npx agent-bober research job remove <jobId>        # Delete a research job's JSON file (not-found → exitCode=1)
+npx agent-bober research run <jobId>               # Execute one stored job: query ≥2 distinct tier-policy provider/model blocks, write a vault research note (frontmatter jobId/question/models[]/generatedAt), emit exactly one kind:"watch" hub Finding; prints the note path. Offline unless research.egress.onlineResearch; never throws (not-found → exitCode=1)
+npx agent-bober research tick [--watch] [--interval <ms>]  # Run every job due as of now (nextDueAt unset or <= now) on the same path; idempotent — advances each run job's nextDueAt by cadence (daily+1d/weekly+7d/monthly+1mo) + sets lastRunAt, so a 2nd tick runs nothing. Clock read only at the boundary. --watch = in-process setInterval (default 1h); for unattended runs use OS cron/launchd, e.g. `0 * * * * agent-bober research tick`
+npx agent-bober research digest [--since <iso>]    # Aggregate research runs in [since, now] (default last 24h) into a morning digest under .bober/research/digests/<date>.{md,json} — markdown (one bullet per run: title/top finding/source) + JSON for the Telegram bot. Reads vault research notes (non-sensitive titles only); empty window writes both files with an explicit no-new-research body; never throws
+
+# Telegram frontend (local long-polling bot; transport + whitelist + funnel + zero-friction capture + scoped hub-priority commands + inline approve/adjust/reject gate + document-upload medical-ingest opt-in + streaming in-place progress + silent scheduled digest + multi-LLM /fleet secretary view) — spec COMPLETE (7/7 sprints)
+npx agent-bober telegram                           # Start the local getUpdates long-polling bot (NO server/webhook/inbound port). Reads TELEGRAM_BOT_TOKEN (required; absent → exitCode=1, no network) + TELEGRAM_ALLOWED_USERS (comma-separated numeric ids; empty → deny-all, fail-closed) from env. Plain text from a whitelisted sender is captured as one open inbox task (message = title, no other required field) with a "Captured: <title>" reply; /priority, /today, and /decide X vs Y reply with a numbered ranked list from the priority hub (ephemeral scope parsed from the command, delegated to the hub CLI subprocess so the LLM stays out of the adapter, titles only); /pending lists pending approval checkpoints with [Approve][Adjust][Reject] inline buttons whose taps write the SAME .approved.json/.rejected.json disk markers the approve/reject CLI writes (no new mechanism — calendar/do-bridge resolve through the one existing gate; Approve has no editDelta, Adjust carries editDelta, Reject carries feedback; taps are whitelist-first + pendingExists-guarded, Adjust/Reject collect a follow-up text turn via ephemeral in-memory state); uploading a document (Telegram is NOT E2E-encrypted) DEFERS the download behind a per-upload [Yes][No] opt-in that names the local medical store (.bober/medical) — only on Yes does it download to a temp dir + hand the file to the existing `medical import` ingest exactly once (medical egress/consent/audit guards stay authoritative in the subprocess) + reply with a non-sensitive count only (no PHI) + remove the temp dir; No/no-confirm ingests nothing; /start gets a help stub and any other /command an "Unknown command" stub; everyone else gets one denial echoing their own id. Two Sprint-6 outbound delivery modes (presentation only, no run/fleet/scheduler logic): streamProgress reports a long-running operation by editing ONE status message in place — one sendSafeForEdit send (captures the message id) + N sendSafeEdit edits on the SAME id over an injected async iterable (never a new message per tick; live do-bridge wiring left as a documented seam in src/do-bridge/do.ts), and sendDigest delivers a scheduler-handed digest payload silently (sendSafe with {silent:true} → disable_notification; content/cadence owned by the research-scheduler). /fleet (Sprint 7) shows the most recent fleet run: a read-only renderer reads .bober/fleet-synthesis.json, groups findings by per-agent FactRecord.subject, and replies with a header (round count) + one labeled section per agent (label + one-line summary of the latest finding + round + confidence + finding count); the SAME renderer feeds the live streaming sections, over-long values are truncated to one line, missing/empty synthesis → "no recent fleet run" (never throws), /fleet is whitelist-gated first (non-whitelisted reads nothing), and SynthesisBundle/FactRecord are type-only imports so the bot keeps zero runtime coupling to src/fleet/better-sqlite3 (no new dep). All text replies leave through the single sendSafe funnel + all keyboards through the single sendSafeKeyboard funnel + streaming through sendSafeForEdit/sendSafeEdit (four chokepoints total; the new silent option is an optional 4th sendSafe arg so prior callers are byte-identical); grammy is isolated behind the transport wrapper. Ctrl+C (SIGINT/SIGTERM) stops it; never throws. spec-20260628-telegram-frontend is COMPLETE (7/7 sprints); deferred: live do-bridge streaming wire + live smoke tests need a real bot token, Tier 2/Tier 3 → sibling specs
+
+# Security audit (three surfaces over one runSecurityAudit core: fail-closed pipeline gate + this CLI + the advisory `bober.security-audit` skill; opt-in, default-off) — spec-20260712 COMPLETE (7/7). agent-bober itself dogfoods the gate (security.enabled=true, scanners:[] — LLM-only). Full reference: docs/security-audit.md
+npx agent-bober security-audit [target]            # Run an on-demand stack-aware security audit against a local path (or the working tree when target is omitted). Runs the SAME runSecurityAudit core the in-pipeline gate uses (with evaluation=null), persists a cited artifact to .bober/security/<id>-security-audit.md, and prints a summary (verdict, per-bucket counts, top findings as path:line, artifact path). Exit code: 0 = pass, 2 = blocked-by-threshold OR fail-closed (audit threw / auditor output unparseable) — wire it into CI. Blocking threshold is security.standaloneBlockOn ('critical' default | 'important' also fails on important-bucket findings). Does NOT require security.enabled=true — the explicit invocation IS the opt-in; the pipeline gate's critical-only veto is untouched. After the exit code is computed, critical (hub severity/urgency 5) + important (3) findings are emitted into the priority hub (best-effort, guarded by security.hub default true; never changes the exit code) so they show up in `bober hub list`/`priority`. Local paths only (no remote URLs). For a conversational audit inside Claude Code use the `/bober-security-audit` skill (advisory-only; spawns the bober-security-auditor subagent)
+
+# Fleet orchestrator (spawn N isolated agent-bober children in bulk)
+npx agent-bober fleet <manifest>                   # Run a fleet of agent-bober children from a manifest (full reference in COMMANDS.md)
+npx agent-bober fleet expand <goal>                # Decompose a goal into a fleet manifest and optionally run it (full reference in COMMANDS.md)
+npx agent-bober fleet expand-deep <goal>           # Robustly decompose a large/ambiguous goal (two-stage plan-then-expand) into a fleet manifest and optionally run it (full reference in COMMANDS.md)
+
+# Config, telemetry & introspection
+npx agent-bober config [migrate]                   # Inspect and migrate bober.config.json (full reference in COMMANDS.md)
+npx agent-bober telemetry <status|purge|export>    # Inspect, export, or purge local telemetry events (opt-in, local-only; full reference in COMMANDS.md)
+npx agent-bober worktree run <task>                # Run the full Bober pipeline in an isolated git worktree on a new branch (full reference in COMMANDS.md)
+npx agent-bober memory <distill|list|show|prune>   # Inspect and distill self-improvement lessons (full reference in COMMANDS.md)
+npx agent-bober facts <add|list|show|invalidate>   # Inspect and manage semantic bi-temporal facts (full reference in COMMANDS.md)
 ```
 
 #### Clarification gating
@@ -685,6 +755,23 @@ namespace / pipeline shape), the built-in programming team, and the deferred
 
 ---
 
+## Documentation
+
+The `bober/medical-team` build turns agent-bober into a **local-first, multi-LLM personal
+knowledge platform** — recurring research + fleet runs produce Findings and vault notes, the
+priority hub ranks them, and a local Telegram bot is the read/act surface. Start with the umbrella
+guide, then drill into a subsystem:
+
+- **[docs/knowledge-platform.md](./docs/knowledge-platform.md)** — umbrella guide: how the pieces
+  connect, one-time setup, and end-to-end quick-starts. **Read this first.**
+- [docs/fleet.md](./docs/fleet.md) — multi-LLM fleet (heterogeneous children, difficulty tiers, blackboard, synthesis).
+- [docs/research-scheduler.md](./docs/research-scheduler.md) — recurring multi-model research jobs, vault notes, digests.
+- [docs/telegram.md](./docs/telegram.md) — the local long-polling Telegram frontend.
+- [docs/providers.md](./docs/providers.md) — provider/model selection and env-var setup.
+- [docs/storage.md](./docs/storage.md) — the local SQLite / JSON storage model and egress axes.
+
+---
+
 ## Configuration
 
 All configuration lives in `bober.config.json` at your project root. The `init` command creates this file from a template, and you can customize it afterward.
@@ -775,6 +862,18 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     }
   },
 
+  // -- Security auditor (opt-in; whole section optional, default-off; agent-bober's own repo dogfoods it with { enabled: true, scanners: [] } — LLM-only) --
+  "security": {                           // Optional. Omit entirely => byte-identical (no key, no defaults).
+    "enabled": false,                     // Fail-closed pipeline gate runs ONLY when exactly true. NOT required by the standalone CLI.
+    "failClosed": true,                   // Unparseable auditor output / timeout blocks. Default true.
+    "timeoutMs": 300000,                  // Per-audit time-box (pipeline gate).
+    "model": "opus",                      // Auditor model. Any model string or shorthand.
+    "maxTurns": 20,                       // Max read-only tool-use turns for the audit.
+    "standaloneBlockOn": "critical",      // CI threshold for `bober security-audit`: 'critical' | 'important'. Gate ignores this key.
+    "scanners": [],                       // Opt-in deterministic pre-filter strategies (EvalStrategy[]). slither/semgrep JSON parsed into auditor priors; unknown scanners → raw-text excerpt. Nonzero exit ⇒ [] (use exit-0 commands). Empty ⇒ zero child processes.
+    "hub": true                           // Emit critical (severity 5) / important (severity 3) findings into the priority hub after the verdict (gate + CLI). Best-effort; false ⇒ zero hub writes. Never affects the verdict/exit code.
+  },
+
   // -- Sprint ------------------------------------------
   "sprint": {
     "maxSprints": 10,                     // Max sprints per plan
@@ -811,9 +910,145 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
       "pipelineShape": "ts",              // "ts" | "skill" | "workflow"
       "providers": { "chat": "openai" }   // Partial role->provider override; unset roles keep defaults
     }
+  },
+
+  // -- Medical team egress (Phase 6; all three axes default false) --
+  "medical": {                            // Optional. Omit entirely => zero egress (all axes off).
+    "egress": {                           // Three INDEPENDENT opt-in axes; code-enforced zero-egress default.
+      "cloudInference": false,            // Permit cloud inference synthesis. Default false.
+      "literatureRetrieval": false,       // Permit MedlinePlus literature retrieval. Default false.
+      "deviceConnection": false           // Permit WHOOP device-connection egress. Default false.
+    },
+    "inference": {                        // Optional. Synthesis/critic model override. Omit => local Ollama default.
+      "provider": "openai-compat",        // Default openai-compat. A CLOUD provider here needs egress.cloudInference=true.
+      "endpoint": "http://localhost:11434/v1", // Default localhost (Ollama). Non-localhost => treated as cloud + gated.
+      "model": "llama3"                   // Default llama3. Threaded into both synthesis and the grounding critic.
+    },
+    "vaultDir": ".bober/medical/vault"    // Optional. Vault dir for proactive-review Finding notes. Omit => <root>/.bober/medical/vault.
+  },
+
+  // -- Vault (on-device Obsidian MCP read/write adapter) --
+  "vault": {                              // Optional. Omit entirely => no MCP adapter.
+    "obsidian": {                         // Declares ONE on-device Obsidian MCP server.
+      "name": "my_vault",                 // Alphanumeric/underscore. Used in errors — never secrets.
+      "mcpCommand": "npx",                // Local executable to spawn (stdio). REMOTE schemes are refused.
+      "mcpArgs": ["-y", "obsidian-mcp-server"],
+      "mcpEnv": { "OBSIDIAN_API_KEY": "..." }, // OPAQUE secret — never logged or stringified.
+      "enabled": true,                    // Default true.
+      "toolNames": {                      // Optional. Override per-op tool names for a non-cyanheads server.
+        "readNote": "obsidian_read_file",      // Default (cyanheads/obsidian-mcp-server).
+        "writeNote": "obsidian_update_file",   // Default.
+        "listNotes": "obsidian_list_files_in_dir" // Default.
+      }
+    }
+  },
+
+  // -- Task inbox Gmail egress (opt-in; isolated single axis, default false) --
+  "taskInbox": {                          // Optional. Omit entirely => zero Gmail egress.
+    "gmailEgress": false                  // Permit `agent-bober task from-gmail` to read a thread via the MCP connector. Default false.
+  },
+
+  // -- Calendar planner (Google Calendar egress, opt-in; default 'ics', zero-egress) --
+  "calendar": {                           // Optional. Omit entirely => local .ics connector, zero cloud egress.
+    "egress": {                           // Single opt-in axis; code-enforced fail-closed default.
+      "cloudCalendar": false              // Permit Google Calendar (cloud) free/busy read + event write. Default false.
+    },
+    "connector": "ics",                   // 'ics' (local, default) | 'google' (cloud, needs egress.cloudCalendar=true + a 0600 token).
+    "timezone": "America/New_York"        // Optional IANA tz, informational only (not used in epoch-ms slot math).
+  },
+
+  // -- Research scheduler online egress (opt-in; isolated single axis, default false) --
+  "research": {                           // Optional. Omit entirely => research runs are fully offline.
+    "egress": {                           // Single opt-in axis; code-enforced fail-closed default.
+      "onlineResearch": false             // Permit `agent-bober research run` web/online retrieval. Default false.
+    }
   }
 }
 ```
+
+> **The Obsidian MCP adapter is on-device only.** `VaultMcpAdapter` wraps the existing
+> `ExternalMcpServer` and exposes `readNote` / `writeNote` / `listNotes` over the declared
+> server. An `isOnDevice()` guard **refuses any non-local declaration before the server is
+> spawned** — a `mcpCommand` with a remote URL scheme (`https?`/`wss?`/`ftp`/`tcp://`) or an
+> `mcpArgs` element pointing at a non-loopback host throws (naming only `name`, never `mcpEnv`).
+> `mcpEnv` is treated as opaque secrets and is never logged. Tool names default to
+> cyanheads/obsidian-mcp-server and are overridable for other servers (e.g. the Obsidian Local
+> REST API plugin's built-in MCP). The adapter is an independent read/write surface — it is **not**
+> wired into `agent-bober vault reindex`, which reads notes from the local filesystem. See
+> [docs/sprints/sprint-spec-20260628-obsidian-vault-store-4.md](./docs/sprints/sprint-spec-20260628-obsidian-vault-store-4.md).
+
+> **Zero-egress is code-enforced for the medical team.** All three `medical.egress` axes
+> default `false`, so a medical SOP turn makes **zero outbound calls** out of the box —
+> a numeric question is answered from deterministic local compute and a literature
+> question abstains, with no network module ever reached. The default is enforced two
+> ways: the runtime `EgressGuard` (whose `assertAllowed` throws when an axis is off) and
+> a scoped `no-restricted-imports` ESLint boundary over `src/medical/**/*.ts` that makes
+> any network import a lint error (with **two** sanctioned exceptions — the
+> literature-retrieval source `src/medical/retrieval/medline-source.ts` and the WHOOP
+> client `src/medical/whoop/whoop-client.ts`). Opting `literatureRetrieval` **in** turns
+> on a real MedlinePlus / NIH (no-auth) grounded retrieval + cited synthesis that
+> **abstains unless a retrieved passage supports the claim**; it runs the synthesis on a
+> **local** model (Ollama by default). Opting `deviceConnection` **in** turns on the
+> authenticated WHOOP transport (OAuth2 refresh + paginated v2 fetch; credentials from
+> `WHOOP_CLIENT_ID`/`WHOOP_CLIENT_SECRET` env vars + a `0600` refresh-token sidecar, no
+> keychain) used by the on-demand `agent-bober medical whoop sync [--since <iso>]` command,
+> which persists WHOOP recovery/sleep/cycle/workout into the medical health store
+> (idempotent, fail-closed). The three axes are **independent** — enabling one never
+> enables another. See
+> [docs/teams.md](./docs/teams.md) ("EgressGuard + full SOP wiring", "MedlinePlus
+> grounded retrieval + cited synthesis", and "WHOOP device-connection axis +
+> authenticated transport").
+
+> **The synthesis/critic model is configurable, and cloud is gated by `cloudInference`.**
+> The optional `medical.inference` block `{ provider?, endpoint?, model? }` overrides the
+> model used for grounded synthesis **and** the grounding critic. Omit it (the default) and
+> the medical team uses the **local Ollama default** (`openai-compat`,
+> `http://localhost:11434/v1`, `llama3`). A **cloud** provider here (anything that is not
+> `openai-compat` against a `localhost` endpoint) is honoured **only** when
+> `medical.egress.cloudInference` is `true`; with the axis off (the default) the resolver
+> **fails closed to the local default** and **no cloud client is ever constructed** — so the
+> out-of-the-box posture still makes zero cloud egress. The critic's outcome is recorded as
+> the IDs/enums-only `criticVerdict` (`approve` / `reject-abstained` / `error-abstained`)
+> field on the PHI-free `0600` medical audit log. See
+> [docs/teams.md](./docs/teams.md) ("Configurable model + cloud-inference gating" and
+> "Critic verdict in the audit").
+
+> **Gmail capture is opt-in and default-off.** The isolated `taskInbox.gmailEgress` axis
+> (default `false`, separate from the `medical.egress` axes) gates `agent-bober task from-gmail
+> <thread>`. With the axis off — the default — the command **refuses with an opt-in message,
+> sets `exitCode=1`, and constructs no MCP client / makes no network call**, so the
+> out-of-the-box build performs **zero Gmail egress**. The gate fires fail-closed at two
+> layers (the CLI returns before constructing the connector, and the `fromGmailTask` core
+> throws before `mcp.start()`/`callTool()`), a missing/invalid config resolves to disabled,
+> and any connector error is caught and **sanitized** (`KEY=VALUE` env assignments stripped to
+> `[redacted]`, the same regex as `src/mcp/external-client.ts`) so tokens never leak. When
+> enabled (plus an enabled `observability` provider named `gmail`), one thread is read on
+> demand and captured through the same `captureTask` write path as `task add`. See
+> [COMMANDS.md](./COMMANDS.md) (`agent-bober task from-gmail <thread>`) and
+> [docs/sprints/sprint-spec-20260628-task-inbox-6.md](./docs/sprints/sprint-spec-20260628-task-inbox-6.md).
+
+> **Google Calendar egress is opt-in and default-off.** The isolated `calendar.egress.cloudCalendar`
+> axis (default `false`, separate from the `medical`/`taskInbox` axes) gates the Sprint 3 Google
+> Calendar connector. With the axis off — the default — the calendar planner uses the local-first
+> `.ics` connector and makes **zero cloud egress**; any Google read/write **refuses before constructing
+> the MCP client**, naming `calendar.egress.cloudCalendar`. Enabling it also requires a provisioned
+> `0600` OAuth token sidecar (`.bober/calendar/google-token.json`), and only a non-sensitive
+> `calendarSafeTitle` (never the full finding title, evidence, or tags) ever leaves the device as the
+> event summary; connector errors are sanitized (`KEY=VALUE` stripped, same regex as
+> `src/mcp/external-client.ts`) so tokens never leak. Hosted OAuth is **unfit for unattended/cron runs**,
+> so scheduled use should stay on the `.ics` fallback. See [docs/calendar.md](./docs/calendar.md) and
+> [docs/sprints/sprint-spec-20260628-calendar-planner-3.md](./docs/sprints/sprint-spec-20260628-calendar-planner-3.md).
+
+> **Online research egress is opt-in and default-off.** The isolated `research.egress.onlineResearch`
+> axis (default `false`, **separate** from the `medical`/`taskInbox`/`calendar` axes) gates `bober
+> research run` (and `agent-bober research tick`) web retrieval. With the axis off — the default — a research run uses only its injected
+> provider clients and makes **zero outbound retrieval requests**; the `ResearchEgressGuard`
+> (`src/research/egress.ts`, mirroring the medical `EgressGuard`) is fail-closed (`assertAllowed` throws
+> `Egress axis 'online-research' not enabled` when off), and the runner's gated branch skips retrieval
+> entirely so the retrieval client is **never constructed** and the note is byte-identical to the
+> offline run. Opting in threads the retrieved source URLs into the note frontmatter `sources` list. See
+> [COMMANDS.md](./COMMANDS.md) (Research Commands → "Online research egress") and
+> [docs/sprints/sprint-spec-20260628-research-scheduler-3.md](./docs/sprints/sprint-spec-20260628-research-scheduler-3.md).
 
 ### Sprint Sizes
 

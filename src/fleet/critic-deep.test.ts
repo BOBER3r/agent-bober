@@ -17,6 +17,7 @@ import {
   DEEP_MAX_TOTAL_CALLS,
   DEEP_EXPAND_MAX_RETRIES,
   decomposeGoalDeep,
+  runExpandStage,
 } from "./decomposer-deep.js";
 
 // ── Scripted fake client ─────────────────────────────────────────────
@@ -363,6 +364,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_SINGLE_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
 
     expect(result).toBe(VALID_SINGLE_CHILD_MANIFEST);
@@ -383,6 +385,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_SINGLE_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
 
     expect(FleetManifestSchema.safeParse(result).success).toBe(true);
@@ -404,6 +407,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_SINGLE_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
 
     // calls[0]=critic, calls[1]=re-expand, calls[2]=critic-2
@@ -422,6 +426,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_TWO_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
     expect(result).toBeDefined();
     expect(FleetManifestSchema.safeParse(result).success).toBe(true);
@@ -437,6 +442,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_TWO_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
     expect(client.calls.length).toBeLessThanOrEqual(DEEP_CRITIQUE_MAX_TOTAL_CALLS);
   });
@@ -451,6 +457,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
         outline: VALID_OUTLINE,
         baseline: VALID_TWO_CHILD_MANIFEST,
         expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+        expand: runExpandStage,
       }),
     ).resolves.toBeDefined();
   });
@@ -465,6 +472,7 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_TWO_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
     // both have 2 children; baseline is first, so reduces to baseline
     expect(result.children.length).toBe(2);
@@ -480,8 +488,29 @@ describe("runCritiqueLoop (sc-1-7)", () => {
       outline: VALID_OUTLINE,
       baseline: VALID_SINGLE_CHILD_MANIFEST,
       expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: runExpandStage,
     });
     expect(result.children.length).toBe(3);
+  });
+
+  it("invokes the injected expand fn on a critique miss (sc-1-7)", async () => {
+    // critic rejects baseline → loop must call the injected expand exactly once
+    const client = new ScriptedClient([VALID_REJECT_JSON, VALID_APPROVE_JSON]);
+    let expandCalls = 0;
+    const fakeExpand = async (): Promise<typeof VALID_TWO_CHILD_MANIFEST> => {
+      expandCalls += 1;
+      return VALID_TWO_CHILD_MANIFEST;
+    };
+    await runCritiqueLoop({
+      client,
+      model: "m",
+      goal: "g",
+      outline: VALID_OUTLINE,
+      baseline: VALID_SINGLE_CHILD_MANIFEST,
+      expandMaxRetries: DEEP_EXPAND_MAX_RETRIES,
+      expand: fakeExpand,
+    });
+    expect(expandCalls).toBe(1);
   });
 });
 

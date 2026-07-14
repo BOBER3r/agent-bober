@@ -47,6 +47,16 @@ describe("PortfolioReporter.build (sc-4-4)", () => {
     expect(() => new Date(report.generatedAt)).not.toThrow();
     expect(new Date(report.generatedAt).toISOString()).toBe(report.generatedAt);
   });
+
+  it("build(outcomes) with no opts omits the rounds key entirely", () => {
+    const report = reporter.build([]);
+    expect("rounds" in report).toBe(false);
+  });
+
+  it("build(outcomes, { rounds: 2 }) includes rounds === 2", () => {
+    const report = reporter.build([], { rounds: 2 });
+    expect(report.rounds).toBe(2);
+  });
 });
 
 describe("PortfolioReporter.write (sc-4-5)", () => {

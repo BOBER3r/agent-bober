@@ -3,6 +3,14 @@ import { validateManifest } from "./decomposer.js";
 import type { FleetManifest } from "./manifest.js";
 import type { LLMClient, Message } from "../providers/types.js";
 import { runCritiqueLoop } from "./critic-deep.js";
+import {
+  DEEP_PLAN_MAX_RETRIES,
+  DEEP_EXPAND_MAX_RETRIES,
+  DEEP_MAX_TOTAL_CALLS,
+} from "./decomposer-deep-constants.js";
+// bober: re-exported so existing importers of these from ./decomposer-deep.js keep working.
+// Defined in the dependency-free leaf to avoid the critic-deep module-init TDZ cycle.
+export { DEEP_PLAN_MAX_RETRIES, DEEP_EXPAND_MAX_RETRIES, DEEP_MAX_TOTAL_CALLS };
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -69,15 +77,17 @@ Rules:
 - Each child carries ONLY "folder" and "task" — no other keys.
 - Output the JSON object and nothing else.`;
 
-export const DEEP_PLAN_MAX_RETRIES = 1;
-export const DEEP_EXPAND_MAX_RETRIES = 1;
-// bober: fixed budget = (1+DEEP_PLAN_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES); upgrade path: increase retries constants
-export const DEEP_MAX_TOTAL_CALLS = 4;
+// bober: DEEP_PLAN_MAX_RETRIES / DEEP_EXPAND_MAX_RETRIES / DEEP_MAX_TOTAL_CALLS now live in
+// ./decomposer-deep-constants.js (imported + re-exported above) to break the init-time TDZ cycle.
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type OutlineArea = { name: string; intent: string };
-export type Outline = { areas: OutlineArea[] };
+// bober: Outline/OutlineArea now live in the dependency-free ./decomposer-deep-types.js leaf
+// (imported here for internal use and re-exported so existing importers of
+// `import { Outline } from "./decomposer-deep.js"` keep working). Sourcing them from a leaf lets
+// critic-deep import Outline WITHOUT a decomposer-deep dependency, breaking the cycle.
+import type { Outline, OutlineArea } from "./decomposer-deep-types.js";
+export type { Outline, OutlineArea };
 
 export interface DecomposeDeepInput {
   goal: string;
@@ -358,7 +368,7 @@ export async function decomposeGoalDeep(
   });
 
   if (input.critique === true) {
-    return runCritiqueLoop({ client, model, goal, outline, baseline: manifest, expandMaxRetries });
+    return runCritiqueLoop({ client, model, goal, outline, baseline: manifest, expandMaxRetries, expand: runExpandStage });
   }
 
   return manifest;

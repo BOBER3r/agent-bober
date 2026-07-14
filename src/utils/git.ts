@@ -146,26 +146,3 @@ export async function isClean(
   return { clean: false, dirtyFiles };
 }
 
-/**
- * Stash any current changes, run the provided function, then restore.
- *
- * If the stash is empty (nothing to save) the restore step is skipped.
- */
-export async function stashAndRestore<T>(
-  cwd: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  const dirty = await hasUncommittedChanges(cwd);
-
-  if (dirty) {
-    await execa("git", ["stash", "push", "-m", "bober-auto-stash"], { cwd });
-  }
-
-  try {
-    return await fn();
-  } finally {
-    if (dirty) {
-      await execa("git", ["stash", "pop"], { cwd, reject: false });
-    }
-  }
-}

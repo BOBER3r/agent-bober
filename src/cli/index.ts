@@ -35,8 +35,18 @@ import { registerTelemetryCommand } from "./commands/telemetry.js";
 import { registerWorktreeCommand } from "./commands/worktree.js";
 import { registerMemoryCommand } from "./commands/memory.js";
 import { registerFactsCommand } from "./commands/facts.js";
+import { registerTaskCommand } from "./commands/task.js";
 import { registerFleetCommand } from "../fleet/index.js";
 import { registerChatCommand } from "./commands/chat.js";
+import { registerMedicalCommand } from "./commands/medical.js";
+import { registerResearchCommand } from "./commands/research.js";
+import { registerCalendarCommand } from "./commands/calendar.js";
+import { registerVaultCommand } from "./commands/vault.js";
+import { registerBlackboardCommand } from "./commands/blackboard.js";
+import { registerHubCommand } from "./commands/hub.js";
+import { registerDoCommand } from "./commands/do.js";
+import { registerTelegramCommand } from "./commands/telegram.js";
+import { registerSecurityAuditCommand } from "./commands/security-audit.js";
 
 // ── Version loader ─────────────────────────────────────────────────
 
@@ -313,11 +323,41 @@ async function main(): Promise<void> {
   // ── facts ─────────────────────────────────────────────────────────
   registerFactsCommand(program);
 
+  // ── task ──────────────────────────────────────────────────────────
+  registerTaskCommand(program);
+
+  // ── medical ───────────────────────────────────────────────────────
+  registerMedicalCommand(program);
+
+  // ── research ────────────────────────────────────────────
+  registerResearchCommand(program);
+
+  // ── calendar ──────────────────────────────────────────────────────
+  registerCalendarCommand(program);
+
+  // ── vault ─────────────────────────────────────────────────────────
+  registerVaultCommand(program);
+
   // ── fleet ─────────────────────────────────────────────────────────
   registerFleetCommand(program);
 
   // ── chat ──────────────────────────────────────────────────────────
   registerChatCommand(program);
+
+  // ── blackboard ────────────────────────────────────────────────────
+  registerBlackboardCommand(program);
+
+  // ── hub ───────────────────────────────────────────────────────────────
+  registerHubCommand(program);
+
+  // ── do ────────────────────────────────────────────────────────────────
+  registerDoCommand(program);
+
+  // ── telegram ──────────────────────────────────────────────────────────
+  registerTelegramCommand(program);
+
+  // ── security-audit ────────────────────────────────────────────────────
+  registerSecurityAuditCommand(program);
 
   // ── Parse ───────────────────────────────────────────────────────
   await program.parseAsync(process.argv);
