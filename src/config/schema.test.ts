@@ -888,7 +888,11 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
     // Full deep-equal against an explicit expected object (not just an
     // absence check) — proves the rest of the parse output is unperturbed.
     expect(parsed).toEqual({
-      project: { name: "agent-bober", mode: "greenfield" },
+      project: {
+        name: "agent-bober",
+        mode: "greenfield",
+        stack: { language: "typescript", backend: "node" },
+      },
       planner: { maxClarifications: 5, model: "opus", provider: "anthropic" },
       curator: { model: "opus", maxTurns: 25, enabled: true },
       generator: {
@@ -957,6 +961,10 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
         scanners: [],
         standaloneBlockOn: "critical",
         hub: true,
+        diff: { mode: "git-diff", expandWithGraph: false },
+        supplyChain: { enabled: true, scanners: [] },
+        egress: { onlineResearch: false },
+        verifier: { enabled: true, model: "opus", maxTurns: 10 },
       },
       commands: {},
     });

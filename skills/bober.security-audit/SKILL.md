@@ -26,6 +26,26 @@ sprint (see "Fail-Closed Gate vs. Advisory Skill" below). This skill is for
 **standalone** runs — when you want a deep audit outside the normal pipeline flow, or
 when `security.enabled` is `false`/absent and you still want the visibility.
 
+**The full pipeline this skill orchestrates:**
+
+- **Per-stack signature retrieval** — the `bober-security-auditor` subagent is fed a
+  retrieved `# Stack Security Context` drawn from one of 8 authored
+  `skills/bober.security-<stack>/SKILL.md` libraries (`solidity`, `anchor`, `react`,
+  `node`, `payments`, `igaming`, `dex-backend`, plus a shared `generic` OWASP/CWE
+  floor that is always included) — resolved from `project.stack` via
+  `SecurityStackRegistry.resolve`, never a static excerpt. See
+  [`docs/security-audit.md`](../../docs/security-audit.md#per-stack-signature-libraries-shipped)
+  for the full registry and how to add/edit a signature.
+- **Finder → verifier stage** — when `security.verifier.enabled` is set, a second
+  read-only agent, `bober-security-verifier` (`agents/bober-security-verifier.md`),
+  runs sequentially after the finder in a fresh, contract-free context and tries to
+  *disprove* each critical/important finding. It is downgrade-only and fail-closed —
+  see [Finder → verifier stage](../../docs/security-audit.md#finder--verifier-stage).
+- **Supply-chain axis** — when `security.supplyChain.enabled` is set, an always-available
+  offline diff inspector (plus optional `npm-audit`/`osv-scanner`/`gitleaks` scanners,
+  network-gated behind `security.egress.onlineResearch`) folds dependency/lockfile/CI
+  risk findings into the finder's priors alongside any `security.scanners` pre-filter.
+
 ## When to Request an Audit
 
 **Automatic in pipeline (when opted in):** If `bober.config.json` has
@@ -115,10 +135,24 @@ Read `bober.config.json` for the `security` section:
 - `security.standaloneBlockOn` — the threshold the CLI path would use (`critical` or
   `important`); mention it when you point the user at the CLI.
 - `security.scanners` — if non-empty, deterministic scanner priors (slither/semgrep)
-  will ground the audit; if `[]` (the default in this repo — LLM-only dogfooding), the
-  audit runs on LLM judgment alone.
+  will ground the audit; if `[]`, the audit runs on LLM judgment alone.
 - `security.hub` — whether critical/important findings will also be emitted into the
   priority hub (default `true`).
+- `project.stack` — resolved via `SecurityStackRegistry.resolve` to one of 8
+  per-stack skill libraries (or the `generic` floor for an unrecognised/absent stack);
+  mention which stack's signatures grounded the audit when presenting results.
+- `security.verifier.enabled` — if set, a fresh-context `bober-security-verifier`
+  pass already re-checked the finder's critical/important findings before they
+  reached you (downgrade-only, fail-closed — see `docs/security-audit.md`).
+- `security.supplyChain.enabled` / `security.egress.onlineResearch` — whether the
+  offline supply-chain diff inspector (and, only if `egress.onlineResearch` is
+  `true`, network scanners) contributed priors to this audit.
+- `security.diff.mode` — `"git-diff"` means the auditor was grounded in a real diff
+  rather than `estimatedFiles`.
+
+This repo's own `bober.config.json` opts into the full pipeline (verifier +
+offline supply-chain, network egress off, `project.stack` resolving to `node`) —
+see `docs/security-audit.md` for the exact config.
 
 Read `.bober/principles.md` if it exists.
 

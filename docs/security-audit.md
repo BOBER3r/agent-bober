@@ -287,16 +287,30 @@ folded review.
 }
 ```
 
-agent-bober's own `bober.config.json` opts into **LLM-only dogfooding**:
+agent-bober's own `bober.config.json` opts into the **full pipeline** — finder, offline
+supply-chain axis, and the finder→verifier stage — with network egress kept off (sprint 10):
 
 ```jsonc
-"security": { "enabled": true, "scanners": [] }
+"security": {
+  "enabled": true,
+  "scanners": [],
+  "diff": { "mode": "git-diff" },
+  "supplyChain": { "enabled": true },
+  "egress": { "onlineResearch": false },
+  "verifier": { "enabled": true }
+}
 ```
 
-Every other field takes its schema default (`failClosed: true`, `timeoutMs: 300000`,
-`model: "opus"`, `maxTurns: 20`, `standaloneBlockOn: "critical"`, `hub: true`) — so
-every future sprint of this repository runs the fail-closed gate on LLM judgment
-alone (no `slither`/`semgrep` binaries required on the dev machine).
+and `project.stack` is set to `{ "language": "typescript", "backend": "node" }`, which
+`SecurityStackRegistry.resolve` matches to the `node` stack — so every future sprint of
+this repository is audited against the real `bober.security-node` signature library
+(not the generic floor). Every other field takes its schema default (`failClosed: true`,
+`timeoutMs: 300000`, `model: "opus"`, `maxTurns: 20`, `standaloneBlockOn: "critical"`,
+`hub: true`, `diff.expandWithGraph: false`, `supplyChain.scanners: []`,
+`verifier.model: "opus"`, `verifier.maxTurns: 10`). No `slither`/`semgrep` binaries are
+required — the deterministic `scanners: []` pre-filter stays empty, and the
+supply-chain axis runs on its always-available offline diff inspector alone (network
+scanners stay off via `egress.onlineResearch: false`).
 
 ---
 
@@ -424,17 +438,17 @@ clean one:
 
 ---
 
-## Roadmap: per-stack signature libraries (in progress)
+## Per-stack signature libraries (shipped)
 
-An in-progress upgrade (`spec-20260714-security-auditor-per-stack-skills`) is building a
-registry of hand-authored, per-stack **security signature libraries** to give the auditor
-concrete vulnerable/safe code exemplars per technology (Solidity, Anchor, React, Node,
-payments, iGaming, DEX-backend, plus a shared `generic` OWASP/CWE library). Each library is
+`spec-20260714-security-auditor-per-stack-skills` shipped a registry of hand-authored,
+per-stack **security signature libraries** that give the auditor concrete vulnerable/safe
+code exemplars per technology (Solidity, Anchor, React, Node, payments, iGaming,
+DEX-backend, plus a shared `generic` OWASP/CWE library). Each library is
 a `skills/bober.security-<stack>/SKILL.md` file of discrete labelled **signature blocks**
 (`signatureId`, title, CWE, severity, `VulnClass`, invariant, unsafe/safe examples,
 keywords), read by a pure, total `SecuritySignatureParser`
-(`src/orchestrator/security-knowledge/`). As of the current sprints, the widened
-taxonomy, the `SecuritySignature` type + parser, **all eight** authored libraries, **and
+(`src/orchestrator/security-knowledge/`). The widened
+17-class taxonomy, the `SecuritySignature` type + parser, **all eight** authored libraries, **and
 the retrieval pipeline that feeds them to the auditor** all exist and are tested:
 
 - [`bober.security-generic`](../skills/bober.security-generic/SKILL.md) — shared OWASP/CWE library (14 blocks).
@@ -448,6 +462,65 @@ the retrieval pipeline that feeds them to the auditor** all exist and are tested
 
 An enumeration test locks this exact 8-stack set (excluding `bober.security-audit`, the
 audit *workflow* skill).
+
+### The 17-class taxonomy + structured finding metadata
+
+Every signature and every finding is organised against a single fixed **17-class
+`VulnClass` taxonomy** (`src/orchestrator/security-audit-types.ts`, mirrored in
+`ALL_VULN_CLASSES`, `src/orchestrator/stack-knowledge.ts`) that does not vary by stack:
+`injection`, `authn-authz`, `secret-handling`, `input-validation`, `path-traversal`,
+`privilege-escalation`, `race-condition`, `money-integrity`, `ssrf`, `xss`,
+`insecure-randomness`, `crypto-weakness`, `deserialization`, `supply-chain`, `idor-bola`,
+`denial-of-service`, `audit-logging`. `resolveStackSecurityContext` always carries the full
+taxonomy in `StackSecurityContext.taxonomy` regardless of which stack resolved, so the
+auditor is classifying against the same fixed backbone on every stack.
+
+A `SecurityFinding` (`security-audit-types.ts`) extends the locked `ReviewFinding` shape
+with optional **structured metadata**, filled in by the auditor when it can attribute a
+finding to a specific signature: `vulnClass` (one of the 17 classes above), `cwe`
+(e.g. `"CWE-89"`), `severity` (`critical`/`high`/`medium`/`low`/`info`), `confidence`
+(`confirmed`/`firm`/`tentative`), an optional `taint` source→sink path, and `signatureId`
+(the matched signature's id, e.g. `node.sql-injection`, when the finding traces back to a
+retrieved signature). This metadata rides into the priority hub as `tags[]`
+(`cwe:<id>`, `severity:<level>`, `confidence:<level>`, `sig:<signatureId>`) and backs the
+`#<discriminator>` used to dedup hub rows (see [Hub Emission](#hub-emission)).
+
+### How to add or edit a signature
+
+Every signature is a `### <signatureId>` block inside a `skills/bober.security-<stack>/SKILL.md`
+file, parsed by the pure, total `SecuritySignatureParser`
+(`src/orchestrator/security-knowledge/parser.ts`). The exact block shape (mirrored in
+[`bober.security-generic`](../skills/bober.security-generic/SKILL.md)'s own "Signature Block
+Format" section — the two are one executable spec):
+
+```markdown
+### <stack>.<short-name>
+- **Title:** <human-readable title>
+- **CWE:** CWE-xx                (optional — omit for cwe: null)
+- **Severity:** critical|high|medium|low|info
+- **VulnClass:** <one of the 17 VulnClass values above, verbatim>
+- **Invariant:** <the safety invariant this signature protects>
+- **Keywords:** comma, separated, keywords
+
+**Unsafe:**
+```ts
+<unsafe example>
+```
+
+**Safe:**
+```ts
+<safe example>
+```
+```
+
+The heading text (trimmed) becomes the `signatureId` — use a `<stack>.<short-name>` convention
+(e.g. `node.sql-injection`) so it reads unambiguously in findings and hub tags. A block is
+dropped (never throws, never blocks the parse of the rest of the file) if any required field
+is missing or invalid: empty `signatureId`, missing `Title`, a `VulnClass` that is not a member
+of the 17-class union, an unrecognised `Severity`, or a missing/unclosed `Unsafe`/`Safe` fenced
+example. `CWE` and `Keywords` are optional. After editing a skill file, restart the process
+that loads `SecurityKnowledgeIndex` — it memoises all 8 files **once per process** (ADR-7, no
+runtime cache invalidation) — to pick up the change.
 
 **As of sprint 5, these libraries are WIRED** — the auditor now retrieves per-stack
 signatures at audit time via a four-stage pipeline under
@@ -464,7 +537,11 @@ signatures at audit time via a four-stage pipeline under
 4. `resolveStackSecurityContext` renders the selected signatures (id/title/CWE/invariant +
    unsafe/safe examples) into a **never-empty** prompt fragment that is folded into the
    finder's user message. This closes **G3**: `unknown`/`anchor`/`react` no longer inject
-   frontmatter filler, and an unrecognised stack falls through to the generic floor.
+   frontmatter filler, and an unrecognised stack falls through to the generic floor. It
+   also accepts an optional `threatModelText` **input** (`ResolveStackSecurityContextInput.threatModelText`,
+   `resolver.ts`) appended verbatim after the rendered signatures — this is an in-memory
+   call parameter to `resolveStackSecurityContext`, **not** a `bober.config.json` key; there
+   is no `security.threatModelPath` config field.
 
 By default, ranking scores against the sprint's `estimatedFiles` scope. **As of sprint 6, an
 opt-in real git-diff mode exists** (`security.diff.mode: "git-diff"`, default `"estimated-files"`):
@@ -515,8 +592,10 @@ rate** on the safe set. The required CI test drives the harness with determinist
 label against the real parsed signature index (or the `ALL_VULN_CLASSES` union for the scanner-only
 supply-chain case). It is a measurement + regression guard, **not** a new blocking gate, and is not
 wired into `runSecurityAudit`; a documented, skipped-by-default block records how to run it against a
-real provider locally. Only the dogfood/docs close-out remains. See the
-[sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
+real provider locally.
+
+**As of sprint 10, this repository dogfoods the full pipeline** — see the config snippet above.
+See the [sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
 
 ---
 
