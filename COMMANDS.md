@@ -497,6 +497,27 @@ reach for `fleet expand-deep` when the goal is broad or vague and the single-sho
 poor split. Both write the same manifest format and feed the same `agent-bober fleet <manifest>`
 runner. The `--critique` self-judged gate is available on `fleet expand-deep` only.
 
+### `bober blackboard`
+
+Publish and read findings on the shared inter-agent fleet blackboard (Phase B). The
+`blackboard` group is a container with no action of its own — run a subcommand. Both
+subcommands read the shared db path from the current directory's `bober.config.json`
+`fleet` section **only** (never re-derived from the cwd); if that section is absent —
+i.e. this is not a child of a blackboard-enabled fleet run — they print an error and
+exit `1` (they never throw).
+
+```bash
+bober blackboard publish <value>              # Publish a finding to the shared fleet blackboard, under this child's subject (its folder name)
+bober blackboard publish <value> --round <n>  # Round number to publish under (default: 1)
+bober blackboard read                         # Print findings from the shared fleet blackboard (default: siblings only, i.e. every child except this one)
+bober blackboard read --all                   # Print every child's findings (default: siblings only)
+```
+
+See [Inter-child blackboard (Phase B)](#inter-child-blackboard-phase-b) below for the manifest
+`blackboard` block that enables this and the bounded-rounds fleet behavior it drives.
+
+---
+
 ### Inter-child blackboard (Phase B)
 
 A fleet run can opt into a **bounded inter-agent blackboard** — a single shared `facts.db` (opened
