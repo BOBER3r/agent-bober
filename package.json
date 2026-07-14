@@ -1,7 +1,7 @@
 {
   "name": "agent-bober",
   "version": "0.18.0",
-  "description": "Multi-agent harness for building applications autonomously with any LLM. Researcher, Planner, Curator, Generator, Evaluator, Documenter pipeline. Supports Claude, GPT, Gemini, DeepSeek, Ollama, and Claude Code subscriptions. MCP server for Cursor/Windsurf.",
+  "description": "Multi-agent, multi-provider harness for building software autonomously with any LLM. Researcher, Planner, Curator, Generator, Evaluator, Documenter pipeline with a fail-closed security-audit gate, a fleet orchestrator for bulk multi-agent runs, and a cross-domain knowledge platform (medical, vault, priority hub). Supports Claude, GPT, Gemini, DeepSeek, Ollama, and Claude Code subscriptions. MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,11 @@
     "gemini",
     "deepseek",
     "ollama",
-    "plugin"
+    "plugin",
+    "security-audit",
+    "fleet",
+    "incident-response",
+    "knowledge-platform"
   ],
   "author": "BOBER3r",
   "license": "MIT",

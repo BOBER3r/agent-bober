@@ -630,6 +630,18 @@ npx agent-bober telegram                           # Start the local getUpdates 
 
 # Security audit (three surfaces over one runSecurityAudit core: fail-closed pipeline gate + this CLI + the advisory `bober.security-audit` skill; opt-in, default-off) — spec-20260712 COMPLETE (7/7). agent-bober itself dogfoods the gate (security.enabled=true, scanners:[] — LLM-only). Full reference: docs/security-audit.md
 npx agent-bober security-audit [target]            # Run an on-demand stack-aware security audit against a local path (or the working tree when target is omitted). Runs the SAME runSecurityAudit core the in-pipeline gate uses (with evaluation=null), persists a cited artifact to .bober/security/<id>-security-audit.md, and prints a summary (verdict, per-bucket counts, top findings as path:line, artifact path). Exit code: 0 = pass, 2 = blocked-by-threshold OR fail-closed (audit threw / auditor output unparseable) — wire it into CI. Blocking threshold is security.standaloneBlockOn ('critical' default | 'important' also fails on important-bucket findings). Does NOT require security.enabled=true — the explicit invocation IS the opt-in; the pipeline gate's critical-only veto is untouched. After the exit code is computed, critical (hub severity/urgency 5) + important (3) findings are emitted into the priority hub (best-effort, guarded by security.hub default true; never changes the exit code) so they show up in `bober hub list`/`priority`. Local paths only (no remote URLs). For a conversational audit inside Claude Code use the `/bober-security-audit` skill (advisory-only; spawns the bober-security-auditor subagent)
+
+# Fleet orchestrator (spawn N isolated agent-bober children in bulk)
+npx agent-bober fleet <manifest>                   # Run a fleet of agent-bober children from a manifest (full reference in COMMANDS.md)
+npx agent-bober fleet expand <goal>                # Decompose a goal into a fleet manifest and optionally run it (full reference in COMMANDS.md)
+npx agent-bober fleet expand-deep <goal>           # Robustly decompose a large/ambiguous goal (two-stage plan-then-expand) into a fleet manifest and optionally run it (full reference in COMMANDS.md)
+
+# Config, telemetry & introspection
+npx agent-bober config [migrate]                   # Inspect and migrate bober.config.json (full reference in COMMANDS.md)
+npx agent-bober telemetry <status|purge|export>    # Inspect, export, or purge local telemetry events (opt-in, local-only; full reference in COMMANDS.md)
+npx agent-bober worktree run <task>                # Run the full Bober pipeline in an isolated git worktree on a new branch (full reference in COMMANDS.md)
+npx agent-bober memory <distill|list|show|prune>   # Inspect and distill self-improvement lessons (full reference in COMMANDS.md)
+npx agent-bober facts <add|list|show|invalidate>   # Inspect and manage semantic bi-temporal facts (full reference in COMMANDS.md)
 ```
 
 #### Clarification gating
