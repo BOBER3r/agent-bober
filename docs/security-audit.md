@@ -308,19 +308,23 @@ a `skills/bober.security-<stack>/SKILL.md` file of discrete labelled **signature
 (`signatureId`, title, CWE, severity, `VulnClass`, invariant, unsafe/safe examples,
 keywords), read by a pure, total `SecuritySignatureParser`
 (`src/orchestrator/security-knowledge/`). As of the current sprints, the widened
-taxonomy, the `SecuritySignature` type + parser, and **five** authored libraries exist and
-are tested:
+taxonomy, the `SecuritySignature` type + parser, and **all eight** authored libraries exist
+and are tested:
 
 - [`bober.security-generic`](../skills/bober.security-generic/SKILL.md) — shared OWASP/CWE library (14 blocks).
 - [`bober.security-solidity`](../skills/bober.security-solidity/SKILL.md) — on-chain EVM contract signatures (12 blocks).
 - [`bober.security-anchor`](../skills/bober.security-anchor/SKILL.md) — Solana/Anchor program signatures (7 blocks).
 - [`bober.security-igaming`](../skills/bober.security-igaming/SKILL.md) — iGaming/betting-backend signatures (12 blocks).
 - [`bober.security-dex-backend`](../skills/bober.security-dex-backend/SKILL.md) — crypto-exchange off-chain custody/backend signatures (12 blocks).
+- [`bober.security-node`](../skills/bober.security-node/SKILL.md) — Node/Express backend signatures (12 blocks).
+- [`bober.security-payments`](../skills/bober.security-payments/SKILL.md) — payments/PSP backend signatures (10 blocks).
+- [`bober.security-react`](../skills/bober.security-react/SKILL.md) — React client-side signatures (8 blocks).
 
-The remaining `node`, `payments`, and `react` libraries are the next authoring sprint. All
-authored libraries are **tested but not yet wired into `runSecurityAudit`** — the audit
-behavior described above is unchanged until the index/selector sprint lands. See the
-[sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
+An enumeration test locks this exact 8-stack set (excluding `bober.security-audit`, the
+audit *workflow* skill). All authored libraries are **tested but not yet wired into
+`runSecurityAudit`** — the audit behavior described above is unchanged until the
+index/selector sprint (sprint 5) lands. See the [sprint records](./sprints/README.md) for
+the authoring format and per-sprint detail.
 
 ---
 
