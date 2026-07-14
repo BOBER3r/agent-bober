@@ -307,11 +307,19 @@ payments, iGaming, DEX-backend, plus a shared `generic` OWASP/CWE library). Each
 a `skills/bober.security-<stack>/SKILL.md` file of discrete labelled **signature blocks**
 (`signatureId`, title, CWE, severity, `VulnClass`, invariant, unsafe/safe examples,
 keywords), read by a pure, total `SecuritySignatureParser`
-(`src/orchestrator/security-knowledge/`). As of the foundation sprints, the widened
-taxonomy, the `SecuritySignature` type + parser, and the first
-[`bober.security-generic`](../skills/bober.security-generic/SKILL.md) library exist and
-are tested, **but are not yet wired into `runSecurityAudit`** — the audit behavior described
-above is unchanged until the index/selector sprint lands. See the
+(`src/orchestrator/security-knowledge/`). As of the current sprints, the widened
+taxonomy, the `SecuritySignature` type + parser, and **five** authored libraries exist and
+are tested:
+
+- [`bober.security-generic`](../skills/bober.security-generic/SKILL.md) — shared OWASP/CWE library (14 blocks).
+- [`bober.security-solidity`](../skills/bober.security-solidity/SKILL.md) — on-chain EVM contract signatures (12 blocks).
+- [`bober.security-anchor`](../skills/bober.security-anchor/SKILL.md) — Solana/Anchor program signatures (7 blocks).
+- [`bober.security-igaming`](../skills/bober.security-igaming/SKILL.md) — iGaming/betting-backend signatures (12 blocks).
+- [`bober.security-dex-backend`](../skills/bober.security-dex-backend/SKILL.md) — crypto-exchange off-chain custody/backend signatures (12 blocks).
+
+The remaining `node`, `payments`, and `react` libraries are the next authoring sprint. All
+authored libraries are **tested but not yet wired into `runSecurityAudit`** — the audit
+behavior described above is unchanged until the index/selector sprint lands. See the
 [sprint records](./sprints/README.md) for the authoring format and per-sprint detail.
 
 ---
