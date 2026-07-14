@@ -11,9 +11,22 @@ import { resolveRoleTools, getGraphState, getGraphDeps } from "./tools/index.js"
 import { runAgenticLoop } from "./agentic-loop.js";
 import { budgetFromMaxUsd } from "./workflow/budget.js";
 import { saveSecurityAudit } from "../state/security-audit-state.js";
-import { resolveStackSecurityContext, ALL_VULN_CLASSES } from "./stack-knowledge.js";
+import { ALL_VULN_CLASSES } from "./stack-knowledge.js";
+import { resolveStackSecurityContext } from "./security-knowledge/resolver.js";
+import { SecurityKnowledgeIndex } from "./security-knowledge/index.js";
 import { runScannerPreFilter } from "./security-scanners.js";
 import { logger } from "../utils/logger.js";
+
+// bober: one memoised index per process (ADR-7, no runtime invalidation) —
+// swap for an injectable dependency if per-request skill reloading is ever needed.
+let sharedSecurityKnowledgeIndex: SecurityKnowledgeIndex | null = null;
+
+function getSecurityKnowledgeIndex(): SecurityKnowledgeIndex {
+  if (!sharedSecurityKnowledgeIndex) {
+    sharedSecurityKnowledgeIndex = new SecurityKnowledgeIndex();
+  }
+  return sharedSecurityKnowledgeIndex;
+}
 
 // ── Main ───────────────────────────────────────────────────────────
 
@@ -76,7 +89,17 @@ export async function runSecurityAudit(
     "SecurityAuditor",
   );
 
-  const ctx = await resolveStackSecurityContext(config.project.stack);
+  const knowledgeIndex = getSecurityKnowledgeIndex();
+  await knowledgeIndex.load();
+  const ctx = await resolveStackSecurityContext({
+    stack: config.project.stack,
+    // Sprint-6 seam: the git diff provider lands next sprint. For now the
+    // finder's retrieved signatures are ranked against the sprint's
+    // estimated-files scope rather than a real diff.
+    changedPaths: contract.estimatedFiles,
+    diffKeywords: [],
+    index: knowledgeIndex,
+  });
 
   // Sprint-5 seam: when scanners are configured, run the deterministic
   // pre-filter INSIDE the audit path (under its own AbortController keyed to

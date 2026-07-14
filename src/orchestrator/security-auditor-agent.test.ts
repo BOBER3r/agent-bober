@@ -4,9 +4,9 @@
  *
  * Mocks the loop/client per the evaluator-agent.test.ts convention (loopSpy,
  * clientSpy, resolveModel, assembleSystemPrompt, tools/index). Uses the REAL
- * stack-knowledge resolver (no mock) so the sc-2-3 prompt-fragment assertion
- * exercises the actual skill-file resolution against this repository's
- * skills/bober.solidity/SKILL.md, giving genuine field-name-drift coverage.
+ * security-knowledge resolver+index (no mock) so the sc-2-3 prompt-fragment
+ * assertion exercises the actual retrieval against this repository's
+ * skills/bober.security-<stack>/SKILL.md files, giving genuine field-name-drift coverage.
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -291,9 +291,9 @@ describe("runSecurityAudit — sc-2-3 stack knowledge injected into the prompt",
 
     expect(loopSpy).toHaveBeenCalledTimes(1);
     const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
-    expect(userMessage).toContain("Security Checklist");
+    expect(userMessage).toContain("solidity.reentrancy-single-function");
     expect(userMessage).toContain("Stack: solidity");
-    expect(userMessage).toContain("Skill: bober.solidity");
+    expect(userMessage).toContain("Skill: bober.security-solidity");
   });
 
   it("falls back to the generic taxonomy fragment for an unknown stack", async () => {
@@ -303,10 +303,8 @@ describe("runSecurityAudit — sc-2-3 stack knowledge injected into the prompt",
     await runSecurityAudit(testContract, testEvaluation, "/tmp/project", config);
 
     const userMessage = loopSpy.mock.calls[0][0].userMessage as string;
-    expect(userMessage).toContain("Skill: none (generic taxonomy only)");
-    expect(userMessage).toContain(
-      "Focus on injection vulnerabilities, authentication and authorisation gaps",
-    );
+    expect(userMessage).toContain("Skill: bober.security-generic");
+    expect(userMessage).toContain("sql-injection");
   });
 
   it("renders a 'Deterministic scanner findings' section when priors are non-empty", async () => {
