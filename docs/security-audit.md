@@ -148,11 +148,25 @@ materialized-but-disabled section.
 | `scanners` | `EvalStrategy[]` | `[]` | Opt-in deterministic scanner pre-filter (see "Scanners" below). Empty means zero child processes are spawned. |
 | `standaloneBlockOn` | `"critical" \| "important"` | `"critical"` | CLI-only blocking threshold for `bober security-audit`'s exit code. The pipeline gate ignores this key entirely — its veto is always critical-only. |
 | `hub` | `boolean` | `true` | Whether critical/important findings are emitted into the priority hub after the verdict is computed (see "Hub Emission" below). `false` means zero hub writes. |
+| `diff` | `{ mode, baseRef?, expandWithGraph }` (optional) | unset | Opt-in real-diff provider (sprint 6). Omitted entirely ⇒ byte-identical to `estimated-files` behavior. See the sub-table below. |
 
-`provider`/`endpoint`/`providerConfig`/`budget` are the only fields with **no**
+`provider`/`endpoint`/`providerConfig`/`budget`/`diff` are the only fields with **no**
 default — a config that sets `security: { enabled: true }` (or any subset that omits
-these four) parses without them present in the materialized object at all; every
+these) parses without them present in the materialized object at all; every
 other field always materializes to its default.
+
+The optional `security.diff` object (`SecurityDiffConfigSchema`) has its own fields:
+
+| Field | Type | Default | Effect |
+|---|---|---|---|
+| `mode` | `"estimated-files" \| "git-diff"` | `"estimated-files"` | `estimated-files` ranks signatures against the sprint's `estimatedFiles` scope (today's behavior). `git-diff` computes a **real** `AuditDiff` (changed files + hunks) via the orchestrator-owned `SecurityDiffProvider` and feeds the real hunks to the selector and the finder prompt. `git-diff` is **never** the default. |
+| `baseRef` | `string` (optional) | unset | The git ref to diff against. When omitted, the provider resolves the merge-base with the detected default branch (`origin/HEAD` → `origin/main`/`master` → `main`/`master`), falling back to `HEAD~1`. |
+| `expandWithGraph` | `boolean` | `false` | When `true` **and** the tokensave graph engine is `ready`, expands the changed files into a call-graph neighborhood (`GraphClient.impact`) surfaced to the finder. Ignored (empty neighborhood) when the graph is not ready. |
+
+Even in `git-diff` mode the auditor toolset stays read-only — `git` runs only in
+orchestrator Node ([ADR-5](../.bober/architecture/arch-20260714-security-auditor-per-stack-skills-adr-5.md)) —
+and any git failure or an empty diff degrades to `estimated-files` behavior (never
+throws, no regression).
 
 **Annotated example** (mirrors the README's config-reference block):
 
@@ -165,7 +179,11 @@ other field always materializes to its default.
   "maxTurns": 20,                       // Max read-only tool-use turns for the audit.
   "standaloneBlockOn": "critical",      // CI threshold for `bober security-audit`: 'critical' | 'important'. Gate ignores this key.
   "scanners": [],                       // Opt-in deterministic pre-filter strategies (EvalStrategy[]). slither/semgrep JSON parsed into auditor priors; unknown scanners → raw-text excerpt. Nonzero exit ⇒ [] (use exit-0 commands). Empty ⇒ zero child processes.
-  "hub": true                           // Emit critical (severity 5) / important (severity 3) findings into the priority hub after the verdict (gate + CLI). Best-effort; false ⇒ zero hub writes. Never affects the verdict/exit code.
+  "hub": true,                          // Emit critical (severity 5) / important (severity 3) findings into the priority hub after the verdict (gate + CLI). Best-effort; false ⇒ zero hub writes. Never affects the verdict/exit code.
+  "diff": {                             // Optional (sprint 6). Omit entirely => byte-identical estimated-files behavior. git runs ONLY in orchestrator Node (ADR-5) — auditor stays read-only.
+    "mode": "estimated-files",          // 'git-diff' computes a real AuditDiff (60-file/256KB caps) and feeds the actual changed hunks to the selector + finder. Never the default; empty diff / git failure ⇒ estimated-files fallback.
+    "expandWithGraph": false            // 'git-diff' only: when true AND the tokensave graph is ready, add a call-graph neighborhood. baseRef?: optional ref (default: merge-base w/ default branch, else HEAD~1).
+  }
 }
 ```
 
@@ -340,10 +358,20 @@ signatures at audit time via a four-stage pipeline under
    finder's user message. This closes **G3**: `unknown`/`anchor`/`react` no longer inject
    frontmatter filler, and an unrecognised stack falls through to the generic floor.
 
-Ranking currently scores against the sprint's `estimatedFiles` scope; the **real git-diff
-provider lands in sprint 6**, and the supply-chain scanners + finding **verifier** are
-sprints 7–8. See the [sprint records](./sprints/README.md) for the authoring format and
-per-sprint detail.
+By default, ranking scores against the sprint's `estimatedFiles` scope. **As of sprint 6, an
+opt-in real git-diff mode exists** (`security.diff.mode: "git-diff"`, default `"estimated-files"`):
+an orchestrator-owned `SecurityDiffProvider` shells `git` in orchestrator Node to compute the
+actual changed files/hunks (bounded to 60 files / 256 KB, `truncated:true` past that; base ref =
+explicit → merge-base with the detected default branch → `HEAD~1`), optionally expanded with a
+tokensave call-graph neighborhood. Those real hunks then drive both the selector's
+keyword/path ranking and a `# Changed files (real diff)` section rendered inline into the finder
+prompt. The provider **never throws** — any git failure (no repo, no `git` binary, abort, malformed
+output) degrades to an empty diff, which falls back to `estimatedFiles` behavior with no regression.
+Crucially the auditor toolset stays read-only: **git runs only in orchestrator Node, never as an
+auditor tool** ([ADR-5](../.bober/architecture/arch-20260714-security-auditor-per-stack-skills-adr-5.md)).
+This closes **G4**. The supply-chain scanners + offline inspector (sprint 7) and the fresh-context
+finding **verifier** (sprint 8) remain the next items. See the [sprint records](./sprints/README.md)
+for the authoring format and per-sprint detail.
 
 ---
 
