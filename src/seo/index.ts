@@ -19,6 +19,9 @@ export type {
 export { SeoEgressGuard } from "./egress.js";
 export type { SeoEgressAxis } from "./egress.js";
 
+export { SeoQuotaGovernor } from "./quota-governor.js";
+export type { QuotaRequest, QuotaDecision, QuotaRefusalReason } from "./quota-governor.js";
+
 export { SeoPlaybookParser } from "./parser.js";
 export { SeoPlaybookIndex } from "./playbook-index.js";
 export { SeoPlaybookRetriever } from "./retriever.js";
