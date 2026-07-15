@@ -29,11 +29,16 @@ export type SeoWorkflow =
 /**
  * Provenance stamped on every `DataOutcome` `"data"` arm (architecture
  * lines 165-169). `costUsd` is set only by costed live sources (DataForSEO).
+ * `path`/`mtimeMs` are set only by file-backed sources (LocalExportSource,
+ * Sprint 6) for freshness auditing — optional so `gsc`/`dataforseo`
+ * provenance stays byte-compatible (same optional idiom as `costUsd`).
  */
 export type DataProvenance = {
   source: "local-export" | "gsc" | "dataforseo";
   retrievedAt: string;
   costUsd?: number;
+  path?: string;
+  mtimeMs?: number;
 };
 
 /**

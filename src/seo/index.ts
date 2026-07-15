@@ -23,3 +23,19 @@ export { SeoPlaybookParser } from "./parser.js";
 export { SeoPlaybookIndex } from "./playbook-index.js";
 export { SeoPlaybookRetriever } from "./retriever.js";
 export type { SeoRetrieveInput, SeoRetrieveResult } from "./retriever.js";
+
+export type {
+  SeoDataSource,
+  SeoCapability,
+  SearchAnalyticsQuery,
+  SearchAnalyticsRow,
+  UrlInspectionQuery,
+  UrlInspectionRow,
+  SerpQuery,
+  SerpRow,
+  KeywordQuery,
+  KeywordRow,
+  BacklinkQuery,
+  BacklinkRow,
+} from "./data-source.js";
+export { LocalExportSource } from "./sources/local-export.js";
