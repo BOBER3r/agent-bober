@@ -10,16 +10,21 @@ import { SeoPlaybookIndex } from "./playbook-index.js";
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REPO_SKILLS_ROOT = join(REPO_ROOT, "skills");
 
-// ── sc-2-3 / sc-2-2: real repo skills — index loads the generic floor ──
+// ── sc-2-3 / sc-2-2 / sc-3-5: real repo skills — index loads the generic
+// floor plus every discovered per-workflow skill (technical-audit,
+// internal-linking, schema-audit, and any future bober.seo-* additions) ──
 
 describe("SeoPlaybookIndex — real repository skills/", () => {
-  it("loads and memoises >=10 signatures from skills/bober.seo-generic/SKILL.md", async () => {
+  it("loads and memoises >=10 signatures across all discovered bober.seo-* skills, including the generic floor", async () => {
     const index = new SeoPlaybookIndex(REPO_SKILLS_ROOT);
     const signatures = await index.load();
 
     expect(signatures.length).toBeGreaterThanOrEqual(10);
+    // The generic skill is always present among the discovered signatures --
+    // robust to future non-generic bober.seo-* skills being added alongside it.
+    expect(signatures.some((s) => s.skillRef.includes("bober.seo-generic"))).toBe(true);
     for (const s of signatures) {
-      expect(s.skillRef).toContain("bober.seo-generic");
+      expect(s.skillRef).toContain("bober.seo-");
     }
   });
 
