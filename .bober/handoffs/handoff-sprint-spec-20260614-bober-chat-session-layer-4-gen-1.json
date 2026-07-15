@@ -1,0 +1,16 @@
+{
+  "handoffId":"handoff-sprint-spec-20260614-bober-chat-session-layer-4-gen-1",
+  "type":"to-generator","contractId":"sprint-spec-20260614-bober-chat-session-layer-4",
+  "specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T17:24:42Z","iteration":1,
+  "context":{
+    "projectOverview":"agent-bober chat session layer, final sprint. Sprint 4 adds STEER: a /stop command (and inspect) that kills a spawned run by PID, using the PidSidecar recorded in Sprint 2 (.bober/chat/<sessionId>.pids.json maps runId->{pid,task,spawnedAt}).",
+    "completedSprints":[
+      {"contractId":"...-1","title":"Chat REPL","summary":"src/chat/ module + chat role + bober chat command; ConversationStore, RosterReader, slash-commands (/runs /help /exit)."},
+      {"contractId":"...-2","title":"Detached spawn + --run-id","summary":"RunSpawner launches detached bober run with session runId; PidSidecar persists runId->{pid,task,spawnedAt} at .bober/chat/<sessionId>.pids.json."},
+      {"contractId":"...-3","title":"Completion weaving","summary":"CompletionTailer tails history.jsonl rotation-safely; ChatSession weaves '[run <id> finished]' notices."}
+    ],
+    "currentBranch":"bober/chat-session-layer",
+    "relevantFiles":["src/chat/slash-commands.ts","src/chat/pid-sidecar.ts","src/chat/roster-reader.ts","src/chat/chat-session.ts","src/state/run-state.ts"]
+  },
+  "principles":"see .bober/principles.md","evaluatorFeedback":null
+}

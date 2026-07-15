@@ -1,0 +1,165 @@
+{
+  "specId": "spec-20260628-calendar-planner",
+  "version": 1,
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z",
+  "title": "Calendar planner: deterministic slotter + Google MCP/.ics + approve-gate",
+  "description": "Take ranked Findings from the priority hub (with dueBy + estDurationMin), read current free/busy from a calendar, run a DETERMINISTIC JS slot-fill that places tasks into open slots in priority order (the LLM never packs slots), then propose the schedule through the existing approve/steer gate before writing events. Connector-agnostic: a Google Calendar MCP adapter plus a local-first .ics export fallback; cloud events carry only a non-sensitive calendarSafeTitle while the sensitive 'why' stays local.",
+  "status": "completed",
+  "completedAt": "2026-06-29T22:39:30.000Z",
+  "mode": "greenfield",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Every load-bearing decision is grounded in the locked research design (.bober/research/research-20260627-knowledge-platform-landscape.md §3a, lines 121-135) and existing substrate: deterministic numerics pattern (src/medical/numerics.ts), egress-axis guard (src/medical/egress.ts), approval gate (src/state/approval-state.ts + src/chat/slash-commands.ts), external-MCP connector (src/mcp/external-client.ts), 0600 token sidecar (src/medical/whoop/whoop-token.ts), and the CLI command model (src/cli/commands/medical.ts + src/cli/index.ts). No high-stakes question remained codebase-silent; ambiguityScore 3 < 7.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "dependsOn": ["spec-20260628-priority-hub", "spec-20260628-task-inbox"],
+  "assumptions": [
+    "Finding consume-interface is owned by spec-20260628-priority-hub (research §3a, lines 121-126): { id, domain, title, kind, urgency 1-5, severity 1-5, evidence[], surfacedAt, dueBy?, tags[], estDurationMin?, calendarSafeTitle?, status, promotesTo? }. Since that sibling spec is not yet built, the calendar planner defines a local TypeScript consume-type matching this schema and reads the hub's ranked findings from a JSON file (with test fixtures), keeping a clean forward dependency.",
+    "Priority order is the INPUT order of the ranked findings array (the hub already ranked them via lens-panel, research §3a lines 115-119). The slotter must NOT re-rank or use an LLM to order/pack; it places findings in the given order, respecting dueBy and estDurationMin (research §3a line 135: 'do NOT let the LLM pack slots').",
+    "The deterministic slot-fill engine follows the medical NumericsQueryLayer contract verbatim (src/medical/numerics.ts:9): NO async, NO fs, NO network, NO LLM import; identical input => identical output. This is the project's established no-LLM-for-math / deterministic-placement pattern.",
+    "Writing to a live cloud calendar is outbound egress. It is gated behind a new default-false, fail-closed opt-in axis modeled on EgressGuard (src/medical/egress.ts:5-58) and a new `calendar` config section modeled on MedicalSectionSchema (src/config/schema.ts:374-401). Default connector is the local-first .ics exporter (zero egress).",
+    "The claude.ai Google Calendar MCP is env-installed and OAuth-gated via /mcp; real event tools surface only POST-auth. The Google connector is therefore written against a GoogleCalendarToolAdapter interface (tool discovery via listTools, calls via callTool, mirroring src/mcp/external-client.ts:81-103) with a stub/fake adapter for tests — no live OAuth in CI.",
+    "Hosted OAuth is unfit for unattended/cron runs (research §3a line 135). Scheduled 'auto-fill' uses the .ics fallback; a 0600 local-token sidecar path (modeled on src/medical/whoop/whoop-token.ts) is provided for the interactive Google path. This caveat is documented in the connector and CLI help.",
+    "The propose -> /approve -> write flow reuses the existing approval gate (src/state/approval-state.ts: PendingMarker/ApprovedMarker/RejectedMarker, savePending/saveApproved/listPendingApprovals) and the existing /approve, /reject, /tell handlers (src/chat/slash-commands.ts:103-135). No new approval mechanism is built.",
+    "Cloud events carry ONLY finding.calendarSafeTitle (research §3a line 135). The sensitive 'why' (finding.evidence, full title, tags) is never sent to a cloud connector; the .ics local path may keep full detail since the file stays on the user's machine.",
+    "CLI commands mirror `bober medical` (src/cli/commands/medical.ts): an extracted core function (like runWhoopSync) with injectable deps for testability, chalk for output, process.exitCode for failures; registered in src/cli/index.ts alongside registerMedicalCommand (src/cli/index.ts:319).",
+    "Project conventions are honored: ESM with .js import extensions, node:fs/promises only, Zod for the new config section, collocated *.test.ts, type-only imports, unicode section headers (.bober/principles.md)."
+  ],
+  "outOfScope": [
+    "Finding ranking and the Finding schema definition (owned by spec-20260628-priority-hub).",
+    "Task capture / task inbox lifecycle (owned by spec-20260628-task-inbox).",
+    "Telegram presentation of proposals (owned by a sibling presentation adapter).",
+    "The scheduler / cron that fires the calendar planner on a cadence (owned by the scheduler sibling).",
+    "Live OAuth flows and hitting real Google APIs in CI (tests use a stub MCP adapter).",
+    "Two-way calendar sync, recurring-event expansion, attendee management, and conflict resolution beyond not double-booking existing busy intervals.",
+    "Bi-directional editing of already-written events (this spec writes proposed events after approval; editing is future work)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Deterministic slot-fill engine",
+      "description": "A pure synchronous TypeScript engine that consumes pre-ranked Findings and a free/busy model and places each finding into an open slot in priority (input) order, respecting dueBy and estDurationMin, emitting a ProposedPlan of scheduled items plus an unscheduled list with reasons.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Given N ranked findings and a free/busy window, the engine returns scheduled items (each with ISO start/end inside a free interval and never overlapping a busy interval) plus an unscheduled list where each entry carries a reason (does-not-fit or no-free-slot-before-dueBy).",
+        "AC2: The engine performs no LLM call, no async, no fs, and no network; calling it twice with identical input returns deep-equal output.",
+        "AC3: A finding whose estDurationMin exceeds every remaining free interval before its dueBy is returned as unscheduled, not silently dropped or truncated."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Connector-agnostic calendar adapter with .ics fallback",
+      "description": "A CalendarConnector interface (readFreeBusy + writeEvents) with a local-first .ics (RFC 5545 VEVENT) exporter as the default zero-egress implementation, so the proposed plan can be materialized without any cloud connector.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A single CalendarConnector interface is implemented by both the .ics exporter and (feat-3) the Google connector; the slotter and CLI depend only on the interface.",
+        "AC2: Exporting a ProposedPlan via the .ics connector produces a file containing BEGIN:VCALENDAR, one BEGIN:VEVENT/END:VEVENT block per scheduled item with matching DTSTART/DTEND, and END:VCALENDAR, with zero network egress.",
+        "AC3: The generated .ics round-trips: parsing DTSTART/DTEND/SUMMARY back yields the same start, end, and title as the source ProposedPlan items."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Google Calendar MCP connector behind egress axis with safe-title privacy",
+      "description": "A Google Calendar connector implementing CalendarConnector via the external-MCP pattern, gated behind a default-false fail-closed cloud-calendar egress axis, sending only calendarSafeTitle to the cloud and refusing (exit 1, clear message) when the axis is off or no token is present.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: With the cloud-calendar egress axis disabled, the Google write path refuses with a message naming the config flag and never constructs the MCP client.",
+        "AC2: With the axis enabled and a stub MCP adapter, writeEvents maps each scheduled item to an event whose summary equals finding.calendarSafeTitle and contains none of the finding's evidence or full title text.",
+        "AC3: Token values and MCP env are never included in error messages or logs (sanitized like src/mcp/external-client.ts:69), and the unfit-for-unattended-OAuth caveat is documented with the .ics fallback recommendation."
+      ],
+      "dependencies": ["feat-1", "feat-2"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Approve-gate write flow (propose -> /approve|/tell -> write)",
+      "description": "Wire the ProposedPlan through the existing approval gate so live-calendar events are written only after an ApprovedMarker exists; rejection aborts and /tell-style feedback re-runs the slotter with adjusted constraints and re-proposes.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober calendar plan` (live path) writes a pending approval marker and writes zero events to any connector before approval.",
+        "AC2: After an ApprovedMarker is recorded, applying the plan calls the connector's writeEvents exactly once with the proposed items; after a RejectedMarker, writeEvents is never called.",
+        "AC3: A /tell-style constraint adjustment (e.g. exclude an interval or shift the window) re-runs the slotter and yields a new ProposedPlan reflecting the constraint, without writing events."
+      ],
+      "dependencies": ["feat-1", "feat-2", "feat-3"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "techStack": ["TypeScript (ESM, NodeNext)", "Node.js", "Zod", "Vitest", "commander", "chalk", "@modelcontextprotocol/sdk"],
+  "techNotes": {
+    "integrationPoints": [
+      "Priority hub ranked-findings output (consume-interface; spec-20260628-priority-hub)",
+      "claude.ai Google Calendar MCP (env-installed, OAuth via /mcp; tools surface post-auth)",
+      "Existing approval gate (src/state/approval-state.ts + src/chat/slash-commands.ts)",
+      "External-MCP subprocess client (src/mcp/external-client.ts)"
+    ],
+    "dataModel": "Finding (consumed, from hub) -> SlotConstraints (window + working hours + timezone) + BusyInterval[] (from connector) -> deterministic slotter -> ProposedPlan { scheduled: PlanItem[], unscheduled: { findingId, reason }[] } -> approval PendingMarker -> connector.writeEvents after approval.",
+    "securityConsiderations": [
+      "Cloud-calendar write is egress: default-false fail-closed axis (EgressGuard pattern).",
+      "Only calendarSafeTitle leaves the device; evidence/why stays local.",
+      "Token + MCP env never logged (sanitization pattern from external-client.ts).",
+      "Events written only after explicit approval; no auto-approve in any mode."
+    ],
+    "deterministicNumericsPattern": "src/medical/numerics.ts — pure synchronous, no async/fs/network/LLM, identical input => identical output; exhaustive switch + never guard for closed enums."
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "Cloud-calendar egress is default-false and fail-closed; the Google write path never constructs an MCP client when the axis is off.",
+      "verificationMethod": "unit-test asserting axis-off refusal and no client construction"
+    },
+    {
+      "category": "security",
+      "requirement": "Only finding.calendarSafeTitle is sent to a cloud connector; evidence, full title, and tags never leave the device.",
+      "verificationMethod": "unit-test asserting written event summary equals calendarSafeTitle and excludes sensitive fields"
+    },
+    {
+      "category": "reliability",
+      "requirement": "The slot-fill engine is deterministic: identical input yields deep-equal output, with no Date.now/Math.random/async/fs/network in the algorithm.",
+      "verificationMethod": "unit-test running the slotter twice on identical input and a source scan for forbidden imports"
+    },
+    {
+      "category": "maintainability",
+      "requirement": "All connectors implement a single CalendarConnector interface so the slotter and CLI depend only on the abstraction.",
+      "verificationMethod": "typecheck — both connectors structurally satisfy CalendarConnector"
+    }
+  ],
+  "constraints": [
+    "ESM everywhere with .js import extensions (NodeNext).",
+    "node:fs/promises only — no synchronous fs.",
+    "Zod for the new calendar config section.",
+    "Tests collocated as *.test.ts; no live network/OAuth in CI (stub the MCP adapter).",
+    "type-only imports; unused params prefixed with _; unicode section headers.",
+    "maxSprints 10, sprintSize medium."
+  ],
+  "metadata": {
+    "dependsOn": ["spec-20260628-priority-hub", "spec-20260628-task-inbox"],
+    "contractIds": [
+      "sprint-spec-20260628-calendar-planner-1",
+      "sprint-spec-20260628-calendar-planner-2",
+      "sprint-spec-20260628-calendar-planner-3",
+      "sprint-spec-20260628-calendar-planner-4"
+    ],
+    "approvalEvidence": [
+      ".bober/research/research-20260627-knowledge-platform-landscape.md",
+      "src/medical/numerics.ts",
+      "src/medical/egress.ts",
+      "src/state/approval-state.ts",
+      "src/chat/slash-commands.ts",
+      "src/mcp/external-client.ts",
+      "src/medical/whoop/whoop-token.ts",
+      "src/cli/commands/medical.ts",
+      "src/cli/index.ts",
+      "src/config/schema.ts"
+    ]
+  }
+}

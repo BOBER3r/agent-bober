@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-research-scheduler-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-research-scheduler-2",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-29T20:50:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober. Sprint 2 of 5 of spec-20260628-research-scheduler. Build a deterministic runner that executes one stored ResearchJob by querying >=2 distinct provider/model blocks (model diversity from fleet tier-policy), synthesizes a markdown vault note, and emits exactly ONE Finding to the priority hub via an INJECTED sink. NO web egress (Sprint 3). Add `bober research run <jobId>`.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260628-research-scheduler-1", "title": "Research job schema, JSON store, CLI", "summary": "src/research/types.ts (ResearchJobSchema, cadence enum, jobId helper), src/research/job-store.ts (addJob/listJobs/readJob/removeJob), src/cli/commands/research.ts (registerResearchCommand: job add|list|remove). Commit 0336e47."}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/research/types.ts + job-store.ts (Sprint 1 — runner consumes ResearchJob; add `run` to the same research.ts)",
+      "src/fleet/tier-policy.ts (model diversity — read briefing)",
+      "src/hub/finding.ts + src/hub/finding-store.ts (Finding type + ingestFinding sink)",
+      "src/medical/research/research-note.ts (note-writer pattern to mirror)",
+      "src/vault/frontmatter.ts (serializeFrontmatter)",
+      "src/providers/types.ts (provider-agnostic queryModel shape)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run"},
+    "generator": {"model": "sonnet", "autoCommit": true, "commitFormat": "bober(sprint-N): description"}
+  },
+  "principles": "Read .bober/principles.md. Hard gates: TS strict zero errors; ESLint consistent-type-imports (`import type`), unused vars errored (`_` escape), ZERO lint errors; ESM `.js` import extensions; Zod schemas; PROVIDER-AGNOSTIC — never import an LLM SDK outside providers/ adapters, the runner takes an injected queryModel dep; async fs only (node:fs/promises); clock injected (no Date.now()/new Date() except at CLI .action boundary).",
+  "evaluatorFeedback": null,
+  "curatorFindings": {
+    "modelDiversity": "Single exported symbol `tierPolicy` at src/fleet/tier-policy.ts:75. Enumerate DISTINCT provider/model blocks via tierPolicy.resolveTier() across DIFFERENT tiers — the 4 RoleProviderBlock consts (:26-48) are NOT exported, and within ONE tier planner==generator==evaluator so distinctness must come from different tiers. src/research/model-diversity.ts returns >=2 distinct provider/model blocks this way.",
+    "findingSink": "Inject findingSink into the runner. The real CLI binds it to ingestFinding(store, finding, {now}) at src/hub/finding-store.ts:140. Canonical Finding type/schema = src/hub/finding.ts:10/:27 — IMPORT it, never redefine. Finding fields {id?, domain, title, kind, evidence[], surfacedAt} (id/surfacedAt may be derived by ingestFinding; confirm exact required fields by reading finding.ts).",
+    "noteWriter": "Mirror src/medical/research/research-note.ts. Use serializeFrontmatter from src/vault/frontmatter.ts:145 (scalars + string-arrays ONLY — flatten models list to string[]). Frontmatter must carry jobId, question, models (string[]), generatedAt (passed-in timestamp).",
+    "regressionRisk": "src/cli/commands/research.test.ts whole-module vi.mock's utils/fs.js. KEEP all real fs work inside runner.ts/note-writer.ts, NOT in research.ts. The CLI `run` action should delegate to runResearchJob; do not do fs directly in research.ts."
+  },
+  "notes": "Contract: .bober/contracts/sprint-spec-20260628-research-scheduler-2.json. Briefing: .bober/briefings/sprint-spec-20260628-research-scheduler-2-briefing.md. runResearchJob(job, deps) where deps = {queryModel(block, prompt), findingSink(finding), now, vaultRoot}. Keep a generic default domain analyzer + a registry hook for domain-specific analyzers, but do NOT import src/medical/. Do NOT use FleetCoordinator. Do NOT add egress/network."
+}

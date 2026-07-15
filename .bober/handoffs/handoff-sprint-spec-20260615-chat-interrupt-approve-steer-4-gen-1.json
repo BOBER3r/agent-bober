@@ -1,0 +1,43 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-chat-interrupt-approve-steer-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T14:28:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Chat Interrupt / Approve / Steer (Phase 2). Sprint 4 = free-text guidance injection. A runId-keyed guidance channel (.bober/runs/<id>/guidance.jsonl) appended by /tell <runId> <text> (and NL), plus an ADDITIVE pipeline read point that at the sprint boundary drains pending guidance for the active runId and injects it into the next agent handoff. With NO guidance, the pipeline is byte-for-byte unchanged (pipeline.ts:571 invariant).",
+    "completedSprints": [
+      { "contractId": "...-1", "commit": "14c2be6", "summary": "RunState grammar, CarefulSidecar, /careful, --approve-gates, RunSpawner careful." },
+      { "contractId": "...-2", "commit": "67495fc", "summary": "ApprovalReader, ApprovalCursor, handleTurn prelude, RunState reflection, roster waiting=<gate>." },
+      { "contractId": "...-3", "commit": "fb4b787", "summary": "/approve, /reject+feedback, NL classifier intents, handleApprove/handleReject, RunState clear. The optional-handler + classifier-action + handleStop patterns to MIRROR for /tell are now all present in chat-session.ts/slash-commands.ts/turn-classifier.ts." }
+    ],
+    "currentBranch": "bober/chat-interrupt-approve-steer",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts (PROTECTED). Curator-verified insertion: INSIDE runSprintCycle, BETWEEN the handoff build (~:265) and runGenerator (~:286), guarded on pipelineRunId (the runSprintCycle param ~:141). Leave runTsPipeline and the :571 invariant block (~:568-572) untouched.",
+      "src/orchestrator/context-handoff.ts (the handoff object shape — inject guidance into the handoff's `issues: string[]` field so empty-guidance is a clean deep-equal no-op)",
+      "src/orchestrator/generator-agent.ts (runGenerator — how the handoff reaches the agent input)",
+      "src/state/run-state.ts (runDir(<runId>) path helper ~:23; atomic temp+rename write ~:41-52; never-throw read pattern — MIRROR for guidance.ts)",
+      "src/state/helpers.ts (existing helpers — NOTE: curator confirmed NO safe-segment/path-traversal helper exists; you must write one for the sc-4-4 security guard)",
+      "src/chat/chat-session.ts (handleStop/handleApprove pattern to mirror for handleTell; RosterReader for unknown-run guard; classify-path routing for 'tell')",
+      "src/chat/slash-commands.ts (optional-handler threading — now has careful/approve/reject; add /tell <runId> <rest-of-line-as-text>; HELP_TEXT)",
+      "src/chat/turn-classifier.ts (loose-JSON action union — add 'tell' {runId, text})",
+      "src/chat/roster-reader.ts (list known runs for the unknown-run guard)",
+      "src/orchestrator/pipeline-run-id.test.ts (the extract-pure-logic + stubbed-boundary test style to follow)"
+    ]
+  },
+  "keyInvariants": [
+    "PROTECTED pipeline.ts — ADDITIVE ONLY: insert a SINGLE clearly-commented 'Phase 2 guidance injection (additive)' read point inside runSprintCycle (between handoff build ~:265 and runGenerator ~:286), guarded on pipelineRunId being present. Do NOT reorder phases, do NOT touch runTsPipeline or the :571 invariant block. With no guidance (or no runId), the handoff/agent input must be IDENTICAL to today (sc-4-7 deep-equal no-op).",
+    "PURE HELPER FOR TESTABILITY (curator rec): extract a pure `injectGuidanceIntoHandoff(handoff, guidanceTexts)` function (returns the handoff with guidance appended to `issues: string[]`, or the unchanged handoff when guidanceTexts is empty). Test it directly for sc-4-6/sc-4-7; call it from the single pipeline read point. This keeps the protected-file change minimal.",
+    "ATOMIC DRAIN (sc-4-5): drainGuidance(projectRoot, runId) reads unconsumed entries, marks them consumed atomically (temp+rename, mirror writeRunState), returns their texts; a second drain returns []. guidance.jsonl is append-only {ts, text, consumed?} one-per-line.",
+    "PATH-TRAVERSAL GUARD (sc-4-4 security NFR): validate runId is a safe path segment BEFORE any file write — reject '..' or path separators. No helper exists; write a small one (e.g. /^[A-Za-z0-9][A-Za-z0-9._-]*$/ rejecting '..'). A malicious runId must never write outside .bober/runs.",
+    "UNKNOWN-RUN GUARD: /tell for a run not present in the roster (hasRunDir / RosterReader) returns a clear error and writes nothing.",
+    "NEVER mutate an in-flight agent call — guidance applies only at the NEXT boundary. Does NOT require careful mode (guidance can be queued for any run; drained only at boundaries that execute).",
+    "prefer src/state/guidance.ts (the pipeline reads it too, so it belongs in state/, not chat/)."
+  ],
+  "successCriteriaSummary": "sc-4-1 build; sc-4-2 typecheck; sc-4-3 tests; sc-4-4 /tell known run appends {ts,text,consumed:false}, unknown run -> error+no-write, runId path-traversal rejected; sc-4-5 drain-then-redrain (2nd returns []); sc-4-6 pipeline boundary drains+injects into agent input (stub test); sc-4-7 no-guidance no-op deep-equal + existing pipeline suite green; sc-4-8 NL 'tell run X to ...' classified+routed, guidance written, /help lists /tell.",
+  "config": { "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" } },
+  "principlesRef": ".bober/principles.md (ESM/NodeNext, .js imports, no SDK types outside src/providers/, async fs only, atomic temp+rename, collocated *.test.ts, no fs mocks, loose-JSON classifier, conventional commit bober(sprint-4): ...)",
+  "notesForGenerator": "Baseline after Sprint 3 is 2048 tests passing. Known PRE-EXISTING flake in src/mcp/tools/list-active-runs.test.ts (intermittent ENOTEMPTY cleanup race; passes on re-run/isolation) — do NOT fix here (Sprint 6); if it's the ONLY failure, re-run once to confirm green. The pipeline.ts:571 invariant is the single most important thing to preserve — diff review will confirm no phase reordering.",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,95 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-5",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 5,
+  "title": "Stack registry + knowledge index + selector + context resolver, wired into the finder (fixes G3)",
+  "description": "Turn the eight authored skill files into live, retrieval-grounded audit context. Extend the stack map from 3 to 7 stacks + a generic floor, build the per-process memoised SecurityKnowledgeIndex (ADR-7), the top-K SecuritySignatureSelector, and replace the head-excerpt resolveStackSecurityContext with one that renders retrieved signatures into a never-empty prompt fragment. Wire it into runSecurityAudit so the finder receives real per-stack signatures. This closes G3 (unknown/anchor/react no longer inject frontmatter filler; unknown degrades to the generic floor).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-4"
+  ],
+  "features": [
+    "feat-retrieval"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "SecurityStackRegistry.resolve maps every declared stack keyword to one of the 7 SecurityStackIds and its bober.security-<stack> skill name, extending STACK_SKILL_MAP; an unknown/absent/null stack resolves to stackId 'generic' (never null, never a throw); a per-stack test asserts all 7 stacks + generic resolve to a real skill name.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "SecurityKnowledgeIndex.load() parses all skills/bober.security-*/SKILL.md once and memoises; forStack(stackId) returns that stack's signatures (missing skill => [], never throws); all() returns the union; a skillsRoot option supports test injection. A test asserts each of the 8 stacks indexes to >= 6 signatures from the real files.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "SecuritySignatureSelector.select({stackId, changedPaths, diffKeywords, topK}) returns at most topK signatures ranked by stack membership + keyword/path overlap, ALWAYS including the generic-floor signatures; pure and total; a test shows a diff whose keywords match a specific signature ranks it into the selection and that generic-floor signatures are always present.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "resolveStackSecurityContext (replacing stack-knowledge.ts:185) returns StackSecurityContext {stackId, stackLabel, skillName, taxonomy, signatures, promptFragment} where promptFragment is NEVER empty and renders the retrieved signatures (id/title/invariant/unsafe/safe) plus the optional threatModelText; a test asserts the fragment for each of the 7 stacks + generic is non-empty and contains a stack-appropriate signature (closes G3 head-excerpt fallback).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "runSecurityAudit builds its stack context via the new resolver+index+selector (fed the estimated-files paths as changedPaths for now, since the git diff provider lands in sprint 6), and an end-to-end audit test (stubbed agentic loop) shows the retrieved signatures reach the finder user message; the fail-closed parse and read-only curator toolset are unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "A config omitting security is byte-identical; npm run build + typecheck + lint pass; full suite green including the existing security-auditor-agent tests (adjusted only where the resolver signature legitimately changed).",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not build the git diff provider yet (sprint 6) \u2014 changedPaths come from estimatedFiles this sprint.",
+    "Do not add supply-chain scanners or the verifier (sprints 7-8).",
+    "Do not add index cache invalidation (ADR-7: per-process memoised, no runtime invalidation).",
+    "Do not change deriveVerdict or the gate."
+  ],
+  "stopConditions": [
+    "All 7 stacks + generic resolve to a real, non-empty signature fragment (G3 closed).",
+    "Retrieved signatures verifiably reach the finder prompt; existing fail-closed/read-only behavior intact."
+  ],
+  "definitionOfDone": "The registry, memoised index, top-K selector, and never-empty context resolver exist, are wired into runSecurityAudit, and demonstrably feed real per-stack signatures to the finder, closing G3, with all invariants preserved and the suite green.",
+  "assumptions": [
+    "The old resolveStackSecurityContext/extractSecurityExcerpt/STACK_SKILL_MAP at stack-knowledge.ts:49-212 are replaced/augmented; callers of the old resolver (security-auditor-agent.ts:79) are updated to the new signature.",
+    "The eval-lenses.ts:4 LENS_CATALOG data-module pattern is the precedent for the index shape; readSkillSecurityExcerpt's never-throw fs discipline (stack-knowledge.ts:156-167) is the precedent for the index loader.",
+    "topK default is a small number (~6-8) tunable via config in a later step; the generic floor is always included."
+  ],
+  "outOfScope": [
+    "git diff provider, supply-chain, verifier, benchmark, dogfood (later)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Build under src/orchestrator/security-knowledge/. (1) registry.ts: SECURITY_STACK_MAP extends the precedence logic of detectStack (stack-knowledge.ts:64-98) \u2014 blockchain/language first \u2014 to 7 stacks + generic floor; unknown => generic. (2) index.ts: memoised load() (module-level or instance cache), forStack/all, skillsRoot option (mirror stack-knowledge.ts:187 test seam); use node:fs/promises, never throw (missing file => []). (3) selector.ts: pure ranking \u2014 score = stack-match + keyword overlap (signature.keywords vs diffKeywords) + path hints; cap topK; always concat the generic-floor set (dedup). (4) resolver.ts: resolveStackSecurityContext replacing stack-knowledge.ts:185 \u2014 render signatures into a compact prompt fragment (id/title/invariant + unsafe/safe fenced) + optional threatModelText; NEVER empty (fallback to generic floor). (5) security-auditor-agent.ts: replace the ctx = await resolveStackSecurityContext(config.project.stack) call (line ~79) with the new input object; derive changedPaths/diffKeywords from contract.estimatedFiles for now (diff provider is sprint 6). Keep buildUserMessage folding the fragment in. Do NOT change the read-only toolset or the fail-closed parse. Update the existing security-auditor-agent tests where the resolver call shape changed.",
+  "evaluatorNotes": "sc-5-1: table-test resolve() over all 7 keywords + an unknown => generic. sc-5-2: load the real files via a real skillsRoot pointing at the repo skills/ dir; assert each stack indexes >=6. sc-5-3: craft a diffKeywords set matching a known signature's keywords, assert it's selected and topK respected and generic floor present. sc-5-4: assert promptFragment non-empty for all 8 and contains a stack-appropriate token (G3: no head-excerpt frontmatter). sc-5-5: stub runAgenticLoop, capture the userMessage, assert a retrieved signature id/title appears in it. sc-5-6: deep-equal config-omitting-security parse; full suite + build + typecheck + lint. Verify NO Bash/Write/Edit added to the auditor toolset.",
+  "estimatedFiles": [
+    "src/orchestrator/security-knowledge/registry.ts",
+    "src/orchestrator/security-knowledge/index.ts",
+    "src/orchestrator/security-knowledge/selector.ts",
+    "src/orchestrator/security-knowledge/resolver.ts",
+    "src/orchestrator/security-knowledge/resolver.test.ts",
+    "src/orchestrator/security-auditor-agent.ts",
+    "src/orchestrator/security-auditor-agent.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-5-1",
+      "timestamp": "2026-07-14T18:20:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-5-1",
+  "updatedAt": "2026-07-14T18:20:00Z",
+  "completedAt": "2026-07-14T18:20:00Z"
+}

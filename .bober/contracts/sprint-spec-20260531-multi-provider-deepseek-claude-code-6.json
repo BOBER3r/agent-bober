@@ -1,0 +1,84 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-6",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "sprintNumber": 6,
+  "title": "Documentation and key-gated provider smoke scripts",
+  "description": "Document the provider capability matrix, costs, ToS, prerequisites, and the no-key-persistence rule in README.md and a new docs/providers.md with copy-paste config examples, and ensure the deepseek and claude-code smoke scripts run only when the relevant key/binary is present, skip otherwise, and are excluded from npm test.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260531-multi-provider-deepseek-claude-code-5"
+  ],
+  "features": [
+    "feat-7",
+    "feat-8"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "README.md Supported Providers section contains a capability matrix with rows for planner, researcher, curator, generator, evaluator, code-reviewer and columns for anthropic, deepseek, claude-code, marking claude-code unsupported for the four tool roles.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "docs/providers.md exists and contains copy-paste bober.config.json snippets for anthropic (default), deepseek (noting npm install openai and DEEPSEEK_API_KEY), and claude-code (subscription, planner/researcher only), plus an explicit statement that agent-bober never persists API keys and that .env is gitignored.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "docs/providers.md and the changed README section pass markdownlint with exit 0.",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "Running scripts/spike-deepseek.mjs (or scripts/provider-smoke.mjs) with no DEEPSEEK_API_KEY set prints a skip message and exits 0 without making any network call.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "Running the claude-code smoke with no claude binary on PATH prints a skip message and exits 0; the smoke script(s) are not referenced by the npm test script in package.json.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "npm test exits 0 and does not execute any smoke script (vitest config does not include scripts/*.mjs as test files).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not commit any API key, .env file, or secret into the repo.",
+    "Do not add the smoke scripts to the npm test command or vitest include globs.",
+    "Do not document or test OpenAI-compatible vendors other than DeepSeek.",
+    "Do not change provider source code behavior in this sprint — docs and smoke scripts only."
+  ],
+  "stopConditions": [
+    "README and docs/providers.md carry the capability matrix, costs, ToS, prerequisites and no-key-persistence note and pass markdownlint; the key/binary-gated smoke scripts skip-and-exit-0 when secrets are absent and are excluded from npm test; npm test exits 0."
+  ],
+  "definitionOfDone": "A new user reading README plus docs/providers.md can pick anthropic, deepseek, or claude-code and copy a working config snippet, understanding deepseek needs npm install openai and DEEPSEEK_API_KEY, that claude-code is subscription-billed and limited to planner/researcher per the 2026-06-15 ToS, and that agent-bober never persists keys. A maintainer can run the smoke scripts locally to verify deepseek completion plus tool_use and claude-code completion plus the tools-guard throw, and those scripts skip cleanly without secrets and never run in CI.",
+  "assumptions": [
+    "The capability matrix mirrors the PRD Provider Capability Matrix exactly — evidence: PRD section 'Provider Capability Matrix'.",
+    "Smoke gating is by presence of DEEPSEEK_API_KEY (deepseek) and the claude binary on PATH (claude-code), skipping with exit 0 otherwise — evidence: PRD US-008 AC 'runs only when the relevant key/binary is present; skips otherwise'.",
+    ".env is already gitignored — evidence: .gitignore lines 10-12 list .env, .env.local, .env.*.local."
+  ],
+  "outOfScope": [
+    "Any further provider code changes (covered by Sprints 2-5).",
+    "Cost dashboards or usage metering UI (PRD Non-Goals)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Update README.md around the existing 'Supported Providers' section (line ~181) to add the capability matrix and a claude-code/deepseek row; note costs/ToS link (2026-06-15 metered, ~40k-token system-prompt overhead per claude -p call). Create docs/providers.md (docs/ dir exists) with three config snippets and the no-key-persistence statement. scripts/spike-deepseek.mjs already exists; ensure it guards on process.env.DEEPSEEK_API_KEY (skip+exit 0 if absent). Add a claude-code smoke (either a new scripts/provider-smoke.mjs covering both, or extend the existing spike-claude-code-provider.mjs) that probes the claude binary on PATH and skips if absent; cover deepseek completion+tool_use and claude-code completion+tools-guard throw. Confirm package.json test script (vitest) and vitest config do not include scripts/*.mjs. Run markdownlint on README.md and docs/providers.md.",
+  "evaluatorNotes": "Read README.md and docs/providers.md to confirm the matrix rows/columns and the no-key-persistence statement are present and that deepseek prerequisites (npm install openai, DEEPSEEK_API_KEY) and claude-code limits (planner/researcher only, metered ToS) are documented. Run markdownlint and assert exit 0. Run the smoke script(s) with DEEPSEEK_API_KEY unset and no claude on PATH and assert each prints a skip and exits 0 with no network call. Inspect package.json and vitest config to confirm no smoke script is in the test globs. Run npm test and assert exit 0.",
+  "estimatedFiles": [
+    "README.md",
+    "docs/providers.md",
+    "scripts/spike-deepseek.mjs",
+    "scripts/provider-smoke.mjs",
+    "package.json"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-31T15:20:00Z"
+}

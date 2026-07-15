@@ -1,0 +1,42 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-memory-self-improve-p0-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-1",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T19:10:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: a multi-agent harness that builds applications autonomously using any LLM. ESM/TypeScript strict CLI + MCP server. Phase 3 of the chattable-team platform adds a durable semantic-facts memory type plus lesson hygiene. This sprint introduces the project's FIRST relational store.",
+    "completedSprints": [],
+    "currentBranch": "bober/memory-self-improve-p0",
+    "relevantFiles": [
+      "src/state/memory.ts",
+      "src/state/helpers.ts",
+      "src/orchestrator/memory/distill.ts",
+      "src/cli/commands/memory.ts",
+      "src/cli/index.ts",
+      "src/config/loader.ts",
+      "package.json"
+    ]
+  },
+  "decisionsLocked": {
+    "Q1": "B — SQLite via better-sqlite3 (synchronous, Node>=18). NOT node:sqlite (needs Node 22.5+). Hidden behind a FactStore interface so the driver is swappable.",
+    "purity": "Never call Date.now()/new Date() inside the store, distill, or reconcile cores — timestamps are injected at the CLI/caller boundary.",
+    "ids": "Deterministic content hash sha256(`${scope}|${subject}|${predicate}|${value}|${tCreated}`).slice(0,16), mirroring lessonIdFromSignature in distill.ts."
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "Read .bober/principles.md directly. KEY GATES: TypeScript strict (zero type errors = hard gate); ESLint flat config with consistent-type-imports (use `import type`); ESM everywhere with .js import specifiers for NodeNext; Zod for all config/input validation; no synchronous fs in app code (node:fs/promises) — NOTE better-sqlite3 is synchronous by design and is the sanctioned exception for the store; filesystem state under .bober/; section comments `// -- Section ------`; conventional commits `bober(sprint-1): ...`; prefix unused params with `_`; no `any` without justification.",
+  "evaluatorFeedback": null
+}

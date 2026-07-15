@@ -1,0 +1,103 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "sprintNumber": 4,
+  "title": "Free-text guidance injection: /tell <runId> <text> + pipeline read point",
+  "description": "Let a human steer a run with free-text guidance, not just approve/reject. Add a runId-keyed guidance channel (.bober/runs/<id>/guidance.jsonl) appended by `/tell <runId> <text>` (and NL 'tell run X to …'), and an ADDITIVE pipeline read point that, at each checkpoint boundary, drains pending guidance for the active runId and injects it as extra context into the next agent (curator/generator) handoff. With no guidance present the pipeline behaves byte-for-byte as before (the pipeline.ts:571 invariant).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260615-chat-interrupt-approve-steer-1"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "All tests pass, including new guidance-channel, drain, and pipeline-injection tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "`/tell <runId> <text>` for a known run appends a guidance entry {ts, text, consumed:false} to .bober/runs/<runId>/guidance.jsonl and acks; for an unknown run it returns a clear error and writes nothing. A unit test asserts the appended entry and the unknown-run no-op. A runId containing path separators or '..' is rejected before any write.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "A guidance helper drains pending (unconsumed) guidance for a runId — returning the entries and marking them consumed so a second drain returns nothing. A unit test asserts drain-then-redrain semantics on the JSONL channel.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "The pipeline drains and injects pending guidance for the active runId at a checkpoint boundary, threading the drained text into the next agent's context/handoff. A unit/integration test seeds guidance for a runId and asserts the boundary read point surfaces it into the agent input (via a stubbed agent invocation or the handoff object).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "The pipeline read point is purely additive: with no guidance file present, the pipeline produces the same handoff/agent input as before and the existing pipeline test suite stays green. A unit test asserts no-guidance is a no-op (no change to the handoff).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-8",
+      "description": "Natural-language 'tell run X to <instruction>' is classified to a tell action {runId, text} and routed to the /tell handler. A unit test with a stubbed classifier asserts the guidance entry is written. /help lists /tell.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not mutate an agent call already executing — guidance applies only at the NEXT checkpoint boundary",
+    "Do not change phase order or the pipeline algorithm; the read point is additive only",
+    "Do not add pause/resume (Sprint 5) or hygiene/docs (Sprint 6)",
+    "Do not require careful mode — guidance can be queued for any run, but is only drained at boundaries that execute"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Guidance can be queued from chat and is drained+injected at a pipeline boundary; no-guidance is a verified no-op; build + typecheck + full suite green"
+  ],
+  "definitionOfDone": "A runId-keyed guidance channel exists, /tell (slash + NL) appends to it with path-safety + unknown-run guard, a drain helper marks entries consumed, and an additive pipeline boundary read point injects drained guidance into the next agent handoff. With no guidance, the pipeline is byte-for-byte unchanged. /help updated. Build, typecheck, and the full suite pass.",
+  "assumptions": [
+    "guidance.jsonl is append-only with one JSON object per line {ts, text, consumed?}; 'drain' rewrites the file (or appends a consumed-marker) atomically via the temp-file+rename pattern used in run-state.ts:41-52. The exact consumed-tracking representation is the generator's call as long as drain-then-redrain returns nothing the second time.",
+    "The natural injection boundary is the per-sprint pre-generator/pre-curator handoff and/or the post-sprint boundary, where the pipeline already builds a handoff object and invokes an agent (pipeline.ts around the curate/generate sites). Injecting drained guidance text as an extra context field on that handoff is sufficient; the generator chooses the least-invasive insertion point that is provably additive.",
+    "The active runId is available inside runPipeline via the existing opts.runId path (run.ts:155 threads --run-id into runPipeline). Guidance is keyed by that same runId."
+  ],
+  "outOfScope": [
+    "Pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)",
+    "Guidance that edits files or overrides the contract (only adds advisory context)"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "This sprint touches the PROTECTED pipeline.ts — changes must be strictly ADDITIVE read points; do NOT reorder phases or change behavior when no guidance is present (the pipeline.ts:571 invariant). Verified touch points:\n- New src/state/guidance.ts (or src/chat/guidance-channel.ts — prefer src/state/ since the pipeline reads it too): path helpers under .bober/runs/<runId>/guidance.jsonl reusing the runDir helper shape from run-state.ts:23. Functions: appendGuidance(projectRoot, runId, text) (validate runId is a safe segment — reuse/duplicate a safe-segment check; reject '..'/separators), drainGuidance(projectRoot, runId): Promise<string[]> (read unconsumed entries, mark them consumed atomically, return their texts), hasRunDir(projectRoot, runId) for the unknown-run guard. Atomic write via temp+rename (mirror run-state.ts writeRunState).\n- Chat side: new handleTell(runId, text) in chat-session.ts (mirror handleStop): guard the run exists in the roster (RosterReader), append guidance, ack. Unknown run -> clear error. src/chat/slash-commands.ts: add /tell <runId> <rest-of-line-as-text>; thread a tellHandler callback (same optional-handler pattern). Update HELP_TEXT. turn-classifier.ts: add a 'tell' action {runId, text}; keep loose JSON.\n- Pipeline side (additive): in src/orchestrator/pipeline.ts, at the sprint curate/generate boundary (e.g. just before the curator or generator agent invocation, near the pre-curator/pre-generator checkpoint sites at :169/:271), call drainGuidance(projectRoot, runId) and, if non-empty, append the joined guidance text to the handoff/context passed to that agent. Guard on runId being present (opts.runId); if absent or no guidance, do exactly what the code does today. Add a focused test that seeds guidance and asserts it reaches the agent input via a stub; add a test that asserts no-guidance leaves the handoff identical.\n- Be conservative: the smallest additive insertion that satisfies sc-4-6/sc-4-7 is best. Prefer reading guidance once per sprint iteration at a single, clearly-commented site labelled 'Phase 2 guidance injection (additive)'.\nTests: temp dirs, stubbed agent/classifier, no network. Run build+typecheck+test before handoff.",
+  "evaluatorNotes": "sc-4-4: appendGuidance for an existing run dir -> assert guidance.jsonl has the entry; for a non-existent run -> assert no file and a clear error; appendGuidance with runId '../evil' -> assert rejected, nothing written outside .bober/runs.\nsc-4-5: append two entries, drain -> returns both texts; drain again -> returns []; assert the file reflects consumed state.\nsc-4-6: seed guidance for runId R, invoke the pipeline boundary read point (or the smallest unit exercising it) with a stubbed agent, assert the guidance text appears in the agent's input/handoff.\nsc-4-7: with no guidance file, assert the boundary produces an identical handoff (snapshot/deep-equal) and the existing pipeline suite is green.\nsc-4-8: stub classifier to return tell {runId:R, text:'prefer Zod'} -> assert guidance entry written; assert HELP_TEXT lists /tell.\nRegression: full pipeline suite green; diff review confirms only additive read points in pipeline.ts (no phase reordering). Run build, typecheck, test.",
+  "estimatedFiles": [
+    "src/state/guidance.ts",
+    "src/state/guidance.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/chat-session-steer.test.ts",
+    "src/chat/slash-commands.ts",
+    "src/chat/turn-classifier.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/pipeline.guidance.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-4-1",
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T17:00:00Z",
+  "completedAt": "2026-06-15T14:43:09Z"
+}

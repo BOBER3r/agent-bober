@@ -1,0 +1,56 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-4",
+  "status": "complete",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-4-1",
+      "met": true,
+      "evidence": "buildAuditDescriptor(target, now) -> contractId security-audit-<slug> (never /^sprint-/, fs-safe); runStandaloneSecurityAudit calls runSecurityAudit(descriptor, null, projectRoot, runConfig); core persists internally; built-dist --help smoke passes"
+    },
+    {
+      "criterionId": "sc-4-2",
+      "met": true,
+      "evidence": "full 10-cell matrix {critical|important} x {critical, important-only, clean, parsed:false, throws} asserts exact exit codes; parsed:false + throw also assert stderr; 24/24 tests"
+    },
+    {
+      "criterionId": "sc-4-3",
+      "met": true,
+      "evidence": "config.security absent -> SecuritySectionSchema.parse({}) defaults (enabled:false ok for standalone); summary prints verdict/counts/path:line/artifact path"
+    },
+    {
+      "criterionId": "sc-4-4",
+      "met": true,
+      "evidence": "git diff --stat on security-gate.ts + pipeline.ts: ZERO output; grep standaloneBlockOn never in gate/pipeline logic; gate's 16 tests pass unchanged"
+    },
+    {
+      "criterionId": "sc-4-5",
+      "met": true,
+      "evidence": "build+tsc clean, eslint 0 on touched files, suite 311 files / 4004 tests (+24), node dist/cli/index.js security-audit --help works"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/cli/commands/security-audit.ts",
+      "action": "created",
+      "description": "registerSecurityAuditCommand + pure thresholdVerdict (CLI-local) + buildAuditDescriptor + DI core runStandaloneSecurityAudit; sets process.exitCode, never process.exit()"
+    },
+    {
+      "path": "src/cli/commands/security-audit.test.ts",
+      "action": "created",
+      "description": "24 tests incl. 10-cell matrix + 3 Commander parseAsync wiring tests"
+    },
+    {
+      "path": "src/cli/index.ts",
+      "action": "modified",
+      "description": "registerSecurityAuditCommand(program) wired per existing pattern"
+    }
+  ],
+  "testsAdded": [
+    "src/cli/commands/security-audit.test.ts"
+  ],
+  "commits": [
+    "61e055a - bober(sprint-4): standalone `bober security-audit` CLI with configurable blocking threshold"
+  ],
+  "blockers": [],
+  "notes": "package.json untouched. config.security?.enabled intentionally never read by the CLI (invocation = opt-in per nonGoals[0]); looseness confined to CLI module. priors defaults [] via unchanged core signature. Only 3 files touched."
+}

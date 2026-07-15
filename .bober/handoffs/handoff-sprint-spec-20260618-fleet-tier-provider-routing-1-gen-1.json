@@ -1,0 +1,26 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-tier-provider-routing-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-1",
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "timestamp": "2026-06-18T18:35:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase A of the head-agnostic multi-provider agent team (arch-20260618-heterogeneous-multi-provider-agent-team). Sprint 1 wires Grok/xAI as the existing openai-compat provider at api.x.ai/v1, mirroring DeepSeek's 3 touch-points. No fleet behavior change; no tier logic yet.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/model-resolver.ts",
+      "src/providers/factory.ts",
+      "src/fleet/index.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-fleet-tier-provider-routing-1.json",
+  "specRef": ".bober/specs/spec-20260618-fleet-tier-provider-routing.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

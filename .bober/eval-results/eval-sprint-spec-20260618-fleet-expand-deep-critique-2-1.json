@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-expand-deep-critique-2-1",
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-2",
+  "specId": "spec-20260618-fleet-expand-deep-critique",
+  "timestamp": "2026-06-18T10:45:14Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "summary": "All 8 criteria pass (independent verify). build/typecheck/lint clean; all 14 fleet suites green (188 tests) + 9 new expand-deep-critique tests. Guarded-spread byte-identity verified (critique key ABSENT when flag absent, critique:true with flag); command tree intact (--critique on expand-deep, no sibling, fleet expand unchanged); spawn-safety (credential fail-fast, write-before-spawn, --yes gate) preserved. Only deleted line = intended decompose-call rewrite. 6 pre-existing cockpit E2E MCP failures unrelated (not a regression)."
+}

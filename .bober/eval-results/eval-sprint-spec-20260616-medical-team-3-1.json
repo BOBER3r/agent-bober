@@ -1,0 +1,31 @@
+{
+  "evalId": "eval-sprint-spec-20260616-medical-team-3-1",
+  "contractId": "sprint-spec-20260616-medical-team-3",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T19:42:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "strict + noUnusedLocals/Params clean" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "clean emit" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "191 files, 2303 passed, 3 skipped", "details": "+25 red-flag +13 guardrails +7 engine; S1/S2 green" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "no new issues" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "description": "build clean", "required": true, "result": "pass", "evidence": "tsc exit 0", "feedback": "" },
+    { "criterionId": "sc-3-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit exit 0", "feedback": "" },
+    { "criterionId": "sc-3-3", "description": "tests green", "required": true, "result": "pass", "evidence": "2303 passed, 0 failures; S1/S2 medical tests green", "feedback": "" },
+    { "criterionId": "sc-3-4", "description": "5-category short-circuit, 0 LLM/numerics", "required": true, "result": "pass", "evidence": "parametrized 5 categories; spies injected via deps.llmClient/numerics (REAL seam); shortCircuit + hotline + never-called all pass; engine has no LLM call path this sprint", "feedback": "" },
+    { "criterionId": "sc-3-5", "description": "pure + sync detector", "required": true, "result": "pass", "evidence": "red-flag.ts zero imports; not instanceof Promise; deep-equal twice; no network/clock/random", "feedback": "" },
+    { "criterionId": "sc-3-6", "description": "benign -> none -> allow", "required": true, "result": "pass", "evidence": "benign prompts category none; engine success + shortCircuit false", "feedback": "" },
+    { "criterionId": "sc-3-7", "description": "short-circuit audit IDs/enums only + patternsetVersion", "required": true, "result": "pass", "evidence": "ruleId+rulesetVersion+patternsetVersion===PATTERNSET_VERSION (getter read via 'in'); no prompt text in bytes", "feedback": "" },
+    { "criterionId": "sc-3-8", "description": "throws on empty + no provider/network imports", "required": true, "result": "pass", "evidence": "evaluate(''/whitespace) throws; source-read asserts no providers/node:http/net/https/fetch", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "low", "category": "quality", "file": "src/medical/engine.test.ts", "line": "118-155", "description": "Original sc-2-4 fail-closed test still creates llmSpy/numericsSpy but does NOT inject them into the engine constructor — those specific assertions remain hollow. The NEW consent-ordering invariant test injects spies properly and provides the genuine guarantee; the structural seam is correct.", "expected": "S6 (touches engine.test.ts): inject llmSpy/numericsSpy into the sc-2-4 engine ctor via llmClient/numerics, or remove the dead assertions." },
+    { "priority": "low", "category": "safety-advisory", "file": "src/medical/red-flag.ts", "line": "N/A", "description": "Advisory red-flag false-negatives (ADR-2 accepted conservative matching): 'I want to end it all' -> none; 'my chest hurts and I cannot breathe' -> none; 'myocardial infarction' -> none. Contract sc-3-4 (one representative prompt per category) passes; comprehensiveness is out of scope per ADR-2.", "expected": "Surface to the patternset revision / external S6.5 counsel review; consider expanding cardiac/self-harm phrasings in a future patternset bump. Not a sprint-3 failure." }
+  ],
+  "summary": "Sprint 3 passes all 8 required criteria. Gate 2 red-flag short-circuit verified across all 5 categories with zero LLM/numerics calls, consent-before-red-flag ordering, PHI-free audit with real patternsetVersion, and throws-on-empty. Two low-priority carry-forwards: residual hollow sc-2-4 assertions (clean up in S6) and advisory red-flag false-negatives (ADR-2 accepted; surface to patternset revision / counsel review)."
+}

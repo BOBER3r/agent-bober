@@ -1,0 +1,91 @@
+{
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "specId": "spec-20260529-anthropic-prompt-caching",
+  "sprintNumber": 1,
+  "title": "Anthropic prompt caching behind a default-on flag",
+  "description": "Add ephemeral cache_control breakpoints to the AnthropicAdapter using the system-and-last-3 strategy, gated by a promptCaching option that the factory resolves from per-role providerConfig and defaults to enabled for the anthropic provider. When the flag is off, the request payload matches the previous plain-string-system shape. New unit tests capture the mocked Anthropic SDK request to assert both the enabled and disabled paths, and all existing provider suites keep passing.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "When promptCaching is enabled, chat() passes the system prompt to the Anthropic SDK as a content-block array whose text block carries cache_control of type ephemeral, asserted by a unit test capturing the messages.create arguments.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "When promptCaching is enabled and the message history has two or more entries, a cache_control breakpoint is attached to the latest message content and the request never contains more than four cache_control breakpoints in total.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "When promptCaching is disabled, chat() sends the system prompt as a plain string and no system block, message block, or tool entry in the captured request carries a cache_control field.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "createClient reads the promptCaching value from the role providerConfig, defaults it to enabled for the anthropic provider, and forwards it into the AnthropicAdapter constructor, asserted by a factory unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "The AnthropicAdapter constructor accepts an optional options object carrying promptCaching, and the package typechecks with no new TypeScript errors via npm run typecheck.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "C6",
+      "description": "npm run build completes with no errors after the adapter and factory changes, producing an updated dist for the npm-linked cockpit to consume.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "C7",
+      "description": "Running npm run test introduces no NEW failures beyond the two documented pre-existing provider-unrelated failures (external-server-graph 37-tool-count and disk.test approval-poll); the new anthropic adapter tests pass and the openai, google, openai-compat, and factory suites stay green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add cache_control to the OpenAI, Google, or OpenAI-compat adapters; caching stays confined to the Anthropic adapter.",
+    "Do not extend ChatResponse.usage with cache token fields or emit cache metrics to telemetry; metrics surfacing is a separate deferred feature.",
+    "Do not call the live Anthropic API in tests; assert request shape against a mocked SDK client only.",
+    "Do not change the default model, max_tokens value, tool conversion, or response normalization of the adapter.",
+    "Do not modify the cockpit or any consumer repository; the only deliverable boundary is the rebuilt agent-bober dist."
+  ],
+  "stopConditions": [
+    "Stop when typecheck, lint, build, and unit-test all pass and the new Anthropic adapter tests cover both the enabled and disabled flag paths.",
+    "Stop when cache_control references exist only in src/providers/anthropic.ts and its test file, plus the flag-resolution lines in src/providers/factory.ts.",
+    "Stop when the disabled-flag request payload matches the previous plain-string-system shape with zero cache_control fields."
+  ],
+  "definitionOfDone": "The Anthropic adapter attaches ephemeral cache_control breakpoints to the system prompt and the most recent message(s) using the system-and-last-3 strategy, capped at four breakpoints per request, whenever the resolved promptCaching flag is enabled (the default for Anthropic). When the flag is disabled the adapter sends a plain-string system and no cache_control anywhere, matching the previous payload shape. The factory reads promptCaching from the role providerConfig and forwards it to the constructor. Every non-Anthropic provider path stays untouched, the project typechecks, lints, and builds, and the full provider unit-test suite passes including new tests that capture the mocked SDK request for both flag states.",
+  "assumptions": [
+    "@anthropic-ai/sdk in package-lock supports cache_control ephemeral on system and message content blocks.",
+    "promptCaching is a free-form key in the existing providerConfig record, so no config-schema migration is needed.",
+    "The factory BOBER_TEST_DETERMINISTIC stub short-circuits createClient, so payload-shape tests construct or mock the adapter directly rather than relying on that env path."
+  ],
+  "outOfScope": [
+    "Live-API cost measurement",
+    "Cache metrics in usage / telemetry / cockpit"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "INSERTION POINTS: src/providers/anthropic.ts AnthropicAdapter constructor (~line 133) and chat() (~line 140); src/providers/factory.ts anthropic case (lines ~159-161). FLAG PLUMBING: in factory.ts extract `const promptCaching = typeof providerConfig?.['promptCaching'] === 'boolean' ? providerConfig['promptCaching'] : true;` and call `new AnthropicAdapter(apiKey, { promptCaching })`. Add an optional 2nd constructor arg `opts?: { promptCaching?: boolean }` (default true) stored on the instance. SDK DETAILS: Anthropic `system` accepts `string | TextBlockParam[]`; to cache the system prompt build `[{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]`. cache_control may also be attached to the LAST content block of a message param (text, tool_use, or tool_result blocks all accept it). STRATEGY (system-and-last-3): one breakpoint on the system block + a breakpoint on the final content block of up to the last 3 messages, but Anthropic permits at most 4 cache_control blocks per request, so cap the total at 4 (system counts as 1 -> at most 3 message breakpoints). A robust minimal implementation: always cache system, plus cache the final content block of the single most-recent message; optionally extend toward last-3 while honoring the cap. GOTCHA: `toAnthropicMessage` returns MessageParam whose content may be a plain string for TextMessage — to attach cache_control you must convert string content into `[{ type: 'text', text, cache_control }]`. Keep model/max_tokens/tool conversion/response normalization byte-identical. TESTING: add src/providers/anthropic.test.ts; use vitest `vi.mock('@anthropic-ai/sdk')` to replace the SDK and capture the object passed to `messages.create`, then assert payload shape for flag on/off. Mirror the structure of openai.test.ts / google.test.ts. For the factory test (C4), assert the flag-resolution logic without setting BOBER_TEST_DETERMINISTIC (which would short-circuit to the stub). CROSS-REFERENCE: the local `claude-api` Claude Code skill documents exact Anthropic cache_control breakpoint semantics and TTL — consult it for the breakpoint placement rather than guessing. This feature is borrow #1 from openhands-bober/.bober/research/research-20260529-borrow-from-hermes-agent.md (hermes-agent agent/prompt_caching.py 'system_and_3').",
+  "evaluatorNotes": "Verify C1 by inspecting the captured messages.create payload: system must be an array with a text block bearing cache_control.type==='ephemeral'. C2: with >=2 messages, the latest message's final content block carries cache_control AND count every cache_control across system+messages+tools — it must be <= 4. C3 (most important regression guard): with the flag off, system must be a plain string and a deep scan of the request must find zero cache_control fields anywhere. C4: confirm factory defaults promptCaching to true for anthropic and passes it through; also confirm an explicit `providerConfig.promptCaching: false` is honored. C5/C6: run `npm run typecheck` and `npm run build` — both must exit 0. C7: run `npm run test` (and `npm run lint`) — all pre-existing provider suites must still pass. ISOLATION CHECK: `grep -rn cache_control src/providers` must only match anthropic.ts and anthropic.test.ts. Confirm openai.ts, google.ts, openai-compat.ts are unchanged. BASELINE (captured 2026-05-29 before this sprint): typecheck/lint/build all PASS; `npm run test` had 2 PRE-EXISTING failures UNRELATED to providers — (1) tests/mcp/external-server-graph.test.ts 'registerAllTools registers exactly 37 tools' and (2) src/orchestrator/checkpoints/mechanisms/disk.test.ts 'deletes pending file after approval' (both ~5s poll/timeout-style). For C7, treat ONLY these two as the allowed pre-existing baseline; any additional failure, or any failure inside src/providers/, is a real regression. Do not blame the generator for these two.",
+  "estimatedFiles": [
+    "src/providers/anthropic.ts",
+    "src/providers/factory.ts",
+    "src/providers/anthropic.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [{"iteration":1,"evalId":"eval-sprint-spec-20260529-anthropic-prompt-caching-1-1","result":"fail","timestamp":"2026-05-29T17:05:00Z"},{"iteration":2,"evalId":"eval-sprint-spec-20260529-anthropic-prompt-caching-1-2","result":"pass","timestamp":"2026-05-29T17:16:00Z"}],
+  "lastEvalId": "eval-sprint-spec-20260529-anthropic-prompt-caching-1-2",
+  "createdAt": "2026-05-29T13:30:00Z",
+  "updatedAt": "2026-05-29T17:16:00Z",
+  "startedAt": "2026-05-29T13:48:00Z",
+  "completedAt": "2026-05-29T17:16:00Z"
+}

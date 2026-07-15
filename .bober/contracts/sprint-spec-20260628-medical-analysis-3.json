@@ -1,0 +1,101 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-3",
+  "specId": "spec-20260628-medical-analysis",
+  "sprintNumber": 3,
+  "title": "Recommendation generation end-to-end + `bober medical recommend` CLI",
+  "description": "Wire the sprint-2 judge loop into a real recommendation path: assemble the profile context from FactStore and the medical profile, build per-lens clients with provider diversity via tier-policy (gated by the cloud-inference egress axis, fail-closed to the local model), generate a candidate recommendation, gate it through the panel, and on acceptance emit a Finding(kind=action) with an LLM-assigned urgency/severity/confidence; on no-consensus emit a Finding(kind=question) flagged for review with the panel dissent; on a red-flag emit the canned escalation and no recommendation. Exposed via `bober medical recommend`.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-analysis-1",
+    "sprint-spec-20260628-medical-analysis-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "Running the project build (tsc) after the sprint produces zero type errors with the recommendation path and CLI included.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "A Vitest test with injected fake lens clients all approving asserts generateRecommendation writes a Finding markdown note with kind 'action' into the vault findings directory and that the note body contains no refer-out hedging phrase such as 'consult a licensed healthcare professional'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "A Vitest test where the panel reaches no consensus asserts generateRecommendation writes a Finding with kind 'question' whose title contains 'flagged for your review' and whose evidence/body includes the per-lens dissent, and that no kind 'action' finding is written.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A Vitest test with a red-flag question asserts generateRecommendation returns the canned escalation outcome, writes no recommendation Finding, and appends a 'short-circuit' audit entry.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "A Vitest test with cloud-inference egress OFF asserts all four lens clients and the candidate generator resolve to the local Ollama model via buildMedicalInferenceClient (no cloud provider constructed), proving fail-closed model selection.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "A Vitest test asserts the accepted Finding carries urgency and severity integers within 1..5 assigned by the (faked) LLM call, plus a confidence value recorded in the finding frontmatter or tags.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "Running `bober medical recommend --goal 'optimize energy' \"what should I do about my high LDL\"` prints whether the recommendation was accepted, flagged-for-review, or escalated, and exits with code 0.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not modify MedicalSopEngine or the reactive `bober chat medical` path — they remain the reactive Q&A surface.",
+    "Do not construct a cloud model when egress.cloudInference is false; fail closed to the local model via buildMedicalInferenceClient (src/medical/inference.ts:31).",
+    "Do not write health values or recommendation text into the audit log; audit entries stay IDs/enums only.",
+    "Do not bypass the sprint-2 red-flag-first ordering or the contraindication veto.",
+    "Do not re-implement the judge loop; import runJudgeLoop from sprint 2."
+  ],
+  "stopConditions": [
+    "All required success criteria sc-3-1 through sc-3-6 pass and `bober medical recommend` exits 0.",
+    "The full Vitest suite passes with no new failures and MedicalSopEngine tests are unchanged."
+  ],
+  "definitionOfDone": "`bober medical recommend [--goal <g>] <question>` (and the importable generateRecommendation) runs the red-flag guard first, assembles meds/supplements from FactStore.getActiveFacts plus profile conditions/allergies/goals, builds four per-lens LLM clients (different tier providers when cloud-inference is enabled, otherwise the local model for all), generates a candidate, and gates it through the sprint-2 panel. Accepted recommendations are written as a kind 'action' Finding with LLM-assigned urgency/severity/confidence and no refer-out hedging; no-consensus produces a kind 'question' Finding flagged for review with dissent; a red-flag produces the canned escalation and no recommendation. Audit entries are appended for each outcome.",
+  "assumptions": [
+    "Active medications/supplements are read via FactStore.getActiveFacts('medical','patient', <predicate>) exactly as src/medical/engine.ts:370; profile conditions/allergies/goals come from the profile reader delivered by spec-20260628-medical-ingest, defaulting to empty arrays (degraded but functional) when the profile file is absent.",
+    "Per-lens model diversity uses tierPolicy.resolveTier (src/fleet/tier-policy.ts:75); cloud tiers are honoured only when egress.isAllowed('cloud-inference') is true, otherwise buildMedicalInferenceClient fail-closes to the local Ollama default (src/medical/inference.ts:41-49).",
+    "LLM-assigned urgency/severity/confidence (research §4a:183,203) come from one bounded LLM call producing integers 1..5; the numeric values are interpretation, not arithmetic, so they sit outside the ADR-3 deterministic-numerics boundary (numerics.ts) by design.",
+    "Findings are emitted via the sprint-1 finding-writer; vault dir resolution is shared with sprint 1.",
+    "The red-flag short-circuit reuses MedicalGuardrails.evaluate (src/medical/guardrails.ts:84) and the canned escalation/audit pattern from src/medical/engine.ts:255-289."
+  ],
+  "outOfScope": [
+    "Cross-marker dig-deeper trigger (sprint 4) and online research (sprint 5).",
+    "Cross-repo ranking of the emitted action findings (spec-20260628-priority-hub).",
+    "Calendar/scheduling of accepted recommendations (priority-hub / scheduler specs)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Create src/medical/recommend/context.ts: assembleRecommendationContext(projectRoot, config, {goal?}) -> {meds[], supplements[], conditions[], allergies[], goal} reading meds via new FactStore(factsDbPath(projectRoot,'medical')).getActiveFacts('medical','patient','takes-medication') and supplements via the 'takes-supplement' predicate (engine.ts:370 pattern; open gracefully and default to [] when the dir is absent); conditions/allergies/goals from the spec-20260628-medical-ingest profile reader if present, else []. Create src/medical/recommend/urgency.ts: assignUrgencySeverity(llm, model, candidate, context) -> {urgency:1..5, severity:1..5, confidence:number} via one bounded LLM call with a never-throwing JSON validator (reuse the grounding-critic parse strategy); clamp to 1..5. Create src/medical/recommend/recommend.ts: generateRecommendation(projectRoot, config, {question, goal?, now}, deps?) -> builds EgressGuard.fromConfig, builds four lens clients — when egress.isAllowed('cloud-inference') map each lens to a distinct tierPolicy block (cheap/standard/hard/frontier) via createClient, else all lenses + generator use buildMedicalInferenceClient(config, egress) (fail-closed local); builds generateCandidate as an LLM call; calls runJudgeLoop (sprint 2) with an injected red-flag guard (MedicalGuardrails). On accepted: assignUrgencySeverity then writeFinding(kind 'action', evidence = candidate citations + a panel-verdict summary, urgency, severity, confidence); the action body must state the recommendation directly with NO refer-out hedging. On no-consensus: writeFinding(kind 'question', title 'Flagged for your review — panel disagreed', evidence/body = dissent). On short-circuit/refuse: return the canned escalation (engine.ts:255-327 pattern), write NO recommendation finding. Append AuditLog entries (event 'answer'|'abstain'|'short-circuit', IDs/enums only). Register `bober medical recommend [--goal <g>] <question>` in src/cli/commands/medical.ts mirroring the existing action pattern (read clock only here, never throw, process.exitCode on error). Inject deps (lens clients, generateCandidate, finding writer, facts, now) so tests avoid real network. Collocate *.test.ts with fakes.",
+  "evaluatorNotes": "Confirm the accepted-path Finding has kind 'action' and the body does NOT contain a refer-out hedging phrase. Confirm the no-consensus path writes only a kind 'question' finding with the dissent and no 'action' finding. Confirm the red-flag path writes no recommendation finding and appends a 'short-circuit' audit entry. Confirm with cloud-inference OFF that no cloud client is constructed (spy createClient / assert provider is the local openai-compat localhost from inference.ts:10-14). Confirm urgency and severity are integers clamped to 1..5. Confirm src/medical/engine.ts and its tests are unchanged (git diff). Confirm runJudgeLoop is imported, not re-implemented.",
+  "estimatedFiles": [
+    "src/medical/recommend/context.ts",
+    "src/medical/recommend/context.test.ts",
+    "src/medical/recommend/urgency.ts",
+    "src/medical/recommend/urgency.test.ts",
+    "src/medical/recommend/recommend.ts",
+    "src/medical/recommend/recommend.test.ts",
+    "src/cli/commands/medical.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-28T00:00:00.000Z",
+  "completedAt": "2026-06-28T19:21:56.518Z"
+}

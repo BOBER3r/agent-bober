@@ -1,0 +1,47 @@
+{
+  "contractId": "sprint-spec-20260604-native-lens-panel-1",
+  "specId": "spec-20260604-native-lens-panel",
+  "sprintNumber": 1,
+  "title": "Canonical panel reference, lensVerdicts schema field, and drift gate",
+  "description": "Create the single source of truth for native panel orchestration — a canonical markdown reference (skills/shared/lens-panel.md) that embeds the four LENS_CATALOG fragments verbatim and documents the split fan-out, majority-vote/fail-closed reconciliation, and the lensVerdicts output shape. Add an optional lensVerdicts field to EvalResultSchema. Add a vitest drift gate tying the markdown to src/orchestrator/eval-lenses.ts. Zero runtime behavior change.",
+  "status": "completed",
+  "completedAt": "2026-06-04T05:55:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "skills/shared/lens-panel.md exists and embeds each of the four canonical lens fragments verbatim — the exact strings returned by resolveLensFocus('correctness'|'security'|'regression'|'quality') from src/orchestrator/eval-lenses.ts — and documents (a) the split fan-out (deterministic strategies once, then one qualitative evaluator per lens), (b) majority-vote with fail-closed on tie, and (c) the lensVerdicts output array shape.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C2", "description": "EvalResultSchema in src/contracts/eval-result.ts gains an optional field `lensVerdicts: z.array(z.object({ lens: z.string(), passed: z.boolean(), summary: z.string() })).optional()`. A unit test asserts (a) a result WITHOUT lensVerdicts still parses, and (b) a result WITH a valid lensVerdicts array parses and round-trips.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "A vitest drift gate (e.g. src/orchestrator/lens-panel-parity.test.ts) reads skills/shared/lens-panel.md and asserts it contains resolveLensFocus(lens) for every built-in lens ['correctness','security','regression','quality']. The test reads the markdown via node:fs/promises and uses the exported resolveLensFocus as the accessor (no new export of LENS_CATALOG required).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "npx tsc --noEmit, npm run build, and npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented pre-existing skipped baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do not edit any SKILL.md, any .claude/commands/*.md, or any agents/*.md yet — that is sprints 2 and 3.",
+    "Do not copy lens-panel.md into any skill's references/ dir yet — that is sprint 3.",
+    "Do not modify src/orchestrator/eval-lenses.ts (reuse resolveLensFocus as-is) or src/orchestrator/workflow/reconciler.ts.",
+    "Do not change reconcile() to populate lensVerdicts (Surface 2 is out of scope — the field is additive-only here).",
+    "Do not add evaluator.panel config (it already exists) or change any other config."
+  ],
+  "stopConditions": [
+    "Stop when the canonical reference exists and embeds all four fragments, EvalResultSchema accepts an optional lensVerdicts, the drift gate is green and would go red on a fragment mutation, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to skills/shared/lens-panel.md, src/contracts/eval-result.ts, src/contracts/eval-result.test.ts (or the existing test file), and the new drift-gate test."
+  ],
+  "definitionOfDone": "A canonical skills/shared/lens-panel.md embeds the four LENS_CATALOG fragments verbatim and documents the split fan-out + majority-vote/fail-closed + lensVerdicts shape; EvalResultSchema carries an optional, backward-compatible lensVerdicts field proven by a parse test; a vitest drift gate ties the markdown fragments to resolveLensFocus and would fail on divergence; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "resolveLensFocus is exported from src/orchestrator/eval-lenses.ts and returns the exact fragment string for each built-in lens; the test imports it with `import { resolveLensFocus } from \"./eval-lenses.js\"` (ESM .js specifier).",
+    "skills/shared/ is NOT a bober.* directory, so scripts/update-all.mjs / init.ts will never emit it as a command — it is a safe neutral home for the canonical reference.",
+    "Reading a committed repo file from a test via node:fs/promises is allowed (scanner tests already read the real codebase); resolve the path relative to the repo root, not a temp dir."
+  ],
+  "outOfScope": ["SKILL.md edits", "agent .md edits", "reference copies into skills", "reconcile() changes", "config changes"],
+  "ambiguityScore": 3,
+  "generatorNotes": "STEP 1 (canonical reference): create skills/shared/lens-panel.md. It must embed, verbatim, the four fragments returned by resolveLensFocus from src/orchestrator/eval-lenses.ts — read that file first and copy the exact correctness/security/regression/quality strings into the markdown (e.g. under a 'Lens focus fragments' section, one fenced or quoted block per lens, each PREFIXED with the lens name). Then document the native panel protocol: (a) SPLIT fan-out — the orchestrator spawns ONE evaluator in deterministic mode (runs build/test/lint/typecheck ONCE) and N evaluators in qualitative mode (one per configured lens, each judging the contract's success criteria through its lens focus, WITHOUT re-running the strategy suite); (b) reconciliation — majority vote over the lens verdicts, passed = passCount > failCount (strict majority, FAIL-CLOSED on tie), mirroring src/orchestrator/workflow/reconciler.ts; (c) combine — final.passed = deterministic.passed && reconciled.passed; (d) output — the orchestrator writes a lensVerdicts array [{ lens, passed, summary }] into the saved eval-result JSON and sets evaluator='panel'. Keep the prose implementation-ready since sprints 2-3 will reference it. STEP 2 (schema): in src/contracts/eval-result.ts, add to EvalResultSchema (around line 74, alongside the other enriched optional fields) `lensVerdicts: z.array(z.object({ lens: z.string(), passed: z.boolean(), summary: z.string() })).optional(),`. Do not reorder existing fields. STEP 3 (schema test): in src/contracts/eval-result.test.ts (create if absent), assert EvalResultSchema.parse(<valid result without lensVerdicts>) succeeds and lensVerdicts is undefined, and EvalResultSchema.parse(<valid result with a 2-entry lensVerdicts>) succeeds and preserves the array. STEP 4 (drift gate): create src/orchestrator/lens-panel-parity.test.ts. Import resolveLensFocus from './eval-lenses.js'. Read skills/shared/lens-panel.md via `await readFile(new URL('../../skills/shared/lens-panel.md', import.meta.url), 'utf-8')` (or resolve from process.cwd()/repo root — pick the form other tests in the repo use for reading committed files). For each lens of ['correctness','security','regression','quality'], assert the markdown includes resolveLensFocus(lens). Use import type where applicable, ESM .js specifiers, unicode `// ── Section ──` headers. Conventional commit: bober(sprint-1): add canonical lens-panel reference + lensVerdicts schema field + drift gate. GIT HYGIENE: the working tree has pre-existing unrelated uncommitted changes — stage ONLY your files with explicit paths; never `git add -A`/`git add .`. Branch bober/evaluator-lens-panel (or whatever branch the orchestrator set) — never main.",
+  "evaluatorNotes": "Read skills/shared/lens-panel.md: confirm it contains the EXACT fragment strings from resolveLensFocus for all four lenses (diff against src/orchestrator/eval-lenses.ts) and that it documents the split fan-out, majority-vote/fail-closed, combine, and lensVerdicts output. Read src/contracts/eval-result.ts: confirm lensVerdicts is optional and the object shape is {lens:string, passed:boolean, summary:string}; run the schema test and confirm both the without- and with-lensVerdicts parse cases pass. Run the drift gate (src/orchestrator/lens-panel-parity.test.ts) and confirm green; then VERIFY IT HAS TEETH — temporarily append a stray char to one fragment usage OR reason about whether editing a LENS_CATALOG fragment in eval-lenses.ts (without updating the md) would make the test fail (it must, because the test compares the live resolveLensFocus output to the markdown). Confirm no SKILL.md/.claude/agents/agents files were touched (git diff --name-only). Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the pre-existing skipped baseline).",
+  "estimatedFiles": [
+    "skills/shared/lens-panel.md",
+    "src/contracts/eval-result.ts",
+    "src/contracts/eval-result.test.ts",
+    "src/orchestrator/lens-panel-parity.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T04:30:00Z",
+  "updatedAt": "2026-06-04T04:30:00Z"
+}

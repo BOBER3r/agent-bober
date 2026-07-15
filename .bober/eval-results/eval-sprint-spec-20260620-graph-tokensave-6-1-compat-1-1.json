@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260620-graph-tokensave-6-1-compat-1-1",
+  "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-1",
+  "specId": "spec-20260620-graph-tokensave-6-1-compat",
+  "timestamp": "2026-06-20T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0, zero errors" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "npm run build (tsc) exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "0 errors; 2 pre-existing warnings in eval-persist.test.ts (unrelated)" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "tests/graph/mcp-client.test.ts 20/20 incl 4 real-binary integration; full suite 219 files / 2809 tests pass" }
+  ],
+  "criteriaSummary": "All 8 required criteria pass: initialize handshake resolves only on correlated id; notifications/initialized after; tools/call envelope; unwrapMcpContent picks JSON entry even when content[0] is a WARNING; isError + JSON-RPC error -> GRAPH_ERROR; HANDSHAKE_TIMEOUT_MS=5000; real tokensave_status round-trip returns parsed object; diff confined to mcp-client.ts + its test.",
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "PASS. MCP transport correctly implemented and independently verified against the real tokensave 6.1.1 binary; zero regressions across 2809 tests."
+}

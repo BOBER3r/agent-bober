@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "met": true, "evidence": "2-turn scripted run asserts exact 8-event trace [init, turn-start, tool-start, tool-end, turn-end, turn-start, turn-end, result] with exact payloads (model/maxTurns, turn numbers, tool name/input/toolUseId, isError, toolsCalled, stopReason/turnsUsed). turn-end fires on the completion turn too (toolsCalled:[]) per briefing recommendation, asserted explicitly."},
+    {"criterionId": "sc-5-2", "met": true, "evidence": "preToolUse denying 'noop': handler spy not called, isError:true rejection with 'blocked' reason fed back in ToolResultMessage, loop continues to stopReason 'end'."},
+    {"criterionId": "sc-5-3", "met": true, "evidence": "4 sub-tests: onStop toHaveBeenCalledTimes(1) on completion, max_turns_exceeded, refusal, budget_exceeded — all routed through new single finish() helper; postToolUse receives (call,result)."},
+    {"criterionId": "sc-5-4", "met": true, "evidence": "Throwing onEvent/postToolUse/onStop -> run resolves normally (logger.warn, swallowed); throwing preToolUse -> handler NOT called (fail-closed deny), loop continues."},
+    {"criterionId": "sc-5-5", "met": true, "evidence": "Paired-run deep-equal test (with no-op hooks vs without). Full suite 300 files / 3802 tests green (3787 + 15). onToolUse/onTurnComplete byte-identical."},
+    {"criterionId": "sc-5-6", "met": true, "evidence": "build + typecheck exit 0; lint 0 errors (2 pre-existing warnings)."}
+  ],
+  "filesChanged": [
+    {"path": "src/orchestrator/loop-events.ts", "action": "created", "description": "Types-only module: LoopEvent union (compact-boundary/text-delta reserved via comment), LoopToolCallInfo, HookDecision, LoopHooks. Type-only import of AgenticLoopResult (no runtime cycle)."},
+    {"path": "src/orchestrator/loop-events.test.ts", "action": "created", "description": "Structural narrowing/assignability smoke tests."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "onEvent/hooks on AgenticLoopParams; safeEmit (swallow+log); finish() wraps all 4 return paths firing result event + onStop exactly once; init/turn-start/turn-end at natural points; per-turn tool callbacks threaded into executeToolBatch; onToolUse/onTurnComplete untouched."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "11 new tests sc-5-1..sc-5-5."},
+    {"path": "src/orchestrator/tools/executor.ts", "action": "modified", "description": "ToolBatch gains optional onToolStart/onToolEnd/preToolUse/postToolUse; executeOne dispatches onToolStart pre-await, preToolUse veto short-circuits to standard isError shape, finalize() closure fires onToolEnd + postToolUse on every result path; absent = exact no-ops on both serial and parallel branches."}
+  ],
+  "testsAdded": ["src/orchestrator/loop-events.test.ts", "agentic-loop.test.ts (11)"],
+  "commits": ["d52f94c - bober(sprint-5): structured loop event stream + host-style hooks (preToolUse veto, postToolUse, onStop)"],
+  "blockers": [],
+  "notes": "Ambiguity resolved per briefing §9: turn-end emitted for completion turns too (8-event trace, asserted explicitly). Event emission gated on onEvent only; hooks gated on hooks only (orthogonal capabilities, verified independently). No config/schema.ts or package.json changes (git diff --stat verified). DISCRETIONARY CHOICE for evaluator review: no executor.test.ts-level veto/hook cases added (briefing marked optional; loop-level coverage + untouched still-passing 9 executor tests judged sufficient). Suite 3787->3802."
+}

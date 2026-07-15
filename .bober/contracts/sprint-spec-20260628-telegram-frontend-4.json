@@ -1,0 +1,85 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-4",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 4,
+  "title": "Inline-keyboard approve / adjust / reject over the existing disk-marker gate",
+  "description": "Surface pending approval checkpoints in Telegram with an inline keyboard [Approve][Adjust][Reject]. Button callbacks write the same .approved.json / .rejected.json disk markers the existing approve/reject CLI writes (src/state/approval-state.ts), routing calendar plans and do-bridge promotions through the one existing gate. Adjust collects replacement text and writes an approved marker carrying it as editDelta (steer). Callbacks are whitelist-gated.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-telegram-frontend-3"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "`npm run build` (tsc) compiles the approvals handler and inline-keyboard additions with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A unit test against a temp .bober/approvals dir shows tapping Approve writes <id>.approved.json matching the ApprovedMarker shape with approvedAt and approverId populated.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A unit test shows tapping Reject writes <id>.rejected.json carrying the supplied feedback in the RejectedMarker, and tapping Adjust then supplying text writes an approved marker whose editDelta equals that text.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A unit test shows a callback for a checkpoint id with no matching <id>.pending.json on disk writes no approval marker file (guard mirrors the approve CLI pendingExists check).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "A unit test shows a button callback from a non-whitelisted user id writes no marker and triggers no resolution.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "A pending calendar-plan checkpoint surfaces in Telegram with three buttons; tapping Approve resolves it so the waiting run proceeds.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not create a new approval mechanism \u2014 write the same .approved.json / .rejected.json markers used by src/state/approval-state.ts and the existing approve/reject CLI commands.",
+    "Do not auto-resolve checkpoints \u2014 every resolution requires an explicit button tap from a whitelisted user.",
+    "Do not write an approval marker when no matching .pending.json exists for the checkpoint id.",
+    "Do not bypass the sendSafe outbound funnel.",
+    "Do not modify the orchestrator or the approval-state schema \u2014 only read pending markers and write approved/rejected markers."
+  ],
+  "stopConditions": [
+    "The approve, reject, adjust, missing-pending, and non-whitelisted-callback unit tests pass against a temp .bober/approvals directory and `npm run build` exits zero.",
+    "Each button tap writes exactly the marker file the matching approve/reject CLI action would write.",
+    "A callback from a non-whitelisted id writes nothing."
+  ],
+  "definitionOfDone": "Pending approval checkpoints surface in Telegram as messages with an inline keyboard of Approve, Adjust, and Reject. Tapping Approve writes the <id>.approved.json marker; tapping Reject prompts for feedback and writes the <id>.rejected.json marker; tapping Adjust prompts for replacement text and writes an <id>.approved.json marker whose editDelta carries that text \u2014 the same disk markers the existing approve/reject CLI commands produce, so calendar plans and do-bridge promotions resolve through the one existing gate. Taps for a checkpoint with no pending marker, or from a non-whitelisted user, write nothing.",
+  "assumptions": [
+    "Approval markers follow src/state/approval-state.ts:24-43 (PendingMarker / ApprovedMarker / RejectedMarker); the adapter imports savePending-style helpers directly per Q1.",
+    "Listing pending checkpoints uses listPending from src/state/approval-state.ts; the guard mirrors pendingExists used in src/cli/commands/approve.ts.",
+    "approverId is resolved from the Telegram sender id (the whitelist identity), analogous to resolveApprover in src/cli/commands/approve.ts."
+  ],
+  "outOfScope": [
+    "Generating the checkpoints (calendar planner / do-bridge own that; this adapter only renders and resolves them).",
+    "A full approvals-browsing UI beyond listing pending items and acting on them."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add src/telegram/handlers/approvals.ts and src/telegram/keyboard.ts (inline keyboard builder). Import the disk-marker helpers directly from src/state/approval-state.ts (listPending, readPending, and the approved/rejected save helpers \u2014 read the module to confirm exact export names; PendingMarker/ApprovedMarker/RejectedMarker shapes are at src/state/approval-state.ts:24-43). A command (e.g. /pending) lists pending markers; each renders as a message + inline keyboard with callback_data encoding {action, checkpointId}. Wire a callback-query handler in bot.ts that: (1) re-checks the Sprint-1 whitelist on the callback's sender id; (2) for a missing pending marker, replies via sendSafe and writes nothing (mirror src/cli/commands/approve.ts pendingExists guard); (3) Approve -> write approved marker with approverId = sender id; Reject -> ask for feedback text, then write rejected marker; Adjust -> ask for replacement text, then write approved marker with editDelta = that text. Use node:fs/promises via the approval-state helpers. ESM .js imports, `import type`, no `any`.",
+  "evaluatorNotes": "Use a temp project root with .bober/approvals containing a fixture .pending.json. Verify the three actions write byte-shaped-correct markers (compare against what approve/reject CLI writes). Verify the no-pending guard and the non-whitelisted-callback guard both write nothing. Verify replies go through sendSafe. Run build + the marker-writing unit tests.",
+  "estimatedFiles": [
+    "src/telegram/handlers/approvals.ts",
+    "src/telegram/handlers/approvals.test.ts",
+    "src/telegram/keyboard.ts",
+    "src/telegram/bot.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-30T00:11:26Z"
+}

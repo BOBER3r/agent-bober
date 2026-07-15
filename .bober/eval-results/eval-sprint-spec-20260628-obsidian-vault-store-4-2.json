@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-obsidian-vault-store-4-2",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T17:53:45.000Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "npx tsc --noEmit exit 0", "details": "clean"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "npx tsc exit 0", "details": "clean"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "eslint src/ exit 0, 0 errors, 2 pre-existing warnings in eval-persist.test.ts; mcp-adapter.test.ts exit 0", "details": "beforeEach removed from line 8; lint hard-gate resolved"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "adapter+schema 62 tests; full suite 227 files 2907 tests", "details": "zero regressions"},
+    {"strategy": "api-check", "required": false, "result": "skipped", "output": "N/A", "details": "no endpoints"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "tsc + tsc --noEmit exit 0", "feedback": ""},
+    {"criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "vault.obsidian round-trips mcpEnv OBSIDIAN_API_KEY=secret-token + toolNames; vault-less undefined; 37 tests", "feedback": ""},
+    {"criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "default + override tool names exact-asserted (custom_read/write, list_vault_files, override_list); parsed VaultNote; McpServerLike interface; external-client.ts untouched; 25 tests", "feedback": ""},
+    {"criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "https/non-loopback -> guardOnDevice throws (config.name only, no mcpEnv) + startSpy.not.toHaveBeenCalled for read/write/list", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 4 iteration 2 passes. One-line lint fix (removed unused beforeEach at mcp-adapter.test.ts:8) resolves the iter-1 hard-gate failure. eslint src/ exit 0 (0 errors). All 4 criteria independently re-verified; full suite 2907 pass, zero regressions."
+}

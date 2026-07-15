@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260531-multi-provider-deepseek-claude-code-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-4",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T14:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-provider harness. This sprint promotes the existing claude-code spike (src/providers/claude-code.ts, 181 lines) into the supported provider set so a Claude Max subscriber can run prompt-only roles (planner/researcher) billed against their subscription via the `claude` CLI — no ANTHROPIC_API_KEY. createClient must accept provider 'claude-code'; validateApiKey must require NO key but preflight the claude binary; tools-guard throw stays; binary + timeoutMs overrides honored; execa mocked in tests.",
+    "completedSprints": [
+      {"contractId": "sprint-1", "title": "eslint ^10", "summary": "npm install clean."},
+      {"contractId": "sprint-2", "title": "DeepSeek resolution", "summary": "deepseek shorthands -> openai-compat @ api.deepseek.com; DEEPSEEK_API_KEY handling; validateApiKey gained a 4th endpoint param."},
+      {"contractId": "sprint-3", "title": "openai preflight", "summary": "src/providers/preflight.ts (preflightOpenaiPeer, usesOpenaiFamily) added with injectable importer seam; not yet wired to startup."}
+    ],
+    "currentBranch": "spike/claude-code-provider",
+    "relevantFiles": ["src/providers/factory.ts", "src/providers/factory.test.ts", "src/providers/claude-code.ts", "src/providers/claude-code.test.ts", "src/providers/index.ts"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "facts": {
+    "claudeCodeTs": "src/providers/claude-code.ts already implements ClaudeCodeAdapter: constructor(binary='claude', timeoutMs=180000), chat() throws on non-empty tools, shells `claude -p PROMPT --output-format json ...`, maps stop_reason/usage into ChatResponse. 181 lines. May contain SPIKE-only header language to soften.",
+    "execa": "execa@^9.5.2 is a runtime dependency. Mock it in tests with vi.mock('execa').",
+    "providerName": "ProviderName at factory.ts:11 is `\"anthropic\" | \"openai\" | \"google\" | \"openai-compat\"` — add `| \"claude-code\"`.",
+    "index": "src/providers/index.ts does NOT export ClaudeCodeAdapter yet — add the export.",
+    "validateApiKeySignature": "validateApiKey gained a 4th optional `endpoint` param in Sprint 2 — preserve that signature; add a 'claude-code' case."
+  },
+  "principles": "ESM (.js import extensions, NodeNext). consistent-type-imports (`import type`). no-explicit-any warned. Zero type + lint errors are hard gates. No SDK lock-in (claude-code uses execa to shell the CLI, not an SDK — fine). Tests MUST mock execa (vi.mock('execa')) — never a real claude CLI call, never require ANTHROPIC_API_KEY. Conventional commit: bober(sprint-4): description.",
+  "evaluatorFeedback": null,
+  "baseline": {"note": "2 pre-existing environmental mcp tool-count timeout flakes — baseline, ignore."},
+  "notesForGenerator": "Stay on branch spike/claude-code-provider. Follow contract generatorNotes + briefing. Steps: (1) Add 'claude-code' to ProviderName. (2) createClient switch: add a 'claude-code' case returning `new ClaudeCodeAdapter(providerConfig?.binary, providerConfig?.timeoutMs)` (use the adapter's defaults when unset). (3) validateApiKey: add a 'claude-code' case that does NOT require any key. The binary-on-PATH preflight must throw an Error NAMING the binary when claude is absent — if the PATH check must be async, do it in createClient's claude-code branch instead and keep validateApiKey's claude-code case a key no-op; either way sc-4-2 requires a no-throw-on-no-key test AND a throw-naming-binary-when-missing test, so design the binary check to be MOCKABLE (e.g. an injectable/overridable probe or mock execa's which-style call). (4) Export ClaudeCodeAdapter from index.ts. (5) Soften SPIKE-only language in claude-code.ts header but KEEP the capability-boundary doc + the tools-guard throw. (6) Create claude-code.test.ts mocking execa, covering sc-4-1..sc-4-5. Do NOT add the Claude Agent SDK. Verify build + lint exit 0 before committing."
+}

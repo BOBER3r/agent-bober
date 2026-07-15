@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-6",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T20:28:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 6 — The Medical Team. S6 is the integration linchpin: wire the FULL ordered SOP into MedicalSopEngine.run and make zero-egress the CODE-ENFORCED default (two opt-in egress axes default FALSE; scoped ESLint network boundary; medications from bi-temporal FactStore). Default outbound bytes = 0.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260616-medical-team-1", "title": "Plumbing + team", "summary": "60215d2" },
+      { "contractId": "sprint-spec-20260616-medical-team-2", "title": "Consent/audit/disclaimer (Gate 1)", "summary": "4e0286d — MedicalSopDeps DI seam, zero-arg ctor" },
+      { "contractId": "sprint-spec-20260616-medical-team-3", "title": "Red-flag (Gate 2)", "summary": "6fc7c97 — deps.llmClient?+numerics? slots" },
+      { "contractId": "sprint-spec-20260616-medical-team-4", "title": "HealthDataStore + NumericsQueryLayer", "summary": "907bae4" },
+      { "contractId": "sprint-spec-20260616-medical-team-5", "title": "Apple Health ingestion + CLI", "summary": "aa7f9be" }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": ["src/medical/engine.ts", "src/medical/types.ts", "src/medical/numerics.ts", "src/medical/health-store.ts", "src/medical/audit.ts", "src/medical/engine.test.ts", "src/medical/numerics.test.ts", "eslint.config.js", "src/telemetry/emit.ts", "src/state/facts.ts", "src/orchestrator/workflow/selector.ts"]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260616-medical-team-6.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260616-medical-team-6-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "test": "npx vitest run", "lint": "npm run lint" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "criticalConstraints": [
+    "EgressGuard (suggest src/medical/egress.ts): two INDEPENDENT axes 'cloud-inference' and 'literature-retrieval', BOTH default false. assertAllowed(axis) THROWS when the axis is off, passes when on. Enabling one axis must NOT enable the other (independence tested).",
+    "Scoped ESLint no-restricted-imports: add a `files: ['src/medical/**/*.ts']` block to eslint.config.js MIRRORING the telemetry block (eslint.config.js ~42-69 / src/telemetry/emit.ts). Forbid undici/got/axios/node-fetch/node:http/node:https/node:net/node:tls AND the fetch global everywhere in src/medical EXCEPT the ONE designated retrieval network file (reserve the exception path for the S7 retriever, e.g. src/medical/literature/retriever.ts — match the path you stub in this sprint). `npm run lint` MUST pass with 0 errors.",
+    "LiteratureRetriever (STUB this sprint, suggest src/medical/literature/retriever.ts at the ESLint-excepted path): retrieve() returns { disabled } SYNCHRONOUSLY when literature-retrieval is OFF — NO network attempt and NO network import yet (the real MedlinePlus call is S7). The engine ABSTAINS when retrieval is disabled.",
+    "Medications: read via FactStore.getActiveFacts under a MEDICAL scope (bi-temporal, value-of-record, ADR-7) — see briefing for the exact getActiveFacts(scope) call. HealthDataStore is NEVER used to store medication-list state.",
+    "Wire the FULL ordered SOP into MedicalSopEngine.run: consent (Gate 1) -> red-flag (Gate 2) -> numerics (via NumericsQueryLayer / deps.numerics) -> meds (FactStore.getActiveFacts) -> egress check -> (retriever disabled => abstain) -> disclaimer footer -> audit (answer|abstain entry) -> PipelineResult. NO LLM/numerics/network call may precede the gates. A numeric question must be answered PURELY from deterministic compute. With both axes off, a full turn produces a MedicalAnswer with footer + an audit answer/abstain entry, and default outbound bytes = 0 (no network module reachable).",
+    "deps.numerics is now actually CALLED by the engine — so the injected spy seam becomes live. Inject opts.now on the real SOP path (address the S2 wall-clock-fallback carry-forward per the briefing).",
+    "CARRY-FORWARD CLEANUPS (REQUIRED this sprint): (a) in src/medical/engine.test.ts, the original sc-2-4 fail-closed test creates llmSpy/numericsSpy but does NOT inject them into the engine ctor — inject them now (deps.llmClient/numerics) and make the never-called assertion REAL; (b) in src/medical/numerics.test.ts, convert the readFileSync source-grep test to `await readFile(...)` from node:fs/promises (the only sync-fs violation in the repo).",
+    "ESM/NodeNext .js extensions; strict TS; no SDK types outside src/providers/. Tests use temp dirs (no fs mocks). Add types additively to src/medical/types.ts. Keep MedicalSopEngine's zero-arg constructor working (selector.ts:126 calls new MedicalSopEngine()).",
+    "nonGoals: do NOT implement the REAL MedlinePlus network retrieval or cited synthesis (that is S7 — only the disabled stub + ESLint exception path here). Do NOT build a cloud-inference synth path (axis exists + defaults off only)."
+  ],
+  "evaluatorFeedback": null
+}

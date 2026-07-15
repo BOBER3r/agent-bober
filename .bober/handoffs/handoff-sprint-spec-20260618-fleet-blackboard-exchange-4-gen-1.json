@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-blackboard-exchange-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-4",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "timestamp": "2026-06-18T19:33:30Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase B Sprint 4 (final): after the rounds complete, assemble a PURE data bundle (final-round child results + all blackboard findings + round count) and atomically write it to <rootDir>/.bober/fleet-synthesis.json for the head to synthesize. NO LLM/network call. Only on blackboard runs; no-blackboard runs write NOTHING extra (byte-identical). fleet-report.json shape/behavior unchanged and always written.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1", "title": "SharedBlackboard", "summary": "readAll(): FactRecord[] — collect() bundles this. Commit e1d4b00." },
+      { "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-2", "title": "config.fleet + CLI", "summary": "resolveBlackboardPath in index.ts. Commit 2784f71." },
+      { "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-3", "title": "Coordinator rounds loop", "summary": "runFleet branch at index.ts ~:135: if(dbPath) ensureDir + SharedBlackboard.open + coordinator.executeRounds(manifest, bb, {maxRounds, dbPath}) in try/finally(bb.close()) else coordinator.execute. Final-round executions feed the existing aggregate + reporter.build + write fleet-report.json. Commit 2e16f19. NOTE: executeRounds returns the final round's executions; the round count run is available there too."
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/index.ts (runFleet — report build+write @~:124; the Sprint-3 blackboard branch + try/finally(bb.close()) — you add the synthesis write AFTER the report write and MOVE bb.close() to after synthesis since collect() calls bb.readAll())",
+      "src/fleet/reporter.ts (PortfolioReport shape — reuse for childResults in the bundle)",
+      "src/fleet/shared-blackboard.ts (readAll)",
+      "src/state/facts.ts (FactRecord shape)",
+      "src/fleet/manifest-write.ts (atomic tmp+rename write helper to reuse for fleet-synthesis.json)"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md — ESM .js imports, import type, node:fs/promises only (atomic tmp+rename like manifest-write.ts), unicode section headers, conventional commits 'bober(sprint-4): ...'. CRITICAL: collect() is PURE (no provider/client/network import in synthesis.ts); fleet-synthesis.json written ONLY on blackboard runs (byte-identical no-file otherwise); fleet-report.json shape unchanged + always written; SEQUENCE the close so bb.readAll() in collect() runs BEFORE bb.close().",
+  "evaluatorFeedback": null
+}

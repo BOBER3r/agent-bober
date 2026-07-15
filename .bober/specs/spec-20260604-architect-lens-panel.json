@@ -1,0 +1,190 @@
+{
+  "specId": "spec-20260604-architect-lens-panel",
+  "version": 1,
+  "createdAt": "2026-06-04T06:30:00Z",
+  "updatedAt": "2026-06-04T06:30:00Z",
+  "title": "Architect Decision Lens Panel",
+  "description": "Adds an opt-in, off-by-default multi-lens panel to the architect's two judgment checkpoints — Checkpoint 2 (approach selection, ranked/synthesized) and Checkpoint 5 (review, pass/fail) — on BOTH the TypeScript orchestrator and native Claude Code surfaces. Introduces a shared synthesize() ranking reducer (alongside the existing reconcile() pass/fail reducer) that the future research and planner deep modes will reuse. Off by default it is byte-identical to today's single-agent architect.",
+  "mode": "brownfield",
+  "status": "completed",
+  "completedAt": "2026-06-04T09:14:25Z",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-scope",
+      "answer": "Architect deep mode ONLY, as its own PlanSpec, including the shared synthesize() reducer foundation. Research and planner deep modes are deferred to separate follow-on PlanSpecs that reuse the reducer.",
+      "resolvedAt": "2026-06-04T06:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-reducer",
+      "answer": "Build ONE shared synthesize() ranking/synthesis reducer (per-lens scores -> ranked winner + grafted runner-up ideas + dissent) alongside reconcile(), reused across divergent phases. reconcile() (majority-vote/fail-closed) stays untouched and is reused for the genuine pass/fail CP5 review.",
+      "resolvedAt": "2026-06-04T06:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-surface",
+      "answer": "Both surfaces (TS architect-agent.ts panel + native skills/agents/commands) together, with a cross-surface drift gate — mirroring the evaluator-panel build.",
+      "resolvedAt": "2026-06-04T06:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-insertion",
+      "answer": "Checkpoint 2 (approach selection) via the synthesize() ranking panel AND Checkpoint 5 (review/assembly) via the reconcile() pass/fail panel. CP1/CP3/CP4 stay single-agent.",
+      "resolvedAt": "2026-06-04T06:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q5-ts-approach",
+      "answer": "Refactor the monolithic runArchitect CP2/CP5 into discrete seams so the panel TRULY drives selection/review (CP2: genApproaches -> synthesize(lensScores) -> select; CP5: assemble -> reconcile(lensReviews)). Panel OFF remains today's single monolithic agentic loop, byte-identical.",
+      "resolvedAt": "2026-06-04T06:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts",
+      "resolvedAt": "2026-06-04T06:30:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The evaluator lens-panel pattern is the template: reconcile() majority-vote/fail-closed (src/orchestrator/workflow/reconciler.ts:17), eval-lenses.ts LENS_CATALOG + resolveLensFocus, evaluator.panel off-by-default config (src/config/schema.ts), skills/shared/lens-panel.md canonical reference + drift gate (src/orchestrator/lens-panel-parity.test.ts). This plan mirrors each of those for the architect.",
+    "Divergent reduction uses a NEW shared synthesize() reducer (ranking: per-lens scores -> ordered ranking + winner + grafted runner-up ideas + dissent), built alongside reconcile() in src/orchestrator/workflow/. reconcile() is reused as-is for the CP5 pass/fail review and is NOT modified (it is pass/fail only).",
+    "TS architect: runArchitect (src/orchestrator/architect-agent.ts:142) currently runs all 5 checkpoints inside ONE runAgenticLoop driven by one autonomousMessage. CP2 and CP5 will be refactored into discrete seams (CP2: genApproaches -> synthesize -> select; CP5: assemble -> reconcile) so the panel drives the decision when on. When architect.panel is OFF, runArchitect runs the existing single monolithic loop byte-identically.",
+    "Config: a new architect.panel { enabled: z.boolean().default(false), lenses: z.array(z.string()).default([]), maxConcurrent: z.number().int().min(1).default(4) } sub-object is added (mirroring evaluator.panel), off by default and mirrored in createDefaultConfig and every defaults.ts/init.ts/loader.ts/mcp literal that tsc flags.",
+    "A new src/orchestrator/arch-lenses.ts exports resolveArchLensFocus(lens) (mirror of resolveLensFocus) over an ARCH_LENS_CATALOG of distinct non-empty fragments for scalability/security/cost/operability/maintainability/reversibility, with a generic fallback for unknown lenses.",
+    "Native: a canonical skills/shared/arch-lens-panel.md (mirroring skills/shared/lens-panel.md) embeds the arch-lens fragments verbatim and documents the CP2 synthesize panel + CP5 reconcile panel protocol; agents/bober-architect.md gains an additive lens/MODE section; .claude/agents/bober-architect.md is synced byte-identical; skills/bober.architect/SKILL.md CP2 (Step 6) and CP5 spawn steps gain gated panel branches; .claude/commands/bober-architect.md is regenerated via the inlineSkill format.",
+    "Per-checkpoint lens output is surfaced via additive optional fields on ArchitectResult (e.g. lensScores for CP2, lensReviews for CP5) and a SynthesisResult { winner, ranking, graftedIdeas, dissent } type in the synthesizer module. All additive/optional and backward compatible.",
+    "Off-by-default guarantee: architect.panel.enabled=false OR lenses.length<2 -> today's behavior on both surfaces (TS single monolithic loop; native single per-checkpoint subagent), byte-identical, verified by mocked-client tests (TS) and additive-only git diffs (native).",
+    "Drift gates mirror the merged work: arch fragments tied to arch-lenses.ts via resolveArchLensFocus, reference-copy byte-equality, and .claude/commands recomputation (NOT update-all:check, which targets external sync projects)."
+  ],
+  "outOfScope": [
+    "Research and planner deep modes — separate follow-on PlanSpecs. Only the shared synthesize() reducer foundation is built here (so they can reuse it later).",
+    "Any change to reconcile() semantics or to the evaluator lens panel.",
+    "Checkpoints 1, 3, and 4 of the architect flow — they remain single-agent.",
+    "Lens weighting or non-majority voting for the CP5 pass/fail review (reconcile() majority/fail-closed only); per-lens score weighting beyond a simple aggregate in synthesize().",
+    "Cost budgeting beyond reading maxConcurrent as a fan-out cap.",
+    "Provider/SDK changes or anything under src/providers/.",
+    "Running a live LLM panel in CI tests — gates are pure-function (synthesize/reconcile/arch-lenses), Zod schema, static-text drift, and mocked-client tests only."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Shared synthesize() reducer, arch-lens catalog, and architect.panel config",
+      "description": "The reusable foundation: a pure ranking/synthesis reducer alongside reconcile(), an arch-lens prompt catalog, and the opt-in architect.panel config. Zero behavior change.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: src/orchestrator/workflow/synthesizer.ts exports synthesize(...) that takes per-approach per-lens scores and returns a SynthesisResult { winner, ranking (ordered, with per-lens scores + total), graftedIdeas, dissent }; pure (no Date.now/Math.random/fs); deterministic tie-break documented; unit-tested for ranking, tie-break, and dissent capture.",
+        "AC2: src/orchestrator/arch-lenses.ts exports resolveArchLensFocus(lens) over ARCH_LENS_CATALOG mapping scalability/security/cost/operability/maintainability/reversibility to DISTINCT non-empty fragments, with a generic non-empty fallback for unknown lenses (no throw); unit-tested.",
+        "AC3: architect.panel { enabled:false, lenses:[], maxConcurrent>=1 default 4 } is added to the config schema, mirrored in createDefaultConfig and every other config literal tsc flags; a config without architect.panel still parses to the default; unit-tested.",
+        "AC4: npx tsc --noEmit, npm run build, npx eslint src/ exit 0; full vitest suite green (only the pre-existing skipped baseline)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "TS Checkpoint 2 synthesis panel",
+      "description": "Refactor the monolithic runArchitect CP2 into a seam that, when the panel is on, generates candidate approaches, fans out one lens scorer per lens (bounded by maxConcurrent), synthesize()s a ranked winner, and selects it. Off-path byte-identical.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When architect.panel is off or lenses<2, runArchitect runs the existing single monolithic agentic loop and returns an ArchitectResult equivalent to today (mocked-client test asserts the single-loop path).",
+        "AC2: When architect.panel.enabled with >=2 lenses, CP2 generates candidate approaches then issues one judge call per lens (never exceeding maxConcurrent concurrent calls) scoring the approaches through that lens, and synthesize() selects the ranked winner; the selected approach + lensScores flow into the architecture doc/ADR-1. A mocked-client test asserts call-count == lenses.length, peak concurrency <= maxConcurrent, and that synthesize()'s winner is the selected approach.",
+        "AC3: The CP2 refactor preserves the rest of the flow (CP1/CP3/CP4/CP5 still run); the ArchitectResult shape is unchanged except the additive optional lensScores.",
+        "AC4: npx tsc --noEmit, npm run build, npx eslint src/ exit 0; full vitest suite green."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "TS Checkpoint 5 review panel",
+      "description": "Refactor runArchitect CP5 into a seam that, when the panel is on, assembles the draft architecture+ADRs, fans out one lens reviewer per lens, and reconcile()s a pass/fail verdict (fail-closed on tie) that gates final assembly. Off-path byte-identical.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the panel is off or lenses<2, CP5 runs as today (single-agent review within the monolithic loop); off-path byte-identical (mocked-client test).",
+        "AC2: When the panel is on, CP5 issues one review call per lens (bounded by maxConcurrent) and reconcile() yields a pass/fail verdict; a 2-pass/2-fail tie reconciles to fail-closed; the verdict + lensReviews are surfaced on ArchitectResult (additive optional) and recorded in the final assembly. Mocked-client test asserts call-count, bounding, and the fail-closed tie.",
+        "AC3: reconcile() is imported and reused unchanged (not reimplemented); the architecture doc/ADRs still save to .bober/architecture/.",
+        "AC4: npx tsc --noEmit, npm run build, npx eslint src/ exit 0; full vitest suite green."
+      ],
+      "dependencies": ["feat-1", "feat-2"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Native canonical reference, lens-aware architect agent, and sync gate",
+      "description": "The native-surface foundation: a canonical arch-lens-panel reference embedding the fragments + documenting the CP2 synthesize / CP5 reconcile protocol, an additive MODE/lens section in the architect agent, the synced .claude copy, and a drift gate.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: skills/shared/arch-lens-panel.md embeds each ARCH_LENS_CATALOG fragment verbatim (resolveArchLensFocus output) and documents the CP2 synthesis panel (per-lens scoring -> synthesize ranked winner) and CP5 reconcile panel (per-lens review -> fail-closed pass/fail).",
+        "AC2: agents/bober-architect.md gains an additive lens/MODE section (e.g. MODE:full default unchanged | MODE:lens-score:<name> for CP2 | MODE:lens-review:<name> for CP5) referencing skills/shared/arch-lens-panel.md; existing instruction prose unchanged; .claude/agents/bober-architect.md regenerated byte-identical.",
+        "AC3: A vitest drift gate asserts (a) skills/shared/arch-lens-panel.md contains resolveArchLensFocus(lens) for each built-in arch lens, and (b) agents/bober-architect.md == .claude/agents/bober-architect.md.",
+        "AC4: npx tsc --noEmit, npm run build, npx eslint src/ exit 0; full vitest suite green."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Wire native architect CP2+CP5, copy reference, regenerate command, extend drift gate",
+      "description": "Add gated panel branches to the native architect skill's CP2 and CP5 spawn steps, copy the canonical reference into the skill's references/, regenerate the inlined command, and extend the drift gate to cover the reference copy and command recomputation. Off-path byte-identical.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: skills/bober.architect/SKILL.md CP2 (approach selection) and CP5 (review/assembly) spawn steps each gain an additive gated branch: when architect.panel.enabled && lenses>=2, run the panel flow per the inlined arch-lens reference (CP2 synthesize ranking; CP5 reconcile pass/fail); otherwise run today's single-checkpoint subagent. Existing prose intact (else-path).",
+        "AC2: skills/shared/arch-lens-panel.md is copied byte-identically into skills/bober.architect/references/arch-lens-panel.md.",
+        "AC3: .claude/commands/bober-architect.md is regenerated via the inlineSkill format (SKILL.md + sorted references) and includes the inlined arch-lens reference + panel branches; verified by an in-repo recomputation assertion (NOT update-all:check).",
+        "AC4: Off-by-default: with the panel disabled, the regenerated command drives the existing single-checkpoint architect flow (git diff shows additive, gated branches only).",
+        "AC5: The drift gate is extended to assert the reference copy equals the canonical AND .claude/commands/bober-architect.md equals its recomputed inline; npx tsc --noEmit, npm run build, npx eslint src/ exit 0; full vitest suite green."
+      ],
+      "dependencies": ["feat-1", "feat-4"],
+      "estimatedComplexity": "high"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Default (panel off) architect behavior is byte-identical on both surfaces — single monolithic loop (TS) and single per-checkpoint subagent (native).",
+      "verificationMethod": "Mocked-client test asserts the off-path single-loop path (TS); git diff shows additive-only gated branches (native)."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The TS arch-lens fragments and the native arch-lens-panel.md cannot silently diverge.",
+      "verificationMethod": "Drift-gate vitest asserts the markdown embeds resolveArchLensFocus(lens) for every built-in arch lens; mutate a fragment to confirm it goes red."
+    },
+    {
+      "category": "performance",
+      "requirement": "CP2/CP5 panel fan-out never exceeds architect.panel.maxConcurrent concurrent judge calls.",
+      "verificationMethod": "Mocked-client test with a concurrency counter asserts peak <= maxConcurrent."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "src/orchestrator/architect-agent.ts (runArchitect — CP2/CP5 seam refactor + panel)",
+      "src/orchestrator/workflow/synthesizer.ts (NEW synthesize ranking reducer)",
+      "src/orchestrator/workflow/reconciler.ts (reconcile — reused for CP5, unchanged)",
+      "src/orchestrator/arch-lenses.ts (NEW arch-lens catalog)",
+      "src/config/schema.ts (architect.panel config)",
+      "skills/bober.architect/SKILL.md + agents/bober-architect.md (native surface)",
+      "skills/shared/arch-lens-panel.md + .claude/commands/bober-architect.md (native reference + regenerated command)"
+    ],
+    "dataModel": "No persistent shapes change. New: SynthesisResult { winner, ranking[], graftedIdeas, dissent } in the synthesizer module; additive optional lensScores/lensReviews on ArchitectResult; new architect.panel config sub-object.",
+    "securityConsiderations": [
+      "A 'security' arch lens is a prompt focus only — it changes no tool permissions.",
+      "No SDK leakage; no changes under src/providers/."
+    ],
+    "existingPatterns": "Mirror the just-merged evaluator lens panel end-to-end: eval-lenses.ts -> arch-lenses.ts; lens-panel.md -> arch-lens-panel.md; evaluator.panel -> architect.panel; the lens-panel-parity.test.ts drift-gate patterns (fragment embedding, reference-copy equality, command recomputation). reconcile() reused verbatim; synthesize() is the new sibling for ranking. Follow inlineSkill byte-format for command regeneration. import type, ESM .js specifiers, unicode headers, collocated vitest, mocked createClient/runAgenticLoop."
+  },
+  "sprints": [
+    "sprint-spec-20260604-architect-lens-panel-1",
+    "sprint-spec-20260604-architect-lens-panel-2",
+    "sprint-spec-20260604-architect-lens-panel-3",
+    "sprint-spec-20260604-architect-lens-panel-4",
+    "sprint-spec-20260604-architect-lens-panel-5"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "8-12 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Additive and opt-in (off by default) on both surfaces. The main risk is the TS CP2/CP5 seam refactor of the monolithic runArchitect (sprints 2-3) — gated by mocked-client off-path byte-identical tests. The native surface (sprints 4-5) and the foundation (sprint 1) closely mirror the already-shipped evaluator panel, lowering their risk."
+  }
+}

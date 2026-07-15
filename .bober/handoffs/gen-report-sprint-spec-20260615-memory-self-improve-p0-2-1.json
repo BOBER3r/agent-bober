@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["0600a76 - bober(sprint-2): reconcile-on-write — deterministic supersede + LLM-judged ambiguity"],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "met": true, "evidence": "build + typecheck exit 0." },
+    { "criterionId": "sc-2-2", "met": true, "evidence": "reconcile.ts exports reconcileFact(store,incoming,{judge?,now}) + ReconcileAction; writeFact wrapper re-exported from facts.ts; CLI uses writeFact." },
+    { "criterionId": "sc-2-3", "met": true, "evidence": "supersede test: metformin→ozempic leaves 1 active (ozempic); metformin row has BOTH tInvalid=t2 AND tInvalidated=t2 via new supersedeFact." },
+    { "criterionId": "sc-2-4", "met": true, "evidence": "identical write twice → second returns 'noop', 1 active, no new row, no judge." },
+    { "criterionId": "sc-2-5", "met": true, "evidence": "fact-judge.ts: FactJudge interface + createLLMFactJudge() via createClient (only import site); judge consulted only on normalized-key collision; no-judge → ADD fallback." },
+    { "criterionId": "sc-2-6", "met": true, "evidence": "stub-judge 'update' supersedes; no-judge same input ADDs both; also covers noop/delete/add stub responses." },
+    { "criterionId": "sc-2-7", "met": true, "evidence": "lint 0 errors (2 pre-existing warnings in eval-persist.test.ts)." }
+  ],
+  "filesChanged": [
+    "src/orchestrator/memory/reconcile.ts", "src/orchestrator/memory/reconcile.test.ts", "src/orchestrator/memory/fact-judge.ts", "src/state/facts.ts (supersedeFact + writeFact re-export)", "src/cli/commands/facts.ts (route add through writeFact)"
+  ],
+  "testsAdded": ["src/orchestrator/memory/reconcile.test.ts"],
+  "blockers": [],
+  "notes": "Import-cycle resolved: writeFact lives in reconcile.ts; reconcile.ts uses `import type` for FactStore/FactInput/FactRecord; facts.ts re-exports writeFact at runtime (no runtime cycle). supersedeFact added to FactStore sets both bi-temporal closure fields. Full suite: 181 files / 2156 pass, 3 skipped. CLI verified: changed value supersedes (1 active), identical value NOOP (no dup)."
+}

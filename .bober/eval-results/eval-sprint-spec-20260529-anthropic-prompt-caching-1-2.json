@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260529-anthropic-prompt-caching-1-2",
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "specId": "spec-20260529-anthropic-prompt-caching",
+  "timestamp": "2026-05-29T17:16:00Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0." },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "eslint src/ exit 0, no errors/warnings." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc build exit 0, clean." },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "1337 passed | 4 skipped | 2 failed — both the tolerated flaky 37-tool-count baseline tests. anthropic 7/7, factory 26/26, all provider suites green." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "C1", "required": true, "result": "pass", "evidence": "buildCachedSystem returns ephemeral system block; tests C1 + C1-default pass." },
+    { "criterionId": "C2", "required": true, "result": "pass", "evidence": "attachMessageBreakpoints caps total at 4 (maxMsgBreakpoints=3 + system); test asserts <=4 and latest-message ephemeral breakpoint." },
+    { "criterionId": "C3", "required": true, "result": "pass", "evidence": "Disabled branch: plain-string system, unmodified messages; C3 + C3-multi assert zero cache_control in request." },
+    { "criterionId": "C4", "required": true, "result": "pass", "evidence": "factory.test.ts 'createClient promptCaching flag resolution' has 2 genuine tests via vi.mock('./anthropic.js') capturing ctor args in _ctorCalls; BOBER_TEST_DETERMINISTIC NOT set so the real anthropic branch runs. Asserts {promptCaching:false} explicit and {promptCaching:true} default. 26/26 factory tests pass." },
+    { "criterionId": "C5", "required": true, "result": "pass", "evidence": "constructor(apiKey?, opts?:{promptCaching?:boolean}); typecheck exit 0." },
+    { "criterionId": "C6", "required": true, "result": "pass", "evidence": "npm run build exit 0." },
+    { "criterionId": "C7", "required": true, "result": "pass", "evidence": "Only the 2 flaky baseline failures; all provider + factory suites green; no new/provider regressions." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 7 required criteria pass in iteration 2. Factory C4 tests are genuine (real factory branch executes; mock captures constructor opts). typecheck/lint/build clean; full suite only shows the 2 documented flaky baseline failures."
+}

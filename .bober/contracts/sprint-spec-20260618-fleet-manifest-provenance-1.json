@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-manifest-provenance-1",
+  "specId": "spec-20260618-fleet-manifest-provenance",
+  "sprintNumber": 1,
+  "version": 1,
+  "createdAt": "2026-06-18T12:07:00Z",
+  "title": "Provenance sidecar + recoverable, informative overwrite",
+  "status": "completed",
+  "dependsOn": [],
+  "description": "Add a shared writeManifestWithProvenance helper (src/fleet/manifest-write.ts) and route both fleet expand and fleet expand-deep Step-4 writes through it: emit a provenance sidecar, preserve the prior manifest as .bak on overwrite, and print an informative non-blocking notice. ADR-4 single shared default path is preserved; provenance lives only in the sidecar.",
+  "estimatedFiles": [
+    "src/fleet/manifest-write.ts (new \u2014 writeManifestWithProvenance, ManifestProvenance type, relative-age formatter, injectable clock)",
+    "src/fleet/manifest-write.test.ts (new \u2014 helper unit tests)",
+    "src/fleet/index.ts (edit \u2014 replace the two Step-4 write blocks at :207-224 and :343-360 with helper calls)",
+    "src/fleet/expand.test.ts (edit \u2014 update overwrite-notice assertion)",
+    "src/fleet/expand-deep.test.ts (edit \u2014 update overwrite-notice assertion)",
+    "src/fleet/expand-deep-critique.test.ts (edit \u2014 update overwrite-notice assertion if present)"
+  ],
+  "successCriteria": [
+    {
+      "id": "sc-1-1",
+      "description": "npm run build (tsc) is clean after adding manifest-write.ts and wiring index.ts.",
+      "required": true,
+      "verify": "build"
+    },
+    {
+      "id": "sc-1-2",
+      "description": "Strict typecheck passes; no explicit any; manifest-write.ts imports only types from providers/manifest as needed via import type; ESM .js extensions; provider-agnostic (no SDK imports).",
+      "required": true,
+      "verify": "typecheck"
+    },
+    {
+      "id": "sc-1-3",
+      "description": "ESLint clean on the new + changed files.",
+      "required": false,
+      "verify": "lint"
+    },
+    {
+      "id": "sc-1-4",
+      "description": "AC1 \u2014 on a successful write the helper creates `${outPath}.meta.json` with { command, goal, critique, childCount, timestamp }: for fleet expand command==='fleet expand'/critique===false; for fleet expand-deep command==='fleet expand-deep'/critique reflects --critique; goal is the RAW goal; childCount===manifest.children.length. Asserted by reading the sidecar in a test.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-5",
+      "description": "AC2+AC3 \u2014 first write (no pre-existing manifest) writes manifest+sidecar, prints NO replace notice, creates NO .bak. Overwrite moves the PRIOR manifest bytes to `${outPath}.bak` BEFORE writing the new manifest (reading .bak returns the previous content), and writes the new manifest atomically (tmp+rename).",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-6",
+      "description": "AC4+AC5 \u2014 overwrite notice (with a fixed injected clock) deterministically reports prior command, goal, childCount, relative age, and that the old file was kept as .bak; when the prior sidecar is missing/corrupt the helper does NOT throw and prints a generic overwrite notice that still states a .bak was kept.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-7",
+      "description": "AC6 \u2014 sidecar and .bak derive from the actual outPath: invoking with --out <custom> writes <custom>.meta.json and <custom>.bak and does NOT touch the default .bober/fleet-expand.json paths.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-8",
+      "description": "AC7+AC8 \u2014 the on-disk manifest still passes FleetManifestSchema.safeParse and carries NO provenance keys; write-and-stop default and the --yes gate are unchanged (no blocking prompt); npm run build + full npm test pass with the existing fleet suites green and their overwrite-notice assertions updated. (The 6 pre-existing tests/e2e/cockpit-integration MCP failures are unrelated and may remain.)",
+      "required": true,
+      "verify": "test"
+    }
+  ],
+  "generatorNotes": "Read src/fleet/index.ts:196-360 \u2014 the two Step-4 write blocks (runFleetExpand :207-224 and runFleetExpandDeep :343-360) are near-identical: resolve outPath = opts.out ?? join(root,'.bober','fleet-expand.json'); ensureDir(dirname(outPath)); access-check alreadyExisted; randomBytes tmp; writeFile(tmp)+rename(tmp,outPath); if(alreadyExisted) console.log('[fleet expand|expand-deep] Overwritten existing manifest at: '+outPath). REPLACE both with a single call to a NEW helper in src/fleet/manifest-write.ts:\n  writeManifestWithProvenance({ outPath, manifest, provenance: { command, goal, critique, childCount }, log?, now? }): Promise<void>\nThe helper must: (1) ensureDir(dirname(outPath)); (2) check if outPath exists; (3) if it exists, try to read `${outPath}.meta.json` (tolerate missing/corrupt \u2192 null), move the existing manifest to `${outPath}.bak` (rename), and log an informative notice \u2014 with prior sidecar: `[${command}] Replacing manifest from \\`${prior.command}\\` for goal \"${prior.goal}\" (${prior.childCount} children, ${relAge}) \u2192 kept as ${basename(outPath)}.bak`; without prior sidecar: a generic `[${command}] Overwriting existing manifest at ${outPath} \u2192 kept as ${basename}.bak`; (4) atomically write the new manifest (randomBytes tmp + rename, mirror index.ts:217-220); (5) write `${outPath}.meta.json` with { command, goal, critique, childCount, timestamp: new Date(now()).toISOString() }. Derive sidecarPath/bakPath from outPath (NOT the default constant). Inject the clock as `now?: () => number` defaulting to Date.now; relative-age helper formats (now - Date.parse(prior.timestamp)) as e.g. 'just now' / 'Nm ago' / 'Nh ago'. Pass console.log as the default `log`. In index.ts, call it from BOTH sites: expand \u2192 { command:'fleet expand', goal, critique:false, childCount: manifest.children.length }; expand-deep \u2192 { command:'fleet expand-deep', goal, critique: opts.critique === true, childCount: manifest.children.length }. Use the RAW `goal` param (NOT goalWithHint). Keep Step 5 (print manifest) and the --yes gate exactly as-is. Provenance NEVER goes into the manifest object. Update the overwrite-notice assertions in expand.test.ts / expand-deep.test.ts / expand-deep-critique.test.ts to the new message (search for 'Overwritten existing manifest'). Add src/fleet/manifest-write.test.ts with a temp-dir based suite (mirror how other fleet tests create temp dirs) injecting a fixed clock. Commit: 'bober(sprint-1): fleet manifest provenance sidecar + recoverable overwrite'.",
+  "evaluatorNotes": "Verify independently: (1) read manifest-write.ts \u2014 confirm sidecarPath/bakPath are derived from outPath (e.g. `${outPath}.meta.json` / `${outPath}.bak`), NOT hardcoded to the default. (2) A test writes A then B to the same outPath and asserts `${outPath}.bak` === A bytes and outPath === B (recoverability) \u2014 run it. (3) A test deletes/corrupts the prior sidecar and asserts writeManifestWithProvenance does NOT throw and still prints an overwrite notice + writes a new sidecar. (4) Notice determinism: a fixed injected clock yields an exact asserted relative-age string. (5) --out test writes <custom>.meta.json/.bak and leaves the default path untouched. (6) The written manifest still passes FleetManifestSchema.safeParse and has no provenance keys (grep the written file / parse it). (7) No blocking prompt / stdin use added; write-and-stop + --yes unchanged. (8) git diff: index.ts Step-4 blocks replaced by helper calls (the two old console.log 'Overwritten existing manifest' lines gone); manifest.ts, decomposer*.ts, critic-deep.ts, runFleet untouched. (9) npm run build + full npm test green; the ONLY failures permitted are the 6 pre-existing tests/e2e/cockpit-integration MCP 'Connection closed' failures (unrelated). Required strategies: build + typecheck; lint + unit-test.",
+  "startedAt": "2026-06-18T12:13:50Z",
+  "completedAt": "2026-06-18T12:26:56Z"
+}

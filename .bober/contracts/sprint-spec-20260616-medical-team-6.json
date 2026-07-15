@@ -1,0 +1,112 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-6",
+  "specId": "spec-20260616-medical-team",
+  "sprintNumber": 6,
+  "title": "EgressGuard + medications-in-FactStore + full SOP wiring (zero-egress end-to-end)",
+  "description": "Wire the complete SOP under a code-enforced zero-egress default. EgressGuard exposes two independently opt-in axes (cloud-inference, literature-retrieval, both default false; assertAllowed throws when off). A `no-restricted-imports` ESLint block scoped to src/medical/**/*.ts forbids network modules everywhere except the one designated retrieval network file (created/stubbed here, real source in S7). Medications are read from FactStore.getActiveFacts (bi-temporal, ADR-7), never HealthDataStore. MedicalSopEngine.run is wired in full order: consent -> red-flag -> numerics -> meds -> egress check -> (literature disabled => abstain) -> disclaimer footer -> audit -> PipelineResult. With both axes off, a numeric question is answered from deterministic compute and a literature question abstains — default outbound bytes = 0.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260616-medical-team-3",
+    "sprint-spec-20260616-medical-team-4"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "Lint passes, INCLUDING the new src/medical/**/*.ts no-restricted-imports boundary (npm run lint).",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "All tests pass including EgressGuard, medications-via-FactStore, and full-SOP tests; the full pre-existing suite stays green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "EgressGuard: both axes (cloud-inference, literature-retrieval) default false; isAllowed returns false by default; assertAllowed(axis) throws when the axis is off and returns void when on. Tests cover both axes independently (enabling one does not enable the other).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "A `files: ['src/medical/**/*.ts']` no-restricted-imports ESLint block forbids undici/got/axios/node-fetch/node:http/node:https/node:net/node:tls and the fetch global everywhere in src/medical EXCEPT the one designated retrieval network file; a deliberately-added forbidden import in a non-sanctioned medical file would fail lint (verified by the rule config + a focused test/fixture or by reviewing the config).",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-7",
+      "description": "Medications are read via FactStore.getActiveFacts under a medical scope (value-of-record); a test asserts the engine reads active medication facts from FactStore and that HealthDataStore is NOT used to store medication-list state.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-8",
+      "description": "Full zero-egress SOP turn: with both axes off and consent present, a numeric question yields a MedicalAnswer answered from deterministic compute with the disclaimer footer + an 'answer' audit entry; a literature question yields LiteratureRetriever.retrieve() === {disabled} and an abstained MedicalAnswer; a spy LLMClient + a network spy confirm ZERO outbound bytes / zero network module reached.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the real MedlinePlus networking — the designated retrieval file returns {disabled}/{abstain} only this sprint (Sprint 7 adds the live source).",
+    "Do not build a cloud-inference synthesis path — the axis exists and defaults off; nothing cloud is exercised.",
+    "Do not add new numeric primitives or ingestion adapters.",
+    "Do not change ts|skill|workflow or programming-team behavior."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "EgressGuard two-axis default-off + assertAllowed throws; medical ESLint boundary passes; medications via FactStore; full SOP turn zero-egress with footer + audit; literature abstains when disabled"
+  ],
+  "definitionOfDone": "src/medical/ gains EgressGuard (two axes, default false, isAllowed/assertAllowed) and the designated LiteratureRetriever network file (returning {disabled} when the axis is off; real source deferred to S7). eslint.config.js gains a src/medical/**/*.ts no-restricted-imports block (mirroring the telemetry block) with the single retrieval file as the exception. MedicalSopEngine.run runs the FULL ordered SOP: consent (S2) -> red-flag/guardrail (S3) -> numerics (S4) -> medications via FactStore.getActiveFacts (ADR-7) -> EgressGuard.isAllowed('literature-retrieval') gate -> retrieve (disabled => abstain) -> DisclaimerComposer footer -> AuditLog answer/abstain -> PipelineResult. With both axes off the path is fully local. Build, typecheck, lint, and all tests pass.",
+  "assumptions": [
+    "EgressGuard axes are driven by config (e.g. a medical section / team config flags) defaulting false; the medical team registered in S1 wires the guard from config.",
+    "FactStore.getActiveFacts(scope, subject, predicate) exists (src/state/facts.ts); medications are stored under a medical scope with a 'takes-medication' predicate. Writing medications (reconcile/invalidate path) can be exercised via the existing FactStore API; this sprint focuses on READING active medications in the SOP.",
+    "The designated retrieval network file is e.g. src/medical/retrieval/medline-source.ts — the ONLY file allowed network imports by the ESLint exception; this sprint it has no real network call yet.",
+    "MetricWindow for the numeric path is derived from the prompt by a small deterministic parser or passed in; full NL->query parsing is minimal here (numerics correctness was proven in S4)."
+  ],
+  "outOfScope": [
+    "Real MedlinePlus networking + cited synthesis (Sprint 7)",
+    "Cloud-inference synthesis path",
+    "New primitives/adapters"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add src/medical/egress.ts (EgressGuard), src/medical/retrieval/medline-source.ts (the designated network file — stub returning {disabled}/{abstain} this sprint), and src/medical/retrieval/literature.ts (LiteratureRetriever orchestration that checks the axis and calls the source). Wire the full SOP in src/medical/engine.ts. Update eslint.config.js.\n\nESLint: copy the telemetry no-restricted-imports block pattern (eslint.config.js ~42-69). Add a block: { files: ['src/medical/**/*.ts'], rules: { 'no-restricted-imports': ['error', { paths: [...network modules...], patterns: ['node:http','node:https','node:net','node:tls'] }], 'no-restricted-globals': ['error', { name:'fetch', message:'... egress only via the sanctioned retrieval file' }] } } and a follow-up override { files: ['src/medical/retrieval/medline-source.ts'], rules: { 'no-restricted-imports':'off','no-restricted-globals':'off' } } as the single exception. Forbid: undici, got, axios, node-fetch, node:http, node:https, node:net, node:tls + the fetch global. Confirm test files (*.test.ts) under src/medical are either also covered or allowed as appropriate (prefer covered, with the retrieval test importing through the source module).\n\nEgressGuard(config): isAllowed(axis): boolean reads config flags (cloudInference / literatureRetrieval) defaulting false; assertAllowed(axis): if(!isAllowed(axis)) throw new Error(`Egress axis '${axis}' not enabled`). Two axes independent.\n\nLiteratureRetriever.retrieve(query): if (!egress.isAllowed('literature-retrieval')) return { kind:'disabled' } SYNCHRONOUSLY (no network attempt); else delegate to medline-source (stub abstain this sprint). synthesize stays minimal (returns an abstained MedicalAnswer when outcome is disabled/abstain).\n\nMedications: read via FactStore.getActiveFacts (src/state/facts.ts) under a medical scope. Do NOT write medication state to HealthDataStore. A test seeds a FactStore with an active medication fact and asserts the engine reads it.\n\nMedicalSopEngine.run FULL order: consent -> guardrail.evaluate (short-circuit/refuse return early) -> derive MetricWindow + numerics.getMetric (deterministic, no LLM) -> FactStore active meds -> egress gate + retrieve (disabled => abstain) -> compose MedicalAnswer (numeric result + meds context + footer) -> audit 'answer'/'abstain' -> return PipelineResult. With literature-retrieval off, NO network module is reached; with a numeric prompt, the answer comes from compute.\n\nTests: EgressGuard both-axes default-off + independence + assertAllowed throw/pass; lint boundary (rely on `npm run lint` passing with the config; optionally a fixture asserting the rule object forbids the modules); medications-from-FactStore; full SOP zero-egress turn (numeric answer + footer + audit; literature prompt => disabled + abstain) with a network spy asserting zero reach and a spy LLMClient asserting zero calls on the disabled path.",
+  "evaluatorNotes": "sc-6-5: new EgressGuard with default config => isAllowed('cloud-inference') and isAllowed('literature-retrieval') both false; assertAllowed throws for each; enable only literature-retrieval => isAllowed('literature-retrieval') true but 'cloud-inference' still false.\nsc-6-6: run `npm run lint` and confirm green WITH the new block; inspect eslint.config.js to confirm the src/medical glob forbids undici/got/axios/node-fetch/node:http(s)/node:net/node:tls + fetch and that ONLY medline-source.ts is excepted. (Optionally verify a temporary forbidden import in a non-sanctioned medical file fails lint, then revert.)\nsc-6-7: seed FactStore with an active 'takes-medication' fact; assert engine.run surfaces/uses it via getActiveFacts and that no medication row is written to HealthDataStore.\nsc-6-8: with both axes off + consent present: numeric prompt => MedicalAnswer from compute + footer + 'answer' audit entry; literature prompt => retrieve()==={disabled} + abstained answer; a network spy (e.g. monkeypatched http/https/fetch in the test) records ZERO calls and the spy LLMClient records ZERO calls on the disabled literature path.\nFull suite + build + typecheck + lint green; S1-S5 unaffected.",
+  "estimatedFiles": [
+    "src/medical/egress.ts",
+    "src/medical/retrieval/literature.ts",
+    "src/medical/retrieval/medline-source.ts",
+    "src/medical/engine.ts",
+    "eslint.config.js",
+    "src/medical/egress.test.ts",
+    "src/medical/engine.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260616-medical-team-6-1",
+      "result": "pass"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260616-medical-team-6-1",
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-16T20:44:30.000Z",
+  "startedAt": "2026-06-16T20:29:40Z",
+  "completedAt": "2026-06-16T20:44:30.000Z"
+}

@@ -1,0 +1,51 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-4",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "sprintNumber": 4,
+  "title": "SynthesisStep + fleet-synthesis.json artifact",
+  "description": "After the rounds complete, assemble a PURE data bundle of the final-round child results plus all blackboard findings and write it to a separate <rootDir>/.bober/fleet-synthesis.json for the head to synthesize. New file src/fleet/synthesis.ts exports: type SynthesisBundle = { rounds: number; childResults: <the final executions/outcomes shape used by the reporter>; findings: FactRecord[] }; function collect(blackboard: SharedBlackboard | null, childResults, rounds): SynthesisBundle — findings = blackboard ? blackboard.readAll() : []; returns the bundle; performs NO LLM call and no network. Wire into runFleet: when a blackboard was used, after the rounds + the existing fleet-report.json write, call collect(...) and atomically write fleet-synthesis.json (tmp+rename, mirroring the report writer); when no blackboard, write NOTHING (byte-identical). The existing fleet-report.json remains unchanged in shape and is always written.",
+  "status": "completed",
+  "completedAt": "2026-06-18T19:45:30Z",
+  "dependsOn": ["sprint-spec-20260618-fleet-blackboard-exchange-3"],
+  "features": ["feat-4"],
+  "successCriteria": [
+    { "criterionId": "sc-4-1", "description": "Build + typecheck pass with zero errors.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-4-2", "description": "Full suite passes; only the 6 known cockpit-integration MCP failures may fail; existing fleet report/index tests pass unchanged.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-3", "description": "SynthesisStep.collect(blackboard, childResults, rounds) returns { rounds, childResults, findings } where findings===blackboard.readAll(); when blackboard is null it returns findings:[] and the caller writes NO file. A test asserts both branches.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-4", "description": "On a blackboard-enabled run, <rootDir>/.bober/fleet-synthesis.json is written containing the final-round childResults + all findings + the round count; the existing fleet-report.json is also written and unchanged in shape. A test runs a blackboard fleet and asserts both files exist with the expected content.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-5", "description": "SynthesisStep performs NO LLM/network call — a test asserts no provider/client is constructed and no network import exists in synthesis.ts.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-6", "description": "When no blackboard is configured, NO fleet-synthesis.json is written and the run output is byte-identical to Phase A (the existing fleet tests pass unchanged; a test asserts the file is absent on a no-blackboard run).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-4-7", "description": "lint passes; the synthesis write is additive + gated on a blackboard being used; the fleet-report.json shape/behavior is unchanged.", "verificationMethod": "lint", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT perform any LLM synthesis — collect is pure data; the head/dynamic-workflow synthesizes.",
+    "Do NOT change the fleet-report.json shape or stop writing it.",
+    "Do NOT write fleet-synthesis.json on a no-blackboard run.",
+    "Do NOT add network/SDK imports.",
+    "Do NOT change the rounds loop (Sprint 3) or the blackboard module (Sprint 1)."
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "fleet-synthesis.json is written (final childResults + all findings + rounds) only on a blackboard run, collect is pure (no LLM), the report is unchanged, the no-blackboard path is byte-identical, and build/typecheck/test/lint are green"
+  ],
+  "definitionOfDone": "src/fleet/synthesis.ts exports SynthesisBundle + collect (pure, no LLM/network). runFleet writes <rootDir>/.bober/fleet-synthesis.json (atomic tmp+rename) on a blackboard run after the report; writes nothing extra otherwise; fleet-report.json unchanged. Collocated tests cover collect (blackboard + null), the written synthesis file content, the no-LLM assertion, and the no-file-on-no-blackboard byte-identical path. Build/typecheck/test/lint green.",
+  "assumptions": [
+    "Sprint 3 made the rounds available and exposes the final-round executions/outcomes (the same shape the reporter consumes) and the round count to runFleet.",
+    "SharedBlackboard.readAll() (Sprint 1) returns FactRecord[]; collect just bundles it — no transformation beyond shaping the JSON.",
+    "The atomic writer pattern (tmp filename via randomBytes + rename) used for fleet-report.json / fleet-expand.json is reused for fleet-synthesis.json.",
+    "fleet-report.json continues to be written for every run (blackboard or not); fleet-synthesis.json is ADDITIONAL and only on blackboard runs."
+  ],
+  "outOfScope": [
+    "SharedBlackboard (Sprint 1)",
+    "config.fleet/CLI (Sprint 2)",
+    "Coordinator rounds loop (Sprint 3)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/fleet/index.ts (runFleet — the report build+write at :124, and the Sprint-3 rounds wiring; you add the synthesis write right after the report write, gated on the blackboard being used); src/fleet/reporter.ts (PortfolioReport shape — reuse for childResults in the bundle); src/fleet/shared-blackboard.ts (readAll); src/state/facts.ts (FactRecord shape); the atomic write helper used for fleet-report.json / manifest-write.ts (tmp+rename). arch SynthesisStep component (CP3) — it is PURE data assembly, NOT an LLM call.\n\nNew src/fleet/synthesis.ts: export interface SynthesisBundle { rounds: number; childResults: <PortfolioReport or the outcomes array>; findings: FactRecord[] }; export function collect(blackboard: SharedBlackboard | null, childResults, rounds): SynthesisBundle { return { rounds, childResults, findings: blackboard ? blackboard.readAll() : [] }; }. No imports of providers/network.\n\nrunFleet: after writing fleet-report.json, if (dbPath /* blackboard used */) { const bundle = collect(bb, report /*or outcomes*/, roundsRun); const out = join(rootDir, '.bober', 'fleet-synthesis.json'); atomic tmp+rename write JSON.stringify(bundle, null, 2); }. Ensure bb is still open (readAll) before close — sequence: run rounds → build+write report → collect+write synthesis → bb.close(). Adjust the Sprint-3 finally so close happens after synthesis.\n\nTests (synthesis.test.ts + index.test.ts additions): collect with a real SharedBlackboard (tmp db, seed findings) → bundle.findings matches readAll; collect(null, ...) → findings:[]; a blackboard fleet run (DI fakes) → assert .bober/fleet-synthesis.json exists with rounds+childResults+findings AND fleet-report.json exists unchanged; a no-blackboard run → assert fleet-synthesis.json is ABSENT; grep synthesis.ts for provider/network imports (none). Follow ESM .js imports, import type, unicode section headers, no synchronous fs.",
+  "evaluatorNotes": "sc-4-3: collect with a seeded blackboard → findings===readAll(); collect(null,...) → findings:[]. sc-4-4: run a blackboard fleet (DI) → assert .bober/fleet-synthesis.json exists and parses to {rounds, childResults, findings}; assert fleet-report.json still written and its shape unchanged. sc-4-5: grep synthesis.ts for '@anthropic-ai/sdk'|'openai'|'fetch'|'node:http'|'node:net' (none); assert collect constructs no client. sc-4-6 (byte-identical): a no-blackboard run → assert NO fleet-synthesis.json is created and the existing fleet index/report tests pass unchanged. sc-4-2: FULL suite, only 6 known cockpit failures. Build/typecheck/lint clean.",
+  "estimatedFiles": ["src/fleet/synthesis.ts", "src/fleet/synthesis.test.ts", "src/fleet/index.ts", "src/fleet/index.test.ts"],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T19:30:00Z",
+  "updatedAt": "2026-06-18T19:30:00Z"
+}

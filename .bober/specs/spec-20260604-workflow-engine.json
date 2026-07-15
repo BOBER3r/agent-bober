@@ -1,0 +1,161 @@
+{
+  "specId": "spec-20260604-workflow-engine",
+  "version": 1,
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-04T00:21:25.051Z",
+  "title": "Config-Selectable Workflow Orchestration Engine",
+  "description": "Adds Claude Code Dynamic Workflows as a third, config-selected orchestration engine (pipeline.engine) behind the frozen runPipeline seam, driving the existing bober-* subagents via agentType. The TS engine remains byte-for-byte intact as the universal fallback. The full deterministic surface ships (seam, pure reducer with hand-written JS twin, args builder, flusher, resume cursor, the bober-pipeline.js script, eligibility probe, conformance harness); live workflow execution is wired but downgrades to TS when the runtime is ineligible.",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Wired-but-dormant: ship the full seam, pure reducer (TS twin + JS port), args builder, flusher, resume cursor, bober-pipeline.js, eligibility probe, and conformance harness. invoke() probes ineligible in CI/headless and silently downgrades to the TS engine (ADR-6). Live execution validated manually in Claude Code, not required green in CI.",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Defer careful-flow stage-splitting. First release is autopilot-only on the workflow engine; mode=careful + engine=workflow downgrades to the TS engine (which already supports inline disk gates). ADR-5 stage-split lands in a follow-up.",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Conformance harness in CI asserts (a) JS reducer port and TS reducer twin produce byte-identical EvalResult over fixture lens-vectors, and (b) ts vs skill engines emit equivalent .bober/ artifacts for a fixture spec. Live three-engine diff is opt-in behind workflow eligibility.",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts",
+      "resolvedAt": "2026-06-04T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The engine-selection seam goes exactly at runPipeline(userPrompt, projectRoot, config) (src/orchestrator/pipeline.ts:515); the current body is extracted into the TS engine's run, keeping the exported signature frozen.",
+    "The selector mirrors the config-driven resolution at src/orchestrator/checkpoints/registry.ts:65 — a pure resolveEngineName plus a select lookup.",
+    "pipeline.engine is a Zod enum [\"ts\",\"skill\",\"workflow\"] defaulting to \"ts\" (CI-safe; ADR-6 pins CI to ts).",
+    "The reconciler is a pure majority-vote TS function with a hand-written JS twin at .claude/workflows/lib/reconcile.js, drift-gated by shared fixtures (ADR-4); the caller injects the timestamp (no Date.now in the reducer).",
+    "engine=workflow with an ineligible probe downgrades to TS with one log line (ADR-6); WorkflowUnavailableError on the first invoke re-dispatches TS before any .bober/ flush.",
+    "mode=careful with engine=workflow downgrades to TS; careful gates already work inline there (disk.ts:63). Stage-splitting is deferred.",
+    "New TS code lives under src/orchestrator/workflow/; the workflow script and its lib live under .claude/workflows/. The 10 agents/*.md, the contracts protocol (src/contracts/), providers/types.ts, and durable .bober/ shapes are untouched.",
+    "PipelineResult is reused verbatim from src/orchestrator/pipeline.ts:62; EvalResult/PlanSpec/SprintContract/HistoryEntry are the frozen contracts protocol types.",
+    "The repo carries a documented flaky baseline (2 tool-count timeout failures); evaluators tolerate only that baseline, no new failures."
+  ],
+  "outOfScope": [
+    "Live programmatic invoke() of the workflow runtime in CI — dormant; manual validation in Claude Code only.",
+    "Careful-flow stage-splitting (ADR-5 awaiting-gate / stopBefore / startAt) — deferred follow-up.",
+    "/bober-audit and /bober-migrate commands (architecture Open Questions — downstream scripts).",
+    "Multi-angle planner / PlanSpec reducer panel (deferred; only the evaluator panel is wired).",
+    "Any change to the 10 subagent defs, the contracts protocol, providers/types.ts, or the 4 VISION mode entry points.",
+    "Non-Anthropic provider behavior on the workflow path beyond what already flows through providers/types.ts."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Engine-selection seam and config",
+      "description": "Introduce pipeline.engine config and a PipelineEngineSelector that resolves to one of three interchangeable engines behind the frozen runPipeline signature, with the TS engine wrapping the existing pipeline body unchanged.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When pipeline.engine is unset, runPipeline resolves the TS engine and behaves identically to today.",
+        "AC2: When pipeline.engine='workflow' and the eligibility probe reports ineligible, the selector resolves the TS engine and logs exactly one downgrade line.",
+        "AC3: The exported runPipeline signature is unchanged and all existing pipeline tests stay green."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Evaluator panel reconciler (twin + port)",
+      "description": "A pure majority-vote reducer over EvalResult[] producing one canonical EvalResult (evaluator='panel'), authored as a TS twin and a hand-written pure-JS port, drift-gated by shared fixtures.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: reconcile returns passed=true only on a strict majority of passing lenses; ties fail closed.",
+        "AC2: Failing details from minority/failing lenses are unioned into the canonical result.",
+        "AC3: The TS twin and JS port produce byte-identical EvalResult (timestamp excluded) over every fixture lens-vector."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Workflow host plumbing",
+      "description": "ResumeCursorReconstructor, ArgsPayloadBuilder, RunResultFlusher, and the bober-pipeline.js script — the host marshals config/principles/cursor into WorkflowArgs, the script orchestrates agents and returns WorkflowRunResult, and the host flushes it to durable .bober/ state stamping timestamps.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: ResumeCursorReconstructor re-derives completedSprintNumbers from durable contract status + history.",
+        "AC2: ArgsPayloadBuilder throws MissingKnobError on an unset required knob and AgentCapError when worst-case agent count exceeds caps, pre-invoke.",
+        "AC3: RunResultFlusher commits spec/contracts/eval-results/history/progress and stamps ISO timestamps, atomic per file.",
+        "AC4: bober-pipeline.js parses, declares a literal meta block, and orchestrates plan→curate→generate→panel→reconcile→retry, skipping passed contracts and chunking the panel ≤16."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Workflow engine + conformance harness",
+      "description": "WorkflowEngine implements PipelineEngine name='workflow' (buildArgs→invoke→flush) with a dormant eligibility probe and TS re-dispatch on WorkflowUnavailableError; the EngineConformanceHarness asserts ts/skill artifact equivalence and is wired as a CI gate.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: With engine='workflow' in a CI/headless environment, the run completes via TS downgrade with no partial .bober/ flush.",
+        "AC2: WorkflowUnavailableError on the first invoke re-dispatches the TS engine before any sprint is flushed.",
+        "AC3: EngineConformanceHarness.assertEquivalent reports equivalent=true for ts vs skill over a fixture spec and reports diffs when artifacts differ."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "TypeScript strict mode produces zero errors and ESLint produces zero errors across all new files.",
+      "verificationMethod": "Run npm run typecheck and the lint command; both exit 0."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The TS pipeline path is byte-for-byte unchanged in behavior; the workflow path never owns truth and is crash-safe at every flush.",
+      "verificationMethod": "Existing pipeline tests stay green; conformance harness asserts equivalent .bober/ artifacts; flush-after-each-contract verified by unit test."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The pure-JS reducer port and TS twin cannot silently drift.",
+      "verificationMethod": "CI conformance test asserts byte-identical reconciled EvalResult over fixture lens-vectors; editing one side without the other fails the test."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "Claude Code Dynamic Workflows runtime (research-preview, paid-only, CC >= 2.1.154) — invoked dormantly via WorkflowEngine.invoke",
+      "Anthropic provider/model resolved into args.models via the existing model-resolver"
+    ],
+    "dataModel": "FROZEN contracts protocol: PlanSpec, SprintContract, EvalResult, HistoryEntry JSON under .bober/. New TS types: PipelineEngineName, WorkflowArgs, WorkflowRunResult, ResumeCursor, ConformanceReport. PipelineResult reused verbatim.",
+    "securityConsiderations": [
+      "No SDK leakage outside providers/ adapters.",
+      "No network egress added; workflow path is local orchestration over existing agent dispatch."
+    ],
+    "existingPatterns": "Mirror checkpoints/registry.ts config-driven mechanism resolution for the engine selector. Use src/state (saveContract/updateContract/appendHistory/updateProgress) for all fs. ESM with .js import specifiers. Zod for any new config. Collocated *.test.ts with Vitest. Unicode box-drawing section headers in long files."
+  },
+  "sprints": [
+    "sprint-spec-20260604-workflow-engine-1",
+    "sprint-spec-20260604-workflow-engine-2",
+    "sprint-spec-20260604-workflow-engine-3",
+    "sprint-spec-20260604-workflow-engine-4",
+    "sprint-spec-20260604-workflow-engine-5",
+    "sprint-spec-20260604-workflow-engine-6"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "10-16 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Primary risk is reducer twin/port drift, gated by the conformance harness. The live invoke transport is the only genuinely uncertain piece and is deliberately dormant behind the eligibility probe with TS fallback, removing it from the critical path."
+  },
+  "completedAt": "2026-06-04T00:21:25.051Z"
+}

@@ -1,0 +1,69 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-5",
+  "status": "complete",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-5-1",
+      "met": true,
+      "evidence": "parseSlitherOutput on committed __fixtures__/slither-sample.json -> 2 findings (path/line/vulnClass verified); parseSemgrepOutput on semgrep-sample.json -> 2 findings; malformed/wrong-shape inputs -> [] never throwing; 12/12"
+    },
+    {
+      "criterionId": "sc-5-2",
+      "met": true,
+      "evidence": "middle-scanner ENOENT throw and nonzero-exit each yield [] for that scanner while others' findings survive; resolves without rejecting"
+    },
+    {
+      "criterionId": "sc-5-3",
+      "met": true,
+      "evidence": "real node -e sleeping child SIGKILLed on AbortSignal.abort() (~100-300ms), pre-filter resolves with partial (fast scanner's) findings; execa cancelSignal+killSignal:'SIGKILL' semantics verified in scratch script"
+    },
+    {
+      "criterionId": "sc-5-4",
+      "met": true,
+      "evidence": "scanners:[] -> runScannerPreFilter never called, no priors section, scannerRan:false; scanners configured -> pre-filter invoked, findings folded into priors section, scannerRan:true; caller priors + scanner findings combine; 28/28"
+    },
+    {
+      "criterionId": "sc-5-5",
+      "met": true,
+      "evidence": "build+tsc clean, lint 0 errors, full suite 312 files / 4019 tests (+15); grep proves no real slither/semgrep binary invoked in tests"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/orchestrator/security-scanners.ts",
+      "action": "created",
+      "description": "runScannerPreFilter + pure parsers + rawTextFallback (2000-char bound) + detectScannerKind + injectable ScannerRunner (execa cancelSignal/SIGKILL/reject:false/maxBuffer 10MB) + inferVulnClass keyword heuristic (never fabricates)"
+    },
+    {
+      "path": "src/orchestrator/security-scanners.test.ts",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/__fixtures__/slither-sample.json",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/__fixtures__/semgrep-sample.json",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/security-auditor-agent.ts",
+      "action": "modified",
+      "description": "signature UNCHANGED; internal AbortController keyed to timeoutMs; scanner findings concatenated onto caller priors; scannerRan = configuredScanners.length>0 || effectivePriors.length>0"
+    },
+    {
+      "path": "src/orchestrator/security-auditor-agent.test.ts",
+      "action": "modified",
+      "description": "+3 sc-5-4 wiring tests via module mock; no existing tests modified"
+    }
+  ],
+  "testsAdded": [
+    "src/orchestrator/security-scanners.test.ts",
+    "security-auditor-agent.test.ts +3"
+  ],
+  "commits": [
+    "bf2a31b - bober(sprint-5): scanner pre-filter with slither/semgrep parsers"
+  ],
+  "blockers": [],
+  "notes": "gate/CLI untouched (git diff --stat: only 6 intended files). package.json untouched. Documented ceiling (bober: comment): ANY nonzero exit -> [] even for scanners whose convention is nonzero=findings (e.g. semgrep --error) \u2014 operators must configure exit-0 commands. slither reentrancy left vulnClass-undefined intentionally (no clean 6-class fit)."
+}

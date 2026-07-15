@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-2",
+  "specId": "spec-20260615-team-abstraction",
+  "sprintNumber": 2,
+  "title": "Per-team memory namespacing of the lessons store",
+  "description": "Thread an optional per-team namespace through the lessons memory store (src/state/memory.ts) and the retriever (src/orchestrator/memory/retrieve.ts), and update every caller to derive its namespace from the active team. The default/programming namespace resolves to the existing `.bober/memory/` path (no migration, pre-existing lessons stay visible); a named team's namespace resolves to `.bober/memory/<namespace>/`. After this sprint, two teams' lessons are fully isolated in both directions.",
+  "status": "completed",
+  "completedAt": "2026-06-15T12:35:00Z",
+  "dependsOn": ["sprint-spec-20260615-team-abstraction-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "All tests pass with zero failures, including new collocated namespace tests and the existing memory tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "memory.ts path helpers and public functions (appendLesson, loadLessonIndex, loadLesson) accept an optional namespace; a named namespace resolves to .bober/memory/<namespace>/ and the default/empty namespace resolves to the existing .bober/memory/ path. A unit test asserts both resolved paths.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "Isolation: a unit test appends a lesson under namespace 'teamA', then loadLessonIndex for 'teamA' returns it while loadLessonIndex for the default namespace does NOT; and a lesson appended under the default namespace is NOT returned for 'teamA'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "Back-compat: calling the memory functions with no namespace reads/writes the existing .bober/memory/ path; a unit test writing a fixture lesson into .bober/memory/ (no namespace) is still loaded by the no-namespace loadLessonIndex.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "retrieveRelevantLessons accepts and honors the namespace, returning only that namespace's lessons. A unit test seeds two namespaces and asserts retrieval is scoped.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "The `bober memory` CLI and the chat memory distill (buildMemoryDistill) derive the namespace from the active team (loadTeam), defaulting to the programming/current path. A unit test exercises the CLI/distill namespace resolution (e.g. default team -> current path).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not introduce the semantic_facts SQLite table — that is Phase 3 (only the .bober/memory/ lessons store is namespaced here)",
+    "Do not migrate existing lessons into a 'programming/' subdir — the default team keeps the current .bober/memory/ path",
+    "Do not change pipeline-shape selection — that is Sprint 3",
+    "Do not add CLI --team flags or the example team — that is Sprint 4",
+    "Do not add memory hygiene/decay or reconcile-on-write (Phase 3+)"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Lessons are isolated per namespace in both directions and the default/programming path is unchanged with pre-existing lessons still visible"
+  ],
+  "definitionOfDone": "memory.ts and retrieve.ts accept an optional namespace; memoryDir(projectRoot, namespace?) returns .bober/memory/ for the default/empty namespace and .bober/memory/<namespace>/ otherwise. appendLesson, loadLessonIndex, loadLesson, and retrieveRelevantLessons thread the namespace. All callers (src/cli/commands/memory.ts, src/chat/chat-session.ts buildMemoryDistill, src/orchestrator/memory/distill.ts) derive the namespace from the active team via loadTeam, defaulting to programming (current path). Lessons are fully isolated across namespaces; the default path and pre-existing lessons are untouched. Build, typecheck, and all tests (new + existing memory tests) pass.",
+  "assumptions": [
+    "The programming/default team's memoryNamespace sentinel (from Sprint 1) maps to the existing .bober/memory/ path with no subdir, so no migration is needed.",
+    "Namespace values are constrained to safe path segments (alphanumeric/underscore/hyphen) — already enforced by the Sprint 1 schema regex — preventing path traversal.",
+    "The INDEX.md file is per-namespace (.bober/memory/<ns>/INDEX.md), so each team has its own bounded index."
+  ],
+  "outOfScope": [
+    "semantic_facts table and bi-temporal facts (Phase 3)",
+    "Memory hygiene/decay/reconcile-on-write (Phase 3+)",
+    "Pipeline-shape selection (Sprint 3) and CLI/example team (Sprint 4)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Thread namespace as an optional trailing parameter to preserve back-compat for any caller not yet updated.\n\nVerified touch points:\n- src/state/memory.ts: memoryDir(projectRoot) at :15, lessonPath at :19, indexPath at :23 — add optional namespace and, when present+non-empty, join MEMORY_DIR/<namespace>. appendLesson at :195, loadLessonIndex at :241, loadLesson — add optional namespace and pass through to the path helpers. Keep INDEX_FILE per-namespace.\n- src/orchestrator/memory/retrieve.ts: retrieveRelevantLessons(projectRoot, keywords, opts) at :79 — add namespace to opts (or a param) and pass through to loadLessonIndex/loadLesson.\n- Callers to update to derive namespace from the active team (loadTeam(config, teamId).memoryNamespace, default programming -> '' -> current path):\n  - src/cli/commands/memory.ts: appendLesson:68, loadLessonIndex:58 & :93, loadLesson:139. Add an optional --team (or --namespace) option that resolves via loadTeam; default keeps current path.\n  - src/chat/chat-session.ts: buildMemoryDistill at :41 (loadLessonIndex:43, loadLesson:49). The session already knows its config/team context; pass the active team's namespace.\n  - src/orchestrator/memory/distill.ts: appendLesson — write lessons under the active run's team namespace (default programming).\n\nBack-compat rule: namespace undefined OR '' OR 'programming' -> .bober/memory/ (current path, no subdir). Any other value -> .bober/memory/<value>/. Centralize this mapping in one helper so every path computation agrees.\n\nUse node:fs/promises (async) and ensureDir; no fs mocks — use real temp dirs in tests and clean up (project principle). Reuse LessonEntrySchema/serialization unchanged.\n\nTests: collocate in src/state/memory.test.ts (extend) and a new namespace test. Seed two namespaces in a temp projectRoot, assert isolation both directions, assert default path round-trips a pre-existing fixture, assert retrieveRelevantLessons is scoped.",
+  "evaluatorNotes": "sc-2-4: assert memoryDir(root) === <root>/.bober/memory and memoryDir(root,'teamA') === <root>/.bober/memory/teamA; same for lessonPath/indexPath.\nsc-2-5: appendLesson(root, lessonA, 'teamA'); loadLessonIndex(root,{...},'teamA') includes lessonA; loadLessonIndex(root,{...}) (default) excludes it. Then appendLesson(root, lessonB) (default); loadLessonIndex(root,{...},'teamA') excludes lessonB.\nsc-2-6: manually write a valid lesson .md + INDEX line into <root>/.bober/memory/ and assert no-namespace loadLessonIndex returns it (proves default path unchanged).\nsc-2-7: seed lessons in 'teamA' and 'teamB'; retrieveRelevantLessons(root, keywords, {namespace:'teamA'}) returns only teamA's.\nsc-2-8: invoke the memory CLI / buildMemoryDistill with the default team and assert it reads the current path; with a named team assert it reads the subdir.\nRun npm run build, npm run typecheck, npm run test (must include existing memory tests green).",
+  "estimatedFiles": [
+    "src/state/memory.ts",
+    "src/state/memory.test.ts",
+    "src/orchestrator/memory/retrieve.ts",
+    "src/cli/commands/memory.ts",
+    "src/chat/chat-session.ts",
+    "src/orchestrator/memory/distill.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-15T00:00:00Z",
+  "updatedAt": "2026-06-15T00:00:00Z"
+}

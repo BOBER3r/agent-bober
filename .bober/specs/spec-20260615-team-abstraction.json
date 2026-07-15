@@ -1,0 +1,160 @@
+{
+  "specId": "spec-20260615-team-abstraction",
+  "version": 1,
+  "createdAt": "2026-06-15T00:00:00Z",
+  "updatedAt": "2026-06-15T00:00:00Z",
+  "title": "Domain-Agnostic Team Abstraction (Chattable-Team Phase 4)",
+  "description": "Make a 'team' a data object rather than hardcoded pipeline logic, so adding a team is configuration not code. The existing programming pipeline becomes the first Team instance; the lessons memory store is namespaced per team; and the pipeline shape (encoded SOP) is resolved from the active team. This is the domain-agnostic spine that later domains (e.g. the deferred medical team) plug into. CLI-first, provider-agnostic, no new heavy deps. Note: this is the user's 'Phase 2' and corresponds to research roadmap Phase 4; the interrupt/approve/steer phase (research Phase 2) is intentionally not built here.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-15T12:55:00Z",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-phase-scope",
+      "answer": "Plan research-roadmap Phase 4 'Team abstraction generalization' (the user's 'Phase 2'), NOT the interrupt/approve/steer phase (research Phase 2). Confirmed by the user against the memory note's mental model.",
+      "resolvedAt": "2026-06-15T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-team-config-location",
+      "answer": "Option A: team definitions live as an optional `teams` section in bober.config.json plus a built-in 'programming' team registered in code. A `.bober/teams/*.json` file registry is explicitly deferred (can be layered on later by merging file teams with config teams without changing the Team type).",
+      "resolvedAt": "2026-06-15T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-spawn-mode-and-pause-points",
+      "answer": "User selected 'supervised by default' and 'configurable per spawn' — but these pertain to the interrupt/approve/steer phase (research Phase 2), which is NOT built in this spec. Recorded for the future interrupt/steer plan; no effect on the Team abstraction.",
+      "resolvedAt": "2026-06-15T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-architect-first",
+      "answer": "Plan directly now (no bober-architect pass). Phase 4 reuses the existing role/provider routing, pipeline selector, and memory store; the new design (Team data model, per-team namespacing, team-aware shape selection) mirrors established Phase 1 patterns.",
+      "resolvedAt": "2026-06-15T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "lets go with A for now write the sprints",
+      "resolvedAt": "2026-06-15T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Scope is research-roadmap Phase 4 'Team abstraction generalization' (the user's 'Phase 2'). The interrupt/approve/steer-in-chat phase (research Phase 2) is OUT of scope here.",
+    "Phase 3 is not built, so the `semantic_facts` SQLite table does not exist yet. Per-team namespacing in this plan covers ONLY the existing `.bober/memory/` lessons store (src/state/memory.ts:15-25). `semantic_facts.scope` namespacing is deferred to Phase 3.",
+    "A team differs along three already-existing axes: per-role provider routing (RoleProviderMap via resolveRoleProviders, src/config/role-providers.ts:97), memory namespace, and pipeline shape (the encoded SOP resolved by selectPipelineEngine, src/orchestrator/workflow/selector.ts:50). No dynamic arbitrary-role execution graph is built; a different team's behavior is realized as a different pipeline shape ('same engine, different SOP').",
+    "Team definitions live as an optional `teams` record in bober.config.json plus a built-in 'programming' team registered in code (Option A). A `.bober/teams/*.json` file registry is deferred.",
+    "The default/programming team keeps the current `.bober/memory/` path (no migration; existing lessons stay live). Additional named teams get a `.bober/memory/<namespace>/` subdir.",
+    "The abstraction is validated with a minimal NON-medical example team defined purely as data (e.g. a 'docs'/'research-only' team). The medical team is not built.",
+    "Medical team, code-enforced guardrail enforcement, and the full medical SOP are OUT of scope (research Phase 6). The Team type may carry a forward-compat optional `guardrails` field, but nothing enforces it.",
+    "Zero behavior change for the existing programming pipeline is a hard requirement: the full existing test suite stays green and build+typecheck stay clean. loadTeam(config) with no team id must reproduce today's routing, shape, and memory path exactly.",
+    "CLI-first and provider-agnostic: everything runs identically on Anthropic and OpenAI-compatible (DeepSeek) providers. No new heavy dependencies; new code is ESM/NodeNext strict TS with .js import extensions, no SDK types leaking outside src/providers/."
+  ],
+  "outOfScope": [
+    "The interrupt/approve/steer-in-chat phase: input-required/paused RunState, mid-run pause/resume, approve/reject/steer via chat (research Phase 2).",
+    "The semantic_facts SQLite table, bi-temporal facts, reconcile-on-write, and memory hygiene/decay (research Phase 3).",
+    "The medical team, code-enforced guardrails, health ingestion adapters, the code-as-tool sandbox, and literature retrieval (research Phase 6).",
+    "Dynamic arbitrary-role execution graphs, a visual team builder, and any team DSL beyond JSON config.",
+    "A `.bober/teams/*.json` file registry (deferred; Option A only for now).",
+    "Self-improvement loops (ExpeL fail->pass extraction, GEPA prompt evolution).",
+    "Any second PRODUCTION team beyond the minimal example fixture used to validate the abstraction.",
+    "Changing the public behavior of runPipeline, resolveRoleProviders, selectPipelineEngine, or the memory store for the default/programming team."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Team data model + registry + programming team as instance #1",
+      "description": "A `Team` data type and a `loadTeam(config, teamId?)` resolver, with a built-in 'programming' team that reproduces today's behavior. An optional `teams` config section and `defaultTeam` field let additional teams be declared as data.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When loadTeam(config) is called with no team id, it returns the built-in 'programming' team whose providers deep-equal resolveRoleProviders(config), whose pipelineShape equals the resolved engine for config, and whose memoryNamespace maps to the current .bober/memory/ path.",
+        "AC2: When bober.config.json declares a `teams` entry and `defaultTeam`, the schema parses it and loadTeam(config, '<id>') returns a Team built from that entry (providers merged over resolved defaults, namespace and pipelineShape from the entry).",
+        "AC3: When loadTeam is called with an unknown team id, it throws a clear error naming the missing id.",
+        "AC4: The existing pipeline and chat continue to behave identically (no regression) because the active team defaults to 'programming' everywhere."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Per-team memory namespacing of the lessons store",
+      "description": "The `.bober/memory/` lessons store accepts an optional per-team namespace threaded through memory.ts and retrieve.ts and all callers. The default/programming namespace resolves to the current path; named teams get a subdir, so teams' lessons never cross-contaminate.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a lesson is appended under namespace 'teamA' and the index is loaded for 'teamA', the lesson is returned; loading the index for the programming/default namespace does NOT return it (isolation in both directions).",
+        "AC2: When the memory functions are called with no namespace (back-compat), they read and write the existing `.bober/memory/` path unchanged, and pre-existing lessons remain visible.",
+        "AC3: The `bober memory` CLI and the chat memory distill derive their namespace from the active team, defaulting to the programming/current path.",
+        "AC4: retrieveRelevantLessons honors the namespace and returns only that namespace's lessons."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Team-aware pipeline-shape selection",
+      "description": "The pipeline engine / encoded SOP is resolved from the active team's pipelineShape, falling back to global config for the programming team. A team declaring a different shape selects a different engine — 'same engine substrate, different SOP'.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the active team is 'programming', the selected engine is identical to selectPipelineEngine(config) today (e.g. TsPipelineEngine for engine 'ts').",
+        "AC2: When the active team declares a different pipelineShape, the corresponding engine is selected, while the existing eligibility/careful downgrade rules still apply.",
+        "AC3: runPipeline resolves the active team and uses its pipelineShape; with no team specified it resolves to 'programming' and behaves as today."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Second team as data + CLI wiring + docs (the platform proof)",
+      "description": "A minimal non-medical example team defined purely as config, plus `--team`/team selection on `bober run` and `bober chat`, plus documentation. Proves that adding a team is data, not code.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A minimal example team is defined purely as data (a `teams` config entry) with no new code path; loadTeam returns it with its own namespace, pipelineShape, and providers.",
+        "AC2: `bober run --team <id>` and `bober chat` team selection route the run to the named team's namespace, shape, and providers; omitting the flag uses the programming team unchanged.",
+        "AC3: Lessons produced under the example team land in its memory namespace, not the programming namespace.",
+        "AC4: Documentation explains 'adding a team is data, not code', including the `teams` config shape and the deferred file-registry path."
+      ],
+      "dependencies": ["feat-2", "feat-3"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "All new code is ESM/NodeNext with .js import extensions, strict TS, and provider-agnostic (no @anthropic-ai/sdk or openai types outside src/providers/).",
+      "verificationMethod": "Run typecheck and build; grep new src/teams files for SDK imports (must be none)."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The default/programming team is byte-for-byte behavior-compatible: providers, pipeline shape, and memory path are unchanged when no team is specified.",
+      "verificationMethod": "Unit test asserting loadTeam(config).providers deep-equals resolveRoleProviders(config) and memoryNamespace maps to the current `.bober/memory/` path; full existing suite stays green."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Team config is validated by the existing Zod config schema (single loader, single source of truth), not an ad-hoc parser.",
+      "verificationMethod": "Unit test parsing a config with a `teams` section + `defaultTeam` through BoberConfigSchema."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "New src/teams/ module: Team type ({ id, displayName, memoryNamespace, providers: RoleProviderMap, pipelineShape: PipelineEngineName, roles: Role[], guardrails?: unknown }) and loadTeam(config, teamId?). New optional config: teams: Record<string, TeamConfig> + defaultTeam: string in BoberConfigSchema (src/config/schema.ts). Per-team lessons live under .bober/memory/<namespace>/ with the programming/default namespace mapping to the existing .bober/memory/ path.",
+    "securityConsiderations": [
+      "Unknown team id fails fast with a clear error (never silently falls back to programming, which would hide misconfiguration).",
+      "Namespaces are constrained to safe path segments (alphanumeric/underscore/hyphen) so a team id cannot traverse outside .bober/memory/."
+    ],
+    "existingPatterns": "Reuse: resolveRoleProviders(config):RoleProviderMap (src/config/role-providers.ts:97; RoleName union + ALL_ROLES at :10,38), selectPipelineEngine(config) / resolveEngineName (src/orchestrator/workflow/selector.ts:22,50; PipelineEngine at src/orchestrator/workflow/engine.ts:9), runPipeline + its selectPipelineEngine call (src/orchestrator/pipeline.ts:970,977), the BoberConfig Zod schema + createDefaultConfig factory (src/config/schema.ts), the loader's resolveRoleProviders call (src/config/loader.ts:264), the chat client wiring (src/cli/commands/chat.ts:28), and the memory store path helpers + public fns (src/state/memory.ts: memoryDir/lessonPath/indexPath:15-25, appendLesson:195, loadLessonIndex:241, loadLesson) + retrieveRelevantLessons (src/orchestrator/memory/retrieve.ts:79). Memory callers to update: src/cli/commands/memory.ts (appendLesson:68, loadLessonIndex:58/93, loadLesson:139), src/chat/chat-session.ts (buildMemoryDistill:41), src/orchestrator/memory/distill.ts (appendLesson). CLI registration mirrors src/cli/commands/run.ts. Research: .bober/research/20260614-chattable-team-of-agents-platform.md (sections 4-5, roadmap Phase 4)."
+  },
+  "sprints": [
+    "sprint-spec-20260615-team-abstraction-1",
+    "sprint-spec-20260615-team-abstraction-2",
+    "sprint-spec-20260615-team-abstraction-3",
+    "sprint-spec-20260615-team-abstraction-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "6-9 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Reuses the existing role/provider routing, pipeline selector, and memory store. Risk concentrated in: keeping the programming team byte-for-byte behavior-compatible (S1 regression), threading a namespace through memory.ts + all callers without breaking back-compat (S2), team-aware shape selection without disturbing eligibility/careful downgrade (S3), and proving the abstraction with a data-only second team (S4). Each is isolated to its own sprint and verified independently. Dependency note: semantic_facts namespacing is deferred to Phase 3 (table does not exist yet)."
+  }
+}

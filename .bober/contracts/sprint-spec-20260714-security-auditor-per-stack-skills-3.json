@@ -1,0 +1,87 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-3",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 3,
+  "title": "Author the money/crypto security skill files: solidity, anchor, igaming, dex-backend",
+  "description": "Author the four highest-value per-stack security skill files as discrete signature blocks in the sprint-2 format, sourced from research-20260714. These are the money-handling stacks the customer cares about most: on-chain (solidity reentrancy/oracle/access-control/ERC4626-inflation/unsafe-ERC20; anchor account-constraint/unchecked-sysvar/PDA/CPI) and money-flow backends (igaming TOCTOU-double-spend/client-supplied-odds/idempotency/RNG/seamless-wallet-rollback/bonus-abuse; dex-backend withdrawal-race/deposit-crediting/decimals/hot-wallet-key-custody/SIWE-replay).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-2"
+  ],
+  "features": [
+    "feat-signatures"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "skills/bober.security-solidity/SKILL.md exists with >= 10 signature blocks covering at least: single/cross-function/read-only reentrancy, spot-price-as-oracle + flash-loan manipulation, missing onlyOwner/role, unprotected initializer/uninitialized proxy, unchecked{} arithmetic, ERC-4626 first-depositor/inflation, unsafe ERC20 (no SafeERC20 / fee-on-transfer / rebasing), tx.origin auth, missing amountOutMin/deadline, DoS unbounded loop \u2014 each with vulnClass, cwe (SWC/CWE), invariant, unsafe/safe examples.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "skills/bober.security-anchor/SKILL.md exists with >= 6 signature blocks covering at least: missing is_signer/is_writable/owner/has_one account constraints, deprecated 'unchecked' sysvar/account loader (load_instruction_at vs _checked), PDA seed collision / missing uniqueness, init vs init_if_needed re-init, CPI to unverified program id, missing signer-authority checks \u2014 vulnClass 'access-control'/'privilege-escalation' as appropriate.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "skills/bober.security-igaming/SKILL.md exists with >= 10 signature blocks covering at least: TOCTOU balance double-spend (read-check-write no lock), non-atomic settlement/idempotency, client-supplied odds/price trust, negative/zero stake, float money, missing webhook HMAC/timestamp, seamless-wallet orphan/replayed rollback, non-CSPRNG game outcome, client-side outcome determination, deposit-limit/self-exclusion enforced only client-side, bonus/wagering-requirement abuse \u2014 vulnClass 'money-integrity'/'race-condition'/'insecure-randomness'/'authn-authz' as appropriate.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "skills/bober.security-dex-backend/SKILL.md exists with >= 10 signature blocks covering at least: withdrawal TOCTOU race (SELECT-compare-UPDATE no row lock), missing withdrawal idempotency, missing 2FA/withdrawal-whitelist cooldown, deposit credited off event-log/webhook without outer-tx-success+balanceOf-delta+confirmations, token decimals mismatch (8/6 vs 18), float/Number token amounts, hot-wallet key in env/config/repo, KMS/HSM signer without authz gate, SIWE/EIP-4361 recover-but-skip-domain/nonce/chainId replay, missing circuit breaker on price feed \u2014 vulnClass 'money-integrity'/'race-condition'/'secret-handling'/'crypto-weakness' as appropriate.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "All four new skill files parse via SecuritySignatureParser (reading the REAL files) to their claimed block counts with zero dropped blocks; every signature's vulnClass is a VulnClass union member; npm run build + typecheck + lint pass; full suite green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not author node/payments/react skill files (sprint 4).",
+    "Do not build the index/selector/registry or wire retrieval into the finder (sprint 5).",
+    "Do not duplicate the existing bober.solidity ## Security Checklist verbatim \u2014 the new bober.security-solidity file is signature-block structured and may cite it, but must be independently parseable.",
+    "Do not change any TypeScript runtime behavior."
+  ],
+  "stopConditions": [
+    "Each of the four files parses to >= its claimed block count with zero dropped blocks.",
+    "Signature content is drawn from research-20260714 (real exploit classes, not invented)."
+  ],
+  "definitionOfDone": "The four money/crypto per-stack security skill files exist, are authored as parseable signature blocks with research-sourced content, and all parse cleanly with union-member vulnClasses; the suite stays green.",
+  "assumptions": [
+    "The sprint-2 signature-block format and parser are the contract for these files.",
+    "Signature content is sourced from .bober/research/research-20260714-...-research.md sections B (iGaming), C (DEX/crypto on-chain + off-chain), and the solidity checklist already in skills/bober.solidity/SKILL.md:399.",
+    "SWC/CWE ids are used where they apply (e.g. SWC-107 reentrancy, CWE-362 TOCTOU, CWE-798 hardcoded creds); cwe may be null where no clean id applies."
+  ],
+  "outOfScope": [
+    "node/payments/react skill files, index/selector/registry, finder wiring (later)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "This is a content-dense authoring sprint. Read .bober/research/research-20260714-...-research.md 'External State of the Art' sections B/C and the per-domain scratchpad content referenced there for the concrete signatures. For each block: a stable signatureId (e.g. 'igaming.toctou-balance-double-spend'), a one-line title, cwe (SWC-/CWE- or null), severity (money-loss classes default 'critical' or 'high'), vulnClass from the widened union, the invariant that must hold, a MINIMAL unsafe example and its safe counterpart, and keywords (retrieval tokens like 'balance', 'FOR UPDATE', '.raw(', 'postinstall', 'ecrecover', 'load_instruction_at'). Keep examples short (they are grounding, not tutorials). Reuse the frontmatter/format from skills/bober.security-generic/SKILL.md. Verify each file parses by running the parser on it as part of the test.",
+  "evaluatorNotes": "sc-3-1..3-4: read each REAL file, parse it, assert the minimum block count with ZERO dropped blocks (a dropped block = malformed authoring, fail it), and assert every vulnClass is a union member and unsafe/safe non-empty. Spot-check that the money-loss signatures (TOCTOU, client-odds, withdrawal-race, decimals, hot-wallet key) are actually present by signatureId or keyword. sc-3-5: parser over all four files, build+typecheck+lint+full suite.",
+  "estimatedFiles": [
+    "skills/bober.security-solidity/SKILL.md",
+    "skills/bober.security-anchor/SKILL.md",
+    "skills/bober.security-igaming/SKILL.md",
+    "skills/bober.security-dex-backend/SKILL.md",
+    "src/orchestrator/security-knowledge/skill-files.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-3-1",
+      "timestamp": "2026-07-14T17:35:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-3-1",
+  "updatedAt": "2026-07-14T17:35:00Z",
+  "completedAt": "2026-07-14T17:35:00Z"
+}

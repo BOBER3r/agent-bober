@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-expand-deep-1-1",
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-1",
+  "specId": "spec-20260618-fleet-expand-deep",
+  "timestamp": "2026-06-18T08:08:18Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 8,
+    "requiredFailed": 0,
+    "requiredTotal": 8
+  },
+  "summary": "All 8 required criteria pass (independent verify). build/typecheck/lint/full-suite(2277) clean. Byte-lock confirmed (only 2 new files). validateManifest imported verbatim; responseSchema never referenced; jsonObjectMode:true on both calls; PLAN exhaustion=2 calls no EXPAND leak; budget<=4; constants 1/1/4."
+}

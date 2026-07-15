@@ -1,0 +1,96 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "sprintNumber": 6,
+  "title": "Emit security audit findings into the priority hub",
+  "description": "Make audit results visible in the unified priority surface: after an audit completes (pipeline gate or standalone CLI), critical and important findings are mapped to the canonical hub Finding shape (FindingSchema imported from src/hub/finding.ts, never redefined) and ingested via the existing finding-store path, gated by security.hub (default true within the opt-in security section). Duplicate emission across retries is absorbed by the hub's existing content-hash dedup.",
+  "status": "completed",
+  "createdAt": "2026-07-12T09:30:00.000Z",
+  "updatedAt": "2026-07-12T13:21:11.000Z",
+  "completedAt": "2026-07-12T13:21:11.000Z",
+  "dependsOn": [
+    "sprint-spec-20260712-security-audit-agent-team-2"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "A pure exported mapping function converts a SecurityAuditResult into hub Finding objects (one per critical/important finding) that validate against the canonical FindingSchema imported from src/hub/finding.ts, with a severity mapping documented in code (critical bucket \u2192 the hub's highest applicable severity; important \u2192 a mid severity) and title/body carrying vulnClass, path:line, and description.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "When an audit completes with findings and security.hub is true (default), the Findings are ingested via the existing finding-store ingest function through an injected sink (research-runner precedent); with security.hub:false, zero hub writes occur for an otherwise identical audit; a hub ingest failure is caught and logged and never alters the audit verdict or blocks the pipeline/CLI.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "Emitting the same audit result twice produces no duplicate hub entries (the hub's existing content-hash dedup absorbs it), demonstrated with the real finding-store in a temp directory.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "FindingSchema and the ingest path are imported from src/hub/ \u2014 grep confirms no redefinition of the Finding shape and no schema drift; clean audits (no critical/important findings) emit nothing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green \u2014 existing hub tests unchanged.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not surface findings in Telegram (out of scope per spec).",
+    "Do not modify src/hub/ (FindingSchema, finding-store, priority logic) \u2014 consume only.",
+    "Do not emit info/minor buckets or scanner-only priors that the LLM auditor did not confirm into the review buckets.",
+    "Do not make hub emission affect the gate verdict, exit codes, or timing (fire-and-forget with caught errors, after the verdict is computed)."
+  ],
+  "stopConditions": [
+    "All five criteria verified with the dedup test running against the REAL finding-store in a temp dir.",
+    "Full suite green."
+  ],
+  "definitionOfDone": "Security findings from any audit appear as canonical Findings in the priority hub (deduped, severity-mapped, source-attributed), silenced by security.hub:false, and a hub failure can never change an audit outcome.",
+  "assumptions": [
+    "src/hub/finding.ts owns the canonical Zod FindingSchema and src/hub/ exposes an ingest function (research runner binds findingSink\u2192ingestFinding at finding-store.ts:140 per progress notes); the exact severity enum and required fields are read from the actual schema at implementation time \u2014 the mapping documented in code must use REAL enum values, not invented ones.",
+    "The hub dedup key is content-derived (sha256 over domain|title|kind per prior art), so stable titles per finding (vulnClass + path:line) give retry-idempotent emission.",
+    "A 'security' (or closest existing) domain/kind tag is representable in FindingSchema; if the schema has a closed domain enum without a fitting value, use the closest existing value and record the limitation in code comments and the sprint handoff rather than editing the hub schema.",
+    "Emission call sites are the audit completion points in runSecurityAudit or its two callers \u2014 one shared helper, invoked after verdict computation."
+  ],
+  "outOfScope": [
+    "Telegram surfaces, hub schema changes, digest/priority re-ranking, skill/dogfood/docs (sprint 7)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) READ src/hub/finding.ts and src/hub/finding-store.ts first; mirror how src/research/runner.ts imports FindingSchema/Finding type and takes an INJECTED findingSink dependency (so tests pass a spy and the CLI/pipeline bind ingestFinding at the boundary) \u2014 do not import finding-store deep into the auditor core if the research precedent injects instead. (2) New src/orchestrator/security-hub.ts (or a section in security-auditor-agent.ts if tiny): export mapAuditToFindings(result: SecurityAuditResult): Finding[] (pure) and emitSecurityFindings(result, sink, logger) (try/catch, logs failures, returns void). (3) Wire emission after verdict computation in the shared core path so gate and CLI both get it; gate/CLI must not await-fail on it \u2014 catch inside emitSecurityFindings. (4) Respect config.security.hub with the ?? true default semantics from the schema; when config.security is absent entirely (standalone CLI default-parse case) the parsed section carries hub:true \u2014 fine, the CLI explicitly opted in by running. (5) Dedup test: use the real ingest in a temp .bober; emit twice; count stored findings.",
+  "evaluatorNotes": "For sc-6-1: validate every mapped object with the REAL FindingSchema.parse (not a hand-rolled check); verify severity mapping uses actual enum members by reading src/hub/finding.ts yourself and cross-checking the code's mapping table. For sc-6-2: three tests \u2014 hub:true ingests N findings; hub:false ingests zero; sink that throws \u2192 verdict/exit unchanged and a logged warning. For sc-6-3: real finding-store in temp dir, emit twice, assert store count equals first-emission count. For sc-6-4: grep 'z.object' in the new files for any Finding-shaped redefinition; grep imports to confirm they point at src/hub/. Confirm clean-audit no-op (sink zero calls). Full suite green including hub tests.",
+  "estimatedFiles": [
+    "src/orchestrator/security-hub.ts",
+    "src/orchestrator/security-hub.test.ts",
+    "src/orchestrator/security-auditor-agent.ts",
+    "src/cli/commands/security-audit.ts",
+    "src/orchestrator/security-gate.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "fail",
+      "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-1",
+      "timestamp": "2026-07-12T13:10:31.000Z",
+      "reason": "sc-6-2: unguarded default-sink store setup rejects on fs failure, flips clean audit to blocked"
+    },
+    {
+      "iteration": 2,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-2",
+      "timestamp": "2026-07-12T13:21:11.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-2"
+}

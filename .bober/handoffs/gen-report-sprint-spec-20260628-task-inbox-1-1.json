@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["0e39c1578c6e15df742dc3c05d555ffcac054c5d - bober(sprint-1): task capture persistence helper + bober task add"],
+  "filesChanged": [
+    "src/hub/finding-store.ts (created)",
+    "src/hub/task-inbox.ts (created)",
+    "src/cli/commands/task.ts (created)",
+    "src/hub/finding-store.test.ts (created)",
+    "src/hub/task-inbox.test.ts (created)",
+    "src/cli/commands/task.test.ts (created)",
+    "src/cli/index.ts (modified: registerTaskCommand import + call)"
+  ],
+  "testsAdded": ["src/hub/finding-store.test.ts", "src/hub/task-inbox.test.ts", "src/cli/commands/task.test.ts"],
+  "notes": "17 new tests pass; 107-test hub+facts suite green, no regressions; lint clean (2 pre-existing unrelated warnings). Schema imported (FindingSchema runtime + Finding type-only), domain/urgency/severity neutral defaults applied per never-block fallback."
+}

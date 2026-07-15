@@ -1,0 +1,23 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-3",
+  "status": "complete",
+  "iteration": 1,
+  "note": "First generator attempt was interrupted by an API connection error after creating scope.ts/lenses.ts/scope.test.ts; a continuation generator added judge.ts/judge.test.ts and committed the whole sprint as one commit 01af871.",
+  "commits": ["01af871 - bober(sprint-3): query scope parser + two-pass prioritization judge"],
+  "filesChanged": [
+    "src/hub/scope.ts (created — Scope union, parseScope, pure applyFilter)",
+    "src/hub/scope.test.ts (created, 22 tests)",
+    "src/hub/lenses.ts (created — HUB_LENS_CATALOG, resolveHubLensFocus, RelevanceVerdictSchema, LensScoreSchema, four-tier extractJson, validators)",
+    "src/hub/judge.ts (created — rankFindings two-pass judge)",
+    "src/hub/judge.test.ts (created, 16 tests, ScriptedClient fake)"
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "met": true},
+    {"criterionId": "sc-3-2", "met": true},
+    {"criterionId": "sc-3-3", "met": true},
+    {"criterionId": "sc-3-4", "met": true},
+    {"criterionId": "sc-3-5", "met": true},
+    {"criterionId": "sc-3-6", "met": true}
+  ],
+  "notes": "flagged-for-review = literal string appended to a SPREAD COPY of finding.tags (input never mutated; Finding schema unchanged). aggregate score = SUM of 4 per-lens scores (0-40). Reconcile = strict majority, FAIL-CLOSED ON TIE (passVotes>failVotes => normal rank, else keep+flag). Final sort: aggregate DESC, urgency DESC, severity DESC, dueBy ASC (undefined=+Infinity LAST), id ASC. Filtered scope = pure-JS fast path, ZERO llm calls. LLMClient injected (no provider import). ScriptedClient fake records all ChatParams. 69 hub tests + medical/recommend(73) + eval-lenses(5) regression all green; typecheck/build/lint clean."
+}

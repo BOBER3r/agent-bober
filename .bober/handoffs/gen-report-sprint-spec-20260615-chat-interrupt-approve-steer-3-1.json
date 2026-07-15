@@ -1,0 +1,7 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+  "iteration": 1, "status": "complete", "commit": "fb4b787",
+  "filesChanged": ["src/chat/turn-classifier.ts(+test)", "src/chat/slash-commands.ts(+test)", "src/chat/chat-session.ts", "src/chat/chat-session-approval.test.ts"],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "test": "173 files, 2048 passed, 3 skipped; +27", "lint": "0 errors, 2 pre-existing warnings" },
+  "notes": "REUSED saveApproved/saveRejected/pendingExists (unmodified) + imported resolveApprover (already exported approve.ts:29). pendingExists guard in handleApprove/handleReject -> 'No pending checkpoint found' + writes nothing on missing. Ambiguity rule (resolveCheckpoint): 0 pending->message; 1->use; 2+ unnamed->'which one?' writes nothing. disk round-trip integration test writes rejected marker via setTimeout AFTER request() polling begins (disk.ts cleans .approved/.rejected/.timeout at start, NOT .pending). RunState clear: destructures out pending fields + status:running. PROTECTED FILES UNTOUCHED: approval-state.ts, disk.ts, feedback-router.ts, reject.ts CLI, approve.ts (verified via git stat)."
+}

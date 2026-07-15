@@ -1,0 +1,144 @@
+{
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "version": 1,
+  "createdAt": "2026-06-18T18:30:00Z",
+  "updatedAt": "2026-06-18T18:30:00Z",
+  "title": "Phase A — Tier-by-difficulty provider routing + Grok/xAI provider + tool-role guard",
+  "description": "Make the bober fleet heterogeneous: a head writes a per-child difficulty tier, bober maps it to a provider/model block, Grok/xAI joins the provider pool, and a build-time guard keeps the claude-code subscription provider off roles it cannot drive. Purely additive — omit the tier and the fleet runs byte-identically to today. This is Phase A of arch-20260618-heterogeneous-multi-provider-agent-team (the head-agnostic worker substrate); the shared blackboard + synthesis is the deferred Phase B.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-18T19:10:00Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-tier-table",
+      "answer": "4 tiers across the pool: cheap->DeepSeek, standard->Grok/xAI, hard->Anthropic Sonnet, frontier->Anthropic Opus; default/absent->no overlay (DeepSeek default preserved). Model ids use model-resolver shorthands and are config-overridable.",
+      "resolvedAt": "2026-06-18T18:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-claude-code-placement",
+      "answer": "Head/orchestration only — claude-code is NEVER placed in a tier (children build = tool roles, which claude-code cannot drive, role-providers.ts:25). Tier providers = DeepSeek/Grok/Anthropic-API; the subscription is used by the Claude Code dynamic-workflow head only. The ToolRoleGuard then only ever catches user error.",
+      "resolvedAt": "2026-06-18T18:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-scope",
+      "answer": "Phase A only (tier->provider mapping + Grok provider + ToolRoleGuard, 3 sprints). The shared WAL blackboard + SynthesisStep (Phase B) is a separate later plan.",
+      "resolvedAt": "2026-06-18T18:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts. (User approved assumptions + out-of-scope via the plan approval gate.)",
+      "resolvedAt": "2026-06-18T18:30:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Phase A is purely ADDITIVE to the fleet. The no-flag path (no tier) stays byte-identical: applyTier(base, child.tier=undefined, policy) returns base UNCHANGED, so the existing `merged = {...base, ...(child.config ?? {})}` at src/fleet/child-config.ts:43 runs identically and the ~203 fleet tests stay green.",
+    "Tier enum is a CLOSED set: 'default' | 'cheap' | 'standard' | 'hard' | 'frontier'. Policy table: cheap->DeepSeek (openai-compat https://api.deepseek.com), standard->Grok/xAI (openai-compat https://api.x.ai/v1), hard->Anthropic Sonnet, frontier->Anthropic Opus; 'default'/absent->undefined (no overlay, DeepSeek default preserved). Model ids default to the model-resolver shorthands (deepseek / grok / sonnet / opus) and are overridable via child.config.",
+    "claude-code is NEVER placed in a tier block. A child's generator/evaluator are TOOL_ROLES which claude-code cannot drive (src/config/role-providers.ts:25); tier providers are therefore DeepSeek/Grok/Anthropic-API only. The claude-code subscription is used by the head (a Claude Code dynamic workflow), out of repo.",
+    "Grok/xAI is wired as the EXISTING 'openai-compat' provider pointed at https://api.x.ai/v1 via three DeepSeek-mirroring touch-points (SHORTHAND_MAP model-resolver.ts, validateApiKey factory.ts, createClient key-injection factory.ts) plus a single isXaiEndpoint() predicate reused at all sites; NO new ProviderName value and NO new adapter class. validateManifestCredentials (src/fleet/index.ts) recognizes xAI for free once validateApiKey has the arm; missing XAI_API_KEY fails fast before any child spawn.",
+    "ToolRoleGuard runs in the THROWING fail-fast credential phase (alongside/within validateManifestCredentials, BEFORE coordinator.execute spawns anything), NOT inside the never-throw validateManifest. It reuses the authoritative TOOL_ROLES via a NEW exported isToolRole(role) predicate so it never re-derives the tool-role list.",
+    "The tier field is supplied POST-EXPAND (the head or a hand-authored manifest writes it). The decomposer EXPAND prompt stays {folder,task}-only and the never-throw validateManifest shape guard is unchanged.",
+    "FleetChild gains ONE optional field `tier`; FleetManifestSchema otherwise unchanged. No BoberConfig.fleet section, no manifest.blackboard, no --blackboard flag (all Phase B)."
+  ],
+  "outOfScope": [
+    "The shared WAL facts.db blackboard, SharedBlackboard, SynthesisStep, inter-agent exchange, BoberConfig.fleet section, manifest.blackboard block, and the --blackboard CLI flag (all Phase B).",
+    "A tier-assignment critic / any validation of whether the head tiered correctly (no objective difficulty primitive exists).",
+    "The Claude Code dynamic-workflow head itself (out-of-repo, not a buildable component).",
+    "Auto-emitting tier from the decomposer / changing the EXPAND prompt or validateManifest shape.",
+    "Any change to the no-flag fleet behavior, the DeepSeek child default, or the existing `fleet <manifest>` / `fleet expand` / `fleet expand-deep` command surfaces beyond the additive tier field.",
+    "A new ProviderName union value or a dedicated Grok adapter class."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Grok/xAI provider wiring",
+      "description": "Recognize Grok/xAI as an OpenAI-wire-compatible provider at https://api.x.ai/v1 at the same three resolution sites DeepSeek uses, so a grok* model or api.x.ai endpoint resolves, key-validates, and key-injects without a new adapter.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: resolveProviderModel('grok') (and 'grok-4'/'grok-4-fast' or the chosen ids) returns { provider:'openai-compat', modelId, endpoint:'https://api.x.ai/v1' }, mirroring the deepseek shorthand.",
+        "AC2: validateApiKey for an openai-compat provider whose endpoint isXaiEndpoint requires a key from providerConfig.apiKey ?? XAI_API_KEY and throws a clear 'Grok/xAI ... XAI_API_KEY is not set' error when absent.",
+        "AC3: createClient builds an OpenAICompatAdapter for an api.x.ai endpoint injecting XAI_API_KEY (parallel to the existing DEEPSEEK_API_KEY arm); the adapter class is unchanged.",
+        "AC4: A single isXaiEndpoint(endpoint) predicate is the only place the api.x.ai host string is matched, reused by validateApiKey and createClient; a test asserts all sites agree.",
+        "AC5: validateManifestCredentials recognizes an xAI child section (pre-spawn credential check throws when XAI_API_KEY is missing) with zero edits to its loop body."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "TierProviderPolicy + buildChildConfig tier overlay",
+      "description": "Add a closed difficulty-tier enum on FleetChild and a TierProviderPolicy mapping each tier to a planner/generator/evaluator provider block, overlaid in buildChildConfig BEFORE the existing shallow-merge — byte-identical when tier is absent.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: FleetChildSchema gains an optional tier enum 'default'|'cheap'|'standard'|'hard'|'frontier'; a manifest without tier parses identically to today and an out-of-enum tier is a ZodError at parse.",
+        "AC2: TierProviderPolicy.resolveTier returns undefined for 'default'/absent (no overlay) and the mapped TieredRoleBlock for cheap/standard/hard/frontier (cheap->DeepSeek, standard->Grok api.x.ai, hard->Anthropic Sonnet, frontier->Anthropic Opus).",
+        "AC3: buildChildConfig(child) with no tier produces a BoberConfig byte-identical to today's (DeepSeek planner/generator/evaluator), proven by a deep-equal test against the pre-change output.",
+        "AC4: buildChildConfig(child) with tier='standard' yields planner/generator/evaluator on provider 'openai-compat' + endpoint 'https://api.x.ai/v1'; tier='hard' yields provider 'anthropic' + a Sonnet model; tier='frontier' yields 'anthropic' + an Opus model.",
+        "AC5: The tier overlay is applied BEFORE the existing `merged = {...base, ...(child.config ?? {})}` line, so an explicit child.config still wins over the tier block (child.config precedence preserved)."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "ToolRoleGuard (build-time, fail-fast)",
+      "description": "Reject at manifest-build time any child whose resolved BoberConfig would place claude-code on a TOOL_ROLE, reusing the authoritative TOOL_ROLES, throwing before any child is spawned.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A new exported isToolRole(role) returns true for curator/generator/evaluator/codeReview and false for planner/researcher/chat, derived from the authoritative TOOL_ROLES (no re-declared literal).",
+        "AC2: ToolRoleGuard.check(child, resolvedConfig) returns a ToolRoleViolation {childFolder, role, provider:'claude-code'} when claude-code resolves onto any tool role, else null; it never throws.",
+        "AC3: ToolRoleGuard.assertManifest(manifest) THROWS a named error identifying the offending child.folder + role on the first violation, and runs in the fail-fast credential phase BEFORE coordinator.execute (no child is spawned when it throws).",
+        "AC4: A clean manifest (no claude-code on any tool role, incl. all tier-mapped children) passes assertManifest with no throw and no side effects.",
+        "AC5: The never-throw validateManifest is unchanged; the guard is a separate throwing call, and the no-flag fleet path remains byte-identical."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Byte-identical no-flag path: a manifest with no tier on any child produces serialized child bober.config.json files and spawn behavior identical to before this plan.",
+      "verificationMethod": "A deep-equal test comparing buildChildConfig output for a tier-less child against the known DeepSeek-default config; the full fleet suite (~203 tests) passes unchanged."
+    },
+    {
+      "category": "security",
+      "requirement": "Fail-fast credentials: a missing XAI_API_KEY for a Grok-routed child, and any claude-code-on-tool-role placement, both throw BEFORE any child process is spawned.",
+      "verificationMethod": "Tests that invoke the credential/guard phase with (a) a Grok child and no XAI_API_KEY and (b) a manifest placing claude-code on a generator, asserting a throw and that no spawn occurred."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "No new ProviderName value, no new adapter, and the api.x.ai host is matched in exactly one predicate.",
+      "verificationMethod": "Grep that ProviderName is unchanged and that 'api.x.ai' appears only inside isXaiEndpoint; lint/typecheck clean."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "xAI Grok API at https://api.x.ai/v1 (OpenAI-wire-compatible, via the existing OpenAICompatAdapter)",
+      "DeepSeek + Anthropic providers (existing) as tier targets",
+      "fleet manifest / buildChildConfig / scaffolder (the per-child config seam)"
+    ],
+    "dataModel": "FleetChild gains an optional `tier` enum. New in-memory types: RoleProviderBlock {provider:ProviderName, model:string, endpoint?:string|null}; TieredRoleBlock {planner,generator,evaluator: RoleProviderBlock}; ToolRoleViolation {childFolder, role:RoleName, provider:'claude-code'}. No persistent schema/db changes.",
+    "securityConsiderations": [
+      "claude-code never in a tier; ToolRoleGuard enforces it at build time (defense for hand-authored child.config).",
+      "Grok key via XAI_API_KEY, validated pre-spawn; openai-compat adapter unchanged.",
+      "No new network surface; reuses the openai-compat adapter path."
+    ],
+    "existingPatterns": "Mirror the DeepSeek wiring exactly (model-resolver SHORTHAND_MAP deepseek entry + endpoint attach; factory.ts validateApiKey/createClient api.deepseek.com arms). Reuse role-providers.ts effectiveProvider/TOOL_ROLES. Flow the tier block through the existing shallow-merge at child-config.ts:43. Follow arch-20260618-heterogeneous-multi-provider-agent-team ADR-2 (tier as post-EXPAND mapping) and ADR-4 (Grok as openai-compat)."
+  },
+  "sprints": [
+    "sprint-spec-20260618-fleet-tier-provider-routing-1",
+    "sprint-spec-20260618-fleet-tier-provider-routing-2",
+    "sprint-spec-20260618-fleet-tier-provider-routing-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "low",
+    "riskNotes": "All three sprints are additive extensions of proven seams (DeepSeek wiring, the shallow-merge child-config, role-providers). The main risk is the byte-identical guarantee of the tier overlay, mitigated by a deep-equal test against the pre-change config. No persistent state, no new adapter, no decomposer-prompt change. Phase B (blackboard) is deliberately excluded."
+  }
+}

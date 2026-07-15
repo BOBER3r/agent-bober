@@ -1,0 +1,13 @@
+{
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["0edf3d1 - bober(sprint-2): fleet expand subcommand — write-and-stop, --yes gate"],
+  "filesChanged": [
+    { "path": "src/fleet/index.ts", "action": "modified", "description": "+185/-2. Added FleetExpandOptions/FleetExpandDeps interfaces, exported runFleetExpand(goal, opts, deps?) (credential fail-fast via createClient FIRST, before any IO; decomposeGoal; atomic temp+rename write via ensureDir; overwrite notice; print manifest+review hint; --yes gates runFleet), and registerFleetExpandSubcommand(fleet). registerFleetCommand refactored to capture `const fleet = program.command(...)` and call registerFleetExpandSubcommand(fleet); the `fleet <manifest>` .command string + .action body are byte-identical." },
+    { "path": "src/fleet/expand.test.ts", "action": "created", "description": "14 tests with real temp dirs + env save/restore + FleetExpandDeps fake injection. Covers sc-2-4 (write-and-stop, runFleet never called), sc-2-5 (--yes calls runFleet once with outPath, after write), sc-2-6 (credential throw → no file, decompose not called), sc-2-8 (overwrite notice + --out redirect), sc-2-7 (fleet+expand both registered, manifest positional intact, options present)." }
+  ],
+  "testsAdded": ["src/fleet/expand.test.ts"],
+  "blockers": [],
+  "notes": "EVALUATOR — verify these safety invariants independently: (1) createClient is the FIRST statement in runFleetExpand (before ensureDir/writeFile); sc-2-6 test injects a throwing createClient fake to avoid the BOBER_TEST_DETERMINISTIC guard (factory.ts:182-184) that would otherwise bypass validateApiKey. (2) the only runFleet call site is structurally inside `if (opts.yes) { ... }`. (3) `fleet <manifest>` registration byte-identical (only change is `program` → `const fleet = program` capture + trailing registerFleetExpandSubcommand(fleet) call). Full suite reported 2246 passing; no scanner flake observed this run."
+}

@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-5",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "met": true, "evidence": "tsc --noEmit exit 0; tsc exit 0; eslint src/ exit 0 (0 errors, 2 pre-existing warnings). Orphaned NoteStatus import removed from reindex.ts."},
+    {"criterionId": "sc-5-2", "met": true, "evidence": "profile.test.ts sc-5-2: plaintext profile.yaml -> typed VaultProfile {owner,domain,tags[]}; standalone YAML wrapped in --- for parseFrontmatter"},
+    {"criterionId": "sc-5-3", "met": true, "evidence": "sc-5-3: SOPS fixture -> toEqual({encrypted:true}) exact; name/sops/version/mac all undefined; detection via 'sops' in frontmatter (key-presence; parser stores sops: as empty string)"},
+    {"criterionId": "sc-5-4", "met": true, "evidence": "sc-5-4: missing profile.yaml -> undefined (ENOENT caught, no throw); constants ACTIVE_STATUS='active', SUPERSEDED_STATUS='superseded' (byte-identical to sprint-2), ATTACHMENTS_DIR='attachments'"}
+  ],
+  "filesChanged": [
+    {"path": "src/vault/conventions.ts", "action": "created", "description": "Canonical ACTIVE_STATUS/SUPERSEDED_STATUS (NoteStatus) + ATTACHMENTS_DIR"},
+    {"path": "src/vault/index-map.ts", "action": "modified", "description": "local SUPERSEDED_STATUS const replaced with re-export from ./conventions.js (line 75)"},
+    {"path": "src/vault/reindex.ts", "action": "modified", "description": "import SUPERSEDED_STATUS from conventions + re-export; removed orphaned NoteStatus type import (noUnusedLocals build-breaker)"},
+    {"path": "src/vault/profile.ts", "action": "created", "description": "resolveProfile async: reads profile.yaml via node:fs/promises, wraps in --- for parseFrontmatter, SOPS via 'sops' in frontmatter, ENOENT->undefined, no clock/crypto/sops"},
+    {"path": "src/vault/profile.test.ts", "action": "created", "description": "4 tests sc-5-2/3/4 via mkdtemp temp-dir + inline YAML fixtures"}
+  ],
+  "testsAdded": ["src/vault/profile.test.ts"],
+  "commits": ["bb95d3b - bober(sprint-5): vault conventions + profile resolver + SUPERSEDED_STATUS convergence"],
+  "blockers": [],
+  "notes": "tsc/tsc --noEmit/eslint src/ all exit 0 (0 errors). vitest run src/vault/ 6 files 67 tests pass — Sprint-2 SUPERSEDED_STATUS.toBe('superseded') tests in index-map.test.ts:116 + reindex.test.ts:166 GREEN. Full suite 228 files 2911 tests pass, zero regressions. Removed orphaned NoteStatus import in reindex.ts (was the curator-flagged build-breaker). profile.ts clock/crypto/sops only in doc-comments (lines 10-11), no executable call. Source-purity unit test omitted because profile.ts doc-comment contains literal 'Date.now()' text -> regex false-positive; contract's 4 criteria don't require a purity test."
+}

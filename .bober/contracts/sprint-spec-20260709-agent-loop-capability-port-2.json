@@ -1,0 +1,90 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 2,
+  "title": "Cost substrate: CostMeter price table, ChatResponse.costUsd, Budget maxUsd",
+  "description": "Build the money layer with no loop changes. A new pure CostMeter maps (provider, model, tokenUsage) to a USD estimate via a static all-provider price table (longest-prefix match, unknown \u2192 undefined). Every adapter populates optional ChatResponse.costUsd \u2014 claude-code returns its real, currently-discarded total_cost_usd and never estimates (ADR-3); anthropic/openai/openai-compat (and google where usage is normalized) use the CostMeter. Budget gains an optional maxUsd ceiling alongside tokens/agents.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "estimateCostUsd({provider, model, usage}) returns the correct USD for known models via longest-prefix match on `${provider}:${modelPrefix}` keys and undefined for unknown models; the table carries rows for anthropic, openai, openai-compat (DeepSeek, xAI/Grok) and google with an as-priced date comment.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "The claude-code adapter returns costUsd equal to the CLI's parsed total_cost_usd (vendor-authoritative), never a CostMeter estimate, and omits the field when the CLI output lacks it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "The anthropic and openai/openai-compat adapters set costUsd from estimateCostUsd when a price row matches and omit the field entirely when it returns undefined.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "Budget accepts maxUsd (null/omitted = unlimited): chargeUsd accumulates into usdSpent; remainingUsd() returns Infinity when uncapped; exceeded() and assertWithinBudget() honor the USD axis with BudgetExceededError kind 'usd'; NaN/negative/undefined charges are treated as 0.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "All pre-existing Budget token/agent tests and provider adapter tests pass unchanged (byte-identical when maxUsd/costUsd are absent).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not wire Budget into the agentic loop or any role (sprint 3).",
+    "Do not add config schema fields (sprint 3).",
+    "Do not make the price table config-overridable (explicitly declined in planning Q1).",
+    "Do not fetch prices at runtime \u2014 the table is static and in-repo."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: prefix matching + undefined for unknown, claude-code real-cost passthrough, adapter estimate-or-omit behavior, and the full USD Budget axis including error kind 'usd'.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "A pure src/providers/cost-meter.ts exposes estimateCostUsd with a dated all-provider PriceTable; every API adapter populates optional ChatResponse.costUsd (real for claude-code); Budget enforces an optional maxUsd with chargeUsd/usdSpent/remainingUsd and BudgetExceededError kind 'usd'. Nothing consumes these yet; omitting them is byte-identical. Build and full suite green.",
+  "assumptions": [
+    "claude-code.ts already parses total_cost_usd (~:55) and discards it in the return block (~:182-190); this sprint threads it into the return.",
+    "ChatResponse (src/providers/types.ts:212-224) gains optional costUsd \u2014 LLMClient.chat signature unchanged.",
+    "Budget lives at src/orchestrator/workflow/budget.ts (BudgetOptions ~:19-24, BudgetExceededError ~:27-36); its existing workflow-interpreter callers must remain source-compatible.",
+    "ProviderName union comes from src/providers/factory.ts (~:13); DeepSeek/Grok run through openai-compat so their price keys use model-prefix distinctions (e.g. 'openai-compat:deepseek', 'openai-compat:grok').",
+    "Price values are best-known list prices at build time with an as-priced date comment; guardrail-not-billing semantics (approved planning answer Q1)."
+  ],
+  "outOfScope": [
+    "Loop charging and stop behavior (sprint 3).",
+    "History/report persistence of cost (sprint 3)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/providers/cost-meter.ts: export type PriceRow { inputPerMillion: number; outputPerMillion: number }, type PriceTable = Record<string, PriceRow> keyed `${provider}:${modelPrefix}`, and estimateCostUsd(input: {provider, model, usage}): number | undefined implementing longest-prefix match (sort matching keys by prefix length desc). Include a '// Prices as of 2026-07 (list prices; guardrail semantics, not billing)' comment. Populate rows for anthropic (claude-fable-5, claude-opus-4, claude-sonnet-5, claude-haiku-4-5 prefixes), openai, openai-compat:deepseek, openai-compat:grok, google:gemini \u2014 verify current list prices before hardcoding; if a price cannot be confirmed, omit the row (undefined is the safe fail-open) rather than guessing. Return undefined for provider 'claude-code' unconditionally. Extend budget.ts additively: maxUsd on BudgetOptions, chargeUsd (guard !Number.isFinite(usd) || usd < 0 \u2192 0), usdSpent getter, remainingUsd() (Infinity when uncapped), extend exceeded()/assertWithinBudget(), add 'usd' to the kind union. In each adapter, compute costUsd right where the normalized ChatResponse is assembled (anthropic ~:348 return, openai usage normalize ~:455-457, openai-compat mirrors openai, claude-code return block ~:182-190) using conditional spread so the key is absent when undefined. Do NOT import cost-meter in claude-code.ts.",
+  "evaluatorNotes": "Test estimateCostUsd: exact prefix, longer-prefix-wins (e.g. 'anthropic:claude-sonnet' vs 'anthropic:claude'), unknown model \u2192 undefined, claude-code \u2192 undefined, arithmetic correctness (tokens/1e6 * price summed for input+output) (sc-2-1). Mock the claude CLI JSON with and without total_cost_usd and assert passthrough/omission (sc-2-2). For adapters, stub the SDK response and deep-assert the returned ChatResponse: costUsd present with expected value for a priced model, key ABSENT (Object.hasOwn false) for an unpriced one (sc-2-3). Budget: charge sequences crossing the ceiling, remainingUsd Infinity uncapped, assertWithinBudget throws BudgetExceededError with kind 'usd', NaN/negative \u2192 0 (sc-2-4). Run the FULL suite for sc-2-5 and build/typecheck for sc-2-6.",
+  "estimatedFiles": [
+    "src/providers/cost-meter.ts",
+    "src/providers/cost-meter.test.ts",
+    "src/providers/types.ts",
+    "src/providers/anthropic.ts",
+    "src/providers/openai.ts",
+    "src/providers/openai-compat.ts",
+    "src/providers/claude-code.ts",
+    "src/orchestrator/workflow/budget.ts",
+    "src/orchestrator/workflow/budget.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-09T20:56:32.000Z",
+  "completedAt": "2026-07-09T20:56:32.000Z"
+}

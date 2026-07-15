@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["349c22c - bober(sprint-1): break critic-deep<->decomposer-deep cycle via runExpandStage injection"],
+  "filesChanged": [
+    { "path": "src/fleet/decomposer-deep-types.ts", "action": "created", "description": "Dependency-free leaf: OutlineArea + Outline, zero relative imports." },
+    { "path": "src/fleet/decomposer-deep.ts", "action": "modified", "description": "Imports types from leaf + re-exports for backward compat; passes expand: runExpandStage into runCritiqueLoop at line 371; decomposeGoalDeep signature unchanged." },
+    { "path": "src/fleet/critic-deep.ts", "action": "modified", "description": "Deleted import from ./decomposer-deep.js; imports Outline from ./decomposer-deep-types.js; runCritiqueLoop gained injected expand param; calls input.expand(...)." },
+    { "path": "src/fleet/critic-deep.test.ts", "action": "modified", "description": "All 8 existing runCritiqueLoop calls supply expand: runExpandStage; +1 new sc-1-7 spy test asserting expand invoked once on a critique miss." }
+  ],
+  "selfVerify": {
+    "build": "exit 0", "typecheck": "exit 0", "lint": "exit 0 (2 pre-existing warnings in eval-persist.test.ts)",
+    "test": "npx vitest run → 2815/2815 passed (219 files)",
+    "sc-1-2": "grep 'from \"./decomposer-deep.js\"' src/fleet/critic-deep.ts → zero matches",
+    "sc-1-4": "grep relative imports in decomposer-deep-types.ts → 0 (dependency-free)"
+  },
+  "notes": "sc-1-2 nuance acknowledged: substring 'decomposer-deep' still appears (imports of the -constants/-types leaves + comments); the correct invariant 'no import from ./decomposer-deep.js' holds. Zero behavior change; full suite green."
+}

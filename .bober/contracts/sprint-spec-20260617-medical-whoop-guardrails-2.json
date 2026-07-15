@@ -1,0 +1,97 @@
+{
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-2",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "sprintNumber": 2,
+  "title": "WHOOP egress axis + authenticated transport",
+  "description": "Establish authenticated, egress-gated access to WHOOP without yet persisting data. Add a third EgressAxis value 'device-connection' to src/medical/egress.ts:5 (default false), widen EgressGuard.isAllowed/assertAllowed to handle all three axes exhaustively (compile-time never check) and EgressGuard.fromConfig to read medical.egress.deviceConnection; add medical.egress.deviceConnection: z.boolean().default(false) to the medical config schema (src/config/schema.ts). The axis-independence invariant MUST hold: enabling any one axis never enables another. Add WhoopTokenStore (src/medical/whoop/whoop-token.ts): clientCredentials() reads WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET from process.env (mirroring src/providers/factory.ts:96-136) and throws clearly if unset; readRefreshToken()/writeTokens() persist {accessToken, refreshToken, expiresAtIso} at .bober/medical/whoop-token.json with mode 0600 (mirror audit.ts 0600). Add WhoopClient (src/medical/whoop/whoop-client.ts) as the SECOND ESLint-excepted network file (sibling to retrieval/medline-source.ts): ensureAccessToken() does the offline-scope refresh_token grant; fetchPage(collection, window, cursor?) fetches one v2 page (recovery=/v2/recovery, sleep=/v2/activity/sleep, cycle=/v2/cycle, workout=/v2/activity/workout), follows the cursor for pagination, refreshes+retries ONCE on 401, and awaits the Reset-header seconds on 429. WhoopClient calls EgressGuard.assertAllowed('device-connection') BEFORE any HTTP. Transport is an injectable FetchLike (mirror medline-source.ts FetchLike) so tests use fixtures, never the real network. Add the new file to the eslint.config.js network-exception allow-list. No sync/persistence/CLI this sprint (Sprint 3).",
+  "status": "completed",
+  "completedAt": "2026-06-17T16:00:00Z",
+  "dependsOn": [],
+  "features": ["feat-2"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck), including the widened EgressAxis exhaustive switch with the compile-time never guard intact.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "EgressAxis === 'cloud-inference' | 'literature-retrieval' | 'device-connection'; EgressGuard.fromConfig reads medical.egress.deviceConnection (default false) and the config schema parses a config with deviceConnection true/false/absent. A unit test asserts the TS union and Zod enum/flags agree and that absent => false.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "Axis independence: a guard built with only device-connection enabled returns isAllowed('device-connection')===true and isAllowed('cloud-inference')===isAllowed('literature-retrieval')===false; and enabling only one of the original two leaves device-connection false. A unit test asserts all independence combinations.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "WhoopClient.ensureAccessToken and fetchPage call EgressGuard.assertAllowed('device-connection') before any HTTP; with the axis off, both throw (Egress axis 'device-connection' not enabled) and the injected FetchLike is never called. A unit test asserts the throw and zero fetch calls.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "All WHOOP network access lives only in src/medical/whoop/whoop-client.ts; that file is on the eslint.config.js network-exception allow-list and npm run lint passes; grep confirms no network import (node:http(s)/net/fetch/undici) elsewhere under src/medical including whoop-token.ts and the sync adapter scaffolding.",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "WhoopTokenStore.clientCredentials() throws a clear 'set WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET' error when either env var is unset; writeTokens() writes .bober/medical/whoop-token.json with file mode 0600; readRefreshToken() returns undefined when the file is absent and the parsed refresh token when present. A unit test (temp dir, env stubbed) asserts each.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "With the axis enabled and an injected FetchLike serving fixtures, WhoopClient.fetchPage paginates via cursor across multiple pages, refreshes the access token + retries exactly once on a 401 then succeeds, and on a 429 awaits the Reset-header seconds (injected/fake clock or zero-delay) before retrying — asserted with no real network access.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement WhoopSyncAdapter, record->HealthObservation mapping, persistence, or the CLI (Sprint 3).",
+    "Do not add OS keychain storage — env vars + 0600 sidecar only (ADR-2).",
+    "Do not implement webhooks or any inbound listener.",
+    "Do not change the existing two egress axes' behavior or the literature-retrieval/cloud-inference call sites.",
+    "Do not add a persisted sync cursor (Open Question; idempotent re-run lands in Sprint 3)."
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "The third device-connection axis exists (default false, independent), WhoopTokenStore loads env creds + persists a 0600 token, WhoopClient performs egress-gated paginated v2 fetch with 401-refresh-retry-once and 429-Reset handling against an injected FetchLike, network code is confined to the one ESLint-excepted file, and build/typecheck/test/lint are green"
+  ],
+  "definitionOfDone": "src/medical/egress.ts EgressAxis gains 'device-connection' with isAllowed/assertAllowed exhaustive over all three (never guard) and fromConfig reading medical.egress.deviceConnection. src/config/schema.ts medical.egress gains deviceConnection: z.boolean().default(false). src/medical/whoop/whoop-token.ts exports WhoopTokenStore (env creds + 0600 sidecar). src/medical/whoop/whoop-client.ts exports WhoopClient { ensureAccessToken(): Promise<string>; fetchPage(collection, window, cursor?): Promise<WhoopPage> } with an injectable FetchLike, assertAllowed before HTTP, v2 endpoints, cursor pagination, 401->refresh+retry-once, 429->await Reset header; it is the only src/medical network file and is added to eslint.config.js exceptions. Collocated fixture-driven tests cover axis flags/independence, the assert-before-HTTP throw, token store env/0600/read, and pagination/401/429. Build, typecheck, test, and lint pass; the existing two axes and their call sites are byte-identical.",
+  "assumptions": [
+    "src/medical/egress.ts currently defines EgressAxis as a 2-value union with an isAllowed/assertAllowed switch and a fromConfig static (per ADR-6 of the base architecture); the third value is purely additive and the never-guard default stays intact.",
+    "The medical config lives under a medical/egress section in src/config/schema.ts; deviceConnection is added as a sibling boolean to the existing cloud-inference/literature-retrieval flags with default false.",
+    "eslint.config.js has a scoped no-restricted-imports/no-restricted-globals block over src/medical/** with a single file exception for src/medical/retrieval/medline-source.ts; src/medical/whoop/whoop-client.ts is added to that exception list and nothing else under src/medical gains network access.",
+    "WHOOP token endpoint and api.prod.whoop.com base URLs are module constants in whoop-client.ts (like MEDLINEPLUS_BASE in medline-source.ts); the offline-scope refresh_token grant returns a new access token (and possibly a rotated refresh token, which is persisted via writeTokens).",
+    "The 429 Reset header is expressed in seconds; tests inject a no-op/zero-delay waiter (or fake clock) so they do not actually sleep, and timestamps/now are injected parameters (never Date.now) consistent with the base architecture."
+  ],
+  "outOfScope": [
+    "Sync adapter + record mapping + persistence + CLI (Sprint 3)",
+    "Keychain credential storage",
+    "Webhooks / inbound endpoints",
+    "Changes to existing egress axes' call sites"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/medical/egress.ts (full — the EgressAxis union, isAllowed/assertAllowed switch + never guard, fromConfig), src/medical/retrieval/medline-source.ts (full — THE template: ESLint-excepted network file, FetchLike type, module-constant base URL, how it calls assertAllowed before fetch, fixture-driven tests in medline-source.test.ts), src/medical/audit.ts (0600 write pattern, ensureDir, .bober/medical path), src/providers/factory.ts:96-136 (process.env credential reads), src/config/schema.ts (the medical/egress section), eslint.config.js:74-106 (the scoped medical network boundary + the single existing exception).\n\negress.ts: add 'device-connection' to EgressAxis; extend the switch arms in isAllowed/assertAllowed; ensure the exhaustive never-check default still compiles; fromConfig reads config.medical?.egress?.deviceConnection ?? false. Keep the existing two arms byte-identical.\n\nschema.ts: add deviceConnection: z.boolean().default(false) to the medical egress object schema next to the existing two flags.\n\nwhoop-token.ts (NO network — must stay outside the ESLint exception): WhoopTokenStore { clientCredentials(): {clientId, clientSecret} (throws if env unset); readRefreshToken(): Promise<string|undefined>; writeTokens({accessToken, refreshToken, expiresAtIso}): Promise<void> }. Use node:fs/promises with mode 0600 and ensureDir for .bober/medical (mirror audit.ts). Resolve the token path under projectRoot/.bober/medical/whoop-token.json.\n\nwhoop-client.ts (the SECOND ESLint exception — add it to eslint.config.js): constructor(egress: EgressGuard, tokenStore: WhoopTokenStore, fetchImpl?: FetchLike). type WhoopCollection='recovery'|'sleep'|'cycle'|'workout'; map to /v2/recovery, /v2/activity/sleep, /v2/cycle, /v2/activity/workout; base const WHOOP_API_BASE='https://api.prod.whoop.com'; WHOOP_TOKEN_URL for the OAuth token endpoint. ensureAccessToken(): assertAllowed('device-connection'); if cached access token unexpired return it, else POST refresh_token grant (client creds + stored refresh token + scope offline) via fetchImpl, persist rotated tokens, return access token; on 401/invalid_grant throw a clear 're-authorize' error. fetchPage(collection, window, cursor?): assertAllowed; GET the v2 endpoint with start/end from window + cursor query param + Bearer token; on 401 call ensureAccessToken (force refresh) and retry ONCE; on 429 read the Reset header seconds, await an injectable waiter, retry; parse JSON into { records: WhoopRecord[], nextCursor? }. FetchLike mirrors medline-source.ts so tests inject fixtures.\n\nTests: egress.test.ts additions (three-axis flags, independence matrix, fromConfig default false); whoop-token.test.ts (env-unset throw, 0600 mode via fs.stat, read absent=>undefined / present=>token, temp dir); whoop-client.test.ts (assert-before-HTTP throw with axis off + zero fetch calls; multi-page pagination via injected FetchLike; 401->refresh+retry-once->success; 429->reads Reset, awaits injected waiter, retries). NEVER hit the real network. ESM/.js extensions, unicode section headers.",
+  "evaluatorNotes": "sc-2-2/sc-2-3: build an EgressGuard from configs with each single axis enabled and assert the independence matrix; parse a config with medical.egress.deviceConnection absent and assert it defaults false.\nsc-2-4: instantiate WhoopClient with axis off and a FetchLike spy; call ensureAccessToken and fetchPage; assert both throw the 'not enabled' error and the spy recorded 0 calls.\nsc-2-5: npm run lint clean WITH the new exception; grep -rE 'node:http|node:https|node:net|undici|(^|[^.])fetch\\(' src/medical --include=*.ts excluding whoop-client.ts and *.test.ts — expect no production network usage outside whoop-client.ts; confirm eslint.config.js lists src/medical/whoop/whoop-client.ts.\nsc-2-6: stub process.env (unset => clientCredentials throws clear message); writeTokens then fs.stat the file and assert (mode & 0o777)===0o600; readRefreshToken on absent file===undefined, on present file===the token.\nsc-2-7: with axis on and an injected FetchLike returning a 2-page fixture, assert fetchPage walks nextCursor to completion; a fixture that returns 401 once then 200 triggers exactly one refresh (assert ensureAccessToken/refresh fetch called once) then success; a fixture returning 429 with a Reset header asserts the injected waiter is invoked with the header seconds and the request is retried. Confirm no real sleeping and no real network.\nBuild/typecheck/test/lint all green; existing egress tests and call sites unchanged.",
+  "estimatedFiles": [
+    "src/medical/egress.ts",
+    "src/medical/egress.test.ts",
+    "src/config/schema.ts",
+    "src/medical/whoop/whoop-token.ts",
+    "src/medical/whoop/whoop-token.test.ts",
+    "src/medical/whoop/whoop-client.ts",
+    "src/medical/whoop/whoop-client.test.ts",
+    "eslint.config.js"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-06-17T14:32:38Z",
+  "updatedAt": "2026-06-17T14:32:38Z"
+}

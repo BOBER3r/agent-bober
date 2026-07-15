@@ -1,0 +1,14 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-1",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "14c2be6",
+  "filesChanged": [
+    "src/mcp/run-manager.ts", "src/state/run-state.test.ts", "src/cli/commands/run.ts",
+    "src/cli/index.ts", "src/cli/commands/run.test.ts", "src/chat/careful-sidecar.ts",
+    "src/chat/careful-sidecar.test.ts", "src/chat/slash-commands.ts", "src/chat/slash-commands.test.ts",
+    "src/chat/chat-session.ts", "src/chat/run-spawner.ts", "src/chat/run-spawner.test.ts"
+  ],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "test": "2002 passed, 3 skipped (170 files)", "lint": "0 errors, 2 pre-existing warnings" },
+  "notes": "AUTOPILOT BYTE-FOR-BYTE: RunSpawner.spawn() 3rd param opts:{careful?}={} defaults to {}; careful absent/false -> arg vector identical to Phase 1; canary run-spawner.test.ts:89 stays green. RunState union extended in run-manager.ts (NOT run-state.ts) with input-required/paused + 4 optional fields. --approve-gates validates against CHECKPOINT_SITES, rejects unknown gate with no partial merge, spreads {gate:'disk'} into checkpointOverrides. /careful session sidecar at .bober/chat/<sessionId>.careful.json."
+}

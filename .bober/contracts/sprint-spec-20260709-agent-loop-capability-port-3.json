@@ -1,0 +1,97 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 3,
+  "title": "Loop wiring: per-role effort, USD ceiling enforcement, config schema, cost persistence",
+  "description": "Drive the sprint-2 substrate from config through the loop. Per-role Zod fields effort and budget.maxUsd; AgenticLoopParams gains effort and budget; the loop forwards effort to ChatParams (spread like maxTokens), charges the Budget per turn (tokens + costUsd), and on a hit ceiling breaks gracefully with stopReason 'budget_exceeded' \u2014 never throwing (ADR-4). AgenticLoopResult gains cumulative costUsd, persisted additively into history.jsonl sprint events.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260709-agent-loop-capability-port-2"
+  ],
+  "features": [
+    "feat-2",
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "Per-role config sections accept optional effort (enum low|medium|high|xhigh|max) and budget { maxUsd: positive number | null }; every existing bober.config.json fixture parses unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "config.<role>.effort reaches the Anthropic request as output_config.effort; when unset, the rendered request payload is deep-equal to the pre-change payload (no output_config key) and non-Anthropic adapters never carry effort on the wire.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "With a Budget on AgenticLoopParams, the loop charges tokens and costUsd once per turn and, when exceeded(), returns a partial result with stopReason 'budget_exceeded' via a resolved promise (mirrors the max-turns return; assertWithinBudget is never called).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "AgenticLoopResult.costUsd equals the sum of per-turn response costUsd values when any were present and the key is absent when none were.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "Sprint-completion history.jsonl events carry an optional costUsd field when the run produced one and are byte-identical (no new key) when it did not.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "A role entry point (generator at minimum) constructs Budget from config.<role>.budget.maxUsd and passes effort/budget into runAgenticLoop; with neither key set, its loop invocation arguments are unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not throw BudgetExceededError from the loop (ADR-4: no catcher exists around runGenerator in pipeline.ts).",
+    "Do not enable any effort/budget value in this repo's own bober.config.json (dogfooding declined).",
+    "Do not map effort to non-Anthropic reasoning params.",
+    "Do not add mid-turn cost interruption (ceiling fires between turns; sprint 9 adds abort)."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: schema round-trip compatibility, effort on-wire only when configured, graceful budget_exceeded stop without throwing, cumulative costUsd, and additive history persistence.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "Setting config.<role>.effort and config.<role>.budget.maxUsd drives real behavior: Anthropic requests carry output_config.effort, spend is charged per turn, a hit ceiling ends the run gracefully with stopReason 'budget_exceeded', and per-run cost lands on AgenticLoopResult.costUsd plus optional history.jsonl fields. Omitting both keys is byte-identical end-to-end. Build and full suite green.",
+  "assumptions": [
+    "ChatParams.effort already exists (types.ts:155) and anthropic.ts already forwards it (~:310 output_config conditional spread) \u2014 this sprint only creates callers.",
+    "Per-role Zod sections live at src/config/schema.ts (~:83-129); the additive-optional pattern used by research/fleet sections applies.",
+    "Role entry points construct loop params in src/orchestrator/<role>-agent.ts (generator ~:115-145); wiring the generator plus a shared helper the other roles can adopt satisfies sc-3-6.",
+    "The loop accumulates usage after chatWithRetry (~:293) \u2014 budget charging inserts there; the max-turns return (~:406) is the convention the budget_exceeded return mirrors.",
+    "History events are appended as JSON lines; adding an optional key is additive (approved planning answer Q2)."
+  ],
+  "outOfScope": [
+    "Fleet child config plumbing beyond what buildChildConfig already inherits from the shared schema.",
+    "Cost display in chat/telegram UIs."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Schema: add EffortSchema = z.enum(['low','medium','high','xhigh','max']).optional() and BudgetSectionSchema = z.object({ maxUsd: z.number().positive().nullable().optional() }).optional() in src/config/schema.ts, attach both to each per-role section (planner/curator/generator/evaluator; follow how existing optional fields sit in those sections). Loop: extend AgenticLoopParams with effort?: Effort and budget?: Budget (import type from workflow/budget.ts); spread effort into the chatWithRetry params exactly where maxTokens is spread (~:264-266); after the usage accumulation (~:293) call budget?.chargeTokens(response.usage) and budget?.chargeUsd(response.costUsd ?? 0), then if (budget?.exceeded()) return the partial-result shape used by the max-turns path with stopReason 'budget_exceeded'. Result: track a running cost sum (only when at least one response carried costUsd) and attach via conditional spread. Generator wiring (~generator-agent.ts:115-145): read config values, construct Budget only when maxUsd != null, pass both conditionally so absent config \u2192 identical params object. Persistence: where the sprint-completion history event is appended (grep for \"sprint-completed\" or the history append helper in src/utils or orchestrator/pipeline.ts), conditionally include costUsd. Keep BudgetExceededError untouched for the workflow interpreter's existing fail-fast use.",
+  "evaluatorNotes": "sc-3-1: parse every config fixture in the repo plus a config with the new keys; assert old fixtures produce deep-equal parsed output vs the pre-change schema behavior (no defaults injected). sc-3-2: spy on the Anthropic SDK create call \u2014 with effort set assert output_config.effort; without, deep-equal the request object to the baseline and assert no output_config key; assert openai adapter request never contains effort. sc-3-3: fake client with fixed per-turn costUsd and a Budget maxUsd crossed on turn 2 \u2192 assert resolved result, stopReason 'budget_exceeded', turnsUsed 2, and that chat was not called a third time. sc-3-4: runs with and without costUsd-bearing responses; Object.hasOwn checks. sc-3-5: temp .bober dir, run the history append with and without cost; parse lines and assert key presence/absence. sc-3-6: invoke the generator entry with a config lacking the new keys and spy on runAgenticLoop params (no effort/budget keys). Build + full suite.",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/config/schema.test.ts",
+    "src/orchestrator/agentic-loop.ts",
+    "src/orchestrator/agentic-loop.test.ts",
+    "src/orchestrator/generator-agent.ts",
+    "src/orchestrator/generator-agent.test.ts",
+    "src/orchestrator/pipeline.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-09T21:27:53.000Z",
+  "completedAt": "2026-07-09T21:27:53.000Z"
+}

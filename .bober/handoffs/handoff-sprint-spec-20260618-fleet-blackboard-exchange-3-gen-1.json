@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-blackboard-exchange-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-3",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "timestamp": "2026-06-18T19:18:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase B Sprint 3 (highest complexity): wire the bounded rounds loop into FleetCoordinator + runFleet. When manifest.blackboard is set, run children for up to maxRounds rounds sharing the blackboard — scaffold each child config ONLY on round 1, re-spawn `agent-bober run` each round, early-stop when a completed round adds zero new 'finding' facts. When NO blackboard: exactly one pass, byte-identical to today. Per-child failures stay data (never throw); exit-0 contract preserved. NO synthesis file (Sprint 4).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1",
+        "title": "SharedBlackboard module",
+        "summary": "src/fleet/shared-blackboard.ts: SharedBlackboard.open({dbPath,namespace,busyTimeoutMs?,maxRounds}), publish, readSiblings, readAll (use readAll().length for the new-findings count), close. Commit e1d4b00."
+      },
+      {
+        "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-2",
+        "title": "config.fleet + manifest.blackboard + path injection + CLI",
+        "summary": "manifest.blackboard {namespace, maxRounds 1-3 default 3}; resolveBlackboardPath(manifest) in src/fleet/index.ts → ABSOLUTE join(resolve(rootDir),'.bober','memory',ns,'facts.db') | undefined; scaffolder.scaffold gained optional 3rd blackboard? param that writes config.fleet {blackboardDbPath, blackboardNamespace, blackboardSubject=child.folder, maxRounds} inside an if-guard (byte-identical when absent); `agent-bober blackboard publish|read` CLI. Commit 2784f71."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/coordinator.ts (execute @ :29, runChild @ :39 never-reject thunk, scaffolder+runner DI in constructor)",
+      "src/fleet/coordinator.test.ts (fake scaffolder/runner DI pattern)",
+      "src/fleet/index.ts (runFleet — coordinator.execute @ :118, aggregate @ :120, report build+write @ :124; resolveBlackboardPath added in Sprint 2)",
+      "src/fleet/runner.ts (ChildRunner.run — execa agent-bober run)",
+      "src/fleet/scaffolder.ts (Sprint 2 — writes fleet section; confirm it no-ops/can be guarded when folder exists)",
+      "src/fleet/shared-blackboard.ts (readAll for new-findings count)",
+      ".bober/architecture/arch-20260618-heterogeneous-multi-provider-agent-team-architecture.md (ADR-3/ADR-5, CP4 data-flow)"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md — ESM .js imports, import type, node:fs/promises only (ensureDir for db dir), unicode section headers, conventional commits 'bober(sprint-3): ...'. CRITICAL invariants: (a) no-blackboard path byte-identical (branch: if (!manifest.blackboard) return existing single execute, open NO blackboard); (b) scaffold once per child (round 1 only); (c) re-spawn runner each round; (d) early-stop on no-new-findings (readAll().length unchanged after round r>1); (e) never-throw / exit-0 contract preserved — per-child failures stay data; (f) still write fleet-report.json from the FINAL round.",
+  "evaluatorFeedback": null
+}

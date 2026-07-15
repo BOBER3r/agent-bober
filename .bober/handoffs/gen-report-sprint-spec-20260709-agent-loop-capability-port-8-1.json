@@ -1,0 +1,30 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-8-1", "met": true, "evidence": "Mocked stream yields two text deltas; callback join equals streamed.text; streamed response deep-equals the non-streaming create-path response incl. usage/stopReason/costUsd."},
+    {"criterionId": "sc-8-2", "met": true, "evidence": "Streamed final message with tool_use block: no text deltas fire, toolCalls equal non-streaming normalization."},
+    {"criterionId": "sc-8-3", "met": true, "evidence": "One no-op comment + one explicit test per adapter (openai/openai-compat/google/claude-code): spy never called, serialized request payload contains no 'onTextDelta'. 86 tests green across the 4 files."},
+    {"criterionId": "sc-8-4", "met": true, "evidence": "DeltaRecordingClient confirms threading; ordered text-delta LoopEvents with correct turns; Object.hasOwn(lastParams,'onTextDelta')===false when unset; paired-run deep-equal; streamMock never called absent onTextDelta (createMock used)."},
+    {"criterionId": "sc-8-5", "met": true, "evidence": "erroringStream throws after partial delta -> adapter.chat rejects with same Error (not swallowed), create-throw parity; chatWithRetry/isTransientError untouched (verified by reading :183-220)."},
+    {"criterionId": "sc-8-6", "met": true, "evidence": "build + typecheck exit 0 fresh after all edits."}
+  ],
+  "filesChanged": [
+    {"path": "src/providers/types.ts", "action": "modified", "description": "ChatParams.onTextDelta?: (delta: string) => void with adapters-MAY-ignore doc."},
+    {"path": "src/providers/anthropic.ts", "action": "modified", "description": "Extracted shared normalizeResponse(response, model, structured) (byte-identical to prior inline tail); requestBody built once (no stream key, satisfies both overloads without assertion); branch: create() unchanged path vs messages.stream() + per-delta try/catch callback + finalMessage() through the same normalizer."},
+    {"path": "src/providers/anthropic.test.ts", "action": "modified", "description": "streamMock + fakeStream/erroringStream helpers; 7 new tests incl. requestBody-shape parity between create and stream."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "AgenticLoopParams.onTextDelta; per-turn emitTextDelta wrapper (inside turn loop, captures turn; safeEmit before caller callback) conditionally spread into chat params."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "DeltaRecordingClient + 5 tests."},
+    {"path": "src/orchestrator/loop-events.ts", "action": "modified", "description": "text-delta union member; RESERVED comment removed (all reserved names now implemented)."},
+    {"path": "src/providers/openai.ts + openai-compat.ts + google.ts + claude-code.ts", "action": "modified", "description": "One-line no-op documentation comments only."},
+    {"path": "their 4 test files", "action": "modified", "description": "1 sc-8-3 no-op test each."}
+  ],
+  "testsAdded": ["anthropic.test.ts (7)", "agentic-loop.test.ts (5)", "openai/openai-compat/google/claude-code test files (1 each)"],
+  "commits": [
+    "37405e2 - bober(sprint-8): streaming text deltas (Anthropic adapter + loop passthrough)",
+    "016e9f5 - bober(sprint-8): explicit sc-8-3 no-op tests for non-Anthropic adapters"
+  ],
+  "blockers": [],
+  "notes": "Beyond estimatedFiles: added 1 test-only no-op test per non-Anthropic adapter test file per the evaluatorNotes recipe (additive, serves sc-8-3 directly). No nonGoal violations: no abort/interrupt, no non-Anthropic streaming, claude-code text-only boundary unchanged, no UI wiring. Suite 3843->3859 (+16). Full suite green with extended timeouts."
+}

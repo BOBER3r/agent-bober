@@ -1,0 +1,119 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-task-inbox-2-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-task-inbox-2",
+  "specId": "spec-20260628-task-inbox",
+  "timestamp": "2026-06-29T10:18:14.622Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Task inbox sprint 2 RETRY (iteration 2). The implementation is COMPLETE and all 5 success criteria + build + typecheck pass. The ONLY failure is a lint hard-gate violation: one unused variable. This is a minimal one-line fix.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-task-inbox-1",
+        "title": "Zero-friction task capture",
+        "summary": "finding-store.ts/task-inbox.ts/task.ts (task add)"
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/cli/commands/task.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260628-task-inbox-2",
+    "specId": "spec-20260628-task-inbox",
+    "sprintNumber": 2,
+    "title": "Task listing + lifecycle transitions (start / done / drop)",
+    "description": "Add `bober task list` and the status-transition subcommands `start`, `done`, and `drop`. Transitions read the active Finding by id, write a new value with the new status through the reconcile UPDATE path so the prior status is preserved as history. The default list shows only open/in-progress tasks; `--all` and `--status <s>` widen the view.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260628-task-inbox-1"
+    ],
+    "features": [
+      "feat-2"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-2-1",
+        "description": "`npm run build` exits 0 with the list/start/done/drop subcommands and a transitionFinding helper added.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-2",
+        "description": "A unit test captures a task, runs the done transition, then reads the pool and asserts the active row for that id has status='done' while a superseded (t_invalidated set) historical row with status='open' still exists in the store.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-3",
+        "description": "A unit test asserts the default list returns only findings whose status is open or in-progress, and that after marking one done it is absent from the default list but present when status='done'/--all is requested.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-4",
+        "description": "A unit test runs the start transition on an open task and asserts the active row's status becomes 'in-progress'.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-5",
+        "description": "A unit test passes an unknown id to done/drop and asserts the handler sets exitCode=1 and returns without throwing.",
+        "verificationMethod": "unit-test",
+        "required": false
+      }
+    ],
+    "nonGoals": [
+      "Do NOT implement snooze in this sprint (sprint 3).",
+      "Do NOT delete or hard-remove rows — drop transitions to status='dropped' via supersede, never DELETE.",
+      "Do NOT change captureTask or the persistence convention from sprint 1.",
+      "Do NOT read the clock inside the transition helper — now is injected from the handler boundary.",
+      "Do NOT add new dependencies."
+    ],
+    "stopConditions": [
+      "`npm run build` exits 0 and all list/start/done/drop unit tests pass.",
+      "`bober task add` then `bober task done <id>` removes the task from the default `bober task list`, while `bober task list --all` still shows it with status=done."
+    ],
+    "definitionOfDone": "A user can see their active tasks with `bober task list` (open + in-progress only), move a task through `bober task start <id>`, finish it with `bober task done <id>`, or abandon it with `bober task drop <id>`. Each transition supersedes the prior Finding row and inserts the new one so the earlier status survives as queryable history, and the default list hides terminal (done/dropped) tasks while `--all`/`--status` reveal them. All handlers exit 1 with a stderr message (never throwing) on bad input.",
+    "assumptions": [
+      "transitionFinding(store, id, newStatus, {now, mutate?}) reads the active Finding for that id, applies the new status (and any field mutation), and writes it back via writeFact so reconcileFact UPDATE supersedes the old row (reconcile.ts:70-78).",
+      "Terminal findings remain active rows carrying status done/dropped; the list filters by the status field rather than by invalidation."
+    ],
+    "outOfScope": [
+      "Snooze wake semantics (sprint 3).",
+      "Ingest of domain findings (sprint 4)."
+    ],
+    "generatorNotes": "Add a transitionFinding helper to src/hub/finding-store.ts (or task-inbox.ts): const f = readFindings(store).find(x => x.id === id); if absent return null; write {...f, status:newStatus, ...mutate} via writeFinding — because subject=id and predicate='finding' are unchanged but value differs, writeFact/reconcileFact takes the UPDATE branch (supersede old + insert new), preserving history. Add subcommands to src/cli/commands/task.ts: `list` (options --all, --status <s>; default filter status in {open,in-progress}; print a table mirroring facts list at facts.ts:146-205), `start <id>` (->in-progress), `done <id>` (->done), `drop <id>` (->dropped). Stamp now=new Date().toISOString() at each handler boundary. On a missing id, print a chalk.yellow not-found message, set exitCode=1, return.",
+    "evaluatorNotes": "Verify done/drop do NOT call invalidateFact-only or DELETE — they must go through the UPDATE (supersede+insert) path so a historical row remains. Inspect the store after a done transition: there must be one active row (status=done) and at least one invalidated row (status=open) for the same id. Confirm the default list query excludes done/dropped and that --all includes them. Confirm transition helpers take now as a parameter (no clock reads inside).",
+    "estimatedFiles": [
+      "src/hub/finding-store.ts",
+      "src/hub/finding-store.test.ts",
+      "src/cli/commands/task.ts",
+      "src/cli/commands/task.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "ambiguityScore": 4
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": [
+    {
+      "priority": "high",
+      "category": "quality",
+      "file": "src/cli/commands/task.test.ts",
+      "line": "132",
+      "description": "New ESLint error: task2 assigned but never used (@typescript-eslint/no-unused-vars error). principles.md: zero lint errors is a hard gate.",
+      "expected": "Rename task2 -> _task2 (the _ prefix escape hatch), OR add expect(output).toContain(task2.id) to use the binding and strengthen the assertion."
+    }
+  ]
+}

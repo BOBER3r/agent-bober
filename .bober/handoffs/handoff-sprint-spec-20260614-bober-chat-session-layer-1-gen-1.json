@@ -1,0 +1,16 @@
+{
+  "handoffId": "handoff-sprint-spec-20260614-bober-chat-session-layer-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260614-bober-chat-session-layer-1",
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "timestamp": "2026-06-14T13:20:32Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent harness building apps autonomously. This plan adds a persistent 'bober chat' REPL above the one-shot runPipeline. Sprint 1 is the walking skeleton: a resumable chat session that classifies turns and answers.",
+    "completedSprints": [],
+    "currentBranch": "bober/chat-session-layer",
+    "relevantFiles": []
+  },
+  "principles": "see .bober/principles.md",
+  "evaluatorFeedback": null
+}

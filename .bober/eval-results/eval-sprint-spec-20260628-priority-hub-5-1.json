@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-priority-hub-5-1",
+  "contractId": "sprint-spec-20260628-priority-hub-5",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-29T01:07:45.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors in changed files; 2 pre-existing warnings (eval-persist.test.ts)"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "details": "Full suite 3264 tests / 255 files green"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "loadTeam('hub') resolves memoryNamespace 'hub'; chat.ts threads it; bober chat hub routes correctly"},
+    {"criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "/priority handleHubPriority -> collectFindings+rankFindings(this.llm)+renderPriorityMd, returns ranks+titles"},
+    {"criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "/decide parses 'X vs Y' decision scope, returns X/Y-relevant ranking"},
+    {"criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "HELP_TEXT byte-identical (git diff); all 10 existing commands unchanged; /priority+/decide non-hub no-op (ThrowingClient: zero LLM calls); /help excludes new commands"},
+    {"criterionId": "sc-5-5", "required": true, "result": "pass", "evidence": "build green"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All five criteria pass; hub team is data; new commands delegate to hub functions via injected client; existing commands byte-identical; full suite 3264 green."
+}

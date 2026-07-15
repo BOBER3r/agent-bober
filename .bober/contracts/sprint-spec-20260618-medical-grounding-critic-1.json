@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260618-medical-grounding-critic-1",
+  "specId": "spec-20260618-medical-grounding-critic",
+  "sprintNumber": 1,
+  "title": "Grounding-critic module (fail-closed core)",
+  "description": "Create the fail-closed grounding critic as a standalone, pure, injectable module — the risk-first crux of the feature (the fail-open -> fail-closed inversion of the fleet critic). New file src/medical/retrieval/grounding-critic.ts exports: a GroundingVerdict type {verdict:'approve'|'reject'; feedback:string} (mirrors src/fleet/critic-deep.ts:54-59 CritiqueVerdict); a zod GroundingVerdictSchema; validateGroundingVerdict(rawText) that NEVER throws (direct JSON.parse -> markdown-fence extraction -> first-brace slice -> safeParse, returning {ok,verdict}|{ok:false,error} — copy the tolerant shape from critic-deep.ts:67-115); a buildGroundingSystemPrompt(question, answerBody, passages) that pins the critic to the cited passages and instructs a faithfulness+completeness review; an internal callGroundingCritic that sends a FRESH message array (NEVER extends a prior conversation — mirror critic-deep.ts:130 LOCK1) with jsonObjectMode:true; and getGroundingVerdict({ llm, model, question, answerBody, passages }) that runs a bounded retry-with-coercion loop (1 + GROUNDING_PARSE_MAX_RETRIES attempts) and, on parse exhaustion, FAIL-CLOSED returns {verdict:'reject', feedback:'<unparseable critic output>'} — the exact inversion of critic-deep.ts:199-201 which returns approve. Export GROUNDING_PARSE_MAX_RETRIES and a GROUNDING_MAX_LLM_CALLS budget constant. This sprint adds NO engine wiring and NO config — the app builds and all existing tests pass unchanged.",
+  "status": "completed",
+  "completedAt": "2026-06-18T16:25:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "The full test suite passes with zero failures including new collocated src/medical/retrieval/grounding-critic.test.ts (npm run test); no regression in the pre-existing suite.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "validateGroundingVerdict(rawText) NEVER throws for any string input — proven by a parametrized test over raw JSON, fenced JSON, JSON-with-prose, empty string, and pure garbage — returning {ok:true,verdict} for valid shapes and {ok:false,error} otherwise.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "getGroundingVerdict returns {verdict:'approve'} ONLY when the model explicitly emits an approve verdict; when a fake LLMClient returns unparseable text on every attempt, it returns verdict==='reject' (FAIL-CLOSED), asserted directly against the returned object.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "The critic call uses a fresh message array built from (question, answer body, cited passages) and passes jsonObjectMode-style structured prompting; a test inspecting the fake client's received messages asserts the array starts with a single user turn containing the passages and does NOT include any prior synthesis assistant turn.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "getGroundingVerdict makes at most GROUNDING_MAX_LLM_CALLS LLM calls (= 1 + GROUNDING_PARSE_MAX_RETRIES); a call-counting fake asserts the cap is honored on the parse-exhaustion path.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "grounding-critic.ts adds NO @anthropic-ai/sdk, openai, node:net, node:http, or fetch import (depends only on zod and the injected LLMClient type from providers/types.ts); the scoped medical ESLint boundary still passes (npm run lint).",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not wire the critic into MedicalSopEngine.run or src/medical/retrieval/literature.ts (Sprint 2).",
+    "Do not add any config.medical model/provider fields or touch EgressGuard (Sprint 3).",
+    "Do not add the criticVerdict audit field yet (Sprint 3).",
+    "Do not perform any re-synthesis here — getGroundingVerdict only judges; the loop lands in Sprint 2.",
+    "Do not import or call any real network/cloud client; the module is pure given an injected LLMClient."
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "getGroundingVerdict is fail-closed (reject on exhaustion), validateGroundingVerdict never throws, the call budget is capped, and build/typecheck/test/lint are green with no regression"
+  ],
+  "definitionOfDone": "src/medical/retrieval/grounding-critic.ts exports GroundingVerdict, GroundingVerdictSchema, validateGroundingVerdict (never-throws), buildGroundingSystemPrompt, getGroundingVerdict (bounded retry; fail-closed reject on exhaustion), and the constants GROUNDING_PARSE_MAX_RETRIES and GROUNDING_MAX_LLM_CALLS. Collocated grounding-critic.test.ts covers: never-throws validation across input shapes; approve only on explicit approve; fail-closed reject on parse exhaustion; fresh-message-array construction; call-budget cap. No engine/config/audit changes. Build, typecheck, test, and lint pass with no regression.",
+  "assumptions": [
+    "GroundingVerdict mirrors fleet CritiqueVerdict (src/fleet/critic-deep.ts:54-59): {verdict:'approve'|'reject'; feedback:string}.",
+    "The tolerant parser is copied structurally from critic-deep.ts:67-115 (validateVerdict) and inverted only at the exhaustion branch.",
+    "Passages handed to the critic are the same Passage[] shape used by synthesize (src/medical/retrieval/medline-source.ts Passage: {title,text,url}).",
+    "The LLMClient.chat signature is { model, system, messages, jsonObjectMode?, maxTokens? } per src/providers/types.ts (as used at literature.ts:135-140 and critic-deep.ts:154-159)."
+  ],
+  "outOfScope": [
+    "Engine wiring and the re-synthesis loop (Sprint 2)",
+    "Configurable model/provider + cloud-inference gating (Sprint 3)",
+    "AuditEntry.criticVerdict field (Sprint 3)"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Read FIRST: src/fleet/critic-deep.ts (full — copy the validateVerdict tolerant parser at :67-115, the CritiqueVerdictSchema at :54-57, the fresh-message-array critic at :119-162 'LOCK1', and the bounded loop at :166-202; the ONLY behavioral change is the exhaustion default: where critic-deep.ts:199-201 returns {verdict:'approve'}, you return {verdict:'reject', feedback:'<unparseable critic output>'} — FAIL-CLOSED). Read src/medical/retrieval/literature.ts:44-177 (synthesize, buildSynthesisSystem at :54-67, Passage usage, MedicalAnswer/Citation imports) to match the Passage shape and the passage-block format. Read src/medical/retrieval/medline-source.ts for the Passage/RetrievalOutcome types. Read src/providers/types.ts for LLMClient/Message.\n\nNew file src/medical/retrieval/grounding-critic.ts. Section headers (unicode box-drawing) per principles.md. Exports:\n  export const GROUNDING_PARSE_MAX_RETRIES = 1;\n  export const GROUNDING_MAX_LLM_CALLS = 1 + GROUNDING_PARSE_MAX_RETRIES;\n  export const GroundingVerdictSchema = z.object({ verdict: z.enum(['approve','reject']), feedback: z.string() });\n  export type GroundingVerdict = z.infer<typeof GroundingVerdictSchema>;\n  export function validateGroundingVerdict(rawText: string): { ok:true; verdict:GroundingVerdict } | { ok:false; error:string }  // copy critic-deep.ts:67-115 verbatim-structurally\n  export function buildGroundingSystemPrompt(question, answerBody, passages: Passage[]): string  // instruct: 'You are an independent reviewer. The answer below was produced by another assistant from ONLY the retrieved passages. Approve ONLY if EVERY claim in the answer is directly supported by a cited passage AND the answer addresses the core of the question. Reject if any claim is unsupported (faithfulness) OR the answer omits the central part of the question (completeness). Output ONLY {\\\"verdict\\\":\\\"approve\\\"|\\\"reject\\\",\\\"feedback\\\":\\\"...\\\"}'. Pin the numbered passage block exactly like buildSynthesisSystem (literature.ts:54-67).\n  async function callGroundingCritic({ llm, model, question, answerBody, passages, priorText?, formattedError? }): build a FRESH messages array (first turn = single user message containing question + answer + 'Cited passages:' block; coercion retry uses the 3-message [user, assistant(priorText), user(COERCION+error)] shape from critic-deep.ts:139-152). Call llm.chat({ model, system: buildGroundingSystemPrompt(...), messages, jsonObjectMode: true }).\n  export async function getGroundingVerdict({ llm, model, question, answerBody, passages }): loop maxAttempts = GROUNDING_MAX_LLM_CALLS; on validateGroundingVerdict ok -> return verdict; else record error+priorText and retry; AFTER the loop FAIL-CLOSED: return { verdict:'reject', feedback:'<unparseable critic output>' }.\n\nDo NOT catch transport errors here (let them propagate — Sprint 2's orchestrator maps a thrown error to abstain; that keeps this module's responsibility narrow). Tests: use a fake LLMClient { chat: vi.fn() } returning queued strings; assert never-throws over ['{\"verdict\":\"approve\",\"feedback\":\"\"}', '```json\\n{...}\\n```', 'prose {\"verdict\":\"reject\",\"feedback\":\"x\"} prose', '', 'garbage']; assert fail-closed reject on all-garbage; assert call count == GROUNDING_MAX_LLM_CALLS; inspect chat.mock.calls[0][0].messages to assert fresh single-user-turn with passages and no synthesis assistant turn. Follow ESM .js import extensions and import type {…}.",
+  "evaluatorNotes": "sc-1-3: parametrize validateGroundingVerdict over valid/fenced/prose/empty/garbage inputs; wrap each call to assert it returns (never throws). sc-1-4: queue unparseable responses on a fake client and assert getGroundingVerdict(...).verdict==='reject'; queue a valid approve and assert 'approve'. sc-1-5: after a run, read fakeClient.chat.mock.calls[0][0].messages and assert messages.length===1 on the first attempt, role==='user', content includes a passage title/url and the answer body, and contains NO assistant turn from a prior synthesis. sc-1-6: count chat invocations on the all-garbage path and assert ===GROUNDING_MAX_LLM_CALLS (2). sc-1-7: npm run lint clean; grep grounding-critic.ts for '@anthropic-ai/sdk','openai','node:net','node:http','fetch(' — expect none; confirm only zod + type import from providers/types.js. Build + typecheck clean; run the FULL suite to confirm zero regression (esp. existing fleet critic-deep.test.ts and medical tests).",
+  "estimatedFiles": [
+    "src/medical/retrieval/grounding-critic.ts",
+    "src/medical/retrieval/grounding-critic.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T16:00:00Z",
+  "updatedAt": "2026-06-18T16:00:00Z"
+}

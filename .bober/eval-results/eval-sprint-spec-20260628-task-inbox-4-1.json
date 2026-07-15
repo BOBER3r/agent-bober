@@ -1,0 +1,16 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-4-1",
+  "contractId": "sprint-spec-20260628-task-inbox-4",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "summary": "All 5 required criteria pass. build/typecheck/lint clean (0 errors). Full suite 3303, zero regressions. Source-verified: ingestFinding validates IngestInputSchema then FULL FindingSchema before writeFinding (schema not bypassed, no-write-on-reject); deterministic deriveFindingId sha256.slice(0,16) of domain|title|kind => dedup one active row; now injected (no clock in helper); file/stdin via node:fs/promises (async); reuses writeFinding/writeFact not raw insertFact; no new deps."
+}

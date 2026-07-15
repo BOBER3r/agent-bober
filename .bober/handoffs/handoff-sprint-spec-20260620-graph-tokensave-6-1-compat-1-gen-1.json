@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260620-graph-tokensave-6-1-compat-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-1",
+  "specId": "spec-20260620-graph-tokensave-6-1-compat",
+  "timestamp": "2026-06-20T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Repair agent-bober's OWN code-graph integration so the CLI can talk to tokensave serve 6.1.1 (a standard MCP server, protocolVersion 2024-11-05). Sprint 1 fixes ONLY the MCP transport in src/graph/mcp-client.ts: drive an `initialize` handshake, use the tools/call envelope + unwrap result.content[].text, bump HANDSHAKE_TIMEOUT_MS to 5000. Sprint 2 (separate) will remap GraphClient's stale tool names. Root cause is fully documented in the contract assumptions and was reproduced this session.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/graph/mcp-client.ts",
+      "tests/graph/mcp-client.test.ts",
+      "src/graph/client.ts",
+      "src/graph/types.ts"
+    ],
+    "probeHint": "tokensave is on PATH (6.1.1). Confirm exact wire shapes by piping JSON-RPC into `tokensave serve`: an `initialize` request returns {result:{serverInfo,capabilities,protocolVersion}}; a `tools/call` for tokensave_status returns {result:{content:[{type:'text',text:'<json>'}]}}. Sending nothing leaves stdout empty (server waits for the client)."
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260620-graph-tokensave-6-1-compat-1.json",
+  "specPath": ".bober/specs/spec-20260620-graph-tokensave-6-1-compat.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true, "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

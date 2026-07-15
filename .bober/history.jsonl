@@ -566,3 +566,364 @@
 {"event":"sprint-iteration-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","iteration":2,"result":"pass","timestamp":"2026-06-23T14:40:00.000Z"}
 {"event":"sprint-completed","contractId":"sprint-spec-20260623-plan-contracts-materialization-3","specId":"spec-20260623-plan-contracts-materialization","iteration":2,"timestamp":"2026-06-23T14:40:00.000Z"}
 {"event":"plan-completed","specId":"spec-20260623-plan-contracts-materialization","sprintsCompleted":3,"timestamp":"2026-06-23T14:40:00.000Z"}
+{"event":"plan-created","specId":"spec-20260628-obsidian-vault-store","title":"Obsidian vault storage layer","sprintCount":5,"dependsOn":[],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-medical-ingest","title":"Medical ingest: lab-PDF + profile + supplements","sprintCount":5,"dependsOn":["spec-20260628-obsidian-vault-store"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-medical-analysis","title":"Medical analysis + recommendation judge-loop","sprintCount":5,"dependsOn":["spec-20260628-medical-ingest"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-priority-hub","title":"Unified priority hub","sprintCount":5,"dependsOn":["spec-20260628-obsidian-vault-store","spec-20260628-medical-analysis"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-task-inbox","title":"Task inbox","sprintCount":6,"dependsOn":["spec-20260628-priority-hub"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-do-bridge","title":"Do-bridge: task to bober run","sprintCount":3,"dependsOn":["spec-20260628-task-inbox","spec-20260628-priority-hub"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-calendar-planner","title":"Calendar planner","sprintCount":4,"dependsOn":["spec-20260628-priority-hub","spec-20260628-task-inbox"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-telegram-frontend","title":"Telegram frontend","sprintCount":6,"dependsOn":["spec-20260628-priority-hub","spec-20260628-task-inbox","spec-20260628-calendar-planner"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"plan-created","specId":"spec-20260628-research-scheduler","title":"Research scheduler","sprintCount":5,"dependsOn":["spec-20260628-priority-hub"],"batch":"knowledge-platform","timestamp":"2026-06-28T10:40:47Z"}
+{"event":"pipeline-started","timestamp":"2026-06-28T13:51:58.000Z","specId":"spec-20260628-obsidian-vault-store","task":"Obsidian vault storage layer (vault-canonical + derived FactStore index)","sprintCount":5}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-1", "specId": "spec-20260628-obsidian-vault-store", "sprintNumber": 1, "timestamp": "2026-06-28T13:52:29.000Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-1","timestamp":"2026-06-28T13:56:40.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-obsidian-vault-store-1","iteration":1,"timestamp":"2026-06-28T13:56:40.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-obsidian-vault-store-1", "specId": "spec-20260628-obsidian-vault-store", "iteration": 1, "timestamp": "2026-06-28T14:07:12.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-2", "specId": "spec-20260628-obsidian-vault-store", "sprintNumber": 2, "timestamp": "2026-06-28T14:07:43.000Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-1","docsCommit":"838e86f","timestamp":"2026-06-28T14:10:51.000Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-2","timestamp":"2026-06-28T14:11:40.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-obsidian-vault-store-2","iteration":1,"timestamp":"2026-06-28T14:11:40.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-obsidian-vault-store-2", "specId": "spec-20260628-obsidian-vault-store", "iteration": 1, "timestamp": "2026-06-28T14:20:40.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-3", "specId": "spec-20260628-obsidian-vault-store", "sprintNumber": 3, "timestamp": "2026-06-28T14:20:40.000Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-2","docsCommit":"4289bd6","concern":"SUPERSEDED_STATUS duplicated in index-map.ts and reindex.ts; converge in sprint 5 conventions","timestamp":"2026-06-28T14:23:50.000Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-3","timestamp":"2026-06-28T14:25:41.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-obsidian-vault-store-3","iteration":1,"timestamp":"2026-06-28T14:25:41.000Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-4","timestamp":"2026-06-28T14:32:44.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-obsidian-vault-store-3", "specId": "spec-20260628-obsidian-vault-store", "iteration": 1, "timestamp": "2026-06-28T14:37:39.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-4", "specId": "spec-20260628-obsidian-vault-store", "sprintNumber": 4, "timestamp": "2026-06-28T14:37:39.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-4", "iteration": 1, "timestamp": "2026-06-28T14:37:39.000Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-5","timestamp":"2026-06-28T14:40:24.000Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-3","docsCommit":"1a23506","followUp":"vault.ts re-implements resolveDefaultNamespace verbatim (not DRY); shared exported helper would prevent drift","timestamp":"2026-06-28T14:48:07.000Z"}
+{"event": "sprint-iteration-failed", "contractId": "sprint-spec-20260628-obsidian-vault-store-4", "iteration": 1, "failedCriteria": ["lint-hard-gate: unused beforeEach import mcp-adapter.test.ts:8"], "timestamp": "2026-06-28T14:49:20.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-4", "iteration": 2, "timestamp": "2026-06-28T14:49:20.000Z"}
+{"event":"research-completed","researchId":"research-20260628-telegram-multi-llm-coordination","feature":"Telegram bot-to-bot + secretary coordination over the multi-LLM fleet (enrich spec #8)","method":"tokensave-code-graph","questionsGenerated":6,"filesExplored":11,"timestamp":"2026-06-28T14:52:02Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-obsidian-vault-store-4", "specId": "spec-20260628-obsidian-vault-store", "iteration": 2, "timestamp": "2026-06-28T14:56:01.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-5", "specId": "spec-20260628-obsidian-vault-store", "sprintNumber": 5, "timestamp": "2026-06-28T14:56:01.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-obsidian-vault-store-5", "iteration": 1, "timestamp": "2026-06-28T14:56:01.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-obsidian-vault-store-5", "specId": "spec-20260628-obsidian-vault-store", "iteration": 1, "timestamp": "2026-06-28T15:13:23.000Z"}
+{"event": "plan-completed", "specId": "spec-20260628-obsidian-vault-store", "sprintsCompleted": 5, "timestamp": "2026-06-28T15:13:23.000Z"}
+{"event": "pipeline-completed", "specId": "spec-20260628-obsidian-vault-store", "timestamp": "2026-06-28T15:13:23.000Z"}
+{"event":"research-completed","researchId":"research-20260628-telegram-features-and-topology","feature":"Telegram bot-to-bot + secretary-bot features (2026) validation + topology recommendation","method":"deep-research-harness","claimsVerified":13,"claimsKilled":12,"synthesisStep":"session-limited-authored-manually","timestamp":"2026-06-28T15:14:48Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-obsidian-vault-store-4+5","docsCommit":"b5dec1a","timestamp":"2026-06-28T15:19:17.000Z"}
+{"event":"pipeline-started","timestamp":"2026-06-28T15:27:41Z","task":"spec-20260628-medical-ingest: Medical ingest lab-PDF -> vault notes + profile + supplements","specId":"spec-20260628-medical-ingest"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-ingest-1","specId":"spec-20260628-medical-ingest","timestamp":"2026-06-28T15:28:00Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-medical-ingest-1","timestamp":"2026-06-28T15:33:55Z"}
+{"event":"plan-updated","specId":"spec-20260628-telegram-frontend","specVersion":2,"change":"enriched: +feat-9 multi-LLM secretary /fleet view; +Sprint 7; Tier-2/Tier-3 deferred to sibling specs","sprintCount":7,"evidence":["research-20260628-telegram-features-and-topology","research-20260628-telegram-multi-llm-coordination"],"timestamp":"2026-06-28T15:35:10Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-ingest-1","iteration":1,"timestamp":"2026-06-28T15:39:37Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-ingest-1","specId":"spec-20260628-medical-ingest","iteration":1,"timestamp":"2026-06-28T15:43:29Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-ingest-2","specId":"spec-20260628-medical-ingest","timestamp":"2026-06-28T15:44:21Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-medical-ingest-1","docsCommit":"68ce755","timestamp":"2026-06-28T15:47:42Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-medical-ingest-2","timestamp":"2026-06-28T15:48:21Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-ingest-2","iteration":1,"timestamp":"2026-06-28T15:56:44Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-ingest-2","specId":"spec-20260628-medical-ingest","iteration":1,"timestamp":"2026-06-28T16:00:11Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-ingest-3","specId":"spec-20260628-medical-ingest","timestamp":"2026-06-28T16:00:47Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-medical-ingest-2","docsCommit":"0e5282e","timestamp":"2026-06-28T16:03:59Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-medical-ingest-3","timestamp":"2026-06-28T16:05:05Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-ingest-3","iteration":1,"timestamp":"2026-06-28T16:13:17Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-ingest-3","specId":"spec-20260628-medical-ingest","iteration":1,"timestamp":"2026-06-28T16:17:33Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-ingest-4","specId":"spec-20260628-medical-ingest","timestamp":"2026-06-28T16:18:08Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-medical-ingest-3","docsCommit":"a0f1f34","timestamp":"2026-06-28T16:21:36Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-medical-ingest-4","timestamp":"2026-06-28T16:22:42Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-ingest-4","iteration":1,"timestamp":"2026-06-28T16:32:23Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-ingest-4","specId":"spec-20260628-medical-ingest","iteration":1,"timestamp":"2026-06-28T16:36:23Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-ingest-5","specId":"spec-20260628-medical-ingest","timestamp":"2026-06-28T16:37:02Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-medical-ingest-4","docsCommit":"28ebd38","timestamp":"2026-06-28T16:40:54Z"}
+{"event":"curator-completed","contractId":"sprint-spec-20260628-medical-ingest-5","timestamp":"2026-06-28T16:42:16Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-ingest-5","iteration":1,"timestamp":"2026-06-28T16:50:50Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-ingest-5","specId":"spec-20260628-medical-ingest","iteration":1,"timestamp":"2026-06-28T16:55:00Z"}
+{"event":"plan-completed","specId":"spec-20260628-medical-ingest","sprintsCompleted":5,"timestamp":"2026-06-28T16:55:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-medical-ingest-5","docsCommit":"3fa38a3","timestamp":"2026-06-28T16:59:30Z"}
+{"event":"pipeline-completed","specId":"spec-20260628-medical-ingest","sprintsCompleted":5,"totalIterations":5,"timestamp":"2026-06-28T16:59:30Z"}
+{"event":"pipeline-started","timestamp":"2026-06-28T18:11:12.113Z","task":"medical-analysis spec — resume planned spec-20260628-medical-analysis (5 sprints, all proposed)","specId":"spec-20260628-medical-analysis"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-analysis-1","specId":"spec-20260628-medical-analysis","sprintNumber":1,"timestamp":"2026-06-28T18:17:15.443Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-analysis-1","iteration":1,"timestamp":"2026-06-28T18:17:15.443Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-analysis-1","specId":"spec-20260628-medical-analysis","sprintNumber":1,"iteration":1,"timestamp":"2026-06-28T18:36:01.438Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-analysis-2","specId":"spec-20260628-medical-analysis","sprintNumber":2,"timestamp":"2026-06-28T18:36:19.350Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-analysis-2","iteration":1,"timestamp":"2026-06-28T18:36:19.350Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-analysis-2","specId":"spec-20260628-medical-analysis","sprintNumber":2,"iteration":1,"timestamp":"2026-06-28T18:54:03.935Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-analysis-3","specId":"spec-20260628-medical-analysis","sprintNumber":3,"timestamp":"2026-06-28T18:54:26.063Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-analysis-3","iteration":1,"timestamp":"2026-06-28T18:54:26.063Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-analysis-3","specId":"spec-20260628-medical-analysis","sprintNumber":3,"iteration":1,"timestamp":"2026-06-28T19:21:56.518Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-analysis-4","specId":"spec-20260628-medical-analysis","sprintNumber":4,"timestamp":"2026-06-28T19:22:31.081Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-analysis-4","iteration":1,"timestamp":"2026-06-28T19:22:31.081Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-analysis-4","specId":"spec-20260628-medical-analysis","sprintNumber":4,"iteration":1,"timestamp":"2026-06-28T19:42:37.917Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-medical-analysis-5","specId":"spec-20260628-medical-analysis","sprintNumber":5,"timestamp":"2026-06-28T19:42:53.692Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-medical-analysis-5","iteration":1,"timestamp":"2026-06-28T19:42:53.692Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-medical-analysis-5","specId":"spec-20260628-medical-analysis","sprintNumber":5,"iteration":1,"timestamp":"2026-06-28T20:02:00.663Z"}
+{"event":"plan-completed","specId":"spec-20260628-medical-analysis","sprintsCompleted":5,"timestamp":"2026-06-28T20:02:00.663Z"}
+{"event":"pipeline-started","timestamp":"2026-06-28T20:11:56.000Z","task":"spec-20260628-priority-hub: Unified priority hub (cross-repo collector + Finding schema + query-scoped judge)","specId":"spec-20260628-priority-hub"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-priority-hub-1","specId":"spec-20260628-priority-hub","timestamp":"2026-06-28T20:12:31.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-priority-hub-1","iteration":1,"timestamp":"2026-06-28T20:16:26.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-priority-hub-1","specId":"spec-20260628-priority-hub","iteration":1,"timestamp":"2026-06-28T20:23:57.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-priority-hub-2","specId":"spec-20260628-priority-hub","timestamp":"2026-06-28T20:25:01.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-priority-hub-2","iteration":1,"timestamp":"2026-06-28T20:30:52.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-priority-hub-2","specId":"spec-20260628-priority-hub","iteration":1,"timestamp":"2026-06-28T20:43:04.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-priority-hub-3","specId":"spec-20260628-priority-hub","timestamp":"2026-06-28T20:43:54.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-priority-hub-3","iteration":1,"timestamp":"2026-06-28T20:48:46.000Z"}
+{"event":"sprint-generator-interrupted","contractId":"sprint-spec-20260628-priority-hub-3","iteration":1,"reason":"API connection closed mid-response; scope.ts+lenses.ts+scope.test.ts landed (typecheck clean, 22 scope tests green), judge.ts pending; spawned continuation generator","timestamp":"2026-06-28T21:14:13.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-priority-hub-3","specId":"spec-20260628-priority-hub","iteration":1,"timestamp":"2026-06-28T21:31:44.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-priority-hub-4","specId":"spec-20260628-priority-hub","timestamp":"2026-06-28T21:32:26.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-priority-hub-4","iteration":1,"timestamp":"2026-06-28T21:37:17.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-priority-hub-4","specId":"spec-20260628-priority-hub","iteration":1,"timestamp":"2026-06-28T21:52:23.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-priority-hub-5","specId":"spec-20260628-priority-hub","timestamp":"2026-06-28T21:53:01.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-priority-hub-5","iteration":1,"timestamp":"2026-06-28T21:59:18.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-priority-hub-5","specId":"spec-20260628-priority-hub","iteration":1,"timestamp":"2026-06-28T22:10:25.000Z"}
+{"event":"plan-completed","specId":"spec-20260628-priority-hub","sprintsCompleted":5,"timestamp":"2026-06-28T22:10:25.000Z"}
+{"event":"pipeline-started","timestamp":"2026-06-29T09:46:22.115Z","task":"task-inbox","specId":"spec-20260628-task-inbox"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-task-inbox-1","specId":"spec-20260628-task-inbox","timestamp":"2026-06-29T09:46:50.369Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-task-inbox-1","iteration":1,"timestamp":"2026-06-29T09:56:41.516Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-1","iteration":1,"result":"pass","timestamp":"2026-06-29T10:01:09.423Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-task-inbox-1","specId":"spec-20260628-task-inbox","iteration":1,"timestamp":"2026-06-29T10:01:09.423Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-task-inbox-2","specId":"spec-20260628-task-inbox","timestamp":"2026-06-29T10:02:03.049Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-task-inbox-1","docsCommit":"4e0f4a7","timestamp":"2026-06-29T10:08:19.915Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-task-inbox-2","iteration":1,"timestamp":"2026-06-29T10:13:43.478Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-2","iteration":1,"result":"fail","timestamp":"2026-06-29T10:18:14.622Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260628-task-inbox-2","iteration":1,"failedCriteria":["lint:zero-errors-hard-gate"],"timestamp":"2026-06-29T10:18:14.622Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-2","iteration":2,"result":"pass","timestamp":"2026-06-29T10:20:56.290Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-task-inbox-2","specId":"spec-20260628-task-inbox","iteration":2,"timestamp":"2026-06-29T10:20:56.290Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-task-inbox-3","specId":"spec-20260628-task-inbox","timestamp":"2026-06-29T10:21:28.783Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-task-inbox-2","docsCommit":"2c861a2","timestamp":"2026-06-29T10:24:13.183Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-task-inbox-3","iteration":1,"timestamp":"2026-06-29T10:32:14.693Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-3","iteration":1,"result":"pass","timestamp":"2026-06-29T10:36:17.314Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-task-inbox-3","specId":"spec-20260628-task-inbox","iteration":1,"timestamp":"2026-06-29T10:36:17.314Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-task-inbox-4","specId":"spec-20260628-task-inbox","timestamp":"2026-06-29T10:36:43.018Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-task-inbox-3","docsCommit":"291603b","timestamp":"2026-06-29T10:39:45.426Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-task-inbox-4","iteration":1,"timestamp":"2026-06-29T10:49:08.662Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-4","iteration":1,"result":"pass","timestamp":"2026-06-29T10:52:49.261Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-task-inbox-4","specId":"spec-20260628-task-inbox","iteration":1,"timestamp":"2026-06-29T10:52:49.261Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-task-inbox-5","specId":"spec-20260628-task-inbox","timestamp":"2026-06-29T10:53:32.439Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-task-inbox-4","docsCommit":"3409270","timestamp":"2026-06-29T10:56:27.195Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-task-inbox-5","iteration":1,"timestamp":"2026-06-29T11:03:33.788Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-5","iteration":1,"result":"pass","timestamp":"2026-06-29T11:07:01.694Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-task-inbox-5","specId":"spec-20260628-task-inbox","iteration":1,"timestamp":"2026-06-29T11:07:01.694Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-task-inbox-6","specId":"spec-20260628-task-inbox","timestamp":"2026-06-29T11:07:36.597Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-task-inbox-5","docsCommit":"c31aa72","timestamp":"2026-06-29T11:10:43.665Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-task-inbox-6","iteration":1,"timestamp":"2026-06-29T11:22:28.625Z"}
+{"event":"sprint-iteration-completed","contractId":"sprint-spec-20260628-task-inbox-6","iteration":1,"result":"pass","timestamp":"2026-06-29T11:26:28.909Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-task-inbox-6","specId":"spec-20260628-task-inbox","iteration":1,"timestamp":"2026-06-29T11:26:28.909Z"}
+{"event":"plan-completed","specId":"spec-20260628-task-inbox","sprintsCompleted":6,"timestamp":"2026-06-29T11:26:28.909Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-task-inbox-6","docsCommit":"e600c3c","timestamp":"2026-06-29T11:30:17.363Z"}
+{"event":"pipeline-completed","specId":"spec-20260628-task-inbox","sprintsCompleted":6,"totalIterations":7,"timestamp":"2026-06-29T11:30:17.364Z"}
+{"event":"pipeline-started","timestamp":"2026-06-29T16:08:44.466Z","task":"do-bridge (spec-20260628-do-bridge)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-do-bridge-1","specId":"spec-20260628-do-bridge","timestamp":"2026-06-29T16:09:02.190Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-do-bridge-1","iteration":1,"timestamp":"2026-06-29T16:23:42.274Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-do-bridge-1","specId":"spec-20260628-do-bridge","iteration":1,"timestamp":"2026-06-29T16:26:58.040Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-do-bridge-1","docsCommit":"2ce98f3","timestamp":"2026-06-29T16:31:42.928Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-do-bridge-2","specId":"spec-20260628-do-bridge","timestamp":"2026-06-29T16:35:35.330Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-do-bridge-2","iteration":1,"timestamp":"2026-06-29T16:51:48.778Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-do-bridge-2","specId":"spec-20260628-do-bridge","iteration":1,"timestamp":"2026-06-29T16:56:10.015Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-do-bridge-2","docsCommit":"2e71989","timestamp":"2026-06-29T17:00:11.101Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-do-bridge-3","specId":"spec-20260628-do-bridge","timestamp":"2026-06-29T17:02:31.318Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-do-bridge-3","iteration":1,"timestamp":"2026-06-29T17:15:36.825Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-do-bridge-3","specId":"spec-20260628-do-bridge","iteration":1,"timestamp":"2026-06-29T17:21:10.994Z"}
+{"event":"plan-completed","specId":"spec-20260628-do-bridge","sprintsCompleted":3,"totalIterations":3,"timestamp":"2026-06-29T17:21:10.994Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260628-do-bridge-3","docsCommit":"b1bb484","timestamp":"2026-06-29T17:29:05.913Z"}
+{"event":"pipeline-completed","specId":"spec-20260628-do-bridge","sprintsCompleted":3,"totalIterations":3,"timestamp":"2026-06-29T17:29:05.914Z"}
+{"event":"pipeline-started","timestamp":"2026-06-29T18:01:19.000Z","task":"calendar-planner (spec-20260628-calendar-planner)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-calendar-planner-1","specId":"spec-20260628-calendar-planner","timestamp":"2026-06-29T18:02:31.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-calendar-planner-1","iteration":1,"timestamp":"2026-06-29T18:07:23.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-calendar-planner-1","specId":"spec-20260628-calendar-planner","iteration":1,"timestamp":"2026-06-29T18:24:38.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-calendar-planner-2","specId":"spec-20260628-calendar-planner","timestamp":"2026-06-29T18:30:14.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-calendar-planner-2","iteration":1,"timestamp":"2026-06-29T18:35:16.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-calendar-planner-2","specId":"spec-20260628-calendar-planner","iteration":1,"timestamp":"2026-06-29T18:46:52.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-calendar-planner-3","specId":"spec-20260628-calendar-planner","timestamp":"2026-06-29T18:51:07.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-calendar-planner-3","iteration":1,"timestamp":"2026-06-29T18:58:15.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-calendar-planner-3","specId":"spec-20260628-calendar-planner","iteration":1,"timestamp":"2026-06-29T19:13:27.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-calendar-planner-4","specId":"spec-20260628-calendar-planner","timestamp":"2026-06-29T19:18:45.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-calendar-planner-4","iteration":1,"timestamp":"2026-06-29T19:23:48.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-calendar-planner-4","specId":"spec-20260628-calendar-planner","iteration":1,"timestamp":"2026-06-29T19:40:51.000Z"}
+{"event":"plan-completed","specId":"spec-20260628-calendar-planner","sprintsCompleted":4,"timestamp":"2026-06-29T19:40:51.000Z"}
+{"event":"pipeline-started","timestamp":"2026-06-29T20:23:55.000Z","task":"research-scheduler (spec-20260628-research-scheduler, 5 sprints)"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-research-scheduler-1","specId":"spec-20260628-research-scheduler","timestamp":"2026-06-29T20:24:36.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-1","iteration":1,"timestamp":"2026-06-29T20:36:55.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-research-scheduler-1","specId":"spec-20260628-research-scheduler","iteration":1,"timestamp":"2026-06-29T20:40:45.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-research-scheduler-2","specId":"spec-20260628-research-scheduler","timestamp":"2026-06-29T20:48:00.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-2","iteration":1,"timestamp":"2026-06-29T20:48:00.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-2","iteration":1,"phase":"evaluator","timestamp":"2026-06-29T20:57:11.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-research-scheduler-2","specId":"spec-20260628-research-scheduler","iteration":1,"timestamp":"2026-06-29T21:01:25.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-research-scheduler-3","specId":"spec-20260628-research-scheduler","timestamp":"2026-06-29T21:07:35.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-3","iteration":1,"timestamp":"2026-06-29T21:07:35.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-3","iteration":1,"phase":"evaluator","timestamp":"2026-06-29T21:12:57.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-research-scheduler-3","specId":"spec-20260628-research-scheduler","iteration":1,"timestamp":"2026-06-29T21:17:04.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-research-scheduler-4","specId":"spec-20260628-research-scheduler","timestamp":"2026-06-29T21:22:57.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-4","iteration":1,"timestamp":"2026-06-29T21:22:57.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-4","iteration":1,"phase":"evaluator","timestamp":"2026-06-29T21:30:38.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-research-scheduler-4","specId":"spec-20260628-research-scheduler","iteration":1,"timestamp":"2026-06-29T21:34:54.000Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260628-research-scheduler-5","specId":"spec-20260628-research-scheduler","timestamp":"2026-06-29T21:41:19.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-5","iteration":1,"timestamp":"2026-06-29T21:41:19.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260628-research-scheduler-5","iteration":1,"phase":"evaluator","timestamp":"2026-06-29T21:48:22.000Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260628-research-scheduler-5","specId":"spec-20260628-research-scheduler","iteration":1,"timestamp":"2026-06-29T21:53:53.000Z"}
+{"event":"plan-completed","specId":"spec-20260628-research-scheduler","sprintsCompleted":5,"timestamp":"2026-06-29T21:53:53.000Z"}
+{"event": "pipeline-started", "timestamp": "2026-06-29T22:31:11Z", "task": "telegram-frontend", "specId": "spec-20260628-telegram-frontend"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-1", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-29T22:31:44Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-1", "timestamp": "2026-06-29T22:35:45Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-1", "iteration": 1, "timestamp": "2026-06-29T22:51:20Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-1", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-29T23:00:19Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-2", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-29T23:01:58Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-1", "commit": "7ba4a1e", "timestamp": "2026-06-29T23:08:10Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-2", "timestamp": "2026-06-29T23:08:26Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-2", "iteration": 1, "timestamp": "2026-06-29T23:16:30Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-2", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-29T23:23:17Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-3", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-29T23:23:46Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-2", "commit": "0762961", "timestamp": "2026-06-29T23:30:36Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-3", "timestamp": "2026-06-29T23:31:41Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-3", "iteration": 1, "timestamp": "2026-06-29T23:45:16Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-3", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-29T23:49:26Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-4", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-29T23:50:06Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-3", "commit": "f30e8ea", "timestamp": "2026-06-29T23:55:42Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-4", "timestamp": "2026-06-29T23:57:12Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-4", "iteration": 1, "timestamp": "2026-06-30T00:07:13Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-4", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-30T00:11:26Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-5", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-30T00:11:56Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-4", "commit": "d6dc6a2", "timestamp": "2026-06-30T00:18:36Z"}
+{"event": "carry-forward-concern", "fromSprint": 4, "toSprint": 5, "concern": "keyboard sends bypass sendSafe funnel (feat-3 chokepoint hole); fold funnel-unification into Sprint 5 where the medical opt-in keyboard is most privacy-sensitive", "timestamp": "2026-06-30T00:18:36Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-5", "timestamp": "2026-06-30T00:19:20Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-5", "iteration": 1, "timestamp": "2026-06-30T00:30:56Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-5", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-30T00:58:27Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-6", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-30T00:59:06Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-6", "timestamp": "2026-06-30T01:05:40Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-5", "commit": "7e2c14e", "timestamp": "2026-06-30T01:06:25Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-6", "iteration": 1, "timestamp": "2026-06-30T01:12:27Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-6", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-30T01:15:55Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260628-telegram-frontend-7", "specId": "spec-20260628-telegram-frontend", "timestamp": "2026-06-30T01:16:32Z"}
+{"event": "sprint-curated", "contractId": "sprint-spec-20260628-telegram-frontend-7", "timestamp": "2026-06-30T01:22:59Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-6", "commit": "428c9ae", "timestamp": "2026-06-30T01:23:13Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260628-telegram-frontend-7", "iteration": 1, "timestamp": "2026-06-30T01:34:35Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260628-telegram-frontend-7", "specId": "spec-20260628-telegram-frontend", "iteration": 1, "timestamp": "2026-06-30T01:38:55Z"}
+{"event": "plan-completed", "specId": "spec-20260628-telegram-frontend", "sprintsCompleted": 7, "timestamp": "2026-06-30T01:38:55Z"}
+{"event": "sprint-docs-written", "contractId": "sprint-spec-20260628-telegram-frontend-7", "commit": "cb01235", "timestamp": "2026-06-30T01:47:07Z"}
+{"event": "pipeline-completed", "specId": "spec-20260628-telegram-frontend", "sprintsCompleted": 7, "sprintsTotal": 7, "finalSuite": 3686, "timestamp": "2026-06-30T01:47:07Z"}
+{"event":"research-completed","researchId":"research-20260702-document-new-features-multi-llm-scheduler-telegram-db","feature":"Document new branch features: multi-LLM fleet, research scheduler, Telegram frontend, DB/storage","questionsGenerated":8,"filesExplored":22,"method":"tokensave+direct-reads","timestamp":"2026-07-02"}
+{"event":"architecture-completed","architectureId":"arch-20260709-agent-sdk-agent-loop-harness","feature":"Port high-value Agent SDK agent-loop capabilities (refusal, per-role effort, USD budget ceiling, parallel read-only tools) into the own provider-agnostic loop","componentCount":6,"decisionCount":5,"timestamp":"2026-07-09T19:29:10Z"}
+{"event":"plan-created","specId":"spec-20260709-agent-loop-capability-port","title":"Agent-Loop Capability Port: full Agent SDK parity on the own loop","sprintCount":10,"timestamp":"2026-07-09T20:05:22Z"}
+{"event":"pipeline-started","timestamp":"2026-07-09T20:11:34.000Z","task":"resume spec-20260709-agent-loop-capability-port from sprint 1"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-1", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T20:11:57.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-1","iteration":1,"timestamp":"2026-07-09T20:19:43.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-1", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T20:29:01.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-1", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T20:29:01.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-2", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T20:30:28.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-2","iteration":1,"timestamp":"2026-07-09T20:39:17.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-2", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T20:56:32.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-2", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T20:56:32.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-3", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T20:57:22.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-3","iteration":1,"timestamp":"2026-07-09T21:06:04.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-3", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T21:27:53.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-3", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T21:27:53.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-4", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T21:28:39.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-4","iteration":1,"timestamp":"2026-07-09T21:35:54.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-4", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T22:22:25.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-4", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T22:22:25.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-5", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T22:23:17.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-5","iteration":1,"timestamp":"2026-07-09T22:31:08.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-5", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T22:52:38.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-5", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T22:52:38.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-6", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T22:53:27.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-6","iteration":1,"timestamp":"2026-07-09T23:00:07.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-6", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T23:17:13.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-6", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T23:17:13.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-7", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T23:17:36.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-7","iteration":1,"timestamp":"2026-07-09T23:26:26.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-7", "iteration": 1, "result": "pass", "timestamp": "2026-07-09T23:40:02.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-7", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-09T23:40:02.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-8", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-09T23:40:25.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-8","iteration":1,"timestamp":"2026-07-09T23:41:10.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-8", "iteration": 1, "result": "pass", "timestamp": "2026-07-10T00:02:30.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-8", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-10T00:02:30.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-9", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-10T00:02:54.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-9","iteration":1,"timestamp":"2026-07-10T00:03:42.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-9", "iteration": 1, "result": "pass", "timestamp": "2026-07-10T00:25:12.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-9", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-10T00:25:12.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260709-agent-loop-capability-port-10", "specId": "spec-20260709-agent-loop-capability-port", "timestamp": "2026-07-10T00:25:40.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260709-agent-loop-capability-port-10","iteration":1,"timestamp":"2026-07-10T00:26:36.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-10", "iteration": 1, "result": "pass", "timestamp": "2026-07-10T00:57:16.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260709-agent-loop-capability-port-10", "specId": "spec-20260709-agent-loop-capability-port", "iteration": 1, "timestamp": "2026-07-10T00:57:16.000Z"}
+{"event": "plan-completed", "specId": "spec-20260709-agent-loop-capability-port", "sprintsCompleted": 10, "timestamp": "2026-07-10T00:57:16.000Z"}
+{"event": "pipeline-completed", "specId": "spec-20260709-agent-loop-capability-port", "totalIterations": 10, "timestamp": "2026-07-10T00:57:16.000Z"}
+{"event":"architecture-completed","architectureId":"arch-20260712-security-audit-agent-team","feature":"security-audit agent team: fail-closed in-pipeline security gate + standalone profound security audit","componentCount":8,"decisionCount":6,"timestamp":"2026-07-12T12:07:00+03:00"}
+{"event":"plan-created","specId":"spec-20260712-security-audit-agent-team","title":"Security Audit Agent Team (fail-closed gate + standalone audit)","sprintCount":7,"architectureId":"arch-20260712-security-audit-agent-team","timestamp":"2026-07-12T09:35:00.000Z"}
+{"event": "pipeline-started", "timestamp": "2026-07-12T10:22:20.000Z", "task": "Security Audit Agent Team (fail-closed gate + standalone audit) \u2014 resume spec spec-20260712-security-audit-agent-team"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-1", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T10:22:20.000Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260712-security-audit-agent-team-1","iteration":1,"timestamp":"2026-07-12T10:27:21.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-1", "iteration": 1, "result": "pass", "timestamp": "2026-07-12T10:38:29.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-1", "specId": "spec-20260712-security-audit-agent-team", "iteration": 1, "timestamp": "2026-07-12T10:38:29.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T10:38:29.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "iteration": 1, "timestamp": "2026-07-12T10:38:29.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "iteration": 1, "result": "fail", "timestamp": "2026-07-12T11:04:49.000Z"}
+{"event": "sprint-iteration-failed", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "iteration": 1, "failedCriteria": ["nonGoal-3: auditor bash tool"], "timestamp": "2026-07-12T11:04:49.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "iteration": 2, "timestamp": "2026-07-12T11:04:49.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "iteration": 2, "result": "pass", "timestamp": "2026-07-12T11:17:14.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-2", "specId": "spec-20260712-security-audit-agent-team", "iteration": 2, "timestamp": "2026-07-12T11:17:14.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-3", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T11:17:14.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-3", "iteration": 1, "timestamp": "2026-07-12T11:17:14.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-3", "iteration": 1, "result": "pass", "timestamp": "2026-07-12T11:45:30.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-3", "specId": "spec-20260712-security-audit-agent-team", "iteration": 1, "timestamp": "2026-07-12T11:45:30.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-4", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T11:45:30.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-4", "iteration": 1, "timestamp": "2026-07-12T11:45:30.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-4", "iteration": 1, "result": "pass", "timestamp": "2026-07-12T12:02:25.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-4", "specId": "spec-20260712-security-audit-agent-team", "iteration": 1, "timestamp": "2026-07-12T12:02:25.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-5", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T12:02:25.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-5", "iteration": 1, "timestamp": "2026-07-12T12:02:25.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-5", "iteration": 1, "result": "pass", "timestamp": "2026-07-12T12:27:08.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-5", "specId": "spec-20260712-security-audit-agent-team", "iteration": 1, "timestamp": "2026-07-12T12:27:08.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T12:27:08.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "iteration": 1, "timestamp": "2026-07-12T12:27:08.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "iteration": 1, "result": "fail", "timestamp": "2026-07-12T13:10:31.000Z"}
+{"event": "sprint-iteration-failed", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "iteration": 1, "failedCriteria": ["sc-6-2"], "timestamp": "2026-07-12T13:10:31.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "iteration": 2, "timestamp": "2026-07-12T13:10:31.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "iteration": 2, "result": "pass", "timestamp": "2026-07-12T13:21:11.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-6", "specId": "spec-20260712-security-audit-agent-team", "iteration": 2, "timestamp": "2026-07-12T13:21:11.000Z"}
+{"event": "sprint-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-7", "specId": "spec-20260712-security-audit-agent-team", "timestamp": "2026-07-12T13:21:11.000Z"}
+{"event": "sprint-iteration-started", "contractId": "sprint-spec-20260712-security-audit-agent-team-7", "iteration": 1, "timestamp": "2026-07-12T13:21:11.000Z"}
+{"event": "sprint-iteration-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-7", "iteration": 1, "result": "pass", "timestamp": "2026-07-12T13:41:08.000Z"}
+{"event": "sprint-completed", "contractId": "sprint-spec-20260712-security-audit-agent-team-7", "specId": "spec-20260712-security-audit-agent-team", "iteration": 1, "timestamp": "2026-07-12T13:41:08.000Z"}
+{"event": "plan-completed", "specId": "spec-20260712-security-audit-agent-team", "sprintsCompleted": 7, "timestamp": "2026-07-12T13:41:08.000Z"}
+{"event": "pipeline-completed", "specId": "spec-20260712-security-audit-agent-team", "sprints": 7, "totalIterations": 9, "timestamp": "2026-07-12T13:41:08.000Z"}
+{"event":"research-completed","researchId":"research-20260714-security-auditor-pentest-deep-upgrade","feature":"Make bober-security-auditor deeply profound at pentesting/injection/code-security audits for iGaming+DEX money-handling customers","questionsGenerated":14,"filesExplored":15,"timestamp":"2026-07-14T00:00:00Z"}
+{"event":"architecture-completed","architectureId":"arch-20260714-security-auditor-per-stack-skills","feature":"Ultimate per-stack security auditor: skill-file signatures + typed retrieval index + adversarial verifier + supply-chain axis + widened taxonomy + real-diff fidelity","componentCount":14,"decisionCount":7,"timestamp":"2026-07-14T00:00:00Z"}
+{"event":"plan-created","specId":"spec-20260714-security-auditor-per-stack-skills","title":"Per-Stack Security Auditor with Skill-File Signatures + Adversarial Verifier","sprintCount":10,"timestamp":"2026-07-14T00:00:00Z"}
+{"event":"pipeline-started","timestamp":"2026-07-14T00:00:00Z","task":"spec-20260714-security-auditor-per-stack-skills (per-stack security auditor upgrade, 10 sprints)"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-1","iteration":1,"failedCriteria":["sc-1-3"],"timestamp":"2026-07-14T13:45:46Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-1","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":2,"timestamp":"2026-07-14T16:54:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-2","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T16:55:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-1","docsCommit":"7efa30f","timestamp":"2026-07-14T16:56:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-2","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T17:20:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-3","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T17:21:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-2","docsCommit":"61c8205","timestamp":"2026-07-14T17:22:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-3","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T17:35:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-4","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T17:36:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-3","docsCommit":"b87a3ec","timestamp":"2026-07-14T17:37:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-4","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T17:55:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-5","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T17:56:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-4","docsCommit":"a2e641e","timestamp":"2026-07-14T17:57:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-5","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T18:20:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-6","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T18:21:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-5","docsCommit":"4917aad","timestamp":"2026-07-14T18:22:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-6","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T18:50:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-7","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T18:51:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-6","docsCommit":"5168e33","timestamp":"2026-07-14T18:52:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-7","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T19:15:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-8","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T19:16:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-7","docsCommit":"d17c99a","timestamp":"2026-07-14T19:17:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-8","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T16:36:10Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-9","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T16:37:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-8","docsCommit":"de7a4df","timestamp":"2026-07-14T16:44:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-9","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T19:56:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-10","specId":"spec-20260714-security-auditor-per-stack-skills","timestamp":"2026-07-14T19:57:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-9","docsCommit":"f178771","timestamp":"2026-07-14T19:58:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-10","specId":"spec-20260714-security-auditor-per-stack-skills","iteration":1,"timestamp":"2026-07-14T20:20:00Z"}
+{"event":"plan-completed","specId":"spec-20260714-security-auditor-per-stack-skills","sprintsCompleted":10,"timestamp":"2026-07-14T20:20:00Z"}
+{"event":"sprint-docs-completed","contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-10","docsCommit":"cf3acc9","timestamp":"2026-07-14T20:21:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260714-security-auditor-per-stack-skills","sprintsCompleted":10,"totalIterations":11,"timestamp":"2026-07-14T20:21:00Z"}
+{"event":"pipeline-started","timestamp":"2026-07-14T20:30:00Z","task":"Re-scope stale docs-correction (0.16.0) into a current 0.18.0 docs+metadata refresh and run it"}
+{"event":"spec-superseded","specId":"spec-20260604-docs-correction","reason":"stale-0.16.0-repo-now-0.18.0","timestamp":"2026-07-14T20:30:00Z"}
+{"event":"plan-created","specId":"spec-20260714-docs-metadata-0-18-refresh","timestamp":"2026-07-14T18:51:12Z","status":"draft","sprintCount":2}
+{"event":"plan-created","specId":"spec-20260714-docs-metadata-0-18-refresh","title":"Documentation & Metadata Refresh (0.18.0)","sprintCount":2,"timestamp":"2026-07-14T20:34:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-docs-metadata-0-18-refresh-1","specId":"spec-20260714-docs-metadata-0-18-refresh","timestamp":"2026-07-14T20:35:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260714-docs-metadata-0-18-refresh-1","iteration":1,"failedCriteria":["sc-1-2"],"timestamp":"2026-07-14T19:08:14Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-docs-metadata-0-18-refresh-1","specId":"spec-20260714-docs-metadata-0-18-refresh","iteration":2,"timestamp":"2026-07-14T22:20:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260714-docs-metadata-0-18-refresh-2","specId":"spec-20260714-docs-metadata-0-18-refresh","timestamp":"2026-07-14T22:21:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260714-docs-metadata-0-18-refresh-2","specId":"spec-20260714-docs-metadata-0-18-refresh","iteration":1,"timestamp":"2026-07-14T22:45:00Z"}
+{"event":"plan-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"timestamp":"2026-07-14T22:45:00Z"}
+{"event":"pipeline-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"totalIterations":3,"timestamp":"2026-07-14T22:45:00Z"}
+{"event":"sprint-docs-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","docsCommit":"3053de4","timestamp":"2026-07-14T22:46:00Z"}

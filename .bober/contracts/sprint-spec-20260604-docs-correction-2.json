@@ -1,0 +1,18 @@
+{
+  "contractId": "sprint-spec-20260604-docs-correction-2",
+  "specId": "spec-20260604-docs-correction",
+  "sprintNumber": 2,
+  "title": "README corrections",
+  "status": "pending",
+  "description": "Document lens panels + workflow engine, expand the slash-command table to all 24 commands, and document auto-filter command filtering in the README.",
+  "filesInScope": ["README.md"],
+  "successCriteria": [
+    "A 'Lens Panels' section explains opt-in evaluator.panel and architect.panel (off by default) and lists built-in lenses: evaluator [correctness, security, regression, quality], architect [scalability, security, cost, operability, maintainability, reversibility].",
+    "Full Configuration Reference jsonc documents evaluator.panel, an architect section with panel, and pipeline.engine ('ts'|'skill'|'workflow', default 'ts').",
+    "Slash Commands table lists all 24 commands (existing 12 + bober-code-review, bober-debug, bober-deploy, bober-diagnose, bober-graph, bober-impact, bober-incident, bober-onboard, bober-postmortem, bober-runbook, bober-using-bober, bober-verify).",
+    "README documents preset-aware (auto-filter) slash-command installation.",
+    "No broken markdown tables or jsonc syntax."
+  ],
+  "generatorNotes": "Command table starts at README:394. Config reference jsonc at README:503-591 (evaluator block 549-563, pipeline block 573-579). Add panel to evaluator block, add an architect block after evaluator, add engine to pipeline block. Place the Lens Panels prose section near the Anthropic-features section (ends ~README:279) or just before ## Configuration. Use exact descriptions from src/config/schema.ts:112-128,203-204. The '24 skills + 10 subagents' headline at README:83 is already correct — do not change the count, just make the table match it.",
+  "evaluatorNotes": "Count rows in the slash-command table (must be 24). grep README for each of the 12 previously-missing command names. Confirm 'evaluator.panel', 'architect', 'engine' appear in the jsonc block. Confirm a Lens Panels heading exists. Confirm lens names match schema constants."
+}

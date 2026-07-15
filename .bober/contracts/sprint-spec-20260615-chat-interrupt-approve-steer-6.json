@@ -1,0 +1,98 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-6",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "sprintNumber": 6,
+  "title": "Hygiene, docs, and end-to-end verification",
+  "description": "Harden and document the mid-flight HITL loop. Clean up stale pending/guidance/pause markers and chat-owned RunState pending/paused fields when a run completes or is aborted. Document the full chat steer command set and the single-careful-run-at-a-time limitation plus the runId-scoped-marker follow-up. Update /help, the README chat section, and a docs page. Add an end-to-end test that drives the whole loop: /careful on -> spawn -> pause at post-plan -> /tell -> /approve -> resume -> /pause -> /resume -> completion.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-5"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "All tests pass, including the hygiene/cleanup tests and the end-to-end steer test (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "When a run completes or is aborted, its stale pending approval marker(s), guidance.jsonl drain-state, and paused.json are cleaned up and the chat-owned RunState pending/paused fields are cleared. A unit test transitions a run to completed/aborted and asserts the markers + RunState fields are gone.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "An end-to-end test drives the full loop against a stubbed/fast pipeline in temp dirs: /careful on -> spawn -> pause at post-plan -> /tell guidance -> /approve -> resume -> /pause -> /resume -> completion, asserting the disk markers and RunState transitions at each step. No network.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "/help lists the full command set (/careful, /approve, /reject, /tell, /pause, /resume, /stop, /runs, /exit). A unit test asserts each command appears in HELP_TEXT.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-7",
+      "description": "Documentation (README chat section + a docs/ page) describes /careful and the curated gates (post-research/post-plan/post-sprint), /approve, /reject, /tell, /pause, /resume, and explicitly states the single-careful-run-at-a-time limitation and the runId-scoped-marker follow-up.",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement runId-scoped marker filenames (documented as a follow-up only)",
+    "Do not add MCP-cockpit/IDE surfacing of input-required/paused",
+    "Do not introduce new steer capabilities beyond Sprints 1-5"
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "Stale markers + RunState fields are cleaned on completion/abort, the full loop passes end-to-end, /help and docs are complete (including the documented limitation), and build + typecheck + full suite are green"
+  ],
+  "definitionOfDone": "Completion/abort cleans up stale pending/guidance/pause markers and RunState pending/paused fields. /help lists the full steer command set. The README chat section and a docs page document /careful, the curated gates, approve/reject/tell/pause/resume, and the single-careful-run limitation + runId-scoped-marker follow-up. An end-to-end test drives the whole loop. Build, typecheck, and the full suite pass.",
+  "assumptions": [
+    "The cleanup hook runs in the chat process (which owns chat-spawned RunState) when it observes a run reach a terminal status (completed/aborted) — e.g. in the completion poll prelude or alongside CompletionTailer handling. It removes that run's pending markers in .bober/approvals (by correlated runId), drops its guidance/pause markers under .bober/runs/<id>/, and clears RunState pending/paused fields.",
+    "The end-to-end test stubs the pipeline (or uses a tiny fake run loop) so it can deterministically reach post-plan, observe the pending marker, and resume — it does not run the real LLM pipeline.",
+    "Docs live in README.md (chat section, likely extended from Phase 1) plus a dedicated docs/ page (e.g. docs/chat-steer.md); cross-reference research Phase 2 and docs/teams.md."
+  ],
+  "outOfScope": [
+    "runId-scoped marker filenames (follow-up)",
+    "Cockpit/IDE surfacing",
+    "Any Phase 3/5/6 work"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Integration + polish sprint; minimal new abstraction. Verified touch points:\n- Cleanup: add a cleanup helper (e.g. src/chat/steer-cleanup.ts) invoked when the chat process sees a run go terminal. Reuse: src/state/approval-state.ts deletePending(projectRoot, id) (:138) for stale pending markers; unlink guidance.jsonl + paused.json under .bober/runs/<id>/ (best-effort, tolerate ENOENT). Clear RunState pending/paused fields via writeRunState. Hook it in src/chat/chat-session.ts where completions are processed (the tailer poll at :120 / completion handling at :135,181) — when a completion for runId R arrives, run cleanup for R. Keep best-effort (never throw into the turn).\n- /help: src/chat/slash-commands.ts HELP_TEXT — ensure the full set is listed: /careful, /runs, /approve, /reject, /tell, /pause, /resume, /stop, /help, /exit.\n- Docs: extend the README chat section with the steer commands and the curated-gate explanation; add docs/chat-steer.md describing the cross-process model, /careful toggle, curated gates, approve/reject+feedback, /tell guidance, /pause//resume, the relationship to /stop, and a clearly-flagged 'Limitations / follow-ups' section: single careful run at a time (checkpointId-keyed shared markers) and the runId-scoped-marker upgrade path. Cross-reference .bober/research/20260614-chattable-team-of-agents-platform.md Phase 2 and docs/teams.md.\n- E2E test (src/chat/chat-steer-e2e.test.ts): use temp dirs + a stubbed pipeline/run loop. Sequence: setCareful(on); spawn (capture args include --approve-gates); simulate the child reaching post-plan by writing a post-plan.pending.json; turn -> assert surfaced + RunState input-required; handleTell -> assert guidance entry; handleApprove('post-plan') -> assert approved.json + pending cleared; simulate post-sprint pending then handlePause -> assert paused.json + RunState paused; handleResume -> assert cleared; simulate completion marker -> assert cleanup removed stale markers + RunState fields. Assert at the disk-artifact + RunState level (this is the integration proof).\nRun build+typecheck+test before handoff. Run update-all is a human follow-up (noted in docs), not part of this sprint.",
+  "evaluatorNotes": "sc-6-4: seed a run with a pending marker + guidance.jsonl + paused.json + RunState pending/paused fields; transition it to completed (and separately aborted); assert all markers removed and RunState pending/paused fields cleared.\nsc-6-5: run the e2e test and confirm each asserted transition (careful spawn args, surfaced input-required, guidance written, approved+cleared, paused, resumed, completion-cleanup). Confirm it uses a stub, not the real pipeline, and no network.\nsc-6-6: assert HELP_TEXT contains every command in the set.\nsc-6-7: confirm README chat section + docs/chat-steer.md exist and cover /careful, curated gates, approve/reject/tell/pause/resume, and explicitly the single-careful-run limitation + runId-scoped follow-up.\nRegression: full suite green; build + typecheck clean. Confirm cleanup is best-effort and never breaks a chat turn.",
+  "estimatedFiles": [
+    "src/chat/steer-cleanup.ts",
+    "src/chat/steer-cleanup.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/slash-commands.ts",
+    "src/chat/chat-steer-e2e.test.ts",
+    "README.md",
+    "docs/chat-steer.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1",
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T17:00:00Z",
+  "completedAt": "2026-06-15T15:30:02Z"
+}

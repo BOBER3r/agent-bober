@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["274338b - bober(sprint-1): team data model + loadTeam registry + teams config schema"],
+  "filesChanged": [
+    {"path": "src/teams/types.ts", "action": "created", "description": "Role interface + Team interface (id, displayName, memoryNamespace, providers: RoleProviderMap, pipelineShape: PipelineEngineName, roles: Role[], guardrails?: unknown). Pure types."},
+    {"path": "src/teams/registry.ts", "action": "created", "description": "loadTeam(config, teamId?): Team + buildProgrammingTeam + DEFAULT_ROLES. Reuses resolveRoleProviders + resolveEngineName; throws named Error for unknown ids."},
+    {"path": "src/teams/registry.test.ts", "action": "created", "description": "13 collocated Vitest tests for sc-1-4..sc-1-7."},
+    {"path": "src/config/schema.ts", "action": "modified", "description": "Added exported TeamConfigSchema (all-optional) + TeamConfig type; appended teams + defaultTeam optional fields to BoberConfigSchema. createDefaultConfig untouched."}
+  ],
+  "testsAdded": ["src/teams/registry.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0, zero errors",
+    "build": "exit 0, zero errors",
+    "test": "167 files / 1933 passed / 3 skipped; +13 new tests in registry.test.ts",
+    "lint": "0 errors, 2 pre-existing warnings in eval-persist.test.ts (not from this sprint)",
+    "sdkGrep": "no @anthropic-ai/sdk or openai imports under src/teams"
+  },
+  "blockers": [],
+  "notes": "Zero behavior change: resolveRoleProviders, resolveEngineName, runPipeline, selectPipelineEngine, memory.ts untouched. teams/defaultTeam purely additive (.optional()). programming memoryNamespace = '' sentinel for Sprint 2."
+}

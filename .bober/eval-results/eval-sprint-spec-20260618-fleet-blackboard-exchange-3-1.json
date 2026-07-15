@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-blackboard-exchange-3-1",
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-3",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "timestamp": "2026-06-18T19:32:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings (eval-persist.test.ts)." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "2781 passed, 3 skipped, 6 failed (all pre-known cockpit MCP); fleet 268/268 pass." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0." },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "2781 passed; only 6 known cockpit failures; 5 pre-existing coordinator tests unchanged (git diff = additions only)." },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "scaffoldCfg only on r===1 (coordinator.ts:73); runChildRound scaffolds round 1 only, synthetic ScaffoldResult after; scaffold 2x, runner 6x (2 children × 3 rounds)." },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "prevCount init before loop; r>1 && count===prevCount break (coordinator.ts:66/77); round 2 adds none → runner 4x (2 rounds not 3)." },
+    { "criterionId": "sc-3-5", "required": true, "result": "pass", "evidence": "no-blackboard → coordinator.execute() verbatim (index.ts:155-158); executeRounds not called, no .bober/memory dir created; 5 pre-existing coordinator tests pass." },
+    { "criterionId": "sc-3-6", "required": true, "result": "pass", "evidence": "resolveBlackboardPath @ index.ts:135; ensureDir+SharedBlackboard.open+executeRounds in try/finally(close); scaffold 3rd arg = abs dbPath + namespace + maxRounds." },
+    { "criterionId": "sc-3-7", "required": true, "result": "pass", "evidence": "runChildRound full try/catch (coordinator.ts:97-131) → ChildExecution w/ scaffold.error, spawn undefined; failing child no throw, report built." },
+    { "criterionId": "sc-3-8", "required": true, "result": "pass", "evidence": "lint 0 errors; loop gated behind if(dbPath) from manifest.blackboard; never-throw + byte-identical preserved." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 required criteria pass (deep logic review). executeRounds gated on manifest.blackboard, scaffold-once (round 1), early-stop on no-new-findings, byte-identical no-blackboard single-pass, never-throw throughout. All nonGoals respected; 4 declared files only."
+}

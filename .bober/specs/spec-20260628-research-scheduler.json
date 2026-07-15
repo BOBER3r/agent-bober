@@ -1,0 +1,239 @@
+{
+  "specId": "spec-20260628-research-scheduler",
+  "version": 1,
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z",
+  "title": "Research scheduler: recurring multi-model research jobs",
+  "description": "A new src/research/ module that defines recurring research jobs (question + cadence + model-set + target repo/domain), fires them via a deterministic runner that uses fleet tier->provider routing for genuine model diversity, lands results as markdown research notes in the target vault plus Findings bubbled to the priority hub, gates all web/online research behind a new opt-in egress axis (default off, mirroring the medical egress pattern), and emits a morning digest artifact the Telegram bot can push as a silent scheduled message.",
+  "status": "completed",
+  "completedAt": "2026-06-30T00:50:30.000Z",
+  "mode": "brownfield",
+  "ambiguityScore": 4,
+  "metadata": {
+    "dependsOn": ["spec-20260628-priority-hub"],
+    "approvalEvidence": [
+      ".bober/research/research-20260627-knowledge-platform-landscape.md#L99-L100 (scheduler net-new: thin research-job config + harness cron firing bober run/fleet/chat)",
+      ".bober/research/research-20260627-knowledge-platform-landscape.md#L121-L126 (common Finding schema the hub ranks)",
+      ".bober/research/research-20260627-knowledge-platform-landscape.md#L181-L183,#L197 (online research = egress, scheduler-friendly weekly marker research)",
+      "src/fleet/tier-policy.ts#L50-L71 (DifficultyTier->provider/model block table for model diversity)",
+      "src/medical/egress.ts#L1-L60 + src/config/schema.ts#L374-L401 (EgressGuard / opt-in axis pattern to mirror)",
+      "src/cli/commands/medical.ts#L130-L185 + src/cli/index.ts#L40,#L319 (registerXCommand CLI pattern)",
+      "src/state/facts.ts#L20-L33 (FactStore schema + clock-free store pattern)"
+    ]
+  },
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "tech-constraints",
+      "question": "Which scheduling mechanism should fire recurring jobs: an in-repo loop, OS cron/launchd, or a harness scheduler?",
+      "options": [
+        { "label": "A", "description": "Idempotent `bober research tick` that runs only due jobs, triggered externally by OS cron/launchd; plus optional `--watch` in-process loop." },
+        { "label": "B", "description": "Long-lived in-process daemon only." },
+        { "label": "C", "description": "Depend on a hosted/harness scheduler service." }
+      ],
+      "recommendation": "A — research doc says fire `bober run`/`fleet` on a cadence via harness-level cron (L99-L100) and warns hosted/OAuth schedulers are unfit for unattended runs (L135, L141). An idempotent tick is testable with an injected clock and stays connector-agnostic.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q2",
+      "category": "data-model",
+      "question": "Where should research-job definitions live: a config section, a JSON file store, or the FactStore?",
+      "options": [
+        { "label": "A", "description": "JSON file store under .bober/research/jobs/<jobId>.json — mutable user data, mirrors other .bober/ artifact stores." },
+        { "label": "B", "description": "A `research` block inside bober.config.json." },
+        { "label": "C", "description": "Rows in the FactStore SQLite db." }
+      ],
+      "recommendation": "A — jobs are mutable user data, not project config; the research doc calls it a 'thin research job config' (L100) and the repo already keeps mutable artifacts under .bober/ (specs, contracts, memory).",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "integrations",
+      "question": "How should run results bubble to the priority hub, given the hub spec is a sibling dependency built first?",
+      "options": [
+        { "label": "A", "description": "Write a markdown research note to the target vault (owned here) AND emit a Finding via the hub's Finding write surface from spec-20260628-priority-hub." },
+        { "label": "B", "description": "Only write a note; let the hub scrape vault notes." }
+      ],
+      "recommendation": "A — dependsOn=spec-20260628-priority-hub guarantees the hub Finding API exists at build time. Finding shape is locked in research doc L121-L126. The note is the self-owned, independently verifiable artifact; the Finding is the hub hand-off.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q4",
+      "category": "tech-constraints",
+      "question": "For model diversity, should a job use the full FleetCoordinator (spawns child agent-bober runs) or a lightweight multi-provider query loop over tier-policy blocks?",
+      "options": [
+        { "label": "A", "description": "Lightweight loop resolving distinct provider/model blocks from src/fleet/tier-policy.ts and querying each for the research question." },
+        { "label": "B", "description": "Full FleetCoordinator spawning isolated child runs per model." }
+      ],
+      "recommendation": "A — FleetCoordinator (src/fleet/coordinator.ts) spawns full child agent-bober runs, far heavier than answering a research question. Reusing the tier-policy table (tier-policy.ts:50-71) gives provider/model diversity directly. Research doc L80 confirms the judging substrate is already internal.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q5",
+      "category": "scope",
+      "question": "Should a job whose target domain is medical invoke the medical analysis pass instead of the generic multi-model query?",
+      "options": [
+        { "label": "A", "description": "Runner exposes a pluggable domain-analyzer interface with a generic multi-model default; medical-analysis can register later without a hard dependency." },
+        { "label": "B", "description": "Hard-wire a medical branch now, depending on spec-20260628-medical-analysis." }
+      ],
+      "recommendation": "A — spec-20260628-medical-analysis is a sibling, NOT in this spec's dependsOn, so a hard wire would create an undeclared coupling. A pluggable analyzer keeps the runner domain-agnostic (research doc L181-L183) while letting the medical pass register when it lands.",
+      "ambiguityWeight": 2
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Design approved against locked research doc and substrate evidence: .bober/research/research-20260627-knowledge-platform-landscape.md (L99-L100 scheduler, L121-L126 Finding, L181-L183/L197 online-research egress), src/fleet/tier-policy.ts:50-71, src/medical/egress.ts:1-60, src/config/schema.ts:374-401, src/cli/commands/medical.ts:130-185, src/state/facts.ts:20-33.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q1",
+      "answer": "A — canonical idempotent `bober research tick` (runs only jobs whose nextDueAt <= injected now), plus optional `--watch` in-process loop; OS cron/launchd documented as the recommended unattended trigger. Evidence: research doc L99-L100 (cadence firing), L135/L141 (hosted OAuth unfit unattended).",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "A — JSON file store at .bober/research/jobs/<jobId>.json. Evidence: research doc L100 ('thin research job config'); .bober/ already holds mutable artifact stores (specs/, contracts/, memory/).",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "A — write a vault markdown note (self-owned) AND emit a Finding via the hub's write surface (spec-20260628-priority-hub, declared dependsOn). Finding fields per research doc L121-L126. Evidence: research doc L96-L97, L121-L126.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "A — lightweight multi-provider query loop resolving distinct provider/model blocks from src/fleet/tier-policy.ts:50-71; not the full FleetCoordinator. Evidence: src/fleet/coordinator.ts (spawns child runs), tier-policy.ts:50-71, research doc L80.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "A — pluggable domain-analyzer interface with a generic multi-model default; medical-analysis registers later (not a declared dependency). Evidence: research doc L181-L183; briefing scope ('this CALLS them'); spec-20260628-medical-analysis absent from dependsOn.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "Scheduling is an idempotent `bober research tick` (runs only due jobs, injected clock) + optional `--watch`, with OS cron/launchd as the recommended unattended trigger. Evidence: research doc L99-L100, L135, L141.",
+    "Research jobs are stored as JSON files under .bober/research/jobs/<jobId>.json (mutable user data, not bober.config.json). Evidence: research doc L100; .bober/ artifact-store convention.",
+    "Run output is a markdown research note in the target vault PLUS a Finding emitted through the hub's write surface (spec-20260628-priority-hub). Finding fields per research doc L121-L126. Evidence: research doc L96-L97, L121-L126.",
+    "Model diversity comes from a lightweight loop over distinct provider/model blocks resolved from src/fleet/tier-policy.ts:50-71, not from FleetCoordinator child-run spawning. Evidence: tier-policy.ts:50-71, src/fleet/coordinator.ts.",
+    "The new online-research egress axis mirrors src/medical/egress.ts EgressGuard exactly: default false, code-enforced, assertAllowed throws when off. Evidence: src/medical/egress.ts:1-60, src/config/schema.ts:374-401.",
+    "The runner exposes a pluggable domain-analyzer interface (generic default) so the medical analysis pass can register later without an undeclared dependency. Evidence: research doc L181-L183; spec-20260628-medical-analysis not in dependsOn.",
+    "All new work is additive: existing fleet, medical, and run/pipeline behavior stays byte-identical when no research job runs. Evidence: additive-module convention used by src/medical/ and src/fleet/ phases."
+  ],
+  "outOfScope": [
+    "The hub's cross-repo collection and priority ranking logic (owned by spec-20260628-priority-hub).",
+    "Calendar planning / free-busy slot-fill (owned by the calendar sibling spec).",
+    "Telegram bot transport, polling, whitelist, inline buttons, and message rendering (owned by the telegram sibling spec) — this spec only produces the digest content artifact.",
+    "Medical analysis internals: red-flag short-circuit, recommendation judge-loop, grounded synthesis (owned by spec-20260628-medical-analysis; this spec only invokes a registered analyzer).",
+    "Lab-PDF ingestion, SOPS encryption, and Obsidian MCP wiring (owned by other sibling specs).",
+    "Building a new model router/proxy (LiteLLM/OpenRouter) — model diversity reuses existing fleet tier-policy."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Research job definition and management",
+      "description": "A research-job schema (question, cadence, model-set/tier, target repo/domain, online-research opt-in flag) with a JSON file store and a `bober research job add|list|remove` CLI.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A ResearchJob zod schema validates the fields {question, cadence, tier/modelSet, targetRepo, domain, onlineResearch} and rejects an empty question.",
+        "AC2: `bober research job add` persists a JSON file under .bober/research/jobs/<jobId>.json and `bober research job list` prints the stored job's id, question, and cadence."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Multi-model research run with model diversity",
+      "description": "A deterministic runner that executes one stored job by querying at least two distinct provider/model blocks resolved from fleet tier-policy, synthesizes the answers into a markdown research note written to the target vault, and emits a Finding to the hub.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Running a job resolves at least two distinct provider/model blocks from src/fleet/tier-policy.ts and the produced note records which model produced each contribution.",
+        "AC2: The run writes a markdown research note with frontmatter (job id, question, models, generatedAt) to the target vault and emits one Finding via the hub Finding surface."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Online-research egress axis (opt-in, default off)",
+      "description": "A new code-enforced egress axis for online/web research mirroring the medical EgressGuard pattern; default false, fail-closed. The runner's web-retrieval step only executes when the axis is opted in.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: The online-research egress axis defaults to false; the guard's assertAllowed throws when the axis is off and returns void when opted in via config.",
+        "AC2: With the axis off (default), a run performs zero outbound web requests; with the axis on, the run performs retrieval and the note cites the retrieved sources."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Recurring scheduler / cadence runner",
+      "description": "Cadence evaluation (compute nextDueAt from a job's cadence using an injected clock) and an idempotent `bober research tick` that runs only due jobs and advances their nextDueAt, plus an optional `--watch` loop.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober research tick` with an injected now runs only jobs whose nextDueAt <= now and leaves not-yet-due jobs untouched.",
+        "AC2: After a job runs, its nextDueAt advances by its cadence and lastRunAt is recorded; a second tick at the same now runs nothing."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Morning digest artifact",
+      "description": "A digest builder that aggregates research notes/Findings produced within a time window into a digest artifact (markdown + JSON) the Telegram bot can push as a silent scheduled message; transport is out of scope.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: `bober research digest --since <iso>` writes .bober/research/digests/<date>.{md,json} listing each job run in the window with title and top finding.",
+        "AC2: An empty window produces a digest stating no new research was produced (not an error or empty file)."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "techStack": ["typescript", "node", "zod", "commander", "vitest", "better-sqlite3"],
+  "techNotes": {
+    "integrationPoints": [
+      "src/fleet/tier-policy.ts (provider/model diversity)",
+      "spec-20260628-priority-hub Finding write surface (results bubble up)",
+      "src/medical/egress.ts (egress axis pattern to mirror)",
+      "src/orchestrator/pipeline.ts (bober run / fleet entry, for reference)",
+      "src/medical/retrieval/literature.ts (online-retrieval reference pattern)"
+    ],
+    "dataModel": "ResearchJob {id, question, cadence, tier|modelSet, targetRepo, domain, onlineResearch, lastRunAt?, nextDueAt?} stored as JSON at .bober/research/jobs/<jobId>.json. Run output = vault markdown note (frontmatter) + hub Finding (schema per research doc L121-L126).",
+    "securityConsiderations": [
+      "Online research is egress: gated behind a new opt-in axis defaulting to false (fail-closed), mirroring src/medical/egress.ts.",
+      "Hosted-OAuth connectors are unfit for unattended runs — prefer local-token/.ics paths where relevant (research doc L135, L141).",
+      "Digest content is non-sensitive summary only; raw sensitive detail must not be embedded (Telegram is not E2E-encrypted — research doc L141)."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "Online/web research performs zero outbound bytes unless the online-research egress axis is explicitly opted in via config.",
+      "verificationMethod": "unit-test asserting the guard defaults to false and a default-config run issues no network call (injected fetch spy records zero calls)."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Cadence and scheduling logic never reads the wall clock directly; the current time is injected so runs are deterministic and testable.",
+      "verificationMethod": "unit-test passing two fixed `now` values and asserting deterministic due/not-due selection."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "All work is additive — existing fleet, medical, and run/pipeline code paths are byte-identical when no research job is defined or run.",
+      "verificationMethod": "build plus the existing vitest suite remaining green."
+    }
+  ],
+  "constraints": [
+    "New code lives under src/research/ and src/cli/commands/research.ts; do not modify src/fleet/, src/medical/, or src/orchestrator/pipeline.ts behavior.",
+    "Reuse src/fleet/tier-policy.ts for model diversity; do not introduce a new model router (LiteLLM/OpenRouter).",
+    "Mirror src/medical/egress.ts for the egress axis; do not invent a different egress mechanism.",
+    "Stay within sprint.maxSprints=10 and sprintSize=medium (3-8 files per sprint)."
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-task-inbox-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-task-inbox-4",
+  "specId": "spec-20260628-task-inbox",
+  "timestamp": "2026-06-29T10:36:43.018Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Task inbox sprint 4: domain finding INGEST seam. Exported ingestFinding(store, finding, {now}) + `bober task ingest [<file>]` (file or stdin). Content-derived stable id = 16-char sha256 of `${domain}|${title}|${kind}` so re-surfacing reconciles to NOOP/UPDATE (one active row, not a duplicate). Validate against imported Finding schema; reject malformed without throwing (exitCode=1).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-task-inbox-1",
+        "title": "Capture",
+        "summary": "finding-store.ts writeFinding (routes through writeFact -> reconcile NOOP/UPDATE/ADD) + readFindings (getActiveFacts(HUB_SCOPE,undefined,finding)); task-inbox.ts captureTask; cli task add. FindingSchema runtime + Finding type-only in src/hub/finding.ts."
+      },
+      {
+        "contractId": "sprint-spec-20260628-task-inbox-2",
+        "title": "List + lifecycle",
+        "summary": "transitionFinding + task list/start/done/drop."
+      },
+      {
+        "contractId": "sprint-spec-20260628-task-inbox-3",
+        "title": "Snooze",
+        "summary": "isVisibleInDefaultList pure helper; runTaskList now-param; task snooze --until + snooze-until tag."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/hub/finding-store.ts",
+      "src/cli/commands/task.ts",
+      "src/cli/commands/task.test.ts",
+      "src/hub/finding.ts",
+      "src/state/facts.ts",
+      "src/orchestrator/memory/reconcile.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260628-task-inbox-4",
+    "specId": "spec-20260628-task-inbox",
+    "sprintNumber": 4,
+    "title": "Domain finding intake (pool ingest + dedup)",
+    "description": "Provide the seam domains write AUTO-surfaced findings through: an exported ingestFinding(store, finding, {now}) and a `bober task ingest` CLI that reads a Finding JSON (file or stdin). Ingest assigns/uses a content-derived stable id (hash of domain+title+kind) so a re-surfaced finding reconciles to NOOP/UPDATE rather than duplicating, validates against the Finding schema, and the finding then appears in `bober task list`.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260628-task-inbox-1"
+    ],
+    "features": [
+      "feat-4"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-4-1",
+        "description": "`npm run build` exits 0 with ingestFinding and the `bober task ingest` subcommand added.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-2",
+        "description": "A unit test ingests a watch-kind Finding JSON and asserts it appears in the active hub pool and is returned by the list query.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-3",
+        "description": "A unit test ingests two findings with identical domain+title+kind and asserts exactly one active row exists for that id afterward (dedup via reconcile NOOP/UPDATE, not a second ADD).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-4",
+        "description": "A unit test feeds malformed JSON / a payload missing required Finding fields and asserts ingest rejects it, the CLI sets exitCode=1, and no row is written and nothing is thrown.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-5",
+        "description": "`npm run typecheck` exits 0 — ingestFinding accepts the imported Finding type and returns a typed reconcile action.",
+        "verificationMethod": "typecheck",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do NOT implement any domain's proactive review pass that generates findings — only the ingest entry point they call.",
+      "Do NOT bypass the Finding schema — every ingested payload is validated before persistence.",
+      "Do NOT duplicate captureTask's persistence — reuse writeFinding/writeFact.",
+      "Do NOT read the clock inside ingestFinding — now is injected.",
+      "Do NOT add new dependencies."
+    ],
+    "stopConditions": [
+      "`npm run build` and `npm run typecheck` exit 0 and the ingest + dedup + rejection unit tests pass.",
+      "Ingesting a sample domain Finding makes it visible in `bober task list`, and ingesting it again leaves a single active row."
+    ],
+    "definitionOfDone": "Domain pipelines have one entry point — ingestFinding(store, finding, {now}) plus `bober task ingest` (reading a Finding JSON from a file path or stdin) — to push an AUTO-surfaced finding into the unified hub pool. Ingest derives a stable id from domain+title+kind so a repeated finding reconciles to a single active row instead of duplicating, validates the payload against the imported Finding schema, surfaces the finding in `bober task list`, and reports malformed input on stderr with exitCode=1 without throwing.",
+    "assumptions": [
+      "Stable id = a short hash of `${domain}|${title}|${kind}` (mirroring factId in src/state/facts.ts:58-69) so re-surfacing collides on subject and reconciles (reconcile.ts:56-78).",
+      "ingestFinding reuses writeFinding (which routes through writeFact) so the reconcile NOOP/UPDATE/ADD logic applies for free.",
+      "A finding supplied without an id gets the derived id; a finding with an id keeps it."
+    ],
+    "outOfScope": [
+      "Chat capture (sprint 5) and Gmail bridge (sprint 6).",
+      "Ranking/judging of ingested findings (priority-hub)."
+    ],
+    "generatorNotes": "Add ingestFinding(store, finding, {now}) to src/hub/finding-store.ts: validate finding via the imported Finding schema (.parse — throws into a caught boundary), derive id when absent as a 16-char hash of `${domain}|${title}|${kind}` (reuse the createHash('sha256').slice(0,16) approach from factId at src/state/facts.ts:58-69), set surfacedAt=now if absent, then call writeFinding (so reconcile dedups). Return the ReconcileAction. Add a `ingest` subcommand to src/cli/commands/task.ts taking an optional <file> arg (read stdin when omitted), JSON.parse the payload, call ingestFinding, and print the action (added/updated/unchanged). On parse/validation failure: chalk.red message, exitCode=1, return — write nothing. Keep now injected at the boundary.",
+    "evaluatorNotes": "Verify dedup: ingest the same domain+title+kind twice with an in-memory store and assert getActiveFacts('hub',undefined,'finding') has length 1. Verify validation rejects a payload missing required schema fields and that NO row is written on rejection. Confirm ingestFinding reuses writeFinding/writeFact rather than a raw insertFact. Confirm the derived id is deterministic (same inputs -> same id) and that now is a parameter.",
+    "estimatedFiles": [
+      "src/hub/finding-store.ts",
+      "src/hub/finding-store.test.ts",
+      "src/cli/commands/task.ts",
+      "src/cli/commands/task.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "ambiguityScore": 5
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

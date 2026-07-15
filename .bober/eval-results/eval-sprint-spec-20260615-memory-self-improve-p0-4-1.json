@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-4-1",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-4",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T20:20:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit zero errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings in eval-persist.test.ts." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "distill 21/21; full suite 182 files / 2180 pass / 3 skipped; zero regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "build + typecheck exit 0." },
+    { "criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "[fail,fail,pass] → exactly one fix-contrast:flip-1 lesson; refs iteration-1,2 (fail) + iteration-3 (pass); [pass,fail] no-later-pass → 0 (ordering enforced)." },
+    { "criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "first-iteration-pass and all-fail → 0 fix-contrast lessons." },
+    { "criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "grep providers|Date.now|new Date|readFile|fetch → only a comment; purity + determinism tests pass; output sorted by lessonId; no createClient invoked." },
+    { "criterionId": "sc-4-5", "required": true, "result": "pass", "evidence": "temp dir [fail,pass] → `memory distill` 'distilled 2 lessons' → `memory list` + INDEX.md show fix-contrast:sprint-sc45-test; cleaned up." },
+    { "criterionId": "sc-4-6", "required": false, "result": "pass", "evidence": "lint 0 errors on distill.ts/distill.test.ts." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 4 passes all 5 required + optional lint. Signal (d) is a pure additive block: detects fail→pass transitions, emits fix-contrast lessons with correct refs, ignores first-pass/all-fail/pass-before-fail. The two updated assertions are legitimate (fixture genuinely [fail,pass], now triggers signals c AND d). Full suite 182 files / 2180 pass, zero regressions."
+}

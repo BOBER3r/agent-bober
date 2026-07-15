@@ -1,0 +1,115 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-3-1",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T11:45:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 7,
+    "criteriaPassed": 7,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "310 files / 3980 tests green; pipeline-adjacent suites re-run in isolation 44/44"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-3-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-3-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-3-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-3-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-3-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-3-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-3-7",
+      "required": true,
+      "result": "pass",
+      "evidence": "hand-traced + test-verified; see evaluator transcript"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/pipeline.ts",
+      "line": "488",
+      "description": "finding-cap 20 duplicated as magic number vs unexported MAX_RENDERED_FINDINGS in security-gate.ts",
+      "expected": "export the constant and import at call site"
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/pipeline.ts",
+      "line": "516",
+      "description": "security needs-rework return includes generatorResult; eval-failed mirror at :692 omits it (harmless shape divergence)",
+      "expected": "align the two returns"
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/security-gate.ts",
+      "line": "158",
+      "description": "documented narrowing cast review.critical as SecurityFinding[] \u2014 safe today, not compiler-verified",
+      "expected": "awareness only, no action"
+    }
+  ],
+  "summary": "Gate correctly scoped, fail-closed no-throw traced, byte-identity proven by frozen-clock deep-equal of full results + complete history call array. Only 4 expected files touched. PASS with 3 low advisories."
+}

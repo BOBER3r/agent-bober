@@ -1,0 +1,74 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+  "status": "complete",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-2-1",
+      "met": true,
+      "evidence": "mocked loop w/ critical finding -> review.critical.length 1, parsed:true, verdict 'blocked', stack 'solidity', saveSecurityAudit called once; 20/20 tests"
+    },
+    {
+      "criterionId": "sc-2-2",
+      "met": true,
+      "evidence": "fail-closed tests: prose garbage + truncated JSON -> parsed:false verdict 'blocked'; clean audit distinguishable (parsed:true 'pass'); !parsed forces 'blocked', never derives from fallback review; also rejects JSON arrays (stricter than code-reviewer)"
+    },
+    {
+      "criterionId": "sc-2-3",
+      "met": true,
+      "evidence": "stack-knowledge.test.ts 9 tests: solidity->bober.solidity real 'Security Checklist' excerpt, anchor->bounded head excerpt, react->generic fallback, unknown/absent->skillName:null + resolveLensFocus('security') taxonomy; prompt-capture tests assert fragment in userMessage"
+    },
+    {
+      "criterionId": "sc-2-4",
+      "met": true,
+      "evidence": "agents/bober-security-auditor.md 154 lines, tools Read/Bash/Grep/Glob only (no Write/Edit), ReviewResult JSON contract field-for-field matched to parseSecurityAuditResult, fail-closed section"
+    },
+    {
+      "criterionId": "sc-2-5",
+      "met": true,
+      "evidence": "runSecurityAudit(contract, evaluation|null, projectRoot, config, priors?); null omits eval-context section ('standalone' wording asserted); provider error rejects un-swallowed, saveSecurityAudit never called on throw"
+    },
+    {
+      "criterionId": "sc-2-6",
+      "met": true,
+      "evidence": "createClient(config.security?.provider/endpoint/providerConfig, model, 'SecurityAuditor') + runAgenticLoop only; budgetFromMaxUsd wiring tested; grep for SDK imports in new files: zero"
+    },
+    {
+      "criterionId": "sc-2-7",
+      "met": true,
+      "evidence": "build+tsc exit 0; eslint 0 problems on touched files; full suite 308 files / 3958 tests pass (+29, zero regressions)"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/orchestrator/stack-knowledge.ts",
+      "action": "created"
+    },
+    {
+      "path": "agents/bober-security-auditor.md",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/security-auditor-agent.ts",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/stack-knowledge.test.ts",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/security-auditor-agent.test.ts",
+      "action": "created"
+    }
+  ],
+  "testsAdded": [
+    "src/orchestrator/stack-knowledge.test.ts",
+    "src/orchestrator/security-auditor-agent.test.ts"
+  ],
+  "commits": [
+    "0990156 - bober(sprint-2): stack-aware security-knowledge injector (StackKnowledgeInjector)",
+    "ddf27bc - bober(sprint-2): bober-security-auditor agent definition",
+    "e5cf267 - bober(sprint-2): runSecurityAudit core with fail-closed parse (parsed:false != pass)"
+  ],
+  "blockers": [],
+  "notes": "Deviation: parse guard also rejects JSON arrays (!Array.isArray) \u2014 stricter fail-closed than code-reviewer's check, test-proven. code-reviewer-agent.ts untouched (git status verified; only the 5 estimatedFiles changed). package.json untouched. bober.anchor falls back to bounded head excerpt (briefing-prescribed pitfall handling, documented with bober: comment naming the per-skill heading registry upgrade path). Exports for sprints 3-6: runSecurityAudit / resolveStackSecurityContext / parseSecurityAuditResult."
+}

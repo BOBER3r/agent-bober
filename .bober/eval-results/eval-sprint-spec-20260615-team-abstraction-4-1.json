@@ -1,0 +1,33 @@
+{
+  "evalId": "eval-sprint-spec-20260615-team-abstraction-4-1",
+  "contractId": "sprint-spec-20260615-team-abstraction-4",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T12:55:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0,
+    "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0."},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0."},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "details": "169 files / 1977 passed / 3 skipped (+16 over 1961 baseline)."},
+    {"strategy": "api-check", "required": false, "result": "skipped", "details": "No API endpoints."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "result": "pass", "evidence": "build exit 0."},
+    {"criterionId": "sc-4-2", "result": "pass", "evidence": "typecheck exit 0."},
+    {"criterionId": "sc-4-3", "result": "pass", "evidence": "1977 pass; +16; no existing tests weakened."},
+    {"criterionId": "sc-4-4", "result": "pass", "evidence": "loadTeam(config,'example') -> namespace 'example', shape 'ts', providers.chat 'openai'. grep confirms NO 'example' code branch in non-test src; registry.ts:40 resolves all ids uniformly."},
+    {"criterionId": "sc-4-5", "result": "pass", "evidence": "index.ts:221-224 registers --team mirroring --run-id; run.ts threads teamId:options.team. Tests: team->objectContaining({teamId:'example'}); no flag->undefined; runId+team both propagate."},
+    {"criterionId": "sc-4-6", "result": "pass", "evidence": "chat.ts:31 loadTeam(config,team); :45 memoryNamespace||undefined -> ChatSession. Tests: example->'example' ns; no team->'' collapses to default; unknown throws."},
+    {"criterionId": "sc-4-7", "result": "pass", "evidence": "Real temp dirs: appendLesson(...,'example') visible to 'example' loader, NOT default; memoryDir(...,'example') matches /memory[/\\\\]example$/; bidirectional isolation."},
+    {"criterionId": "sc-4-8", "result": "pass", "evidence": "docs/teams.md (223 lines): three-axes table, config shape, CLI usage, programming default, deferred .bober/teams/*.json registry, 'data not code' guide. README Teams section + teams/defaultTeam in config reference."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Final sprint passes all 8 required criteria. Example team is pure config data (no code branch for 'example' anywhere in production src); --team is additive (absent = programming unchanged); lesson routing isolates the example namespace; docs comprehensive. No nonGoal creep (no medical team, no file registry, no semantic_facts, no second production team). 1977 tests green."
+}

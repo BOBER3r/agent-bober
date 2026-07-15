@@ -1,0 +1,101 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-2",
+  "specId": "spec-20260618-fleet-expand-deep",
+  "sprintNumber": 2,
+  "title": "fleet expand-deep CLI subcommand (additive, spawn-safe, byte-lock preserved)",
+  "description": "Add an additive `fleet expand-deep <goal>` sibling subcommand in src/fleet/index.ts via a new registerFleetExpandDeepSubcommand(fleet), called IMMEDIATELY AFTER registerFleetExpandSubcommand(fleet) inside registerFleetCommand and touching NO existing line. Its action runFleetExpandDeep mirrors runFleetExpand step-for-step (credential fail-fast via createClient BEFORE any IO; assemble { rootDir, concurrency, children }; atomic tmp+rename write to opts.out ?? <root>/.bober/fleet-expand.json with overwrite notice; print manifest + review hint; chain into the locked runFleet(outPath) ONLY behind --yes, else write-and-stop exit 0) and differs ONLY in calling decomposeGoalDeep (from Sprint 1) instead of decomposeGoal. Same DI seam (decomposeDeep/runFleet/createClient) and same option set as expand.",
+  "status": "completed",
+  "createdAt": "2026-06-18T07:32:33Z",
+  "updatedAt": "2026-06-18T07:32:33Z",
+  "dependsOn": [
+    "sprint-spec-20260618-fleet-expand-deep-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds successfully (tsc) with zero errors after the additive change to src/fleet/index.ts.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "TypeScript compilation produces zero type errors (strict mode); no explicit any; no SDK import outside src/providers/.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "ESLint reports zero errors on modified/new files (consistent-type-imports, no-unused, ESM .js import extensions).",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "Running runFleetExpandDeep(goal, opts) without --yes (decomposeDeep + runFleet + createClient injected as fakes) writes a FleetManifestSchema-valid manifest to the resolved outPath, prints it plus a review hint, and the injected runFleet is NEVER called (write-and-stop, no spawn). (feat-2 AC1)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "With --yes, runFleetExpandDeep calls the injected runFleet exactly once with outPath, and the manifest file already exists on disk BEFORE runFleet executes (write precedes the spawn gate); without --yes runFleet is not called. (feat-2 AC2)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "When the injected createClient throws (missing DEEPSEEK_API_KEY), runFleetExpandDeep rejects with the credential error, writes NO manifest file, and never calls decomposeGoalDeep or runFleet (credential fail-fast precedes all IO). (feat-2 AC3)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "When the injected decomposeDeep throws (budget exhaustion), runFleetExpandDeep propagates the error, writes NO file, and never calls runFleet. (feat-2 AC4)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "registerFleetCommand registers `expand-deep <goal>` as a child of `fleet` with the same option set as expand (--count/--provider/--model/--root/--concurrency/--out/--yes), AND the byte-locked `fleet <manifest>` positional + its --concurrency/--root options + the existing `expand` subcommand remain intact. --out redirects the write; a pre-existing file is overwritten atomically with a printed notice. The full suite (incl. existing decomposer.test.ts / expand.test.ts / index.test.ts) passes with no regression. (feat-2 AC5, AC6, AC7, AC8)",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "No change to runFleet's signature/behavior, FleetManifestSchema/FleetChildSchema, or buildChildConfig.",
+    "No change to the `fleet <manifest>` command or the `fleet expand` command / runFleetExpand / registerFleetExpandSubcommand \u2014 every existing line stays byte-identical.",
+    "No change to the Sprint-1 engine beyond importing decomposeGoalDeep.",
+    "No interactive y/N prompt and no TTY check (--yes is the sole spawn gate).",
+    "No self-critique round; no hard --count cap; no distinct default output path (expand-deep shares fleet-expand.json).",
+    "No top-level CLI change: registerFleetCommand(program) at src/cli/index.ts:317 is untouched (the new subcommand wires inside registerFleetCommand)."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass programmatic verification.",
+    "Default invocation writes-and-stops with zero spawns; --yes invokes the injected runFleet exactly once AFTER the file exists; missing credential and decompose-failure both abort before any write/spawn; the byte-locked command tree (`fleet <manifest>`, `fleet expand`) is provably unchanged."
+  ],
+  "definitionOfDone": "src/fleet/index.ts gains (additively): export interface FleetExpandDeepOptions { count?; provider?; model?; root?; concurrency?; out?; yes? }; export interface FleetExpandDeepDeps { decomposeDeep?: typeof decomposeGoalDeep; runFleet?: typeof runFleet; createClient?: typeof createClient }; export async function runFleetExpandDeep(goal, opts, deps?): Promise<void>; export function registerFleetExpandDeepSubcommand(fleet: Command): void. runFleetExpandDeep mirrors runFleetExpand (index.ts:169-256) step-for-step: (1) build the DeepSeek client via (deps?.createClient ?? createClient)('openai-compat'|opts.provider, 'https://api.deepseek.com', undefined, opts.model ?? 'deepseek-v4-pro', 'FleetDecomposer') \u2014 fail-fast BEFORE any IO; (2) fold the --count soft hint into the goal and call (deps?.decomposeDeep ?? decomposeGoalDeep)({ goal: goalWithHint, client, model }); (3) assemble { rootDir: opts.root ?? '.', concurrency: opts.concurrency ? Number(opts.concurrency) : 3, children }; (4) outPath = opts.out ?? join(root, '.bober', 'fleet-expand.json'); ensureDir; detect pre-existence; atomic tmp+rename write; overwrite notice; (5) print the manifest + 'Review then run: agent-bober fleet \"<outPath>\"'; (6) if opts.yes -> (deps?.runFleet ?? runFleet)(outPath) + Fleet Summary, else process.exitCode = 0. registerFleetExpandDeepSubcommand attaches .command('expand-deep <goal>') with options --count/--provider/--model/--root/--concurrency/--out/--yes and a thin try/catch action calling runFleetExpandDeep (logger.error + exitCode 1 on throw), mirroring registerFleetExpandSubcommand. registerFleetCommand calls registerFleetExpandDeepSubcommand(fleet) on the line AFTER registerFleetExpandSubcommand(fleet) \u2014 no existing line edited. Collocated tests in src/fleet/expand-deep.test.ts mirror expand.test.ts's DI helpers (fake decomposeDeep, fake createClient, runFleet spy, temp dir outPath) and cover write-and-stop, --yes-after-write, credential fail-fast-before-write, decompose-failure-before-write, the command-tree registration (expand-deep present; fleet <manifest> + expand intact), overwrite notice, and --out redirect. Build, typecheck, lint clean; all tests pass.",
+  "assumptions": [
+    "decomposeGoalDeep from src/fleet/decomposer-deep.ts (Sprint 1) is imported and injectable for tests; the subcommand wires it to the real DeepSeek client in production.",
+    "createClient('openai-compat', 'https://api.deepseek.com', undefined, model, 'FleetDecomposer') throws via validateApiKey when DEEPSEEK_API_KEY is missing (src/providers/factory.ts) \u2014 the fail-fast runs before any manifest write.",
+    "runFleet(outPath) is the locked entrypoint (src/fleet/index.ts:94) reused via the written manifest path, never modified.",
+    "The atomic write block, --yes gate, overwrite notice, and Fleet Summary print are copied from runFleetExpand (index.ts:206-256); ensureDir from ../state/helpers.js is the dir helper already used there.",
+    "registerFleetExpandDeepSubcommand(fleet) is attached on the line after registerFleetExpandSubcommand(fleet) inside registerFleetCommand (index.ts:345), so the `fleet <manifest>` and `expand` registrations stay byte-identical.",
+    "Tests reuse the DI helpers established in src/fleet/expand.test.ts (makeFakeDecompose-style fake, makeFakeClientBuilder, runFleet spy) adapted to decomposeDeep \u2014 no real network/spawn."
+  ],
+  "outOfScope": [
+    "The decomposition engine itself (Sprint 1).",
+    "Any Phase-1/Phase-2 behavior change (runFleet, fleet <manifest>, fleet expand)."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Edit src/fleet/index.ts (ADDITIVE only) + add collocated src/fleet/expand-deep.test.ts. Do NOT touch the `fleet <manifest>` registration, registerFleetExpandSubcommand, or runFleetExpand \u2014 they are byte-locked.\n\n1. READ FIRST: src/fleet/index.ts (FULL \u2014 runFleetExpand :169-256 is the exact template to mirror; FleetExpandOptions/FleetExpandDeps :131-152; registerFleetExpandSubcommand :266-300; registerFleetCommand :312-346 \u2014 note registerFleetExpandSubcommand(fleet) at :345, the new call goes right AFTER it), src/fleet/decomposer-deep.ts (Sprint 1 \u2014 decomposeGoalDeep signature), src/fleet/expand.test.ts (DI helper pattern: makeFakeDecompose, makeFakeClientBuilder, makeFakeClientBuilderThrowing, runFleetSpy, temp-dir outPath, command-tree assertions), src/providers/factory.ts (createClient/validateApiKey), src/state/helpers.js (ensureDir).\n\n2. Add to src/fleet/index.ts:\n   - import { decomposeGoalDeep } from './decomposer-deep.js';\n   - export interface FleetExpandDeepOptions { count?: string; provider?: string; model?: string; root?: string; concurrency?: string; out?: string; yes?: boolean } (same shape as FleetExpandOptions).\n   - export interface FleetExpandDeepDeps { decomposeDeep?: typeof decomposeGoalDeep; runFleet?: typeof runFleet; createClient?: typeof createClient }.\n   - export async function runFleetExpandDeep(goal, opts: FleetExpandDeepOptions, deps?: FleetExpandDeepDeps): Promise<void> \u2014 COPY runFleetExpand's body verbatim and change exactly one thing: the decompose call uses (deps?.decomposeDeep ?? decomposeGoalDeep)({ goal: goalWithHint, client, model }) instead of decomposeGoal. Keep the count-hint fold, credential fail-fast ordering, the { rootDir, concurrency, children } assembly, the ensureDir + access pre-existence check + randomBytes tmp + writeFile + rename atomic write, the overwrite notice, the manifest print + review hint, and the --yes gate (runFleet only under opts.yes; else process.exitCode = 0) \u2014 all identical to runFleetExpand.\n   - export function registerFleetExpandDeepSubcommand(fleet: Command): void \u2014 copy registerFleetExpandSubcommand, change .command('expand <goal>') -> .command('expand-deep <goal>'), update the .description (e.g. 'Robustly decompose a large/ambiguous goal (two-stage plan-then-expand) into a fleet manifest and optionally run it'), keep the SAME seven options, and call runFleetExpandDeep in the try/catch action (logger.error 'Fleet expand-deep failed: ...' + process.exitCode = 1 on throw).\n\n3. In registerFleetCommand, on the line AFTER `registerFleetExpandSubcommand(fleet);` add `registerFleetExpandDeepSubcommand(fleet);`. Touch NO other line in that function or in registerFleetExpandSubcommand / the `fleet <manifest>` .command/.action.\n\n4. Style: ESM .js imports; import type for typeof-imported symbols where needed; no explicit any; mirror the existing section-comment style.\n\n5. Tests (src/fleet/expand-deep.test.ts), mirroring expand.test.ts: (a) write-and-stop \u2014 inject fake decomposeDeep (returns a known children-only manifest), fake createClient (returns a no-op LLMClient), runFleet spy; call runFleetExpandDeep(goal, { root: tmpDir }, deps); assert the written file at <tmp>/.bober/fleet-expand.json (or --out) parses as a FleetManifestSchema-valid manifest and runFleet spy NOT called. (b) --yes \u2014 same deps with opts.yes:true; assert runFleet spy called exactly once with outPath, and (read the file inside the runFleet fake or assert via call ordering) the file existed before runFleet ran. (c) credential fail-fast \u2014 inject createClient that throws; expect rejection, assert NO file written and decomposeDeep fake never called. (d) decompose-failure \u2014 inject decomposeDeep that throws; expect rejection, assert NO file written and runFleet spy not called. (e) registration \u2014 new Command(); registerFleetCommand(program); assert a child named 'expand-deep' exists with all seven options AND `fleet <manifest>` positional + --concurrency/--root + the 'expand' child are still present (mirror expand.test.ts:404-440). (f) overwrite notice + --out redirect (mirror expand.test.ts:321-402).",
+  "evaluatorNotes": "Independently verify each criterion.\nsc-2-4: Run the default-path test; confirm a FleetManifestSchema-valid manifest is written to outPath and the injected runFleet spy is NEVER called. Confirm the only call into runFleet in runFleetExpandDeep is guarded by opts.yes (structural read).\nsc-2-5: Confirm --yes calls runFleet exactly once with outPath and only AFTER the write (e.g. the fake runFleet can readFileSync(outPath) without error, or assert via ordering); confirm without --yes it is not called.\nsc-2-6: Inject a throwing createClient; confirm runFleetExpandDeep rejects, NO manifest file exists, and the injected decomposeDeep was never invoked (credential check precedes decompose + write).\nsc-2-7: Inject a throwing decomposeDeep; confirm rejection, NO file written, runFleet spy not called.\nsc-2-8: Build the commander program via registerFleetCommand and assert: child 'expand-deep' exists with --count/--provider/--model/--root/--concurrency/--out/--yes; `fleet <manifest>` positional + --concurrency/--root intact; 'expand' child intact. Diff src/fleet/index.ts to confirm ONLY additive lines (new interfaces, runFleetExpandDeep, registerFleetExpandDeepSubcommand, the import, and the single new call in registerFleetCommand) \u2014 the `fleet <manifest>` .command/.action, registerFleetExpandSubcommand, and runFleetExpand bodies are byte-unchanged. Confirm --out redirect + overwrite notice work. Run the FULL suite \u2014 decomposer.test.ts, expand.test.ts, index.test.ts, decomposer-deep.test.ts all green.\nAlso check: no synchronous fs, .js import extensions, import type, no explicit any, no SDK import outside providers/; runFleet/FleetManifestSchema/buildChildConfig NOT modified; src/cli/index.ts unchanged.",
+  "estimatedFiles": [
+    "src/fleet/index.ts",
+    "src/fleet/expand-deep.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "startedAt": "2026-06-18T08:08:59Z",
+  "completedAt": "2026-06-18T08:19:41Z"
+}

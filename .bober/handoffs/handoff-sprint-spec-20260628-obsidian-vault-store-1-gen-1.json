@@ -1,0 +1,34 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-obsidian-vault-store-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-1",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T13:52:29.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Add a domain-agnostic vault storage layer to agent-bober where each per-domain repo is an Obsidian vault: markdown + YAML frontmatter is canonical source of truth and FactStore (SQLite) is a derived, rebuildable index over note frontmatter. This sprint builds the foundational note model + frontmatter round-trip I/O under a new src/vault/ module.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/health-store.ts",
+      "src/state/facts.ts",
+      "package.json"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run",
+      "testSingle": "npx vitest run <path>"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "evaluatorFeedback": null,
+  "note": "Contract, spec, and principles are on disk \u2014 read them from their paths. config.commands here resolve the empty bober.config.json commands map: build/typecheck via tsc, tests via 'vitest run' (NOT bare 'vitest' which watches). Stay on branch bober/medical-team; do NOT create a new branch (the medical-team line already carries this work)."
+}

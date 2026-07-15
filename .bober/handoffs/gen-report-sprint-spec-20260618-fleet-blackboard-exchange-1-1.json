@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["e1d4b00 - bober(sprint-1): SharedBlackboard WAL facts.db wrapper + FactStore opts"],
+  "filesChanged": [
+    { "path": "src/state/facts.ts", "action": "modified", "description": "Optional 2nd constructor arg opts?: { journalModeWal?; busyTimeoutMs? }; pragma WAL + busy_timeout only when set; default byte-identical." },
+    { "path": "src/fleet/shared-blackboard.ts", "action": "created", "description": "BLACKBOARD_MAX_ROUNDS=3, BlackboardFinding, SharedBlackboard (static async open with ensureDir+WAL, publish w/ round-cap throw, readSiblings, readAll, close)." },
+    { "path": "src/state/facts.test.ts", "action": "modified", "description": "sc-1-7 regression: default FactStore journal_mode='delete' not 'wal'; WAL-when-opted test." },
+    { "path": "src/fleet/shared-blackboard.test.ts", "action": "created", "description": "13 tests: WAL after open, publish fields+round-cap throw, readSiblings/readAll 2-subject+empty, 5 concurrent publishes." }
+  ],
+  "criteriaResults": "all 8 (sc-1-1..sc-1-8) reported met",
+  "verification": {
+    "build": "exit 0",
+    "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings in eval-persist.test.ts)",
+    "test": "2749 passed, 3 skipped, 6 failed (all 6 pre-existing cockpit-integration MCP)"
+  },
+  "notes": "WAL verified via raw better-sqlite3 pragma('journal_mode',{simple:true})==='wal'. Default FactStore reports 'delete'. FactStore opts change purely additive — no existing caller passes a 2nd arg. WAL skipped for ':memory:'. No coordinator/CLI/config/sprint-2-4 touches."
+}

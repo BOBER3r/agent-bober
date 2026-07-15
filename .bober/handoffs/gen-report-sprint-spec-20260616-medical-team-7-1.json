@@ -1,0 +1,28 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-7",
+  "status": "complete",
+  "criteriaResults": [
+    { "criterionId": "sc-7-1", "met": true, "evidence": "npm run build exit 0" },
+    { "criterionId": "sc-7-2", "met": true, "evidence": "tsc --noEmit exit 0" },
+    { "criterionId": "sc-7-3", "met": true, "evidence": "lint 0 errors; network usage only in medline-source.ts (ESLint exception)" },
+    { "criterionId": "sc-7-4", "met": true, "evidence": "vitest run 198 files, 2393 passed, 3 skipped; +7 medline-source +15 literature tests; fixtures + injected transports, no live network" },
+    { "criterionId": "sc-7-5", "met": true, "evidence": "axis ON + fixture -> grounded passages via injected FetchLike; axis OFF -> {disabled}, source not called" },
+    { "criterionId": "sc-7-6", "met": true, "evidence": "grounded + supported LLM -> abstained=false, citations>=1; LLM ABSTAIN/empty -> abstained=true" },
+    { "criterionId": "sc-7-7", "met": true, "evidence": "network throw / 503 / empty docs -> abstain{reason}; source error -> LLM never called; fail-closed at every layer, no uncited claim" },
+    { "criterionId": "sc-7-8", "met": true, "evidence": "EgressGuard(false,true).isAllowed('cloud-inference')===false; synthesize uses openai-compat/Ollama or injected llmClient, never anthropic; model unavailable -> abstained, no cloud fallback" }
+  ],
+  "filesChanged": [
+    { "path": "src/medical/types.ts", "action": "modified", "description": "Citation interface real fields (title,url,source:'medlineplus')" },
+    { "path": "src/medical/retrieval/medline-source.ts", "action": "modified", "description": "real MedlinePlus fetch; Passage type; injectable FetchLike (default global fetch, only ESLint-excepted file); assertAllowed FIRST in fetchPassages; parseMedline; all errors -> abstain{source-error}" },
+    { "path": "src/medical/retrieval/literature.ts", "action": "modified", "description": "retrieve ON path grounded/abstain + try/catch; synthesize: abstains on disabled/abstain (no LLM), single llm.chat on grounded, abstain on empty/'ABSTAIN', citations>=1; LLM throw -> abstained 'model unavailable', no cloud fallback" },
+    { "path": "src/medical/engine.ts", "action": "modified", "description": "grounded path calls synthesize(deps.llmClient ?? createClient openai-compat Ollama); audit event from answer.abstained; zero LLM on numeric/disabled/red-flag paths preserved" },
+    { "path": "src/medical/engine.test.ts", "action": "modified", "description": "MedlineSource ctor egress arg; grounded+cited end-to-end test (abstained=false, citations>=1, cloud stays false)" },
+    { "path": "src/medical/retrieval/__fixtures__/medlineplus-sample.json", "action": "created", "description": "sanitized nlmSearchResult fixture (2 metformin passages)" },
+    { "path": "src/medical/retrieval/medline-source.test.ts", "action": "created", "description": "7 tests: grounded from fixture, network throw/503/empty/malformed -> abstain, axis OFF -> abstain; injected FetchLike, no live network" },
+    { "path": "src/medical/retrieval/literature.test.ts", "action": "created", "description": "15 tests: disabled/grounded/source-error/supported-cited/ABSTAIN/empty/model-unavailable/cloud-stays-off" }
+  ],
+  "testsAdded": ["src/medical/retrieval/medline-source.test.ts", "src/medical/retrieval/literature.test.ts"],
+  "commits": ["553f087 - bober(sprint-7): MedlinePlus grounded retrieval + cited synthesis (opt-in)"],
+  "blockers": [],
+  "notes": "EVALUATOR FLAGS: (1) Single network file: only src/medical/retrieval/medline-source.ts touches fetch/Response; assertAllowed('literature-retrieval') is the FIRST statement in fetchPassages (defense-in-depth over ESLint). (2) NO live network in CI: tests inject a duck-typed FetchLike fake + committed __fixtures__/medlineplus-sample.json — confirm tests pass offline. (3) Abstain-unless-supported: synthesize abstains on empty/'ABSTAIN' model output; non-abstained answers carry citations>=1 derived from pinned passages. (4) Fail-closed at 3 layers (assertAllowed off, fetch error, model unavailable) -> abstain, NEVER fail-open / no uncited claim. (5) cloud-inference independently off: grounded path uses deps.llmClient ?? createClient('openai-compat', Ollama) — never a cloud provider; enabling literature does not enable cloud. (6) Commit 553f087 clean (8 files, 0 .bober). Confirm gates still first + programming team byte-identical."
+}

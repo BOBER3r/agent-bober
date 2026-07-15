@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260617-fleet-expand-decomposer-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-2",
+  "specId": "spec-20260617-fleet-expand-decomposer",
+  "timestamp": "2026-06-17T20:06:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Fleet Expand — Phase 2 of the fleet orchestrator. Sprint 2 of 2: wire Sprint 1's decomposeGoal into a `fleet expand <goal>` Commander subcommand that builds the DeepSeek client (credential fail-fast BEFORE any write), calls decomposeGoal, assembles { rootDir, concurrency, children }, atomically writes it to <root>/.bober/fleet-expand.json (overwrite + notice), prints it + a review hint, and STOPS by default — chaining into the locked Phase 1 runFleet(outPath) only when --yes is passed.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260617-fleet-expand-decomposer-1", "title": "FleetDecomposer module", "summary": "src/fleet/decomposer.ts exports decomposeGoal({goal, client, model, maxRetries}): Promise<FleetManifest> — children-only Zod-valid manifest via one DeepSeek jsonObjectMode call + 1 coercion retry + per-child config-key guard. Commit 4c1dc09." }
+    ],
+    "currentBranch": "bober/fleet-expand-decomposer",
+    "relevantFiles": [
+      "src/fleet/index.ts (runFleet ~88 + FleetDeps; registerFleetCommand ~133 — PRESERVE the `fleet <manifest>` registration BYTE-IDENTICAL; Fleet Summary print block)",
+      "src/cli/index.ts (registerFleetCommand call site; registerWorktreeCommand parent+child attachment pattern)",
+      "src/providers/factory.ts (createClient + validateApiKey fail-fast on missing DEEPSEEK_API_KEY)",
+      "src/fleet/child-config.ts (DeepSeek constants: 'openai-compat', 'https://api.deepseek.com', 'deepseek-v4-pro')",
+      "src/fleet/decomposer.ts (decomposeGoal signature — Sprint 1)",
+      "src/fleet/manifest.ts (FleetManifestSchema, concurrency default 3)",
+      "src/state/run-state.ts (atomic temp+rename write helper + mkdir-recursive to mirror)",
+      "src/fleet/index.test.ts (FleetDeps fake-injection test pattern)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": "See .bober/principles.md — ESM with .js import extensions; provider-agnostic (no SDK import outside providers/); Zod validation; async fs only (node:fs/promises, no *Sync); `import type` (consistent-type-imports); no explicit any (unknown + narrowing); unused params prefixed `_`; unicode box-drawing section comments; conventional commits, sprint commits `bober(sprint-N): description`.",
+  "evaluatorFeedback": null,
+  "notes": "Read the Sprint Briefing FIRST: .bober/briefings/sprint-spec-20260617-fleet-expand-decomposer-2-briefing.md. LOAD-BEARING SAFETY INVARIANTS: (1) credential fail-fast — createClient/validateApiKey must throw on missing DEEPSEEK_API_KEY BEFORE any manifest file is written; (2) the default (no --yes) path must NEVER call runFleet/spawn — runFleet is reachable ONLY under opts.yes; (3) the existing `fleet <manifest>` `.command(...)`/`.action(...)` registration lines must stay BYTE-IDENTICAL. Factor the action body into an exported testable `runFleetExpand(goal, opts, deps?)` (deps inject decomposeGoal, runFleet, and the client builder) mirroring how runFleet takes FleetDeps, so tests avoid real network/spawn and use a temp dir for the out path. Atomic write = temp + rename, mkdir recursive async. Default outPath = opts.out ?? <root>/.bober/fleet-expand.json; print an overwrite notice when the target already existed."
+}

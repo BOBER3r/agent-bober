@@ -1,0 +1,24 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-ingest-3-1",
+  "contractId": "sprint-spec-20260628-medical-ingest-3",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T19:14:50Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors; 2 pre-existing any warnings unrelated", "details": "" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "231 files / 2947 tests passed; +3", "details": "medical.test.ts 9 tests" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "happy path: fake parser called once, getLabSeries returns marker, audit event 'ingest' PHI-clean" },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "fail-closed: egress check at medical.ts:165-173 returns exitCode=1 BEFORE buildMedicalInferenceClient(175)/readFile(177)/parse(179); test asserts parseSpy callCount 0 + no note file + stderr names medical.egress.cloudInference" },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "first run >=1 new row, second run 0 (reindex INSERT OR IGNORE dedup)" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 4 required criteria pass. Fail-closed control flow structurally correct (egress gate before any PDF read/client build); audit IDs/enums-only PHI-clean; import-labs nested under medical (not top-level). Suite 2947 green."
+}

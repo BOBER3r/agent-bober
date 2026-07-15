@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260531-multi-provider-deepseek-claude-code-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-6",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T15:06:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-provider harness. Final sprint: document the provider capability matrix (anthropic/deepseek/claude-code x roles), costs, ToS, prerequisites, and the no-key-persistence rule in README.md + a new docs/providers.md with copy-paste config snippets; and ensure the deepseek + claude-code smoke scripts are key/binary-gated (skip + exit 0 when absent) and excluded from npm test. DOCS + SMOKE ONLY — no provider source code changes.",
+    "completedSprints": [
+      {"contractId": "sprint-2", "title": "DeepSeek", "summary": "deepseek/-v4-pro/-v4-flash -> openai-compat @ https://api.deepseek.com; key from providerConfig.apiKey or DEEPSEEK_API_KEY."},
+      {"contractId": "sprint-4", "title": "claude-code", "summary": "provider 'claude-code' (subscription, no key); prompt-only (throws on tools); providerConfig.binary + timeoutMs overrides."},
+      {"contractId": "sprint-5", "title": "role fallback", "summary": "tool roles (curator/generator/evaluator/codeReview) on claude-code redirect to another provider or hard-error at config load; planner/researcher allowed on claude-code."}
+    ],
+    "currentBranch": "spike/claude-code-provider",
+    "relevantFiles": ["README.md", "docs/providers.md", "scripts/spike-deepseek.mjs", "scripts/spike-claude-code-provider.mjs", "scripts/provider-smoke.mjs", "package.json", ".markdownlint.json"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest", "markdownlint": "npx markdownlint <file>" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "facts": {
+    "markdownlint": "Project uses markdownlint-cli ^0.48 (node_modules/.bin/markdownlint) with config .markdownlint.json = {\"MD013\": false, \"MD041\": false}. Run with `npx markdownlint <file>`. (Do NOT use markdownlint-cli2 — different ruleset.)",
+    "readmeProviderSection": "README.md has '## Multi-Provider Support' at line 177, '### Supported Providers' at line 183 with a provider table (lines 184-188) and '### Configuration' at line 194 with jsonc config snippets. Add the capability matrix + claude-code/deepseek rows + costs/ToS notes in/after this section.",
+    "smokeScripts": "Both scripts/spike-deepseek.mjs and scripts/spike-claude-code-provider.mjs ALREADY EXIST. Ensure spike-deepseek.mjs guards on process.env.DEEPSEEK_API_KEY (skip + exit 0 if absent, no network). Ensure the claude-code smoke probes the `claude` binary on PATH and skips + exit 0 if absent. You MAY consolidate into scripts/provider-smoke.mjs covering both (deepseek completion+tool_use; claude-code completion + tools-guard throw) OR keep the two scripts — either satisfies the contract.",
+    "vitest": "There is NO vitest.config file — vitest uses defaults (test files match *.test.ts), so scripts/*.mjs are NOT collected. The npm test script is just 'vitest'. Confirm package.json test script does not reference any smoke script.",
+    "gitignore": ".env, .env.local, .env.*.local are already gitignored (.gitignore lines ~10-12)."
+  },
+  "principles": "Conventional commit: bober(sprint-6): description. Markdown must pass the project's markdownlint config. ESM .mjs scripts. NEVER commit a key/.env/secret.",
+  "evaluatorFeedback": null,
+  "baseline": {
+    "criticalMarkdownlint": "README.md ALREADY HAS 80 pre-existing markdownlint errors across 36 lines (e.g. lines 14, 57, 84, 85, 91, 92, 101, 102, 110, 121, 184, 215, 220, 242, 256, 270, 294, 305, 310, 350, 416, 430, 441, 452, 549, 557, 569, 727, 732, 739, 746, 756, 805, 815, 837, 872). These are NOT yours to fix — fixing all 80 is scope creep and risky, and this sprint's nonGoal is docs+smoke only. sc-6-3 requires 'docs/providers.md AND the changed README section pass markdownlint'. Interpret this as: (1) the NEW docs/providers.md must be FULLY markdownlint-clean — `npx markdownlint docs/providers.md` exits 0; (2) the README content YOU ADD must introduce ZERO NEW markdownlint errors (proper blank lines around tables/lists/fenced blocks, a language on every fence, and table-column spacing matching MD060 — note the existing provider table at line 184 already trips MD060 in baseline, so make your NEW table internally consistent with surrounding style). Do NOT be blamed for the 80 pre-existing errors, but do NOT add to them.",
+    "testFlakes": "2 pre-existing environmental mcp tool-count timeout flakes — baseline, ignore."
+  },
+  "notesForGenerator": "Stay on branch spike/claude-code-provider. Tasks: (1) README.md: add the capability matrix (rows: planner, researcher, curator, generator, evaluator, code-reviewer; columns: anthropic, deepseek, claude-code — mark claude-code UNSUPPORTED/❌ for the four tool roles curator/generator/evaluator/code-reviewer, supported for planner/researcher), plus deepseek prerequisites (npm install openai + DEEPSEEK_API_KEY) and claude-code notes (subscription, planner/researcher only, metered per 2026-06-15 ToS, ~40k-token system-prompt overhead per `claude -p` call). Keep your additions markdownlint-clean. (2) Create docs/providers.md (docs/ dir exists) with copy-paste bober.config.json snippets for anthropic (default), deepseek (with the npm install openai + DEEPSEEK_API_KEY notes), and claude-code (subscription, planner/researcher only), PLUS an explicit statement that agent-bober never persists API keys and that .env is gitignored. Make docs/providers.md FULLY markdownlint-clean. (3) Ensure scripts/spike-deepseek.mjs skips+exit 0 when DEEPSEEK_API_KEY is unset (no network), and the claude-code smoke skips+exit 0 when `claude` is not on PATH; cover deepseek completion+tool_use and claude-code completion+tools-guard throw. (4) Confirm no smoke script is in the npm test command / vitest globs. Verify: `npx markdownlint docs/providers.md` exit 0; run each smoke with secrets/binary absent and confirm skip+exit 0; `npm test` exit 0. Do NOT change any provider source code. Do NOT commit secrets."
+}

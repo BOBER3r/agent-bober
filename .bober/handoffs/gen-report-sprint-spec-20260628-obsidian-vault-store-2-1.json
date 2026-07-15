@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-2",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "met": true, "evidence": "npx tsc --noEmit exit 0; npx tsc exit 0."},
+    {"criterionId": "sc-2-2", "met": true, "evidence": "index-map.test.ts: one FactInput/key; subject=id-else-path; predicate=key; value String()/JSON.stringify. 13 tests pass."},
+    {"criterionId": "sc-2-3", "met": true, "evidence": "reindex twice identical -> 2nd pass every action 'noop' (factsNoop=5, factsAdded=0), active count unchanged."},
+    {"criterionId": "sc-2-4", "met": true, "evidence": "value change between passes -> old fact getFact(oldId).tInvalidated non-null; new value only active fact for subject/predicate."},
+    {"criterionId": "sc-2-5", "met": true, "evidence": "note status:superseded skipped -> 0 active facts; mixed-notes test confirms non-superseded still indexed."}
+  ],
+  "filesChanged": [
+    {"path": "src/vault/index-map.ts", "action": "created", "description": "PURE noteToFacts + SUPERSEDED_STATUS export; JSON.stringify for stable ids; no clock"},
+    {"path": "src/vault/reindex.ts", "action": "created", "description": "reindexNotes via writeFact from ../state/facts.js; skips superseded; tallies add/update/noop into ReindexSummary"},
+    {"path": "src/vault/index-map.test.ts", "action": "created", "description": "13 tests sc-2-2 + purity"},
+    {"path": "src/vault/reindex.test.ts", "action": "created", "description": "7 tests sc-2-3/4/5 + summary shape + purity"}
+  ],
+  "testsAdded": ["src/vault/index-map.test.ts", "src/vault/reindex.test.ts"],
+  "commits": ["01d17b4 - bober(sprint-2): add noteToFacts mapping and reindexNotes reconcile-at-ingest indexer"],
+  "blockers": [],
+  "notes": "vitest run src/vault/ -> 4 files 38 tests pass. Full suite 225 files 2869 tests pass, zero regressions. writeFact imported from ../state/facts.js (re-export), never insertFact. SUPERSEDED_STATUS exported. eslint src/vault/ exit 0."
+}

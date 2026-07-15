@@ -1,0 +1,255 @@
+{
+  "specId": "spec-20260616-medical-team",
+  "version": 1,
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-17T00:08:00.000Z",
+  "title": "Phase 6 — The Medical Team (local-first, code-enforced health/wellness team)",
+  "description": "Add a second domain Team instance to agent-bober: a local-first, conversational health/wellness team that validates the domain-agnostic Team abstraction on a high-stakes domain. Introduces a new additive `medical-sop` pipelineShape with a dedicated engine running a fixed SOP (consent -> red-flag-gate -> numerics -> retrieve -> answer-with-abstention), a concrete GuardrailSet filling the existing Team.guardrails slot, an in-process whitelisted numerics layer (no Python sandbox), and two independently opt-in egress axes. Regulatory refusals, the emergency short-circuit, numerical reasoning, and the zero-egress default are CODE-ENFORCED, never prompt-only — the highest-stakes decisions never pass through an LLM. Built from arch-20260616-medical-team. Engineering-complete on a feature branch; shipping/enabling remains gated on an external S6.5 counsel/regulatory review which is NOT a buildable sprint.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-scope-phasing",
+      "answer": "Full surface in this plan, including a REAL networked grounded-literature source (not just the abstain/disabled interface). ~7 sprints.",
+      "resolvedAt": "2026-06-16T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-literature-source",
+      "answer": "MedlinePlus / NIH open APIs (consumer-health, no OAuth). Lower legal/integration risk than PubMed/PMC; accessed only behind the `literature-retrieval` egress axis; CI uses recorded/fixture responses, no live network.",
+      "resolvedAt": "2026-06-16T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-ingestion-adapters",
+      "answer": "Apple Health XML only (SAX streaming, the named ~4GB case), plus the IngestionAdapter registry so additional sources (Whoop/CSV) are additive later. Whoop and CSV adapters are out of scope for this plan.",
+      "resolvedAt": "2026-06-16T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-enablement-posture",
+      "answer": "Medical team is REGISTERED and selectable via `bober chat medical`, but both egress axes default false and first-run consent is fail-closed. Engineering-complete but ships nothing to cloud by default; shipping/marketing remains gated on the external S6.5 counsel review.",
+      "resolvedAt": "2026-06-16T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "approve",
+      "resolvedAt": "2026-06-16T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The `bober/team-abstraction` substrate is merged to main (verified: commit 63e6a33 '#45'); the Team interface (src/teams/types.ts:20), loadTeam (src/teams/registry.ts:34), PipelineEngineName (src/orchestrator/workflow/engine.ts:6), and both exhaustive switches in src/orchestrator/workflow/selector.ts (selectPipelineEngine:51, selectPipelineEngineForTeam:103) are present on HEAD. The architecture's shorthand paths `selector.ts`/`engine.ts` resolve to src/orchestrator/workflow/.",
+    "Adding `medical-sop` to PipelineEngineName forces an exhaustiveness update in BOTH switches in selector.ts: selectPipelineEngineForTeam returns the MedicalSopEngine; selectPipelineEngine (the config/programming path, which reads config.pipeline.engine and can never legitimately be `medical-sop`) handles the new member defensively (e.g. falls through to TsPipelineEngine or throws) so the switch stays exhaustive without changing programming behavior.",
+    "The `pipelineShape` Zod enum must be widened to include `medical-sop` everywhere it mirrors PipelineEngineName: the team pipelineShape enum (src/config/schema.ts:366) and the PipelineSectionSchema engine enum the engine.ts comment references. These must stay in sync with the TS union.",
+    "Team.guardrails is currently typed `?: unknown` (src/teams/types.ts:29); filling it with a concrete GuardrailSet type is additive/narrowing and breaks nothing for existing teams that leave it undefined.",
+    "MedicalSopEngine `implements PipelineEngine` (PipelineEngine is an interface at engine.ts:9, not an abstract class — the architecture's `extends` was shorthand). Its run signature matches `run(userPrompt, projectRoot, config, opts?: { runId?: string }): Promise<PipelineResult>`.",
+    "Medical chat turns route through the EXISTING detached-spawn contract (ADR-5): TurnClassifier -> action 'spawn' -> RunSpawner launches a detached child that returns SpawnAck immediately; the SOP runs inside that child via selectPipelineEngineForTeam. No synchronous inline answer is added to ChatSession.handleTurn (it must stay non-blocking).",
+    "All numerical reasoning is deterministic in-process TypeScript over a closed NumericPrimitive whitelist (mean|min|max|latest|delta|slope|percentile|zscore). No eval, no code generation, no Python sandbox. The LLM never performs arithmetic.",
+    "HealthDataStore uses better-sqlite3 SYNC (mirroring FactStore) with a single generic events table and INSERT OR IGNORE on a deterministic SHA-256 id of (metric|tStart|source|value); all other I/O uses node:fs/promises. All new code is ESM/.js/NodeNext, strict TS, provider-agnostic (no SDK types outside src/providers/).",
+    "Timestamps are injected parameters everywhere (observation tStart, consent acceptedAtIso, audit tIso) and are NEVER read from the wall clock — matching the architecture data-model note and keeping tests deterministic.",
+    "Both egress axes (cloud-inference, literature-retrieval) default false. The medical team is registered/selectable but ships nothing to cloud by default; the local Ollama model (via openai-compat, src/providers/factory.ts) is the default synthesize model with NO automatic cloud fallback.",
+    "MedlinePlus / NIH retrieval requires no OAuth; unit/integration tests use recorded/fixture HTTP responses (no live network in CI), satisfying both local-first and the 'no fs/network mocks beyond fixtures' principle.",
+    "This plan delivers engineering-complete code on a feature branch; the external S6.5 FFDCA §201(h) counsel/regulatory review that gates shipping is NOT a buildable component and is explicitly out of scope for code."
+  ],
+  "outOfScope": [
+    "The S6.5 counsel/regulatory review itself (external process, release-gating, not buildable; shipping/marketing the medical team is blocked on it regardless of engineering completeness).",
+    "Whoop and CSV ingestion adapters (Apple Health XML only; the IngestionAdapter registry makes additional sources additive later).",
+    "A built/tested cloud-inference synthesis path beyond the EgressGuard axis existing and defaulting off (provider-specific cloud synth is reachable only after the independent cloud-inference opt-in; not exercised in this plan).",
+    "Multi-user, server, or throughput concerns — single-user interactive `bober chat`/`bober medical` only.",
+    "New numeric primitives beyond the 8 whitelisted ones (added later via reviewable code change, never via runtime/generated code).",
+    "Any UI/GUI (CLI + chat only, per project principles — agent-bober has no UI).",
+    "Cloud-inference prompt-cache economics (deferred per architecture Open Question).",
+    "Any change to the ts|skill|workflow engines or the programming team's behavior (byte-zero invariant is a hard requirement).",
+    "Medication PARSING from ingested files (medications are the FactStore value-of-record per ADR-7; HealthDataStore never stores medication-list state)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Additive pipeline plumbing + medical team registration",
+      "description": "Add `medical-sop` as a new additive PipelineEngineName + Zod enum member, extend both exhaustive switches in selector.ts, create a minimal MedicalSopEngine stub implementing PipelineEngine, define the GuardrailSet type filling Team.guardrails, and register a built-in `medical` team via buildMedicalTeam(config) + loadTeam so `bober chat medical` resolves to the medical SOP — with byte-zero impact on existing teams.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: PipelineEngineName (src/orchestrator/workflow/engine.ts) includes `medical-sop`, and every Zod enum mirroring it (team pipelineShape at schema.ts:366 + the PipelineSectionSchema engine enum) is widened in lockstep; typecheck and build pass.",
+        "AC2: Both switches in selector.ts handle the new member exhaustively (compile-time `never` guard intact): selectPipelineEngineForTeam returns a MedicalSopEngine for a `medical-sop` team; selectPipelineEngine (config/programming path) handles it defensively without altering ts/skill/workflow behavior.",
+        "AC3: loadTeam(config, 'medical') returns a Team with pipelineShape === 'medical-sop' and a concrete GuardrailSet in its guardrails slot; loadTeam(config) (no id) still returns the byte-identical programming team.",
+        "AC4: The existing ts|skill|workflow engines and the programming team behave identically — the full existing test suite stays green and a regression test asserts the programming team still resolves to its prior engine."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Consent gate, append-only audit log, and disclaimer footer",
+      "description": "Fail-closed first-run ConsentGate (absent consent => refuse, no downstream calls), an append-only AuditLog (.bober/medical/audit-<date>.jsonl, O_APPEND|O_CREAT, mode 0600, IDs/enums only — never prompt text or health values), and a versioned DisclaimerComposer footer. ConsentGate is wired as Gate 1 in MedicalSopEngine.run.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When no consent is recorded, MedicalSopEngine.run returns a refuse verdict and makes ZERO downstream calls (no numerics, no retrieval, no LLM); a recorded consent round-trips via ConsentGate.current().",
+        "AC2: AuditLog.append writes to .bober/medical/audit-<date>.jsonl with file mode 0600 and O_APPEND semantics, and a test asserts the serialized entry contains only IDs/enums (event, rulesetVersion, patternsetVersion, ruleId) and NO prompt text or health values.",
+        "AC3: DisclaimerComposer.footer() returns a non-empty string carrying disclaimerVersion; the version is recorded in the ConsentRecord.",
+        "AC4: All timestamps (consent acceptedAtIso, audit tIso) are injected parameters, not read from the system clock (verified by a deterministic test)."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Red-flag emergency short-circuit (Gate 2, 0 LLM calls)",
+      "description": "A deterministic, pure/synchronous RedFlagDetector (categories cardiac|stroke|anaphylaxis|self-harm|overdose|none, with patternsetVersion) wrapped by GuardrailSet.evaluate (allow|short-circuit|refuse, with rulesetVersion), wired into MedicalSopEngine.run immediately after the consent gate. A red-flag match returns a canned 911/988 escalation with zero downstream calls.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: For a prompt in each red-flag category, GuardrailSet.evaluate returns a short-circuit verdict with a canned escalation and the engine makes 0 LLM calls — verified with a spy/fake LLMClient asserted never to be invoked.",
+        "AC2: RedFlagDetector.detect is pure and synchronous: identical input yields identical output across runs, and a non-emergency prompt returns category 'none' and proceeds to allow.",
+        "AC3: A short-circuit appends an audit entry carrying ruleId, rulesetVersion, and patternsetVersion (IDs/enums only).",
+        "AC4: GuardrailSet.evaluate throws on an empty prompt; the detector requires no network and no model."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "HealthDataStore + deterministic NumericsQueryLayer",
+      "description": "A generic single-table HealthDataStore (better-sqlite3 sync, INSERT OR IGNORE on deterministic SHA-256 id, getObservations/getLabSeries/getBaseline/putBaseline/getPreference) and a NumericsQueryLayer exposing only the closed NumericPrimitive whitelist (mean|min|max|latest|delta|slope|percentile|zscore) and getLabTrend. The LLM never performs arithmetic; sampleCount 0 => abstain.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: HealthDataStore.upsertObservations dedupes identical observations via INSERT OR IGNORE on the deterministic id and returns the count of NEW rows only (test inserts duplicates and asserts the count).",
+        "AC2: Each of the 8 numeric primitives computes the correct value on a fixture series; getMetric with an empty window returns NumericResult { value: null, sampleCount: 0 } (abstain) rather than throwing.",
+        "AC3: NumericsQueryLayer reads the per-row unit and refuses to aggregate across heterogeneous units rather than silently mixing them.",
+        "AC4: No eval, Function constructor, code generation, or child process appears anywhere in src/medical numerics code (verified by grep/test)."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Apple Health ingestion (SAX streaming) + `bober medical import`",
+      "description": "An IngestionNormalizer with an IngestionAdapter registry and ObservationSink, plus an AppleHealthAdapter that stream-parses ~4GB Apple Health export XML via SAX with bounded (~1000-row) batches and pause/resume backpressure, never loading the whole document. A `bober medical import <file>` CLI command drives it.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: AppleHealthAdapter ingests a fixture Apple Health XML via streaming SAX with bounded batches (batch-size cap asserted) and never reads the whole file into memory; writeBatch applies backpressure (pause/resume).",
+        "AC2: Re-importing the same file is idempotent — the second import adds 0 new rows (dedup via HealthDataStore INSERT OR IGNORE).",
+        "AC3: IngestionNormalizer.importFile throws a clear error naming the problem when no registered adapter canHandle the file.",
+        "AC4: `bober medical import <file>` is registered, callable, and reports an IngestionResult (counts) on completion."
+      ],
+      "dependencies": [
+        "feat-4"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "EgressGuard + medications-in-FactStore + full SOP wiring (zero-egress end-to-end)",
+      "description": "EgressGuard with two independently opt-in axes (cloud-inference, literature-retrieval, both default false; assertAllowed throws when off) plus a `no-restricted-imports` ESLint boundary scoped to src/medical/**/*.ts. Medications read from FactStore.getActiveFacts (bi-temporal, ADR-7), not HealthDataStore. The full ordered SOP is wired in MedicalSopEngine.run: consent -> red-flag -> numerics -> meds -> egress check -> (retriever disabled => abstain) -> footer -> audit -> PipelineResult.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: EgressGuard.assertAllowed throws when an axis is off and returns/passes when on; both axes default false. With literature-retrieval OFF, LiteratureRetriever.retrieve returns { disabled } synchronously (no network attempt) and the engine abstains.",
+        "AC2: A `files: ['src/medical/**/*.ts']` no-restricted-imports ESLint block forbids undici/got/axios/node-fetch/node:http(s)/node:net/node:tls and the fetch global everywhere in src/medical EXCEPT the one designated retrieval network file; lint passes.",
+        "AC3: Medications are read via FactStore.getActiveFacts under a medical scope (value-of-record), and HealthDataStore is never used to store medication-list state.",
+        "AC4: With both egress axes off, a full medical SOP turn produces a MedicalAnswer with a disclaimer footer and an audit answer/abstain entry, and a numeric question is answered purely from deterministic compute — default outbound bytes = 0 (no network module reachable)."
+      ],
+      "dependencies": [
+        "feat-2",
+        "feat-3",
+        "feat-4"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "MedlinePlus grounded retrieval + cited synthesis (opt-in)",
+      "description": "A real MedlinePlus / NIH (no-auth) LiteratureRetriever behind the literature-retrieval egress axis, confined to the single sanctioned network file (the ESLint exception). retrieve returns disabled|abstain{reason}|grounded{passages}; synthesize runs the single LLM call (local Ollama default) and abstains unless a retrieved passage supports the claim; non-abstained answers carry citations. Source failure => abstain, never fail-open. cloud-inference remains independently off.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: With literature-retrieval ON, LiteratureRetriever.retrieve queries MedlinePlus and returns grounded passages (tested against a recorded/fixture response — no live network in CI).",
+        "AC2: synthesize abstains (abstained=true) when no retrieved passage supports the claim, and every non-abstained clinical claim carries >=1 citation.",
+        "AC3: When the literature source is unreachable or errors, retrieve returns abstain{reason} and the engine never fails open (no uncited claim is emitted).",
+        "AC4: The only network import in src/medical lives in the designated retrieval file (ESLint boundary passes), and the cloud-inference axis remains independently off (enabling literature-retrieval does not enable cloud inference)."
+      ],
+      "dependencies": [
+        "feat-6"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "Local-first zero-egress is the code-enforced default: no outbound network is reachable from src/medical unless the matching EgressGuard axis is opted in, enforced by BOTH a scoped no-restricted-imports ESLint rule and a runtime assertAllowed at every call site (defense in depth).",
+      "verificationMethod": "ESLint medical-scope boundary passes with network imports only in the sanctioned retrieval file; unit test asserts assertAllowed throws for an off axis; a zero-egress SOP turn reaches no network module."
+    },
+    {
+      "category": "security",
+      "requirement": "The audit log never contains PHI: entries hold IDs and enums only (event, versions, ruleId) — never prompt text or health values — and the file is created mode 0600 with O_APPEND|O_CREAT.",
+      "verificationMethod": "Unit test serializes audit entries and asserts no prompt/health substrings leak; test asserts file mode 0600 and append-only behavior."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The emergency red-flag short-circuit and consent refusal are deterministic and make 0 LLM calls; numerical answers come 100% from deterministic in-process compute; clinical claims are cited or abstained — no fail-open path emits an uncited claim.",
+      "verificationMethod": "Spy LLMClient asserted never invoked on short-circuit/refuse; numerics tests assert no eval/codegen; synthesize tests assert abstain-unless-supported and citation presence."
+    },
+    {
+      "category": "performance",
+      "requirement": "Apple Health XML up to ~4GB ingests via streaming SAX with bounded batches and backpressure, never loading the whole document into memory.",
+      "verificationMethod": "Ingestion test asserts batch-size cap and streaming parse on a fixture; no whole-file read in the adapter."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "All new code is ESM/NodeNext with .js import extensions, strict TS (zero type errors), provider-agnostic (no @anthropic-ai/sdk or openai types outside src/providers/), and adds the medical-sop enum member to PipelineEngineName and its mirrored Zod enums in lockstep.",
+      "verificationMethod": "Run typecheck + build + lint; grep src/medical for SDK imports (none); test that the enum union and Zod enums agree."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Byte-zero impact on existing engines and the programming team: ts|skill|workflow and the programming pipeline behave identically after the additive changes.",
+      "verificationMethod": "Full existing suite stays green; regression test asserts the programming team resolves to its prior engine and selectPipelineEngine(config) is unchanged for ts/skill/workflow."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "PipelineEngineName + PipelineEngine interface: src/orchestrator/workflow/engine.ts:6,9 (add medical-sop member; MedicalSopEngine implements PipelineEngine).",
+      "selectPipelineEngine (config path) + selectPipelineEngineForTeam (team path) exhaustive switches: src/orchestrator/workflow/selector.ts:51,103. resolveEngineNameForTeam:75 passes medical-sop through verbatim (no coercion — only 'workflow' is downgraded).",
+      "Team.pipelineShape + Team.guardrails slot: src/teams/types.ts:27,29 (guardrails is currently `?: unknown`).",
+      "loadTeam(config, teamId?): src/teams/registry.ts:34 (register the built-in 'medical' team alongside 'programming').",
+      "pipelineShape Zod enum: src/config/schema.ts:366 + the PipelineSectionSchema engine enum the engine.ts comment mirrors (widen both to include medical-sop).",
+      "Detached-spawn contract (ADR-5): src/chat/chat-session.ts (handleTurn, ~247-253), src/chat/run-spawner.ts:111 (fire-and-forget, do NOT await), src/chat/turn-classifier.ts (classify -> spawn), CompletionTailer poll (chat-session.ts ~145,282-287).",
+      "FactStore bi-temporal medications (ADR-7): src/state/facts.ts (factId :58-69, schema :136-153, getActiveFacts), src/orchestrator/memory/reconcile.ts:73 (invalidate-don't-delete).",
+      "Local model path for synthesize: src/providers/factory.ts (openai-compat/Ollama) via the provider-agnostic LLMClient (src/providers/types.ts:216).",
+      "ESLint scoped no-restricted-imports precedent: eslint.config.js telemetry block (~42-69) + src/telemetry/emit.ts:13.",
+      "CLI registration mirrors src/cli/commands/run.ts for the new `bober medical import` command."
+    ],
+    "dataModel": "New src/medical/ module. HealthObservation { id (SHA-256 of metric|tStart|source|value), metric, value:number, unit, tStart (ISO, a PARAMETER), tEnd?, source }. LabResult { id, biomarker, value, unit, collectedAtIso, referenceLow?, referenceHigh? }. ConsentRecord { consentVersion, acceptedAtIso, rulesetVersion, disclaimerVersion }. AuditEntry { tIso, event: consent|short-circuit|refuse|answer|abstain|ingest, rulesetVersion?, patternsetVersion?, ruleId? } (IDs/enums only). GuardrailVerdict = allow | short-circuit{rule,cannedResponse} | refuse{rule,reason}. MedicalAnswer { body, abstained, citations[], disclaimerFooter, shortCircuit }. NumericResult { primitive, value:number|null, unit, sampleCount }. HealthDataStore = single generic events table (better-sqlite3 sync, INSERT OR IGNORE) mirroring the FactStore single-table convention; medications live in FactStore (bi-temporal) under a medical scope, NOT in HealthDataStore.",
+    "securityConsiderations": [
+      "Refusals/short-circuit/zero-egress/numerics are CODE-ENFORCED, never prompt-only — the highest-stakes decisions never pass through an LLM (FFDCA §201(h) posture).",
+      "EgressGuard.assertAllowed gates every network call site at runtime in addition to the static ESLint import boundary (defense in depth against transitive network imports).",
+      "Consent is fail-closed: absent consent => refuse before any retrieval or LLM call.",
+      "Audit entries hold IDs/enums only (never prompt text or health values); audit file mode 0600, O_APPEND|O_CREAT.",
+      "Numerics are a closed whitelist with no eval/codegen/sandbox; a missing computation forces abstain and is added later only as a reviewable code change.",
+      "Medications are the FactStore value-of-record (invalidate-don't-delete) so a discontinued/corrected drug supersedes without deletion (audit-preserving); HealthDataStore never stores medication-list state to avoid a divergent second source of truth."
+    ],
+    "existingPatterns": "Reuse, do not rebuild: the Team/loadTeam abstraction (src/teams/), the PipelineEngine selector pattern (src/orchestrator/workflow/selector.ts + engine.ts), the detached-spawn chat contract (src/chat/run-spawner.ts:111, chat-session.ts, turn-classifier.ts), the bi-temporal FactStore (src/state/facts.ts, reconcile.ts:73) for medications, the better-sqlite3 single-table sync convention from FactStore for HealthDataStore, the scoped no-restricted-imports ESLint pattern from the telemetry module (eslint.config.js ~42-69), the provider-agnostic LLMClient + Ollama path (src/providers/factory.ts, types.ts:216), the Zod config schema + createDefaultConfig factory (src/config/schema.ts), and CLI command registration (src/cli/commands/run.ts). Architecture: .bober/architecture/arch-20260616-medical-team-architecture.md + ADR-1..7. NOTE: MedicalSopEngine IMPLEMENTS the PipelineEngine interface (engine.ts:9) — the ADR text's `extends` is shorthand."
+  },
+  "sprints": [
+    "sprint-spec-20260616-medical-team-1",
+    "sprint-spec-20260616-medical-team-2",
+    "sprint-spec-20260616-medical-team-3",
+    "sprint-spec-20260616-medical-team-4",
+    "sprint-spec-20260616-medical-team-5",
+    "sprint-spec-20260616-medical-team-6",
+    "sprint-spec-20260616-medical-team-7"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "14-20 hours",
+    "riskLevel": "high",
+    "riskNotes": "High-stakes domain with HARD code-enforced constraints. Risk-first ordering puts the integration linchpin (S1: additive enum across two exhaustive switches + Zod enums, byte-zero impact) and the three code-enforced safety gates (S2 consent/audit, S3 red-flag 0-LLM short-circuit, S6 egress/zero-egress) before the networked slice (S7). Top risks: (1) guardrail bypass if any LLM call precedes the gates — mitigated by routing ALL medical turns through spawn + gates-first in run + the bypass lint rule; (2) egress leak via transitive network import — mitigated by runtime assertAllowed at every call site over the static ESLint glob; (3) 4GB SAX ingestion blocking the loop — mitigated by bounded batches + backpressure; (4) enum addition breaking the exhaustive switches — mitigated by the compile-time never check in both switches; (5) audit PHI leak — mitigated by IDs/enums-only entries + 0600. RELEASE GATE (non-engineering): shipping/enabling is blocked on the external S6.5 FFDCA §201(h) counsel review, which is out of scope for code; this plan is engineering-complete-on-a-branch only."
+  },
+  "completedAt": "2026-06-17T00:08:00.000Z"
+}

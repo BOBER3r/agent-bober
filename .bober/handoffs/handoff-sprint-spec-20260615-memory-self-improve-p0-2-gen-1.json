@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-memory-self-improve-p0-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-2",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T19:30:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase 3, Sprint 2 of 5. Route fact writes through a reconcile step on top of Sprint 1's FactStore. Deterministic core (NOOP/ADD/UPDATE-supersede) with NO LLM on the exact-match path; an injected LLM FactJudge resolves only deterministic normalized-key ambiguity, with an ADD fallback when no judge is present.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260615-memory-self-improve-p0-1",
+        "title": "Add bi-temporal SQLite semantic-facts store + bober facts CLI",
+        "summary": "src/state/facts.ts: FactStore (better-sqlite3 behind an interface) with insertFact, getActiveFacts(scope,subject?,predicate?), getFact(id), invalidateFact(id,tInvalidated), close(). Pure store — timestamps injected. Deterministic id = sha256(`${scope}|${subject}|${predicate}|${value}|${tCreated}`).slice(0,16). FactSchema (Zod), factId(), factsDbPath(), ensureFactsDir() exported. semantic_facts table: id,scope,subject,predicate,value,confidence,source_run_id,t_valid,t_invalid,t_created,t_invalidated. `bober facts add|list|show|invalidate` CLI in src/cli/commands/facts.ts stamps tCreated/tValid at the handler boundary."
+      }
+    ],
+    "currentBranch": "bober/memory-self-improve-p0",
+    "relevantFiles": [
+      "src/state/facts.ts",
+      "src/orchestrator/memory/retrieve.ts",
+      "src/orchestrator/memory/distill.ts",
+      "src/providers/factory.ts",
+      "src/orchestrator/architect-agent.ts",
+      "src/cli/commands/facts.ts"
+    ]
+  },
+  "decisionsLocked": {
+    "Q2": "B — LLM-judged ambiguity merge. Deterministic exact-match supersede for the clean case (NO LLM); injected FactJudge resolves ambiguous near-matches into ADD/UPDATE/DELETE/NOOP.",
+    "exactMatchPathPurity": "NO client/network call on the NOOP/ADD/UPDATE exact-match path — sc-2-3 and sc-2-4 must pass with NO judge injected.",
+    "judgeSafety": "createLLMFactJudge honours BOBER_TEST_DETERMINISTIC=1; on any parse failure or thrown error returns 'add' (never let the LLM corrupt the store). No-judge → deterministic ADD fallback.",
+    "clockPurity": "reconcileFact takes an injected `now` ISO string; never reads the clock inside the core."
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": "Read .bober/principles.md. Gates: TS strict (zero errors), ESLint consistent-type-imports (`import type`), ESM .js specifiers, Zod validation, no `any` unjustified, section comments, conventional commit `bober(sprint-2): ...`, provider SDKs only behind providers/ adapters (use createClient from the factory, never import an SDK directly).",
+  "evaluatorFeedback": null
+}

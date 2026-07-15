@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-7",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "sprintNumber": 7,
+  "title": "Add the bober.security-audit skill, enable dogfooding, and write docs",
+  "description": "Ship the operator surface: a skills/bober.security-audit/SKILL.md orchestration document mirroring skills/bober.code-review (spawn the bober-security-auditor subagent / invoke the CLI for standalone deep audits), enable dogfooding by setting security.enabled=true (LLM-only, scanners:[]) in agent-bober's own bober.config.json so every future sprint of this repo runs the fail-closed gate, and write docs/security-audit.md covering the config reference, gate semantics, CLI usage, and hub emission.",
+  "status": "completed",
+  "createdAt": "2026-07-12T09:30:00.000Z",
+  "updatedAt": "2026-07-12T13:41:08.000Z",
+  "completedAt": "2026-07-12T13:41:08.000Z",
+  "dependsOn": [
+    "sprint-spec-20260712-security-audit-agent-team-3",
+    "sprint-spec-20260712-security-audit-agent-team-4"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "skills/bober.security-audit/SKILL.md exists with valid frontmatter (name, description with trigger guidance) and a body that orchestrates the standalone audit following the bober.code-review shape: read config, spawn the bober-security-auditor subagent (or direct the CLI path), present severity-ranked findings, point to the persisted .bober/security/ artifact; it never instructs writing code fixes.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "agent-bober's own bober.config.json gains security: { enabled: true, scanners: [] } (LLM-only dogfooding), parses cleanly under the extended schema, and a test asserts the repo config file remains schema-valid.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "docs/security-audit.md documents: every SecuritySectionSchema field with its default, the fail-closed gate semantics (what blocks, what happens on block \u2014 retry with findings, no documenter, history events), CLI usage with exit codes and standaloneBlockOn, scanner configuration with slither/semgrep examples, hub emission behavior, and the byte-identical-when-unconfigured guarantee.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "The skill is discoverable per repo distribution conventions (listed alongside sibling skills; the update-all sync path picks it up structurally \u2014 same layout as bober.code-review including any .claude/commands twin if siblings have one).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green with the dogfood config in place.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not run `npm run update-all` inside the sprint (post-merge follow-up; note it in the handoff).",
+    "Do not configure scanners in the dogfood config (slither/semgrep not guaranteed on dev machines; LLM-only per approved assumption 5).",
+    "Do not add application code \u2014 this sprint is skill markdown, config, docs, and a config-validity test only.",
+    "Do not write a Telegram or hub UI surface."
+  ],
+  "stopConditions": [
+    "All five criteria verified; the dogfood config change is proven schema-valid by test, not by assertion.",
+    "Full suite green \u2014 if the enabled gate makes any existing pipeline test spawn a real audit, those tests must be examined: unit tests must not depend on the repo's own bober.config.json for their pipeline configs (flag as regression if they do)."
+  ],
+  "definitionOfDone": "Claude Code users can invoke the security audit as a skill, agent-bober itself runs the fail-closed gate on every future sprint (LLM-only), and an operator can learn the entire feature \u2014 config, semantics, CLI, exit codes, hub behavior \u2014 from docs/security-audit.md.",
+  "assumptions": [
+    "skills/bober.code-review/ is the structural template (SKILL.md frontmatter + orchestration body spawning a subagent); if sibling skills ship a .claude/commands/*.md twin in-repo, mirror that too \u2014 check how bober-code-review is laid out and copy the layout exactly.",
+    "Existing unit tests construct their own configs and do not load the repo's bober.config.json for pipeline behavior, so flipping the dogfood flag cannot make tests spawn real audits (if violated, this surfaces immediately in the suite and must be reported, not painted over).",
+    "docs/ is the documentation home (precedent: docs/teams.md, docs/chat-steer.md).",
+    "The dogfooding cost/latency/false-positive-block tradeoff was explicitly approved at the plan design gate (assumption 5)."
+  ],
+  "outOfScope": [
+    "npm run update-all execution, marketplace/plugin manifest changes beyond skill file placement, additional stack skills, Telegram surfaces."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) READ skills/bober.code-review/SKILL.md and its directory layout first; mirror frontmatter style, references/ subdir if present, and any .claude/commands twin convention used by in-repo skills. The skill body should: check config, offer target scoping, spawn bober-security-auditor (agents/bober-security-auditor.md from sprint 2) or invoke `bober security-audit`, present findings ranked by severity with path:line citations, and remind that the audit is advisory in skill mode (the CLI exit code / pipeline gate are the enforcement points). (2) bober.config.json: minimal diff \u2014 add the security key only (enabled:true, scanners:[]); do NOT materialize other defaults into the file. (3) The config-validity test: if a test already parses the repo's bober.config.json (sprint 1 touched this area), extend it; else add one next to the config tests. (4) docs/security-audit.md: structure \u2014 Overview, Quick start (CLI + skill), Pipeline gate (flows incl. blocked path), Configuration reference table (field/type/default/effect), Scanners (slither/semgrep config examples with the JSON output flags), Hub emission, Fail-closed guarantees, FAQ (what happens on timeout/budget exhaustion/false positive \u2014 cite the retry path). Use timeless language per repo doc conventions.",
+  "evaluatorNotes": "For sc-7-1: read the skill fully; verify the referenced agent name, CLI command, config keys, and artifact paths all actually exist in the codebase as named (stale references = fail). For sc-7-2: run the config test; also parse bober.config.json with the real schema in a scratch script if the test's coverage is indirect. For sc-7-3: cross-check EVERY documented field name and default against SecuritySectionSchema in src/config/schema.ts \u2014 any drift fails the criterion; verify the exit codes documented match the sprint-4 implementation. For sc-7-4: diff the directory layout against bober.code-review's (ls both) \u2014 same shape required. For sc-7-5: run the FULL suite with the dogfood config committed; investigate any test that newly touches the network or spawns subagents (would indicate a test reading the repo config \u2014 report as a finding, do not mask).",
+  "estimatedFiles": [
+    "skills/bober.security-audit/SKILL.md",
+    "bober.config.json",
+    "docs/security-audit.md",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-7-1",
+      "timestamp": "2026-07-12T13:41:08.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-7-1"
+}

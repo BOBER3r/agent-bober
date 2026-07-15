@@ -1,0 +1,237 @@
+{
+  "specId": "spec-20260714-docs-metadata-0-18-refresh",
+  "version": 1,
+  "createdAt": "2026-07-14T18:51:12Z",
+  "updatedAt": "2026-07-14T22:45:00Z",
+  "title": "Documentation & Metadata Refresh (0.18.0)",
+  "description": "Correct genuine command-reference and npm-metadata drift against the shipped 0.18.0 codebase: complete COMMANDS.md (which claims to be a complete reference but omits five registered command groups), add the missing fleet + five commands to the README CLI quick-reference, and refresh package.json description/keywords to advertise the 0.18.0 surface. Docs and metadata only \u2014 no source, test, or git-tag changes.",
+  "status": "completed",
+  "mode": "brownfield",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "scope",
+      "question": "Should VISION.md and docs/providers.md be part of this refresh?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Include them in the refresh"
+        },
+        {
+          "label": "B",
+          "description": "Exclude them \u2014 spot-check found them current"
+        }
+      ],
+      "recommendation": "B \u2014 VISION.md:304,358 already documents the 0.16.0 lens-panel config and docs/providers.md:24,48,73 already covers deepseek/grok/claude-code/opus.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q2",
+      "category": "scope",
+      "question": "Should CHANGELOG.md be edited as part of this refresh?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Add a CHANGELOG entry for the doc drift"
+        },
+        {
+          "label": "B",
+          "description": "No CHANGELOG change \u2014 the drift is reference-sync, not undocumented shipped work"
+        }
+      ],
+      "recommendation": "B \u2014 CHANGELOG already runs through [0.18.0] 2026-06-23 with an [Unreleased] section; the affected commands already shipped and were changelogged.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q3",
+      "category": "data-model",
+      "question": "Are config/telemetry/worktree/memory/facts real user-facing commands that warrant documentation?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Yes \u2014 document all five"
+        },
+        {
+          "label": "B",
+          "description": "No \u2014 some are internal/hidden"
+        }
+      ],
+      "recommendation": "A \u2014 all five are registered in src/cli/index.ts:312-324 with .description() text and none use { hidden: true } (grep found none).",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q4",
+      "category": "design-ux",
+      "question": "Should the README CLI block carry full per-subcommand detail for the five commands, or one-line entries deferring to COMMANDS.md?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Full per-subcommand detail in README"
+        },
+        {
+          "label": "B",
+          "description": "One-line entries pointing to COMMANDS.md"
+        }
+      ],
+      "recommendation": "B \u2014 mirrors the README's existing 'Full reference in COMMANDS.md' pattern (README.md:548), keeping README a quick-reference.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q5",
+      "category": "pattern-conflict",
+      "question": "Which package.json keywords are defensible additions for 0.18.0?",
+      "options": [
+        {
+          "label": "A",
+          "description": "security-audit, fleet, incident-response, knowledge-platform"
+        },
+        {
+          "label": "B",
+          "description": "A broader marketing set including medical/telegram/calendar"
+        }
+      ],
+      "recommendation": "A \u2014 each maps to a first-class documented CLI surface (security-audit command + docs/security-audit.md; fleet + docs/fleet.md; incident command; knowledge-platform docs).",
+      "ambiguityWeight": 2
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Exclude VISION.md and docs/providers.md \u2014 both are current. VISION.md:304,358,366 documents the 0.16.0 lens-panel config; docs/providers.md:24,48,73,171 already covers deepseek/grok/claude-code/opus routing and cost.",
+      "resolvedAt": "2026-07-14T18:51:12Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "No CHANGELOG change. CHANGELOG.md runs through [0.18.0] 2026-06-23 with an [Unreleased] section; the affected commands already shipped and were changelogged. The drift is a reference-sync gap, not undocumented shipped work.",
+      "resolvedAt": "2026-07-14T18:51:12Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Yes, document all five. config/telemetry/worktree/memory/facts are registered in src/cli/index.ts:312-324 with .description() text; grep for 'hidden' in each command file returns nothing.",
+      "resolvedAt": "2026-07-14T18:51:12Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "One-line README entries deferring to COMMANDS.md, matching the existing pattern at README.md:548 ('Full reference in COMMANDS.md').",
+      "resolvedAt": "2026-07-14T18:51:12Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "Add keywords security-audit, fleet, incident-response, knowledge-platform. Each maps to a shipped, documented CLI surface (src/cli/commands/security-audit.ts + docs/security-audit.md; src/fleet/index.ts + docs/fleet.md; src/cli/commands/incident.ts; docs/knowledge-platform.md).",
+      "resolvedAt": "2026-07-14T18:51:12Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Every assumption is backed by cited file evidence; no high-stakes or codebase-silent question remains, so proceed at status draft without user clarification.",
+      "resolvedAt": "2026-07-14T18:51:12Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          "COMMANDS.md:2 (claims 'Complete reference for all bober CLI commands')",
+          "src/cli/index.ts:312-324 (config/telemetry/worktree/memory/facts registered, non-hidden)",
+          "src/fleet/index.ts:477,525,571 (fleet expand-deep / expand / <manifest> registered)",
+          "README.md:507-633 (CLI quick-reference block omits fleet + the five commands)",
+          "package.json:4,21-36 (description + keywords predate security-audit/fleet/knowledge-platform)",
+          "VISION.md:304,358 + docs/providers.md:24,48,73 (spot-checked current \u2014 excluded)"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "COMMANDS.md:2 declares itself the 'Complete reference for all bober CLI commands', so any registered non-hidden top-level command missing a heading is genuine drift.",
+    "config, telemetry, worktree, memory, facts are real user-facing commands: registered in src/cli/index.ts:312-324 with .description() text; grep 'hidden' in src/cli/commands/{config,telemetry,worktree,memory,facts}.ts returns nothing.",
+    "The fleet command family is a first-class feature (src/fleet/index.ts:477,525,571; docs/fleet.md; COMMANDS.md 'Fleet Commands' section) but absent from the README CLI quick-reference (README.md:507-633).",
+    "VISION.md and docs/providers.md are current (VISION.md:304,358 lens-panel config; docs/providers.md:24,48,73 deepseek/grok/claude-code/opus) and are excluded from this refresh.",
+    "Git tags v0.12.0-v0.18.0 all already exist and CHANGELOG.md runs through [0.18.0] 2026-06-23, so historical tagging and CHANGELOG re-cutting are out of scope.",
+    "package.json keyword additions are limited to shipped documented surfaces: security-audit (src/cli/commands/security-audit.ts + docs/security-audit.md), fleet (src/fleet/index.ts + docs/fleet.md), incident-response (src/cli/commands/incident.ts), knowledge-platform (docs/knowledge-platform.md)."
+  ],
+  "outOfScope": [
+    "Creating, moving, or pushing any git tags (v0.12.0-v0.18.0 all already exist).",
+    "Re-cutting or restructuring CHANGELOG.md released version blocks.",
+    "Editing VISION.md or docs/providers.md (spot-checked current).",
+    "Any change to files under src/ or any *.test.ts (no application or test behavior change).",
+    "Changing package.json version, name, bin, dependencies, peerDependencies, or scripts.",
+    "Adding new CLI commands, MCP tools, or altering command registrations.",
+    "Broad marketing rewrites of README/COMMANDS beyond correcting the identified drift."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Complete the COMMANDS.md CLI reference",
+      "description": "Add COMMANDS.md sections for the five registered but undocumented command groups (config, telemetry, worktree, memory, facts) so the file's 'complete reference' claim holds against the real CLI.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: COMMANDS.md contains a '### `bober <cmd>`' heading for each of config, telemetry, worktree, memory, and facts.",
+        "AC2: Each new section documents that command's real subcommands (config migrate; telemetry status/purge/export; worktree run; memory distill/list/show/prune; facts add/list/show/invalidate) with no invented flags.",
+        "AC3: A completeness check over every top-level command registered in src/cli/index.ts and src/fleet/index.ts finds a matching COMMANDS.md heading (zero missing)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Sync the README CLI quick-reference",
+      "description": "Add the fleet command family and one-line entries for config/telemetry/worktree/memory/facts to the README CLI block, each deferring to COMMANDS.md for full detail.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: The README CLI reference lists agent-bober fleet <manifest>, fleet expand, and fleet expand-deep.",
+        "AC2: The README CLI reference lists agent-bober usage lines for config, telemetry, worktree, memory, and facts, each pointing to COMMANDS.md."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Refresh package.json npm metadata for 0.18.0",
+      "description": "Update the package.json description and keywords to advertise the 0.18.0 surface (security auditing, fleet orchestration, knowledge platform) without touching version, name, bin, deps, or scripts.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: package.json keywords includes security-audit, fleet, incident-response, and knowledge-platform.",
+        "AC2: package.json description mentions security auditing and fleet orchestration; version stays 0.18.0 and name/bin/dependencies/scripts are unchanged."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "techStack": [
+    "typescript",
+    "node",
+    "commander",
+    "markdown"
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "No data model \u2014 documentation Markdown (README.md, COMMANDS.md) and npm package metadata (package.json) mirroring the CLI command registrations in src/cli/index.ts and src/fleet/index.ts.",
+    "securityConsiderations": [
+      "Docs-only change; no code paths, no new dependencies, no egress. No secrets or PHI are documented.",
+      "package.json edits limited to description/keywords \u2014 dependencies, bin, and scripts untouched, so no supply-chain surface change."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "COMMANDS.md remains a complete CLI reference: every registered non-hidden top-level command has a documentation heading.",
+      "verificationMethod": "Iterate the top-level commands from src/cli/index.ts + src/fleet/index.ts and assert each has a matching '### ' heading in COMMANDS.md."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The refresh introduces no code or test behavior change; the project still builds.",
+      "verificationMethod": "npm run build exits 0 and git diff --name-only lists only COMMANDS.md, README.md, and package.json."
+    }
+  ],
+  "constraints": [
+    "Docs and metadata only \u2014 no changes under src/ or any *.test.ts.",
+    "No git tag creation, moving, or pushing.",
+    "Preserve valid JSON in package.json and preserve version 0.18.0."
+  ],
+  "sprints": [],
+  "completedAt": "2026-07-14T22:45:00Z"
+}

@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-1",
+  "specId": "spec-20260615-team-abstraction",
+  "sprintNumber": 1,
+  "title": "Team data model + registry + programming team as instance #1",
+  "description": "Introduce a `Team` data type and a `loadTeam(config, teamId?)` resolver in a new src/teams/ module, with a built-in 'programming' team that reproduces today's behavior exactly. Add an optional `teams` record and `defaultTeam` field to BoberConfig (Zod). loadTeam(config) with no id returns the programming team whose providers deep-equal resolveRoleProviders(config), whose pipelineShape equals the resolved engine, and whose memoryNamespace maps to the current `.bober/memory/` path. Named teams are built from config entries (providers merged over resolved defaults). This sprint is purely additive resolution + schema: it does NOT yet namespace memory (Sprint 2) or change pipeline-shape selection at runtime (Sprint 3). Zero behavior change is a hard requirement.",
+  "status": "completed",
+  "completedAt": "2026-06-15T12:01:30.000Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "All tests pass with zero failures, including new collocated tests for src/teams (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A Team type and loadTeam(config, teamId?) exist in src/teams/. A unit test asserts loadTeam(config) (no id) returns id 'programming', providers deep-equal resolveRoleProviders(config), pipelineShape equals resolveEngineName(config) (or config.pipeline.engine default 'ts'), and memoryNamespace is the value that maps to the current .bober/memory/ path (e.g. '' or 'programming' sentinel).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "BoberConfigSchema (src/config/schema.ts) parses an optional `teams` record (id -> { displayName?, memoryNamespace?, pipelineShape?, providers? (partial role->provider), roles?, guardrails? }) and an optional `defaultTeam` string. A unit test parses a config containing a `teams` entry + `defaultTeam` successfully, and a config WITHOUT either still parses (back-compat).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "loadTeam(config, '<id>') for a declared team returns a Team built from that entry: providers from the entry merged over the resolved defaults (resolveRoleProviders), memoryNamespace and pipelineShape from the entry. A unit test verifies a partial provider override (e.g. generator -> deepseek) is applied while unspecified roles keep the resolved default.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "loadTeam(config, 'does-not-exist') throws an Error whose message names the missing team id. Covered by a unit test asserting the throw and the id substring.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-8",
+      "description": "No @anthropic-ai/sdk or openai SDK import appears anywhere under src/teams (grep returns nothing); provider routing reuses resolveRoleProviders.",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not namespace the memory store yet — that is Sprint 2 (loadTeam may carry memoryNamespace, but memory.ts is untouched this sprint)",
+    "Do not change runtime pipeline-shape selection — that is Sprint 3 (the Team carries pipelineShape, but selectPipelineEngine/runPipeline are untouched this sprint)",
+    "Do not add CLI --team flags or a second example team — that is Sprint 4",
+    "Do not change the behavior of resolveRoleProviders, selectPipelineEngine, runPipeline, or the memory store",
+    "Do not build a .bober/teams/*.json file registry (Option A only)"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "loadTeam(config) reproduces today's resolved providers + engine + memory path for the programming team, and a config-declared team resolves with its overrides"
+  ],
+  "definitionOfDone": "A new src/teams/ module exposes a Team type ({ id, displayName, memoryNamespace, providers: RoleProviderMap, pipelineShape: PipelineEngineName, roles: Role[], guardrails?: unknown }) and loadTeam(config, teamId?): Team. A built-in 'programming' team is registered in code and is the default when no id (or 'programming') is passed; it reproduces resolveRoleProviders(config), the resolved engine, and the current .bober/memory/ path. BoberConfig gains an optional `teams` record + `defaultTeam`, validated by the existing Zod schema, with both absent still valid. Unknown team ids throw a clear error. No existing behavior changes; build, typecheck, and all tests pass; no SDK types leak into src/teams.",
+  "assumptions": [
+    "The memoryNamespace value for the programming/default team is a sentinel ('' or 'programming') that Sprint 2 will map to the existing .bober/memory/ path; this sprint only stores the value.",
+    "PipelineEngineName is the existing union from src/orchestrator/workflow/engine.ts ('ts'|'skill'|'workflow'); pipelineShape reuses it.",
+    "roles is descriptor metadata (name/displayName) for the 7 existing RoleName values; it does not drive execution in this sprint.",
+    "guardrails is a forward-compat optional field, unused and unenforced (medical is Phase 6)."
+  ],
+  "outOfScope": [
+    "Memory namespacing (Sprint 2)",
+    "Pipeline-shape selection at runtime (Sprint 3)",
+    "CLI wiring + example team + docs (Sprint 4)",
+    "Any change to existing public behavior"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/teams/ with small single-purpose files (principle: small modules, unicode box-header section comments), e.g. src/teams/types.ts (Team, Role) and src/teams/registry.ts (builtin programming team + loadTeam). Collocate *.test.ts.\n\nVerified reuse signatures:\n- resolveRoleProviders(config: BoberConfig): RoleProviderMap — src/config/role-providers.ts:97. RoleName union ('planner'|'researcher'|'curator'|'generator'|'evaluator'|'codeReview'|'chat') at :10; ALL_ROLES order at :38. RoleProviderMap = Record<RoleName,string> at :19.\n- resolveEngineName(config): PipelineEngineName — src/orchestrator/workflow/selector.ts:22 (pure, returns the name without instantiating). PipelineEngineName/PipelineEngine — src/orchestrator/workflow/engine.ts. config.pipeline.engine defaults to 'ts' (createDefaultConfig in src/config/schema.ts).\n- BoberConfigSchema — src/config/schema.ts (full config object ~line 361). Add at the end: teams: z.record(z.string(), TeamConfigSchema).optional(), defaultTeam: z.string().optional(). Define TeamConfigSchema with all-optional fields: displayName?, memoryNamespace? (z.string().regex to safe segment), pipelineShape? (reuse the engine enum), providers? (z.record over RoleName -> string, partial), roles? , guardrails? (z.unknown()). Keep createDefaultConfig emitting NO teams (back-compat).\n\nloadTeam(config, teamId?):\n- If teamId is undefined or 'programming' (or === config.defaultTeam when that points to the builtin): return the builtin programming team: { id:'programming', displayName:'Programming team', memoryNamespace:'' (sentinel for current path), providers: resolveRoleProviders(config), pipelineShape: resolveEngineName(config), roles: the 7 roles as descriptors, guardrails: undefined }.\n- Else if config.teams?.[teamId] exists: build a Team from it. providers = { ...resolveRoleProviders(config), ...(entry.providers ?? {}) } so unspecified roles keep resolved defaults. memoryNamespace = entry.memoryNamespace ?? teamId. pipelineShape = entry.pipelineShape ?? resolveEngineName(config). roles = entry.roles ?? default descriptors. guardrails = entry.guardrails.\n- Else: throw new Error(`Unknown team '${teamId}'. Declare it under config.teams or use the built-in 'programming' team.`).\n\nDo NOT wire loadTeam into runPipeline/chat behavior this sprint beyond what is needed to keep things compiling — the goal is the data model + resolver + schema, fully unit-tested, with zero behavior change. If you add a thin call site, ensure the default path is exactly today's behavior.\n\nTests: construct a BoberConfig via createDefaultConfig (or a fixture) and assert loadTeam(config) deep-equals the expected programming team fields. For sc-1-6 declare a teams entry with providers:{generator:'deepseek'} and assert the merge. For sc-1-7 assert the throw. Use no network and no fs (pure functions).",
+  "evaluatorNotes": "sc-1-4: call loadTeam(config) (no id); assert id==='programming', deepEqual(team.providers, resolveRoleProviders(config)), team.pipelineShape===resolveEngineName(config), and team.memoryNamespace is the documented sentinel.\nsc-1-5: parse via BoberConfigSchema a config object with teams:{docs:{memoryNamespace:'docs',pipelineShape:'ts',providers:{generator:'deepseek'}}} and defaultTeam:'programming' — expect success; parse a config WITHOUT teams/defaultTeam — expect success.\nsc-1-6: loadTeam(config,'docs') -> providers.generator==='deepseek' AND providers.planner===resolveRoleProviders(config).planner (unspecified role unchanged); memoryNamespace==='docs'.\nsc-1-7: expect loadTeam(config,'nope') to throw with message containing 'nope'.\nsc-1-8: grep -r '@anthropic-ai/sdk\\|from \"openai\"' src/teams — expect no matches.\nRegression: run the FULL suite (npm run test) and confirm nothing else changed (programming default behavior intact). Run npm run build and npm run typecheck.",
+  "estimatedFiles": [
+    "src/teams/types.ts",
+    "src/teams/registry.ts",
+    "src/teams/registry.test.ts",
+    "src/config/schema.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-15T00:00:00Z",
+  "updatedAt": "2026-06-15T00:00:00Z"
+}

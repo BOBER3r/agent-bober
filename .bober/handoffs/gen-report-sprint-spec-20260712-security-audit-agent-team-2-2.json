@@ -1,0 +1,48 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+  "status": "complete",
+  "iteration": 2,
+  "fixApplied": "nonGoal violation fix only \u2014 all 7 criteria were already passing in iteration 1",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-2-4",
+      "met": true,
+      "evidence": "agents/bober-security-auditor.md frontmatter now Read/Grep/Glob only; body reworked to Glob+Read over estimatedFiles instead of git-diff-via-bash"
+    },
+    {
+      "criterionId": "nonGoal-3",
+      "met": true,
+      "evidence": "security-auditor-agent.ts now resolveRoleTools('curator',...) + assembleSystemPrompt('curator',...) \u2014 curator ROLE_TOOLS = ['read_file','glob','grep'], no bash. 2 new regression tests assert no bash/write_file/edit_file in tools array NOR toolHandlers Map; tests mutation-verified (fail when role reverted to 'evaluator'). Test mock switched to vi.importActual for real resolveRoleTools behavior."
+    },
+    {
+      "criterionId": "sc-2-7",
+      "met": true,
+      "evidence": "build exit 0, tsc --noEmit clean, eslint 0 errors, full suite 308 files / 3960 tests green (+2)"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/orchestrator/security-auditor-agent.ts",
+      "action": "modified",
+      "description": "evaluator->curator role for tools + system prompt; prompt 'Your Task' now Glob+Read over estimatedFiles (no git diff)"
+    },
+    {
+      "path": "agents/bober-security-auditor.md",
+      "action": "modified",
+      "description": "Bash removed from frontmatter; body sections reworked for no-shell operation"
+    },
+    {
+      "path": "src/orchestrator/security-auditor-agent.test.ts",
+      "action": "modified",
+      "description": "real resolveRoleTools via vi.importActual; new 'nonGoal: no bash/write/edit tools' describe with 2 tests"
+    }
+  ],
+  "testsAdded": [
+    "src/orchestrator/security-auditor-agent.test.ts (+2 nonGoal regression tests)"
+  ],
+  "commits": [
+    "40c1488 - bober(sprint-2): remove bash tool from security-auditor subagent (nonGoal fix)"
+  ],
+  "blockers": [],
+  "notes": "tools/index.ts NOT touched \u2014 reused 'curator' role (already exactly ['read_file','glob','grep'] and registered in gatedRemovalRoles) instead of adding a new AgentRole, which would have forced updates to closed Record maps in src/graph/preflight-injector.ts and src/graph/prompts.ts. Removing bash removed the git-diff path, so auditor instructions now audit current file state of contract estimatedFiles via Glob+Read \u2014 a necessary consequence of the nonGoal, documented in prompt + .md."
+}

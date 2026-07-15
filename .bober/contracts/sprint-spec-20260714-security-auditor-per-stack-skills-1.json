@@ -1,0 +1,92 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-1",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 1,
+  "title": "Widen the vulnerability taxonomy + add structured finding metadata + fix hub collision",
+  "description": "Lay the typed foundation everything else builds on: widen the VulnClass union with the money/credential/supply-chain classes, add OPTIONAL structured fields (cwe/severity/confidence/taint/signatureId) to SecurityFinding without touching the LOCKED ReviewFinding, extend inferVulnClass to map the new classes, and fix the hub-Finding id collision (G10) by folding signatureId/cwe into the title. Pure-additive, no behavior change when the new fields are absent.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-taxonomy"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "VulnClass in src/orchestrator/security-audit-types.ts is widened to include (in addition to the existing 6) at least: 'race-condition', 'money-integrity', 'ssrf', 'xss', 'insecure-randomness', 'crypto-weakness', 'deserialization', 'supply-chain', 'idor-bola', 'denial-of-service', 'audit-logging'; ALL_VULN_CLASSES in stack-knowledge.ts is updated in lockstep and a test asserts the two lists are identical.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "SecurityFinding still `extends ReviewFinding` and gains ONLY optional fields cwe?: string, severity?: FindingSeverity ('critical'|'high'|'medium'|'low'|'info'), confidence?: FindingConfidence ('confirmed'|'firm'|'tentative'), taint?: {source,sink,sanitizerPresent}, signatureId?: string; ReviewResult/ReviewFinding are imported type-only and never redefined (grep-verified).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "inferVulnClass in security-scanners.ts maps representative rule/check ids for the new classes (e.g. reentrancy->(not forced), 'race'/'toctou'->race-condition, 'ssrf'->ssrf, 'xss'->xss, 'weak-random'/'insecure-random'->insecure-randomness, 'md5'/'weak-crypto'->crypto-weakness, 'deserial'->deserialization, 'idor'/'bola'->idor-bola, 'dos'->denial-of-service) and still returns undefined (never a forced wrong class) when nothing matches; table-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "mapAuditToFindings in security-hub.ts produces a hub Finding title that folds signatureId (or cwe, or a line-hash fallback) into the id-deriving string so two DIFFERENT vulns of the same vulnClass at the same path:line produce DIFFERENT hub ids, while a retried identical finding still dedups to the same id; the hub Finding schema (hub/finding.ts) is unchanged and new metadata rides existing tags (cwe:/severity:/confidence:/sig:). A test proves the collision case now yields two rows.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "Every existing config fixture and the repo bober.config.json parse deep-equal to the pre-change parse; all 77+ existing security tests pass unchanged; npm run build + typecheck pass; ESLint zero errors on changed files.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add the signature type, parser, skill files, index, selector, diff provider, supply-chain scanners, or verifier (later sprints).",
+    "Do not change deriveVerdict or the critical[]-blocks rule; a finding's own severity field never overrides the bucket.",
+    "Do not modify ReviewResult/ReviewFinding or any code-reviewer behavior (locked).",
+    "Do not change the hub Finding schema in hub/finding.ts."
+  ],
+  "stopConditions": [
+    "All five criteria verified; full suite green with zero regressions.",
+    "Config byte-identity proven by deep-equal paired-parse, and the hub collision fix proven by a two-row test."
+  ],
+  "definitionOfDone": "The widened taxonomy, optional structured SecurityFinding fields, extended inferVulnClass, and collision-free hub title exist and are fully tested, with all existing behavior byte-identical when the new fields/classes are absent.",
+  "assumptions": [
+    "VulnClass and SecurityFinding live at src/orchestrator/security-audit-types.ts:9-25 and ALL_VULN_CLASSES at src/orchestrator/stack-knowledge.ts:38-45; inferVulnClass at src/orchestrator/security-scanners.ts:90; mapAuditToFindings/deriveFindingId at src/orchestrator/security-hub.ts:39-108.",
+    "The existing 6 VulnClass values are preserved verbatim; widening is purely additive."
+  ],
+  "outOfScope": [
+    "Signature/parser/skill-files/index/selector/diff/supply-chain/verifier/benchmark/dogfood (later sprints)."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Re-locate anchors by pattern. (1) security-audit-types.ts: widen the VulnClass union; add FindingSeverity/FindingConfidence/TaintPath type aliases and the 5 optional fields on SecurityFinding \u2014 keep `extends ReviewFinding`, import type-only from code-reviewer-agent.js. (2) stack-knowledge.ts: extend ALL_VULN_CLASSES to match the union exactly; a test should assert set-equality against the union (e.g. via a const array typed as VulnClass[]). (3) security-scanners.ts inferVulnClass: extend the keyword regex ladder additively; keep the 'undefined rather than a wrong guess' contract (generatorNotes[1] of the original scanner sprint). (4) security-hub.ts: in mapBucket, change the title/id-deriving string to include `#${finding.signatureId ?? finding.cwe ?? <stable-line-hash>}` BEFORE ` at ${path}:${line}` so identical retries still dedup but distinct signatures don't collapse; add cwe:/severity:/confidence:/sig: to tags when present. Do NOT touch hub/finding.ts. Unicode box section comments per principles.md.",
+  "evaluatorNotes": "sc-1-1: assert ALL_VULN_CLASSES deep-equals the VulnClass union membership (no drift). sc-1-2: grep for 'import type' on ReviewFinding/ReviewResult; confirm all 5 new fields optional; confirm SecurityFinding still extends ReviewFinding. sc-1-4: construct two findings with the same vulnClass+path+line but different signatureId and assert two distinct hub ids; construct the SAME finding twice and assert one id (dedup preserved). sc-1-5: deep-equal paired parse of the real bober.config.json before/after; run FULL suite + build + typecheck + lint.",
+  "estimatedFiles": [
+    "src/orchestrator/security-audit-types.ts",
+    "src/orchestrator/security-audit-types.test.ts",
+    "src/orchestrator/stack-knowledge.ts",
+    "src/orchestrator/security-scanners.ts",
+    "src/orchestrator/security-scanners.test.ts",
+    "src/orchestrator/security-hub.ts",
+    "src/orchestrator/security-hub.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "fail",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-1-1",
+      "timestamp": "2026-07-14T13:45:46Z"
+    },
+    {
+      "iteration": 2,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-1-2",
+      "timestamp": "2026-07-14T16:54:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-1-2",
+  "updatedAt": "2026-07-14T16:54:00Z",
+  "completedAt": "2026-07-14T16:54:00Z"
+}

@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-native-lens-panel-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-native-lens-panel-3",
+  "specId": "spec-20260604-native-lens-panel",
+  "timestamp": "2026-06-04T05:59:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Final sprint of Native-Surface Multi-Lens Evaluator Panel. Sprints 1-2 built the canonical reference (skills/shared/lens-panel.md), the optional lensVerdicts schema field, the drift gate (src/orchestrator/lens-panel-parity.test.ts), and the lens-aware evaluator agent MODE (full|deterministic|lens). Sprint 3 wires the three orchestrators (bober.run/sprint/eval) to actually USE the panel: add a gated panel branch at each evaluator-spawn step, copy the canonical reference into each skill's references/ dir so it inlines into the generated commands, regenerate the .claude/commands outputs, and extend the drift gate to cover all three reference copies. Off by default => exactly one full evaluator, byte-identical.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260604-native-lens-panel-1",
+        "title": "Canonical reference + lensVerdicts + drift gate",
+        "summary": "skills/shared/lens-panel.md (split fan-out, majority-vote/fail-closed, lensVerdicts shape, 4 verbatim fragments); optional lensVerdicts on EvalResultSchema; drift gate. Commit 0dc9cd8."
+      },
+      {
+        "contractId": "sprint-spec-20260604-native-lens-panel-2",
+        "title": "Lens-aware evaluator agent modes + sync gate",
+        "summary": "agents/bober-evaluator.md gained additive MODE:full|deterministic|lens:<name>; .claude copy byte-identical; sync gate added to lens-panel-parity.test.ts. Commit 0736260."
+      }
+    ],
+    "currentBranch": "bober/evaluator-lens-panel",
+    "relevantFiles": [
+      "skills/bober.run/SKILL.md",
+      "skills/bober.sprint/SKILL.md",
+      "skills/bober.eval/SKILL.md",
+      "skills/shared/lens-panel.md",
+      "scripts/update-all.mjs",
+      "src/cli/commands/init.ts",
+      "src/orchestrator/lens-panel-parity.test.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-native-lens-panel-3.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest", "updateAllCheck": "npm run update-all:check" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist (graph CLI, agent .md, .bober artifacts). Stage ONLY this sprint's files with explicit paths: the 3 SKILL.md, the 3 references/lens-panel.md copies, the 3 regenerated .claude/commands/*.md, and src/orchestrator/lens-panel-parity.test.ts. NEVER `git add -A`/`git add .`. CRITICAL: the panel branch in each SKILL.md must be ADDITIVE and GATED (the existing single-evaluator spawn prose is the else-path, untouched). The .claude/commands/*.md must be REGENERATED from SKILL.md + sorted references using the EXACT inlineSkill format in scripts/update-all.mjs (SKILL.md content, then for each ref in sorted order: '\\n\\n---\\n\\n<!-- Reference: <file> -->\\n\\n<content>'). After regenerating, `npm run update-all:check` MUST report no drift for this project. Branch bober/evaluator-lens-panel — never main."
+}

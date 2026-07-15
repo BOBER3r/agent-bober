@@ -1,0 +1,48 @@
+{
+  "contractId": "sprint-spec-20260604-architect-lens-panel-1",
+  "specId": "spec-20260604-architect-lens-panel",
+  "sprintNumber": 1,
+  "title": "Shared synthesize() reducer, arch-lens catalog, and architect.panel config",
+  "description": "Build the reusable foundation with zero behavior change: a pure synthesize() ranking/synthesis reducer (alongside the untouched reconcile()), an arch-lens prompt catalog (src/orchestrator/arch-lenses.ts), and the opt-in architect.panel config in the Zod schema. Pure functions + config only; no orchestrator wiring yet.",
+  "status": "completed",
+  "completedAt": "2026-06-04T08:22:50Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "src/orchestrator/workflow/synthesizer.ts exports `synthesize(approaches, lensScores, ...)` returning a SynthesisResult { winner, ranking: Array<{ approach, perLensScores, total }> (ordered desc by total), graftedIdeas: string[], dissent: string[] }. It is PURE (no Date.now/new Date/Math.random/fs — any timestamp is a caller arg). Tie-break is deterministic and documented (e.g. earliest approach index wins on equal total). Unit tests cover: clear winner, a tie resolved deterministically, and dissent capture (a lens whose top pick differs from the winner is recorded in dissent).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C2", "description": "src/orchestrator/arch-lenses.ts exports `resolveArchLensFocus(lens: string): string` over an ARCH_LENS_CATALOG mapping scalability/security/cost/operability/maintainability/reversibility to DISTINCT non-empty focus fragments, returning a generic non-empty fallback for unknown lenses without throwing. A unit test asserts the six built-ins are distinct + non-empty and an unknown lens returns the generic fallback.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "architect.panel { enabled: z.boolean().default(false), lenses: z.array(z.string()).default([]), maxConcurrent: z.number().int().min(1).default(4) }.default({...}) is added to the architect config in src/config/schema.ts, mirrored in createDefaultConfig and every other config literal tsc flags (defaults.ts, init.ts, loader.ts, mcp/tools/init.ts). A schema test asserts the defaults and that a config without architect.panel still parses to the default.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "npx tsc --noEmit, npm run build, and npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented pre-existing skipped baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT wire synthesize/arch-lenses/architect.panel into runArchitect or any orchestrator yet — that is sprints 2-3.",
+    "Do NOT touch the native surface (skills/agents/commands) — that is sprints 4-5.",
+    "Do NOT modify src/orchestrator/workflow/reconciler.ts (reconcile stays as-is) or eval-lenses.ts.",
+    "Do NOT add lens weighting or non-majority voting; synthesize uses a simple per-lens score aggregate."
+  ],
+  "stopConditions": [
+    "Stop when synthesize() + SynthesisResult, arch-lenses.ts catalog, and architect.panel config exist with passing tests and clean typecheck/build/lint.",
+    "Stop when changes are confined to src/orchestrator/workflow/synthesizer.ts(+test), src/orchestrator/arch-lenses.ts(+test), src/config/schema.ts (+ the mirrored literals tsc flags), and src/config/schema.test.ts."
+  ],
+  "definitionOfDone": "A pure synthesize() ranking reducer (winner + ordered ranking + grafted ideas + dissent, deterministic tie-break), an arch-lens catalog with resolveArchLensFocus + generic fallback, and an opt-in off-by-default architect.panel config all exist with unit tests; reconcile() is untouched; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "Mirror src/orchestrator/eval-lenses.ts for arch-lenses.ts structure (module-private catalog + exported resolver). Mirror the evaluator.panel Zod shape (added in commit 5dc7a5e) for architect.panel.",
+    "reconcile() in src/orchestrator/workflow/reconciler.ts is the sibling pattern; synthesize() lives next to it but is independent (ranking, not pass/fail).",
+    "The defaults.ts trap from the evaluator sprint applies: several config literals (defaults.ts, init.ts, loader.ts, mcp/tools/init.ts) carry the architect block and will need architect.panel to keep tsc green — run tsc and fix what it flags."
+  ],
+  "outOfScope": ["orchestrator wiring", "native surface", "reconcile changes", "lens weighting"],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read src/orchestrator/eval-lenses.ts (the catalog/resolver pattern to mirror), src/orchestrator/workflow/reconciler.ts (the sibling reducer; note its pure-function discipline — no Date.now/Math.random/fs), src/config/schema.ts (find the architect-related config and the evaluator.panel field added in 5dc7a5e to mirror), and how the evaluator sprint touched defaults.ts/init.ts/loader.ts/mcp literals. STEP 1 (synthesizer): create src/orchestrator/workflow/synthesizer.ts. Define `export interface SynthesisResult { winner: string; ranking: Array<{ approach: string; perLensScores: Record<string, number>; total: number }>; graftedIdeas: string[]; dissent: string[]; }` and `export function synthesize(approaches: string[], lensScores: Array<{ lens: string; scores: Record<string, number> }>, ...): SynthesisResult`. Aggregate per-approach totals across lenses, rank desc, deterministic tie-break (document it — e.g. lower original approach index wins), winner = ranking[0].approach, dissent = lenses whose individual top-scored approach != winner (record lens name + its pick), graftedIdeas = a placeholder collection slot (e.g. runner-up approaches' names) kept simple this sprint. Keep it PURE. STEP 2 (arch-lenses): create src/orchestrator/arch-lenses.ts mirroring eval-lenses.ts — ARCH_LENS_CATALOG (module-private) with distinct non-empty fragments for scalability/security/cost/operability/maintainability/reversibility, and `export function resolveArchLensFocus(lens: string): string` returning the entry or a generic `Evaluate this architecture specifically through the '${lens}' lens.` fallback. STEP 3 (config): add architect.panel to schema.ts mirroring evaluator.panel exactly; mirror in createDefaultConfig and EVERY other literal tsc flags. STEP 4 (tests): synthesizer.test.ts (winner/tie/dissent), arch-lenses.test.ts (6 distinct+non-empty, unknown fallback), and extend src/config/schema.test.ts (architect.panel defaults + parses-without-it). Use import type, ESM .js specifiers, unicode `// ── Section ──` headers. Conventional commit: bober(sprint-1): add synthesize() reducer + arch-lens catalog + architect.panel config. GIT HYGIENE: stage only your files with explicit paths; never `git add -A`. Branch: the feature branch the orchestrator set — never main.",
+  "evaluatorNotes": "Confirm synthesizer.ts: synthesize() is pure (grep for Date./Math.random/fs — none), returns the documented SynthesisResult, ranks desc by total, deterministic tie-break, winner==ranking[0], dissent captures divergent lenses. Run synthesizer.test.ts. Confirm arch-lenses.ts: 6 distinct non-empty fragments + generic fallback (no throw on unknown); run arch-lenses.test.ts. Confirm schema.ts architect.panel mirrors evaluator.panel (enabled false, lenses [], maxConcurrent>=1 default 4) and a config without it parses; run schema.test.ts. Confirm reconciler.ts and eval-lenses.ts are unchanged (git diff). Confirm NO orchestrator/native files were touched. Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the pre-existing skipped baseline).",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/synthesizer.ts",
+    "src/orchestrator/workflow/synthesizer.test.ts",
+    "src/orchestrator/arch-lenses.ts",
+    "src/orchestrator/arch-lenses.test.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T06:30:00Z",
+  "updatedAt": "2026-06-04T06:30:00Z"
+}

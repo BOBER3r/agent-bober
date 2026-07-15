@@ -1,0 +1,136 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-telegram-frontend-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-telegram-frontend-4",
+  "specId": "spec-20260628-telegram-frontend",
+  "timestamp": "2026-06-29T23:50:06Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober telegram adapter. Sprints 1-3 DONE: src/telegram/{whitelist,outbound,bot,router,keyboard?}.ts + handlers/{capture,prioritize}.ts. sendSafe is the sole outbound funnel; bot.ts dispatches commands (/start,/today,/priority,/decide,text). Sprint 4 adds inline-keyboard [Approve][Adjust][Reject] over pending approval checkpoints, writing the SAME .approved.json/.rejected.json disk markers as the existing approve/reject CLI (src/state/approval-state.ts). Callbacks are whitelist-gated. Adjust/Reject collect follow-up text.",
+    "completedSprints": [
+      {
+        "contractId": "...-1",
+        "title": "transport+whitelist+funnel",
+        "summary": "sendSafe, grammy behind TelegramTransport/BotTransport (bot.ts only), whitelist isAllowed/denialReply."
+      },
+      {
+        "contractId": "...-2",
+        "title": "router+capture",
+        "summary": "router.classify; handlers/capture.ts injected-sink pattern."
+      },
+      {
+        "contractId": "...-3",
+        "title": "prioritize",
+        "summary": "parseScopeFromCommand; handlers/prioritize.ts injected-HubQuery pattern + execa default; bot.ts command dispatch extended here."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/telegram/bot.ts (BotTransport interface + poll loop + command dispatch \u2014 extend for callback_query handling + answerCallback; reply_markup on sendMessage)",
+      "src/telegram/outbound.ts (sendSafe \u2014 extend to carry inline keyboard? keep funnel invariant)",
+      "src/telegram/whitelist.ts (re-check on callback sender id)",
+      "src/telegram/handlers/{capture,prioritize}.ts (injected-dep handler+test pattern to mirror)",
+      "src/state/approval-state.ts (listPending/readPending/save approved+rejected helpers + PendingMarker/ApprovedMarker/RejectedMarker shapes @24-43 \u2014 curator pins exact exports)",
+      "src/cli/commands/approve.ts (pendingExists guard + resolveApprover pattern to mirror)"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260628-telegram-frontend-4",
+    "specId": "spec-20260628-telegram-frontend",
+    "sprintNumber": 4,
+    "title": "Inline-keyboard approve / adjust / reject over the existing disk-marker gate",
+    "description": "Surface pending approval checkpoints in Telegram with an inline keyboard [Approve][Adjust][Reject]. Button callbacks write the same .approved.json / .rejected.json disk markers the existing approve/reject CLI writes (src/state/approval-state.ts), routing calendar plans and do-bridge promotions through the one existing gate. Adjust collects replacement text and writes an approved marker carrying it as editDelta (steer). Callbacks are whitelist-gated.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260628-telegram-frontend-3"
+    ],
+    "features": [
+      "feat-6"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-4-1",
+        "description": "`npm run build` (tsc) compiles the approvals handler and inline-keyboard additions with zero TypeScript errors.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-2",
+        "description": "A unit test against a temp .bober/approvals dir shows tapping Approve writes <id>.approved.json matching the ApprovedMarker shape with approvedAt and approverId populated.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-3",
+        "description": "A unit test shows tapping Reject writes <id>.rejected.json carrying the supplied feedback in the RejectedMarker, and tapping Adjust then supplying text writes an approved marker whose editDelta equals that text.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-4",
+        "description": "A unit test shows a callback for a checkpoint id with no matching <id>.pending.json on disk writes no approval marker file (guard mirrors the approve CLI pendingExists check).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-5",
+        "description": "A unit test shows a button callback from a non-whitelisted user id writes no marker and triggers no resolution.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-6",
+        "description": "A pending calendar-plan checkpoint surfaces in Telegram with three buttons; tapping Approve resolves it so the waiting run proceeds.",
+        "verificationMethod": "manual",
+        "required": false
+      }
+    ],
+    "nonGoals": [
+      "Do not create a new approval mechanism \u2014 write the same .approved.json / .rejected.json markers used by src/state/approval-state.ts and the existing approve/reject CLI commands.",
+      "Do not auto-resolve checkpoints \u2014 every resolution requires an explicit button tap from a whitelisted user.",
+      "Do not write an approval marker when no matching .pending.json exists for the checkpoint id.",
+      "Do not bypass the sendSafe outbound funnel.",
+      "Do not modify the orchestrator or the approval-state schema \u2014 only read pending markers and write approved/rejected markers."
+    ],
+    "stopConditions": [
+      "The approve, reject, adjust, missing-pending, and non-whitelisted-callback unit tests pass against a temp .bober/approvals directory and `npm run build` exits zero.",
+      "Each button tap writes exactly the marker file the matching approve/reject CLI action would write.",
+      "A callback from a non-whitelisted id writes nothing."
+    ],
+    "definitionOfDone": "Pending approval checkpoints surface in Telegram as messages with an inline keyboard of Approve, Adjust, and Reject. Tapping Approve writes the <id>.approved.json marker; tapping Reject prompts for feedback and writes the <id>.rejected.json marker; tapping Adjust prompts for replacement text and writes an <id>.approved.json marker whose editDelta carries that text \u2014 the same disk markers the existing approve/reject CLI commands produce, so calendar plans and do-bridge promotions resolve through the one existing gate. Taps for a checkpoint with no pending marker, or from a non-whitelisted user, write nothing.",
+    "assumptions": [
+      "Approval markers follow src/state/approval-state.ts:24-43 (PendingMarker / ApprovedMarker / RejectedMarker); the adapter imports savePending-style helpers directly per Q1.",
+      "Listing pending checkpoints uses listPending from src/state/approval-state.ts; the guard mirrors pendingExists used in src/cli/commands/approve.ts.",
+      "approverId is resolved from the Telegram sender id (the whitelist identity), analogous to resolveApprover in src/cli/commands/approve.ts."
+    ],
+    "outOfScope": [
+      "Generating the checkpoints (calendar planner / do-bridge own that; this adapter only renders and resolves them).",
+      "A full approvals-browsing UI beyond listing pending items and acting on them."
+    ],
+    "ambiguityScore": 4,
+    "generatorNotes": "Add src/telegram/handlers/approvals.ts and src/telegram/keyboard.ts (inline keyboard builder). Import the disk-marker helpers directly from src/state/approval-state.ts (listPending, readPending, and the approved/rejected save helpers \u2014 read the module to confirm exact export names; PendingMarker/ApprovedMarker/RejectedMarker shapes are at src/state/approval-state.ts:24-43). A command (e.g. /pending) lists pending markers; each renders as a message + inline keyboard with callback_data encoding {action, checkpointId}. Wire a callback-query handler in bot.ts that: (1) re-checks the Sprint-1 whitelist on the callback's sender id; (2) for a missing pending marker, replies via sendSafe and writes nothing (mirror src/cli/commands/approve.ts pendingExists guard); (3) Approve -> write approved marker with approverId = sender id; Reject -> ask for feedback text, then write rejected marker; Adjust -> ask for replacement text, then write approved marker with editDelta = that text. Use node:fs/promises via the approval-state helpers. ESM .js imports, `import type`, no `any`.",
+    "evaluatorNotes": "Use a temp project root with .bober/approvals containing a fixture .pending.json. Verify the three actions write byte-shaped-correct markers (compare against what approve/reject CLI writes). Verify the no-pending guard and the non-whitelisted-callback guard both write nothing. Verify replies go through sendSafe. Run build + the marker-writing unit tests.",
+    "estimatedFiles": [
+      "src/telegram/handlers/approvals.ts",
+      "src/telegram/handlers/approvals.test.ts",
+      "src/telegram/keyboard.ts",
+      "src/telegram/bot.ts"
+    ],
+    "estimatedDuration": "medium"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,43 @@
+{
+  "handoffId": "handoff-sprint-spec-20260617-medical-whoop-guardrails-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-1",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "timestamp": "2026-06-17T15:14:05Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober is a multi-agent autonomous build harness (TypeScript/ESM, npm CLI + MCP server). This spec extends the existing medical team (arch-20260616-medical-team, ADRs 1-7) to production-grade for a single self-responsible user. Sprint 1 closes the code-enforced non-emergency refusal gap: prescription/specific-dosing/individualized-treatment-plan prompts must be refused deterministically BEFORE any LLM call, mirroring the existing red-flag short-circuit.",
+    "completedSprints": [
+      {
+        "contractId": "spec-20260616-medical-team (all 7 sprints)",
+        "title": "Base medical team",
+        "summary": "Already on branch bober/medical-team: src/medical/ module with MedicalSopEngine, MedicalGuardrails+RedFlagDetector (0-LLM emergency short-circuit), consent fail-closed, deterministic JS numerics, FactStore meds, EgressGuard zero-egress default (cloud-inference + literature-retrieval axes), Apple Health SAX import, MedlinePlus opt-in cited synthesis. GuardrailVerdict already has {kind:'refuse'} and AuditEvent already has 'refuse' — but evaluate() never emits refuse yet. That is the gap this sprint closes."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/red-flag.ts",
+      "src/medical/guardrails.ts",
+      "src/medical/engine.ts",
+      "src/medical/types.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260617-medical-whoop-guardrails-1.json",
+  "specRef": ".bober/specs/spec-20260617-medical-whoop-guardrails.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/medical-team",
+      "commitFormat": "bober(sprint-1): <description>"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

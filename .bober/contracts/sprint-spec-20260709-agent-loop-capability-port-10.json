@@ -1,0 +1,91 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-10",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 10,
+  "title": "In-process scoped subagents (spawn_subagent tool) + opt-in MCP tool bridge",
+  "description": "The last two capability areas, both opt-in. (1) Subagents: AgenticLoopParams.subagents registers a spawn_subagent tool; its handler runs a nested runAgenticLoop with a fresh context, a scoped tool subset, optional per-agent model/effort/maxTurns, charging the SAME parent Budget, and returns the child's finalText to the parent as a tool result \u2014 the parent's context grows by the summary only. (2) MCP bridge: an off-by-default config axis exposes a configured MCP server's tools as loop ToolDefs routed through a bridge using the repo's existing MCP client transport; disabled (default) spawns nothing and changes nothing, preserving loop hermeticity.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260709-agent-loop-capability-port-3"
+  ],
+  "features": [
+    "feat-9"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-10-1",
+      "description": "With subagents configured, the parent loop exposes a spawn_subagent tool; invoking it runs a nested loop whose client sees ONLY the subagent's scoped tools and a fresh message history (no parent turns), and the child's finalText comes back as the parent's tool result.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-2",
+      "description": "The nested loop honors per-agent model, effort and maxTurns overrides and charges tokens/costUsd into the parent's Budget instance (combined spend visible; a child cannot out-spend a parent ceiling).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-3",
+      "description": "A child that refuses, exceeds budget, or errors surfaces as an isError tool result to the parent (loop continues; parent decides), never a throw.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-4",
+      "description": "Without a subagents param the spawn_subagent tool is not registered and the tool list is byte-identical; with the MCP bridge disabled (default) no MCP process/transport is created and the tool list is unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-5",
+      "description": "With the bridge enabled in config, the configured MCP server's tools appear as ToolDefs (unmarked readOnly \u2192 serial execution), calls route through the bridge to the MCP transport, and close() tears the connection down cleanly at loop end.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-6",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not allow recursive subagent nesting deeper than one level (child loops get no subagents param \u2014 hard cap, mirrors the Workflow one-level rule).",
+    "Do not register the MCP bridge on the hermetic claude-code child path or fleet children (--strict-mcp-config stays).",
+    "Do not mark bridged MCP tools readOnly (unknown side effects \u2192 serial per ADR-2's conservative default).",
+    "Do not build persona-file (.md) loading into subagent defs \u2014 SubagentDef is a programmatic surface; the existing agent-loader personas remain the role layer."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: scoped fresh-context spawn with summary-only return, shared-Budget accounting with overrides, fail-soft child outcomes, double off-by-default (no tool, no MCP spawn), and bridged round-trip with clean close.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "A parent loop can delegate a bounded subtask to a fresh-context nested loop with scoped tools and per-agent model/effort under the parent's budget, and a config-enabled MCP bridge can extend the tool catalog through the existing MCP client \u2014 while both features absent leave every byte of current behavior unchanged. Build and full suite green.",
+  "assumptions": [
+    "runAgenticLoop is re-entrant (pure function over its params) so nesting is safe; the child gets its own params object and shares only the Budget reference.",
+    "The repo already has an MCP client transport (src/graph/client.ts MCP initialize + tools/call pattern, fixed 2026-06-20) the bridge can reuse or mirror \u2014 no new MCP dependency.",
+    "The bridge config lives as an optional section (e.g. config.tools.mcpBridge { enabled: false, server: { command, args } }) following the egress-axis default-off idiom used by medical/research sections.",
+    "SubagentDef = { name, description, systemPrompt, tools: string[], model?, effort?, maxTurns? } \u2014 an own type; per-agent effort rides ChatParams.effort from sprint 3 (hard dependsOn).",
+    "spawn_subagent's input schema is { name: string, task: string } \u2014 the model picks a configured subagent by name and passes the task text."
+  ],
+  "outOfScope": [
+    "Parallel subagent fan-out (one spawn per tool call; the fleet layer owns bulk fan-out).",
+    "MCP server lifecycle management beyond start/close for a single configured server.",
+    "Exposing subagents or the bridge in bober.config.json role sections for pipeline roles (a consumer wires them explicitly; config surface here is the bridge axis only)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Subagents: create src/orchestrator/subagents.ts exporting SubagentDef and buildSubagentTool(defs, parentParams): { tool: ToolDef, handler: ToolHandler }. The handler: resolve def by name (unknown name \u2192 isError result listing valid names); build child AgenticLoopParams { client: parentParams.client (or a model-overridden client via the provider factory when def.model set \u2014 reuse how roles resolve clients), systemPrompt: def.systemPrompt, userMessage: task, tools: parentParams.tools filtered to def.tools, toolHandlers filtered likewise, maxTurns: def.maxTurns ?? 10, effort: def.effort, budget: parentParams.budget (SAME instance), subagents: undefined }; await runAgenticLoop; map result \u2192 tool result text (finalText, or isError for refused/budget_exceeded/error with the stopReason named). In agentic-loop.ts (or the entry assembling tools), when params.subagents?.length, append the built tool/handler before the loop starts. MCP bridge: create src/orchestrator/tools/mcp-bridge.ts exporting createMcpToolBridge(server: {command, args}): Promise<{ tools: ToolDef[], handlers: Map<string,ToolHandler>, close(): Promise<void> }> \u2014 initialize over stdio using the same MCP handshake/tool-call encoding as src/graph/client.ts (tools/list \u2192 ToolDefs with a 'mcp__' name prefix to avoid collisions; tools/call \u2192 result text). Config: optional ToolsSectionSchema { mcpBridge?: { enabled: z.boolean().default(false), server: {...} } } \u2014 but ONLY construct the bridge when enabled === true at the call site (never at config parse). Ensure close() runs in a finally at loop end. Inject the transport for tests (accept an optional transport factory) so no real process spawn is needed.",
+  "evaluatorNotes": "sc-10-1: parent fake client scripts a spawn_subagent tool call; child fake client (or shared scripted client distinguishing by system prompt) asserts the child's first request contains ONLY scoped tool defs and no parent messages; parent's next turn receives the child finalText as tool result. sc-10-2: shared Budget \u2014 assert usdSpent/tokensSpent include child turns; set a ceiling the child crosses \u2192 child stops with budget_exceeded and parent sees isError naming it (also covers sc-10-3 partially). sc-10-3: child scripted refusal \u2192 parent isError mentioning refusal; loop continues. sc-10-4: no subagents \u2192 tool defs deep-equal baseline; default config \u2192 assert injected transport factory never called. sc-10-5: stub transport implementing initialize/tools-list/tools-call; assert bridged ToolDefs appear prefixed, a call round-trips, readOnly is absent on them, and close() called once at loop end (finally). Build + typecheck + FULL suite.",
+  "estimatedFiles": [
+    "src/orchestrator/subagents.ts",
+    "src/orchestrator/subagents.test.ts",
+    "src/orchestrator/tools/mcp-bridge.ts",
+    "src/orchestrator/tools/mcp-bridge.test.ts",
+    "src/orchestrator/agentic-loop.ts",
+    "src/orchestrator/agentic-loop.test.ts",
+    "src/config/schema.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-10T00:57:16.000Z",
+  "completedAt": "2026-07-10T00:57:16.000Z"
+}

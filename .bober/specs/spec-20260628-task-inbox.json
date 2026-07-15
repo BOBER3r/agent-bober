@@ -1,0 +1,233 @@
+{
+  "specId": "spec-20260628-task-inbox",
+  "version": 1,
+  "createdAt": "2026-06-28T12:00:00Z",
+  "updatedAt": "2026-06-29T11:26:28.909Z",
+  "title": "Task inbox: capture + lifecycle + snooze + Gmail->task",
+  "description": "A zero-friction personal task inbox built into agent-bober that captures plain tasks as Findings in the unified hub pool, manages their open->in-progress->snoozed->done/dropped lifecycle through the bi-temporal FactStore, ingests AUTO-surfaced domain findings into the same pool, and offers a Gmail-thread->task bridge. Capture never blocks: the AI infers only what is safe and leaves unknowns null.",
+  "status": "completed",
+  "mode": "brownfield",
+  "ambiguityScore": 5,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Every design decision below is grounded in concrete substrate evidence (file:line) plus the locked research design. No load-bearing decision was left to the generator's discretion; the lone cross-spec coupling (Finding schema optionality) has a documented never-block fallback, so ambiguity stays below the clarification gate.",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q1",
+      "answer": "data-model — How is a Finding persisted to the existing FactStore? Decision: use the flat bi-temporal store with the convention scope='hub', subject=<finding.id>, predicate='finding', value=JSON.stringify(finding). Evidence: src/state/facts.ts:136-215 (FactStore.insertFact validates FactInput then INSERT OR REPLACE), facts.ts:222-257 (getActiveFacts(scope[,subject][,predicate]) returns non-invalidated rows), and research §3a line 128 ('Rides on FactStore machinery already shipped'). One Finding == one (subject=id, predicate='finding') row; the structured fields live inside the JSON value.",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "integration-risk — Will priority-hub's Finding schema let capture omit urgency/severity/dueBy? Decision: ASSUME those fields are optional/nullable so zero-friction capture holds (research §3a line 129: 'leaves unknowns (e.g. dueBy) null, NEVER blocks capture'). Never-block fallback if priority-hub marks them required: capture sets neutral defaults (urgency=3, severity=1, dueBy=null) rather than prompting. Evidence: research line 129; dependency declared in metadata.dependsOn.",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "data-model — How does a status transition (done/drop/snooze/start) avoid losing history? Decision: route every transition through reconcileFact's UPDATE path — read the active finding by id, build a new finding value with the new status, write it back with the SAME subject+predicate so reconcileFact calls supersedeFact(old) then insertFact(new). The prior status survives as an invalidated (historical) row. Evidence: src/orchestrator/memory/reconcile.ts:70-78 (different-value UPDATE = supersede+insert), src/state/facts.ts:291-300 (supersedeFact sets t_invalidated AND t_invalid), research line 131 ('Completion = supersede').",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "tech-constraints — What command surface should `bober task` follow? Decision: mirror `bober facts` exactly — a parent command with add/list subcommands plus transition subcommands, FactStore opened at the handler boundary, wall-clock now stamped at the boundary (never inside the store), handlers NEVER throw (set process.exitCode=1 and return). Evidence: src/cli/commands/facts.ts:54-301 (whole registerFactsCommand), src/cli/index.ts:37 + :316 (registerFactsCommand import + wiring).",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "integrations — How is the Gmail->task bridge gated and invoked? Decision: it is egress; gate it behind an explicit opt-in axis that defaults FALSE (mirror EgressGuard), and invoke the Gmail MCP through the existing ExternalMcpServer.callTool surface. Default (axis off) path captures NOTHING from Gmail and never blocks the rest of the inbox. Evidence: src/medical/egress.ts:1-59 (three independent opt-in axes, all default false, assertAllowed throws), src/mcp/external-client.ts:95-103 (callTool), research lines 133 & 141 (Gmail connector is opt-in, not default).",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q6",
+      "answer": "error-handling — What is the CLI failure contract? Decision: handlers must not throw; on any error write a chalk.red message to stderr, set process.exitCode=1, and return. Capture additionally must succeed even when optional inference fails. Evidence: src/cli/commands/facts.ts:9-11 header ('CLI handlers MUST NOT throw. They set process.exitCode=1 and return') and the try/catch in every facts subcommand (facts.ts:135-143, :196-204).",
+      "resolvedAt": "2026-06-28T12:00:00Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "The Finding Zod schema, FindingKind enum (action|watch|risk|question) and FindingStatus are DEFINED by spec-20260628-priority-hub and imported here — task-inbox consumes them, never redefines them (research §3a lines 121-126).",
+    "The shared FactStore persistence convention for the unified pool is scope='hub', predicate='finding', subject=<finding.id>, value=JSON.stringify(finding). priority-hub (built first) reads this pool to rank; task-inbox writes/transitions through it. Neither imports a persistence module from the other (priority-hub cannot depend on the later-built task-inbox), so the convention itself is the shared contract. Evidence: src/state/facts.ts:222-257, src/orchestrator/memory/reconcile.ts:51-101.",
+    "priority-hub's Finding schema makes urgency/severity/dueBy/estDurationMin/calendarSafeTitle/promotesTo optional or nullable so capture can leave them unset; if any is required, capture sets a neutral default rather than prompting (research §3a line 129).",
+    "Status transitions persist the new state via the reconcile UPDATE path (supersede old + insert new), so bitemporal history is preserved automatically (src/state/facts.ts:291-300, reconcile.ts:70-78).",
+    "`bober task` mirrors the `bober facts` command shape, namespace resolution, boundary now-stamping, and never-throw contract (src/cli/commands/facts.ts).",
+    "Snooze stores its wake time as a Finding tag of the form 'snooze-until:<ISO>' so it needs no schema change to priority-hub's Finding (tags[] already exists per research §3a line 124).",
+    "AUTO-surfaced domain findings use a content-derived stable id (hash of domain+title+kind) so re-surfacing reconciles to NOOP/UPDATE instead of duplicating (reconcile.ts:56-78).",
+    "The Gmail MCP connector is reachable through the existing ExternalMcpServer/MCP client surface (src/mcp/external-client.ts); the bonus sprint reads a thread and parses it locally — it does not build a Gmail integration from scratch."
+  ],
+  "outOfScope": [
+    "The Finding Zod schema definition and the cross-repo priority ranking / lens-panel judge (owned by spec-20260628-priority-hub).",
+    "do-bridge / promotesTo execution that turns a task into a real `bober run`/`fleet` (owned by spec-20260628-do-bridge).",
+    "Calendar planner, free/busy slot-fill, and .ics fallback (separate calendar work in the research roadmap §3a).",
+    "Telegram frontend / presentation adapter (sequences after hub+inbox, research §3a).",
+    "Medical/financial domain proactive review passes that EMIT findings — task-inbox only provides the ingest seam they write through, not the domain logic itself.",
+    "Editing task numbers/medical lab values (medical hand-edit rule, research §3b) — irrelevant to tasks but explicitly not a concern here."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Zero-friction task capture",
+      "description": "`bober task add \"<text>\" [--domain <d>]` writes a Finding (kind=action, status=open) into the hub pool with no required fields; safe deterministic enrichment only (id, surfacedAt, status, kind, optional domain tag); unknowns left null; capture never prompts and never blocks.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Running `bober task add \"renew passport\"` with no other flags exits 0 and persists exactly one active Finding with kind=action, status=open, title=\"renew passport\", dueBy unset.",
+        "AC2: Adding `--domain medical` tags the captured Finding with that domain; omitting it leaves the Finding in the default hub pool with no domain.",
+        "AC3: When optional enrichment cannot determine a field (e.g. dueBy), the field is left null/unset and capture still succeeds — no question is asked."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Task listing and core lifecycle transitions",
+      "description": "`bober task list` prints the open/in-progress task pool; `bober task start|done|drop <id>` transition status through the reconcile UPDATE path so history is preserved; terminal tasks are hidden from the default list and shown with `--all`/`--status`.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober task list` prints a table of active non-terminal findings (status in open|in-progress) and omits done/dropped ones.",
+        "AC2: `bober task done <id>` transitions that finding to status=done; a follow-up `bober task list` no longer shows it, while `--all` does.",
+        "AC3: After a transition, the prior status remains queryable as a superseded (invalidated) historical row — the active row carries the new status."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Snooze with wake semantics",
+      "description": "`bober task snooze <id> --until <when>` sets status=snoozed and records a 'snooze-until:<ISO>' tag; the default list hides a snoozed task until its wake time has passed, then surfaces it again.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: `bober task snooze <id> --until 2026-07-01` sets status=snoozed and adds a snooze-until tag with that ISO date.",
+        "AC2: `bober task list` hides a snoozed task whose snooze-until is in the future and shows it once the injected now is past that time.",
+        "AC3: A snoozed task can still be transitioned with `bober task done`/`drop`."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Domain finding intake (pool ingest)",
+      "description": "An ingest seam (exported function + `bober task ingest`) that domains write AUTO-surfaced findings through; ingest reconciles by content-derived stable id so re-surfacing updates rather than duplicates, and the finding then appears in `bober task list`.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Ingesting a Finding JSON (kind=action|watch|risk) places it in the hub pool and it appears in `bober task list`.",
+        "AC2: Ingesting the same logical finding twice (same domain+title+kind) results in one active row, not two (NOOP/UPDATE, not duplicate ADD).",
+        "AC3: Ingest validates against the Finding schema and rejects malformed input without throwing out of the CLI handler."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Chat intent-detection capture",
+      "description": "The chat surface distinguishes a new-task statement (\"renew passport\") from a question and from a scope-statement (\"I'm deciding between X and Y\"); a new-task intent captures the task via the same captureTask path instead of answering.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: A classifier maps an imperative/noun task phrase to a capture-task action carrying the task text.",
+        "AC2: A question maps to the existing answer action and a scope-statement does NOT capture a task.",
+        "AC3: When the capture-task action fires in a chat turn, a Finding is persisted and the user receives a confirmation rather than an answer."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Gmail thread to task (egress-gated bonus)",
+      "description": "`bober task from-gmail <thread>` reads a Gmail thread via the Gmail MCP connector, parses it locally into a Finding (kind=action), and captures it — behind an opt-in egress axis that defaults false so the default build performs no Gmail egress.",
+      "priority": "nice-to-have",
+      "acceptanceCriteria": [
+        "AC1: With the gmail egress axis disabled (default), `bober task from-gmail <thread>` refuses with a clear opt-in message and performs no network call.",
+        "AC2: With the axis enabled, the command reads the thread through the MCP client, builds a Finding (kind=action, title derived from the thread subject), and captures it into the pool.",
+        "AC3: MCP/connector failures are caught, surfaced as a stderr message with exitCode=1, and never leak connector env/token contents."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "techStack": [
+    "TypeScript",
+    "Node.js",
+    "commander",
+    "better-sqlite3",
+    "zod",
+    "vitest",
+    "@modelcontextprotocol/sdk",
+    "chalk"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "spec-20260628-priority-hub: Finding Zod schema + FindingKind/FindingStatus (imported)",
+      "src/state/facts.ts FactStore (persistence)",
+      "src/orchestrator/memory/reconcile.ts reconcileFact/writeFact (dedup + supersede transitions)",
+      "src/chat/turn-classifier.ts (intent detection extension)",
+      "src/mcp/external-client.ts ExternalMcpServer (Gmail MCP)"
+    ],
+    "dataModel": "One unified Finding pool stored flat in the bi-temporal FactStore: scope='hub', predicate='finding', subject=finding.id, value=JSON.stringify(finding). Status lives inside the JSON; transitions supersede the prior row and insert the new one, preserving history. Snooze wake time rides in tags[] as 'snooze-until:<ISO>'.",
+    "securityConsiderations": [
+      "Gmail egress defaults OFF behind an explicit opt-in axis (EgressGuard pattern).",
+      "MCP error messages must never include connector env/token contents (external-client.ts:66-77 precedent).",
+      "All wall-clock reads happen at CLI handler boundaries; the store stays pure (facts.ts:128-135)."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Every `bober task` handler catches its errors, sets process.exitCode=1, and returns — it never throws out of the command.",
+      "verificationMethod": "Read each handler in src/cli/commands/task.ts and confirm a try/catch with exitCode=1; unit test asserts a bad input does not throw."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The FactStore stays pure — no Date.now()/new Date() inside store or reconcile helpers; now is injected from the CLI boundary.",
+      "verificationMethod": "Grep new src/hub modules for Date.now()/new Date() and confirm timestamps are parameters."
+    },
+    {
+      "category": "security",
+      "requirement": "Gmail egress is opt-in and default-off; with the axis disabled no Gmail network call is made.",
+      "verificationMethod": "Unit test asserts from-gmail with the axis off returns the opt-in refusal and never constructs/starts the MCP client."
+    }
+  ],
+  "constraints": [
+    "Do not redefine the Finding schema — import it from spec-20260628-priority-hub.",
+    "Reuse FactStore + reconcileFact/supersedeFact; do not introduce a second persistence engine.",
+    "Stay additive: do not modify medical, fleet, or existing chat behavior beyond the additive intent-detection branch.",
+    "No more than ~8 files changed per sprint (sprintSize=medium)."
+  ],
+  "metadata": {
+    "dependsOn": [
+      "spec-20260628-priority-hub"
+    ],
+    "siblingSpecs": [
+      "spec-20260628-priority-hub",
+      "spec-20260628-do-bridge"
+    ],
+    "approvalEvidence": [
+      "src/state/facts.ts:136-306",
+      "src/orchestrator/memory/reconcile.ts:51-154",
+      "src/cli/commands/facts.ts:54-301",
+      "src/cli/index.ts:37,316",
+      "src/chat/turn-classifier.ts:11-170",
+      "src/chat/answerer.ts:28-65",
+      "src/mcp/external-client.ts:95-103",
+      "src/medical/egress.ts:1-59",
+      ".bober/research/research-20260627-knowledge-platform-landscape.md (§3a lines 121-141)"
+    ]
+  },
+  "completedAt": "2026-06-29T11:26:28.909Z"
+}

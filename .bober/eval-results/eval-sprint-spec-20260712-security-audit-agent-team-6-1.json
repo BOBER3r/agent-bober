@@ -1,0 +1,102 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-1",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T13:10:31.000Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 4,
+    "criteriaFailed": 1,
+    "criteriaSkipped": 0,
+    "requiredPassed": 4,
+    "requiredFailed": 1,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "313 files / 4043 tests green"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-6-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "pure mapping, severity 5/3 documented + FindingSchema.parse validated"
+    },
+    {
+      "criterionId": "sc-6-2",
+      "required": true,
+      "result": "fail",
+      "evidence": "REPRODUCED: file blocking mkdir of .bober/memory -> runStandaloneSecurityAudit REJECTS (EEXIST) before thresholdVerdict; CLI catch-all flips clean audit to exit 2; same unguarded pattern in security-gate.ts breaks its 'NEVER throws' invariant (would propagate into pipeline.ts:454)",
+      "feedback": "ensureFactsDir + new FactStore sit OUTSIDE try/catch at both call sites; only emitSecurityFindings is guarded. Wrap the ENTIRE default-sink sequence (ensureFactsDir -> new FactStore -> emitSecurityFindings -> close) in one try/catch/finally at BOTH call sites; log via logger.warn; resolve normally."
+    },
+    {
+      "criterionId": "sc-6-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "real-store dedup proven in temp dirs at 3 boundaries"
+    },
+    {
+      "criterionId": "sc-6-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "no z.object; type-only Finding import; src/hub/ untouched; deriveFindingId replica judged contract-consistent (3rd copy = drift risk, low advisory)"
+    },
+    {
+      "criterionId": "sc-6-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "all strategies green"
+    }
+  ],
+  "regressions": [
+    {
+      "description": "evaluateSecurityGate 'NEVER throws' invariant (sprint-3) broken by unguarded default-sink store setup; reproduced EEXIST rejection flips clean audit to blocked",
+      "severity": "critical"
+    }
+  ],
+  "generatorFeedback": [
+    {
+      "priority": "critical",
+      "category": "bug",
+      "file": "src/orchestrator/security-gate.ts",
+      "line": "181-192",
+      "description": "Default-sink path unguarded: ensureFactsDir()/new FactStore() errors propagate as unhandled rejections (also src/cli/commands/security-audit.ts:196-226). A hub fs failure (disk full, EACCES, blocked path, locked db) IS the 'hub ingest failure' sc-6-2 requires to be caught.",
+      "expected": "Wrap the full sequence in a single try/catch/finally at both call sites; logger.warn on failure; never propagate. Add regression tests using the reproduction (touch <tmp>/.bober/memory as a FILE so mkdir fails) asserting: gate resolves with verdict unchanged; CLI resolves exitCode 0 for a non-blocking audit.",
+      "reproduction": "mkdir -p <tmp>/.bober && touch <tmp>/.bober/memory; call runStandaloneSecurityAudit with projectRoot=<tmp>, hub:true, important-only findings, standaloneBlockOn:'critical' -> expected {exitCode:0}, actual rejection EEXIST."
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/security-hub.ts",
+      "line": "33-41",
+      "description": "deriveFindingId sha256 formula now has 3 copies (finding-store.ts private, research/runner.ts, security-hub.ts) \u2014 drift risk, future consolidation",
+      "expected": "no action this sprint"
+    }
+  ],
+  "summary": "4/5 criteria pass with strong real-store coverage, but sc-6-2 FAILS on a reproduced critical defect: unguarded hub-store setup can reject and flip a clean audit to blocked, breaking the gate's never-throws invariant. FAIL iteration 1."
+}

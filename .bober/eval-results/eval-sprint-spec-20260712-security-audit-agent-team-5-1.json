@@ -1,0 +1,93 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-5-1",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-5",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T12:27:08.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "output": "0 errors"
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "output": "312 files / 4019 tests; slither/semgrep binaries absent on machine \u2014 CI-offline empirically proven"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-5-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-5-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-5-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-5-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-5-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/security-audit-types.ts",
+      "line": "35",
+      "description": "scannerRan doc comment now imprecise (true also from caller-priors-only) \u2014 contract-sanctioned backward compat, doc-only follow-up"
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/security-scanners.ts",
+      "line": "176-181",
+      "description": "severity bucketing flattened to [High]/[ERROR] description prefixes (ReviewFinding locked, no bucket field) \u2014 defensible, awareness only"
+    }
+  ],
+  "summary": "Parsers fixture-proven never-throw; per-scanner isolation; real-child SIGKILL abort; scanners:[] structurally zero-spawn; scannerRan reconciliation judged contract-sanctioned. PASS."
+}

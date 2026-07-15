@@ -1,0 +1,44 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-3",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T19:24:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 6 — The Medical Team. Fixed SOP with CODE-ENFORCED safety. This sprint (S3) adds Gate 2: a deterministic red-flag emergency short-circuit that makes ZERO LLM/numerics/retrieval calls and returns a canned 911/988 escalation.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260616-medical-team-1", "title": "Pipeline plumbing + medical team", "summary": "60215d2 — medical-sop engine name + selector switches + src/medical/{types,engine,team}.ts; built-in medical team." },
+      { "contractId": "sprint-spec-20260616-medical-team-2", "title": "Consent gate + audit + disclaimer (Gate 1)", "summary": "4e0286d — ConsentGate (fail-closed Gate 1), AuditLog (append-only mode-0600 IDs/enums-only), DisclaimerComposer; MedicalSopDeps DI seam {auditLog,consentGate,disclaimer} + preserved zero-arg constructor; AuditEntry has optional patternsetVersion reserved for red-flag." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/types.ts",
+      "src/medical/engine.ts",
+      "src/medical/team.ts",
+      "src/medical/consent.ts",
+      "src/medical/audit.ts",
+      "src/providers/types.ts",
+      "src/chat/turn-classifier.ts",
+      "src/medical/engine.test.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260616-medical-team-3.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260616-medical-team-3-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "test": "npx vitest run", "lint": "npm run lint" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "criticalConstraints": [
+    "RedFlagDetector.detect(prompt) MUST be PURE and SYNCHRONOUS: identical input => identical output, no network, no model, no clock. Categories: cardiac|stroke|anaphylaxis|self-harm|overdose|none + patternsetVersion.",
+    "GuardrailSet.evaluate(prompt, ctx) returns allow | short-circuit{rule,cannedResponse} | refuse{rule,reason} with rulesetVersion; THROWS on an empty prompt. Replace the S1 trivial allow-only impl (team.ts buildMedicalGuardrails) with the real one (suggest src/medical/guardrails.ts + src/medical/red-flag.ts).",
+    "Wire Gate 2 into MedicalSopEngine.run IMMEDIATELY AFTER the consent gate. A red-flag match returns a canned 911/988 escalation MedicalAnswer (shortCircuit:true) with ZERO downstream calls (no numerics, no retrieval, no LLM) and appends an audit entry carrying ruleId + rulesetVersion + patternsetVersion (IDs/enums ONLY — no prompt text, no health values).",
+    "CARRY-FORWARD FIX (REQUIRED, from S2 eval): extend MedicalSopDeps with an injectable llmClient slot typed as LLMClient (from src/providers/types.ts) so the spy-LLMClient-never-invoked proof is REAL, not hollow. AC1 requires a spy/fake LLMClient asserted never invoked on a short-circuit. Inject the spy in the test and assert it was never called. Also keep a numerics-spy seam if practical, but the LLMClient one is mandatory.",
+    "MedicalSopEngine MUST keep its zero-arg constructor (selector.ts:126 calls `new MedicalSopEngine()`). Add llmClient as an OPTIONAL dep with a safe real default; never make it a required constructor param.",
+    "Keep injecting opts.now in tests (the engine.ts wall-clock fallback stays for ad-hoc runs; do not regress determinism).",
+    "ESM/NodeNext .js extensions; strict TS; no SDK types outside src/providers/; tests use temp dirs (no fs mocks). Do NOT commit audit logs.",
+    "nonGoals: do NOT implement HealthDataStore/numerics (S4), ingestion (S5), egress/full SOP (S6), or retrieval (S7). Gate 2 + detector + real GuardrailSet + injection seam ONLY."
+  ],
+  "evaluatorFeedback": null
+}

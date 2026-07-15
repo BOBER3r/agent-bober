@@ -1,0 +1,132 @@
+{
+  "handoffId": "handoff-sprint-spec-20260712-security-audit-agent-team-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T10:38:29.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Adds a single stack-aware bober-security-auditor role driving one runSecurityAudit() core, consumed by an in-pipeline fail-closed gate that vetoes sprint-passed on critical findings/timeout/parse-failure and a standalone `bober security-audit` CLI with a configurable blocking threshold. Findings reuse the locked ReviewResult shape, persist to .bober/security/, and flow into the priority hub; an opt-in deterministic scanner pre-filter (with slither and semgrep parsers) grounds the LLM judgment. Implements arch-20260712-security-audit-agent-team (ADR-1..6) for users whose generated code manages real customer funds.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-1",
+        "title": "Add security config section, audit result types, and .bober/security store",
+        "summary": "SecuritySectionSchema (opt-in default-off, fields enabled/failClosed/timeoutMs/model/maxTurns/provider?/endpoint?/providerConfig?/budget?/scanners/standaloneBlockOn/hub) wired as security: SecuritySectionSchema.optional() on BoberConfigSchema. src/orchestrator/security-audit-types.ts exports VulnClass (6-member union), SecurityFinding (extends ReviewFinding, optional vulnClass), SecurityAuditResult {review, stack, scannerRan, parsed, verdict}, pure deriveVerdict(review) -> 'blocked' iff review.critical.length>0. src/state/security-audit-state.ts exports saveSecurityAudit/readSecurityAudit/listSecurityAudits over .bober/security/<contractId>-security-audit.md rendering via renderReviewMarkdown(result.review); NOT in the src/state/index.ts barrel yet (optional; add if needed). Commits f76ee2e/fc20eae/4ae188f; suite 3929."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "agents/bober-security-auditor.md",
+      "src/orchestrator/security-auditor-agent.ts",
+      "src/orchestrator/security-auditor-agent.test.ts",
+      "src/orchestrator/stack-knowledge.ts",
+      "src/orchestrator/stack-knowledge.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+    "specId": "spec-20260712-security-audit-agent-team",
+    "sprintNumber": 2,
+    "title": "Implement bober-security-auditor agent, runSecurityAudit core, and stack knowledge injection",
+    "description": "The audit engine: an agents/bober-security-auditor.md definition, a provider-agnostic runSecurityAudit(contract, evaluation|null, projectRoot, config) core in src/orchestrator/security-auditor-agent.ts mirroring runCodeReviewer's structure (prompt build \u2192 runAgenticLoop with read-only tools \u2192 parse \u2192 persist), and a StackKnowledgeInjector mapping config.project.stack to the matching stack skill checklist plus the security-lens vulnerability taxonomy. Parsing is fail-closed: unparseable auditor output yields parsed:false, never a silent empty-critical pass.",
+    "status": "in-progress",
+    "createdAt": "2026-07-12T09:30:00.000Z",
+    "updatedAt": "2026-07-12T10:38:29.000Z",
+    "completedAt": null,
+    "dependsOn": [
+      "sprint-spec-20260712-security-audit-agent-team-1"
+    ],
+    "features": [
+      "feat-2"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-2-1",
+        "description": "runSecurityAudit with a mocked/fake client returning a well-formed audit containing a critical finding resolves to SecurityAuditResult with that finding in review.critical, parsed:true, verdict 'blocked', the resolved stack label, and the artifact persisted via saveSecurityAudit.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-2",
+        "description": "When the fake client returns unparseable output (garbage text, truncated JSON), runSecurityAudit resolves with parsed:false and does NOT return a verdict of 'pass' derived from an empty fallback \u2014 the result is distinguishable from a genuine clean audit.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-3",
+        "description": "The stack knowledge resolver maps stack solidity\u2192'bober.solidity', anchor\u2192'bober.anchor', react\u2192'bober.react' (reading each skill's security checklist content into promptFragment when the skill file exists) and unknown/absent stack \u2192 {skillName:null} with the generic VulnClass taxonomy sourced from the security fragment in src/orchestrator/eval-lenses.ts; the resolved promptFragment appears verbatim in the prompt sent to the client.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-4",
+        "description": "agents/bober-security-auditor.md exists with frontmatter (name, description, read-only tools list, model) following the structure of agents/bober-code-reviewer.md, instructing the auditor to emit findings in the ReviewResult JSON shape organised by VulnClass, cited with path+line+snippet+severity, and to never write or edit files.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-5",
+        "description": "runSecurityAudit accepts evaluation as EvaluationRunResult | null and omits the evaluation-context section of the prompt when null (standalone mode); a provider/client error rejects (throws) rather than resolving to a clean result.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-6",
+        "description": "All LLM interaction goes through the existing provider-agnostic client path honoring config.security.model/provider/endpoint/providerConfig/maxTurns and optional budget; grep confirms no provider SDK import outside src/providers/.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-7",
+        "description": "npm run build and npm run typecheck pass; ESLint zero errors; full existing suite green.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not wire the gate into pipeline.ts (sprint 3) \u2014 this sprint only exports the callable core.",
+      "Do not add the CLI command (sprint 4), scanner pre-filter (sprint 5 \u2014 accept an optional priors parameter or leave the seam documented), or hub emission (sprint 6).",
+      "Do not modify runCodeReviewer or its parse fallback \u2014 the fail-closed parse is NEW code for the security path only.",
+      "Do not give the auditor subagent write/edit/bash tools."
+    ],
+    "stopConditions": [
+      "All seven criteria verified; the fail-closed parse behavior (sc-2-2) is demonstrated by test, not asserted in prose.",
+      "Full suite green with zero regressions."
+    ],
+    "definitionOfDone": "A callable, fully tested runSecurityAudit core exists that any provider can serve, with stack-aware prompting, fail-closed parsing, and persistence \u2014 ready for the gate (sprint 3) and CLI (sprint 4) to consume.",
+    "assumptions": [
+      "runCodeReviewer (src/orchestrator/code-reviewer-agent.ts:54 area) is the structural template: it builds a prompt from contract+diff, drives runAgenticLoop with read-only tools, parses JSON from the final text, and its parse fallback at :325-337 returns empty findings \u2014 the security parse must NOT reuse that fallback.",
+      "The agentic loop and client factory (createClient) support per-role model/provider/endpoint/providerConfig/maxTurns/budget config as established for other roles (reviewer/evaluator sections); the security section mirrors those fields.",
+      "Stack values come from StackSchema (src/config/schema.ts:8-16); the skill files live at skills/bober.solidity/SKILL.md, skills/bober.anchor/SKILL.md, skills/bober.react/SKILL.md \u2014 the solidity one carries a security checklist near SKILL.md:401.",
+      "eval-lenses.ts:7-8 exports (or contains greppable) the security lens fragment text listing the vulnerability classes; the VulnClass taxonomy from sprint 1 mirrors it."
+    ],
+    "outOfScope": [
+      "Pipeline gate, CLI entry, scanner execution, hub Findings, skill wrapper, dogfooding."
+    ],
+    "ambiguityScore": 3,
+    "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) READ code-reviewer-agent.ts fully first; mirror its deps-object/injection style so tests can pass a fake client (check how its tests fake the LLM \u2014 follow that exact pattern). (2) src/orchestrator/security-auditor-agent.ts: export runSecurityAudit plus a parseSecurityAuditResult that returns {result, parsed} \u2014 on any JSON.parse/shape failure return parsed:false with an empty review, and make deriveVerdict-based verdict computation happen only when parsed:true (the gate in sprint 3 treats parsed:false as audit-error). Accept an optional `priors?: SecurityFinding[]` parameter now (default []) so sprint 5 plugs in without signature churn; when non-empty, render priors into a 'Deterministic scanner findings (ground truth priors)' prompt section. (3) src/orchestrator/stack-knowledge.ts: export resolveStackSecurityContext(stack) \u2014 read the skill file's security-checklist section (bounded excerpt, not the whole 400-line skill) with graceful fallback to generic taxonomy when the file is missing (fs error \u2192 generic, never throw). (4) agents/bober-security-auditor.md: follow bober-code-reviewer.md frontmatter + body structure; specify the exact output JSON contract (ReviewResult shape + optional vulnClass per finding) and severity bucket definitions (critical = exploitable vulnerability endangering funds/data; important = weakness needing attention). (5) Read-only tools: reuse whatever tool set runCodeReviewer passes to its loop. (6) Tests: fake-client scripted responses per existing agentic-loop test convention; include a prompt-content assertion for the stack fragment and priors section.",
+    "evaluatorNotes": "sc-2-2 is the DOMINANT criterion \u2014 construct at least two malformed outputs (plain prose, truncated JSON) and assert parsed:false on both, and additionally assert that a genuinely-clean well-formed audit (empty critical, parsed:true, verdict 'pass') is distinguishable from the malformed case. For sc-2-3: temp-dir test with a fake skills root for the missing-skill fallback; assert promptFragment lands in the outgoing prompt by capturing the fake client's received messages. For sc-2-4: read the agent file; verify tools are read-only and the output contract includes the ReviewResult field names actually parsed by parseSecurityAuditResult (cross-check they match \u2014 a drifted field name here is a real bug). For sc-2-5: assert rejection propagates (await expect(...).rejects) on client throw. For sc-2-6: grep '@anthropic-ai/sdk' and 'openai' imports outside src/providers/. Run full suite.",
+    "estimatedFiles": [
+      "agents/bober-security-auditor.md",
+      "src/orchestrator/security-auditor-agent.ts",
+      "src/orchestrator/security-auditor-agent.test.ts",
+      "src/orchestrator/stack-knowledge.ts",
+      "src/orchestrator/stack-knowledge.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "lastEvalId": null
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

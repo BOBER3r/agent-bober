@@ -1,0 +1,8 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["5e2bc2f - bober(sprint-2): task list + start/done/drop lifecycle transitions"],
+  "filesChanged": ["src/hub/finding-store.ts (transitionFinding)", "src/hub/finding-store.test.ts", "src/cli/commands/task.ts (runTaskList/runTaskTransition + list/start/done/drop)", "src/cli/commands/task.test.ts"],
+  "notes": "transitionFinding PURE (no clock) in finding-store.ts; routes through writeFinding->writeFact UPDATE path (supersede+insert). sc-2-2 uses factId(HUB_SCOPE,id,'finding',JSON.stringify(captured),T0)+getFact to read superseded open row. +27 tests, full suite 3291 green, lint 0 errors."
+}

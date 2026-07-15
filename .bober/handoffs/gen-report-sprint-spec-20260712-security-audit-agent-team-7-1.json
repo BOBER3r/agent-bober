@@ -1,0 +1,57 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-7",
+  "status": "complete",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-7-1",
+      "met": true,
+      "evidence": "skills/bober.security-audit/SKILL.md mirrors bober.code-review shape; every referenced symbol verified to exist (agent name, CLI registration, artifact path, config keys); advisory-only stated"
+    },
+    {
+      "criterionId": "sc-7-2",
+      "met": true,
+      "evidence": "bober.config.json +security:{enabled:true,scanners:[]} (2-key diff); schema.test.ts repo snapshot updated (hasOwn true + 8-key materialized block, optionals absent); 79/79"
+    },
+    {
+      "criterionId": "sc-7-3",
+      "met": true,
+      "evidence": "docs/security-audit.md 325 lines: config reference field-by-field vs SecuritySectionSchema, gate semantics all reasons, CLI exit codes, scanners, hub emission, guarantees, FAQ"
+    },
+    {
+      "criterionId": "sc-7-4",
+      "met": true,
+      "evidence": "skill dir shape identical to bober.code-review (single SKILL.md); auto-discovered by update-all readdir; no hand-authored .claude/commands twin"
+    },
+    {
+      "criterionId": "sc-7-5",
+      "met": true,
+      "evidence": "build+tsc clean, eslint 0 errors, full suite 313 files / 4045 tests green; dogfood flip causes no test to spawn subagents or touch network"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "skills/bober.security-audit/SKILL.md",
+      "action": "created"
+    },
+    {
+      "path": "bober.config.json",
+      "action": "modified",
+      "description": "security:{enabled:true,scanners:[]} dogfood"
+    },
+    {
+      "path": "docs/security-audit.md",
+      "action": "created"
+    },
+    {
+      "path": "src/config/schema.test.ts",
+      "action": "modified",
+      "description": "repo-config snapshot repaired for dogfood"
+    }
+  ],
+  "testsAdded": [],
+  "commits": [
+    "c2953e7 - bober(sprint-7): add bober.security-audit skill, enable LLM-only dogfooding, and write docs"
+  ],
+  "blockers": [],
+  "notes": "docs/sprints/README.md index section deliberately left to the documenter phase (not in contract estimatedFiles). npm run update-all NOT run per nonGoals \u2014 manual follow-up. No application code touched."
+}

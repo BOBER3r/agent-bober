@@ -1,0 +1,30 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-4-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-10T01:25:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "Unrelated file."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "3786/3787 in full run; single failure = pre-existing perf-budget test in untouched src/graph/preflight-injector-bench.test.ts, isolated re-run passes ~440x under budget", "details": "Load-induced flake independently verified (ps aux showed unrelated heavy background processes + vitest worker contention). Targeted sprint files 38/38 green."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "description": "readOnly annotation exact coverage", "required": true, "result": "pass", "evidence": "types.ts:46 readOnly?; schemas.ts true only on read_file(:32)/glob(:105)/grep(:127); bash/write_file/edit_file undefined (not false).", "feedback": ""},
+    {"criterionId": "sc-4-2", "description": "Proven concurrency + order preservation", "required": true, "result": "pass", "evidence": "Real-timer serial floor >=135-140ms (setTimeout cannot fire early) with parallel < 70% of same-run serial — overlap physically proven; order by toolUseId preserved regardless of completion order.", "feedback": ""},
+    {"criterionId": "sc-4-3", "description": "In-slot isError shapes, never rejects", "required": true, "result": "pass", "evidence": "Diffed executor shapes against git show 4ab7040^ old serial block — thrown-handler and unknown-tool shapes byte-identical; never-rejects test with all handlers throwing; loop completes stopReason 'end' despite mid-batch throw.", "feedback": ""},
+    {"criterionId": "sc-4-4", "description": "Flag-off/unmarked byte-identical serial", "required": true, "result": "pass", "evidence": "callOrder assertions; all-write batch stays serial under parallel:true; evaluator's independent runtime probe of mixed [ro,ro,write,ro] batch: maxConcurrent=2, no merge across write boundary; all pre-existing loop tests pass unmodified.", "feedback": ""},
+    {"criterionId": "sc-4-5", "description": "Config flag optional, no default, threads to loop", "required": true, "result": "pass", "evidence": "schema.ts:133 z.boolean().optional() no default; createDefaultConfig omits; generator-agent.ts:59,132 conditional spread; 4 wiring tests.", "feedback": ""},
+    {"criterionId": "sc-4-6", "description": "build + typecheck", "required": true, "result": "pass", "evidence": "Both re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [
+    {"description": "preflight-injector-bench perf-budget flake under machine load — NOT sprint-caused", "evidence": "Sprint diff never touches src/graph/; isolation run p95=0.34ms vs 100ms budget; ps aux showed unrelated load.", "severity": "minor"}
+  ],
+  "generatorFeedback": [
+    {"priority": "low", "category": "quality", "file": "src/orchestrator/tools/executor.test.ts", "description": "No committed test for a mixed batch with multiple read-only calls flanking a write tool; evaluator probe-verified the behavior but a regression test would protect the contiguous-run nonGoal.", "expected": "Add a mixed-batch concurrency/segmentation test in a later sprint."}
+  ],
+  "summary": "All 6 criteria independently verified incl. an evaluator-authored runtime probe of mixed-batch segmentation. Single full-suite failure proven to be unrelated machine-load flake. No nonGoal violations: bash never annotated, no hard-coded allow-list, no default-on flag. Iteration-1 pass."
+}

@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-5-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T22:51:36.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "Unrelated file."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "Targeted 38/38; full suite 3800/3802 with 2 confirmed machine-load perf flakes (preflight-injector-bench, checkpoints/disk) in files untouched by d52f94c, both 14/14 in isolation", "details": "Effectively green; flakes verified unrelated."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "description": "Ordered typed event trace with payloads", "required": true, "result": "pass", "evidence": "Exact 8-event sequence asserted with payload equality; emit sites verified at :358/:362/:500-510/:565/:465/:346.", "feedback": ""},
+    {"criterionId": "sc-5-2", "description": "preToolUse veto: skip handler, isError rejection, loop continues", "required": true, "result": "pass", "evidence": "Handler spy never called; ToolResultMessage isError:true contains reason; stopReason 'end'. Executor veto short-circuit :91-102.", "feedback": ""},
+    {"criterionId": "sc-5-3", "description": "postToolUse + onStop exactly once per stop path", "required": true, "result": "pass", "evidence": "Exactly 4 returns in runAgenticLoop (:383/:412/:467/:573), ALL through finish() (:345-356); onStop toHaveBeenCalledTimes(1) on all 4 paths.", "feedback": ""},
+    {"criterionId": "sc-5-4", "description": "Throwing hooks: observe swallowed, preToolUse fail-closed", "required": true, "result": "pass", "evidence": "safeEmit/finish/postToolUse wrappers try/catch+logger.warn; preToolUse throw -> {allow:false,'hook error (fail-closed)'}. 5 tests green.", "feedback": ""},
+    {"criterionId": "sc-5-5", "description": "Byte-identical absence path", "required": true, "result": "pass", "evidence": "Paired-run deep-equal green; onToolUse/onTurnComplete call sites appear only as unchanged context lines in the diff.", "feedback": ""},
+    {"criterionId": "sc-5-6", "description": "build + typecheck", "required": true, "result": "pass", "evidence": "Independently re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "low", "category": "quality", "file": "src/orchestrator/tools/executor.test.ts", "description": "No direct executor-level unit tests for veto/onToolStart/onToolEnd/postToolUse plumbing (loop-level coverage exercises them transitively and suffices for this contract). Forward-looking: add direct finalize()-path coverage when executor.ts is next touched.", "expected": "No action required this sprint."}
+  ],
+  "summary": "All 6 criteria independently verified; single finish() helper confirmed as the only result/onStop dispatch with no bypassing return path; all 4 nonGoals held (no callback removal, reserved event names comment-only, no config/package changes, no input-transform surface). 3800/3802 with 2 confirmed unrelated load flakes. Iteration-1 pass."
+}

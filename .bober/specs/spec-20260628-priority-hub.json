@@ -1,0 +1,216 @@
+{
+  "specId": "spec-20260628-priority-hub",
+  "version": 1,
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-29T01:07:45.000Z",
+  "title": "Unified priority hub: cross-repo collector + Finding schema + query-scoped judge",
+  "description": "Adds a new src/hub/ module to agent-bober that defines the canonical cross-domain Finding schema (owned here; sibling kb-* specs consume it), aggregates findings from each sibling kb-* repo's derived FactStore read-only into one pool, and ranks that pool relative to an ephemeral per-question scope via a two-pass lens panel (pass 1 relevance-filter, pass 2 prioritization-lens scoring with deterministic final ordering). Output is a priority.md note written into the kb-hub vault, surfaced through `bober hub list|priority|decide` CLI commands and a `bober chat hub` session. Reuses fleet synthesis.collect, the SharedBlackboard finding/FactStore pattern, the eval-lenses fan-out plus lens-panel reconcile semantics, and the existing chat team-selection surface.",
+  "mode": "brownfield",
+  "status": "completed",
+  "completedAt": "2026-06-29T01:07:45.000Z",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Design locked in research-20260627-knowledge-platform-landscape.md sections 3, 3a, 3b. Approval evidence: .bober/research/research-20260627-knowledge-platform-landscape.md:96-97 (net-new unified hub = cross-repo collector + priority schema + ranking prompt, reuse synthesis.collect + lens-panel); :107-126 (sibling-clone layout, query-scoped two-pass lens-panel, Finding schema fields); :146-159 (vault canonical / FactStore derived, priority.md a browsable note); src/fleet/synthesis.ts:29-39 (collect pool pattern); src/fleet/shared-blackboard.ts:96-105 (readAll/predicate-finding pattern); src/orchestrator/eval-lenses.ts:1-31 (LENS_CATALOG + resolveLensFocus); skills/shared/lens-panel.md:73-99 (majority-vote / fail-closed reconcile); src/state/facts.ts:136-306 (FactStore read-only surface); src/cli/commands/chat.ts:23-56 (bober chat [team] selection).",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q1-finding-source-format",
+      "answer": "Self-answered: the collector reads findings from each sibling's derived FactStore at predicate 'finding' (JSON value parsed into a Finding), behind a small FindingSource interface so a future vault-markdown source can be added without changing the collector. Evidence: src/fleet/shared-blackboard.ts:84-105 already stores findings as FactStore rows with predicate 'finding' and a payload value; src/fleet/synthesis.ts:29-39 already pools those via readAll(); research:150 locks the vault as canonical and FactStore as a derived rebuildable index, so reading the derived index is the decoupled v1 path and obsidian-vault-store owns the canonical vault read/write.",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2-sibling-repo-resolution",
+      "answer": "Self-answered: sibling repos are resolved from an optional hub.repos config array of paths (resolved to absolute), with a fallback that discovers sibling directories named kb-* next to the agent-bober project root. Evidence: research:112 (~/kb/ agent-bober + kb-medical/kb-financial/kb-projects/kb-hub as siblings); research:109 (sibling clones, NOT submodules; hub reads each domain read-only). Absolute-path discipline mirrors the resolveBlackboardPath ABSOLUTE rule recorded in fleet-orchestrator memory.",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3-read-only-guarantee",
+      "answer": "Self-answered: add an additive optional { readonly?: boolean } to the FactStore constructor that opens better-sqlite3 with { readonly: true } and skips the CREATE TABLE bootstrap when set; the collector opens every sibling store with readonly:true so it can never write to another domain's repo. Evidence: src/state/facts.ts:139-167 currently always runs CREATE TABLE IF NOT EXISTS in the constructor, which would mutate a sibling file; better-sqlite3 supports a readonly open flag. Default (readonly absent) stays byte-identical for all existing callers.",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4-ranking-determinism",
+      "answer": "Self-answered: the LLM produces per-finding relevance verdicts (pass 1) and per-lens scores (pass 2); the final ordering is computed by deterministic JS (stable sort on aggregated lens score, tie-broken by urgency, then severity, then earliest dueBy, then id). The LLM never emits the final ordered list directly. Evidence: research:135 establishes the same LLM-ranks / deterministic-JS-arranges boundary for the calendar planner; the medical module enforces deterministic numerics (src/medical/numerics.ts). lens-panel.md:73-89 supplies the majority/fail-closed reconcile semantics the prioritization panel reuses.",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5-chat-hub-surface",
+      "answer": "Self-answered: `bober chat hub` is satisfied by registering a hub team (data) so the existing chat command routes to the hub memory namespace, plus additive `/priority` and `/decide` slash commands that delegate to the same hub judge built for the CLI. Evidence: src/cli/commands/chat.ts:23-56 already selects a team via loadTeam and threads memoryNamespace; src/chat/chat-session.ts:200-230 dispatches slash commands through src/chat/slash-commands.ts; teams are data not code per the team-abstraction memory. The richer Telegram /today|/priority|/decide mapping is owned by the separate telegram-frontend spec (research:140).",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "The hub OWNS the canonical Finding schema; sibling specs (obsidian-vault-store, medical-analysis, task-inbox, do-bridge, calendar-planner) import and emit it but do not redefine it. Evidence: team-lead scope item (1) plus research:121-126 listing the exact field set.",
+    "Findings are read from each sibling repo's derived FactStore at predicate 'finding' with the Finding serialized as the JSON value, mirroring SharedBlackboard.publish (src/fleet/shared-blackboard.ts:84-90) and read via getActiveFacts (src/state/facts.ts:222).",
+    "The collector pools findings exactly like fleet synthesis.collect (src/fleet/synthesis.ts:29-39): it shapes existing data, performs no LLM call and no network, and opens every sibling store read-only.",
+    "Sibling repos live as sibling clones next to the agent-bober project root and are resolved to absolute paths (research:109-112).",
+    "Prioritization is query-scoped and ephemeral: the scope is supplied per question and never persisted (research:115-119).",
+    "The two-pass judge reuses the eval-lenses fan-out shape (src/orchestrator/eval-lenses.ts:1-31) and the lens-panel majority/fail-closed reconcile semantics (skills/shared/lens-panel.md:73-89), but defines its own prioritization lenses rather than the correctness/security/regression/quality/simplicity evaluation lenses.",
+    "Final ordering is deterministic JS over LLM-produced scores (research:135 calendar-planner boundary; medical deterministic-numerics discipline).",
+    "priority.md is a browsable Obsidian/Dataview note written into the kb-hub sibling vault; writing it is a local filesystem operation, not network egress (research:159, 146-148).",
+    "The hub judge's LLM calls use the existing configured chat/planner provider via createClient (src/providers/factory.js); the hub introduces no new outbound network surface of its own.",
+    "npm run build is part of done because the CLI must pick up the new src/hub/ module and `bober hub` / `bober chat hub` commands."
+  ],
+  "outOfScope": [
+    "Task capture and lifecycle commands (bober task add|list|done|snooze|drop) — owned by spec-20260628-task-inbox.",
+    "The do-bridge that turns a Finding.promotesTo into a real bober run/fleet launch — owned by spec-20260628-do-bridge (the hub only defines the promotesTo field).",
+    "Calendar slot-fill against free/busy and the calendarSafeTitle write path to a calendar connector — owned by spec-20260628-calendar-planner (the hub only defines calendarSafeTitle).",
+    "The Telegram presentation adapter and its /today|/priority|/decide button mapping — owned by spec-20260628-telegram-frontend.",
+    "The recurring multi-model research scheduler — owned by spec-20260628-research-scheduler.",
+    "Defining the canonical vault markdown/frontmatter format and a vault-markdown FindingSource — owned by spec-20260628-obsidian-vault-store; this spec reads the derived FactStore and leaves a FindingSource seam for a future vault source.",
+    "Producing findings inside any domain pipeline (e.g. the medical proactive review pass) — owned by spec-20260628-medical-analysis; the hub only consumes findings other specs emit.",
+    "Per-lens multi-provider model diversity via fleet tier routing — deferred; v1 runs all prioritization lenses against the single configured provider."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Canonical Finding schema + FactStore finding source + bober hub list",
+      "description": "Define the cross-domain Finding Zod schema (owned by the hub) and a FindingSource interface with one concrete FactStoreFindingSource that reads predicate 'finding' rows from a FactStore and parses each JSON value into a validated Finding, surfaced by a `bober hub list` command.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A Finding Zod schema in src/hub/finding.ts validates every field from the locked design (id, domain, title, kind in action|watch|risk|question, urgency 1-5, severity 1-5, evidence[], surfacedAt, dueBy?, tags[], estDurationMin?, calendarSafeTitle?, status, promotesTo?) and rejects an out-of-range urgency or an unknown kind.",
+        "AC2: FactStoreFindingSource.read() returns one validated Finding per active 'finding' fact in a store and skips rows whose JSON value fails Finding validation without throwing.",
+        "AC3: Running `bober hub list` against a project whose FactStore holds two finding facts prints both findings with their kind, urgency, and severity."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Cross-repo read-only collector with sibling resolution and dedup",
+      "description": "Resolve configured/discovered sibling kb-* repos to absolute paths, open each one's derived FactStore read-only, and pool their findings into one deduplicated Finding[] following the fleet synthesis.collect pattern.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: The collector pools findings from two distinct sibling FactStores into a single Finding[] whose length equals the count of distinct finding ids across both stores.",
+        "AC2: Findings sharing the same Finding.id across repos are collapsed to one pooled entry (dedup by id).",
+        "AC3: Opening a sibling store via the collector never creates or modifies its facts.db file (read-only open verified by an unchanged file mtime/size assertion or a readonly-write rejection).",
+        "AC4: Sibling repo paths are resolved to absolute paths from hub.repos config, falling back to discovery of kb-* directories beside the project root."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Query scope + two-pass prioritization judge",
+      "description": "Parse an ephemeral scope (general | decision{a,b} | filtered{domain?,dueWithinDays?,tag?}), relevance-filter the pool against that scope in pass 1, score the survivors through prioritization lenses in pass 2, and produce a deterministic final ordering.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Filtered scope applies a pure-JS structural filter (by domain, due window in days, and/or tag) with no LLM call required for the structural narrowing.",
+        "AC2: Given fixed pass-1 relevance verdicts and fixed pass-2 lens scores from an injected fake LLM client, the judge returns the same ranked Finding[] on every run (deterministic ordering: aggregate score, then urgency, then severity, then earliest dueBy, then id).",
+        "AC3: When the lens panel reaches no majority consensus on a finding's inclusion, that finding is surfaced flagged-for-review rather than dropped silently (fail-closed reconcile).",
+        "AC4: Decision scope keeps only findings the pass-1 filter marks relevant to either named option and ranks them within that frame."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "priority.md renderer + bober hub priority / decide",
+      "description": "Render a ranked Finding[] into a priority.md note (frontmatter + Dataview-friendly table + per-finding rationale) written to the kb-hub vault, wired end-to-end through `bober hub priority` and `bober hub decide`.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: The renderer emits valid markdown with YAML frontmatter and a table row per ranked finding including rank, title, domain, kind, urgency, severity, and dueBy.",
+        "AC2: Running `bober hub priority` against seeded sibling stores writes priority.md to the resolved kb-hub vault path and prints a ranked summary to stdout.",
+        "AC3: Running `bober hub decide \"X vs Y\"` writes a decision-scoped priority.md containing only findings relevant to X or Y, ranked within that frame.",
+        "AC4: The kb-hub output path is resolved to an absolute path from config with a documented default, and a missing kb-hub directory yields a clear error instead of a thrown stack trace."
+      ],
+      "dependencies": [
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "bober chat hub surface with scoped /priority and /decide",
+      "description": "Register a hub team (data) so `bober chat hub` routes to the hub namespace, and add additive /priority and /decide slash commands that delegate to the hub judge and return a ranked summary while writing priority.md.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: `bober chat hub` starts a chat session bound to the hub team's memory namespace.",
+        "AC2: Inside a hub chat session, /priority returns a ranked summary of the collected findings and /decide X vs Y returns the decision-scoped ranking.",
+        "AC3: The new slash commands leave all pre-existing chat slash commands (/runs, /stop, /careful, /approve, /reject, /tell, /pause, /resume, /help, /exit) unchanged."
+      ],
+      "dependencies": [
+        "feat-4"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "techStack": [
+    "TypeScript (ESM, NodeNext)",
+    "better-sqlite3 via FactStore",
+    "Zod",
+    "commander CLI",
+    "existing LLM provider abstraction (createClient / LLMClient.chat)"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "src/fleet/synthesis.ts collect() — pool-assembly pattern",
+      "src/fleet/shared-blackboard.ts — findings as FactStore rows at predicate 'finding'",
+      "src/state/facts.ts FactStore.getActiveFacts — read surface (needs additive readonly open flag)",
+      "src/orchestrator/eval-lenses.ts LENS_CATALOG / resolveLensFocus — lens fan-out shape",
+      "skills/shared/lens-panel.md — majority-vote / fail-closed reconcile semantics",
+      "src/cli/commands/chat.ts + src/teams/registry.ts loadTeam — bober chat [team] selection",
+      "src/chat/slash-commands.ts + src/chat/chat-session.ts — additive slash command dispatch"
+    ],
+    "dataModel": "Finding (new, owned by src/hub/finding.ts) serialized as the JSON value of a FactStore row at predicate 'finding'; the hub pools active findings across sibling kb-* derived FactStores read-only and ranks them per ephemeral query scope.",
+    "securityConsiderations": [
+      "Sibling FactStores are opened read-only so the hub can never mutate another domain's repo.",
+      "Sibling repo paths are resolved to absolute paths and constrained to configured entries plus discovered kb-* siblings; no arbitrary path traversal.",
+      "Finding JSON values from sibling stores are validated with Zod before use; malformed rows are skipped, not trusted.",
+      "priority.md writes are local filesystem only; the hub adds no new outbound network surface beyond the existing configured LLM provider used by the judge."
+    ],
+    "existingPatterns": "Mirror src/cli/commands/blackboard.ts (publish|read) and src/cli/commands/memory.ts (list) for the hub subcommands; mirror src/cli/commands/medical.ts handler error discipline (set process.exitCode, never throw)."
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "The collector never throws on a malformed or missing sibling FactStore; it skips invalid finding rows and absent repos and pools what is valid.",
+      "verificationMethod": "Unit test feeding a store with one valid and one malformed finding row asserts only the valid Finding is pooled and no error is thrown."
+    },
+    {
+      "category": "security",
+      "requirement": "Sibling repositories are read-only from the hub's perspective.",
+      "verificationMethod": "Unit test asserts the collector opens sibling stores read-only and a write attempt against such a handle is rejected (or the sibling file is unchanged after a collect)."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The Finding schema has a single definition owned by src/hub/finding.ts and is imported everywhere else.",
+      "verificationMethod": "Code review confirms one Zod Finding schema exported from src/hub/finding.ts and no duplicate redefinition in the hub module."
+    }
+  ],
+  "constraints": [
+    "Add only new modules under src/hub/ plus the additive src/cli/commands/hub.ts; the single permitted edit to an existing core file is the additive readonly open flag on FactStore (default behaviour byte-identical).",
+    "No new runtime dependencies beyond what agent-bober already vendors.",
+    "Sprint count <= 10 and sprintSize medium per bober.config.json.",
+    "Forward dependencies only; each sprint is an independently demonstrable vertical slice."
+  ],
+  "sprints": [
+    "sprint-spec-20260628-priority-hub-1",
+    "sprint-spec-20260628-priority-hub-2",
+    "sprint-spec-20260628-priority-hub-3",
+    "sprint-spec-20260628-priority-hub-4",
+    "sprint-spec-20260628-priority-hub-5"
+  ],
+  "metadata": {
+    "dependsOn": [
+      "spec-20260628-obsidian-vault-store",
+      "spec-20260628-medical-analysis"
+    ],
+    "estimatedTotalDuration": "8-12 hours",
+    "riskLevel": "medium",
+    "riskNotes": "The judge couples to the configured LLM provider; mitigated by injecting the LLMClient and asserting deterministic ordering with a fake client. Cross-repo reads are decoupled from the concurrently-planned obsidian-vault-store by reading the derived FactStore behind a FindingSource seam. The only existing-file edit is the additive FactStore readonly flag."
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-10-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-10",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-10T00:56:01Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "None in sprint files."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "304 files / 3903 tests green (28.56s); sprint files 145/145 in isolation", "details": "Matches +33 claim."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-10-1", "description": "Scoped fresh-context spawn, summary-only return", "required": true, "result": "pass", "evidence": "Child tools ['tool_a'] only; fresh messages; parent receives child summary as tool result.", "feedback": ""},
+    {"criterionId": "sc-10-2", "description": "Per-agent overrides + shared parent Budget", "required": true, "result": "pass", "evidence": "clientFactory('haiku')+resolveModel; budget toBe reference; 0.3+0.8=1.1 usdSpent; parent capped by same ceiling.", "feedback": ""},
+    {"criterionId": "sc-10-3", "description": "Fail-soft child outcomes", "required": true, "result": "pass", "evidence": "Unknown name/refusal/budget/error/aborted/throwing-runLoop all -> isError, never throw; parent continues to 'end'.", "feedback": ""},
+    {"criterionId": "sc-10-4", "description": "Double off-by-default byte-identity", "required": true, "result": "pass", "evidence": "tools REFERENCE equality absent/empty; createDefaultConfig never sets tools key; no bridge construction anywhere outside its test.", "feedback": ""},
+    {"criterionId": "sc-10-5", "description": "Bridged round-trip + clean close", "required": true, "result": "pass", "evidence": "mcp__ prefix; readOnly absent; round-trip via original name; close() exactly once on success AND throw.", "feedback": ""},
+    {"criterionId": "sc-10-6", "description": "build + typecheck", "required": true, "result": "pass", "evidence": "Independently re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Final sprint verified clean iteration-1. Deep scrutiny confirmed: package.json untouched (@modelcontextprotocol/sdk pre-existing), import cycle broken via type-only imports, child Budget same object reference, agentic-loop.ts never mentions mcp (hermeticity), spawn_subagent handler never throws, claude-code.ts/fleet untouched, no persona loading. Suite 3903/3903."
+}

@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["79971c9 - bober(sprint-2): add DeepSeek shorthand resolution and DEEPSEEK_API_KEY handling"],
+  "filesChanged": [
+    {"path": "src/orchestrator/model-resolver.ts", "action": "modified", "description": "deepseek/-v4-pro/-v4-flash SHORTHAND_MAP entries + endpoint https://api.deepseek.com attached in shorthand branch"},
+    {"path": "src/orchestrator/model-resolver.test.ts", "action": "modified", "description": "3 deepseek tests + 2 no-regression tests"},
+    {"path": "src/providers/factory.ts", "action": "modified", "description": "validateApiKey gains endpoint param + DEEPSEEK_API_KEY throw; createClient hoists resolvedEndpoint + DEEPSEEK_API_KEY env fallback scoped to api.deepseek.com"},
+    {"path": "src/providers/factory.test.ts", "action": "modified", "description": "sc-2-4 key-missing throw + ollama no-throw + validateApiKey tests"},
+    {"path": "src/providers/openai-compat.test.ts", "action": "modified", "description": "sc-2-5 key-present reaches mocked openai client via lastConstructorOptions"}
+  ],
+  "selfVerification": {
+    "targetedTests": "64 pass (model-resolver 25, factory 30, openai-compat 9)",
+    "build": "exit 0",
+    "lint": "exit 0"
+  },
+  "notes": "openai-compat.ts/openai.ts unchanged — DEEPSEEK_API_KEY injection handled in factory before adapter construction. 2 pre-existing mcp tool-count timeout flakes are baseline."
+}

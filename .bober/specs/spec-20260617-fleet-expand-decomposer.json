@@ -1,0 +1,137 @@
+{
+  "specId": "spec-20260617-fleet-expand-decomposer",
+  "version": 1,
+  "createdAt": "2026-06-17T19:05:00Z",
+  "updatedAt": "2026-06-17T19:05:00Z",
+  "title": "Fleet Expand — LLM Goal Decomposer",
+  "description": "A `fleet expand <goal>` subcommand that turns one high-level goal string into a Zod-valid FleetManifest via a single DeepSeek LLMClient call plus one bounded coercion re-prompt, then writes the manifest and stops by default so the operator can inspect it before any child spawns. Phase 2 of the fleet orchestrator — purely additive on top of the locked, merged Phase 1 runner.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-17T20:17:00Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Qa-count-semantics",
+      "answer": "`--count` is a SOFT target embedded into the decomposition prompt (ask for ~N children); the manifest is accepted at any children.length >= 1 and no hard cap is enforced in code. The write-and-stop review gate (ADR-5) is the safety bound, and the operator can edit the written manifest before spawning.",
+      "resolvedAt": "2026-06-17T19:05:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Qb-guard-scope",
+      "answer": "The validator guard rejects any CHILD carrying a `config` key (the only real provider/credential override vector, since FleetChildSchema.config is optional). Unknown TOP-LEVEL keys in the LLM output are ignored — the CLI rebuilds the final manifest taking only `children` from the decomposer and setting rootDir/concurrency itself, so top-level LLM keys are discarded and harmless.",
+      "resolvedAt": "2026-06-17T19:05:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Qc-yes-tty",
+      "answer": "No TTY check anywhere. `--yes` is the non-interactive automation escape hatch (a TTY requirement would defeat it). The default path never prompts — it write-and-stops regardless of TTY — so no interactive/TTY logic is introduced.",
+      "resolvedAt": "2026-06-17T19:05:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Qd-overwrite",
+      "answer": "When the target manifest path already exists, expand OVERWRITES it atomically (temp + rename) and prints a notice naming the path. Refusing would block re-runs; suffixing clutters; `--out` already gives explicit control for parallel/preserved manifests.",
+      "resolvedAt": "2026-06-17T19:05:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approved — user selected 'Approve — write contracts', accepting the assumptions, out-of-scope, the four resolved open-question answers, and the 2-sprint decomposition before contract generation.",
+      "resolvedAt": "2026-06-17T19:05:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Phase 1 surface is byte-unchanged and everything here is additive: a new src/fleet/decomposer.ts module and a sibling `fleet expand` subcommand. runFleet (src/fleet/index.ts:88), the `fleet <manifest>` command (src/fleet/index.ts:133, wired src/cli/index.ts:321), FleetManifestSchema/FleetChildSchema (src/fleet/manifest.ts), and buildChildConfig (src/fleet/child-config.ts) are NOT modified.",
+    "The decomposer uses ChatParams.jsonObjectMode=true (loose JSON-object mode), NOT responseSchema — DeepSeek rejects strict json_schema (src/providers/types.ts). The prompt therefore spells out the exact { children: [{ folder, task }] } shape and forbids config/concurrency/provider keys.",
+    "decomposeGoal takes an injected LLMClient (DI seam) so unit tests need no network; the CLI builds the real DeepSeek client via createClient('openai-compat', 'https://api.deepseek.com', undefined, 'deepseek-v4-pro', 'FleetDecomposer') (src/providers/factory.ts:172).",
+    "DeepSeek constants come from src/fleet/child-config.ts:7-9 (provider 'openai-compat', endpoint 'https://api.deepseek.com', model 'deepseek-v4-pro').",
+    "The CLI consumes only manifest.children from the decomposer and sets rootDir/concurrency from --root/--concurrency (or schema defaults). Validation mirrors the planner's parsePlanSpec coercion-retry pattern (src/orchestrator/planner-agent.ts).",
+    "The `fleet expand` subcommand is attached to the existing `fleet` parent command following the registerWorktreeCommand parent+child pattern, leaving the `fleet <manifest>` registration line byte-identical."
+  ],
+  "outOfScope": [
+    "Two-call plan-then-expand (ADR-1 escalation path) — deferred.",
+    "Per-child provider/config overrides emitted by the decomposer (children stay config-free; provider injected downstream by buildChildConfig).",
+    "Resume / re-run of a partially-built portfolio.",
+    "Any change to runFleet, the `fleet <manifest>` command, FleetManifestSchema, or buildChildConfig.",
+    "A hard numeric cap on child count enforced in code (review gate is the bound).",
+    "Streaming/live decomposition progress UI."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "FleetDecomposer module",
+      "description": "A new src/fleet/decomposer.ts that turns one goal string into a children-only, Zod-valid FleetManifest through a single DeepSeek LLMClient call plus one bounded coercion re-prompt, with a config-key guard, returning an in-memory manifest (no CLI, no spawn).",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When decomposeGoal is given a goal and a fake LLMClient that returns a valid { children: [{ folder, task }] } JSON object, it resolves with a FleetManifest whose children pass FleetManifestSchema and carry only folder/task.",
+        "AC2: When the first LLM response is invalid JSON or fails schema validation, decomposeGoal issues exactly ONE coercion re-prompt (DECOMPOSE_MAX_RETRIES=1, <=2 calls total) feeding the prior text + formatted Zod error, and succeeds if the second response validates.",
+        "AC3: When both attempts fail validation, decomposeGoal rejects with a single clear Error carrying the formatted Zod issues, and never resolves with an invalid or partial manifest.",
+        "AC4: When the LLM emits a child carrying a `config` key, the validator rejects that output (treated as invalid → coerce → throw); a `--count` hint is reflected in the system/user prompt as a soft target.",
+        "AC5: JSON extraction tolerates a fenced ```json block and a first-brace-to-last-brace block, mirroring parsePlanSpec, and the call uses jsonObjectMode=true (not responseSchema)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "fleet expand subcommand",
+      "description": "A sibling `fleet expand <goal>` subcommand that builds the DeepSeek client (credential fail-fast), calls decomposeGoal, assembles the final manifest, writes it to <root>/.bober/fleet-expand.json (overwrite + notice), prints it, and stops by default — chaining into the locked runFleet only when --yes is passed.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `agent-bober fleet expand \"<goal>\"` (no --yes) writes a Zod-valid manifest to <root>/.bober/fleet-expand.json, prints it plus a review hint, exits 0, and spawns NO child process.",
+        "AC2: When --yes is passed, the command chains into runFleet(outPath) against the same written file and prints the Fleet Summary; without --yes it never calls runFleet.",
+        "AC3: When DEEPSEEK_API_KEY is unset, the command exits 1 via createClient/validateApiKey BEFORE any manifest is written or child is spawned.",
+        "AC4: The existing `fleet <manifest>` command continues to parse and run identically (byte-unchanged registration); `fleet --help` lists the new `expand` subcommand.",
+        "AC5: --count/--provider/--model/--root/--concurrency/--out/--yes are wired; --provider/--model override only the decomposer's own LLM (not child provider config); when the target path exists it is overwritten atomically with a printed notice."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "No real detached child process may spawn on any path where the operator could not first inspect the generated manifest; the on-disk manifest is the sole hand-off into runFleet.",
+      "verificationMethod": "Test that the default (no --yes) path writes the manifest and never invokes the injected runFleet/coordinator; test that --yes calls runFleet only after the file is written."
+    },
+    {
+      "category": "security",
+      "requirement": "DeepSeek credentials are validated fail-fast before any filesystem write or child spawn.",
+      "verificationMethod": "Test that with DEEPSEEK_API_KEY unset the command throws/exits 1 and writes no manifest file."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Zero TypeScript errors, zero ESLint errors, clean tsc build; ESM with .js import extensions; async fs only; no SDK leakage outside providers/.",
+      "verificationMethod": "Run typecheck, lint, and build evaluator strategies; all must pass."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Decomposition is bounded to at most two LLM calls (one + one coercion re-prompt) and fails clearly rather than emitting an invalid manifest.",
+      "verificationMethod": "Test asserts the fake LLMClient is called at most twice and that exhaustion throws with the Zod issues."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "DeepSeek API via openai-compat provider, client built by createClient (src/providers/factory.ts)",
+      "Locked Phase 1 runFleet(manifestPath) (src/fleet/index.ts:88) consumed via the written manifest path"
+    ],
+    "dataModel": "One new on-disk artifact: the generated FleetManifest at <root>/.bober/fleet-expand.json { rootDir, concurrency, children: [{ folder, task }] }. Reuses the existing FleetManifestSchema unchanged. The downstream PortfolioReport (.bober/fleet-report.json) is owned by Phase 1 runFleet, unchanged.",
+    "securityConsiderations": [
+      "Reject any decomposer-emitted child carrying a `config` key (provider/credential override vector)",
+      "Fail-fast on missing DEEPSEEK_API_KEY before any write or spawn",
+      "Write-and-stop default keeps spawning gated behind manifest inspection"
+    ],
+    "existingPatterns": "Mirror parsePlanSpec + PLAN_SPEC_COERCION_INSTRUCTION (src/orchestrator/planner-agent.ts) for JSON extraction + coercion retry; reuse FleetManifestSchema/load (src/fleet/manifest.ts), createClient + validateApiKey (src/providers/factory.ts), LLMClient.chat with jsonObjectMode (src/providers/types.ts), registerWorktreeCommand parent+child command pattern and atomic temp+rename write (src/cli/index.ts / src/state/run-state.ts)."
+  },
+  "sprints": [
+    "sprint-spec-20260617-fleet-expand-decomposer-1",
+    "sprint-spec-20260617-fleet-expand-decomposer-2"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "low",
+    "riskNotes": "Additive on a tested Phase 1 substrate. Load-bearing details: use jsonObjectMode (not responseSchema, which DeepSeek rejects); the per-child config-key guard must run beyond FleetManifestSchema.parse; the expand subcommand must not alter `fleet <manifest>` parsing; default must never spawn. Architecture: arch-20260617-fleet-orchestrator-phase-2-expand (ADR-1..5)."
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-2",
+  "specId": "spec-20260628-calendar-planner",
+  "sprintNumber": 2,
+  "title": "Connector interface + .ics export (local-first, zero-egress)",
+  "description": "Introduce a single CalendarConnector interface (readFreeBusy + writeEvents) that the slotter and CLI depend on, and implement the first concrete connector: a local-first .ics (RFC 5545 VEVENT) exporter that materializes a ProposedPlan to a file on disk with zero network egress. Wire `bober calendar plan --export-ics <path>` to slot the findings and write the .ics file the user imports manually into their calendar app.",
+  "status": "completed",
+  "completedAt": "2026-06-29T18:45:30.000Z",
+  "dependsOn": ["sprint-spec-20260628-calendar-planner-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "`npm run build` (tsc) completes with zero errors after adding src/calendar/connector.ts and src/calendar/ics-connector.ts and the --export-ics CLI path.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "`npm run typecheck` confirms the .ics connector structurally satisfies the CalendarConnector interface (readFreeBusy + writeEvents) with zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A vitest writes a ProposedPlan with two scheduled items via the .ics connector and asserts the resulting file contains BEGIN:VCALENDAR, exactly two BEGIN:VEVENT/END:VEVENT blocks each with DTSTART and DTEND in UTC (trailing Z) form, and END:VCALENDAR.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A round-trip vitest parses DTSTART, DTEND, and SUMMARY back out of the generated .ics and asserts they equal the start, end, and title of the source ProposedPlan items.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "A source-scan vitest asserts ics-connector.ts performs no network egress: it imports no http/https/fetch and no src/mcp/external-client, and readFreeBusy reads only a local file via node:fs/promises.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "A vitest invokes the extracted runCalendarPlan core with --export-ics pointed at a temp path and asserts the command exits 0 and the written file validates (contains BEGIN:VCALENDAR and END:VCALENDAR).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write to a live cloud calendar — the Google connector is Sprint 3.",
+    "Do not perform any network egress from the .ics path.",
+    "Do not add the pending-approval gate — .ics export is the user-invoked, manually-imported path (Sprint 4 gates direct live writes).",
+    "Do not change the slot-fill algorithm delivered in Sprint 1.",
+    "Do not add a heavyweight calendar dependency if a small hand-rolled VEVENT writer suffices; if a library is added it must be ESM and node-native."
+  ],
+  "stopConditions": [
+    "The .ics connector tests (generation, round-trip, no-egress source scan) pass under `npm test` and `npm run build` is green.",
+    "`bober calendar plan --export-ics <path>` produces an RFC-5545 VCALENDAR file containing one VEVENT per scheduled item."
+  ],
+  "definitionOfDone": "A developer can run `bober calendar plan --export-ics out.ics` and obtain a valid RFC 5545 .ics file with one VEVENT per scheduled item (DTSTART/DTEND in UTC, SUMMARY = item title) that imports cleanly into a calendar app, produced with zero network egress. The slotter and CLI depend only on the CalendarConnector interface, which the .ics exporter implements, so a second connector can be added in Sprint 3 without touching the slotter.",
+  "assumptions": [
+    "CalendarConnector is the single abstraction both connectors implement; the slotter/CLI depend on it (research §3a line 135 'keep the planner connector-agnostic').",
+    ".ics path is local-first / zero-egress and is the scheduled/unattended fallback for the OAuth caveat. Evidence: research §3a line 135.",
+    "Hand-rolled VEVENT writer is acceptable; RFC 5545 minimal VEVENT requires UID, DTSTAMP, DTSTART, DTEND, SUMMARY."
+  ],
+  "outOfScope": [
+    "Recurring events (RRULE), attendees, alarms/VALARM, and timezones beyond UTC normalization.",
+    "Reading free/busy from a network source (Sprint 3).",
+    "Approval gating of the .ics write (the manual import step is the human review)."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create src/calendar/connector.ts defining `interface CalendarConnector { readonly name: string; readFreeBusy(window): Promise<BusyInterval[]>; writeEvents(items: PlanItem[]): Promise<WriteResult>; }` and a WriteResult type ({ writtenCount, target }). Create src/calendar/ics-connector.ts implementing it: writeEvents serializes PlanItem[] to RFC 5545 (BEGIN:VCALENDAR/VERSION:2.0/PRODID, one VEVENT per item with UID, DTSTAMP, DTSTART, DTEND in UTC YYYYMMDDTHHMMSSZ, SUMMARY, END:VEVENT, END:VCALENDAR), CRLF line endings; readFreeBusy reads a local free/busy JSON file via node:fs/promises (no network). Update runCalendarPlan to accept --export-ics <path> and call the connector. Reuse PlanItem/ProposedPlan/BusyInterval from src/calendar/types.ts. Keep DTSTART/DTEND escaping minimal and SUMMARY text escaped per RFC (commas, semicolons, newlines). No http/https/fetch imports. Honor ESM .js imports, node:fs/promises, unicode section headers.",
+  "evaluatorNotes": "Verify the generated .ics structure (one VEVENT per scheduled item, UTC Z timestamps, matching DTSTART/DTEND). Run the round-trip parse test. Confirm ics-connector.ts has no http/https/fetch and no external-client import (read the file). Confirm typecheck shows the .ics connector satisfies CalendarConnector. Confirm --export-ics writes the file and exits 0.",
+  "estimatedFiles": [
+    "src/calendar/connector.ts",
+    "src/calendar/ics-connector.ts",
+    "src/calendar/ics-connector.test.ts",
+    "src/cli/commands/calendar.ts",
+    "src/calendar/__fixtures__/freebusy.json"
+  ],
+  "estimatedDuration": "medium"
+}

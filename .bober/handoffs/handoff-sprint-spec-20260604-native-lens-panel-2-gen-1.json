@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-native-lens-panel-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-native-lens-panel-2",
+  "specId": "spec-20260604-native-lens-panel",
+  "timestamp": "2026-06-04T05:56:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of Native-Surface Multi-Lens Evaluator Panel. Sprint 1 (commit 0dc9cd8) created skills/shared/lens-panel.md (canonical protocol + verbatim fragments), added optional lensVerdicts to EvalResultSchema, and a drift gate. Sprint 2 teaches the bober-evaluator AGENT a prompt-level MODE (full | deterministic | lens:<name>) so it can run as today's full evaluator (default, byte-identical), a deterministic-only strategy runner, or a single-lens qualitative judge that emits a per-lens verdict. The .claude/agents copy is synced and gated against drift.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260604-native-lens-panel-1",
+        "title": "Canonical panel reference + lensVerdicts schema field + drift gate",
+        "summary": "skills/shared/lens-panel.md (split fan-out + majority-vote/fail-closed + lensVerdicts shape + 4 verbatim lens fragments); optional lensVerdicts on EvalResultSchema; src/orchestrator/lens-panel-parity.test.ts drift gate (uses resolveLensFocus). Commit 0dc9cd8."
+      }
+    ],
+    "currentBranch": "bober/evaluator-lens-panel",
+    "relevantFiles": [
+      "agents/bober-evaluator.md",
+      ".claude/agents/bober-evaluator.md",
+      "skills/shared/lens-panel.md",
+      "src/orchestrator/lens-panel-parity.test.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-native-lens-panel-2.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist in the working tree. Stage ONLY this sprint's files with explicit paths: git add agents/bober-evaluator.md .claude/agents/bober-evaluator.md src/orchestrator/lens-panel-parity.test.ts (or a new src/orchestrator/agent-sync.test.ts if you add one). NEVER `git add -A`/`git add .`. CRITICAL: agents/bober-evaluator.md and .claude/agents/bober-evaluator.md must end up BYTE-IDENTICAL (the .claude copy is a straight copy of the source). The MODE section must be ADDITIVE — do not change any existing instruction prose. Branch bober/evaluator-lens-panel — never main."
+}

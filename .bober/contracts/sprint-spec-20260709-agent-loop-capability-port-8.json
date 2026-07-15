@@ -1,0 +1,88 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 8,
+  "title": "Streaming text deltas (Anthropic adapter streaming + loop passthrough)",
+  "description": "Real-time output without changing the loop's turn model. ChatParams gains an optional provider-agnostic onTextDelta callback; when set, the Anthropic adapter switches to the SDK's streaming API, invokes the callback per text delta, and still returns the exact same normalized ChatResponse (text, toolCalls, stopReason, usage, costUsd) at the end. Other adapters accept the param and never call it (documented no-op). The loop threads AgenticLoopParams.onTextDelta through and additionally emits text via the LoopEvent stream when onEvent is present. Absent callback \u2192 the existing non-streaming request path, byte-identical.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260709-agent-loop-capability-port-5"
+  ],
+  "features": [
+    "feat-8"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-8-1",
+      "description": "On the Anthropic path with onTextDelta set, the callback receives deltas whose concatenation equals the final ChatResponse.text, and the returned ChatResponse (stopReason, toolCalls, usage, costUsd) is deep-equal to what the non-streaming path returns for the same underlying response.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-2",
+      "description": "Streaming responses containing tool_use blocks normalize identically to the non-streaming path (tool calls with ids and parsed inputs), so agentic tool turns stream safely.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-3",
+      "description": "openai/openai-compat/google/claude-code adapters accept ChatParams carrying onTextDelta without error and never invoke it (no-op degradation, nothing extra on the wire).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-4",
+      "description": "runAgenticLoop threads onTextDelta to every chat call and emits a text-delta LoopEvent when onEvent is present; with no callback the adapter's non-streaming create is used (spy: stream API never called) and behavior is byte-identical.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-5",
+      "description": "A mid-stream provider error is normalized to the same error handling as the non-streaming path (chatWithRetry semantics preserved: transient retried, else stopReason 'error').",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-6",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement abort/interrupt (sprint 9).",
+    "Do not stream on openai-family or google adapters this sprint (documented no-op; own follow-up if wanted).",
+    "Do not stream through the claude-code CLI path (text-only boundary stays).",
+    "Do not wire chat/telegram UIs to deltas (consumers integrate later)."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: delta-concatenation equals final text with identical normalized response, tool_use streaming parity, no-op on other adapters, loop threading + event emission, and mid-stream error parity.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "Setting onTextDelta streams Anthropic responses token-by-token to the caller while every downstream consumer sees the identical ChatResponse and loop behavior; leaving it unset uses the exact pre-change non-streaming path everywhere. Build and full suite green.",
+  "assumptions": [
+    "The installed @anthropic-ai/sdk (0.100.1) exposes a streaming API (messages.stream or create with stream:true) that yields text deltas and a final accumulated message with usage \u2014 SDK types stay inside anthropic.ts per the provider-agnosticism law.",
+    "onTextDelta lives on ChatParams as a plain (delta: string) => void \u2014 an own type, safe for every adapter to ignore.",
+    "chatWithRetry (~agentic-loop.ts:105) wraps client.chat uniformly; streaming happens inside the adapter so retry semantics are unchanged.",
+    "Sprint 5's LoopEvent union is present for the text-delta event (hard dependsOn)."
+  ],
+  "outOfScope": [
+    "Streamed thinking/reasoning blocks (text deltas only).",
+    "Partial tool-input streaming (tool calls surface only when complete)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "types.ts: add onTextDelta?: (delta: string) => void to ChatParams with a doc comment that adapters MAY ignore it. anthropic.ts: when params.onTextDelta is set, use the SDK streaming surface (prefer client.messages.stream if available in 0.100.1 \u2014 it accumulates the final message for you; otherwise iterate create({stream:true}) events accumulating content blocks and usage manually); invoke the callback for each text delta; assemble the SAME normalized ChatResponse the non-streaming branch builds (reuse the existing normalization code by extracting a shared normalizeResponse(message) helper rather than duplicating). Wrap callback invocations in try/catch (a throwing consumer must not kill the request). Loop: add onTextDelta to AgenticLoopParams, pass into chat params alongside effort/maxTokens; when onEvent present, also emit { type:'text-delta', turn, delta } (add to the union). Other adapters: no code needed beyond the type accepting the field \u2014 add one no-op comment line in each documenting the degradation. Test with a mocked SDK stream (async iterable of events) \u2014 no live API.",
+  "evaluatorNotes": "sc-8-1: mock stream yielding 3 text deltas + final usage; collect callback output, assert join equals response.text; run the same underlying content through the non-streaming mock and deep-equal both ChatResponses. sc-8-2: mock stream with a tool_use block; assert toolCalls parity with non-streaming normalization. sc-8-3: pass onTextDelta to openai/openai-compat mocks; assert never called and request payload unchanged. sc-8-4: loop-level fake client records receipt of onTextDelta; onEvent collects text-delta events; without callback, spy asserts the streaming branch is not taken; FULL suite. sc-8-5: mock stream erroring mid-way \u2192 same retry/error classification as a non-streaming throw (assert via chatWithRetry behavior with a transient then success). Build + typecheck.",
+  "estimatedFiles": [
+    "src/providers/types.ts",
+    "src/providers/anthropic.ts",
+    "src/providers/anthropic.test.ts",
+    "src/orchestrator/agentic-loop.ts",
+    "src/orchestrator/agentic-loop.test.ts",
+    "src/orchestrator/loop-events.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-10T00:02:30.000Z",
+  "completedAt": "2026-07-10T00:02:30.000Z"
+}

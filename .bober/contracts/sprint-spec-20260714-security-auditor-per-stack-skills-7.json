@@ -1,0 +1,95 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-7",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 7,
+  "title": "Supply-chain axis: scanner kinds + nonzero-exit fix (G9) + offline diff inspector (G5)",
+  "description": "Add the supply-chain/dependency/secret axis. Implement the G9 fix (scanners whose convention is nonzero-exit-means-findings are parsed instead of discarded) via a per-kind scannerExitPolicy, add npm-audit/osv-scanner/gitleaks parser kinds, and build the always-available OFFLINE SupplyChainDiffInspector that flags lifecycle-script/lockfile/.npmrc/CI-workflow risks over the diff with zero network. Network-capable scanners run only behind config.security.egress.onlineResearch (default off). Findings fold into the finder's priors.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-6"
+  ],
+  "features": [
+    "feat-supplychain"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "scannerExitPolicy(kind) returns 'nonzero-means-findings' for npm-audit/osv-scanner/gitleaks (and semgrep-with-error convention) and 'zero-clean' otherwise; runOneScanner (security-scanners.ts:355) parses stdout regardless of exit code for 'nonzero-means-findings' kinds, while ENOENT/thrown/abort still yield [] per-scanner (isolation preserved). A test injects a runner exiting nonzero WITH findings on stdout and asserts the findings survive (G9 fixed), and a runner ENOENT yields [].",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "parseNpmAuditOutput, parseOsvOutput, parseGitleaksOutput are pure, total (malformed => []), and map into SecurityFinding[] with vulnClass 'supply-chain' (or 'secret-handling' for gitleaks) and evidence path+line where available; detectScannerKind recognizes the three new kinds by type/label/command substring. Each parser is table-tested against a representative real-shaped JSON payload.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "config.security.supplyChain is an OPTIONAL object {enabled: boolean (default false), scanners: EvalStrategy[] (default [])} and config.security.egress is {onlineResearch: boolean (default false)}; a config omitting them parses byte-identical; network-capable scanners (npm-audit/osv-scanner) are only invoked when egress.onlineResearch === true.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "SupplyChainDiffInspector.inspect({projectRoot, diff, signal}) performs OFFLINE, zero-network checks scoped to the diff's changed files and emits SecurityFinding[] (vulnClass 'supply-chain') for at least: added/changed package.json lifecycle scripts (preinstall/install/postinstall/prepare) with obfuscated/eval/base64 content, lockfile 'resolved' host != the registry host, .npmrc registry override or ignore-scripts disabled, a new dependency with no matching import in the diff, CI workflow using 'npm install' instead of 'npm ci', and a GitHub Action pinned by tag instead of full SHA; never throws.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "When config.security.supplyChain.enabled, runSecurityAudit folds runScannerPreFilter output AND SupplyChainDiffInspector output into effectivePriors alongside existing priors; the offline inspector runs even when no external scanners are configured; a test shows a diff adding a malicious postinstall produces a supply-chain prior reaching the finder.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "npm run build + typecheck + lint pass; full suite green; default behavior (supplyChain absent) unchanged and no network calls occur in any test (offline inspector + injected runners only).",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add the LLM verifier (sprint 8).",
+    "Do not turn on egress.onlineResearch anywhere (network scanners stay opt-in and off).",
+    "Do not implement a full SBOM/provenance verifier (offline diff inspector heuristics only this build).",
+    "Do not add a dedicated supply-chain LLM sub-auditor (ADR-4: deterministic scanners + offline inspector, findings feed the finder as priors)."
+  ],
+  "stopConditions": [
+    "G9 nonzero-exit fix proven by an injected-runner test.",
+    "Offline inspector flags the postinstall/lockfile/.npmrc/CI cases with zero network; default path byte-identical."
+  ],
+  "definitionOfDone": "The supply-chain axis exists: per-kind exit policy fixes G9, three new scanner parsers, and an always-available offline diff inspector fold supply-chain findings into the finder priors, all default-off and network-gated, with the suite green.",
+  "assumptions": [
+    "runOneScanner + detectScannerKind + parseScannerStdout live at security-scanners.ts:260-369; the nonzero-exit discard is the branch at security-scanners.ts:355.",
+    "EvalStrategySchema (used by the existing scanners field) is reused for supplyChain.scanners; the existing scanners field and the new supplyChain.scanners may both feed runScannerPreFilter.",
+    "The repo's existing egress-axis pattern (research/medical online-research axis) is the precedent for egress.onlineResearch default-false gating."
+  ],
+  "outOfScope": [
+    "Verifier, benchmark, dogfood (later)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "(1) security-scanners.ts: add scannerExitPolicy(kind); in runOneScanner, branch on it at line ~355 \u2014 for 'nonzero-means-findings' kinds, parse stdout even when exitCode!=0 (but still [] on ENOENT/thrown/abort \u2014 distinguish 'process ran and exited nonzero with output' from 'failed to spawn'). Add npm-audit/osv-scanner/gitleaks to detectScannerKind and parseScannerStdout. (2) parseNpmAuditOutput: npm audit --json shape {vulnerabilities:{...}} or advisories; parseOsvOutput: osv-scanner --format json {results:[{packages:[{vulnerabilities}]}]}; parseGitleaksOutput: gitleaks --report-format json array [{File,StartLine,RuleID,Secret...}]. All defensive/total like parseSlitherOutput. (3) schema.ts: add security.supplyChain + security.egress optional objects. (4) supply-chain-inspector.ts: pure-ish offline checks over diff.changedFiles \u2014 inspect package.json hunks for scripts.{pre,post}install/prepare with base64/hex/eval; lockfile resolved-host mismatch; .npmrc; CI yml npm install vs ci + action tag-vs-sha. Read files via node:fs/promises scoped to changed paths; never throw. (5) security-auditor-agent.ts: when supplyChain.enabled, fold both scanner priors and inspector findings into effectivePriors (extend the existing effectivePriors folding at security-auditor-agent.ts:86-104). Network scanners only when egress.onlineResearch. Source detection heuristics from .bober/research/research-20260714-...-research.md section D checklist.",
+  "evaluatorNotes": "sc-7-1: inject a runner returning {exitCode:1, stdout:<valid findings json>} for kind npm-audit and assert findings parsed (G9); inject ENOENT and assert []. sc-7-2: table-test each parser on a real-shaped payload and on garbage (=> []). sc-7-4: craft an AuditDiff whose changedFiles include a package.json hunk adding a postinstall with a base64 blob, a lockfile with a non-registry resolved host, an .npmrc with ignore-scripts=false-removed, a CI yml with 'npm install' and an action@v4 tag \u2014 assert a supply-chain finding for each; confirm zero network (no real npm/osv calls). sc-7-3: deep-equal config-omitting parse; assert network scanner skipped when egress off. sc-7-6: build+typecheck+lint+full suite; confirm no network in tests.",
+  "estimatedFiles": [
+    "src/orchestrator/security-scanners.ts",
+    "src/orchestrator/security-scanners.test.ts",
+    "src/orchestrator/security-knowledge/supply-chain-inspector.ts",
+    "src/orchestrator/security-knowledge/supply-chain-inspector.test.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts",
+    "src/orchestrator/security-auditor-agent.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-7-1",
+      "timestamp": "2026-07-14T19:15:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-7-1",
+  "updatedAt": "2026-07-14T19:15:00Z",
+  "completedAt": "2026-07-14T19:15:00Z"
+}

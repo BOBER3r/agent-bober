@@ -1,0 +1,28 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["f30c769 - bober(sprint-4): calendar approve-gate (propose -> approve|tell -> write)"],
+  "filesChanged": [
+    "src/calendar/proposal-gate.ts (created — proposePlan/applyPlan/adjustPlan; ALL fs writes live here)",
+    "src/cli/commands/calendar.ts (modified — live propose path + `calendar apply <checkpointId>`; NO writeFile import)",
+    "src/calendar/proposal-gate.test.ts (created — sc-4-3/4/5)",
+    "src/calendar/calendar-e2e.test.ts (created — sc-4-6 lifecycle)"
+  ],
+  "criteriaResults": {
+    "sc-4-1": "build green; proposal-gate.ts + apply CLI path",
+    "sc-4-2": "typecheck green",
+    "sc-4-3": "live plan -> savePending .pending.json + plan sidecar .bober/calendar/<id>.plan.json; checkpointId=calendar-<planId>; ZERO writeEvents before approval",
+    "sc-4-4": "ApprovedMarker -> writeEvents EXACTLY ONCE + deletePending; RejectedMarker -> writeEvents NEVER called",
+    "sc-4-5": "adjustPlan pure re-run of planSlots with ConstraintDelta (excludeInterval appended to busy[] / window shift); writes nothing; no input mutation",
+    "sc-4-6": "e2e propose->approve->apply: pending written, writeCalls 0 before approval, exactly 1 after, pending deleted; reject path 0"
+  },
+  "selfVerification": {
+    "build": "exit 0",
+    "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings unrelated)",
+    "fullSuite": "3497 passed (276 files), zero regressions"
+  },
+  "blockers": [],
+  "notes": "checkpointId=calendar-<planId> (mirrors do-bridge promote-<id>) so `bober approve`/`/approve` can approve. NO readApproved/readRejected export -> markers detected inline via readdir (mirrors promote.ts/approve.ts). Plan sidecar .bober/calendar/<id>.plan.json stores ProposedPlan + connectorName; applyPlan reloads to recover PlanItems. ALL writes in proposal-gate.ts; calendar.ts has zero writeFile/writeJson/appendFile (Sprint-1 source-scan still passes). Google connector in apply still egress-gated (prints actionable error + exit 1 when OAuth not provisioned). NO auto-approve anywhere."
+}

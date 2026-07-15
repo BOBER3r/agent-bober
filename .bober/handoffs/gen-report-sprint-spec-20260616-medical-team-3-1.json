@@ -1,0 +1,27 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-3",
+  "status": "complete",
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "met": true, "evidence": "npm run build exit 0" },
+    { "criterionId": "sc-3-2", "met": true, "evidence": "tsc --noEmit exit 0 (noUnusedLocals/Params/strict)" },
+    { "criterionId": "sc-3-3", "met": true, "evidence": "vitest run 191 files, 2303 passed, 3 skipped; +25 red-flag +13 guardrails +7 engine tests" },
+    { "criterionId": "sc-3-4", "met": true, "evidence": "parametrized 5 categories; injects llmSpy:LLMClient={chat:vi.fn()}+numericsSpy into MedicalSopDeps (REAL seam); asserts shortCircuit + correct hotline + both spies never called" },
+    { "criterionId": "sc-3-5", "met": true, "evidence": "detect() deep-equal twice; not instanceof Promise; pure sync, no I/O/network/LLM" },
+    { "criterionId": "sc-3-6", "met": true, "evidence": "benign 'average resting heart rate' -> success + shortCircuit false; guardrails allow for benign" },
+    { "criterionId": "sc-3-7", "met": true, "evidence": "short-circuit audit entry has ruleId+rulesetVersion+patternsetVersion===PATTERNSET_VERSION; no prompt text in file bytes" },
+    { "criterionId": "sc-3-8", "met": true, "evidence": "evaluate('')/('   ')/('\\t\\n') throw; source-read asserts no providers/network imports in red-flag.ts + guardrails.ts" }
+  ],
+  "filesChanged": [
+    { "path": "src/medical/red-flag.ts", "action": "created", "description": "pure/sync RedFlagDetector, 5 categories + PATTERNSET_VERSION; self-harm/overdose ordered first (988 before 911)" },
+    { "path": "src/medical/red-flag.test.ts", "action": "created", "description": "25 tests: determinism, sync, category hits, benign misses, no-imports source-read" },
+    { "path": "src/medical/guardrails.ts", "action": "created", "description": "MedicalGuardrails implements GuardrailSet; short-circuit canned 911/988; throws on empty; allow benign; GUARDRAIL_RULESET_VERSION" },
+    { "path": "src/medical/guardrails.test.ts", "action": "created", "description": "13 tests" },
+    { "path": "src/medical/team.ts", "action": "modified", "description": "replaced stub buildMedicalGuardrails with real MedicalGuardrails" },
+    { "path": "src/medical/engine.ts", "action": "modified", "description": "MedicalSopDeps += guardrails?/llmClient?:LLMClient/numerics?; Gate 2 after consent; short-circuit audit + canned answer + 0 downstream calls" },
+    { "path": "src/medical/engine.test.ts", "action": "modified", "description": "parametrized 5-category short-circuit w/ real injected spies; benign allow; consent-before-redflag ordering" }
+  ],
+  "testsAdded": ["src/medical/red-flag.test.ts", "src/medical/guardrails.test.ts"],
+  "commits": ["6fc7c97 - bober(sprint-3): Gate 2 red-flag short-circuit + MedicalGuardrails + LLMClient injection seam"],
+  "blockers": [],
+  "notes": "CARRY-FORWARD FIX done: MedicalSopDeps now has llmClient?:LLMClient + numerics?:()=>unknown slots; tests inject spies via deps; engine holds them and (correctly for S3) makes no call -> not.toHaveBeenCalled is meaningful. engine.ts imports guardrails.ts directly (avoids circular via team.ts). patternsetVersion read off guardrails via runtime 'in' check to avoid coupling to concrete type. refuse branch is a bober: placeholder for S6. FLAG FOR EVALUATOR: verify the llmClient seam is the same field S4/S6 will route real calls through (this.deps.llmClient), not a decorative param; verify patternsetVersion in the audit entry is the detector's real value."
+}

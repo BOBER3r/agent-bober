@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260531-multi-provider-deepseek-claude-code-4-1",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-4",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T14:52:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit EXIT 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "eslint src/ EXIT 0"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "provider dir 116 pass; full suite 109 files, 1397 pass, 0 fail"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc EXIT 0"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "result": "pass", "required": true, "evidence": "createClient('claude-code') -> instanceof ClaudeCodeAdapter; ProviderName includes claude-code"},
+    {"criterionId": "sc-4-2", "result": "pass", "required": true, "evidence": "validateApiKey('claude-code') no-throw, no ANTHROPIC_API_KEY read; preflightClaudeBinary throws naming binary when probe false"},
+    {"criterionId": "sc-4-3", "result": "pass", "required": true, "evidence": "execa mocked; chat maps result.text + usage.input/output_tokens; stopReason 'end'"},
+    {"criterionId": "sc-4-4", "result": "pass", "required": true, "evidence": "tools:[t] rejects /cannot return custom tool_use blocks/; execa not called"},
+    {"criterionId": "sc-4-5", "result": "pass", "required": true, "evidence": "binary 'my-claude' + timeout 5000 reach mocked execa"},
+    {"criterionId": "sc-4-6", "result": "pass", "required": true, "evidence": "build + lint EXIT 0"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass. claude-code wired into factory; validateApiKey no-op (no ANTHROPIC_API_KEY); preflightClaudeBinary injectable seam; execa mocked; tools-guard preserved; no Agent SDK. Full suite green, no regressions."
+}

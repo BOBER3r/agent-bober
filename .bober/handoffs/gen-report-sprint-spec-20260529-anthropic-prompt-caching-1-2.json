@@ -1,0 +1,14 @@
+{
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "iteration": 2,
+  "status": "complete",
+  "commits": ["2dab5fb - bober(sprint-1): add factory unit tests for promptCaching flag resolution (C4)"],
+  "filesChanged": [
+    {"path": "src/providers/factory.test.ts", "action": "modified", "description": "Added vi.mock('./anthropic.js') with a MockAnthropicAdapter recording ctor args in a static _ctorCalls array; new 'createClient promptCaching flag resolution' describe with 2 tests (explicit false forwarded; omitted defaults to true). 26/26 factory tests pass; existing 24 unaffected."}
+  ],
+  "testsAdded": [
+    "createClient promptCaching flag resolution > forwards promptCaching: false to AnthropicAdapter constructor when explicitly set",
+    "createClient promptCaching flag resolution > defaults promptCaching to true for anthropic when promptCaching is omitted from providerConfig"
+  ],
+  "notes": "typecheck/lint/build all exit 0. Full test: 1337 passed, 4 skipped, 2 failed (the 2 tolerated flaky 37-tool-count baseline tests). All 5 provider suites green (73/73). Only factory.test.ts changed; factory.ts/anthropic.ts untouched."
+}

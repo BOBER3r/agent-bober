@@ -1,0 +1,16 @@
+{
+  "contractId": "sprint-spec-20260604-docs-correction-3",
+  "specId": "spec-20260604-docs-correction",
+  "sprintNumber": 3,
+  "title": "Ancillary docs (COMMANDS.md, VISION.md, docs/providers.md)",
+  "status": "pending",
+  "description": "Add the DeepSeek env var to the CLI reference, extend the VISION config reference with the panel and engine fields, and verify the provider guide is accurate.",
+  "filesInScope": ["COMMANDS.md", "VISION.md", "docs/providers.md"],
+  "successCriteria": [
+    "COMMANDS.md Environment Variables table (around line 398) includes a DEEPSEEK_API_KEY row.",
+    "VISION.md Configuration Reference documents pipeline.engine in the pipeline table, plus new evaluator and architect sections covering panel.enabled/panel.lenses/panel.maxConcurrent.",
+    "docs/providers.md verified accurate (DeepSeek + claude-code coverage correct); no edits required unless an inaccuracy is found."
+  ],
+  "generatorNotes": "COMMANDS.md: add a single env-var row mirroring the existing format. VISION.md uses '| Field | Type | Default | Since | Description |' tables; use Since='0.16.0'. Add 'pipeline.engine' row to the pipeline table (296-306), then '### evaluator section' and '### architect section' tables documenting panel.* fields. docs/providers.md is already complete — only touch it if you find a factual error; otherwise leave unchanged and report 'verified accurate'.",
+  "evaluatorNotes": "grep COMMANDS.md for DEEPSEEK_API_KEY. grep VISION.md for 'pipeline.engine', 'evaluator.panel'/'panel.enabled', 'architect'. Confirm docs/providers.md unchanged or improved (no regressions)."
+}

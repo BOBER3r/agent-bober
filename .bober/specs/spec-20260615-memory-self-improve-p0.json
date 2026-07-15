@@ -1,0 +1,281 @@
+{
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "version": 1,
+  "createdAt": "2026-06-15T12:00:00.000Z",
+  "updatedAt": "2026-06-15T17:45:14Z",
+  "title": "Durable Semantic Facts + Memory Hygiene (Phase 3)",
+  "description": "Phase 3 of the chattable-team platform: add the missing semantic-facts memory type as a bi-temporal SQLite store with reconcile-on-write, give the existing lessons store lifecycle hygiene (occurrence-weighted ranking, decay, conflict-quarantine), and mine the fail-pass signal the generator-evaluator retry loop currently discards. Ships durable facts, non-rotting lessons, and compounding fix-pattern lessons \u2014 the memory substrate that Phases 4 (team generalization) and 6 (medical) build on.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "tech-constraints",
+      "question": "Storage substrate for semantic_facts \u2014 SQLite or file-based JSONL?",
+      "options": [
+        {
+          "label": "A",
+          "description": "File-based JSONL, matching the existing pure/zero-dep memory substrate"
+        },
+        {
+          "label": "B",
+          "description": "SQLite (better-sqlite3 / node:sqlite), per the research doc"
+        }
+      ],
+      "recommendation": "A (file-based) to match the pure, zero-native-dep memory substrate",
+      "ambiguityWeight": 8
+    },
+    {
+      "questionId": "Q2",
+      "category": "scope",
+      "question": "Reconcile-on-write \u2014 deterministic-only this phase, or include the LLM-judged ambiguity merge now?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Deterministic exact-match supersede only; leave a typed seam for the LLM judge"
+        },
+        {
+          "label": "B",
+          "description": "Full Mem0-style ADD/UPDATE/DELETE/NOOP with an LLM resolving near-matches"
+        }
+      ],
+      "recommendation": "A (deterministic-only) to keep memory writes pure/replayable",
+      "ambiguityWeight": 6
+    },
+    {
+      "questionId": "Q3",
+      "category": "scope",
+      "question": "Phase 3 scope for fact producers \u2014 substrate + CLI only, or also auto-populate facts from runs?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Store + reconcile + hygiene + contrast + CLIs; auto-extraction wired later"
+        },
+        {
+          "label": "B",
+          "description": "Also wire an auto-producer that writes project facts from runs/chat"
+        }
+      ],
+      "recommendation": "A (substrate + CLI only) for smallest blast radius",
+      "ambiguityWeight": 5
+    },
+    {
+      "questionId": "Q4",
+      "category": "scope",
+      "question": "Fail-pass contrast extractor \u2014 offline & deterministic in distill, or inline with an LLM?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Extend the pure distiller to mine fail\u2192pass transitions; no LLM"
+        },
+        {
+          "label": "B",
+          "description": "Inline LLM generalizes the fix into a lesson when a sprint flips fail\u2192pass"
+        }
+      ],
+      "recommendation": "A (offline deterministic) to match existing distill discipline",
+      "ambiguityWeight": 4
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "B \u2014 SQLite (better-sqlite3 / node:sqlite). Introduce the project's first relational store for the facts type; aligns with Phase 6 medical (one-table-per-metric) forward pull.",
+      "resolvedAt": "2026-06-15T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "B \u2014 Include the LLM-judged ambiguity merge now. Deterministic exact-match supersede for the clean case; an injected LLM FactJudge resolves ambiguous near-matches into ADD/UPDATE/DELETE/NOOP.",
+      "resolvedAt": "2026-06-15T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "B \u2014 Also wire an auto-producer. A deterministic project-fact detector runs at pipeline/chat start and writes facts through reconcile, so facts populate without manual CLI.",
+      "resolvedAt": "2026-06-15T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "A \u2014 Offline & deterministic. Extend the pure distiller to mine fail\u2192pass transitions from iterationHistory + eval results; no LLM on the contrast path.",
+      "resolvedAt": "2026-06-15T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. The four load-bearing design decisions were resolved by the user (SQLite store, LLM-judged reconcile, auto-producer, deterministic contrast). All remaining assumptions are backed by cited file evidence from the working tree.",
+      "resolvedAt": "2026-06-15T12:00:00.000Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          "src/state/memory.ts (lessons store, namespace mapping memoryDir, LessonEntrySchema, occurrences field)",
+          "src/orchestrator/memory/distill.ts (pure deterministic distill discipline, SENTINEL_CREATED_AT, content-hash ids)",
+          "src/orchestrator/memory/retrieve.ts (scoreRecord token-overlap ranking that ignores occurrences)",
+          "src/cli/commands/memory.ts (CLI handler no-throw/exitCode=1 pattern, resolveDefaultNamespace)",
+          "src/orchestrator/memory/eval-source.ts:70 (loadEvalResults eval input to distill)",
+          "src/providers/factory.ts:172 (createClient factory; BOBER_TEST_DETERMINISTIC=1 deterministic mode)",
+          "src/orchestrator/pipeline.ts:1017 (runPipeline entry for auto-producer hook)",
+          "src/chat/chat-session.ts:64,234 (buildMemoryDistill / memoryNamespace threading)",
+          "package.json (no existing SQLite/native dep; engines node>=18 \u2192 better-sqlite3 over experimental node:sqlite)"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "SQLite engine is better-sqlite3 (synchronous, mature, Node>=18 compatible per package.json engines) rather than experimental node:sqlite which requires Node 22.5+. The store is hidden behind a FactStore adapter so the engine is swappable later (evidence: package.json engines '>=18.0.0'; no existing native dep).",
+    "The facts DB is a single file .bober/memory/facts.db with a 'scope' column for per-team isolation (NOT a per-namespace .db), matching the research doc's 'semantic_facts carries a scope column' store-layer isolation. Scope values reuse the existing namespace convention where ''/'programming' is the default team (evidence: src/state/memory.ts memoryDir mapping rule).",
+    "Bi-temporal model uses four columns: t_valid/t_invalid (world-time the fact was/ceased to be true) and t_created/t_invalidated (record-time it was written/superseded). Active fact = t_invalidated IS NULL. Facts are NEVER hard-deleted \u2014 only invalidated (evidence: research doc \u00a73 Zep/Graphiti bi-temporal).",
+    "All wall-clock timestamps are injected at the CLI/caller boundary, never read inside store/distill/reconcile core logic \u2014 preserving the existing purity discipline (evidence: src/orchestrator/memory/distill.ts SENTINEL_CREATED_AT + 'CLI handler MUST overwrite').",
+    "Fact ids are deterministic content-hashes of (scope|subject|predicate|value|t_created), mirroring distill's lessonIdFromSignature, so supersession history rows stay distinct and test output is byte-stable (evidence: src/orchestrator/memory/distill.ts:88 lessonIdFromSignature).",
+    "The LLM FactJudge is an injected interface; the production impl uses createClient and honours BOBER_TEST_DETERMINISTIC=1 for offline tests, and the deterministic exact-match reconcile path requires NO LLM call (evidence: src/providers/factory.ts:172).",
+    "Reconcile 'ambiguity' is triggered deterministically (no exact scope+subject+predicate active match, but a normalized-key collision against an existing active fact); only the RESOLUTION uses the LLM. A deterministic fallback (treat as ADD) applies if the judge is unavailable.",
+    "The auto-producer is a DETERMINISTIC project-fact detector (reads package.json / config / manifests \u2192 emits facts like project.testCommand, project.buildCommand, project.packageManager). It does NOT use an LLM to produce facts; the LLM only ever appears in reconcile ambiguity (evidence: package.json scripts; bober.config.json evaluator/generator commands).",
+    "Lesson 'decay' is occurrence+recency-scored quarantine (move below-threshold/stale lessons to a QUARANTINE.md, not delete), keeping provenance and reversibility; 'conflict-quarantine' moves deterministically-detected contradictory lessons aside rather than dropping either (evidence: research doc \u00a75 'invalidate, don't delete').",
+    "The fail\u2192pass contrast extractor extends the existing pure distill() and emits a new 'fix-contrast' lesson category from sprints whose iterationHistory shows fail(s) then a pass; it adds no new git calls inside the pure function \u2014 any diff refs are passed in like evalResults (evidence: src/orchestrator/memory/distill.ts signal (c) iterationHistory)."
+  ],
+  "outOfScope": [
+    "Vector / semantic embedding search over facts or lessons (deferred per turbovec/Letta findings \u2014 FTS/exact lookups only).",
+    "GEPA offline prompt evolution and the replay regression harness (Phase 5).",
+    "Evaluator anti-degeneration guards beyond what already exists (Phase 5).",
+    "Any medical-domain schema, ingestion adapters, guardrails, or health facts (Phase 6).",
+    "Migrating existing markdown lessons into SQLite \u2014 lessons stay file-based; only the new facts type is relational.",
+    "Auto-extraction of facts via LLM from run transcripts (the auto-producer is a deterministic manifest detector only).",
+    "A network/HTTP API or MCP surface for facts \u2014 in-process store + CLI + retrieval function only.",
+    "Per-team selection of a non-default namespace from the CLI for facts (mirrors the existing '--team not yet wired' limitation in memory commands)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Bi-temporal SQLite semantic-facts store + `bober facts` CLI",
+      "description": "A FactStore adapter over SQLite (better-sqlite3) holding the semantic_facts table with scope, subject, predicate, value, confidence, source_run_id, and bi-temporal columns. Active-fact queries, invalidate (never delete), and a `bober facts add|list|show|invalidate` CLI make durable facts inspectable from the terminal.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When `bober facts add --scope programming --subject project --predicate testCommand --value vitest` is run, a row is inserted into .bober/memory/facts.db and `bober facts list` prints it as an active fact.",
+        "AC2: When a fact is invalidated via `bober facts invalidate <id>`, the row's t_invalidated is set (row is NOT deleted) and it no longer appears in `bober facts list` but is still retrievable via `bober facts show <id>`.",
+        "AC3: The FactStore exposes insertFact, getActiveFacts(scope, subject?, predicate?), getFact(id), and invalidateFact(id, tInvalidated) and accepts an injectable db path (':memory:' in tests); all timestamps are passed in by the caller, never read inside the store.",
+        "AC4: A unit test using an in-memory SQLite db verifies insert \u2192 query-active \u2192 invalidate \u2192 query-active-empty, and that fact ids are deterministic content-hashes."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Reconcile-on-write (deterministic exact-match + LLM-judged ambiguity)",
+      "description": "writeFact routes through reconcile: an exact (scope,subject,predicate) active match with a new value supersedes the old fact (invalidate + insert); identical value is a NOOP; an ambiguous near-match invokes an injected LLM FactJudge returning ADD/UPDATE/DELETE/NOOP with a deterministic ADD fallback.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a fact (programming, patient, medication, metformin) exists active and a new (programming, patient, medication, ozempic) is written, the old fact is invalidated (t_invalid + t_invalidated set) and the new fact is the only active one \u2014 supersession, not duplication.",
+        "AC2: When the identical (scope,subject,predicate,value) is written again, reconcile returns NOOP and no new row is created.",
+        "AC3: When an ambiguous near-match is detected (no exact subject+predicate match but a normalized-key collision), the injected FactJudge is consulted; with a stub judge returning UPDATE the prior fact is superseded, and with the judge unavailable the deterministic fallback inserts as ADD.",
+        "AC4: The deterministic reconcile path (exact match + NOOP) is covered by tests that inject NO LLM, proving memory writes are pure on the clean path."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Lesson hygiene \u2014 occurrence-weighted ranking, decay, conflict-quarantine",
+      "description": "retrieveRelevantLessons factors occurrences (and a recency proxy) into ranking instead of pure token overlap; a deterministic hygiene pass moves below-threshold/stale lessons and contradictory pairs into a QUARANTINE.md (never deletes); `bober memory prune` exposes it.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Given two lessons with equal token-overlap to the keywords, the one with higher occurrences ranks first in retrieveRelevantLessons output (occurrences now influences ranking).",
+        "AC2: When `bober memory prune` runs, lessons scoring below the decay threshold are removed from INDEX.md and appended to .bober/memory/<ns>/QUARANTINE.md with their provenance; the original lesson .md files are retained.",
+        "AC3: When two lessons are deterministically detected as contradictory (same signature key, opposing tag), both are moved to QUARANTINE.md rather than either being dropped, and the action is reported.",
+        "AC4: Ranking and hygiene functions are pure and deterministic (no Date.now inside; any 'now' is injected) with byte-stable test output."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Fail\u2192pass contrast extractor in distill",
+      "description": "Extend the pure distill() to detect sprints whose iterationHistory shows one or more fail iterations followed by a pass, and emit a new 'fix-contrast' lesson category capturing which strategy/criterion flipped and the sprint provenance \u2014 mining the transition the retry loop currently discards.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: Given a contract with iterationHistory [fail, fail, pass], distill() emits a lesson with category prefix 'fix-contrast:' whose sourceEntryRefs cite the failing iterations and the passing one.",
+        "AC2: A contract that passed on the first iteration (no fail before pass) produces NO fix-contrast lesson.",
+        "AC3: distill() remains pure \u2014 no imports from ../providers, no Date.now(), no fs, no network \u2014 and its output is byte-stable across repeated calls (sorted by lessonId).",
+        "AC4: `bober memory distill` surfaces the new fix-contrast lessons in INDEX.md and `bober memory list`."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Auto-producer + fact retrieval into planner/curator context",
+      "description": "A deterministic project-fact detector reads manifests/config and writes facts (testCommand, buildCommand, packageManager, framework) through reconcile at runPipeline and chat-session start; retrieveRelevantFacts + a bounded serializer inject active facts into planner/curator context, mirroring the lessons path.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When runPipeline (or a chat session) starts in a project with a package.json, project facts (e.g. project/testCommand and project/buildCommand) are present and active in .bober/memory/facts.db afterward.",
+        "AC2: Re-running the pipeline does NOT duplicate project facts \u2014 unchanged values reconcile to NOOP, changed values supersede.",
+        "AC3: retrieveRelevantFacts(scope, keywords) returns scope-isolated active facts ranked deterministically, and serializeFactsForContext produces a bounded, char-capped block (mirroring serializeLessonsForPlanner).",
+        "AC4: The detector is deterministic (no LLM) and unit-tested against a fixture project directory."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "The SQLite store is hidden behind a FactStore adapter interface so the engine (better-sqlite3 now) can be swapped for node:sqlite later without touching callers.",
+      "verificationMethod": "Inspect that reconcile, CLI, and auto-producer depend only on the FactStore interface, not better-sqlite3 directly."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Facts are bi-temporal and never hard-deleted; supersession and invalidation only set t_invalid/t_invalidated.",
+      "verificationMethod": "Unit test asserts an invalidated/superseded row still exists in the DB with t_invalidated set and is absent from active queries."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "distill() and the lesson ranking/hygiene functions remain PURE \u2014 no network, no Date.now(), no fs inside core logic; timestamps injected at the boundary.",
+      "verificationMethod": "Grep the modules for Date.now/new Date()/createClient imports; confirm byte-stable repeated-call test output."
+    },
+    {
+      "category": "security",
+      "requirement": "All SQLite access uses parameterized statements (no string interpolation of user values), and scope/subject/predicate inputs that reach paths are constrained to the existing ^[a-z0-9_-]+$ guard where applicable.",
+      "verificationMethod": "Inspect FactStore for prepared statements with bound parameters; confirm no template-literal SQL with raw inputs."
+    },
+    {
+      "category": "performance",
+      "requirement": "Active-fact lookups are indexed on (scope, subject, predicate) and (scope, t_invalidated) so reconcile stays O(matches) not O(table).",
+      "verificationMethod": "Inspect the CREATE INDEX statements in the schema bootstrap."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "better-sqlite3 (new dependency) + @types/better-sqlite3 (devDependency)",
+      "createClient (src/providers/factory.ts:172) for the LLM FactJudge; honours BOBER_TEST_DETERMINISTIC=1",
+      "runPipeline (src/orchestrator/pipeline.ts:1017) and src/chat/chat-session.ts for the auto-producer hook",
+      "loadEvalResults (src/orchestrator/memory/eval-source.ts:70) + distill (src/orchestrator/memory/distill.ts) for contrast",
+      "src/cli/index.ts to register the new `facts` command and `memory prune` subcommand"
+    ],
+    "dataModel": "semantic_facts(id TEXT PK, scope TEXT, subject TEXT, predicate TEXT, value TEXT, confidence REAL, source_run_id TEXT, t_valid TEXT, t_invalid TEXT NULL, t_created TEXT, t_invalidated TEXT NULL). Active fact = t_invalidated IS NULL. Single DB at .bober/memory/facts.db, isolation via scope column. Lessons remain file-based (markdown + INDEX.md) with a sibling QUARANTINE.md.",
+    "securityConsiderations": [
+      "Parameterized SQLite statements only \u2014 never interpolate values into SQL",
+      "Reuse the existing ^[a-z0-9_-]+$ namespace/scope guard for any value that influences a filesystem path",
+      "LLM FactJudge must have a deterministic, side-effect-free fallback so an unavailable provider can never corrupt the store"
+    ],
+    "existingPatterns": "Follow distill.ts purity discipline (content-hash ids, injected createdAt, byte-stable sorted output); follow memory.ts namespace mapping (memoryDir) and CLI handler no-throw/exitCode=1 pattern from src/cli/commands/memory.ts; mirror serializeLessonsForPlanner for serializeFactsForContext; build everything as ESM with .js import specifiers and Zod schemas as elsewhere in src/state."
+  },
+  "sprints": [
+    "sprint-spec-20260615-memory-self-improve-p0-1",
+    "sprint-spec-20260615-memory-self-improve-p0-2",
+    "sprint-spec-20260615-memory-self-improve-p0-3",
+    "sprint-spec-20260615-memory-self-improve-p0-4",
+    "sprint-spec-20260615-memory-self-improve-p0-5"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "9-14 hours",
+    "riskLevel": "high",
+    "riskNotes": "Introduces the project's first native dependency (better-sqlite3) and the first nondeterministic (LLM) path into the memory subsystem. Risk concentrated in Sprints 1\u20132; mitigated by an adapter seam, deterministic exact-match core, injected/stubbable judge, and a deterministic fallback. Sprints 3\u20135 are additive over proven file-based patterns."
+  },
+  "completedAt": "2026-06-15T17:45:14Z"
+}

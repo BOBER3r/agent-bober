@@ -1,0 +1,100 @@
+{
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-3",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "sprintNumber": 3,
+  "title": "WHOOP sync adapter + CLI",
+  "description": "The end-to-end visible slice: pull WHOOP data and persist it. Add WhoopSyncAdapter (src/medical/whoop/whoop-sync.ts) with sync(window, sink): Promise<IngestionResult>. It does NOT implement IngestionAdapter (that contract is file-path-shaped, ADR-1) — its entry point is a network sync(window). For each collection in [recovery, sleep, cycle, workout] it loops WhoopClient.fetchPage following the cursor, maps each WhoopRecord to HealthObservation[] (source='whoop', a fixed metric name + fixed unit per collection field; tStart from the record's start ISO; id left to the store's content-derived SHA-256), and writes via the EXISTING ObservationSink.writeBatch in bounded batches (reuse StoreObservationSink + HealthDataStore.upsertObservations unchanged). Resume is idempotent: re-running over an overlapping window inserts only genuinely-new rows via INSERT OR IGNORE; a mid-pagination failure aborts with committed batches intact and never partially corrupts the store (fail-closed, never fail-open). Add the CLI: `bober medical whoop sync [--since <iso>]` in src/cli/commands/medical.ts mirroring the existing `medical import` command (src/cli/commands/medical.ts:30-72): build EgressGuard.fromConfig + WhoopTokenStore + WhoopClient + WhoopSyncAdapter + StoreObservationSink + HealthDataStore, call egress.assertAllowed('device-connection') (surfacing a clear 'not enabled' message), run the sync over the window (default last 7 days or --since), print the IngestionResult {recordsParsed, newRows}, store.close() in finally, set process.exitCode on error and NEVER throw.",
+  "status": "completed",
+  "completedAt": "2026-06-17T16:13:00Z",
+  "dependsOn": ["sprint-spec-20260617-medical-whoop-guardrails-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "WhoopSyncAdapter.sync(window, sink) pulls all four collections via WhoopClient (injected, fixture-backed), maps records to HealthObservation rows with source='whoop' and a fixed metric+unit per mapped field, writes them through ObservationSink.writeBatch in bounded batches, and returns IngestionResult {recordsParsed, newRows}. A unit test with a fixture WhoopClient and an in-temp-dir HealthDataStore asserts rows land with source='whoop' and the counts are correct.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "Idempotent resume: running sync twice over the same/overlapping window yields newRows>0 on the first run and newRows===0 on the second (INSERT OR IGNORE on the content-derived SHA-256 dedup key), with no duplicate observations in the store. A unit test asserts the second run adds zero rows.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "Partial-failure safety: when the fixture WhoopClient throws mid-pagination (after >=1 committed batch), sync rejects/aborts, the already-committed batch rows remain valid in the store, no partial/corrupt row is written, and a subsequent successful re-run reaches the same end-state. A unit test asserts committed rows survive and a re-run completes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "`bober medical whoop sync` with the device-connection axis OFF prints a clear 'device-connection egress not enabled' message and exits with process.exitCode 1 without throwing and without constructing a WhoopClient that performs HTTP. A test invoking the command action asserts the message and exit code.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "With the axis on but WHOOP_CLIENT_ID/SECRET unset, or with no stored refresh token, the command prints a clear 'set WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET' or 'authorize first' message and exits with process.exitCode 1 (never throws). A test asserts each branch.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "The full test suite passes (npm run test) with no regression and the scoped ESLint medical boundary still passes (npm run lint) — whoop-sync.ts and the CLI contain no network imports (all HTTP remains in whoop-client.ts).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "On a successful sync the command prints recordsParsed and newRows and calls HealthDataStore.close() in a finally block (no leaked DB handle); ingestion writes an audit entry event:'ingest' (IDs/enums only) consistent with the existing import path. A test asserts the printed result and the audit entry.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add a persisted sync cursor / checkpoint (Open Question; rely on idempotent re-run, ADR-4).",
+    "Do not add UUID-keyed upsert or in-place-mutation handling (Open Question; content-derived dedup only).",
+    "Do not add new numerics primitives for WHOOP metrics — reuse the existing closed whitelist.",
+    "Do not modify the IngestionAdapter interface, ObservationSink, or the health_observations schema.",
+    "Do not add webhooks; sync is on-demand only."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "`bober medical whoop sync` persists WHOOP observations end-to-end with deterministic idempotent dedup, fails closed on partial errors, surfaces clear axis-off/credential errors with exit code 1 and never throws, all HTTP stays in whoop-client.ts, and build/typecheck/test/lint are green with no regression"
+  ],
+  "definitionOfDone": "src/medical/whoop/whoop-sync.ts exports WhoopSyncAdapter { readonly source:'whoop'; sync(window, sink): Promise<IngestionResult> } that pages WhoopClient across the four collections, maps records to HealthObservation[] (source='whoop'), writes via the existing ObservationSink in bounded batches, is idempotent on re-run, and aborts cleanly without partial corruption on error. src/cli/commands/medical.ts gains a `whoop` subcommand with a `sync [--since <iso>]` action mirroring `medical import`: assertAllowed('device-connection'), wire the pieces, print IngestionResult, store.close() in finally, set process.exitCode on error and never throw. Collocated tests (fixture WhoopClient + temp-dir store) cover mapping/counts, idempotent resume, partial-failure safety, and the CLI axis-off/credential-missing/success branches. Build, typecheck, test, lint pass with no regression; no network import outside whoop-client.ts.",
+  "assumptions": [
+    "StoreObservationSink and HealthDataStore.upsertObservations exist and are reused unchanged (src/medical/ingestion.ts:16-32, src/medical/health-store.ts:155-175); WhoopSyncAdapter depends on the ObservationSink interface, not a concrete store.",
+    "IngestionResult is the existing {recordsParsed, newRows} shape (src/medical/types.ts:191-194); recordsParsed counts mapped observations seen, newRows the count returned by upsertObservations.",
+    "The CLI command tree exposes registerMedicalCommand (src/cli/commands/medical.ts) where a `.command(\"whoop\").command(\"sync\")` is added mirroring `medical import`; the import action's error/exitCode/finally pattern (medical.ts:69-73) is the template.",
+    "A default sync window of the last 7 days is used when --since is omitted; the window start/end are computed from an injected now (or Date in the CLI boundary only) and passed as ISO strings to sync — the store and adapter never read the clock.",
+    "Each WHOOP collection maps to one or more fixed (metric, unit) pairs decided in code (e.g. recovery score, resting heart rate, HRV, sleep duration); the mapping is a small reviewable table, and unmapped fields are skipped rather than guessed."
+  ],
+  "outOfScope": [
+    "Persisted sync cursor / checkpoint",
+    "UUID-keyed upsert / in-place mutation",
+    "New numerics primitives",
+    "IngestionAdapter / ObservationSink / schema changes",
+    "Webhooks"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/medical/whoop/whoop-client.ts + whoop-token.ts (from Sprint 2 — the sync depends on these), src/medical/ingestion.ts (IngestionNormalizer, ObservationSink, StoreObservationSink, bounded-batch backpressure pattern), src/medical/health-store.ts:32-42,155-175 (content-derived SHA-256 id + upsertObservations INSERT OR IGNORE returning new-row count), src/medical/adapters/apple-health.ts:13,96-99 (bounded ~1000-row batch + writeBatch backpressure precedent), src/cli/commands/medical.ts:30-72 (the `medical import` command shape: action, print, store.close() in finally, process.exitCode on error, never throw), src/medical/types.ts (IngestionResult :191-194, HealthObservation :96-107, AuditEvent 'ingest').\n\nwhoop-sync.ts (NO network import — it depends on WhoopClient, which owns HTTP): class WhoopSyncAdapter { readonly source='whoop'; constructor(private client: WhoopClient) {} async sync(window: SyncWindow, sink: ObservationSink): Promise<IngestionResult> }. For each collection in ['recovery','sleep','cycle','workout']: cursor=undefined; do { page = await client.fetchPage(collection, window, cursor); const obs = mapWhoopRecords(collection, page.records); accumulate recordsParsed += obs.length; await sink.writeBatch(obs, []); cursor = page.nextCursor } while (cursor). Sum newRows from the sink/store path. mapWhoopRecords: a small fixed table mapping known WHOOP fields to (metric, unit) with source='whoop', tStart=record.tStartIso, value=number; skip fields not in the table. Let the store derive id (content-derived) — do NOT set id from the WHOOP UUID. On any fetch/throw, let it propagate (committed batches already persisted via per-batch transaction) — do NOT catch-and-continue (fail-closed).\n\nCLI: in registerMedicalCommand add medicalCmd.command('whoop').command('sync').option('--since <iso>') with an action that: loads config, builds EgressGuard.fromConfig(config); wrap the body in try/catch; call egress.assertAllowed('device-connection') (catch -> print 'device-connection egress not enabled — set medical.egress.deviceConnection' and set process.exitCode=1, return); build WhoopTokenStore (clientCredentials may throw 'set WHOOP_CLIENT_ID/SECRET' -> catch, message, exit 1); if readRefreshToken() is undefined -> print 'authorize first', exit 1; build WhoopClient + WhoopSyncAdapter + HealthDataStore + StoreObservationSink; compute window (--since or now-7d) as ISO; result = await adapter.sync(window, sink); print recordsParsed/newRows; in finally store.close(). Mirror the exact error/exitCode discipline of `medical import` (medical.ts:69-73) — never throw out of the action. Append an 'ingest' audit entry consistent with the existing import path if that path does so.\n\nTests: whoop-sync.test.ts with a fake WhoopClient returning fixture pages + a real HealthDataStore in a temp dir: assert rows land with source='whoop' and counts; run twice -> second newRows===0; a fake client that throws on page 2 -> assert page-1 rows persisted, sync rejects, re-run completes. CLI test: invoke the action with axis off (assert message + exitCode 1, no HTTP), with env unset (assert message + exit 1), with axis on + fixture client (assert printed recordsParsed/newRows + store closed + 'ingest' audit entry). Inject FetchLike/now so no real network or clock. ESM/.js extensions, unicode section headers, small single-purpose files.",
+  "evaluatorNotes": "sc-3-2: fixture WhoopClient returns known records across the four collections; after sync, query HealthDataStore for source='whoop' rows and assert metric/unit/tStart mapping + recordsParsed/newRows.\nsc-3-3: run sync twice over the same window; assert first newRows>0, second newRows===0, and the row count in the store is unchanged after the second run (no duplicates).\nsc-3-4: fixture client commits page 1 then throws on page 2; assert sync rejects, page-1 rows are present and well-formed (no half-written row), then a clean re-run reaches full expected state.\nsc-3-5: invoke the CLI action with deviceConnection false; assert the printed 'not enabled' message, process.exitCode===1, no throw, and that no fetch/HTTP occurred (spy FetchLike never constructed/called).\nsc-3-6: axis on, env unset -> assert 'set WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET' + exit 1; axis on, creds set, no refresh token -> assert 'authorize first' + exit 1.\nsc-3-7: npm run lint clean; grep whoop-sync.ts and the CLI diff for network imports/fetch -> expect none (all HTTP in whoop-client.ts); run the FULL suite for no regression.\nsc-3-8: on a successful fixture sync assert stdout contains recordsParsed and newRows, store.close() was called (no open-handle warning / spy on close), and an event:'ingest' audit entry (IDs/enums only) was appended.\nBuild/typecheck/test/lint all green.",
+  "estimatedFiles": [
+    "src/medical/whoop/whoop-sync.ts",
+    "src/medical/whoop/whoop-sync.test.ts",
+    "src/cli/commands/medical.ts",
+    "src/cli/commands/medical.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-17T14:32:38Z",
+  "updatedAt": "2026-06-17T14:32:38Z"
+}

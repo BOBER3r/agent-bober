@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260617-medical-whoop-guardrails-3-1",
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-3",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "timestamp": "2026-06-17T16:13:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing eval-persist warnings." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "203 files, 2484 pass / 3 skipped. whoop-sync(5), medical(6) new." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "build+typecheck clean." },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "WHOOP_FIELD_MAP fixed (metric,unit); 4 collections paged; source='whoop'; id unset (store derives); writeBatch per batch; recordsParsed/newRows correct." },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "sync twice => run1 newRows>0, run2 newRows===0, store length 1 no dup; INSERT OR IGNORE content-derived SHA-256, not WHOOP UUID." },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "FAIL-CLOSED: no try/catch around fetchPage in sync(); throwOnNthCall=2 => sync rejects, page-1 row survives valid, clean re-run reaches full state (newRows=1)." },
+    { "criterionId": "sc-3-5", "required": true, "result": "pass", "evidence": "axis-off gate (medical.ts:54 isAllowed) before tokenStore(:64)/WhoopClient(:99) construction; fetchPage spy 0 calls; 'not enabled' msg + exitCode 1, no throw." },
+    { "criterionId": "sc-3-6", "required": true, "result": "pass", "evidence": "creds-unset => 'WHOOP_CLIENT_ID/SECRET' + exit 1; no refresh token => /authoriz/i + exit 1; neither throws (caught at :67-86)." },
+    { "criterionId": "sc-3-7", "required": true, "result": "pass", "evidence": "full suite green; lint 0 errors; grep network patterns on whoop-sync.ts + medical.ts => none; all HTTP in whoop-client.ts." },
+    { "criterionId": "sc-3-8", "required": true, "result": "pass", "evidence": "stdout 'records parsed'/'new rows'; store.close() in finally (:119); audit event:'ingest' tIso only; audit excludes recordsParsed/newRows/'85' (PHI-free, AuditEntry type-enforced)." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 required criteria pass independently. WhoopSyncAdapter: correct 4-collection pagination, content-derived SHA-256 idempotent dedup, fail-closed error propagation (no catch-and-continue). CLI gates on egress axis before any HTTP construction and closes store in finally. Full 2484-test suite green, lint clean, no network imports outside whoop-client.ts, no regressions."
+}

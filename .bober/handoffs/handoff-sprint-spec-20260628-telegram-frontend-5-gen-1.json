@@ -1,0 +1,140 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-telegram-frontend-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-telegram-frontend-5",
+  "specId": "spec-20260628-telegram-frontend",
+  "timestamp": "2026-06-30T00:11:56Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober telegram adapter. Sprints 1-4 DONE: src/telegram/{whitelist,outbound,bot,router,keyboard}.ts + handlers/{capture,prioritize,approvals}.ts. sendSafe is the sole text funnel; BotTransport has sendMessage/sendKeyboard/answerCallback (grammy in bot.ts only); keyboard.ts builds inline keyboards + callback_data codec; poll loop handles message + callback_query; an ephemeral chatId-keyed PendingCallbackState handles multi-turn flows. Sprint 5 handles DOCUMENT uploads with a MANDATORY per-upload Yes/No opt-in before any file reaches the existing src/medical ingest path; replies carry count/summary only (NO PHI echo).",
+    "completedSprints": [
+      {
+        "contractId": "...-1",
+        "title": "transport+whitelist+funnel",
+        "summary": "sendSafe; grammy behind BotTransport in bot.ts; whitelist."
+      },
+      {
+        "contractId": "...-2",
+        "title": "router+capture",
+        "summary": "router.classify; injected-sink handler pattern."
+      },
+      {
+        "contractId": "...-3",
+        "title": "prioritize",
+        "summary": "injected-dep handler + execa-to-CLI default (hub owns LLM)."
+      },
+      {
+        "contractId": "...-4",
+        "title": "inline approve gate",
+        "summary": "keyboard.ts (inline keyboard + callback_data codec); handlers/approvals.ts; BotTransport gained sendKeyboard/answerCallback; ephemeral PendingCallbackState map for multi-turn Adjust/Reject; byte-identical disk markers."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/telegram/keyboard.ts (REUSE for Yes/No inline keyboard + callback_data codec)",
+      "src/telegram/bot.ts (BotTransport \u2014 may need getFile/file-download; poll loop document-message branch; PendingCallbackState pattern to mirror for pending-upload)",
+      "src/telegram/handlers/approvals.ts (mirror the injected-dep + ephemeral-state + callback pattern)",
+      "src/telegram/outbound.ts (sendSafe \u2014 count/summary reply)",
+      "medical ingest surface: src/medical pipeline + src/cli/commands/medical.ts (`agent-bober medical import <file>`) \u2014 curator pins exact importable entry or execa command + egress/consent guards"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260628-telegram-frontend-5",
+    "specId": "spec-20260628-telegram-frontend",
+    "sprintNumber": 5,
+    "title": "Document upload \u2192 medical ingest with mandatory per-upload opt-in",
+    "description": "Handle document uploads. Because Telegram is not end-to-end encrypted, the bot requires an explicit per-upload Yes/No opt-in before any processing. Only on explicit Yes does it download the file and hand it to the existing src/medical ingest path; on No or no confirmation the file is dropped and nothing is ingested. Post-ingest replies carry a non-sensitive count/summary only.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260628-telegram-frontend-4"
+    ],
+    "features": [
+      "feat-7"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-5-1",
+        "description": "`npm run build` (tsc) compiles the document-upload handler additions with zero TypeScript errors.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-2",
+        "description": "A unit test shows an uploaded document with no opt-in confirmation never invokes the medical ingest path (injected ingest spy records zero calls).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-3",
+        "description": "A unit test shows that after an explicit Yes confirmation the handler invokes the medical ingest path exactly once with the downloaded file.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-4",
+        "description": "A unit test shows that after a No confirmation the file is discarded and the ingest spy records zero calls.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-5",
+        "description": "A unit test asserts the opt-in prompt text states the document will be sent to local medical ingest before the user confirms, and the post-ingest reply contains a count/summary with no raw marker values.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-6",
+        "description": "Uploading a lab PDF to the running bot prompts an opt-in; confirming Yes runs medical ingestion and the bot replies with a non-sensitive completion summary.",
+        "verificationMethod": "manual",
+        "required": false
+      }
+    ],
+    "nonGoals": [
+      "Do not auto-ingest uploaded documents \u2014 ingestion happens only after an explicit per-upload Yes confirmation.",
+      "Do not reimplement medical parsing or storage \u2014 invoke the existing medical ingest feature in src/medical.",
+      "Do not echo extracted medical marker values, names, or other raw PHI back through Telegram \u2014 reply with a count/summary only via sendSafe.",
+      "Do not persist the uploaded file outside the medical module's own ingest path.",
+      "Do not weaken or bypass the existing medical egress/consent guardrails in src/medical."
+    ],
+    "stopConditions": [
+      "The opt-in gating unit tests (no-confirm and No \u2192 zero ingest calls; Yes \u2192 one ingest call) pass and `npm run build` exits zero.",
+      "An uploaded document reaches the medical ingest path only after a recorded explicit Yes confirmation.",
+      "Post-ingest replies contain no raw marker values."
+    ],
+    "definitionOfDone": "When a whitelisted user uploads a document, the bot first asks for an explicit per-upload confirmation naming the local medical ingest destination. Only on an explicit Yes does the bot download the file and pass it to the existing src/medical ingest path; on No, or absent a confirmation, the file is dropped and nothing is ingested. The reply after ingest contains only a non-sensitive summary (such as how many results were imported), never raw marker values or names.",
+    "assumptions": [
+      "The medical ingest path is the existing src/medical pipeline (IngestionNormalizer / StoreObservationSink and `agent-bober medical import`, see src/cli/commands/medical.ts); the adapter invokes it per Q1's hybrid rule.",
+      "Medical egress/consent guardrails in src/medical (egress.ts, consent.ts) remain authoritative and are not duplicated here.",
+      "Per-upload opt-in is mandatory because Telegram bot messages are not end-to-end encrypted (research \u00a73a line 141)."
+    ],
+    "outOfScope": [
+      "Lab-PDF parsing into structured JSON (owned by the medical module / its own importer).",
+      "Non-medical document routing (e.g. financial statements) \u2014 not in this spec."
+    ],
+    "ambiguityScore": 4,
+    "generatorNotes": "Add src/telegram/handlers/upload.ts. On a document message: build an inline Yes/No keyboard (reuse src/telegram/keyboard.ts from Sprint 4) with a prompt that names the local medical ingest destination so consent is informed. Track the pending upload keyed by chat/message id; only on the Yes callback download the file via the transport wrapper's getFile and pass the local path to an injected ingest function (default invokes the existing src/medical ingest path \u2014 import the ingest entry if exported, else execa `agent-bober medical import <file>`). On No or timeout, discard the downloaded/temp file and ingest nothing. Reply via sendSafe with a count/summary (e.g. 'Imported N results') \u2014 never echo marker values/names. Respect existing medical egress/consent guards (do not bypass). ESM .js imports, `import type`, no `any`, node:fs/promises only.",
+    "evaluatorNotes": "Verify the no-confirm and No paths record zero ingest calls (injected spy). Verify the Yes path calls ingest exactly once with the downloaded file. Verify the prompt text discloses the destination before confirmation and the post-ingest reply leaks no marker values. Confirm no medical guardrail is duplicated or bypassed. Run build + the gating unit tests.",
+    "estimatedFiles": [
+      "src/telegram/handlers/upload.ts",
+      "src/telegram/handlers/upload.test.ts",
+      "src/telegram/keyboard.ts",
+      "src/telegram/bot.ts"
+    ],
+    "estimatedDuration": "medium"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

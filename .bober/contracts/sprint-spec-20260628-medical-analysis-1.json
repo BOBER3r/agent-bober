@@ -1,0 +1,103 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-1",
+  "specId": "spec-20260628-medical-analysis",
+  "sprintNumber": 1,
+  "title": "Proactive trend Findings + vault Finding writer + Dataview dashboard + review pass",
+  "description": "Add a deterministic proactive review pass that detects lab trends and reference-range crossings over the existing HealthDataStore lab series and emits Finding notes (markdown-with-frontmatter) into a medical vault findings/ directory plus a Dataview dashboard note, exposed via `bober medical review` and a runnable runProactiveReview entrypoint the scheduler can import.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "Running the project build (tsc) after the sprint produces zero type errors with the new src/medical/analysis modules included.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "A Vitest unit test seeds a HealthDataStore (:memory:) with an 'ldl' lab series whose latest value exceeds referenceHigh and asserts analyzeTrends returns at least one MedicalFinding with domain 'medical', kind 'watch' or 'risk', and 'ldl' present in its title.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A Vitest test asserts a flat in-range biomarker series produces zero trend findings, and a strictly rising series that crosses referenceHigh produces exactly one trend finding for that biomarker.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A Vitest test calls runProactiveReview twice against the same seeded store and injected now, asserting the count of files under the vault findings directory is identical after both runs (deterministic ids give idempotent overwrite, no duplicates).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A Vitest test asserts writeDashboard emits findings/dashboard.md containing a fenced dataview code block that references the frontmatter fields urgency and kind.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "A Vitest test asserts serializeFindingToMarkdown emits YAML frontmatter containing keys id, domain, kind, urgency, severity, surfacedAt, status and that surfacedAt equals the injected ISO timestamp (no wall-clock read).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "Running `bober medical review` against a project with a seeded .bober/medical/health.db prints the number of findings written and the dashboard path to stdout and exits with code 0.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not call any LLM, network, or cloud service in the trend analyzer, finding-writer, or review pass — this sprint is fully deterministic and offline.",
+    "Do not define a new canonical Zod Finding schema; the canonical schema is owned by spec-20260628-priority-hub. This sprint emits the common Finding field set as vault markdown frontmatter only.",
+    "Do not modify MedicalSopEngine (src/medical/engine.ts) or the reactive Q&A path.",
+    "Do not write health values into the audit log; AuditLog entries remain IDs/enums only.",
+    "Do not hand-roll trend arithmetic — reuse NumericsQueryLayer.getLabTrend for slope and latest values."
+  ],
+  "stopConditions": [
+    "All required success criteria sc-1-1 through sc-1-6 pass evaluation and `bober medical review` exits 0 against a seeded store.",
+    "The new modules under src/medical/analysis/ have collocated *.test.ts files and the full Vitest suite passes with no new failures."
+  ],
+  "definitionOfDone": "Running `bober medical review` (or importing runProactiveReview) scans the existing lab series in HealthDataStore, applies deterministic reference-range and slope rules via NumericsQueryLayer.getLabTrend, and writes one Finding markdown note per detected condition into the vault findings/<id>.md with common-Finding frontmatter, plus a findings/dashboard.md Dataview note. Re-running over an unchanged store overwrites the same files without creating duplicates. No LLM or network is involved. The reactive medical Q&A engine is untouched.",
+  "assumptions": [
+    "Vault directory resolves to config.medical.vaultDir when set, otherwise <projectRoot>/.bober/medical/vault — mirrors the .bober/medical/health.db location used at src/cli/commands/medical.ts:95-98 and src/medical/engine.ts:350.",
+    "The common Finding field set is taken from research §3a (.bober/research/research-20260627-knowledge-platform-landscape.md:121-126): id, domain, title, kind(action|watch|risk|question), urgency 1-5, severity 1-5, evidence[], surfacedAt, dueBy?, tags[], status, promotesTo?. Emitted as YAML frontmatter; the hub's canonical Zod (spec-20260628-priority-hub) validates the same fields when aggregating.",
+    "Deterministic trend findings assign deterministic urgency/severity from rule tiers; LLM-assigned urgency/severity is reserved for recommendations (research §4a:183,203) and lands in sprint 3.",
+    "Lab trend math reuses NumericsQueryLayer.getLabTrend (src/medical/numerics.ts:212) and getLabSeries (src/medical/health-store.ts:196); no new numeric primitive is added.",
+    "All timestamps are injected via opts.now; the clock is read only at the CLI boundary, mirroring src/cli/commands/medical.ts:89.",
+    "Finding ids are derived deterministically (SHA-256 slice, mirroring observationId at src/medical/health-store.ts:32-42) from stable content so the same condition maps to the same note file across runs."
+  ],
+  "outOfScope": [
+    "Test-gap cadence suggestions and cross-marker dig-deeper (sprint 4).",
+    "Online research notes (sprint 5).",
+    "LLM recommendations and the judge-loop (sprints 2-3).",
+    "Persisting findings into FactStore for hub aggregation — the hub (spec-20260628-priority-hub) owns cross-repo aggregation; this sprint's canonical sink is the vault per research §3b:150."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/medical/analysis/finding.ts: a MedicalFinding interface mirroring the common Finding field set from research §3a (domain fixed to 'medical'); a deterministic findingId(...) using createHash('sha256').digest('hex').slice(0,16) exactly like observationId at src/medical/health-store.ts:32-42; and serializeFindingToMarkdown(finding) producing YAML frontmatter + a short body. Create src/medical/analysis/finding-writer.ts: writeFinding(vaultDir, finding) -> ensureDir (src/utils/fs.ts) + node:fs/promises writeFile to findings/<id>.md; writeDashboard(vaultDir) -> findings/dashboard.md embedding a dataview TABLE urgency, severity, kind, status FROM \"findings\" WHERE domain = \"medical\" SORT urgency DESC block. Use node:fs/promises only (principles: no sync fs). Create src/medical/analysis/trends.ts: analyzeTrends(store, biomarkers, opts:{now}) -> MedicalFinding[]; reuse NumericsQueryLayer.getLabTrend; rule A: latestValue below referenceLow or above referenceHigh -> kind 'watch' (severity 3), or 'risk' (severity 4) when more than 20% beyond the edge; rule B: slope != null and trending toward the nearer reference edge with a projected crossing -> kind 'watch' (severity 2). Create src/medical/analysis/review-pass.ts: runProactiveReview(projectRoot, config, opts:{now; biomarkers?}) -> opens HealthDataStore at <projectRoot>/.bober/medical/health.db like engine.ts:350, resolves vaultDir, runs analyzeTrends, writes findings + dashboard, returns {findingsWritten, dashboardPath, findingPaths}; close the store in a finally like medical.ts:119. Add `vaultDir: z.string().optional()` to MedicalSectionSchema (src/config/schema.ts:376). Register `bober medical review` in src/cli/commands/medical.ts mirroring the existing import / whoop sync action pattern (resolveRoot, try/catch, process.exitCode on error, never throw, read the clock only here). Collocate *.test.ts beside each new module; tests pass :memory: stores and injected now, mirroring health-store.test.ts.",
+  "evaluatorNotes": "Verify there are zero network/LLM imports in src/medical/analysis/* (grep for providers/factory, fetch, http, llm, ollama). Confirm analyzeTrends is pure and deterministic (same input gives same output) and that getLabTrend is the only numeric source (no inline arithmetic for slope). Confirm finding ids are stable across two runProactiveReview calls by asserting the findings file count is unchanged. Confirm dashboard.md contains a fenced dataview block. Confirm src/medical/engine.ts and its tests are unchanged (git diff touches no engine.ts). Confirm all fs operations use node:fs/promises (no *Sync). Confirm surfacedAt in the emitted frontmatter equals the injected now.",
+  "estimatedFiles": [
+    "src/medical/analysis/finding.ts",
+    "src/medical/analysis/finding.test.ts",
+    "src/medical/analysis/finding-writer.ts",
+    "src/medical/analysis/finding-writer.test.ts",
+    "src/medical/analysis/trends.ts",
+    "src/medical/analysis/trends.test.ts",
+    "src/medical/analysis/review-pass.ts",
+    "src/medical/analysis/review-pass.test.ts",
+    "src/config/schema.ts",
+    "src/cli/commands/medical.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-28T00:00:00.000Z",
+  "completedAt": "2026-06-28T18:36:01.438Z"
+}

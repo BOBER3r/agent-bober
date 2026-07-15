@@ -1,0 +1,46 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-ingest-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-ingest-3",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T16:00:47Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical knowledge template — lab-ingestion leg. Sprint 3: wire Sprints 1+2 into a new `bober medical import-labs <pdf>` subcommand + extracted runImportLabs(projectRoot, pdfPath, deps) core. FAIL-CLOSED FIRST: when the cloud-inference egress axis is off (default), print a clear message, set exit 1, and return BEFORE reading the PDF or building any client. When on: parse -> writeLabNote -> reindex -> dedup -> IDs/enums-only audit 'ingest' entry. Tests inject fake parser deps; no real network.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-medical-ingest-1",
+        "title": "Lab-PDF parser",
+        "summary": "parseLabPdf(pdfBytes, deps:{client,model}) in src/medical/lab-pdf-parser.ts returns a Zod-validated ParsedLabReport. Production client via buildMedicalInferenceClient(config, egress) in src/medical/inference.ts (cloud honoured only behind cloud-inference)."
+      },
+      {
+        "contractId": "sprint-spec-20260628-medical-ingest-2",
+        "title": "Lab-note writer + reindex",
+        "summary": "writeLabNote(vaultDir, marker, meta) in src/medical/lab-note.ts writes <vaultDir>/labs/<panel-slug>/<marker-slug>-<date>.md. reindexLabNotes(vaultDir, store) in src/medical/lab-reindex.ts upserts into HealthDataStore.lab_results and RETURNS the genuine new-row count (0 for dups)."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/cli/commands/medical.ts (runWhoopSync + WhoopSyncDeps pattern ~lines 30-121; dbPath wiring ~144-148; .action error handling ~163-171)",
+      "src/medical/inference.ts (buildMedicalInferenceClient, fail-closed ~31-56, 43-49)",
+      "src/medical/egress.ts (EgressGuard.fromConfig, isAllowed('cloud-inference'))",
+      "src/medical/audit.ts + src/medical/types.ts (AuditEntry ~80-92)",
+      "src/medical/lab-pdf-parser.ts (parseLabPdf)",
+      "src/medical/lab-note.ts (writeLabNote)",
+      "src/medical/lab-reindex.ts (reindexLabNotes)",
+      "src/medical/health-store.ts (HealthDataStore)",
+      "src/cli/commands/medical.test.ts (extend)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

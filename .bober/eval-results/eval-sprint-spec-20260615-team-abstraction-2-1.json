@@ -1,0 +1,33 @@
+{
+  "evalId": "eval-sprint-spec-20260615-team-abstraction-2-1",
+  "contractId": "sprint-spec-20260615-team-abstraction-2",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T12:35:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0,
+    "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0, zero errors."},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0, clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings in eval-persist.test.ts."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "details": "167 files / 1953 passed / 3 skipped (pre-existing). memory.test.ts 38, retrieve.test.ts 16, memory CLI 12."},
+    {"strategy": "api-check", "required": false, "result": "skipped", "details": "No API endpoints."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "result": "pass", "evidence": "build exit 0."},
+    {"criterionId": "sc-2-2", "result": "pass", "evidence": "typecheck exit 0."},
+    {"criterionId": "sc-2-3", "result": "pass", "evidence": "1953 pass; sprint suites green; no regressions."},
+    {"criterionId": "sc-2-4", "result": "pass", "evidence": "memoryDir centralizes mapping; undefined/''/'programming' -> .bober/memory, 'teamA' -> .bober/memory/teamA; lessonPath/indexPath delegate. Verified independently via node -e."},
+    {"criterionId": "sc-2-5", "result": "pass", "evidence": "C6 asserts isolation BOTH directions + teamA/teamB mutual isolation."},
+    {"criterionId": "sc-2-6", "result": "pass", "evidence": "C7 writes fixture into .bober/memory/ (readFile-verified) and no-namespace loader returns it; 'programming' round-trips to same path, no subdir."},
+    {"criterionId": "sc-2-7", "result": "pass", "evidence": "retrieveRelevantLessons {namespace:'teamA'} returns only teamA's lessons."},
+    {"criterionId": "sc-2-8", "result": "pass", "evidence": "resolveDefaultNamespace (loadConfig+loadTeam) -> memoryNamespace||undefined; CLI handlers + ChatSession default to current path; tests confirm no programming/ subdir created."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 required criteria pass. memoryDir centralizes the namespace->path rule; all four persistence fns thread namespace; callers derive it from loadTeam; distill.ts provably unmodified (zero diff from main). Build/typecheck clean, 1953 tests pass, async fs only, real temp dirs, no nonGoal violations."
+}

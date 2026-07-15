@@ -1,0 +1,94 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-7",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 7,
+  "title": "Multi-LLM \"secretary\" fleet view (/fleet command + per-agent streaming sections)",
+  "description": "Add a read-only secretary view that surfaces what each LLM/agent produced in the most recent fleet run. A pure renderer reads the head-written .bober/fleet-synthesis.json (SynthesisBundle { rounds, childResults, findings } from src/fleet/synthesis.ts:29), groups findings by FactRecord.subject (the per-agent childFolder, src/fleet/shared-blackboard.ts:74-105), and emits one section per agent showing the agent label, a one-line summary, round, confidence, and that agent's finding count. One shared renderer feeds two surfaces: an on-demand /fleet command and the Sprint 6 streaming/digest path. All output goes through the sendSafe funnel; raw findings[].value is summarized to one line, never sent verbatim. No run/fleet/scheduler logic is added \u2014 this stays a thin read+render adapter and adds no npm dependency (SynthesisBundle/FactRecord are type-only imports).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-telegram-frontend-6"
+  ],
+  "features": [
+    "feat-9"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "`npm run build` (tsc) compiles the fleet-view additions with zero TypeScript errors; SynthesisBundle and FactRecord are imported as type-only (no runtime import of src/fleet or better-sqlite3 into src/telegram).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "A unit test passes the renderer a SynthesisBundle whose findings carry >=2 distinct subjects and asserts the output has exactly one section per distinct subject, each containing that agent's label, a one-line summary, the round, the confidence, and that subject's finding count.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "A unit test shows that when fleet-synthesis.json is absent or has zero findings (injected reader returns null / { findings: [] }), the /fleet handler returns a non-error 'no recent fleet run' message and throws nothing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "A unit test asserts the rendered header includes the run's round count (SynthesisBundle.rounds).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "A unit test with a transport spy and an over-long finding value asserts /fleet and the streamed fleet sections route through sendSafe and that the raw value is truncated/summarized to one line \u2014 the verbatim payload never reaches the transport.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "A unit test shows a non-whitelisted sender's /fleet is denied with the numeric-id echo (per feat-2) and performs no synthesis-file read (verified via an injected reader spy that is never called).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-7",
+      "description": "Running a fleet with a blackboard, then sending /fleet in Telegram, shows one labeled section per agent with summary/round/confidence/count; a live fleet run streams those per-agent sections by editing one message in place (reusing Sprint 6 streaming).",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not add run, fleet, or scheduler execution logic \u2014 read the existing .bober/fleet-synthesis.json artifact only; this stays a presentation adapter.",
+    "Do not couple src/telegram to better-sqlite3 or import SharedBlackboard at runtime \u2014 read the JSON artifact and import SynthesisBundle/FactRecord as type-only.",
+    "Do not emit raw findings[].value verbatim \u2014 summarize/truncate to one line and route through sendSafe.",
+    "Do not implement Tier 2 (per-LLM bot identities / Bot API 10.0 bot-to-bot) or Tier 3 (Secretary Mode) \u2014 both are deferred to sibling specs per the enriched spec outOfScope.",
+    "Do not add an npm dependency \u2014 feat-9 introduces none.",
+    "Do not bypass the whitelist or the sendSafe funnel."
+  ],
+  "stopConditions": [
+    "`npm run build` exits zero and the renderer/grouping, empty-state, header-rounds, sendSafe-truncation, and whitelist-denial unit tests all pass.",
+    "The per-agent grouping is by FactRecord.subject and each section carries label + one-line summary + round + confidence + count.",
+    "Both the /fleet command and the streaming path emit through sendSafe; no raw payload is sent verbatim."
+  ],
+  "definitionOfDone": "A whitelisted user can run /fleet and receive one labeled section per agent from the most recent fleet run (label + one-line summary + round + confidence + finding count, with a header showing the round count), read from .bober/fleet-synthesis.json and grouped by FactRecord.subject. The same renderer feeds the Sprint 6 streaming/digest path so a live run streams per-agent sections in place. Missing/empty synthesis yields a graceful 'no recent fleet run' reply. All output passes through sendSafe with raw payloads truncated to one line; non-whitelisted /fleet is denied with an id-echo and reads nothing. No run/fleet/scheduler logic and no npm dependency are added.",
+  "assumptions": [
+    "The head writes the SynthesisBundle (src/fleet/synthesis.ts:29-39 collect()) to .bober/fleet-synthesis.json after a fleet run; the generator should confirm the exact write path and, if it differs, read that path (the shape \u2014 { rounds, childResults, findings } \u2014 is the contract).",
+    "FactRecord (src/state/facts.ts:36) exposes subject (per-agent childFolder), value (payload), and confidence; predicate is 'finding'. Grouping key = subject.",
+    "The sendSafe funnel (Sprint 1) and the in-place streaming sender (Sprint 6, src/telegram/streaming.ts) already exist and are the only outbound path; this sprint feeds them, it does not replace them.",
+    "The synthesis file reader is injected (a function returning the parsed bundle or null) so unit tests drive fixtures without touching disk; the production reader uses node:fs/promises."
+  ],
+  "outOfScope": [
+    "Live mid-run blackboard reads via `agent-bober blackboard read` (Q7 resolved to the JSON artifact only).",
+    "Rendering childResults (PortfolioReport) detail beyond what the per-agent finding sections need.",
+    "Any change to how the fleet writes fleet-synthesis.json."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add src/telegram/fleet-view.ts exporting (a) a PURE renderFleetView(bundle: SynthesisBundle): string[] (or section[]) that groups bundle.findings by FactRecord.subject, and per group builds a section = agent label (subject) + one-line summary of the latest finding (truncate value to ~1 line) + round + confidence + count; header line includes bundle.rounds; and (b) the /fleet command handler that loads the bundle via an injected reader (default: read .bober/fleet-synthesis.json with node:fs/promises, JSON.parse, return null on ENOENT/parse-failure), gates on the whitelist (reuse feat-2), and emits via sendSafe. Import `type { SynthesisBundle }` from ../fleet/synthesis.js and `type { FactRecord }` from ../state/facts.js (TYPE-ONLY \u2014 no runtime coupling). Register /fleet in the bot router (src/telegram/bot.ts) alongside the other slash commands. Wire the Sprint 6 streaming path (src/telegram/streaming.ts / feat-8) to call renderFleetView so a live run streams the same per-agent sections via in-place edits. Empty/missing synthesis \u2192 a friendly 'no recent fleet run' line, never a throw. ESM .js imports, `import type`, no `any`, node:fs/promises only.",
+  "evaluatorNotes": "Drive renderFleetView with a fixture bundle whose findings have >=2 distinct subjects and assert one section per subject with label+summary+round+confidence+count, and that the header shows rounds. Inject a reader returning null and assert the /fleet handler replies 'no recent fleet run' and does not throw. With a transport spy and an over-long finding value, assert output goes through sendSafe and the verbatim payload is truncated (never emitted whole). Assert a non-whitelisted /fleet is denied with the id-echo and the injected reader spy is never called. Confirm via the diff that src/telegram imports SynthesisBundle/FactRecord type-only (no runtime src/fleet or better-sqlite3 import) and that no npm dependency was added (package.json unchanged). Run build + the fleet-view unit tests.",
+  "estimatedFiles": [
+    "src/telegram/fleet-view.ts",
+    "src/telegram/fleet-view.test.ts",
+    "src/telegram/bot.ts",
+    "src/telegram/streaming.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-30T01:38:55Z"
+}

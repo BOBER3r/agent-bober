@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-6-1",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-6",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T15:31:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "179 files, 2139 passed, 3 skipped; +9; zero regressions; known flake did not appear" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "api-check", "required": false, "result": "skipped", "details": "no API surface this sprint" }
+  ],
+  "regressions": [],
+  "summary": "All 7 required criteria pass (FINAL sprint). e2e chat-steer-e2e.test.ts drives the complete careful->spawn->approve->pause->resume->completion loop against a stubbed pipeline with disk+RunState asserts at every transition. cleanupTerminalRun best-effort (ENOENT-tolerant, never throws, run-isolated): deletePending for correlated runId + unlink guidance.jsonl/paused.json + clear RunState pending/paused (terminal status preserved). HELP_TEXT full set verified. Docs (README + docs/chat-steer.md) cover /careful+curated gates+approve/reject/tell/pause/resume with explicit single-careful-run limitation + runId-scoped follow-up. Protected files untouched. 2139-test suite green."
+}

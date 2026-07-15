@@ -1,0 +1,72 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-4",
+  "specId": "spec-20260628-research-scheduler",
+  "sprintNumber": 4,
+  "title": "Recurring scheduler: cadence due-dates + idempotent `bober research tick`",
+  "description": "Add deterministic cadence evaluation (compute nextDueAt from a job's cadence using an injected clock) and an idempotent `bober research tick` that runs only jobs whose nextDueAt is at or before the current time, advances each run job's nextDueAt and records lastRunAt, plus an optional `--watch` in-process loop. Document the scheduling-mechanism tradeoff.",
+  "status": "completed",
+  "completedAt": "2026-06-30T00:32:30.000Z",
+  "dependsOn": ["sprint-spec-20260628-research-scheduler-2"],
+  "features": ["feat-4"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "computeNextDue(cadence, fromInstant) returns a deterministic next-due ISO timestamp for each supported cadence (e.g. daily/weekly/monthly) given an injected fromInstant, with no wall-clock read.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "`bober research tick` with an injected now selects only jobs whose nextDueAt <= now (or have no nextDueAt yet) and skips jobs whose nextDueAt is after now.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "After a job runs via tick, its stored nextDueAt advances by its cadence and lastRunAt equals the injected now; a second tick at the same now selects and runs zero jobs.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "The project compiles with the scheduler module, the tick subcommand registered, and the optional `--watch` flag parsed.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not read the system clock inside cadence or scheduler logic — time is injected (Date.now only at the CLI boundary).",
+    "Do not change how a single run executes (Sprint 2 runner is invoked unchanged).",
+    "Do not add new egress or retrieval behavior (Sprint 3 owns that).",
+    "Do not depend on a hosted scheduler service; OS cron/launchd remains an external trigger documented in notes."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert deterministic computeNextDue, due-only selection, nextDueAt advancement after a run, and a no-op second tick at the same instant.",
+    "`bober research tick` runs due jobs through the Sprint 2 runner and persists updated lastRunAt/nextDueAt to the job JSON files."
+  ],
+  "definitionOfDone": "A user (or an external OS cron entry) can run `bober research tick` to execute every job that is due as of now; cadence math is deterministic with an injected clock; each executed job's nextDueAt advances and lastRunAt is recorded, so re-running tick immediately runs nothing. An optional `--watch` loop is parsed. The tradeoff between in-repo loop, OS cron, and harness scheduler is documented in the CLI help/notes. Build is green.",
+  "assumptions": [
+    "Canonical entrypoint is an idempotent `bober research tick`; OS cron/launchd is the recommended unattended trigger; `--watch` is an optional in-process loop (resolved Q1). Evidence: research doc L99-L100, L135, L141.",
+    "Cadence is the enum/string chosen in Sprint 1; computeNextDue maps it to a next instant from an injected base time (clock-free core, mirrors src/state/facts.ts).",
+    "tick updates job JSON files in place via the Sprint 1 job store; concurrency is single-process (no lock needed for the 2-person personal use case)."
+  ],
+  "outOfScope": [
+    "Digest aggregation (Sprint 5).",
+    "Distributed/locked scheduling and multi-host coordination.",
+    "Retry/backoff policy for failed runs beyond logging the failure and leaving nextDueAt advanced."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/research/cadence.ts with computeNextDue(cadence, fromIso): string — pure, no Date.now (mirror the clock-free discipline in src/state/facts.ts). Create src/research/scheduler.ts with tick(deps) where deps = {now, runJob, jobStore}: load all jobs, filter nextDueAt <= now (or unset), invoke runJob (the Sprint 2 runResearchJob) for each, then set job.lastRunAt = now and job.nextDueAt = computeNextDue(job.cadence, now) and persist via the store. Add a `tick` subcommand to src/cli/commands/research.ts that injects Date.now at the boundary; add `--watch` to run tick on an interval (setInterval) but keep the loop body delegating to the same injected-now tick for testability. In the tick command help text, document the mechanism tradeoff: in-repo `--watch` loop (simple, dies with the process) vs OS cron/launchd calling `bober research tick` (survives reboots, recommended for unattended) vs a harness scheduler; note hosted-OAuth schedulers are unfit for unattended runs (research doc L135, L141).",
+  "evaluatorNotes": "Assert computeNextDue is deterministic for fixed inputs across the supported cadences (sc-4-1). Build a temp job store with one due and one future job; run tick with a fixed now and assert only the due job's runJob spy fired (sc-4-2). Assert the executed job's persisted nextDueAt advanced by its cadence and lastRunAt === now, and a second tick at the same now fires zero runJob calls (sc-4-3). Confirm no Date.now/new Date() appears inside cadence.ts or scheduler.ts core (only at the CLI boundary). Confirm npm run build passes.",
+  "estimatedFiles": [
+    "src/research/cadence.ts",
+    "src/research/cadence.test.ts",
+    "src/research/scheduler.ts",
+    "src/research/scheduler.test.ts",
+    "src/research/job-store.ts",
+    "src/cli/commands/research.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z"
+}

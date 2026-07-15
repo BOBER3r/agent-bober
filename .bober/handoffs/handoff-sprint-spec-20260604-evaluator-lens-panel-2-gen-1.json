@@ -1,0 +1,42 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-evaluator-lens-panel-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-evaluator-lens-panel-2",
+  "specId": "spec-20260604-evaluator-lens-panel",
+  "timestamp": "2026-06-04T04:07:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of the Multi-Lens Evaluator Panel. Sprint 1 (commit 5dc7a5e) added evaluator.panel config + a lens-aware runSingleLensEval helper (currently injecting an inline lens-focus string) + bounded fan-out + reconcile() wiring. Sprint 2 replaces the inline string with a built-in lens prompt catalog (correctness/security/regression/quality + generic fallback) and emits each lens's pass/fail verdict via telemetry/history, attributable by lens name.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260604-evaluator-lens-panel-1",
+        "title": "Panel config, lens-aware evaluator, and reconcile wiring",
+        "summary": "Added evaluator.panel { enabled, lenses, maxConcurrent } to EvaluatorSectionSchema + all default literals. Refactored runAgentEvaluation: off path (panel off/<2 lenses) = one judge call byte-identical; on path = mapBounded fan-out (chunk batching, peak<=maxConcurrent) of runSingleLensEval(...,lens) then reconcile(contractId,1,lensResults,timestamp) -> evaluator='panel'. runSingleLensEval injects an inline lens-focus string when lens provided, empty when undefined. New test src/orchestrator/evaluator-agent.test.ts mocks providers/factory createClient + agentic-loop runAgenticLoop. Commit 5dc7a5e."
+      }
+    ],
+    "currentBranch": "bober/evaluator-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/evaluator-agent.ts",
+      "src/orchestrator/evaluator-agent.test.ts",
+      "src/telemetry/emit.ts",
+      "src/state/history.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-evaluator-lens-panel-2.json (read it fully)",
+  "config": {
+    "commands": {
+      "build": "tsc",
+      "typecheck": "tsc --noEmit",
+      "lint": "eslint src/",
+      "test": "vitest"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "The working tree has pre-existing uncommitted changes UNRELATED to this sprint (graph CLI: src/graph/cli.ts, src/cli/commands/graph.ts; agent .md files; .bober artifacts). When committing, stage ONLY the files you create/modify for THIS sprint with explicit paths (git add src/orchestrator/eval-lenses.ts src/orchestrator/eval-lenses.test.ts src/orchestrator/evaluator-agent.ts src/orchestrator/evaluator-agent.test.ts). NEVER run `git add -A` or `git add .`."
+}

@@ -1,0 +1,109 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-4",
+  "specId": "spec-20260616-medical-team",
+  "sprintNumber": 4,
+  "title": "HealthDataStore + deterministic NumericsQueryLayer",
+  "description": "Implement the data + numerics layer that keeps arithmetic out of the LLM. HealthDataStore is a single generic events table (better-sqlite3 sync, mirroring FactStore) with INSERT OR IGNORE on a deterministic SHA-256 id of (metric|tStart|source|value); it exposes upsertObservations (returns NEW-row count), getObservations, getLabSeries, getBaseline/putBaseline, getPreference, close. NumericsQueryLayer exposes ONLY the closed NumericPrimitive whitelist (mean|min|max|latest|delta|slope|percentile|zscore) via getMetric plus getLabTrend; sampleCount 0 => value null (abstain). No eval, no codegen, no subprocess. The LLM never performs arithmetic.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260616-medical-team-1"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "All tests pass including new HealthDataStore + NumericsQueryLayer tests (using temp dirs, no fs mocks); the full pre-existing suite stays green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "HealthDataStore.upsertObservations dedupes via INSERT OR IGNORE on the deterministic SHA-256 id and returns the count of NEW rows only: a test inserts N rows then re-inserts the same N and asserts the second call returns 0 while getObservations still returns N.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "Each of the 8 NumericPrimitives (mean,min,max,latest,delta,slope,percentile,zscore) returns the correct value on a known fixture series (asserted against hand-computed expected values).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "getMetric over an empty window returns NumericResult { value: null, sampleCount: 0 } (abstain) and does NOT throw; getLabTrend on an unknown biomarker abstains similarly.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "NumericsQueryLayer reads the per-row unit and refuses (does not silently mix) aggregation across heterogeneous units for the same metric — a test with mixed units asserts a refusal/abstain rather than a blended number.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-8",
+      "description": "No eval, no Function constructor, no code generation, and no child_process/execa appears anywhere in the numerics code (grep/test over src/medical numerics files returns nothing).",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement ingestion / SAX parsing (Sprint 5) — tests insert observations directly via upsertObservations.",
+    "Do not implement EgressGuard, medications, or the full SOP wiring (Sprint 6).",
+    "Do not implement literature retrieval (Sprint 7).",
+    "Do not add numeric primitives beyond the 8 whitelisted ones.",
+    "Do not store medications in HealthDataStore (medications are FactStore value-of-record — Sprint 6 / ADR-7)."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Dedup + NEW-row count correct; all 8 primitives correct; empty window abstains; cross-unit refused; no eval/codegen/subprocess"
+  ],
+  "definitionOfDone": "src/medical/ gains HealthDataStore (better-sqlite3 sync, generic single events table + a lab_results table or shared table, deterministic SHA-256 id, INSERT OR IGNORE, the full accessor surface) and NumericsQueryLayer (closed NumericPrimitive whitelist + getLabTrend, sampleCount-0 abstain, cross-unit refusal). No eval/codegen/subprocess. Build, typecheck, and all tests pass.",
+  "assumptions": [
+    "HealthObservation + LabResult + NumericResult shapes per the spec data model. The deterministic id is SHA-256 of `${metric}|${tStart}|${source}|${value}` (mirroring FactStore factId at src/state/facts.ts:58-69).",
+    "better-sqlite3 is already a dependency (used by FactStore at src/state/facts.ts); HealthDataStore uses the same sync API and a per-store db file path passed in (temp dir in tests).",
+    "slope is a simple linear least-squares slope over (t,value); percentile uses a documented method (e.g. nearest-rank or linear interpolation — pick one and test it); zscore is (latest - mean)/stddev. Document the chosen method in code.",
+    "Timestamps (tStart) are ISO string parameters on the observations; the store never reads the clock."
+  ],
+  "outOfScope": [
+    "Ingestion (Sprint 5)",
+    "Egress + full SOP + medications (Sprint 6)",
+    "Literature retrieval (Sprint 7)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Add src/medical/health-store.ts (HealthDataStore) and src/medical/numerics.ts (NumericsQueryLayer), collocated *.test.ts.\n\nHealthDataStore: model on FactStore (src/state/facts.ts) — same better-sqlite3 sync pattern. Single generic observations table: columns (id TEXT PRIMARY KEY, metric TEXT, value REAL, unit TEXT, t_start TEXT, t_end TEXT, source TEXT). A separate lab_results table (id, biomarker, value, unit, collected_at, ref_low, ref_high) OR a typed view — keep labs distinct from observations. id = sha256(`${metric}|${tStart}|${source}|${value}`) via node:crypto (see facts.ts:58-69 for the exact factId helper to mirror). upsertObservations uses `INSERT OR IGNORE` in a transaction and returns db.changes summed (count of NEW rows). getObservations(metric, fromIso, toIso) filters by metric and t_start range, ordered by t_start. getBaseline/putBaseline + getPreference back a small key/value table. close() closes the db. All sync. Use node:fs/promises only for mkdir of the parent dir if needed.\n\nNumericsQueryLayer(store): getMetric(window: MetricWindow, primitive: NumericPrimitive): NumericResult. Pull rows via store.getObservations(window.metric, window.fromIso, window.toIso). If rows.length === 0 => { primitive, value: null, unit: window.unit ?? '', sampleCount: 0 }. UNIT CHECK: collect distinct units across rows; if >1 distinct unit => abstain ({ value:null, sampleCount:0 }) or throw a documented 'cross-unit' refusal — pick abstain to match the no-throw contract, but make it observable (e.g. a separate reason) and TEST it. Compute the primitive over the numeric values: mean, min, max, latest (max t_start), delta (latest - earliest), slope (least-squares over epoch-ms vs value), percentile (document method; getMetric may take a percentile param or default p50), zscore ((latest-mean)/stddev, sampleCount<2 => abstain). getLabTrend(biomarker): build a LabTrend from store.getLabSeries; unknown biomarker => abstain.\n\nABSOLUTELY NO eval, Function(), new Function, vm, child_process, or execa anywhere in numerics.ts/health-store.ts. The primitive dispatch is a plain switch over the NumericPrimitive union (exhaustive, never guard).\n\nTests use a temp dir (mkdtemp) + real better-sqlite3 (no mocks); clean up in afterEach. Assert dedup NEW-row count; each primitive against hand-computed values on a fixture series; empty-window abstain; cross-unit refusal; grep test (read the file source and assert /eval|new Function|child_process|execa|\\bvm\\b/ is absent).",
+  "evaluatorNotes": "sc-4-4: insert 5 distinct observations (upsert => 5), re-insert the same 5 (=> 0), getObservations returns 5.\nsc-4-5: fixture series e.g. values [10,20,30,40] at increasing timestamps; assert mean=25, min=10, max=40, latest=40, delta=30, slope>0 (matches least-squares), percentile/zscore against documented formulas.\nsc-4-6: getMetric on an empty window => value null, sampleCount 0, no throw; getLabTrend('unknown') abstains.\nsc-4-7: insert two observations for metric 'weight' with units 'kg' and 'lb'; getMetric mean => abstain/refuse, NOT a blended number.\nsc-4-8: read numerics.ts + health-store.ts source; assert no eval/new Function/child_process/execa/vm.\nConfirm better-sqlite3 sync usage (no await on store methods). Full suite + build + typecheck green.",
+  "estimatedFiles": [
+    "src/medical/health-store.ts",
+    "src/medical/numerics.ts",
+    "src/medical/health-store.test.ts",
+    "src/medical/numerics.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260616-medical-team-4-1",
+      "result": "pass"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260616-medical-team-4-1",
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-16T19:56:00.000Z",
+  "startedAt": "2026-06-16T19:45:56Z",
+  "completedAt": "2026-06-16T19:56:00.000Z"
+}

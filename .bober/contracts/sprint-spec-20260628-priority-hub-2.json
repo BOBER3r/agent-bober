@@ -1,0 +1,90 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-2",
+  "specId": "spec-20260628-priority-hub",
+  "sprintNumber": 2,
+  "title": "Cross-repo read-only collector with sibling resolution and dedup",
+  "description": "Add an additive readonly open flag to FactStore, a sibling-repo resolver that turns hub.repos config (or discovered kb-* siblings) into absolute paths, and a collector that opens each sibling's derived FactStore read-only and pools their findings into one deduplicated Finding[] following the fleet synthesis.collect pattern. Extend `bober hub list` to aggregate across all resolved siblings.",
+  "status": "completed",
+  "completedAt": "2026-06-28T20:41:30.000Z",
+  "dependsOn": [
+    "sprint-spec-20260628-priority-hub-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "FactStore accepts an optional { readonly?: boolean }; when true it opens better-sqlite3 with the readonly flag and skips the CREATE TABLE bootstrap, and when absent the constructor behaviour is unchanged from the prior version.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "The collector pools findings from two distinct sibling FactStores into a single Finding[] whose length equals the number of distinct finding ids across both stores.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "When the same Finding.id appears in two sibling stores the collector returns exactly one pooled entry for that id (dedup by id).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A collect over a sibling store opened through the collector leaves that sibling's facts.db file byte-unchanged (size and mtime stable) and a write attempt through the readonly handle is rejected.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "The sibling resolver returns absolute paths from hub.repos config entries and, when that config is absent, discovers directories named kb-* beside the project root; a configured path that does not exist is skipped rather than throwing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "npm run build completes with zero TypeScript errors after the collector, resolver, and FactStore readonly flag are added.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change FactStore behaviour for callers that omit the readonly flag; the default path stays byte-identical.",
+    "Do not implement scope parsing, the lens judge, or ranking (Sprint 3).",
+    "Do not write priority.md or add the priority/decide commands (Sprint 4).",
+    "Do not open sibling stores writable or run any migration against them.",
+    "Do not add a vault-markdown source; aggregation reads derived FactStores only."
+  ],
+  "stopConditions": [
+    "The readonly FactStore flag, the sibling resolver, and the collector exist; `bober hub list` aggregates across resolved siblings; and all six success criteria pass evaluation.",
+    "npm run build exits zero and the existing FactStore tests plus the new collector tests pass."
+  ],
+  "definitionOfDone": "The hub can resolve sibling kb-* repos to absolute paths, open each one's derived FactStore read-only, and pool their findings into one Finding[] deduplicated by id, without ever mutating a sibling file. `bober hub list` now reflects findings aggregated across every resolved sibling. The additive FactStore readonly flag leaves existing callers byte-identical, the build is green, and the new tests pass.",
+  "assumptions": [
+    "Sibling repos are sibling clones next to the project root, resolved to absolute paths (research:109-112; resolveBlackboardPath ABSOLUTE discipline from fleet memory).",
+    "The collector mirrors fleet synthesis.collect (src/fleet/synthesis.ts:29-39): pure data shaping, no LLM, no network.",
+    "better-sqlite3 supports a readonly open flag, so the additive FactStore change is small and safe (src/state/facts.ts:139-167).",
+    "Each sibling's derived FactStore exposes findings at predicate 'finding' (Sprint 1 source contract)."
+  ],
+  "outOfScope": [
+    "Judge, scope, ranking (Sprint 3).",
+    "priority.md and decide (Sprint 4).",
+    "chat hub surface (Sprint 5).",
+    "Reading the canonical vault markdown (owned by obsidian-vault-store)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "FactStore change (src/state/facts.ts): add readonly?: boolean to the opts type at line 140; when true call new Database(dbPath, { readonly: true }) and skip the this.db.exec(CREATE TABLE...) block (lines 150-166); leave the WAL/busy_timeout branches and the no-flag path untouched. Add src/hub/repo-resolver.ts: read config.hub?.repos (string[]) if present, else readdir the parent of projectRoot and keep entries matching /^kb-/ that are directories; resolve all to absolute paths via path.resolve; filter to existing facts.db locations; skip non-existent. Reuse factsDbPath (src/state/facts.ts:77) to locate each sibling's derived store. Add src/hub/collector.ts exporting collectFindings(repoPaths, scope) that opens each store with new FactStore(dbPath, { readonly: true }), wraps it in the Sprint 1 FactStoreFindingSource, concatenates all Findings, then dedups by Finding.id (keep first; stable order). Model the pooling shape on src/fleet/synthesis.ts:29-39 and the readAll convention in src/fleet/shared-blackboard.ts:103-105. Extend src/cli/commands/hub.ts `list` to resolve siblings and collect across them. Guard every store open in try/catch so a missing or corrupt sibling is skipped, not fatal.",
+  "evaluatorNotes": "Confirm the no-flag FactStore constructor still creates the table (existing tests green) and that { readonly: true } both skips CREATE TABLE and opens readonly. Seed two temp FactStores with overlapping and distinct finding ids; assert pooled length equals distinct-id count and the overlapping id appears once. Snapshot a sibling facts.db size+mtime before and after a collect and assert unchanged; assert a write through the readonly handle throws. Point the resolver at a temp parent dir containing kb-a and kb-b plus a non-kb dir and a non-existent configured path; assert only the existing kb-* absolute paths are returned. Confirm npm run build is green.",
+  "estimatedFiles": [
+    "src/state/facts.ts",
+    "src/state/facts.test.ts",
+    "src/hub/repo-resolver.ts",
+    "src/hub/repo-resolver.test.ts",
+    "src/hub/collector.ts",
+    "src/hub/collector.test.ts",
+    "src/cli/commands/hub.ts"
+  ],
+  "estimatedDuration": "medium"
+}

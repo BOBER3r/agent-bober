@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-5",
+  "specId": "spec-20260628-priority-hub",
+  "sprintNumber": 5,
+  "title": "`bober chat hub` surface with scoped /priority and /decide",
+  "description": "Register a hub team (data) so `bober chat hub` routes to the hub memory namespace, and add additive /priority and /decide slash commands to the chat session that delegate to the Sprint 3-4 hub judge and return a ranked summary while writing priority.md. Pre-existing slash commands are left unchanged.",
+  "status": "completed",
+  "completedAt": "2026-06-29T01:07:45.000Z",
+  "dependsOn": [
+    "sprint-spec-20260628-priority-hub-4"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "A hub team is registered as data such that `bober chat hub` starts a chat session whose memory namespace resolves to the hub team's namespace.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "Inside a hub chat session, the /priority slash command returns a ranked summary of the collected findings (rank and title per line) using the hub judge.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "Inside a hub chat session, /decide X vs Y returns the decision-scoped ranking limited to findings relevant to X or Y.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "The pre-existing chat slash commands (/runs, /stop, /careful, /approve, /reject, /tell, /pause, /resume, /help, /exit) return the same output they did before this sprint when dispatched.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "npm run build completes with zero TypeScript errors after the hub team registration and the new slash commands are added.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not alter the dispatch result of any existing slash command.",
+    "Do not route raw sensitive content through chat; the summary lists findings only as already permitted by the source store.",
+    "Do not implement the Telegram adapter or its button mapping (owned by telegram-frontend spec).",
+    "Do not add new collector, judge, or renderer logic; delegate to the Sprint 2-4 functions.",
+    "Do not change the default (non-hub) chat team behaviour."
+  ],
+  "stopConditions": [
+    "The hub team is registered, `bober chat hub` selects it, /priority and /decide delegate to the hub judge, existing slash commands are unchanged, and all five success criteria pass evaluation.",
+    "npm run build exits zero and the chat hub unit tests plus the existing slash-command tests pass."
+  ],
+  "definitionOfDone": "`bober chat hub` opens a chat session bound to the hub team's memory namespace, where /priority returns a ranked summary of the pooled findings and /decide X vs Y returns the decision-scoped ranking, both delegating to the Sprint 3-4 hub functions and writing priority.md. Every previously existing slash command still returns its prior output, the build is green, and the new tests pass.",
+  "assumptions": [
+    "`bober chat [team]` already selects a team via loadTeam and threads memoryNamespace (src/cli/commands/chat.ts:23-56).",
+    "Slash commands are dispatched through src/chat/slash-commands.ts from ChatSession (src/chat/chat-session.ts:200-230); new commands are added additively to that dispatch.",
+    "Teams are data not code (team-abstraction memory), so the hub team is a config/registry entry.",
+    "The richer Telegram /today|/priority|/decide mapping is owned by the telegram-frontend spec (research:140)."
+  ],
+  "outOfScope": [
+    "Telegram adapter and inline buttons (telegram-frontend spec).",
+    "do-bridge, calendar, scheduler, task-inbox (sibling specs).",
+    "Per-lens multi-provider routing (deferred)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Register a hub team as data: follow the team-as-data registry used by loadTeam (src/teams/registry.ts, imported in src/cli/commands/chat.ts:19) and add a hub team with memoryNamespace 'hub' and the default pipelineShape — mirror the example team referenced in the team-abstraction work. `bober chat hub` then resolves through the existing chat command with no command change beyond the team existing. Add /priority and /decide to src/chat/slash-commands.ts dispatch and ChatSession (src/chat/chat-session.ts:200-230): extend the dispatch signature with two new callbacks and add handleHubPriority / handleHubDecide on ChatSession that call the Sprint 2-4 functions (collectFindings -> rankFindings -> renderPriorityMd) and return the ranked summary string. Gate the new commands so they are meaningful only in the hub namespace (e.g. no-op informative message when not the hub team) to avoid coupling other teams. Keep all existing dispatch branches byte-identical. Reuse createClient (src/providers/factory.js) for the judge's LLMClient as elsewhere.",
+  "evaluatorNotes": "Assert `bober chat hub` constructs a ChatSession whose memoryNamespace equals the hub team's namespace. Drive ChatSession.handleTurn('/priority') with seeded sibling stores and a fake judge client; assert the returned string lists ranks+titles. Drive '/decide X vs Y' and assert decision-scoped output. Re-run the existing slash-command tests (or dispatch each existing command) and assert identical outputs to before. Confirm the new commands do not fire for a non-hub team. Confirm npm run build is green.",
+  "estimatedFiles": [
+    "src/teams/registry.ts",
+    "src/chat/slash-commands.ts",
+    "src/chat/slash-commands.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/chat-session.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

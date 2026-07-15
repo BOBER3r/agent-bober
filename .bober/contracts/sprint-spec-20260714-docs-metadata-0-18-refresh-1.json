@@ -1,0 +1,90 @@
+{
+  "contractId": "sprint-spec-20260714-docs-metadata-0-18-refresh-1",
+  "specId": "spec-20260714-docs-metadata-0-18-refresh",
+  "sprintNumber": 1,
+  "title": "Complete the COMMANDS.md CLI reference (config, telemetry, worktree, memory, facts)",
+  "description": "COMMANDS.md opens by declaring itself the 'Complete reference for all bober CLI commands' (COMMANDS.md:2) but has no section for five registered, non-hidden top-level command groups. Add a documentation section for config, telemetry, worktree, memory, and facts so the claim holds against the real CLI in src/cli/index.ts.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "COMMANDS.md contains a level-3 heading '### `bober config`' (or `bober config migrate`), '### `bober telemetry`', '### `bober worktree`', '### `bober memory`', and '### `bober facts`'. Verify: grep -cE \"^### .*\\`bober (config|telemetry|worktree|memory|facts)\" COMMANDS.md returns at least 5.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "Every top-level command registered in src/cli/index.ts and src/fleet/index.ts has a matching '### ' heading in COMMANDS.md \u2014 an outsider iterating the registered command names finds zero without a documentation heading (specifically config, telemetry, worktree, memory, facts are no longer missing).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "Each new section documents that command's actual subcommands as registered: config migrate; telemetry status, telemetry purge, telemetry export; worktree run; memory distill, memory list, memory show, memory prune; facts add, facts list, facts show, facts invalidate. Verify each subcommand token appears under its command's heading and matches src/cli/commands/*.ts.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "The new sections describe only flags and behavior present in the command source (src/cli/commands/{config,telemetry,worktree,memory,facts}.ts) \u2014 no invented flags, no fabricated behavior. Spot-check every documented flag against the corresponding .option()/.description() in source.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "npm run build (tsc) exits 0 and git diff --name-only lists only COMMANDS.md \u2014 confirming the change is docs-only with no source or test edits.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not create, move, or push any git tags (v0.12.0-v0.18.0 already exist).",
+    "Do not modify any file under src/ or any *.test.ts file.",
+    "Do not add, rename, or change any CLI command registration.",
+    "Do not rewrite, reorder, or delete existing COMMANDS.md sections beyond inserting the five new command sections.",
+    "Do not document flags or subcommands that are not present in src/cli/commands/*.ts."
+  ],
+  "stopConditions": [
+    "A completeness check confirms every top-level command registered in src/cli/index.ts and src/fleet/index.ts has a '### ' heading in COMMANDS.md (zero missing).",
+    "grep -cE \"^### .*\\`bober (config|telemetry|worktree|memory|facts)\" COMMANDS.md returns at least 5, npm run build exits 0, and git diff --name-only shows only COMMANDS.md."
+  ],
+  "definitionOfDone": "COMMANDS.md is once again a complete CLI reference: a reader can find documented sections for config, telemetry, worktree, memory, and facts (with their real subcommands) formatted like the neighboring sections, and a script iterating the commands registered in src/cli/index.ts plus src/fleet/index.ts finds no top-level command without a documentation heading. Only COMMANDS.md changed and the project still builds.",
+  "assumptions": [
+    "config/telemetry/worktree/memory/facts are user-facing and non-hidden \u2014 registered in src/cli/index.ts:312-324 with .description() text; grep 'hidden' in each command file returns nothing (Q3).",
+    "COMMANDS.md:2 declaring itself the 'Complete reference for all bober CLI commands' makes the five missing sections genuine drift (spec assumption 1).",
+    "Subcommand lists are taken from the .command()/.description() registrations in src/cli/commands/{config,telemetry,worktree,memory,facts}.ts (config migrate; telemetry status/purge/export; worktree run; memory distill/list/show/prune; facts add/list/show/invalidate)."
+  ],
+  "outOfScope": [
+    "README.md and package.json changes (handled in Sprint 2).",
+    "VISION.md, docs/providers.md, CHANGELOG.md edits (spot-checked current / out of scope).",
+    "Any git-tagging or release work."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Read each command's source before writing its section so descriptions match reality: src/cli/commands/config.ts (config: 'Inspect and migrate bober.config.json'; config migrate: 'Add all new schema fields with default values'), telemetry.ts (telemetry status / purge / export \u2014 opt-in, local-only), worktree.ts (worktree run <task> \u2014 launch/manage worktree-isolated pipeline runs), memory.ts (memory distill / list / show <lessonId> / prune \u2014 self-improvement lessons index), facts.ts (facts add / list / show <id> / invalidate <id> \u2014 semantic FactStore). Mirror the format of an existing section such as COMMANDS.md:801-871 (Graph & Utility Commands): a '### `bober <cmd>`' heading, a one-sentence purpose line, a fenced usage block, then flags/behavior. Place the new sections in a sensible spot (e.g., after 'Utility Commands' or grouped as a new '## Configuration & Introspection Commands' block) without disturbing existing sections. Do NOT touch any src/ file.",
+  "evaluatorNotes": "Verify sc-1-2 by listing every top-level command from src/cli/index.ts (init, update, plan, sprint, eval, run, mcp, graph, onboard, impact, approve, reject, list-approvals, audit, rollback, postmortem, incident, playbook, config, telemetry, worktree, memory, facts, task, medical, research, calendar, vault, chat, blackboard, hub, do, telegram, security-audit) plus fleet from src/fleet/index.ts, and confirming each has a '### ' heading in COMMANDS.md \u2014 the five previously-missing ones (config, telemetry, worktree, memory, facts) must now be present. Confirm sc-1-4 by opening the five command source files and checking that no documented flag is absent from the source. Confirm docs-only via git diff --name-only (only COMMANDS.md) and npm run build exit 0.",
+  "estimatedFiles": [
+    "COMMANDS.md"
+  ],
+  "estimatedDuration": "medium",
+  "updatedAt": "2026-07-14T22:20:00Z",
+  "completedAt": "2026-07-14T22:20:00Z",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "fail",
+      "evalId": "eval-sprint-spec-20260714-docs-metadata-0-18-refresh-1-1",
+      "timestamp": "2026-07-14T19:08:14Z"
+    },
+    {
+      "iteration": 2,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-docs-metadata-0-18-refresh-1-2",
+      "timestamp": "2026-07-14T22:20:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-docs-metadata-0-18-refresh-1-2"
+}

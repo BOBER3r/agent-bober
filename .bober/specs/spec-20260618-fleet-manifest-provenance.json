@@ -1,0 +1,105 @@
+{
+  "specId": "spec-20260618-fleet-manifest-provenance",
+  "version": 1,
+  "createdAt": "2026-06-18T12:06:16Z",
+  "updatedAt": "2026-06-18T12:26:56Z",
+  "title": "Fleet Manifest Provenance + Recoverable Overwrite",
+  "description": "Make `fleet expand` / `fleet expand-deep` manifest overwrites traceable and recoverable while preserving ADR-4's single shared default path. On write, a provenance sidecar records what produced the manifest; before an overwrite clobbers an existing manifest, the prior file is moved to a .bak and an informative notice reports what is being replaced. Non-interactive throughout (write-and-stop default + --yes gate unchanged).",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "1 sprint: a shared writeManifestWithProvenance helper (src/fleet/manifest-write.ts) used by both Step-4 write sites in src/fleet/index.ts, plus helper unit tests and updates to the existing overwrite-notice assertions. Small/medium, single concern.",
+      "resolvedAt": "2026-06-18T12:06:16Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve \u2014 write contract. User selected 'Approve \u2014 write contract' at the planning gate, accepting the assumptions (shared helper; sidecar+.bak derived from outPath; single last-write .bak; injected clock; existing notice tests updated; FleetManifestSchema untouched) and the out-of-scope (no path change / ADR-4 revisit, no rotating backups, no blocking prompt), as a single sprint.",
+      "resolvedAt": "2026-06-18T12:06:16Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "All new write logic lives in a NEW shared helper src/fleet/manifest-write.ts (writeManifestWithProvenance + a ManifestProvenance type + a relative-age formatter); the two near-identical Step-4 write blocks in src/fleet/index.ts (expand at :207-224, expand-deep at :343-360) are replaced by calls to it (DRY).",
+    "The sidecar is written to `${outPath}.meta.json` and the backup to `${outPath}.bak`, BOTH derived from the actual resolved outPath (so `--out <custom>` yields `<custom>.meta.json` / `<custom>.bak`), never hardcoded to the default .bober/fleet-expand.json.",
+    "Provenance fields: { command: 'fleet expand' | 'fleet expand-deep', goal: string (the RAW goal, not the --count-hinted goalWithHint), critique: boolean (false for expand; reflects --critique for expand-deep), childCount: number (manifest.children.length), timestamp: string (ISO-8601 at write time) }.",
+    "Single last-write .bak (overwritten on each overwrite), mirroring the manifest's own last-write-wins semantics; no rotating/timestamped backup history.",
+    "The write helper takes an injectable clock (e.g. now?: () => number, default Date.now) so the relative-age in the notice ('4m ago') is deterministically testable; tests inject a fixed clock.",
+    "On first write (no pre-existing manifest at outPath) the helper writes manifest + sidecar, prints NO replace notice, and creates NO .bak. On overwrite it: reads the prior sidecar if present, moves the existing manifest to .bak, atomically writes the new manifest (tmp+rename), then writes the new sidecar.",
+    "The helper NEVER throws on a missing/corrupt/unreadable prior sidecar \u2014 it degrades to a generic overwrite notice that still reports a .bak was kept.",
+    "Provenance lives ONLY in the sidecar; the on-disk manifest stays a byte-unchanged FleetManifestSchema children-only document (manifest.ts untouched).",
+    "Existing overwrite-notice assertions in src/fleet/expand.test.ts, expand-deep.test.ts, and expand-deep-critique.test.ts are UPDATED to the new informative message (intended behavior change), not left asserting the old 'Overwritten existing manifest at:' text.",
+    "Reuses the existing atomic tmp+rename + ensureDir + access-based existence check pattern (index.ts:208-220) and the ScriptedClient / DI-seam test pattern (expand-deep.test.ts)."
+  ],
+  "outOfScope": [
+    "Changing the shared default output path or introducing per-command default paths (fleet-expand.json vs fleet-expand-deep.json) \u2014 that is the ADR-4 revisit and is explicitly deferred to a separate architect-gated change.",
+    "Rotating or timestamped backup history / keeping more than one .bak.",
+    "Any confirmation prompt, TTY check, or --force gate \u2014 the write path stays fully non-interactive (CI/fleet/autonomous safe).",
+    "Reading or consuming the sidecar anywhere else (e.g. in the `fleet <manifest>` spawn command, runFleet, or a new `fleet inspect` command) \u2014 this sprint is write-side provenance only.",
+    "Any change to FleetManifestSchema/FleetChildSchema/children-only contract, decomposeGoal, decomposeGoalDeep, runCritiqueLoop, runFleet, or the byte-locked Phase-1/2/3 surface beyond the two Step-4 write blocks.",
+    "Encrypting, signing, or validating the sidecar; cleaning up stale .bak/.meta files."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Provenance sidecar + recoverable, informative overwrite",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "description": "A shared writeManifestWithProvenance helper that both fleet expand and fleet expand-deep call to write the manifest, emit a provenance sidecar, and \u2014 on overwrite \u2014 preserve the prior manifest as .bak and print an informative, non-blocking notice describing what was replaced.",
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "AC1: On any successful write, a sidecar at `${outPath}.meta.json` is created with { command, goal, critique, childCount, timestamp }; for `fleet expand` command==='fleet expand' and critique===false; for `fleet expand-deep` command==='fleet expand-deep' and critique reflects the --critique flag; goal is the raw goal string and childCount===manifest.children.length.",
+        "AC2: First write (no pre-existing manifest at outPath) creates the manifest + sidecar, prints NO replace/overwrite notice, and creates NO .bak file.",
+        "AC3: When a manifest already exists at outPath, the PRIOR manifest bytes are moved to `${outPath}.bak` BEFORE the new manifest is written; reading `${outPath}.bak` afterward returns the previous manifest content (recoverable), and the new manifest is written atomically (tmp+rename).",
+        "AC4: On overwrite, the notice is informative and reports the prior command, goal, childCount, and relative age plus that the old file was kept as .bak (e.g. `[fleet expand-deep] Replacing manifest from \\`fleet expand\\` for goal \"\u2026\" (6 children, 4m ago) \u2192 kept as fleet-expand.json.bak`). With a fixed injected clock the relative-age string is asserted deterministically.",
+        "AC5: When the prior manifest exists but its sidecar is missing or unreadable, the helper does NOT throw \u2014 it prints a generic overwrite notice that still states a .bak was kept, and still writes the new sidecar.",
+        "AC6: Sidecar and .bak paths are derived from the actual resolved outPath \u2014 invoking with `--out <custom>` writes `<custom>.meta.json` and `<custom>.bak`, and does NOT touch the default .bober/fleet-expand.json.* paths.",
+        "AC7: The on-disk manifest is a byte-unchanged FleetManifestSchema children-only document (provenance is ONLY in the sidecar); write-and-stop default and the --yes spawn gate behavior are unchanged (no blocking prompt added); `fleet expand` with no pre-existing file and `fleet expand-deep --critique` both still write-and-stop.",
+        "AC8: `npm run build` and the full `npm test` suite pass; the existing fleet suites (expand.test.ts, expand-deep.test.ts, expand-deep-critique.test.ts, decomposer*.test.ts, critic-deep.test.ts, index.test.ts) are green with the overwrite-notice assertions updated to the new message."
+      ]
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "An overwrite never silently destroys the prior manifest \u2014 the previous bytes are always preserved at `${outPath}.bak` before the new manifest lands; the helper never throws on a missing/corrupt prior sidecar.",
+      "verificationMethod": "Unit test writes manifest A, then manifest B to the same outPath, and asserts `${outPath}.bak` equals A's bytes and outPath equals B; a separate test deletes/corrupts the sidecar and asserts no throw + generic notice."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Provenance is confined to the sidecar; FleetManifestSchema and the children-only on-disk contract are unchanged; both write sites go through one shared helper (no duplicated write logic).",
+      "verificationMethod": "Assert the written manifest still passes FleetManifestSchema.safeParse and contains no provenance keys; git diff shows the two Step-4 blocks replaced by a single helper call each."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The write path stays non-interactive: no prompt, no TTY dependency; relative-age is computed from an injectable clock so behavior is deterministic and CI-safe.",
+      "verificationMethod": "Tests inject a fixed clock and assert the exact notice string; no test requires stdin or a real wall clock."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "src/fleet/index.ts Step-4 write blocks: runFleetExpand (:207-224) and runFleetExpandDeep (:343-360) \u2014 replaced by writeManifestWithProvenance calls passing { command, goal, critique, childCount } + injected clock.",
+      "Reuses ensureDir, node:fs/promises writeFile/rename/access, randomBytes tmp-name pattern (index.ts:208-220)."
+    ],
+    "dataModel": "Sidecar (NEW, on disk next to the manifest): ManifestProvenance = { command: 'fleet expand' | 'fleet expand-deep'; goal: string; critique: boolean; childCount: number; timestamp: string }. Manifest itself unchanged (FleetManifestSchema children-only).",
+    "securityConsiderations": [
+      "No new spawn path; write-and-stop + --yes gate unchanged.",
+      "Non-interactive: no prompt that could hang CI/autonomous fleet runs.",
+      "Overwrite is recoverable (.bak), reducing the blast radius of an accidental cross-command clobber at the shared default path."
+    ],
+    "existingPatterns": "Atomic tmp+rename write + ensureDir + access-existence check (index.ts:208-223); ScriptedClient + makeFakeDecompose*/makeFakeClientBuilder/runFleetSpy DI test helpers (expand-deep.test.ts). ESM .js imports, Zod-validated manifest, async node:fs/promises, .bober/ state."
+  },
+  "sprints": [
+    "sprint-spec-20260618-fleet-manifest-provenance-1"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "1-2 hours",
+    "riskLevel": "low",
+    "riskNotes": "Small additive brownfield change to this branch's own (non-byte-locked) write blocks. Main risk is updating the existing overwrite-notice tests to the new message without dropping coverage; mitigated by the shared helper having its own focused unit tests. The clock injection keeps the relative-age notice deterministic. No change to the manifest schema, spawn gate, or decomposers."
+  },
+  "completedAt": "2026-06-18T12:26:56Z"
+}

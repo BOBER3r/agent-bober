@@ -1,0 +1,86 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-2",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 2,
+  "title": "Signature type + skill-file authoring format + total parser + generic security skill",
+  "description": "Establish the on-disk authoring format for per-stack security knowledge and the total parser that reads it. Define the SecuritySignature type, author skills/bober.security-generic/SKILL.md as discrete labelled signature blocks (generic OWASP/injection/secret/auth signatures from the research), and implement SecuritySignatureParser that turns a skill file's markdown into typed SecuritySignature[] \u2014 pure, total, dropping malformed blocks. This resolves the open 'skill-file format' question by making the parser + the generic file the executable spec of the format.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-1"
+  ],
+  "features": [
+    "feat-signatures"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "A new module (e.g. src/orchestrator/security-knowledge/signature.ts) exports the SecuritySignature type exactly as in the architecture {stackId: SecurityStackId, signatureId, title, cwe: string|null, severity: FindingSeverity, vulnClass: VulnClass, invariant, unsafeExample, safeExample, keywords: string[], skillRef} and the SecurityStackId union ('solidity'|'anchor'|'react'|'node'|'payments'|'igaming'|'dex-backend'|'generic').",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "SecuritySignatureParser.parse(stackId, skillMarkdown, skillRelPath) returns SecuritySignature[]; it is pure and TOTAL \u2014 a block missing a required field (signatureId/title/vulnClass) is dropped, malformed markdown yields the parseable subset, and it NEVER throws (mirrors parseSlitherOutput defensive narrowing at security-scanners.ts:128); the block delimiter/field schema is documented in a short comment at the top of the generic skill file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "skills/bober.security-generic/SKILL.md exists, opens with the standard skill frontmatter (name/description), documents the signature-block format once, and contains at least 12 discrete labelled signature blocks covering generic classes (SQLi, command injection, path traversal, SSRF, XSS, hardcoded-secret, missing-authz/BOLA, insecure-deserialization, weak-randomness, prototype-pollution/SSTI, CRLF/log-injection, mass-assignment) each with signatureId/title/cwe/severity/vulnClass/invariant/unsafeExample/safeExample/keywords.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "Parsing the REAL skills/bober.security-generic/SKILL.md from disk yields >= 12 well-formed SecuritySignature records, every one carrying a vulnClass that is a member of the widened VulnClass union and a non-empty unsafeExample and safeExample (test reads the actual file, per the repo convention of testing against real assets).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "npm run build + typecheck pass; ESLint zero errors; full existing suite green; no change to any runtime audit behavior yet (parser + type + skill file are not yet wired into runSecurityAudit).",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not author the other 7 stack skill files yet (sprints 3-4).",
+    "Do not build the index/selector/registry/resolver or wire retrieval into the finder (sprint 5).",
+    "Do not change runSecurityAudit or the prompt yet.",
+    "Do not add a skill-file lint CLI (candidate follow-up)."
+  ],
+  "stopConditions": [
+    "Parser is total (fuzz a few malformed inputs -> no throw, partial results).",
+    "The real generic skill file parses to >=12 valid signatures with union-member vulnClasses."
+  ],
+  "definitionOfDone": "The SecuritySignature type, a total SecuritySignatureParser, and a real generic security skill file authored as discrete signature blocks exist and are tested against the actual on-disk file, with the block format documented and no runtime audit behavior changed.",
+  "assumptions": [
+    "Skill files live under skills/<name>/SKILL.md (repo convention; e.g. skills/bober.solidity/SKILL.md); the security skills use the bober.security-<stack> naming from the architecture.",
+    "FindingSeverity and VulnClass come from the sprint-1 widened types in security-audit-types.ts.",
+    "The signature-block delimiter is a generator design decision; a heading-per-block markdown convention (e.g. '### <signatureId>' with labelled fields) is acceptable as long as the parser is total and the format is documented in-file."
+  ],
+  "outOfScope": [
+    "Other stack skill files, index/selector/registry, finder wiring, lint CLI (later)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/orchestrator/security-knowledge/ as the new module dir. (1) signature.ts: SecuritySignature + SecurityStackId; import VulnClass/FindingSeverity type-only from ../security-audit-types.js. (2) parser.ts: a total parser \u2014 split the markdown into blocks by a stable delimiter (recommend '### ' headings whose text is the signatureId, with subsequent labelled lines/sub-sections for title/cwe/severity/vulnClass/invariant and fenced code blocks for unsafe/safe examples); on any missing required field, skip that block (do not throw). Mirror the defensive narrowing style of parseSlitherOutput (security-scanners.ts:128-185). (3) skills/bober.security-generic/SKILL.md: real frontmatter + a short '## Signature Block Format' section documenting the schema, then '## Signatures' with >=12 blocks. Draw signature content from .bober/research/research-20260714-...-research.md sections A (OWASP/injection code signatures) and the highest-signal greps list. Keep cwe values like 'CWE-89'. (4) Test against the REAL file (readFile the actual skill), not an inline fixture, per principles (tests run against real assets).",
+  "evaluatorNotes": "sc-2-2: feed the parser deliberately malformed markdown (missing signatureId, truncated code fence, empty file) and assert no throw + only valid blocks returned. sc-2-4: read the actual skills/bober.security-generic/SKILL.md, parse it, assert >=12 records and every vulnClass is in the VulnClass union and unsafe/safe examples non-empty. Confirm the parser is pure (no fs inside parse \u2014 it takes markdown text; the index does the fs). Build+typecheck+lint+full suite.",
+  "estimatedFiles": [
+    "src/orchestrator/security-knowledge/signature.ts",
+    "src/orchestrator/security-knowledge/parser.ts",
+    "src/orchestrator/security-knowledge/parser.test.ts",
+    "skills/bober.security-generic/SKILL.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-2-1",
+      "timestamp": "2026-07-14T17:20:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-2-1",
+  "updatedAt": "2026-07-14T17:20:00Z",
+  "completedAt": "2026-07-14T17:20:00Z"
+}

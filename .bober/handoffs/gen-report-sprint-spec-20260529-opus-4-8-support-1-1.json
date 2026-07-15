@@ -1,0 +1,11 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["1fd6497 - bober(sprint-1): repoint opus shorthand to claude-opus-4-8 + pin opus-4-7"],
+  "filesChanged": [
+    {"path": "src/orchestrator/model-resolver.ts", "action": "modified", "description": "opus -> claude-opus-4-8; added opus-4-8 symmetry alias and opus-4-7 pinned alias in SHORTHAND_MAP."},
+    {"path": "src/orchestrator/model-resolver.test.ts", "action": "modified", "description": "opus assertions updated to claude-opus-4-8; new opus-4-7 alias test; passthrough + sonnet/haiku/OpenAI/Google tests unchanged."}
+  ],
+  "notes": "typecheck/lint/build exit 0. npm run test: 1338 passed, 2 failed = the flaky 37-tool-count baseline only. model-resolver suite 20/20. claude-opus-4-7 in src confined to the opus-4-7 alias + passthrough tests."
+}

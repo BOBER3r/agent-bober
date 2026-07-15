@@ -1,0 +1,88 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-3",
+  "specId": "spec-20260628-priority-hub",
+  "sprintNumber": 3,
+  "title": "Query scope parsing and two-pass prioritization judge",
+  "description": "Add scope parsing (general | decision{a,b} | filtered{domain?,dueWithinDays?,tag?}) and a two-pass judge: pass 1 relevance-filters the pooled findings against the stated scope via an injected LLM client, pass 2 scores survivors through hub prioritization lenses, and a deterministic JS step produces the final ordering. Reuses the eval-lenses fan-out shape and the lens-panel majority/fail-closed reconcile semantics.",
+  "status": "completed",
+  "completedAt": "2026-06-29T00:29:30.000Z",
+  "dependsOn": [
+    "sprint-spec-20260628-priority-hub-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "src/hub/scope.ts parses a scope into a discriminated union of general, decision (with two option strings), or filtered (with optional domain, dueWithinDays, tag), and applies the filtered structural narrowing with pure JS and no LLM call.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "Given fixed pass-1 relevance verdicts and fixed pass-2 lens scores from an injected fake LLM client, the judge returns an identical ranked Finding[] across repeated runs, ordered by aggregate lens score then urgency then severity then earliest dueBy then id.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "When the prioritization lens panel reaches no strict-majority consensus on a finding's inclusion, that finding is returned tagged flagged-for-review rather than dropped, matching the lens-panel fail-closed-on-tie rule.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "Under decision scope the judge keeps only findings the pass-1 filter marks relevant to either named option and ranks them within that frame, dropping findings marked relevant to neither.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "The judge accepts an injected LLMClient so tests run with a deterministic fake and no real network call is made during the unit tests.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "npm run build completes with zero TypeScript errors after scope parsing and the judge are added.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not render priority.md or wire the priority/decide CLI commands (Sprint 4).",
+    "Do not let the LLM emit the final ordered list; ordering is computed by deterministic JS over LLM-produced scores.",
+    "Do not add per-lens multi-provider routing; v1 runs all lenses against the one injected client.",
+    "Do not persist the scope; it is ephemeral per call.",
+    "Do not change the Finding schema or the collector from earlier sprints."
+  ],
+  "stopConditions": [
+    "scope.ts and the two-pass judge exist, the judge takes an injected LLMClient, and all six success criteria pass evaluation.",
+    "npm run build exits zero and the new scope and judge unit tests pass with the fake client."
+  ],
+  "definitionOfDone": "The hub can take a pooled Finding[] plus an ephemeral scope and produce a ranked Finding[]: filtered scope narrows structurally in pure JS, decision and general scopes relevance-filter via pass 1, prioritization lenses score survivors in pass 2, no-consensus findings are surfaced flagged-for-review, and the final order is deterministic JS over the lens scores. The LLMClient is injected so tests are deterministic and offline, the build is green, and the new tests pass.",
+  "assumptions": [
+    "Prioritization is query-scoped and ephemeral (research:115-119).",
+    "The LLM-ranks / deterministic-JS-arranges boundary mirrors the calendar planner (research:135) and the medical deterministic-numerics discipline.",
+    "Reconcile is strict-majority, fail-closed-on-tie (skills/shared/lens-panel.md:73-89).",
+    "The lens fan-out shape mirrors src/orchestrator/eval-lenses.ts:1-31 but with hub-specific prioritization lenses (e.g. urgency, impact, effort/ROI, deadline-risk).",
+    "LLMClient.chat is the call surface, injected for testability like the Answerer (src/chat/answerer.ts:11-17)."
+  ],
+  "outOfScope": [
+    "priority.md and the priority/decide commands (Sprint 4).",
+    "chat hub surface (Sprint 5).",
+    "Multi-provider per-lens model diversity (deferred)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "src/hub/scope.ts: export a Scope discriminated union { mode: 'general' } | { mode: 'decision'; optionA: string; optionB: string } | { mode: 'filtered'; domain?: string; dueWithinDays?: number; tag?: string } and a parseScope helper plus a pure applyFilter(findings, scope) that, for filtered mode, keeps findings matching domain and/or tag and/or dueBy within dueWithinDays of a passed-in now (no LLM). src/hub/lenses.ts: define the hub prioritization lens catalog as a Record<string,string> of focus fragments, mirroring the LENS_CATALOG/resolveLensFocus shape in src/orchestrator/eval-lenses.ts:1-31 (do NOT reuse the eval lenses themselves). src/hub/judge.ts: export rankFindings(findings, scope, llm, now) — pass 1: for decision/general, ask the injected llm for a per-finding relevance verdict against the scope; for filtered, use applyFilter first. pass 2: for each surviving finding fan out the prioritization lenses, collect per-lens scores/votes, and reconcile with strict-majority + fail-closed-on-tie (port the semantics documented in skills/shared/lens-panel.md:73-89 — passCount>failCount, tie => not-included => flagged-for-review). Then deterministic stable sort: aggregate score desc, urgency desc, severity desc, dueBy asc (undefined last), id asc. Inject LLMClient (src/providers/types.js) exactly as src/chat/answerer.ts:11-17 does so tests pass a fake returning canned JSON. Keep all parsing of LLM output defensive (safeParse / try-catch) and treat unparseable verdicts as no-vote (contributes to fail-closed).",
+  "evaluatorNotes": "Drive the judge with a fake LLMClient returning fixed relevance verdicts and fixed lens scores; run twice and assert identical ranked output, and assert the tie-break order (score, urgency, severity, dueBy, id). Construct a finding for which the lenses split evenly and assert it is returned flagged-for-review, not dropped. Under decision scope, give one finding relevant to optionA, one to optionB, one to neither, and assert only the first two survive. Assert no real network call occurs (fake client only). Confirm filtered mode narrows with no LLM call. Confirm npm run build is green.",
+  "estimatedFiles": [
+    "src/hub/scope.ts",
+    "src/hub/scope.test.ts",
+    "src/hub/lenses.ts",
+    "src/hub/judge.ts",
+    "src/hub/judge.test.ts"
+  ],
+  "estimatedDuration": "large"
+}

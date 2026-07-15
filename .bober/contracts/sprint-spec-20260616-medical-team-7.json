@@ -1,0 +1,110 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-7",
+  "specId": "spec-20260616-medical-team",
+  "sprintNumber": 7,
+  "title": "MedlinePlus grounded retrieval + cited synthesis (opt-in)",
+  "description": "The opt-in networked slice. Implement the real MedlinePlus / NIH (no-auth) source inside the single sanctioned retrieval network file (the ESLint exception from Sprint 6), reachable only after the literature-retrieval egress axis is opted in. retrieve returns disabled | abstain{reason} | grounded{passages}. synthesize runs the single LLM call (local Ollama default via the provider-agnostic LLMClient) and abstains unless a retrieved passage supports the claim; every non-abstained clinical claim carries >=1 citation. A source failure abstains — never fail-open. The cloud-inference axis stays independently off.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260616-medical-team-6"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "Lint passes — the only network import in src/medical remains in the designated retrieval file (the ESLint boundary from Sprint 6 still holds).",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "All tests pass including retrieval + synthesis tests driven by RECORDED/FIXTURE MedlinePlus responses (no live network in CI); the full pre-existing suite stays green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "With literature-retrieval ON, LiteratureRetriever.retrieve queries MedlinePlus and returns grounded{passages} parsed from a recorded fixture response; with the axis OFF it still returns {disabled} (Sprint 6 behavior preserved).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "synthesize abstains (abstained=true) when no retrieved passage supports the claim, and produces a cited answer (>=1 citation) when a passage does — verified with a fake LLMClient and fixture passages.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-7",
+      "description": "Fail-closed on source error: when the MedlinePlus source is unreachable/errors, retrieve returns abstain{reason} and synthesize emits an abstained MedicalAnswer — NO uncited clinical claim is ever produced (no fail-open path).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-8",
+      "description": "Axis independence: enabling literature-retrieval does NOT enable cloud-inference; synthesize uses the local Ollama model by default and there is no automatic cloud fallback (a test asserts the cloud-inference axis stays off and no cloud provider is constructed by the literature path).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add PubMed/PMC or any second literature source — MedlinePlus/NIH only.",
+    "Do not build a cloud-inference synthesis path or any auto cloud fallback.",
+    "Do not call live network in tests — use recorded/fixture responses.",
+    "Do not relax the src/medical ESLint network boundary beyond the single sanctioned file."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Opt-in MedlinePlus retrieval returns grounded passages from fixtures, synthesis abstains-unless-supported with citations, source failure abstains (never fail-open), and cloud-inference stays independently off"
+  ],
+  "definitionOfDone": "The designated retrieval file (src/medical/retrieval/medline-source.ts) implements a real MedlinePlus / NIH (no-auth) fetch + parse into passages, reachable only after EgressGuard.assertAllowed('literature-retrieval'). LiteratureRetriever.retrieve returns disabled|abstain{reason}|grounded{passages}; synthesize runs the single LLM call via the provider-agnostic LLMClient (local Ollama default) and abstains unless a passage supports the claim, attaching citations otherwise. Source failure abstains (never fail-open). cloud-inference remains independently off. Build, typecheck, lint, and all tests pass.",
+  "assumptions": [
+    "MedlinePlus offers a no-auth endpoint (e.g. the MedlinePlus Connect / Web service / health-topics XML or JSON API) suitable for consumer-health topic lookup; the exact endpoint + response shape is captured as a recorded fixture committed under the test dir.",
+    "The single network call lives ONLY in medline-source.ts using the fetch global or undici (allowed there by the S6 ESLint exception); all other medical files stay network-free.",
+    "synthesize sends retrieved passages + the user question to the LLMClient with an instruction to answer ONLY from the passages and to abstain otherwise; citations reference the passage source URLs/titles.",
+    "Tests inject a fake source (returning fixture passages or throwing) and a fake LLMClient — no live HTTP in CI; an optional integration test behind an env flag may hit the live endpoint but is skipped by default."
+  ],
+  "outOfScope": [
+    "PubMed/PMC or additional sources",
+    "Cloud-inference synthesis / auto fallback",
+    "Live network in CI"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Flesh out src/medical/retrieval/medline-source.ts (the sanctioned network file) and src/medical/retrieval/literature.ts (orchestration + synthesize). Collocate tests with committed fixtures.\n\nmedline-source.ts: export an async function querying MedlinePlus (no auth). Use the fetch global (allowed here per the S6 ESLint exception). Parse the response into Passage[] { title, url, text, source:'medlineplus' }. Wrap the network call so any error/timeout maps to a thrown error the retriever converts to abstain — NEVER return fabricated content. Keep this the ONLY file importing/using network in src/medical.\n\nliterature.ts LiteratureRetriever.retrieve(query): if (!egress.isAllowed('literature-retrieval')) return { kind:'disabled' }; try { const passages = await medlineSource.query(query); return passages.length ? { kind:'grounded', passages } : { kind:'abstain', reason:'no-passages' }; } catch (e) { return { kind:'abstain', reason:'source-error' }; }. synthesize(query, outcome, llm): if outcome is disabled/abstain => return an abstained MedicalAnswer (body = a 'cannot ground an answer' message + footer, citations:[]). If grounded => call llm.complete with a prompt that pins the model to the passages and instructs abstention if unsupported; parse the model output; if the answer is unsupported/empty => abstained; else attach citations derived from the passages (>=1). Use the provider-agnostic LLMClient resolved for the medical team's chat/synthesis role; default local Ollama via the openai-compat path (src/providers/factory.ts) — do NOT construct a cloud provider and do NOT auto-fallback to cloud on Ollama unavailability (abstain + 'model unavailable' footer instead).\n\nWire synthesize into MedicalSopEngine.run's retrieval step (replacing the S6 always-abstain stub) so a literature question with the axis ON produces a grounded, cited answer.\n\nFIXTURES: commit a recorded MedlinePlus response (sanitized) under e.g. src/medical/retrieval/__fixtures__/. Tests: inject a fake source returning fixture passages => retrieve grounded + synthesize cited (with a fake LLMClient returning a supported answer); fake source throwing => abstain (sc-7-7); empty passages => abstain; fake LLMClient returning an unsupported/empty answer => abstained even when passages exist (sc-7-6); axis OFF => disabled (sc-7-5); assert no cloud provider constructed and cloud-inference axis stays false (sc-7-8). Keep any live-network test behind an env flag, skipped by default.",
+  "evaluatorNotes": "sc-7-5: with the axis enabled and a fake source returning fixture passages, retrieve => { kind:'grounded', passages:[...] }; with the axis off, retrieve => { kind:'disabled' }.\nsc-7-6: synthesize with grounded passages + a fake LLMClient whose answer is supported by a passage => abstained=false and citations.length>=1; with a fake LLMClient whose answer is unsupported/empty => abstained=true.\nsc-7-7: fake source throws => retrieve abstain{reason:'source-error'}; synthesize => abstained MedicalAnswer; assert NO uncited claim body is emitted (abstained answers carry no clinical assertion).\nsc-7-8: assert the literature path constructs only the local/Ollama LLMClient (no cloud provider), the cloud-inference axis remains false, and there is no auto-fallback to cloud when the local model is 'unavailable' (simulate and assert abstain+footer).\nsc-7-3: `npm run lint` green; confirm grep shows the only fetch/undici/http usage in src/medical is in medline-source.ts.\nNo live network in CI (fixtures only). Full suite + build + typecheck + lint green; S1-S6 unaffected.",
+  "estimatedFiles": [
+    "src/medical/retrieval/medline-source.ts",
+    "src/medical/retrieval/literature.ts",
+    "src/medical/engine.ts",
+    "src/medical/retrieval/medline-source.test.ts",
+    "src/medical/retrieval/literature.test.ts",
+    "src/medical/retrieval/__fixtures__/medlineplus-sample.json"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260616-medical-team-7-1",
+      "result": "pass"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260616-medical-team-7-1",
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-17T00:08:00.000Z",
+  "startedAt": "2026-06-16T20:51:58Z",
+  "completedAt": "2026-06-17T00:08:00.000Z"
+}

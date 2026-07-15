@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-blackboard-exchange-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-2",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "timestamp": "2026-06-18T19:02:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase B Sprint 2: add the additive config/manifest surface + explicit child seam. Optional config.fleet section (child-visible channel; BoberConfigSchema strips unknown keys so it MUST be declared), optional manifest.blackboard block, resolveBlackboardPath (head-injected ABSOLUTE path), scaffolder injection per child, and a new `agent-bober blackboard publish|read` CLI. NO coordinator loop (Sprint 3) and NO synthesis (Sprint 4).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1",
+        "title": "SharedBlackboard module (WAL facts.db wrapper)",
+        "summary": "src/fleet/shared-blackboard.ts exports BLACKBOARD_MAX_ROUNDS=3, BlackboardFinding, and SharedBlackboard with static async open({dbPath,namespace,busyTimeoutMs?,maxRounds}), publish(finding,now) (throws when round>min(maxRounds,3)), readSiblings(selfFolder), readAll(), close(). FactStore (src/state/facts.ts) gained an optional 2nd constructor arg { journalModeWal?, busyTimeoutMs? } default-off. Commit e1d4b00. The CLI in THIS sprint uses SharedBlackboard.open()."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/config/schema.ts (~:405-421 BoberConfigSchema; MedicalSectionSchema is the optional-section template)",
+      "src/fleet/manifest.ts (FleetManifestSchema)",
+      "src/fleet/scaffolder.ts (:57-58 buildChildConfig serialized to bober.config.json)",
+      "src/fleet/index.ts (runFleet — where resolveBlackboardPath is computed + threaded to scaffolder)",
+      "src/cli/index.ts (:318-321 registerMedicalCommand/registerFleetCommand — add registerBlackboardCommand)",
+      "src/fleet/shared-blackboard.ts (Sprint 1 — used by the CLI)"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md — ESM .js imports, import type, Zod schemas in config/schema.ts (no hand-rolled validation), no SDK leak, node:fs/promises only, unicode section headers, conventional commits 'bober(sprint-2): ...'. CLI must read the absolute db path from config.fleet ONLY — never re-derive from cwd; no-fleet-section = clean exit 1 (printed), never throw; no-blackboard scaffolder output byte-identical (omit the fleet key).",
+  "evaluatorFeedback": null
+}

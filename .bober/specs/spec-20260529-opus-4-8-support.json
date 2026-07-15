@@ -1,0 +1,125 @@
+{
+  "specId": "spec-20260529-opus-4-8-support",
+  "version": 1,
+  "createdAt": "2026-05-29T18:00:00Z",
+  "updatedAt": "2026-05-29T18:00:00Z",
+  "title": "Claude Opus 4.8 Support",
+  "description": "Bring agent-bober up to the Claude Opus 4.8 release: make the `opus` shorthand resolve to claude-opus-4-8 (with a pinned opus-4-7 alias), upgrade the Anthropic SDK to a version exposing the new request fields, and add support for the two new Messages API capabilities — the output_config.effort control and mid-conversation system blocks. This keeps every opus-role agent on the latest model and exposes the new cost/quality and cache-preserving controls.",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 4,
+  "assumptions": [
+    "Target repo is the sibling /Users/bober4ik/agent-bober-workspace/agent-bober; the cockpit consumes the rebuilt dist via npm link.",
+    "The `opus` shorthand should track the latest Opus (claude-opus-4-8); a new `opus-4-7` shorthand preserves explicit pins to the prior model.",
+    "claude-opus-4-8 is a dateless pinned snapshot (Claude 4.6+ naming), so no dated alias suffix is needed.",
+    "The model bump (sprint 1) works on the currently-installed @anthropic-ai/sdk 0.39.0 because model is passed to messages.create as a free string the API accepts server-side; the SDK upgrade is only required for the effort and mid_conv_system features.",
+    "Per the API reference there is NO role:'system' inside the messages array; mid-conversation instructions use a mid_conv_system content block ({ type:'mid_conv_system', content:[{type:'text',text}], cache_control?:{type:'ephemeral',ttl} }).",
+    "effort lives at top-level output_config.effort with values low|medium|high|xhigh|max and defaults to high on Opus 4.8, so omitting it preserves current behavior.",
+    "The Anthropic SDK upgrade target is the current latest (0.100.1) or the minimum version that types output_config.effort and the mid_conv_system block; @anthropic-ai/sdk stays imported only inside src/providers/anthropic.ts."
+  ],
+  "outOfScope": [
+    "Changing the adapter's default max_tokens (Opus 4.8 supports 128k output; the 16384 default is left untouched)",
+    "Wiring a per-role effort setting into bober.config.json schema (core support lands in ChatParams + adapter; config exposure is deferred)",
+    "Adding extended-thinking / thinking-parameter support (Opus 4.8 uses adaptive thinking, not the extended-thinking toggle)",
+    "Updating other providers (OpenAI/Google) to new features beyond gracefully ignoring the new agnostic fields",
+    "The 300k extended-output beta header and Batch API changes",
+    "Updating prose docs (README/AGENTS.md) model references beyond what is needed for code + tests"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Opus 4.8 as the default opus model",
+      "description": "Repoint the `opus` shorthand to claude-opus-4-8 and add a pinned `opus-4-7` alias so existing pins still resolve. Ships independently of the SDK upgrade.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the `opus` shorthand is resolved, resolveProviderModel returns provider anthropic and modelId claude-opus-4-8.",
+        "AC2: When the `opus-4-7` shorthand is resolved, resolveProviderModel returns provider anthropic and modelId claude-opus-4-7.",
+        "AC3: model-resolver.test.ts asserts the opus->4.8 mapping and the opus-4-7 alias, and the full unit-test suite stays green."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Upgrade @anthropic-ai/sdk for the new API fields",
+      "description": "Bump @anthropic-ai/sdk from 0.39.0 to a version whose types expose output_config.effort and the mid_conv_system content block, and fix any breaking changes in the Anthropic adapter while keeping all existing behavior (including prompt caching) intact.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: package.json declares an @anthropic-ai/sdk version whose published types include output_config.effort and the mid_conv_system content block, and package-lock is updated to match.",
+        "AC2: After the upgrade, the Anthropic adapter compiles and npm run typecheck, lint, and build all exit zero.",
+        "AC3: Every existing provider unit test passes, including the prompt-caching tests, with no behavior change apart from the documented flaky baseline failures."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Effort control (output_config.effort)",
+      "description": "Add an optional, provider-agnostic effort field to ChatParams and have the Anthropic adapter forward it as output_config.effort. Omitting it sends no output_config so the API default (high on 4.8) applies.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: ChatParams gains an optional effort field typed to the union low | medium | high | xhigh | max.",
+        "AC2: When effort is set, the Anthropic request body includes output_config.effort equal to that value, verified by a unit test capturing messages.create.",
+        "AC3: When effort is unset, the Anthropic request body contains no output_config field.",
+        "AC4: Passing effort to a non-anthropic adapter is ignored and raises no error."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Mid-conversation system blocks",
+      "description": "Add a provider-agnostic Message variant for a mid-conversation system instruction, rendered by the Anthropic adapter as a mid_conv_system content block (with optional ephemeral cache_control) so instructions can be updated mid-task without breaking the prompt cache.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: The provider Message union gains a variant carrying mid-conversation system text plus an optional ephemeral cache TTL.",
+        "AC2: The Anthropic adapter renders that variant as a content block of type mid_conv_system whose content is a text block with the supplied text.",
+        "AC3: When the variant supplies a cache TTL, the emitted mid_conv_system block carries cache_control of type ephemeral with that ttl; otherwise no cache_control is attached.",
+        "AC4: A non-anthropic adapter handles the variant without throwing (best-effort text rendering or a documented skip)."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "The SDK upgrade and new fields must not regress existing provider behavior; the disabled/absent paths for effort and mid_conv_system must match prior request payloads.",
+      "verificationMethod": "Run the full provider unit-test suite plus typecheck/lint/build; assert unset-effort and no-system-update payloads contain no output_config / mid_conv_system."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "@anthropic-ai/sdk and all Anthropic SDK types stay confined to src/providers/anthropic.ts; new agnostic fields live in providers/types.ts.",
+      "verificationMethod": "grep that @anthropic-ai/sdk is imported only in anthropic.ts; confirm ChatParams/Message changes are in types.ts."
+    },
+    {
+      "category": "security",
+      "requirement": "No prompt content or API keys are newly logged by the upgraded adapter or new fields.",
+      "verificationMethod": "Inspect the adapter diff for any added logging of request bodies or credentials."
+    }
+  ],
+  "techStack": ["typescript", "@anthropic-ai/sdk", "vitest", "zod"],
+  "techNotes": {
+    "integrationPoints": [
+      "Anthropic Messages API: top-level output_config.effort (low|medium|high|xhigh|max, default high on Opus 4.8); mid_conv_system content block ({type:'mid_conv_system', content:[{type:'text',text}], cache_control?:{type:'ephemeral',ttl:'5m'}})",
+      "@anthropic-ai/sdk upgrade 0.39.0 -> latest (0.100.1) for typed support of the above",
+      "src/orchestrator/model-resolver.ts SHORTHAND_MAP for the model bump"
+    ],
+    "dataModel": "ChatParams gains optional effort: 'low'|'medium'|'high'|'xhigh'|'max'. The Message union gains a mid-conversation-system variant carrying text + optional ephemeral cache ttl. No persisted data.",
+    "securityConsiderations": ["Keep @anthropic-ai/sdk imports inside the adapter only; do not log request bodies or keys."],
+    "existingPatterns": "model-resolver SHORTHAND_MAP (src/orchestrator/model-resolver.ts:22); provider-agnostic types (src/providers/types.ts); Anthropic conversion + the recently-added prompt-caching helpers in src/providers/anthropic.ts; per-provider *.test.ts vitest pattern with a mocked SDK."
+  },
+  "sprints": [
+    "sprint-spec-20260529-opus-4-8-support-1",
+    "sprint-spec-20260529-opus-4-8-support-2",
+    "sprint-spec-20260529-opus-4-8-support-3",
+    "sprint-spec-20260529-opus-4-8-support-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "4-7 hours",
+    "riskLevel": "high",
+    "riskNotes": "Sprint 1 (model bump) is trivial and ships independently. The real risk is sprint 2: jumping @anthropic-ai/sdk 0.39.0 -> 0.100.1 may introduce breaking changes in messages.create signatures, content-block/usage types, and the just-added cache_control wiring; it carries strong regression gates. Sprint 4 (mid_conv_system) is the most architecturally involved and lowest immediate ROI given agent-bober resets context per subagent.",
+    "sourceAnnouncement": "https://www.anthropic.com/news/claude-opus-4-8 (Opus 4.8 GA 2026-05-28); shapes confirmed against platform.claude.com API reference."
+  },
+  "completedAt": "2026-05-29T19:40:00Z"
+}

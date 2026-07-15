@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-1",
+  "iteration": 1,
+  "status": "complete",
+  "filesChanged": [
+    "src/config/schema.ts (HistorySectionSchema: maxActiveLines z.number().int().positive().default(2000), wired optional into BoberConfigSchema)",
+    "src/config/schema.test.ts (+4 tests: default 2000, reject 0, reject -1, accept 500)",
+    "src/state/history-rotation.ts (NEW: rotateIfNeeded(projectRoot, maxActiveLines=2000); crash-safe Option B ordering write-temp -> append-archive -> rename; historyActivePath + historyArchivePath helpers; no loadConfig call)",
+    "src/state/history.ts (parseEntries helper; loadRecentHistory(projectRoot,{limit}) active-only tail; loadHistory now archive-then-active concat; appendHistory wires rotateIfNeeded with hardcoded 2000 default; signatures of loadHistory/appendHistory UNCHANGED)",
+    "src/state/history.test.ts (NEW: 15 tests for C1-C4)",
+    "src/state/index.ts (barrel re-export of loadRecentHistory)"
+  ],
+  "testsAdded": ["src/state/history.test.ts", "src/config/schema.test.ts"],
+  "commits": ["a75a376 - bober(sprint-1): bounded history reads + crash-safe rotation"],
+  "criteriaSelfReport": {
+    "C1": "loadRecentHistory reads only active, never archive; test seeds archive 100/101 + active 0/1/2, limit 2 -> {1,2} only. 15 history tests pass.",
+    "C2": "rotateIfNeeded moves overflow to archive, active<=MAX; MAX+10 and MAX+50 seeds asserted.",
+    "C3": "loadHistory archive-then-active returns full ordered set 0..TOTAL-1 across a rotation; conformance(6)+flusher(10) green.",
+    "C4": "Crash-before-rename state: archive has overflow AND active has all; union de-duped via Set asserts all distinct indexes present (no loss). NOTE: this ordering tolerates duplicate-in-crash-window, which the contract generatorNotes explicitly permits ('union test tolerates if you de-dup').",
+    "C5": "zod default 2000, reject 0/-1 -> 19 schema tests pass.",
+    "C6": "typecheck exit 0, build exit 0, 77 tests across 7 suites green; no new failures, no flaky baseline observed."
+  },
+  "notes": "C4 uses Option B (write new-active temp -> append overflow to archive -> rename commit). A crash between archive-append and rename leaves the overflow in BOTH files (duplicated, not lost). loadHistory returns the raw union (may include duplicates only in that crash window). Generator asserts no-loss; strict 'no duplication' is satisfied only in the non-crash steady state. Contract generatorNotes anticipated this tradeoff. Evaluator should decide whether C4's 'exactly once' wording is satisfied by the de-dup-tolerant reading."
+}

@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-research-scheduler-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-research-scheduler-1",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-29T20:23:55.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent autonomous code-gen harness (TypeScript ESM, NodeNext, Zod config, filesystem state under .bober/). This spec (spec-20260628-research-scheduler) adds a new additive src/research/ module for recurring multi-model research jobs. Sprint 1 of 5 builds only the job definition layer: schema + JSON store + CLI. No execution, no egress, no scheduling yet.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/state/facts.ts (FactStore schema + clock-free store pattern to mirror, esp. L20-33)",
+      "src/state/helpers.ts (ensureDir helper)",
+      "src/cli/commands/medical.ts (registerMedicalCommand + commander subcommand pattern + injected deps, esp. L41 deps and L130-185 subcommands)",
+      "src/cli/index.ts (register commands: import ~L40, call ~L319)",
+      "src/config/schema.ts (Zod config conventions)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "commitFormat": "bober(sprint-N): description"
+    }
+  },
+  "principles": "Read .bober/principles.md from disk. Key hard gates: TypeScript strict mode zero type errors; ESLint consistent-type-imports (use `import type`), unused vars errored (prefix `_` to escape); ESM everywhere with `.js` import extensions for NodeNext; Zod for all config validation; filesystem state as JSON under .bober/ (no DB for jobs); async fs only (node:fs/promises, no *Sync); collocated *.test.ts; conventional commits.",
+  "evaluatorFeedback": null,
+  "notes": "Sprint contract at .bober/contracts/sprint-spec-20260628-research-scheduler-1.json and spec at .bober/specs/spec-20260628-research-scheduler.json. Cadence: pick a string enum ('daily'|'weekly'|'monthly') OR cron-like string and document it in the schema doc-comment; do NOT compute next-due dates yet (Sprint 4). Do NOT touch src/fleet/, src/medical/, or src/orchestrator/pipeline.ts."
+}

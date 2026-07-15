@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-workflow-engine-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-workflow-engine-3",
+  "specId": "spec-20260604-workflow-engine",
+  "timestamp": "2026-06-04T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 3 hand-writes a pure-JS port of the reconciler at .claude/workflows/lib/reconcile.js mirroring the TS twin (src/orchestrator/workflow/reconciler.ts) EXACTLY, plus a shared fixture set and a CI conformance test asserting the twin and port produce byte-identical EvalResult over every fixture. This is the ADR-4 drift gate.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260604-workflow-engine-1", "title": "Engine seam + config", "summary": "pipeline.engine + selector under src/orchestrator/workflow/." },
+      { "contractId": "sprint-spec-20260604-workflow-engine-2", "title": "EvaluatorPanelReconciler (TS twin)", "summary": "Pure reconcile(_sprintId,_round,lensVerdicts,timestamp):EvalResult at src/orchestrator/workflow/reconciler.ts. evaluator='panel', strict majority passCount>failCount, fail-closed tie, failing-detail union deduped by `${criterion}\\u241F${message}`, feedback joined by newline or 'All lenses passed.', score=Math.round(100*passCount/n), timestamp echoed. Tests use sentinel timestamps." }
+    ],
+    "currentBranch": "bober/workflow-engine",
+    "relevantFiles": [
+      "src/orchestrator/workflow/reconciler.ts",
+      "src/orchestrator/workflow/reconciler.test.ts",
+      "src/contracts/eval-result.ts",
+      "vitest.config.ts",
+      "eslint.config.js"
+    ]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true }
+  },
+  "principles": "See .bober/principles.md. NOTE: the JS port is OUTSIDE src/ (.claude/workflows/lib/) so `npm run lint` (eslint src/) won't cover it; that's fine. Do NOT loosen lint by adding broad ignores. The conformance test lives under src/ so it IS linted — keep it clean.",
+  "evaluatorFeedback": null,
+  "notes": "KEY CHALLENGE: importing the plain-JS port from .claude/workflows/lib/reconcile.js into a Vitest test under src/orchestrator/workflow/. Use a relative import path that resolves at test runtime (e.g. a deep `../../../.claude/workflows/lib/reconcile.js`). Vitest resolves ESM .js fine. The TS twin uses _sprintId/_round (underscore) because TS noUnusedParameters; the JS port has no such constraint so name them sprintId/round or _sprintId — output must be IDENTICAL regardless. The port must mirror the twin's exact summary string, dedup key (U+241F separator), feedback join, score rounding, and evaluator='panel'. Conformance test: for each fixture, call both with the SAME sentinel timestamp and assert toEqual; also EvalResultSchema.safeParse(jsPort output).success===true. Read reconciler.ts line-by-line and replicate. Confine changes to: .claude/workflows/lib/reconcile.js, src/orchestrator/workflow/__fixtures__/lens-vectors.json, src/orchestrator/workflow/reconcile-conformance.test.ts."
+}

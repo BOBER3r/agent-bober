@@ -1,0 +1,45 @@
+{
+  "contractId": "sprint-spec-20260604-architect-lens-panel-3",
+  "specId": "spec-20260604-architect-lens-panel",
+  "sprintNumber": 3,
+  "title": "TS Checkpoint 5 review panel",
+  "description": "Refactor runArchitect Checkpoint 5 (review/assembly) into a discrete seam: when architect.panel is on, assemble the draft architecture + ADRs, fan out one lens reviewer per lens (bounded by maxConcurrent), and reconcile() a pass/fail verdict (fail-closed on tie) that gates final assembly. When off, CP5 runs as today (single-agent within the monolithic loop), byte-identical.",
+  "status": "completed",
+  "completedAt": "2026-06-04T08:53:00Z",
+  "dependsOn": ["sprint-spec-20260604-architect-lens-panel-1", "sprint-spec-20260604-architect-lens-panel-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "When architect.panel is disabled OR lenses.length<2, CP5 runs as today (the existing single-agent review within the monolithic flow); the off path is byte-identical (mocked-client test asserts no per-lens review fan-out on the off path).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C2", "description": "When the panel is on, CP5 issues one review call per lens through resolveArchLensFocus(lens), bounded by maxConcurrent, each returning a pass/fail verdict, and reconcile() yields the panel verdict. A unit test asserts call-count == lenses.length, peak concurrency <= maxConcurrent, and that a 2-pass/2-fail set reconciles to passed=false (fail-closed).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "reconcile() is imported from src/orchestrator/workflow/reconciler.ts and reused unchanged (not reimplemented). The reconciled verdict + per-lens reviews are surfaced on ArchitectResult via an additive optional lensReviews field, and the architecture doc/ADRs still save to .bober/architecture/. A failing panel verdict is recorded in the final assembly (e.g. flagged in the result) rather than silently dropped.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "npx tsc --noEmit, npm run build, npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented pre-existing skipped baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT modify the CP2 synthesis panel from sprint 2 (only add CP5).",
+    "Do NOT touch the native surface (sprints 4-5).",
+    "Do NOT modify reconcile() (reuse verbatim), synthesize(), or arch-lenses.ts.",
+    "Do NOT change CP1/CP3/CP4, the architecture-doc save path, or the ArchitectResult shape beyond the additive optional lensReviews.",
+    "Do NOT invoke a real LLM in tests — mock createClient and runAgenticLoop."
+  ],
+  "stopConditions": [
+    "Stop when CP5 off path is byte-identical, the on path fans out lens reviewers bounded by maxConcurrent and reconcile()s a fail-closed verdict surfaced on the result, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to src/orchestrator/architect-agent.ts and its test (plus the additive optional lensReviews on ArchitectResult)."
+  ],
+  "definitionOfDone": "runArchitect CP5 is a discrete seam: off (panel disabled/<2 lenses) runs today's single-agent review byte-identically; on, it assembles then fans out one lens reviewer per lens bounded by maxConcurrent and reconcile()s a fail-closed pass/fail verdict, surfacing lensReviews (additive optional) and recording a failing verdict in the final assembly; reconcile() is reused unchanged; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "Sprint 2 established the CP2 seam and the panel-on/off branch structure in runArchitect; CP5 extends the same on-branch continuation with a review fan-out before final assembly.",
+    "reconcile(sprintId, round, lensVerdicts, timestamp) from reconciler.ts is reused for the pass/fail review (each lens reviewer returns an EvalResult-shaped pass/fail; reconcile aggregates fail-closed). A round/id of the architecture id + 1 is safe (reconcile ignores them for output).",
+    "createClient/runAgenticLoop are mocked via vi.mock (same harness as sprint 2). lensReviews is additive optional on ArchitectResult."
+  ],
+  "outOfScope": ["CP2 changes", "native surface", "reducer/lens module changes", "real LLM in tests"],
+  "ambiguityScore": 4,
+  "generatorNotes": "Read src/orchestrator/architect-agent.ts AS OF sprint 2 (the CP2 seam + panel on/off branch). Read src/orchestrator/workflow/reconciler.ts (reconcile signature/semantics — pass/fail, fail-closed on tie, evaluator='panel') and src/orchestrator/arch-lenses.ts (resolveArchLensFocus). DESIGN: extend the panel-ON continuation so that, after CP3/CP4 produce the draft architecture + ADRs and before/at final assembly (CP5), the orchestrator: (1) assembles the draft, (2) mapBounded(panel.lenses, panel.maxConcurrent, lens => a focused review call asking the lens to PASS/FAIL the assembled architecture+ADRs through resolveArchLensFocus(lens), returning an EvalResult-shaped { passed, details, ... }), (3) reconcile(archId, 1, lensReviews, timestamp) -> panel verdict, (4) surface the verdict + lensReviews on ArchitectResult (additive optional lensReviews) and record a failing verdict in the final assembly output (e.g. a 'panel review: FAIL' note + the failing lenses' feedback) — do NOT silently drop a fail. The OFF path (panel disabled/<2 lenses) keeps today's single-agent CP5 review verbatim. Add additive optional `lensReviews?` to the ArchitectResult interface. TESTS: extend src/orchestrator/architect-agent.test.ts (vi.mock createClient/runAgenticLoop): (a) off path -> no per-lens review fan-out; (b) on path 3 lenses + maxConcurrent 2 -> 3 review calls, peak<=2; (c) 2 pass + 2 fail -> reconcile passed=false (fail-closed) and the result reflects the failing verdict. Reuse reconcile() (import, do not reimplement). Use import type, ESM .js specifiers, unicode headers. Conventional commit: bober(sprint-3): add TS architect Checkpoint 5 review panel. GIT HYGIENE: stage only your files with explicit paths; never `git add -A`. Branch: the feature branch — never main.",
+  "evaluatorNotes": "Confirm CP5 off path (panel disabled/<2 lenses) is byte-identical to today's single-agent review (diff vs sprint-2 state; the CP5 panel must be additive/gated). Confirm the on path: assembles, maps panel.lenses -> per-lens PASS/FAIL review via resolveArchLensFocus (imported), bounds concurrency at maxConcurrent, calls reconcile() from reconciler.ts (NOT reimplemented), and surfaces the verdict + lensReviews. Run architect-agent.test.ts: verify off-path no-fan-out, on-path call-count==lenses.length + peak<=maxConcurrent, and the 2-2 -> passed=false fail-closed assertion. Confirm a failing panel verdict is recorded in the result (not dropped). Confirm reconciler.ts/synthesizer.ts/arch-lenses.ts unchanged and CP2 from sprint 2 still works (its tests green). Confirm createClient/runAgenticLoop mocked. Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the pre-existing skipped baseline).",
+  "estimatedFiles": [
+    "src/orchestrator/architect-agent.ts",
+    "src/orchestrator/architect-agent.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "createdAt": "2026-06-04T06:30:00Z",
+  "updatedAt": "2026-06-04T06:30:00Z"
+}

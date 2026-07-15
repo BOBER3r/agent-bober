@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260628-priority-hub-2-1",
+  "contractId": "sprint-spec-20260628-priority-hub-2",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-28T20:41:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings (eval-persist.test.ts)"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "details": "Full suite 3178 tests / 251 files green (+36 from baseline 3142)"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "readonly flag opens {readonly:true} + skips CREATE TABLE; no-flag path byte-identical (git diff confirms); both tested"},
+    {"criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "pooled length == distinct-id count across two siblings"},
+    {"criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "same id across stores -> exactly one pooled entry (seen Set, keep-first)"},
+    {"criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "sibling facts.db size+mtime unchanged after collect; readonly handle write throws SQLITE_READONLY"},
+    {"criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "configured->absolute; kb-* discovery fallback; non-existent skipped; non-kb ignored; missing facts.db skipped"},
+    {"criterionId": "sc-2-6", "required": true, "result": "pass", "evidence": "build green"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All six required criteria pass; FactStore readonly flag genuinely additive (no-flag path byte-identical, WAL/busy_timeout preserved); schema.ts untouched; 3178 tests green; new files async-fs/.js-imports/zero-any."
+}

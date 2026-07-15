@@ -1,0 +1,35 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-memory-self-improve-p0-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-3",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T19:45:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase 3, Sprint 3 of 5. Give the EXISTING lessons store (src/orchestrator/memory + src/state/memory.ts) lifecycle hygiene: occurrence-weighted ranking in retrieveRelevantLessons, a pure deterministic pruneLessons that quarantines below-threshold/stale + deterministically-contradictory lessons into QUARANTINE.md (never deleting), exposed as `bober memory prune`. Independent of the facts store (Sprints 1-2).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-1", "title": "SQLite facts store + CLI", "summary": "Facts store (separate from lessons). Not touched by this sprint." },
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-2", "title": "Reconcile-on-write", "summary": "Facts reconcile. Not touched by this sprint." }
+    ],
+    "currentBranch": "bober/memory-self-improve-p0",
+    "relevantFiles": [
+      "src/orchestrator/memory/retrieve.ts",
+      "src/orchestrator/memory/retrieve.test.ts",
+      "src/orchestrator/memory/distill.ts",
+      "src/state/memory.ts",
+      "src/cli/commands/memory.ts"
+    ]
+  },
+  "decisionsLocked": {
+    "purity": "pruneLessons is a PURE function with injected `now` — no Date.now()/new Date() inside hygiene.ts or retrieve.ts core; stamp now at the CLI boundary.",
+    "neverDelete": "Quarantine (move to QUARANTINE.md + rewrite INDEX.md without them) — NEVER delete the per-lesson <lessonId>.md files. Reversible by design.",
+    "rankingInvariant": "Token-overlap stays DOMINANT (existing C1 'non-matching keyword → empty' must still hold); occurrences only boost/tiebreak. Stable sort: overlap desc → occurrence-weighted → lessonId asc.",
+    "conflictDeterministic": "Contradiction = two lessons sharing the same signature key with opposing markers — move BOTH to quarantine, drop neither. No LLM."
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": "Read .bober/principles.md. Gates: TS strict (zero errors), ESLint consistent-type-imports (`import type`), ESM .js specifiers, no `any` unjustified, section comments, CLI handlers never throw (process.exitCode=1), deterministic/byte-stable output, conventional commit `bober(sprint-3): ...`.",
+  "evaluatorFeedback": null
+}

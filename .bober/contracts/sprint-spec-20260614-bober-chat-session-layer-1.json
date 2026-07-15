@@ -1,0 +1,111 @@
+{
+  "contractId": "sprint-spec-20260614-bober-chat-session-layer-1",
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "sprintNumber": 1,
+  "title": "Chat REPL that answers \u2014 walking skeleton, chat role, resumable session",
+  "description": "Build the thin `bober chat` REPL skeleton: a ChatSession turn loop that reads the disk roster and the .bober/memory/ distill, classifies each turn with one loose-JSON LLMClient.chat call (jsonObjectMode), and answers. Add a dedicated `chat` role to BoberConfig (Zod + defaults) and resolve its provider via resolveRoleProviders/createClient so it runs identically on Anthropic and DeepSeek. Persist conversation to a resumable per-session JSONL and wire deterministic slash-commands /runs, /exit, /help. Spawn and steer-stop are NOT implemented this sprint \u2014 the classifier may emit spawn/steer but the session replies that those actions arrive in a later sprint (graceful stub).",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors (strict mode).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "All tests pass with zero failures, including new collocated tests for this sprint (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "BoberConfig parses a `chat` role (Zod schema in src/config/schema.ts) with model and provider fields; defaults (src/config/defaults.ts) set it to model opus, provider anthropic. A unit test parses a config with a DeepSeek chat role override successfully.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "TurnClassifier.classify calls LLMClient.chat with jsonObjectMode:true and returns a ClassifierAction; given malformed/non-JSON text it returns {action:\"answer\"} (covered by a unit test with a fake LLMClient).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "RosterReader.read delegates to readRunStatesFromDisk (NOT RunManager.load); a unit test writes a 'running' state.json to a temp .bober/runs and asserts RosterReader still reports it as 'running' after read. Grep confirms src/chat contains no reference to RunManager.load.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "ConversationStore appends turns to .bober/chat/<sessionId>.jsonl and loadRecent returns them newest-last; a unit test creates a store, appends, then a NEW store instance with the same sessionId loads the prior turns (resume).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-8",
+      "description": "No @anthropic-ai/sdk or openai SDK import appears anywhere under src/chat (grep returns nothing); all LLM interaction goes through src/providers.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-9",
+      "description": "Deterministic slash-commands /help, /runs, and /exit are handled WITHOUT an LLM call: /runs prints the roster summary, /help lists commands, /exit ends the loop. A unit test verifies the slash dispatcher routes these without invoking the injected LLMClient.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the spawn action handler (RunSpawner) \u2014 that is Sprint 2",
+    "Do not implement completion weaving / history tailing \u2014 that is Sprint 3",
+    "Do not implement steer-stop / kill-by-PID \u2014 that is Sprint 4",
+    "Do not modify runPipeline, RunManager, EventStreamManager, memory, or provider public APIs",
+    "Do not add the --run-id flag yet (Sprint 2)"
+  ],
+  "stopConditions": [
+    "All nine success criteria pass",
+    "Running `bober chat` (or the session.handleTurn entry) answers a plain question using roster + memory distill context and resumes prior conversation on a second launch with the same session id"
+  ],
+  "definitionOfDone": "A new src/chat/ module exposes a ChatSession with start() and handleTurn(input). Each turn reads the disk roster (RosterReader -> readRunStatesFromDisk), reads the .bober/memory/ distill, and classifies via TurnClassifier (one jsonObjectMode LLMClient.chat call, parse-fail -> answer). The answer path composes roster + distill + recent history into one Answerer LLMClient.chat call. A `chat` role exists in BoberConfig with opus/anthropic defaults, overridable to DeepSeek, and the session builds its client via resolveRoleProviders + createClient. Conversation persists to a resumable .bober/chat/<sessionId>.jsonl. Slash-commands /runs, /help, /exit work deterministically. spawn/steer classifier outputs are acknowledged as not-yet-available. Build, typecheck, and all tests pass; no SDK types leak into src/chat.",
+  "assumptions": [
+    "A stable session id (e.g. the literal 'default' per project) is acceptable for resume in Phase 1; multi-session handshakes are deferred",
+    "The memory distill can be read as a plain string for prompt context via the existing reader (src/state/memory.ts:196,242,272)",
+    "The `bober chat <team>` team argument is optional in Phase 1 and ignored beyond labeling (fixed programming role set)"
+  ],
+  "outOfScope": [
+    "Spawn, completion-weaving, and stop (Sprints 2-4)",
+    "Any change to existing public APIs",
+    "Rich structured memory distillation"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/chat/ with one small file per component (principles: small single-purpose modules, section comments with unicode box headers).\n\nVerified reuse signatures:\n- readRunStatesFromDisk(projectRoot): Promise<RunState[]> \u2014 src/state/run-state.ts:110. NEVER call RunManager.load() (it reconciles running->failed, run-manager.ts:251-256).\n- RunState shape \u2014 src/mcp/run-manager.ts:35-55.\n- LLMClient.chat(params): Promise<ChatResponse> \u2014 src/providers/types.ts:216. ChatParams has jsonObjectMode?:boolean at :183 (use true for the classifier). ChatResponse.text is the reply (:194-206). Message/TextMessage at :96-132 (role 'user'|'assistant', content).\n- createClient(provider?, endpoint?, providerConfig?, model?, role?): LLMClient \u2014 src/providers/factory.ts:172. resolveRoleProviders(config): RoleProviderMap \u2014 src/config/role-providers.ts:92. Add 'chat' to the RoleName/RoleProviderMap surface and to BoberConfig schema + defaults.\n- Memory distill reader \u2014 src/state/memory.ts:196 (appendLesson), :242 (loadLessonIndex), :272 (loadLesson). Compose a compact string for the prompt.\n\nClassifier: system prompt instructs the model to return ONLY a JSON object {\"action\":\"answer\"|\"spawn\"|\"steer\", ...}. Request jsonObjectMode:true. Parse defensively: strip code fences, extract first balanced {...}, zod-validate against the ClassifierAction schema; ANY failure => {action:\"answer\"}. Keep the ClassifierAction type exactly as in the architecture (answer | spawn{task} | steer{op:inspect} | steer{op:stop,runId}) even though only answer is handled this sprint.\n\nConversationStore: append-only JSONL at .bober/chat/<sessionId>.jsonl using node:fs/promises (async only). loadRecent(limit) reads + parses, skips malformed lines, returns newest-last. Use ensureDir from src/utils/fs.ts (or src/state/helpers.ts).\n\nSlash-command dispatcher: if input.trimStart().startsWith('/'), handle deterministically and return WITHOUT touching the LLMClient. /runs => RosterReader.summarize(await RosterReader.read()). /help => static text. /exit => signal loop end.\n\nWire a `bober chat` CLI command (src/cli/commands/) that constructs the ChatSession with a real client from config and calls start(). Register it in the CLI entry (mirror how `run` is registered).\n\nTests: collocate *.test.ts. Use a fake LLMClient (returns canned ChatResponse) for classifier + answerer tests \u2014 do NOT hit a network. Use temp dirs for ConversationStore + RosterReader (principle: no fs mocks, real temp dirs, clean up).",
+  "evaluatorNotes": "sc-1-4: parse a config object with chat:{model:'deepseek-chat',provider:'deepseek'} and assert success; assert defaults give opus/anthropic.\nsc-1-5: call classify with a fake LLMClient returning '```json {\\\"action\\\":\\\"answer\\\"}```', then returning garbage 'not json' \u2014 both must yield a valid action, garbage => answer.\nsc-1-6: write a temp .bober/runs/<id>/state.json with status 'running'; after RosterReader.read() the same status must still be 'running' on disk AND in the returned array. Grep src/chat for 'RunManager' \u2014 load() must not appear.\nsc-1-7: append two turns, construct a fresh ConversationStore with the same sessionId+projectRoot, loadRecent(10) returns the two turns in order.\nsc-1-8: grep -r '@anthropic-ai/sdk\\|from \"openai\"' src/chat \u2014 expect no matches.\nsc-1-9: feed '/runs','/help','/exit' to a session whose injected LLMClient throws if called; the turn must succeed without calling it.\nRun npm run build, npm run typecheck (tsc), npm run test.",
+  "estimatedFiles": [
+    "src/chat/chat-session.ts",
+    "src/chat/turn-classifier.ts",
+    "src/chat/roster-reader.ts",
+    "src/chat/answerer.ts",
+    "src/chat/conversation-store.ts",
+    "src/chat/slash-commands.ts",
+    "src/config/schema.ts",
+    "src/config/defaults.ts",
+    "src/config/role-providers.ts",
+    "src/cli/commands/chat.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-14T00:00:00Z",
+  "updatedAt": "2026-06-14T00:00:00Z",
+  "completedAt": "2026-06-14T13:37:03Z"
+}

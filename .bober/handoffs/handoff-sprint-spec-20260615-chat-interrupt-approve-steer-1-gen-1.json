@@ -1,0 +1,52 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-chat-interrupt-approve-steer-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-1",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T13:33:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Chat Interrupt / Approve / Steer (research Phase 2). Add mid-flight HITL control over chat-spawned runs, reusing the existing disk-approval engine (DiskCheckpointMechanism + approval-state.ts) without rebuilding it. Sprint 1 is the foundation: additive RunState grammar extension (input-required/paused + optional fields), a session-persisted /careful on|off toggle, a careful chat spawn that launches the detached run with curated --approve-gates, and the additive `bober run --approve-gates` flag.",
+    "completedSprints": [],
+    "priorPhases": [
+      "Phase 1 (PR #44): bober chat REPL — pure-reader chat process, detached `bober run --run-id` children, filesystem coordination (.bober/runs/<id>/, .bober/chat/ pid sidecar, history.jsonl tailer, /stop kill-by-PID).",
+      "Phase 4 (PR #45): domain-agnostic Team abstraction."
+    ],
+    "currentBranch": "bober/chat-interrupt-approve-steer",
+    "relevantFiles": [
+      "src/mcp/run-manager.ts (RunState type ~line 35 — extend status union + add optional fields ADDITIVELY)",
+      "src/state/run-state.ts (writeRunState/readRunState/readRunStatesFromDisk — schema-loose round-trip)",
+      "src/chat/pid-sidecar.ts (shape to mirror for new careful-sidecar.ts)",
+      "src/chat/run-spawner.ts (spawn args ~93-118 — thread --approve-gates; writeRunState callers)",
+      "src/cli/commands/run.ts (--mode/--run-id/--team flag pattern; checkpointOverrides shaping)",
+      "src/config/schema.ts (PipelineSectionSchema.checkpointOverrides)",
+      "src/orchestrator/checkpoints/registry.ts + sites.ts (CHECKPOINT_SITES — valid gate ids to validate against)",
+      "src/chat/slash-commands.ts (dispatch + HELP_TEXT — register /careful via optional-handler back-compat pattern)",
+      "src/chat/chat-session.ts (handleTurn — read careful toggle at spawn time)",
+      "src/utils/fs.ts (atomic fs helpers)"
+    ]
+  },
+  "keyInvariants": [
+    "AUTOPILOT BYTE-FOR-BYTE: when careful is off (default), RunSpawner.spawn passes NO --approve-gates and the arg vector is identical to Phase 1. The run-spawner.test.ts:89 arg-vector assertion is the canary — it MUST stay green.",
+    "ADDITIVE ONLY: RunState extension adds union members + optional fields; existing statuses and readers (roster.summarize, readRunStatesFromDisk) are unaffected. No exhaustive switch over RunState.status exists (all string-equality ifs) per curator impact analysis.",
+    "--approve-gates validation: unknown gate name rejected with a clear error; valid gates sourced from CHECKPOINT_SITES; merges {gate->'disk'} into config.pipeline.checkpointOverrides for THIS run only (override wins over mode).",
+    "RunState lives in src/mcp/run-manager.ts:35, NOT run-state.ts (curator correction).",
+    "/careful is a SESSION toggle persisted in a chat-scoped sidecar (mirror pid-sidecar.ts under .bober/chat/); /careful with no arg reports current state."
+  ],
+  "successCriteriaSummary": "AC1: /careful on -> spawn passes --approve-gates post-research,post-plan,post-sprint; careful off (default) = no flag, Phase 1 behavior. AC2: `bober run --approve-gates ...` merges {gate->'disk'} into checkpointOverrides for that run only; unknown gate rejected clearly, other gates still apply. AC3: RunState union accepts input-required/paused; optional pendingCheckpointId/pendingPrompt/pendingSince/pausedAt round-trip; existing readers unaffected. AC4: /careful toggle persists across turns in chat sidecar; /careful no-arg reports state; autopilot spawn after /careful off produces no pending markers.",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principlesRef": ".bober/principles.md (ESM/NodeNext, .js import extensions, no SDK types outside src/providers/, Zod for config, async fs only, collocated *.test.ts, conventional commits bober(sprint-1): ...)",
+  "evaluatorFeedback": null
+}

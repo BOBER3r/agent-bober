@@ -1,0 +1,23 @@
+{
+  "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["6ed3f77 - bober(sprint-2): remap GraphClient to tokensave 6.1.1 tool catalog + onboard E2E"],
+  "filesChanged": [
+    { "path": "src/graph/client.ts", "action": "modified", "description": "Replaced stale TOOL map with tokensave_* names; added QUERY_TOOL per-pattern map (callers/callees/file_dependents/test_map); added raw 6.1.1 row types + toNodeRef() with NODE_KINDS coercion; rewrote all 6 methods with correct params + adapters; kept runWithSandbox/runRaw/keepNode/logSandboxDrop/toFailureResult intact" },
+    { "path": "tests/graph/client.test.ts", "action": "modified", "description": "Rewrote call() mock fixtures to RAW 6.1.1 payloads; +5 tests (callees_of, imports_of, tests_for, unknown-kind coercion, impact testsAffected split); sandbox-drop fixtures -> TsSearchRow shapes" }
+  ],
+  "selfVerification": {
+    "typecheck": "exit 0", "build": "exit 0", "lint": "exit 0 (2 pre-existing warnings unrelated)",
+    "graphMcpTests": "tests/graph/ + tests/mcp/ 242/242 pass; client.test.ts 30/30",
+    "fullSuite": "219 files / 2814 tests pass (up from 2809)"
+  },
+  "onboardE2E": {
+    "ran": true, "handshakeTimedOut": false, "exitCode": 0, "filesWritten": 5,
+    "output": "Starting graph engine... / Querying code graph... / Writing artifacts... / 5 files written (10952 bytes total)",
+    "hotspotsHasRows": true,
+    "qualityNote": "onboard uses semantic search() per the kept scope, so output is functional but noisy: test-fixtures (EMPTY_INPUTS) surface as hotspots, dist/ + docs entries appear in architecture-overview, communities = single 'default'/'uncategorized'. Meets sc-2-5 (real rows, not empty-state) but is low-quality — deferred 'option C' onboard rework would fix it."
+  },
+  "notes": "overview() uses JSON.stringify(module_api) to keep its string return type. query() switch uses assertNever for exhaustiveness. callers/callees/impact require node_id (not symbol). file_dependents/test_map return string[] paths adapted to NodeRef[]. The regenerated .bober/onboarding/*.md were NOT committed (not source).",
+  "blockers": []
+}

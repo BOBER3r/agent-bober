@@ -1,0 +1,76 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-3",
+  "specId": "spec-20260628-medical-ingest",
+  "sprintNumber": 3,
+  "title": "bober medical import-labs <pdf> end-to-end command (fail-closed + audit + dedup)",
+  "description": "Add a `bober medical import-labs <pdf>` subcommand and an extracted runImportLabs(projectRoot, pdfPath, deps) core. It checks the cloud-inference egress axis FIRST and refuses fail-closed when off (clear message, exit 1, no PDF read, no client built). When enabled it parses (Sprint 1), writes a vault note and reindexes into HealthDataStore (Sprint 2), dedups at ingest, and appends an IDs/enums-only audit `ingest` entry. Tests inject fake parser deps; no real network.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-ingest-1",
+    "sprint-spec-20260628-medical-ingest-2"
+  ],
+  "features": [
+    "feat-1",
+    "feat-2",
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "Running `npm run build` (tsc) compiles the extended src/cli/commands/medical.ts with the new import-labs subcommand and runImportLabs export with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "A vitest with medical.egress.cloudInference true and an injected fake parser (returning a canned ParsedLabReport) asserts runImportLabs writes a lab note, reindexes so getLabSeries returns the marker, and appends an audit entry with event 'ingest'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "A vitest with cloud-inference off (default) asserts runImportLabs writes a clear message to stderr, sets process.exitCode 1, never invokes the injected parser spy, and writes no note file (fail-closed before reading the PDF).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A vitest asserts a second runImportLabs over the same fixture report adds zero new HealthDataStore.lab_results rows (ingest-time dedup), while the first run added at least one.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not parse a real PDF over the network in tests -- inject a fake parser via a deps object, mirroring runWhoopSync WhoopSyncDeps.",
+    "Do not read PDF bytes or construct any LLM client before the cloud-inference egress check passes (fail-closed ordering).",
+    "Do not add a new top-level command -- import-labs is a subcommand of the existing `medical` command tree.",
+    "Do not write health values or prompt text into the audit log -- IDs and enums only."
+  ],
+  "stopConditions": [
+    "npm run build exits 0 and the extended medical CLI vitest suite, including the import-labs cases, passes.",
+    "The cloud-inference-off path returns exit code 1 without invoking the injected parser and without writing a note."
+  ],
+  "definitionOfDone": "`bober medical import-labs <pdf>` is registered under the existing medical command tree, delegating to an exported runImportLabs(projectRoot, pdfPath, deps) so tests inject fake parser/clock deps. The command resolves EgressGuard from config and, when cloud-inference is off, prints a clear message naming medical.egress.cloudInference, sets exit code 1, and returns before reading the PDF or building any client. When cloud-inference is on it parses the PDF (Sprint 1 parseLabPdf via buildMedicalInferenceClient), writes lab notes and reindexes into HealthDataStore (Sprint 2), reports records parsed and new rows, dedups at ingest, and appends an IDs/enums-only audit ingest entry. Re-importing the same report adds no new store rows.",
+  "assumptions": [
+    "Fail-closed gating mirrors the WHOOP device-connection gate -- evidence: src/cli/commands/medical.ts:54-62; the resolver fail-closes too at src/medical/inference.ts:43-49.",
+    "Production parse client comes from buildMedicalInferenceClient (cloud honoured only behind cloud-inference) -- evidence: src/medical/inference.ts:31-56.",
+    "Audit entries are IDs/enums-only with an injected timestamp -- evidence: src/cli/commands/medical.ts:105-106; src/medical/audit.ts; src/medical/types.ts:80-92 (AuditEntry).",
+    "CLI core is extracted for testability with an injectable deps object -- evidence: runWhoopSync + WhoopSyncDeps at src/cli/commands/medical.ts:31-121."
+  ],
+  "outOfScope": [
+    "The parser internals (Sprint 1) and the vault writer/reindex internals (Sprint 2).",
+    "Supplements and profile commands (Sprints 4 and 5).",
+    "Analysis / recommendations (sibling analysis spec)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Mirror the runWhoopSync structure in src/cli/commands/medical.ts (lines 30-121): export an ImportLabsDeps { parse?: typeof parseLabPdf; nowIso?: string } and runImportLabs(projectRoot, pdfPath, deps={}). Order of operations is load-bearing: (1) loadConfig + EgressGuard.fromConfig; (2) if !egress.isAllowed('cloud-inference') -> stderr message naming medical.egress.cloudInference, process.exitCode=1, return BEFORE any readFile or client build; (3) build the parse client via buildMedicalInferenceClient(config, egress); (4) read the PDF bytes, call parse(); (5) writeLabNote + reindexLabNotes into HealthDataStore at .bober/medical/health.db (reuse the existing dbPath wiring at medical.ts:144-148) or the configured vault dir (accept an optional --vault flag, default under the medical dir); (6) AuditLog.append({ tIso: nowIso, event: 'ingest' }); (7) close the store in finally. CLI .action must not throw -- set process.exitCode and return on error (medical.ts:163-171).",
+  "evaluatorNotes": "The critical test is sc-3-3: with the axis off, assert the injected parser spy call count is 0 AND no note file exists AND exitCode===1. Confirm the parser is never constructed/invoked before the egress check (inspect ordering). For sc-3-2, verify the audit file gained an 'ingest' entry with only IDs/enums (no values). For sc-3-4, run import twice and assert the reported new rows is 0 on the second run. Confirm import-labs is nested under `medical`, not a new top-level command. Verify build is green.",
+  "estimatedFiles": [
+    "src/cli/commands/medical.ts",
+    "src/cli/commands/medical.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T00:00:00Z",
+  "updatedAt": "2026-06-28T16:17:33Z",
+  "completedAt": "2026-06-28T16:17:33Z"
+}

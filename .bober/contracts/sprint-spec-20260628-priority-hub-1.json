@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-1",
+  "specId": "spec-20260628-priority-hub",
+  "sprintNumber": 1,
+  "title": "Canonical Finding schema, FactStore finding source, and `bober hub list`",
+  "description": "Create the src/hub/ module with the owned Finding Zod schema, a FindingSource interface plus a FactStoreFindingSource that reads predicate 'finding' rows and parses each JSON value into a validated Finding, and a `bober hub list` CLI command that prints the findings held in the project's own FactStore. This is the foundational vertical slice: schema to source to CLI output.",
+  "status": "completed",
+  "completedAt": "2026-06-28T23:22:30.000Z",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "src/hub/finding.ts exports a Zod Finding schema with id, domain, title, kind (enum action|watch|risk|question), urgency (int 1-5), severity (int 1-5), evidence (string[]), surfacedAt (ISO datetime), dueBy (optional ISO), tags (string[]), estDurationMin (optional int), calendarSafeTitle (optional string), status (enum open|in-progress|snoozed|done|dropped), and promotesTo (optional string).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "A unit test asserts the Finding schema rejects an urgency of 6 and a kind of 'todo', and accepts a fully-populated valid finding object.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "FactStoreFindingSource.read() returns one validated Finding per active predicate-'finding' fact whose JSON value parses, and skips a row with a malformed JSON value without throwing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "Invoking `bober hub list` against a FactStore seeded with two finding facts prints two lines, each showing the finding title, kind, urgency, and severity.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "npm run build completes with zero TypeScript errors after the new src/hub/ module and hub command registration are added.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the cross-repo collector, sibling resolution, or dedup (Sprint 2 owns those).",
+    "Do not implement scope parsing, the lens judge, ranking, or priority.md rendering.",
+    "Do not redefine the Finding schema anywhere outside src/hub/finding.ts.",
+    "Do not add a vault-markdown FindingSource; only the FactStore source is in scope here.",
+    "Do not modify the FactStore constructor in this sprint."
+  ],
+  "stopConditions": [
+    "src/hub/finding.ts, the FindingSource interface plus FactStoreFindingSource, and the `bober hub list` command exist and all five success criteria pass evaluation.",
+    "npm run build exits zero and the hub unit tests added this sprint pass under the project test runner."
+  ],
+  "definitionOfDone": "The hub module owns a single Zod Finding schema matching the locked design field set, a FactStoreFindingSource that turns predicate-'finding' rows into validated Findings while skipping malformed rows, and a `bober hub list` command that prints the local store's findings with kind/urgency/severity. The build is green and the new hub tests pass.",
+  "assumptions": [
+    "Findings are stored as FactStore rows at predicate 'finding' with the Finding serialized as the JSON value, mirroring SharedBlackboard.publish (src/fleet/shared-blackboard.ts:84-90).",
+    "getActiveFacts(scope, undefined, 'finding') is the read path (src/state/facts.ts:222-257).",
+    "The hub OWNS the Finding schema; siblings import it (research:121-126; team-lead scope item 1)."
+  ],
+  "outOfScope": [
+    "Multi-repo aggregation (Sprint 2).",
+    "Judge, scope, ranking (Sprint 3).",
+    "priority.md and decide (Sprint 4).",
+    "chat hub surface (Sprint 5)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/hub/finding.ts exporting FindingSchema (Zod) and the Finding type. Field set is locked in .bober/research/research-20260627-knowledge-platform-landscape.md:121-126 and the spec feat-1 AC1. Use z.number().int().min(1).max(5) for urgency/severity, z.enum for kind and status, z.string().datetime() for surfacedAt/dueBy. Create src/hub/finding-source.ts with a FindingSource interface { read(): Finding[] } and a FactStoreFindingSource implementation that takes a FactStore (or db path) and scope string, calls getActiveFacts(scope, undefined, 'finding') (src/state/facts.ts:222), JSON.parses each row.value, runs FindingSchema.safeParse, and collects successes (skip failures). Follow the FactStore finding convention in src/fleet/shared-blackboard.ts:84-105. Create src/cli/commands/hub.ts registering `hub` with a `list` subcommand; mirror the handler discipline in src/cli/commands/blackboard.ts and src/cli/commands/memory.ts (resolve project root, loadConfig, set process.exitCode on error, never throw). Register the command wherever blackboard/memory commands are registered in the CLI entrypoint. Keep the finding scope/namespace string a small constant for now (e.g. 'hub').",
+  "evaluatorNotes": "Verify FindingSchema rejects urgency 6 and kind 'todo' and accepts a complete valid finding. Verify FactStoreFindingSource skips a row with non-JSON or schema-invalid value and still returns the valid ones (no throw). Drive `bober hub list` against an in-memory or temp FactStore seeded with two finding facts and assert both titles plus their kind/urgency/severity appear in stdout. Confirm npm run build is green and no second definition of the Finding schema exists in the hub module.",
+  "estimatedFiles": [
+    "src/hub/finding.ts",
+    "src/hub/finding-source.ts",
+    "src/hub/finding.test.ts",
+    "src/hub/finding-source.test.ts",
+    "src/cli/commands/hub.ts",
+    "src/cli/commands/hub.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium"
+}

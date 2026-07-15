@@ -1,0 +1,53 @@
+{
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-1",
+  "specId": "spec-20260617-fleet-expand-decomposer",
+  "sprintNumber": 1,
+  "title": "FleetDecomposer module (goal to validated manifest)",
+  "description": "Create src/fleet/decomposer.ts: a decomposeGoal({goal, client, model, maxRetries}) entrypoint that turns one goal string into a children-only, Zod-valid FleetManifest via a single DeepSeek LLMClient call plus one bounded coercion re-prompt, with a per-child config-key guard. Internal seams callDecomposer (one jsonObjectMode call) and validateManifest (JSON-extract + FleetManifestSchema.safeParse + config-key reject), plus DECOMPOSE_SYSTEM_PROMPT / DECOMPOSE_COERCION_INSTRUCTION / DECOMPOSE_MAX_RETRIES. Pure module, fully unit-tested with a fake LLMClient; no CLI and no spawn. This is the risk-first core (LLM structured output + validate/retry) every later wiring depends on.",
+  "status": "completed",
+  "createdAt": "2026-06-17T19:05:00Z",
+  "updatedAt": "2026-06-17T20:01:30Z",
+  "completedAt": "2026-06-17T20:01:30Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "sc-1-1", "description": "The project builds successfully (tsc) with zero errors after the change.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-1-2", "description": "TypeScript compilation produces zero type errors (strict mode).", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "sc-1-3", "description": "ESLint reports zero errors on new/modified files (consistent-type-imports, no unused, ESM .js import extensions, no explicit any).", "verificationMethod": "lint", "required": true },
+    { "criterionId": "sc-1-4", "description": "decomposeGoal resolves with a FleetManifest (children carry only folder/task, both non-empty) when a fake LLMClient returns a valid { children: [...] } JSON object; output passes FleetManifestSchema.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-5", "description": "On an invalid first response (bad JSON or schema failure), decomposeGoal issues exactly ONE coercion re-prompt (<=2 total client.chat calls) and succeeds when the second response validates — asserted by counting fake-client invocations.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-6", "description": "When both attempts fail validation, decomposeGoal rejects with a single Error whose message includes the formatted Zod issues, and never resolves with an invalid/partial manifest.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-7", "description": "A response whose child carries a `config` key is treated as invalid (rejected by the guard, then coerced/thrown); JSON extraction handles a fenced ```json block and a first-brace block; the client call sets jsonObjectMode=true and not responseSchema.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-8", "description": "All existing tests continue to pass with zero failures.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "No CLI command or subcommand registration (Sprint 2)",
+    "No createClient / real DeepSeek wiring or DEEPSEEK_API_KEY check (Sprint 2)",
+    "No manifest file writing, runFleet chaining, or --yes handling (Sprint 2)",
+    "No change to runFleet, the `fleet <manifest>` command, FleetManifestSchema, or buildChildConfig",
+    "No hard cap on child count; no two-call plan-then-expand"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass programmatic verification",
+    "decomposeGoal round-trips a valid fake response to a FleetManifest, performs exactly one coercion retry on a bad-then-good sequence, and throws clearly on bad-then-bad — all without network access"
+  ],
+  "definitionOfDone": "src/fleet/decomposer.ts exports decomposeGoal(input: { goal: string; client: LLMClient; model: string; maxRetries?: number }): Promise<FleetManifest> plus internal callDecomposer and validateManifest seams and the DECOMPOSE_SYSTEM_PROMPT / DECOMPOSE_COERCION_INSTRUCTION / DECOMPOSE_MAX_RETRIES constants. Output validates against the unchanged FleetManifestSchema and rejects any child with a `config` key. Collocated decomposer.test.ts injects a fake LLMClient (no real network) and covers valid-first-try, invalid-then-coerce-success, invalid-twice-throws-with-Zod-issues, child-with-config-rejected, fenced-JSON extraction, and call-count<=2. Build, typecheck, and lint are clean and all tests pass.",
+  "assumptions": [
+    "ChatParams.jsonObjectMode=true is the correct knob (DeepSeek rejects responseSchema strict json_schema) — src/providers/types.ts. The prompt must spell out the exact { children: [{ folder, task }] } shape and forbid config/concurrency/provider keys.",
+    "LLMClient.chat returns ChatResponse with a .text field holding the JSON document (src/providers/types.ts).",
+    "FleetManifestSchema and FleetChildSchema in src/fleet/manifest.ts are reused verbatim; FleetChildSchema.config is optional, so the config-key guard must run in addition to safeParse.",
+    "The JSON-extraction + coercion-retry shape mirrors parsePlanSpec and PLAN_SPEC_COERCION_INSTRUCTION in src/orchestrator/planner-agent.ts (direct JSON.parse -> ```json fence -> first { to last } block)."
+  ],
+  "outOfScope": [
+    "CLI, createClient wiring, credential checks, manifest writing, runFleet (Sprint 2)",
+    "Any modification of Phase 1 files"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create the new module at src/fleet/decomposer.ts (no Phase 1 file is edited this sprint).\n\n1. READ FIRST: src/providers/types.ts (LLMClient interface + ChatParams: note jsonObjectMode vs responseSchema — USE jsonObjectMode:true because DeepSeek rejects strict json_schema; ChatResponse.text holds the JSON), src/orchestrator/planner-agent.ts (parsePlanSpec JSON-extraction order + PLAN_SPEC_COERCION_INSTRUCTION wording around line 30 and the parse fn ~299-349 — mirror this), src/fleet/manifest.ts (FleetManifestSchema, FleetChildSchema — reuse, do NOT re-create or relax).\n\n2. Constants: DECOMPOSE_SYSTEM_PROMPT (role = a tech-lead that splits ONE goal into N independent buildable sub-projects; MUST output a single JSON object exactly { \"children\": [{ \"folder\": string, \"task\": string }] }; folder = short kebab-case dir name, task = a self-contained build instruction; FORBID config/concurrency/rootDir/provider keys; if a --count target is given, aim for ~that many children but >=1). DECOMPOSE_COERCION_INSTRUCTION (re-prompt that restates the required shape and appends the prior text + the formatted Zod error). DECOMPOSE_MAX_RETRIES = 1.\n\n3. callDecomposer(input): one client.chat({ model, system: DECOMPOSE_SYSTEM_PROMPT, messages:[{role:'user', content: goal (+ count hint)}], jsonObjectMode: true }); on a retry turn append priorText + coercionInstruction to the user message. Return response.text only (no parsing here).\n\n4. validateManifest(rawText): extract JSON (direct JSON.parse -> strip ```json ... ``` fence -> substring first '{' to last '}'); FleetManifestSchema.safeParse; if success ALSO reject when any child has an own `config` key (return { ok:false, error } so it routes to the coercion retry); on failure format issues as 'path: message' lines. Return { ok:true, manifest } | { ok:false, error }.\n\n5. decomposeGoal(input): call callDecomposer once -> validateManifest; if ok return manifest; else if attempts < 1+maxRetries re-call with priorText+coercionInstruction; on final failure throw new Error(`Fleet decomposition failed after N attempts:\\n${lastError}`). Never return an invalid manifest.\n\n6. ESM: every relative import ends in .js. import type for type-only imports (LLMClient, FleetManifest). No `any` — unknown + narrowing. Section comments (// -- Name --).\n\n7. Collocate decomposer.test.ts: build a fake LLMClient = { chat: async (params) => ({ text: <scripted>, toolCalls: [], stopReason: 'end' }) } that returns scripted responses per call index; assert call counts. Cover: valid first try; invalid JSON then valid (1 retry, 2 calls); invalid twice (throws, message contains a Zod path); child-with-config rejected; fenced-```json``` extraction; assert the params passed to chat carry jsonObjectMode:true and NOT responseSchema. No real network, no fs.",
+  "evaluatorNotes": "Independently verify each criterion against the contract.\nsc-1-4: Inspect decomposeGoal + validateManifest; run the valid-first-try test and confirm the returned object passes FleetManifestSchema and children carry only folder/task.\nsc-1-5: Confirm the retry path issues exactly ONE coercion re-prompt — count fake-client.chat invocations (must be exactly 2 on bad-then-good) and verify the second call's prompt includes the prior text + Zod error.\nsc-1-6: Force bad-then-bad; confirm decomposeGoal REJECTS (does not resolve) and the Error message contains the formatted Zod issues; confirm no manifest object escapes.\nsc-1-7: Confirm a child with a `config` key is rejected even though FleetChildSchema would otherwise accept it (guard runs beyond safeParse); confirm fenced-JSON and first-brace extraction both work; INSPECT the chat params to confirm jsonObjectMode:true and the ABSENCE of responseSchema (DeepSeek would reject strict schema).\nsc-1-8: Run the full suite; zero failures.\nAlso check: no synchronous fs, no real network in tests (fake client only), all relative imports use .js, import type used, no explicit any. Confirm NO Phase 1 file (manifest.ts, index.ts, child-config.ts) was modified this sprint.",
+  "estimatedFiles": [
+    "src/fleet/decomposer.ts",
+    "src/fleet/decomposer.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

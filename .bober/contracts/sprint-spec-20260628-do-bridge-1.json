@@ -1,0 +1,80 @@
+{
+  "contractId": "sprint-spec-20260628-do-bridge-1",
+  "specId": "spec-20260628-do-bridge",
+  "sprintNumber": 1,
+  "title": "Promoter registry, FindingStore port, and `bober do --dry-run`",
+  "description": "Build the do-bridge module spine in a new src/do-bridge/ directory: a PromoterRegistry keyed by PromoterKey {domain, kind?}; a narrow FindingStore port with a FactStore-backed adapter and an in-memory fake; the concrete PromotionRef / PromotionPlan types that give Finding.promotesTo its meaning; a coding promoter that turns a domain='coding'|'projects' Finding into a PromotionPlan {kind:'bober-run', task, teamId?}; and a `bober do <findingId> --dry-run` CLI command that reads the finding, resolves the promoter, and prints the planned launch without mutating any state or spawning any process.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "`npm run build` (tsc) finishes with zero type errors after src/do-bridge/ and src/cli/commands/do.ts are added and the command is registered in src/cli/index.ts.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "A Vitest test registers two promoters under different PromoterKeys and asserts registry.resolve() returns the domain+kind-specific promoter when both match and falls back to the domain-only promoter when only the domain matches.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A Vitest test feeds a coding Finding (domain 'coding', kind 'action', a concrete title) to the coding promoter and asserts PromotionPlan.kind === 'bober-run' and PromotionPlan.task is a non-empty string derived from the finding title/evidence.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "Invoking the `bober do <findingId> --dry-run` handler with an in-memory FindingStore fake prints a stdout line containing the resolved task string plus the word 'dry-run', and the fake records zero finding writes (no mutation, no approval marker, no spawn).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "registry.resolve() returns undefined for a Finding whose domain has no registered promoter, and the `bober do` handler then sets a non-zero process.exitCode and prints an error naming the unsupported domain.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not launch any real work or spawn any child process this sprint - `bober do` without --dry-run is Sprint 2.",
+    "Do not write, read, or delete any files under .bober/approvals/ this sprint.",
+    "Do not add a medical or financial promoter - register only the coding/projects promoter.",
+    "Do not modify the task-inbox or priority-hub modules; consume the Finding shape through the FindingStore port only."
+  ],
+  "stopConditions": [
+    "`npm run build` passes and `npm test -- src/do-bridge` passes with the dry-run handler printing the planned task while the fake store records zero writes."
+  ],
+  "definitionOfDone": "A developer can run `bober do <findingId> --dry-run` against a Finding and see the exact `bober run` task the coding promoter would launch, with the target team named, while nothing on disk changes. The PromoterRegistry resolves promoters by finding domain (and optional kind) and returns undefined for unsupported domains; the FindingStore port hides finding reads behind an interface that has both a FactStore-backed adapter and an in-memory fake for tests.",
+  "assumptions": [
+    "task-inbox persists Findings on the shipped FactStore (src/state/facts.ts:136); the FactStore-backed FindingStore adapter reads them and the in-memory fake isolates do-bridge tests. Evidence: research §3a line 128.",
+    "priority-hub adds Finding.promotesTo? (research §3a line 126); this sprint defines the concrete PromotionRef and PromotionPlan types do-bridge uses.",
+    "Coding/project Findings carry domain in {coding, projects} (research §3a line 132)."
+  ],
+  "outOfScope": [
+    "Approve gate, real launch, and outcome recording (Sprints 2 and 3).",
+    "Medical/financial promoters."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "New module src/do-bridge/. Follow the small-module + Zod + unicode section-comment conventions in src/state/facts.ts and src/fleet/. Model the PromoterRegistry on the keyed-registry pattern in src/orchestrator/checkpoints/registry.ts. The CLI command mirrors src/cli/commands/memory.ts and src/cli/commands/approve.ts (commander, findProjectRoot(), handler never throws -> set process.exitCode and return); register it in src/cli/index.ts next to registerMemoryCommand (src/cli/index.ts:36). FindingStore port: interface { readFinding(id): Promise<Finding|null> } for this sprint; the FactStore-backed adapter builds the store via factsDbPath(projectRoot, namespace) (src/state/facts.ts:77). Coding promoter returns PromotionPlan { kind:'bober-run', task, teamId? } - task derives from finding.title (+ evidence/tags) into a one-line `bober run` task; teamId optional (default team). PromoterKey = { domain:string, kind?:FindingKind }; resolve() prefers domain+kind, falls back to domain-only, else undefined. --dry-run path ONLY prints; it must not import or reach execa/child_process. If task-inbox already exposes a finding-read API when you build, delegate the adapter to it instead of reading facts directly.",
+  "evaluatorNotes": "Verify: (1) build clean; (2) resolution precedence domain+kind > domain-only > undefined; (3) dry-run prints the task and performs zero writes - assert the fake store sees no insert/update and that no file appears under .bober/approvals/; (4) unsupported-domain path sets non-zero exit code and names the domain. Confirm the dry-run path reaches no execa/child_process import.",
+  "estimatedFiles": [
+    "src/do-bridge/types.ts",
+    "src/do-bridge/registry.ts",
+    "src/do-bridge/registry.test.ts",
+    "src/do-bridge/finding-port.ts",
+    "src/do-bridge/finding-port.test.ts",
+    "src/do-bridge/coding-promoter.ts",
+    "src/do-bridge/coding-promoter.test.ts",
+    "src/cli/commands/do.ts",
+    "src/cli/commands/do.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-29T16:26:58.040Z"
+}

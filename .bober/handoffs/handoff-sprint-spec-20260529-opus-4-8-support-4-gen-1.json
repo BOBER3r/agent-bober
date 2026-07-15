@@ -1,0 +1,44 @@
+{
+  "handoffId": "handoff-sprint-spec-20260529-opus-4-8-support-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-4",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T19:26:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 4 (final) of Claude Opus 4.8 Support. Add a provider-agnostic Message variant for a mid-conversation system instruction, rendered by the Anthropic adapter as a mid_conv_system content block (with optional ephemeral cache_control). Non-anthropic adapters render best-effort text or skip without throwing. This is the most architecturally involved sprint.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260529-opus-4-8-support-1", "title": "opus->4.8" },
+      { "contractId": "sprint-spec-20260529-opus-4-8-support-2", "title": "SDK 0.100.1" },
+      { "contractId": "sprint-spec-20260529-opus-4-8-support-3", "title": "effort control", "summary": "ChatParams.effort -> output_config.effort (conditional spread)." }
+    ],
+    "currentBranch": "bober/opus-4-8-support",
+    "relevantFiles": [
+      "src/providers/types.ts — Message union (TextMessage | AssistantMessage | ToolResultMessage); add the new variant + export",
+      "src/providers/anthropic.ts — toAnthropicMessage() converts Message -> Anthropic.Messages.MessageParam; add the mid_conv_system branch",
+      "src/providers/anthropic.test.ts — top-level vi.mock; assert the emitted block shape (ttl + no-ttl)",
+      "src/providers/openai.ts, google.ts, openai-compat.ts — non-anthropic Message conversion; handle the new variant WITHOUT throwing (best-effort text or skip)"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260529-opus-4-8-support-4.json",
+  "specPath": ".bober/specs/spec-20260529-opus-4-8-support.json",
+  "config": {
+    "commands": { "build": "npm run build", "test": "npm run test", "lint": "npm run lint", "typecheck": "npm run typecheck" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "confirmedSdkFacts": {
+    "sdkVersion": "0.100.1 (installed)",
+    "MidConversationSystemBlockParam": "interface MidConversationSystemBlockParam { type: 'mid_conv_system'; content: <text-block array or string per SDK>; cache_control?: CacheControlEphemeral | null; ... } — at @anthropic-ai/sdk/resources/messages/messages.d.ts; it IS a member of the ContentBlockParam union, so it can be placed inside a message's content[].",
+    "cacheControlEphemeral": "CacheControlEphemeral has type:'ephemeral' and an optional ttl ('5m' | '1h'). The prompt-caching helpers already use this type.",
+    "note": "Read the EXACT MidConversationSystemBlockParam shape from node_modules before constructing it (whether content is string or block array, and the exact cache_control/ttl typing). Do NOT cast to any."
+  },
+  "keyPrinciples": [
+    "NO role:'system' message variant — the Messages API has no system role in the messages array; use the mid_conv_system content block.",
+    "Provider-agnostic Message variant in types.ts; @anthropic-ai/sdk stays only in anthropic.ts.",
+    "Every Message-union member must be HANDLED in each adapter's conversion (exhaustive) or typecheck/strict will complain; non-anthropic = best-effort text or skip, never throw.",
+    "ESM .js imports; import type; no stray any. Conventional commit: bober(sprint-4): <description>."
+  ],
+  "baselineNote": "Tolerated failures: the 2 flaky 37-tool-count tests + occasionally disk.test.ts (race). Any other failure, or any src/providers/ failure, is a regression.",
+  "evaluatorFeedback": null
+}

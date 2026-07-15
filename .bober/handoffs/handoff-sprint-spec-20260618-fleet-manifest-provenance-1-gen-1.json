@@ -1,0 +1,34 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-manifest-provenance-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-manifest-provenance-1",
+  "specId": "spec-20260618-fleet-manifest-provenance",
+  "timestamp": "2026-06-18T12:13:50Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober fleet orchestrator. ADR-4-preserving follow-up: fleet expand and expand-deep both default to writing <root>/.bober/fleet-expand.json, so one can silently clobber the other. This sprint adds a provenance sidecar + recoverable .bak + informative non-blocking overwrite notice via a shared helper, WITHOUT changing the shared default path. Single sprint.",
+    "completedSprints": [],
+    "currentBranch": "bober/fleet-expand-decomposer",
+    "relevantFiles": [
+      "src/fleet/index.ts (the two near-identical Step-4 write blocks: runFleetExpand :207-224, runFleetExpandDeep :343-360 \u2014 replace both with a shared helper call; uses raw `goal` param, opts.critique, manifest.children.length)",
+      "src/fleet/manifest.ts (FleetManifest / FleetManifestSchema \u2014 UNCHANGED; provenance only in sidecar)",
+      "src/fleet/expand.test.ts / expand-deep.test.ts / expand-deep-critique.test.ts (existing 'Overwritten existing manifest' assertions to UPDATE; temp-dir + DI test patterns to mirror)",
+      "src/utils/fs.ts (ensureDir) if present"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-fleet-manifest-provenance-1.json",
+  "specRef": ".bober/specs/spec-20260618-fleet-manifest-provenance.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "test": "npm test",
+      "lint": "npm run lint"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

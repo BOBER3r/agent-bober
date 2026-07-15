@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-1",
+  "specId": "spec-20260628-research-scheduler",
+  "sprintNumber": 1,
+  "title": "Research job schema, JSON store, and `bober research job` CLI",
+  "description": "Create the new src/research/ module with a ResearchJob zod schema and a JSON file store at .bober/research/jobs/<jobId>.json, plus a `bober research job add|list|remove` CLI registered alongside the existing commands. Delivers the end-to-end ability to define, list, and remove recurring research jobs before any execution exists.",
+  "status": "completed",
+  "completedAt": "2026-06-29T20:40:00.000Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "A ResearchJob zod schema in src/research/types.ts validates {question (min length 1), cadence, tier or modelSet, targetRepo, domain, onlineResearch (boolean default false)} and rejects an empty question with a zod error.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "Calling the job store add function persists a JSON file at .bober/research/jobs/<jobId>.json whose parsed contents round-trip through ResearchJobSchema, and the list function returns that job.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "`bober research job add --question \"...\" --cadence weekly` followed by `bober research job list` prints the stored job id, question, and cadence; `bober research job remove <jobId>` deletes the file and a subsequent list omits it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "The project compiles with the new module and CLI command registered in src/cli/index.ts via a registerResearchCommand call.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement job execution, model querying, or note/Finding output (that is Sprint 2).",
+    "Do not add an egress axis or any network call.",
+    "Do not modify src/fleet/, src/medical/, or src/orchestrator/pipeline.ts.",
+    "Do not store jobs in bober.config.json or the FactStore SQLite db — jobs are JSON files under .bober/research/jobs/."
+  ],
+  "stopConditions": [
+    "npm run build passes and the new vitest tests for the schema, store, and CLI add/list/remove all pass.",
+    "`bober research job add|list|remove` is registered and exercised by a passing CLI test."
+  ],
+  "definitionOfDone": "A user can run `bober research job add` to persist a research job as JSON under .bober/research/jobs/, see it via `bober research job list`, and delete it via `bober research job remove`. The ResearchJob schema validates inputs and rejects an empty question. No execution, model querying, or egress exists yet. The build is green and existing tests still pass.",
+  "assumptions": [
+    "Jobs are stored as JSON files under .bober/research/jobs/<jobId>.json (resolved Q2). Evidence: research doc L100; .bober/ artifact-store convention.",
+    "CLI registration mirrors src/cli/commands/medical.ts:130-185 and src/cli/index.ts:40,319 (registerXCommand + program.command pattern).",
+    "Job id is a deterministic slug+timestamp string, mirroring spec/contract id conventions used elsewhere in .bober/."
+  ],
+  "outOfScope": [
+    "Run execution and model diversity (Sprint 2).",
+    "Online-research egress axis (Sprint 3).",
+    "Cadence due-date computation and the tick runner (Sprint 4).",
+    "Digest output (Sprint 5)."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create src/research/types.ts (ResearchJobSchema via zod, mirror the style of src/state/facts.ts:20-33), src/research/job-store.ts (add/list/remove/read over .bober/research/jobs/, use ensureDir from src/state/helpers.ts, never read the clock for ids beyond a passed-in timestamp), and src/cli/commands/research.ts exporting registerResearchCommand(program). Register it in src/cli/index.ts next to registerMedicalCommand (import at ~L40, call at ~L319). Follow the commander subcommand shape from src/cli/commands/medical.ts:130-185 (`program.command('research')` then `.command('job')` with add/list/remove). Cadence can be a string enum ('daily'|'weekly'|'monthly') or a cron-like string — pick one and document it in the schema doc-comment; do not compute next-due dates yet.",
+  "evaluatorNotes": "Verify ResearchJobSchema rejects an empty question (expect a zod parse failure). Verify add writes a file under .bober/research/jobs/ and list reads it back; use a temp projectRoot in tests. Verify the CLI add->list->remove sequence through the command action functions (inject a deps object as medical.ts does at its line ~41 to avoid real process exit). Confirm registerResearchCommand is wired in src/cli/index.ts and `npm run build` passes.",
+  "estimatedFiles": [
+    "src/research/types.ts",
+    "src/research/job-store.ts",
+    "src/research/job-store.test.ts",
+    "src/cli/commands/research.ts",
+    "src/cli/commands/research.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z"
+}

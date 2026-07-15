@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "sprintNumber": 4,
+  "title": "On-device Obsidian MCP read/write adapter + config",
+  "description": "Add a config schema section declaring an on-device Obsidian MCP server (mirroring ObservabilityProvider) and a thin VaultMcpAdapter that wraps ExternalMcpServer to read, write, and list vault notes through configurable tool names, with an on-device-only guard that rejects non-local server declarations before any spawn.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-obsidian-vault-store-1"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The project compiles: `npm run build` (tsc) completes with no errors after the VaultSection config schema and the VaultMcpAdapter module are added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A unit test parses a bober config containing a vault.obsidian MCP server (mcpCommand/mcpArgs/mcpEnv plus optional tool-name overrides) and asserts the parsed object round-trips with all fields preserved.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A unit test injects a fake ExternalMcpServer and asserts VaultMcpAdapter.readNote/writeNote/listNotes invoke the configured (or default cyanheads) tool names with the expected arguments and return parsed VaultNote results.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A unit test declares a server whose transport implies a non-local network endpoint and asserts the on-device guard throws/returns a clear refusal and the underlying ExternalMcpServer is never started (start not called).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not modify src/mcp/external-client.ts \u2014 wrap ExternalMcpServer, do not fork it.",
+    "Do not log or echo mcpEnv contents anywhere \u2014 treat env as opaque secrets (mirror src/mcp/external-client.ts:66-77).",
+    "Do not implement OAuth, token refresh, or any cloud Obsidian sync \u2014 on-device only.",
+    "Do not bind the adapter to a single Obsidian MCP vendor \u2014 tool names must be overridable in config.",
+    "Do not wire the adapter into the reindex CLI in this sprint \u2014 it is an independent read/write surface."
+  ],
+  "stopConditions": [
+    "All success criteria sc-4-1..sc-4-4 pass under the evaluator.",
+    "`npm test` passes including the new config + adapter tests with no pre-existing test regressed.",
+    "The on-device guard rejects non-local declarations and the adapter only calls listTools/callTool on a started server for local declarations."
+  ],
+  "definitionOfDone": "An on-device Obsidian MCP server can be declared in bober.config.json under a vault section (executable command + args + env + optional tool-name mapping). VaultMcpAdapter wraps the existing ExternalMcpServer stdio transport and exposes readNote/writeNote/listNotes by calling the configured tool names, parsing results into the sprint-1 VaultNote shape. Any declaration that is not on-device is refused before the server is spawned, and MCP env secrets are never logged.",
+  "assumptions": [
+    "The config section mirrors ObservabilityProviderSchema (src/config/schema.ts:298-309): name + mcpCommand + mcpArgs? + mcpEnv? + enabled, added as an optional top-level `vault` section in BoberConfigSchema (src/config/schema.ts:419-450).",
+    "The adapter wraps ExternalMcpServer (src/mcp/external-client.ts:30-140) using start/listTools/callTool/stop; tests inject a fake implementing the same surface so no real subprocess spawns.",
+    "Default tool-name mapping targets cyanheads/obsidian-mcp-server (research \u00a72 line 49); overrides allow the Obsidian Local REST API built-in MCP (research \u00a72 line 50).",
+    "On-device determination: a stdio-spawned local executable is on-device; a declaration implying a remote/non-loopback network endpoint is rejected. The generator defines the concrete guard predicate and documents it."
+  ],
+  "outOfScope": [
+    "Reconciling MCP-read notes into FactStore (that flows through the sprint-2/3 reindex path).",
+    "Choosing/installing a specific Obsidian MCP server binary for the user.",
+    "Semantic search tools (Nooscope) \u2014 only read/write/list note operations.",
+    "Connection pooling, retries, or circuit-breaking beyond what ExternalMcpServer already provides."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add VaultSectionSchema to src/config/schema.ts modeled on ObservabilityProviderSchema (lines 298-309) \u2014 an `obsidian` sub-object with name/mcpCommand/mcpArgs/mcpEnv/enabled plus an optional `toolNames` record mapping logical ops (readNote/writeNote/listNotes) to server tool names with cyanheads defaults; register it as an optional `vault` field on BoberConfigSchema (near line 449). Create src/vault/mcp-adapter.ts: VaultMcpAdapter takes an ExternalMcpServer (or a minimal interface { start, listTools, callTool, stop }) so tests inject a fake. readNote calls the configured read tool and parses the returned markdown into a VaultNote via sprint-1 parseNote; writeNote serializes a VaultNote and calls the write tool; listNotes calls the list tool. Implement an isOnDevice(provider) guard that runs BEFORE start(); on a non-local declaration throw a clear Error and never call start(). Reuse the secret-handling discipline: never include mcpEnv in errors/logs. Use the @modelcontextprotocol/sdk types already imported in external-client.ts.",
+  "evaluatorNotes": "Confirm the adapter wraps (does not duplicate) ExternalMcpServer. Confirm the fake-server test asserts the exact tool NAME called and that override tool names take effect. Confirm the on-device guard test asserts start() was NEVER invoked on rejection (spy/flag on the fake). Grep the adapter for any code path that could stringify provider.mcpEnv into an error or log \u2014 there must be none. Confirm config round-trip preserves mcpEnv. Run the full suite.",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/vault/mcp-adapter.ts",
+    "src/vault/mcp-adapter.test.ts",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T14:56:01.000Z",
+  "completedAt": "2026-06-28T14:56:01.000Z"
+}

@@ -1,0 +1,28 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-medical-grounding-critic-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-medical-grounding-critic-1",
+  "specId": "spec-20260618-medical-grounding-critic",
+  "timestamp": "2026-06-18T16:05:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent harness (TypeScript, ESM, strict). This feature adds a fail-closed grounding critic to the medical-sop pipeline. Sprint 1 builds the standalone critic module ONLY (no engine wiring).",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/critic-deep.ts",
+      "src/medical/retrieval/literature.ts",
+      "src/medical/retrieval/medline-source.ts",
+      "src/providers/types.ts",
+      ".bober/principles.md"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-medical-grounding-critic-1.json",
+  "specRef": ".bober/specs/spec-20260618-medical-grounding-critic.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

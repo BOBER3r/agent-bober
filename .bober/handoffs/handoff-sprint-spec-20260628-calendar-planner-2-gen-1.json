@@ -1,0 +1,35 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-calendar-planner-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-calendar-planner-2",
+  "specId": "spec-20260628-calendar-planner",
+  "timestamp": "2026-06-29T18:30:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Calendar planner sub-system. Sprint 1 (DONE) built the pure deterministic slotter (src/calendar/slotter.ts planSlots), the local Finding consume-type and ProposedPlan/PlanItem/BusyInterval types (src/calendar/types.ts), JSON finding/freebusy readers (src/calendar/finding-source.ts), and the `bober calendar plan --dry-run` CLI (src/cli/commands/calendar.ts with extracted runCalendarPlan core + CalendarPlanDeps). This Sprint 2 introduces the connector abstraction and the first concrete connector: a local-first zero-egress .ics exporter, wired via `bober calendar plan --export-ics <path>`.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-calendar-planner-1",
+        "title": "Deterministic slot-fill engine + dry-run plan CLI",
+        "summary": "src/calendar/{types,slotter,finding-source}.ts + src/cli/commands/calendar.ts (runCalendarPlan core, CalendarPlanDeps injectable readFindings/readFreeBusy/nowIso). ProposedPlan = { scheduled: PlanItem[], unscheduled: {findingId, reason}[] }; PlanItem = { findingId, title, startIso, endIso }; BusyInterval = { startIso, endIso }. Slotter is strictly pure. commit 0d141c1."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/calendar/types.ts (REUSE PlanItem, ProposedPlan, BusyInterval, SlotConstraints — do not redefine)",
+      "src/calendar/slotter.ts (do NOT change the algorithm; Sprint 2 only adds connector + export path)",
+      "src/cli/commands/calendar.ts (extend runCalendarPlan to accept --export-ics <path> and call the connector via injectable deps; keep --dry-run path unchanged)",
+      "src/cli/index.ts (calendar command already registered)",
+      "src/mcp/external-client.ts (reference for what NOT to import in ics-connector.ts — the .ics path must have ZERO network egress)",
+      "src/utils/fs.ts (writeJson/readJson helpers; for .ics use node:fs/promises writeFile directly with CRLF text)",
+      ".bober/principles.md (ESM .js imports, node:fs/promises only, type-only imports, unicode section headers)"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260628-calendar-planner-2.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": null,
+  "evaluatorFeedback": null
+}

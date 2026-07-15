@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260621-codebase-health-remediation-2-1",
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-2",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "timestamp": "2026-06-21T20:02:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Zero errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "No new issues." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "219 files / 2815 passed", "details": "Full suite green, no regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "result": "pass", "evidence": "build + typecheck exit 0." },
+    { "criterionId": "sc-2-2", "result": "pass", "evidence": "export interface RunSprintCycleParams (7 fields, pipelineRunId optional) at pipeline.ts:158-166; signature takes single params object." },
+    { "criterionId": "sc-2-3", "result": "pass", "evidence": "grep: 6 call sites (1 prod :936 + 5 test) all object-literal form; zero positional." },
+    { "criterionId": "sc-2-4", "result": "pass", "evidence": "git show diff: only body addition is the destructure line; prod call maps completedSprints → completedContracts correctly; full suite 2815/2815." },
+    { "criterionId": "sc-2-5", "result": "pass", "evidence": "grep runSprintCycle src/index.ts src/mcp/ → empty (internal)." },
+    { "criterionId": "sc-2-6", "result": "pass", "evidence": "lint 0 errors; git diff --stat confined to pipeline.ts + 2 test files." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass. runSprintCycle now takes a single exported RunSprintCycleParams object; all 6 call sites converted; body delta is one destructure line (zero behavior change, position mapping correct); internal-only; 2815/2815 tests green."
+}

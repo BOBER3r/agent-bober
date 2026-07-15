@@ -1,0 +1,38 @@
+{
+  "handoffId": "handoff-sprint-spec-20260620-graph-tokensave-6-1-compat-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-2",
+  "specId": "spec-20260620-graph-tokensave-6-1-compat",
+  "timestamp": "2026-06-20T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of 2. Remap GraphClient (src/graph/client.ts) from its stale tool-name catalog to tokensave 6.1.1's real tokensave_* tools with per-method result adapters, keeping GraphClient's external GraphResult contract stable. Then verify `agent-bober onboard` writes the 5 files via the real engine. onboard.ts is NOT modified.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-1", "title": "MCP-compliant transport in TokensaveMcpClient", "summary": "commit 1441890 — call(tool,params) now sends the MCP tools/call envelope and RETURNS the unwrapped tool payload (JSON-parsed object from result.content[].text, scanning past any leading WARNING entry). So GraphClient only needs tool NAME/param/result-narrowing changes, not transport changes." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/graph/client.ts",
+      "src/graph/types.ts",
+      "tests/graph/client.test.ts",
+      "tests/mcp/graph-tools.test.ts",
+      "src/cli/commands/onboard.ts",
+      "src/graph/mcp-client.ts"
+    ],
+    "curatorFindings": "Briefing has live-probed 6.1.1 wire shapes for all 9 tools. KEY: search->tokensave_search returns a top-level JSON ARRAY of {file,id,kind,line,name,score,signature} (adapts to SearchHit; field rename name->symbol). callers/callees/impact need a node_id (NOT a symbol name). file_dependents/test_map return string[] paths. tokensave_context returns plain markdown. overview()->tokensave_module_api needs a path arg and a stringify adapter to keep its string return. The EXISTING tests/graph/client.test.ts mocks call() with PRE-ADAPTED shapes and MUST be rewritten to RAW 6.1.1 payloads."
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260620-graph-tokensave-6-1-compat-2.json",
+  "specPath": ".bober/specs/spec-20260620-graph-tokensave-6-1-compat.json",
+  "briefingPath": ".bober/briefings/sprint-spec-20260620-graph-tokensave-6-1-compat-2-briefing.md",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true, "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

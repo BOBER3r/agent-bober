@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-1",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "sprintNumber": 1,
+  "title": "Add bi-temporal SQLite semantic-facts store + `bober facts` CLI",
+  "description": "Introduce the project's first relational store: a FactStore adapter over better-sqlite3 holding the semantic_facts table (scope, subject, predicate, value, confidence, source_run_id + bi-temporal t_valid/t_invalid/t_created/t_invalidated). Implement insert, active-fact query, get-by-id, and invalidate (never delete), plus a `bober facts add|list|show|invalidate` CLI. Timestamps and the DB path are injected so the store stays pure and testable with an in-memory database.",
+  "status": "completed",
+  "createdAt": "2026-06-15T12:00:00.000Z",
+  "updatedAt": "2026-06-15T16:25:04Z",
+  "completedAt": "2026-06-15T16:25:04Z",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds successfully with `npm run build` (tsc) and exit code 0, including the new better-sqlite3 dependency and @types/better-sqlite3.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors (`npm run typecheck`).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "src/state/facts.ts exports a FactStore (or openFactStore) with insertFact, getActiveFacts(scope, subject?, predicate?), getFact(id), and invalidateFact(id, tInvalidated); the constructor accepts a db path and works with ':memory:'. No wall-clock is read inside the store \u2014 all timestamps are parameters.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "The semantic_facts table is created with all columns (id, scope, subject, predicate, value, confidence, source_run_id, t_valid, t_invalid, t_created, t_invalidated) and indexes on (scope, subject, predicate) and (scope, t_invalidated); all statements are parameterized (no interpolated SQL).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A vitest suite in src/state/facts.test.ts uses an in-memory DB and asserts: insert\u2192getActiveFacts returns the row; invalidateFact sets t_invalidated and the row is absent from getActiveFacts but still returned by getFact; fact ids are deterministic for identical (scope|subject|predicate|value|t_created).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "`bober facts add --scope programming --subject project --predicate testCommand --value vitest` inserts a fact (DB created at .bober/memory/facts.db), `bober facts list` prints it, `bober facts show <id>` prints provenance, and `bober facts invalidate <id>` removes it from list; the handler never throws (sets process.exitCode=1 on error like src/cli/commands/memory.ts).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "ESLint reports zero errors on new and modified files (`npm run lint`).",
+      "verificationMethod": "lint",
+      "required": false
+    }
+  ],
+  "generatorNotes": "STORE: Add better-sqlite3 to dependencies and @types/better-sqlite3 to devDependencies in package.json, then `npm install`. better-sqlite3 is synchronous and Node>=18-compatible (do NOT use node:sqlite \u2014 it needs Node 22.5+ and engines is '>=18.0.0'). Put the store at src/state/facts.ts as an ESM module with .js import specifiers. Hide better-sqlite3 behind a FactStore interface (insertFact/getActiveFacts/getFact/invalidateFact + a close()) so it can be swapped for node:sqlite later \u2014 callers in later sprints must depend on the interface, not the driver. PURITY: copy the discipline in src/orchestrator/memory/distill.ts \u2014 NEVER call Date.now()/new Date() inside the store; every timestamp (t_valid, t_created, t_invalidated) is a function parameter stamped by the CLI handler. Derive id as a deterministic content hash sha256(`${scope}|${subject}|${predicate}|${value}|${tCreated}`).slice(0,16), mirroring lessonIdFromSignature (distill.ts:88). SCHEMA: single DB file at .bober/memory/facts.db (use memoryDir(projectRoot) from src/state/memory.ts to resolve the directory, then join 'facts.db'); the scope column provides per-team isolation (default team scope is '' / 'programming' per the memoryDir mapping rule). Active fact = t_invalidated IS NULL. Bootstrap the table + indexes idempotently with CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS in the constructor. Use ensureDir from src/state/helpers.js before opening the file DB. Validate inputs with a Zod schema (FactSchema) co-located in facts.ts, mirroring LessonEntrySchema in src/state/memory.ts. CLI: create src/cli/commands/facts.ts following src/cli/commands/memory.ts exactly \u2014 resolveRoot via findProjectRoot, resolveDefaultNamespace via loadConfig+loadTeam for the scope default, chalk output, handlers MUST NOT throw (set process.exitCode=1 and return). Register registerFactsCommand(program) in src/cli/index.ts next to registerMemoryCommand. For `facts add`, stamp tCreated=tValid=new Date().toISOString() at the handler boundary (NOT in the store).",
+  "evaluatorNotes": "Run `npm install` first so better-sqlite3 compiles, then `npm run build`, `npm run typecheck`, and `npm test -- facts`. For sc-1-3: read src/state/facts.ts and confirm the four methods exist, the constructor takes a path, and grep the file for `Date.now`/`new Date(` \u2014 there must be NONE inside the store. For sc-1-4: confirm the CREATE TABLE has all 11 columns and two CREATE INDEX statements; confirm every SQL statement uses ? placeholders / .prepare with bound params (no `${}` of values into SQL). For sc-1-5: run the test and confirm the invalidate case asserts the row still exists via getFact AND determinism of ids. For sc-1-6: actually exercise the CLI in a temp dir \u2014 `node dist/cli/index.js facts add --scope programming --subject project --predicate testCommand --value vitest` then `... facts list` (should show it), `... facts invalidate <id>` then `... facts list` (should be empty) and `... facts show <id>` (should still print). Confirm better-sqlite3 and @types/better-sqlite3 are in package.json. Edge: invalidating an unknown id should print a friendly message and set exitCode=1, not throw.",
+  "estimatedFiles": [
+    "package.json",
+    "src/state/facts.ts",
+    "src/state/facts.test.ts",
+    "src/cli/commands/facts.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-1-1",
+      "timestamp": "2026-06-15T16:25:04Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260615-memory-self-improve-p0-1-1"
+}

@@ -1,0 +1,38 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-team-abstraction-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-team-abstraction-1",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober is a multi-agent harness that builds applications autonomously using any LLM (Claude, GPT, Gemini, Ollama/DeepSeek). ESM/NodeNext strict TypeScript CLI + MCP server. State is JSON files in .bober/. This plan (Phase 4) makes a 'team' a data object so adding a team is config not code; Sprint 1 introduces the Team data model + loadTeam resolver + Zod config schema with ZERO behavior change.",
+    "completedSprints": [],
+    "currentBranch": "bober/team-abstraction",
+    "relevantFiles": [
+      "src/config/role-providers.ts",
+      "src/orchestrator/workflow/selector.ts",
+      "src/orchestrator/workflow/engine.ts",
+      "src/config/schema.ts",
+      "src/config/loader.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-team-abstraction-1.json",
+  "specRef": ".bober/specs/spec-20260615-team-abstraction.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm run test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,19 @@
+{
+  "handoffId": "handoff-sprint-spec-20260714-security-auditor-per-stack-skills-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-1",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "timestamp": "2026-07-14T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Upgrade bober-security-auditor into a per-stack money-handling security auditor. Sprint 1 lays the typed foundation: widen VulnClass, add optional structured fields to SecurityFinding (extends locked ReviewFinding), extend inferVulnClass, and fix the hub-Finding id collision (G10). Pure-additive, no behavior change when new fields/classes absent.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": ["src/orchestrator/security-audit-types.ts","src/orchestrator/stack-knowledge.ts","src/orchestrator/security-scanners.ts","src/orchestrator/security-hub.ts","src/orchestrator/code-reviewer-agent.ts","src/hub/finding.ts"]
+  },
+  "config": {
+    "commands": {"build":"tsc","typecheck":"tsc --noEmit","lint":"eslint src/","test":"vitest run"}
+  },
+  "principles": "See .bober/principles.md (ESM .js imports, Zod config, type-only imports, no sync fs, collocated *.test.ts run against real code, TS strict zero-error hard gate).",
+  "evaluatorFeedback": null
+}

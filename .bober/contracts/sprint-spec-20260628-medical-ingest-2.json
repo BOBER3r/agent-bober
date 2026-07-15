@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-2",
+  "specId": "spec-20260628-medical-ingest",
+  "sprintNumber": 2,
+  "title": "Lab-note vault writer + derived HealthDataStore reindex + ingest dedup",
+  "description": "Serialize each parsed lab marker to a markdown note with structured YAML frontmatter (marker/value/unit/ref_low/ref_high/ref_range/date/status/panel/source) under the configured vault directory, and reindex those notes into the existing HealthDataStore.lab_results. Lab status is derived in deterministic JS from value vs reference range; duplicate notes produce zero new rows via the deterministic labResultId under INSERT OR IGNORE. No hard import of the sibling vault-store module.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-ingest-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "Running `npm run build` (tsc) compiles src/medical/lab-note.ts and src/medical/lab-reindex.ts with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A vitest asserts writeLabNote writes a markdown file whose YAML frontmatter contains marker, value, unit, ref_low, ref_high, ref_range, date, status, panel and source, and that parsing the file back yields the same field values.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A table-driven vitest asserts deterministic status: value below ref_low yields 'low', above ref_high yields 'high', within range yields 'normal', and a parser-supplied critical flag is preserved as 'critical' -- with no LLM call in the path.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A vitest asserts reindexLabNotes parses a vault directory of lab notes and upserts via HealthDataStore.upsertLabResult so getLabSeries(marker) returns each result with matching value, unit and collectedAtIso.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "A vitest asserts running reindexLabNotes twice over an unchanged vault directory reports zero new rows on the second run (deterministic labResultId dedup under INSERT OR IGNORE).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not import the sibling vault-store module (spec-20260628-obsidian-vault-store); write and parse plain markdown+frontmatter directly so the build is independent of sibling timing.",
+    "Do not call any LLM or open any network connection -- note writing and reindex are pure file plus SQLite operations.",
+    "Do not classify lab status with an LLM -- normal/low/high is computed in deterministic JS from value vs reference range.",
+    "Do not implement the import-labs CLI command (Sprint 3)."
+  ],
+  "stopConditions": [
+    "npm run build exits 0 and the lab-note plus lab-reindex vitest suites pass.",
+    "A second reindexLabNotes run over an unchanged vault directory reports zero new rows."
+  ],
+  "definitionOfDone": "writeLabNote(vaultDir, marker, meta) serializes one lab result to a markdown note with structured YAML frontmatter (marker, value, unit, ref_low, ref_high, ref_range, date, status, panel, source) under the configured vault directory. status is derived in deterministic JS: value below reference low maps to low, above reference high maps to high, otherwise normal; a parser-supplied critical flag is preserved. reindexLabNotes(vaultDir, store) parses every lab note's frontmatter and upserts it into HealthDataStore.lab_results via upsertLabResult so getLabSeries returns it; duplicate notes yield zero new rows because the deterministic labResultId collides under INSERT OR IGNORE. The module never imports the sibling vault layer.",
+  "assumptions": [
+    "Vault is canonical; SQLite store is a derived, rebuildable index; dedup runs at ingest -- evidence: research-20260627-knowledge-platform-landscape.md section 3b (lines 150-153).",
+    "Frontmatter marker/date/ref_low/ref_high map to LabResult biomarker/collectedAtIso/referenceLow/referenceHigh via upsertLabResult -- evidence: src/medical/types.ts:118-127; src/medical/health-store.ts:196-230.",
+    "Dedup is provided by the deterministic labResultId under INSERT OR IGNORE (newRows counts genuine inserts) -- evidence: src/medical/health-store.ts:48-53,212-230.",
+    "Deterministic JS status classification preserves the existing numerics guarantee -- evidence: src/medical/numerics.ts and research section 4a #5 (line 183)."
+  ],
+  "outOfScope": [
+    "Parsing the PDF (Sprint 1).",
+    "CLI wiring, egress gating, and audit (Sprint 3).",
+    "Generic vault reindex / Dataview dashboards (sibling spec)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Reuse ParsedLabMarker/ParsedLabReport from Sprint 1 (src/medical/lab-types.ts). For frontmatter serialization, a tiny hand-rolled YAML-frontmatter writer is acceptable, or use an existing dependency already in package.json if one is present -- check before adding a new dep (a new dep is a non-goal unless already vendored). Note path should be deterministic and collision-resistant, e.g. <vaultDir>/labs/<panel-slug>/<marker-slug>-<date>.md. Map a ParsedLabMarker to LabResult { biomarker: marker, value, unit, collectedAtIso: date, referenceLow: ref_low, referenceHigh: ref_high } then call HealthDataStore.upsertLabResult (it dedups via labResultId, returns 0 for a dup). reindexLabNotes should glob the labs dir, parse each note's frontmatter, and upsert; accumulate and return the new-row count. Keep all timestamps injected (no Date.now()) per the store purity contract. Do NOT import anything from the sibling vault-store module.",
+  "evaluatorNotes": "Confirm zero network/LLM in this sprint (grep for createClient/fetch in the new files -- there must be none). Verify the dedup test inserts once, reindexes a second time, and asserts second-run new rows is 0 AND getLabSeries length is unchanged. Verify the status test covers low/normal/high/critical boundary values deterministically. Verify no import path resolves to the sibling vault-store module. Verify build is green.",
+  "estimatedFiles": [
+    "src/medical/lab-note.ts",
+    "src/medical/lab-note.test.ts",
+    "src/medical/lab-reindex.ts",
+    "src/medical/lab-reindex.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T00:00:00Z",
+  "updatedAt": "2026-06-28T16:00:11Z",
+  "completedAt": "2026-06-28T16:00:11Z"
+}

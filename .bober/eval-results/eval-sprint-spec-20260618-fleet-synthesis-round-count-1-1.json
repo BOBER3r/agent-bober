@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-synthesis-round-count-1-1",
+  "contractId": "sprint-spec-20260618-fleet-synthesis-round-count-1",
+  "specId": "spec-20260618-fleet-synthesis-round-count",
+  "timestamp": "2026-06-18T20:18:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings (eval-persist.test.ts)." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "2789 passed, 3 skipped, 6 failed (all pre-known cockpit MCP); fleet 276/276." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-1-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0." },
+    { "criterionId": "sc-1-2", "required": true, "result": "pass", "evidence": "2789 passed; only 6 known cockpit failures; fleet 276/276." },
+    { "criterionId": "sc-1-3", "required": true, "result": "pass", "evidence": "executeRounds → {executions, roundsRun}; roundsRun=r first for-body stmt (coordinator.ts:71, before break :79); tests assert ===3 full, ===2 early-stop, ===1 maxRounds=1." },
+    { "criterionId": "sc-1-4", "required": true, "result": "pass", "evidence": "early-stop blackboard run → fleet-synthesis.json.rounds===2 (NOT 3); collect gets real roundsRun (index.ts:203)." },
+    { "criterionId": "sc-1-5", "required": true, "result": "pass", "evidence": "PortfolioReport.rounds optional; build guarded spread; build([]) no key, build([],{rounds:2}).rounds===2; report.rounds===2 on early-stop run." },
+    { "criterionId": "sc-1-6", "required": true, "result": "pass", "evidence": "no-blackboard → build(outcomes, undefined) omits rounds key; no fleet-synthesis.json (if(bb) guard); existing no-bb tests pass." },
+    { "criterionId": "sc-1-7", "required": true, "result": "pass", "evidence": "lint 0 errors; synthesis.ts NOT in commit; bober: ceiling comment + hardcoded roundsRun=maxRounds removed (grep empty); never-throw/early-stop untouched; only 6 declared files." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 7 required criteria pass (logic-level review). executeRounds returns the real terminating-round count, threaded into both fleet-synthesis.json and fleet-report.json on blackboard runs; no-blackboard path byte-identical (no rounds key, no synthesis file). Build/typecheck/lint green, 2789 passing, fleet 276/276."
+}

@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-2-1",
+  "contractId": "sprint-spec-20260628-task-inbox-2",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "requiredPassed": 4,
+    "requiredFailed": 0,
+    "requiredTotal": 4
+  },
+  "failureReason": "New ESLint error in changed file src/cli/commands/task.test.ts:132 — unused var task2 (@typescript-eslint/no-unused-vars). Violates principles.md zero-lint-errors hard gate. All 5 criteria + build + typecheck pass.",
+  "generatorFeedback": [
+    {
+      "priority": "high",
+      "category": "quality",
+      "file": "src/cli/commands/task.test.ts",
+      "line": "132",
+      "description": "New ESLint error: task2 assigned but never used (@typescript-eslint/no-unused-vars error). principles.md: zero lint errors is a hard gate.",
+      "expected": "Rename task2 -> _task2 (the _ prefix escape hatch), OR add expect(output).toContain(task2.id) to use the binding and strengthen the assertion."
+    }
+  ]
+}

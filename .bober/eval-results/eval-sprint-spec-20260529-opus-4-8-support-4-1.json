@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260529-opus-4-8-support-4-1",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-4",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T19:40:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0; MidConversationSystemBlockParam typed from SDK, no cast." },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "exit 0." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "exit 0." },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "1344 passed; 27 provider tests green; only the 2 flaky 37-tool-count baseline failures." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "C1", "required": true, "result": "pass", "evidence": "types.ts SystemUpdateMessage (role:'user', systemUpdate, cacheTtl?:'5m'|'1h') in Message union; handled in toAnthropicMessage; typecheck 0." },
+    { "criterionId": "C2", "required": true, "result": "pass", "evidence": "anthropic.ts:118 branch before TextMessage fallthrough emits type:'mid_conv_system' with content:[{type:'text',text}]; test asserts shape." },
+    { "criterionId": "C3", "required": true, "result": "pass", "evidence": "conditional cache_control:{type:'ephemeral',ttl} only when cacheTtl set; ttl + no-ttl tests pass." },
+    { "criterionId": "C4", "required": true, "result": "pass", "evidence": "openai.ts:182 + google.ts:167 explicit branches (no silent fallthrough); openai-compat inherits OpenAIAdapter; openai C4 test no-throw passes." },
+    { "criterionId": "C5", "required": true, "result": "pass", "evidence": "typecheck/lint/build exit 0; only flaky baseline failures; no provider regressions; no role:'system' in agnostic union; SDK confined to anthropic.ts." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "5/5 pass. SystemUpdateMessage integrated; Anthropic emits a typed mid_conv_system block with conditional cache_control; OpenAI + Google have explicit branches preventing silent fallthrough; all provider tests pass; only flaky baseline failures remain."
+}

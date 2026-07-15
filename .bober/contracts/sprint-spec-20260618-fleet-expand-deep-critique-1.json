@@ -1,0 +1,70 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-1",
+  "specId": "spec-20260618-fleet-expand-deep-critique",
+  "sprintNumber": 1,
+  "version": 1,
+  "createdAt": "2026-06-18T10:07:20Z",
+  "title": "Critique engine (critic-deep.ts) + opt-in threading",
+  "status": "completed",
+  "dependsOn": [],
+  "description": "Build src/fleet/critic-deep.ts (the bounded fresh-critic critique/refine loop) plus the additive opt-in threading in src/fleet/decomposer-deep.ts so decomposeGoalDeep({...,critique:true}) routes a structurally-valid baseline manifest through runCritiqueLoop before returning. Fully testable end-to-end via a ScriptedClient fake; NO CLI in this sprint.",
+  "estimatedFiles": [
+    "src/fleet/critic-deep.ts (new)",
+    "src/fleet/critic-deep.test.ts (new)",
+    "src/fleet/decomposer-deep.ts (additive edits: DecomposeDeepInput.critique?, runExpandStage.critiqueFeedback?, decomposeGoalDeep routing + capture outline once)"
+  ],
+  "successCriteria": [
+    {
+      "id": "sc-1-1",
+      "description": "npm run build (tsc) is clean after adding critic-deep.ts and the decomposer-deep.ts edits.",
+      "required": true,
+      "verify": "build"
+    },
+    {
+      "id": "sc-1-2",
+      "description": "Strict typecheck passes, no explicit any; critic-deep.ts imports ONLY LLMClient/Message types from ../providers/types.js (no SDK types) and uses import type; ESM .js extensions on all relative imports.",
+      "required": true,
+      "verify": "typecheck"
+    },
+    {
+      "id": "sc-1-3",
+      "description": "ESLint is clean on critic-deep.ts + critic-deep.test.ts (consistent-type-imports, no-unused, ESM .js).",
+      "required": false,
+      "verify": "lint"
+    },
+    {
+      "id": "sc-1-4",
+      "description": "Constants test asserts CRITIQUE_MAX_ROUNDS===1, CRITIQUE_PARSE_MAX_RETRIES===1, DEEP_CRITIQUE_MAX_TOTAL_CALLS===8, and DEEP_CRITIQUE_MAX_TOTAL_CALLS===DEEP_MAX_TOTAL_CALLS+CRITIQUE_MAX_ROUNDS*((1+CRITIQUE_PARSE_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES)) (audit relation).",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-5",
+      "description": "validateVerdict NEVER throws: returns {ok:false,error} for empty/non-JSON text, bad verdict enum, and missing feedback; returns {ok:true,verdict} for a valid {verdict,feedback}. Mirrors validateOutline's discriminated-union return.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-6",
+      "description": "Both critic chat calls captured by ScriptedClient have jsonObjectMode===true AND responseSchema===undefined; callCritic uses its own CRITIQUE_SYSTEM_PROMPT and a fresh message array presenting the candidate as third-party input (not an appended EXPAND turn). getCriticVerdict fail-open: after (1+CRITIQUE_PARSE_MAX_RETRIES)=2 unparseable responses it returns {verdict:'approve',feedback:''} without throwing; the coercion retry uses the 3-message [user,assistant,user] shape.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-7",
+      "description": "runCritiqueLoop: scripted reject-then-richer-expand folds critic feedback into a FRESH runExpandStage (critiqueFeedback present in the re-expand call) and returns the re-expanded multi-child manifest; scripted all-reject returns accept-best (tiebreak most children, else first-seen baseline) and NEVER throws; total ScriptedClient.chat calls across a fully-failing critique run never exceed DEEP_CRITIQUE_MAX_TOTAL_CALLS=8.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-1-8",
+      "description": "decomposeGoalDeep({...,critique:true}) on a degenerate baseline (2 children) with scripted reject + richer re-expand returns the multi-child manifest, and the manifest passed to the critic is already FleetManifestSchema-valid (critic after structural gate). decomposeGoalDeep with critique absent/false emits ZERO critic calls and a chat sequence byte-identical to Phase 3 (plan+expand only, <=4 calls); decomposer.ts/manifest.ts/providers stay byte-unchanged.",
+      "required": true,
+      "verify": "test"
+    }
+  ],
+  "generatorNotes": "Read .bober/architecture/arch-20260618-fleet-expand-deep-critique-architecture.md + adr-1..5 FIRST \u2014 the Component Breakdown gives every TS signature and the Integration Strategy gives the exact call chain and gate ordering. Mirror, do not invent: validateVerdict mirrors validateOutline (decomposer-deep.ts:107-155) \u2014 same direct-parse -> ```json fence -> first-brace fallback -> Zod safeParse ladder, only the schema differs (CritiqueVerdictSchema). callCritic mirrors callExpand (decomposer-deep.ts:202-239) for the jsonObjectMode:true call + 3-message [user,assistant,user] coercion, BUT builds its OWN clean CRITIQUE_SYSTEM_PROMPT and never references the EXPAND conversation or tells the model it authored the manifest. Re-expand reuses runExpandStage (decomposer-deep.ts:280-315) by adding an optional critiqueFeedback?:string appended to the FIRST EXPAND user message only when present \u2014 do NOT fork runExpandStage. In decomposeGoalDeep, capture the Outline from runPlanStage ONCE and pass it to the baseline expand AND runCritiqueLoop (no 2nd PLAN call). Route to runCritiqueLoop ONLY when input.critique===true; otherwise the existing plan->expand->return path must be byte-unchanged. NEVER set responseSchema anywhere. Constants block + co-located audit test mirror decomposer-deep.ts:71-74 and decomposer-deep.test.ts:76-80. Tests use the ScriptedClient fake from decomposer-deep.test.ts (records every ChatParams, returns scripted responses). Commit only critic-deep.ts, critic-deep.test.ts, and decomposer-deep.ts with message 'bober(sprint-1): critique engine (critic-deep.ts) + opt-in threading'. Do NOT touch index.ts this sprint.",
+  "evaluatorNotes": "Independently verify, do not trust the report: (1) grep responseSchema in critic-deep.ts must be EMPTY; both critic calls assert jsonObjectMode===true && responseSchema===undefined. (2) The audit relation DEEP_CRITIQUE_MAX_TOTAL_CALLS===8 must be a real test assertion, not a comment. (3) The all-reject ceiling test must assert ScriptedClient.calls.length<=8 AND that the loop resolves (never throws). (4) Fail-open: 2 unparseable critic responses -> verdict approve, no throw. (5) Byte-identity: decomposeGoalDeep with critique absent must emit the SAME chat call count/order as a Phase-3 scripted run (<=4, zero critic calls) \u2014 run the existing decomposer-deep.test.ts to confirm no regression. (6) `git diff` must show only critic-deep.ts (new), critic-deep.test.ts (new), decomposer-deep.ts (additive \u2014 assert zero deleted lines via `git diff | grep '^-[^-]'` empty); decomposer.ts, manifest.ts, index.ts, providers/ NOT in the diff. (7) Full npm test green. Required strategies: build + typecheck (required), lint + unit-test.",
+  "startedAt": "2026-06-18T10:13:54Z",
+  "completedAt": "2026-06-18T10:33:14Z"
+}

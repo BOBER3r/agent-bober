@@ -1,0 +1,83 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-4",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "sprintNumber": 4,
+  "title": "Promote claude-code subscription provider into the factory",
+  "description": "Wire the existing ClaudeCodeAdapter spike into the supported provider set: createClient accepts provider claude-code, validateApiKey requires no API key but preflights that the claude binary is on PATH, providerConfig.binary and timeoutMs overrides are honored, the tools-guard throw is preserved, and execa is mocked in tests so CI needs no binary or subscription.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260531-multi-provider-deepseek-claude-code-3"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "createClient(\"claude-code\", null, providerConfig, model) returns an instance of ClaudeCodeAdapter, asserted by a unit test; ProviderName type includes \"claude-code\".",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "validateApiKey(\"claude-code\") does not throw when no API key and no ANTHROPIC_API_KEY are set, but throws an error naming the claude binary when the binary preflight reports it is not on PATH; both branches asserted by unit tests.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "With execa mocked to return a JSON result object, ClaudeCodeAdapter.chat({system, messages}) resolves to a ChatResponse whose text equals the mocked result and whose usage.inputTokens/outputTokens match the mocked usage fields; asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "ClaudeCodeAdapter.chat({system, messages, tools:[oneTool]}) rejects with an error whose message states the claude CLI cannot return custom tool_use blocks; asserted by a unit test (no execa call made).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "When providerConfig.binary and providerConfig.timeoutMs are set, createClient constructs a ClaudeCodeAdapter that invokes the mocked execa with that binary name and passes that timeout; asserted by a unit test inspecting the mocked execa call arguments.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "npm run build exits 0 and npm run lint exits 0 after the changes.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not make claude-code support custom tools — the tools-guard throw must stay.",
+    "Do not read or require ANTHROPIC_API_KEY for the claude-code provider.",
+    "Do not add the Claude Agent SDK package as a dependency.",
+    "Do not make a real claude CLI call in any test — execa must be mocked."
+  ],
+  "stopConditions": [
+    "createClient returns ClaudeCodeAdapter for provider claude-code, the binary preflight and no-key behavior work, the tools-guard throw and result/usage mapping are asserted with mocked execa, and build plus lint exit 0."
+  ],
+  "definitionOfDone": "A Claude Max subscriber can set a prompt-only role to provider claude-code with no ANTHROPIC_API_KEY and createClient builds a ClaudeCodeAdapter that shells the claude CLI. If the claude binary is absent the failure surfaces at validation with a message naming the binary, not deep in a sprint. Passing tools throws immediately. binary and timeoutMs overrides from providerConfig take effect. All behavior is verified against a mocked execa.",
+  "assumptions": [
+    "Q2: the model string is passed to claude --model verbatim (no shorthand expansion) — evidence: claude-code.ts:137-139 already does args.push('--model', model).",
+    "The binary preflight checks PATH (e.g. via which/where or a no-op execa probe) and is the mechanism by which validateApiKey('claude-code') errors when claude is missing — evidence: PRD US-005 AC requires preflighting the claude binary.",
+    "Tests mock execa so no real subscription call occurs — evidence: PRD Technical Considerations 'Tests must mock execa (claude-code)'."
+  ],
+  "outOfScope": [
+    "Role-aware fallback when a tool role resolves to claude-code (Sprint 5).",
+    "Documentation (Sprint 6)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "src/providers/claude-code.ts already implements ClaudeCodeAdapter (constructor(binary='claude', timeoutMs=180000), chat throws on tools, maps stop_reason/usage). In src/providers/factory.ts: add 'claude-code' to ProviderName (line 11); in validateApiKey add a 'claude-code' case that does NOT require a key but preflights the binary on PATH (throw an Error naming the binary if absent — the preflight may be a lightweight check; if it needs to be async, do the binary check inside createClient's claude-code branch instead and keep validateApiKey a no-op for the key). In createClient's switch add a 'claude-code' case returning new ClaudeCodeAdapter(binary, timeoutMs) reading providerConfig.binary and providerConfig.timeoutMs. Export ClaudeCodeAdapter from src/providers/index.ts. In claude-code.test.ts mock execa with vi.mock('execa'). Remove or soften the SPIKE-only language in the file header now that it is promoted, but keep the capability-boundary doc.",
+  "evaluatorNotes": "Run npm test. Confirm claude-code.test.ts and factory.test.ts cover: createClient returns ClaudeCodeAdapter for 'claude-code'; no-key path does not throw; binary-missing preflight throws naming the binary; chat maps mocked execa JSON result.text/usage; tools-passed throws without calling execa; binary/timeoutMs overrides reach the mocked execa call. Confirm index.ts exports ClaudeCodeAdapter. Run npm run build and npm run lint, assert exit 0. Grep tests to confirm execa is mocked (no real spawn).",
+  "estimatedFiles": [
+    "src/providers/factory.ts",
+    "src/providers/factory.test.ts",
+    "src/providers/claude-code.ts",
+    "src/providers/claude-code.test.ts",
+    "src/providers/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-31T14:53:00Z"
+}

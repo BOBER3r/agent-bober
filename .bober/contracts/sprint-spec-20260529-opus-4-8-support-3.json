@@ -1,0 +1,44 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-3",
+  "specId": "spec-20260529-opus-4-8-support",
+  "sprintNumber": 3,
+  "title": "Add effort control via output_config.effort",
+  "description": "Add an optional, provider-agnostic effort field to ChatParams and have the Anthropic adapter forward it as top-level output_config.effort. When effort is unset the adapter sends no output_config so the API default (high on Opus 4.8) applies. Non-anthropic adapters accept and ignore the field. Verified by unit tests capturing the messages.create request for the set and unset cases.",
+  "status": "completed",
+  "dependsOn": ["sprint-spec-20260529-opus-4-8-support-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "ChatParams gains an optional effort field typed to the union 'low' | 'medium' | 'high' | 'xhigh' | 'max', and the package typechecks.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "C2", "description": "When effort is set on a chat call, the Anthropic request body includes output_config.effort equal to that value, asserted by a unit test capturing messages.create arguments.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "When effort is unset, the Anthropic request body contains no output_config field, asserted by a unit test that scans the captured request.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "Passing effort to a non-anthropic adapter (for example the OpenAI adapter) produces a normal response and raises no error, asserted by a unit test.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C5", "description": "npm run build exits zero and npm run test shows no new failures beyond the documented flaky baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do not wire effort into the bober.config.json Zod schema or per-role config in this sprint.",
+    "Do not send output_config when effort is unset, so the API default of high is preserved.",
+    "Do not change model, max_tokens, tools, or the existing prompt-caching breakpoints.",
+    "Do not add a thinking parameter; Opus 4.8 uses adaptive thinking and the effort knob."
+  ],
+  "stopConditions": [
+    "Stop when effort threads from ChatParams to output_config.effort on the anthropic path, the unset case omits output_config, non-anthropic adapters ignore it, and the suite is green except the flaky baseline.",
+    "Stop when the change is confined to types.ts, anthropic.ts, and the relevant *.test.ts files."
+  ],
+  "definitionOfDone": "ChatParams carries an optional effort union (low|medium|high|xhigh|max); the Anthropic adapter includes output_config.effort in the request exactly when effort is set and omits output_config entirely when it is unset; non-anthropic adapters accept and ignore effort without raising; unit tests capture the request payload for both the set and unset cases and assert a non-anthropic adapter tolerates the field; typecheck, lint, and build pass and the suite shows only the documented flaky baseline failures.",
+  "assumptions": [
+    "output_config.effort is the correct location and the value union is low|medium|high|xhigh|max per the API reference.",
+    "The SDK upgrade from sprint 2 types output_config so no cast is needed."
+  ],
+  "outOfScope": ["Per-role effort config", "mid_conv_system", "thinking parameter"],
+  "ambiguityScore": 2,
+  "generatorNotes": "Add `effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'` to ChatParams in src/providers/types.ts (with a doc comment). In src/providers/anthropic.ts chat(), when params.effort is defined, add `output_config: { effort: params.effort }` to the messages.create payload; when undefined, do NOT include output_config at all (the API defaults to high on Opus 4.8). Confirm the upgraded SDK types output_config (from sprint 2). Other adapters (openai/google/openai-compat) read ChatParams but should simply not reference effort — destructuring already ignores unknown-to-them fields, so no change is usually needed; add a test proving the OpenAI adapter still returns normally when effort is passed. Extend src/providers/anthropic.test.ts (mirror the existing top-level vi.mock pattern) to assert: effort set -> req.output_config.effort === value; effort unset -> 'output_config' absent from the captured request. Conventional commit: bober(sprint-3): add effort control via output_config.effort.",
+  "evaluatorNotes": "Read types.ts — confirm the effort union. Read anthropic.ts chat() — confirm output_config.effort is added only when effort is set and omitted otherwise. Run the new/updated anthropic tests and confirm: set-case payload has output_config.effort with the value; unset-case payload has no output_config key (scan JSON.stringify). Confirm a non-anthropic adapter test passes effort and gets a normal response with no thrown error and no output_config leakage into its request. Run typecheck/lint/build (exit 0) and npm run test (only flaky baseline failures tolerated). Confirm the change is limited to types.ts, anthropic.ts, and *.test.ts.",
+  "estimatedFiles": ["src/providers/types.ts", "src/providers/anthropic.ts", "src/providers/anthropic.test.ts"],
+  "estimatedDuration": "medium",
+  "iterationHistory": [{"iteration":1,"evalId":"eval-sprint-spec-20260529-opus-4-8-support-3-1","result":"pass","timestamp":"2026-05-29T19:25:00Z"}],
+  "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-3-1",
+  "createdAt": "2026-05-29T18:00:00Z",
+  "updatedAt": "2026-05-29T19:25:00Z",
+  "startedAt": "2026-05-29T18:55:00Z",
+  "completedAt": "2026-05-29T19:25:00Z"
+}

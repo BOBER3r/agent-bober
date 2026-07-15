@@ -1,0 +1,47 @@
+{
+  "contractId": "sprint-spec-20260604-evaluator-lens-panel-2",
+  "specId": "spec-20260604-evaluator-lens-panel",
+  "sprintNumber": 2,
+  "title": "Lens prompt catalog and per-lens verdict telemetry",
+  "description": "Add a built-in lens prompt catalog (correctness, security, regression, quality) that maps a lens name to a focused prompt fragment, with a graceful generic fallback for custom lens strings, and surface each lens's pass/fail verdict via the existing telemetry/history so a panel failure is attributable to a specific lens. Polish on top of sprint 1; the off-by-default guarantee and fan-out bounding remain intact.",
+  "status": "completed",
+  "completedAt": "2026-06-04T04:15:30Z",
+  "dependsOn": ["sprint-spec-20260604-evaluator-lens-panel-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "A new module (e.g. src/orchestrator/eval-lenses.ts) exports a lens catalog resolving 'correctness','security','regression','quality' to DISTINCT non-empty focus prompt fragments, plus a resolver that returns a generic focus for any unknown custom lens string without throwing. A unit test asserts the four built-ins are distinct and that an unknown lens returns the generic fallback.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C2", "description": "runAgentEvaluation uses the catalog to build each lens's focus block (replacing the inline string from sprint 1). With the catalog wired, the off path (panel disabled / <2 lenses) STILL makes exactly one judge call with no lens focus — proven by the sprint-1 off-path test staying green.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "When the panel runs, each lens's verdict (lens name + passed) is emitted via the existing emit() telemetry and/or appendHistory, attributable by lens name. A unit test (telemetry/history spy or temp .bober) asserts one verdict record per lens with the correct lens name and pass/fail.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "Fan-out bounding (peak concurrency <= maxConcurrent) and the off-by-default single-call guarantee are covered by tests that remain green after the catalog + telemetry changes.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C5", "description": "npx tsc --noEmit, npm run build, and npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented flaky tool-count baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do not change the reconcile semantics or the combine logic.",
+    "Do not add lens weighting or non-majority voting.",
+    "Do not emit telemetry on the off path beyond what the evaluator already emits today.",
+    "Do not touch the workflow engine, .claude/workflows, agents/*.md, or providers/types.ts."
+  ],
+  "stopConditions": [
+    "Stop when the catalog resolves the four built-ins + generic fallback, per-lens verdicts are emitted, all guarantees hold, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to src/orchestrator/eval-lenses.ts (+ its test), src/orchestrator/evaluator-agent.ts, and the evaluator-agent test."
+  ],
+  "definitionOfDone": "A built-in lens catalog maps correctness/security/regression/quality to distinct focus fragments with a generic fallback for custom lenses; runAgentEvaluation uses it; each lens's verdict is emitted to telemetry/history attributable by name; the off-by-default single-call guarantee and maxConcurrent bounding still hold; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "emit() (src/telemetry/emit.ts:69) is the telemetry entry point and is fire-and-forget; appendHistory is available for a durable per-lens record if telemetry is disabled.",
+    "The reconciler already returns lensVerdicts / the per-lens EvalResult[] is available in runAgentEvaluation before reconcile, so emitting per-lens verdicts needs no reducer change.",
+    "Custom (non-catalog) lens strings are valid and should produce a generic focus, not an error."
+  ],
+  "outOfScope": ["weighting", "non-majority voting", "workflow path", "off-path telemetry changes"],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/orchestrator/eval-lenses.ts exporting a catalog, e.g. `const LENS_CATALOG: Record<string,string> = { correctness: '...focus on whether the implementation actually satisfies each success criterion...', security: '...focus on injection, auth, secret handling, unsafe input...', regression: '...focus on whether previously working behavior still works / pre-existing tests...', quality: '...focus on principles violations, dead code, naming, smells...' }` and `export function resolveLensFocus(lens: string): string` returning the catalog entry or a generic `Evaluate specifically through the '${lens}' lens.` fallback. Keep fragments distinct and non-empty. In src/orchestrator/evaluator-agent.ts: replace the sprint-1 inline lens string with resolveLensFocus(lens) in runSingleLensEval. After running the lenses and BEFORE/AFTER reconcile, iterate the per-lens EvalResult[] and emit each: `void emit(projectRoot, config, 'eval-lens-verdict', { contractId, lens, passed: r.passed })` (follow the existing emit call sites in evaluator-agent.ts / pipeline.ts for event-name + payload conventions; if 'eval-lens-verdict' must be a known event type, either reuse an existing generic event or add the minimal event-name plumbing — keep it consistent with how emit is already used). Only emit on the PANEL path (>=2 lenses), never on the off path. If emit's event enum is closed and adding a value is out of scope, fall back to appendHistory with an event the HistoryEntrySchema accepts (check src/state/history.ts event enum) — prefer the lowest-friction option that the schema allows without broad changes. Create src/orchestrator/eval-lenses.test.ts: assert the 4 built-ins are distinct + non-empty and an unknown lens returns the generic fallback. Extend evaluator-agent.test.ts: assert per-lens verdict emission (spy on emit or read temp history) with correct lens names + pass/fail, and that the off path still emits no per-lens verdicts and makes one call. Use import type, ESM .js specifiers, unicode section headers. Conventional commit: bober(sprint-2): add lens prompt catalog + per-lens verdict telemetry.",
+  "evaluatorNotes": "Confirm eval-lenses.ts catalog: correctness/security/regression/quality map to distinct non-empty fragments; resolveLensFocus('made-up') returns the generic fallback (no throw). Confirm runAgentEvaluation uses resolveLensFocus and that the off path still makes exactly one call with NO lens focus (sprint-1 off-path test green). Verify per-lens verdict emission: spy on emit() (or inspect temp .bober history/telemetry) and assert one record per lens with the lens name + correct passed flag, and that NO per-lens verdicts are emitted on the off path. Confirm whichever emit/appendHistory path was used validates against the existing schema (no schema-breaking event). Run the fan-out bounding test (peak concurrency <= maxConcurrent) and the off-by-default single-call test — both green. Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the flaky tool-count baseline). Confirm git diff confined to eval-lenses.ts(+test) and evaluator-agent.ts(+test); reconciler.ts, combine logic, and the event/history schemas unchanged (or minimally + validly extended).",
+  "estimatedFiles": [
+    "src/orchestrator/eval-lenses.ts",
+    "src/orchestrator/eval-lenses.test.ts",
+    "src/orchestrator/evaluator-agent.ts",
+    "src/orchestrator/evaluator-agent.test.ts"
+  ],
+  "estimatedDuration": "small",
+  "createdAt": "2026-06-04T01:00:00Z",
+  "updatedAt": "2026-06-04T01:00:00Z"
+}

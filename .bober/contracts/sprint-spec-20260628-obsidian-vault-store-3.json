@@ -1,0 +1,76 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-3",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "sprintNumber": 3,
+  "title": "`bober vault reindex` CLI command",
+  "description": "Add a domain-agnostic `bober vault reindex` command that loads every note from a vault directory, rebuilds the derived FactStore at the resolved team/namespace memory path via the sprint-2 reindex function, and prints per-run counts. Wire it into the CLI command tree following the existing facts/medical command pattern.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-obsidian-vault-store-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project compiles: `npm run build` (tsc) completes with no errors after the vault command file and its registration in src/cli/index.ts are added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "`bober vault --help` lists a `reindex` subcommand accepting --scope <domain> and an optional --vault <dir>, and the command is registered via a registerVaultCommand call in src/cli/index.ts.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "A unit test invokes the extracted command core against a fixture vault dir + temp project root and asserts facts.db at the namespace memory path contains the expected active facts and the returned summary reports notesParsed/factsAdded counts > 0.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A unit test points the command at a missing/nonexistent vault directory and asserts it sets a non-zero exit code, writes a red error to stderr, does not throw, and closes the FactStore.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change the reindex/mapping logic from sprint 2 \u2014 only orchestrate it from the CLI.",
+    "Do not let the command handler throw \u2014 on any error write chalk.red to stderr and set process.exitCode=1 (mirror src/cli/commands/facts.ts:135-142).",
+    "Do not invent a new facts.db location \u2014 resolve it via loadTeam(config).memoryNamespace + factsDbPath (src/cli/commands/facts.ts:41-50,99).",
+    "Do not read the wall clock anywhere except once at the CLI handler boundary.",
+    "Do not commit/push git or mutate the vault notes \u2014 reindex is read-only over the vault."
+  ],
+  "stopConditions": [
+    "All success criteria sc-3-1..sc-3-4 pass under the evaluator.",
+    "`npm test` passes including the new command tests with no pre-existing test regressed.",
+    "Running `bober vault reindex --scope <domain> --vault <fixture>` exits 0 and prints notesParsed/factsAdded/factsSuperseded counts."
+  ],
+  "definitionOfDone": "A user runs `bober vault reindex --scope medical --vault ./kb-medical` and the derived FactStore at the team/namespace memory path is rebuilt from the vault's note frontmatter, printing how many notes were parsed and how many facts were added, superseded, and unchanged. Errors (missing vault, parse failure) produce a red stderr message and a non-zero exit code without an uncaught exception, and the store is always closed.",
+  "assumptions": [
+    "Command registration mirrors registerMedicalCommand/registerFactsCommand (src/cli/commands/medical.ts:130-189, facts.ts:54): a registerVaultCommand(program) imported and called in src/cli/index.ts alongside the other register* calls.",
+    "The derived store path is the team/namespace memory path: resolveDefaultNamespace -> factsDbPath(projectRoot, ns); ensureFactsDir first (facts.ts CLI pattern at src/cli/commands/facts.ts:82-99).",
+    "The vault directory defaults to a documented location when --vault is omitted (e.g. the project root or a config-declared vault path); the generator picks a sensible default and documents it.",
+    "Command core logic is extracted into a testable async function (like runWhoopSync in src/cli/commands/medical.ts:43) so tests inject projectRoot and assert on the FactStore without spawning a process."
+  ],
+  "outOfScope": [
+    "The Obsidian MCP adapter (sprint 4) \u2014 this command reads notes from the local filesystem via note-io.",
+    "Watching the vault for changes / incremental reindex daemon.",
+    "Per-domain command aliases (e.g. `bober medical reindex`) \u2014 only the generic `bober vault reindex` is in scope."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/cli/commands/vault.ts exporting registerVaultCommand(program) and an extracted core (e.g. runVaultReindex(projectRoot, opts, deps?)) for testability. Reuse: findProjectRoot (src/utils/fs.js), loadConfig (src/config/loader.js), loadTeam (src/teams/registry.js) for the namespace, FactStore + factsDbPath + ensureFactsDir (src/state/facts.js), listNotes/readNote from sprint 1 (src/vault/note-io.js), reindexNotes from sprint 2 (src/vault/reindex.js). Register in src/cli/index.ts next to registerMedicalCommand (import at top ~line 40, call near line 318). Stamp `now` once at the handler boundary (facts.ts:86). Always close the store in a finally block (facts.ts:132-134). Print counts with chalk.green like medical import (medical.ts:156-158). For the missing-vault test, point --vault at a nonexistent path and assert process.exitCode and stderr.",
+  "evaluatorNotes": "Confirm the command is actually wired into src/cli/index.ts (grep for registerVaultCommand). Confirm the handler never throws on the missing-vault path (the test must not reject). Confirm facts.db is created under the namespace memory dir, not an ad-hoc path. Confirm the store is closed even on the error path (finally). Run `node dist/.../cli.js vault --help` or the built binary if available to confirm the subcommand lists. Run the full suite for regressions.",
+  "estimatedFiles": [
+    "src/cli/commands/vault.ts",
+    "src/cli/index.ts",
+    "src/cli/commands/vault.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T14:37:39.000Z",
+  "completedAt": "2026-06-28T14:37:39.000Z"
+}

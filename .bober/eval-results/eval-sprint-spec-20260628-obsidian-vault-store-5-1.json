@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260628-obsidian-vault-store-5-1",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-5",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T18:12:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "orchestrator-direct",
+  "evaluatorNote": "Run directly by the orchestrator via Bash (re-running every configured strategy + inspecting each criterion assertion) because the bober-evaluator subagent hit an account session limit and the Agent classifier was transiently unavailable. Verdict based on independently executed commands, not the generator's self-report.",
+  "score": {"criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "npx tsc --noEmit EXIT=0", "details": "clean"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "npx tsc EXIT=0", "details": "clean"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "npx eslint src/ EXIT=0; 0 errors, 2 pre-existing warnings in eval-persist.test.ts", "details": "hard gate (zero errors) satisfied; convergence refactor left no orphaned/unused import"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "vitest run src/vault/ 6 files 67 tests; convergence index-map+reindex 20 tests; full suite 228 files 2911 tests", "details": "zero regressions"},
+    {"strategy": "api-check", "required": false, "result": "skipped", "output": "N/A", "details": "pure library module, no endpoints"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "tsc --noEmit EXIT=0, tsc EXIT=0, eslint src/ EXIT=0 (0 errors)", "feedback": ""},
+    {"criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "profile.test.ts:46 plaintext profile.yaml -> typed VaultProfile (owner/domain, tags=[primary,care]); not the encrypted sentinel", "feedback": ""},
+    {"criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "profile.test.ts:55 SOPS fixture -> toEqual({encrypted:true}); name/sops/version/mac all toBeUndefined (no ciphertext/value leak); no throw; detection via 'sops' key-presence; profile.ts has no executable clock/crypto/sops (doc-comment only)", "feedback": ""},
+    {"criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "profile.test.ts:68 missing -> toBeUndefined (ENOENT caught, no throw); :78 ACTIVE_STATUS='active', SUPERSEDED_STATUS='superseded' (byte-identical to sprint-2 literal), ATTACHMENTS_DIR='attachments' exported from conventions.ts", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 4 required criteria pass (independently re-verified by the orchestrator due to subagent session limit). Build/typecheck/lint clean (eslint 0 errors — hard gate). SOPS detection returns opaque {encrypted:true} with no value leak; missing profile -> undefined. SUPERSEDED_STATUS convergence into conventions.ts keeps all Sprint-2 export tests green (20 convergence tests). Full suite 2911 tests pass, zero regressions."
+}

@@ -1,0 +1,15 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["417f37f - bober(sprint-4): promote claude-code subscription provider into the factory"],
+  "filesChanged": [
+    {"path": "src/providers/claude-code.ts", "action": "modified", "description": "softened SPIKE header to capability-boundary; adapter logic unchanged"},
+    {"path": "src/providers/factory.ts", "action": "modified", "description": "'claude-code' added to ProviderName; createClient case new ClaudeCodeAdapter(binary,timeoutMs); validateApiKey claude-code no-op; exported preflightClaudeBinary(binary, probe?) + BinaryProbe type"},
+    {"path": "src/providers/index.ts", "action": "modified", "description": "export ClaudeCodeAdapter + validateApiKey + preflightClaudeBinary + BinaryProbe"},
+    {"path": "src/providers/claude-code.test.ts", "action": "created", "description": "7 tests, vi.mock('execa'); sc-4-3 result/usage mapping, sc-4-4 tools-guard + no execa call, sc-4-5 binary/timeout passthrough"},
+    {"path": "src/providers/factory.test.ts", "action": "modified", "description": "claude-code describe: sc-4-1 instanceof, sc-4-2 no-throw + preflight present/absent; 36 tests total"}
+  ],
+  "selfVerification": {"providerTests": "116 pass", "build": "exit 0", "lint": "exit 0"},
+  "notes": "createClient stays synchronous; async binary probe is exported preflightClaudeBinary with injectable seam (Sprint-3 pattern). No ANTHROPIC_API_KEY read; no Agent SDK; execa mocked. 2 baseline mcp timeout flakes unrelated."
+}

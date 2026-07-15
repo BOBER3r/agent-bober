@@ -1,0 +1,95 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-2",
+  "specId": "spec-20260628-medical-analysis",
+  "sprintNumber": 2,
+  "title": "Recommendation judge-loop core — 4-lens panel, contraindication VETO, fail-closed dissent",
+  "description": "Add a pure, injectable multi-lens judge loop that gates candidate medical recommendations through four lenses (evidence-grader, contraindication-checker with VETO, conservative-clinician, optimization-lens), reconciles by strict majority with an absolute contraindication veto, regenerates on rejection up to a bounded number of rounds, and FAILS CLOSED (no recommendation surfaced, dissent captured) when consensus is not reached. The red-flag short-circuit runs first and bypasses recommendation generation entirely.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "Running the project build (tsc) after the sprint produces zero type errors with the new src/medical/recommend modules included.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A Vitest test with four fake lens clients all returning approve and no veto asserts runJudgeLoop returns accepted true with the candidate from the first round and rounds equal to 1.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A Vitest test where the contraindication-checker returns veto true while the other three lenses approve asserts runJudgeLoop returns accepted false with reason 'contraindication-veto' (the veto overrides the vote majority).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A Vitest test with two approve and two reject lens verdicts asserts the panel reconciles to accepted false (strict majority, fail-closed on a tie).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "A Vitest test where a red-flag prompt is supplied asserts runJudgeLoop returns a short-circuit outcome and the injected generateCandidate spy is never called (red-flag fires first).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "A Vitest test where lenses reject across every round asserts the loop stops at the maxRounds cap, returns accepted false with reason 'no-consensus', and includes per-lens dissent feedback strings.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "A Vitest test where one lens client throws on chat asserts that lens is counted as a reject (fail-closed) and runJudgeLoop resolves without throwing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not call FactStore, the filesystem, the network, or any real LLM provider — all clients, the candidate generator, and the profile context are injected parameters.",
+    "Do not emit or write any Finding — recommendation emission and vault writing land in sprint 3.",
+    "Do not adopt the fleet critic fail-open behaviour; this panel must invert it to fail-closed (mirror grounding-critic.ts:206, not critic-deep.ts:206).",
+    "Do not allow the contraindication veto to be overridden by a vote majority under any code path."
+  ],
+  "stopConditions": [
+    "All required success criteria sc-2-1 through sc-2-7 pass evaluation.",
+    "A MEDICAL_PANEL_MAX_TOTAL_CALLS constant bounds the worst-case LLM call count and a test asserts the loop never exceeds it."
+  ],
+  "definitionOfDone": "runJudgeLoop, given an injected candidate generator and four injected lens clients, runs the red-flag guard first, then for each round generates a candidate, asks all four lenses for a JSON verdict (validated by a never-throwing parser that fails closed on unparseable output), and reconciles by strict majority with an absolute contraindication veto. On acceptance it returns the accepted candidate and the per-lens verdicts; on veto, tie, or exhausted rounds it returns accepted false with a machine-readable reason and the collected per-lens dissent. The loop never throws and never exceeds its bounded call budget.",
+  "assumptions": [
+    "Verdict parsing reuses the never-throwing validator pattern at src/medical/retrieval/grounding-critic.ts:40-88; on parse exhaustion a lens verdict is treated as reject (fail-closed), inverting fleet's accept-on-exhaustion at src/fleet/critic-deep.ts:206.",
+    "The regenerate-on-reject loop reuses the structure of runCritiqueLoop (src/fleet/critic-deep.ts:211-278) but replaces accept-best / fail-open with fail-closed.",
+    "Reconciliation mirrors the strict-majority, fail-closed-on-tie semantics in skills/shared/lens-panel.md:80-84; the four lens names match research §4a:186-191.",
+    "Each lens is a separate LLMClient (src/providers/types.ts) so sprint 3 can assign a different model per lens via tier-policy; this sprint injects fakes.",
+    "Three regeneration rounds (research §4a:192) is the default maxRounds; the budget constant is derived from maxRounds and the per-lens parse-retry count (mirroring GROUNDING_MAX_LLM_CALLS at grounding-critic.ts:9)."
+  ],
+  "outOfScope": [
+    "Provider/model assignment per lens (sprint 3 via tier-policy).",
+    "Assembling the real profile context from FactStore (sprint 3).",
+    "Finding emission, urgency/severity assignment, and the CLI (sprint 3)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/medical/recommend/lenses.ts: for each of the four lenses (evidence-grader, contraindication-checker, conservative-clinician, optimization-lens) a buildSystemPrompt(...) plus a never-throwing validateLensVerdict(rawText) that copies the JSON-extraction strategy from validateGroundingVerdict (src/medical/retrieval/grounding-critic.ts:40-88) and returns {verdict:'approve'|'reject', feedback:string, veto?:boolean}; on parse exhaustion default to {verdict:'reject', veto:false}. The contraindication-checker schema additionally parses veto:boolean. Create src/medical/recommend/judge-panel.ts: a reconcilePanel(verdicts) -> {accepted, reason?} where any veto true gives accepted false reason 'contraindication-veto', otherwise accepted = approveCount > rejectCount (strict majority, fail-closed on tie); and runJudgeLoop({question, generateCandidate, lensClients, context, maxRounds=3, redFlag, now}) -> a PanelOutcome discriminated union. runJudgeLoop must (1) call the red-flag guard (MedicalGuardrails-style evaluate via an injected guard) FIRST and return {outcome:'short-circuit'|'refuse'} without calling generateCandidate; (2) loop up to maxRounds: candidate = await generateCandidate(prevFeedback?), run the four lenses each with its own injected client wrapped in try/catch (a throw counts as reject, fail-closed), reconcile, return {accepted:true, recommendation, verdicts, rounds} on accept; (3) after maxRounds without consensus return {accepted:false, reason:'no-consensus'|'contraindication-veto', dissent, verdicts, rounds}. Export MEDICAL_PANEL_MAX_TOTAL_CALLS derived from maxRounds * (1 generate + 4 lenses * lensParseRetries). The whole module is pure orchestration over injected functions — no fs, no network, no real provider. Collocate judge-panel.test.ts and lenses.test.ts with fakes.",
+  "evaluatorNotes": "Confirm the module imports no provider factory, no node:fs, and no network. Confirm reconcilePanel: any veto -> not accepted regardless of approve count; tie -> not accepted. Confirm the red-flag path returns before generateCandidate (assert spy uncalled). Confirm a thrown lens client maps to reject and the loop resolves (no rejection propagates). Confirm fail-closed on parse exhaustion (feed an unparseable lens response, expect reject). Confirm MEDICAL_PANEL_MAX_TOTAL_CALLS is a finite constant and the worst-case loop call count is within it. Confirm the inversion comment references grounding-critic.ts vs critic-deep.ts so the fail-closed intent is documented.",
+  "estimatedFiles": [
+    "src/medical/recommend/lenses.ts",
+    "src/medical/recommend/lenses.test.ts",
+    "src/medical/recommend/judge-panel.ts",
+    "src/medical/recommend/judge-panel.test.ts",
+    "src/medical/recommend/types.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-28T00:00:00.000Z",
+  "completedAt": "2026-06-28T18:54:03.935Z"
+}

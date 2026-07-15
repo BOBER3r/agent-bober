@@ -1,0 +1,93 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-6",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 6,
+  "title": "Orchestrator-owned real-diff provider + wire into the audit (fixes G4), auditor stays read-only",
+  "description": "Give the auditor the ACTUAL changed code instead of a planner's estimatedFiles guess, without granting it Bash. Build SecurityDiffProvider (git changed-files+hunks, optional tokensave call-graph neighborhood) that runs in orchestrator Node, never throws, and degrades to an empty diff on failure. Add config.security.diff (mode default 'estimated-files' = today's behavior). Thread the AuditDiff into the selector (changedPaths/diffKeywords) and the finder prompt. This closes G4 while preserving the read-only-curator invariant (ADR-5).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-5"
+  ],
+  "features": [
+    "feat-diff"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "SecurityDiffProvider.compute({projectRoot, baseRef?, expandWithGraph, signal}) returns AuditDiff {changedFiles:{path,status,hunks:{startLine,lineCount,content}[]}[], neighborhoodFiles:string[], truncated} by shelling git in orchestrator Node (execa reject:false, cancelSignal); a git failure/ENOENT/not-a-repo/abort resolves to {changedFiles:[],neighborhoodFiles:[],truncated:false} and NEVER throws; a changedFiles count cap and hunk-byte cap set truncated:true when exceeded.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "When expandWithGraph is true AND getGraphState(config).engineHealth === 'ready', compute adds call-graph neighborhood files via the tokensave GraphClient (impact/neighbors); when the graph is not ready or returns ok:false, neighborhoodFiles is [] and changedFiles from git are still returned (never throws).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "config.security.diff is added as an OPTIONAL object {mode: 'estimated-files' | 'git-diff' (default 'estimated-files'), baseRef?: string, expandWithGraph: boolean (default false)}; a config omitting security.diff parses byte-identical and the audit uses estimatedFiles exactly as today (fail-safe default).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "When diff.mode === 'git-diff', runSecurityAudit computes the AuditDiff via SecurityDiffProvider and derives selector changedPaths (from changedFiles) and diffKeywords (tokens extracted from changed hunks); the finder prompt now scopes to the real changed files/hunks. An injected fake diff provider proves the changed hunks reach the finder prompt.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "The diff is computed ONCE and passed (read-only) to the resolver/selector and finder; the auditor toolset remains read-only (no Bash/Write/Edit added); git runs only in orchestrator Node (grep-verified the auditor tool set is unchanged). On empty diff (git-diff mode but no changes/failure) the finder degrades to estimatedFiles behavior \u2014 no regression.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "npm run build + typecheck + lint pass; full suite green; SecurityDiffProvider is injectable via SecurityAuditDeps so tests never shell real git.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add supply-chain scanners/inspector (sprint 7) or the verifier (sprint 8) \u2014 but SecurityDiffProvider's AuditDiff is the shared input they will consume.",
+    "Do not make git-diff the default (estimated-files stays default for fail-safe opt-in).",
+    "Do not give the auditor agent a git/Bash tool (ADR-5 \u2014 orchestrator owns the diff)."
+  ],
+  "stopConditions": [
+    "Diff provider never throws and degrades to estimated-files on any failure.",
+    "Auditor toolset provably unchanged (still read-only curator)."
+  ],
+  "definitionOfDone": "SecurityDiffProvider computes a real, bounded, never-throwing AuditDiff in orchestrator Node, is opt-in via config.security.diff.mode, feeds the selector and finder with real changed hunks, and preserves the read-only-auditor invariant, with the suite green and a byte-identical default.",
+  "assumptions": [
+    "execa is the subprocess lib already used by security-scanners.ts (defaultRunner at security-scanners.ts:54); reuse the reject:false + cancelSignal pattern.",
+    "getGraphState/getGraphDeps in src/orchestrator/tools/index.ts are the graph seam (engineHealth === 'ready' gate at tools/index.ts ~130); GraphClient exposes an impact/neighbors call returning a result with an ok flag.",
+    "diffKeyword extraction is a simple tokenizer over changed hunk text (identifiers, notable substrings like '.raw(', 'FOR UPDATE', 'postinstall'); it need not be perfect \u2014 it feeds ranking, not correctness."
+  ],
+  "outOfScope": [
+    "Supply-chain, verifier, benchmark, dogfood (later)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/orchestrator/security-knowledge/diff-provider.ts (or src/orchestrator/security-diff-provider.ts). (1) compute(): `git diff --name-status <baseRef>` + `git diff -U<n> <baseRef>` (baseRef default: the merge-base with the default branch, or HEAD~ fallback; keep it simple and never-throw). Parse name-status into ChangedFile.status and the unified diff into hunks. Cap changedFiles (e.g. 60) and total hunk bytes; set truncated. (2) optional graph: gate on getGraphState(config).engineHealth === 'ready'; call getGraphDeps().client impact/neighbors for changed paths; on {ok:false} skip. (3) schema.ts: add security.diff optional object with the defaults; ensure absent => byte-identical. (4) security-auditor-agent.ts: when config.security.diff?.mode === 'git-diff', call the (injected or default) provider, build changedPaths + diffKeywords, pass to the sprint-5 resolver; else keep estimatedFiles. Thread ONE AbortSignal (the audit's) into compute. Inject via SecurityAuditDeps.diffProvider (added in sprint 5's deps type or here). Keep the auditor toolset read-only.",
+  "evaluatorNotes": "sc-6-1: inject a fake git runner returning name-status + unified diff, assert parsed ChangedFile/hunks; inject a throwing/ENOENT runner, assert empty diff no throw; exceed the cap, assert truncated. sc-6-2: fake graph 'ready' with neighbors vs not-ready vs ok:false. sc-6-3: deep-equal config-omitting-security.diff parse. sc-6-4: inject a fake diffProvider with a known hunk containing '.raw(' and assert the finder prompt (captured via stubbed loop) includes it and that a matching signature is selected. sc-6-5: grep the auditor tool resolution to confirm no Bash added; force empty diff in git-diff mode and assert estimatedFiles fallback. Build+typecheck+lint+full suite.",
+  "estimatedFiles": [
+    "src/orchestrator/security-knowledge/diff-provider.ts",
+    "src/orchestrator/security-knowledge/diff-provider.test.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts",
+    "src/orchestrator/security-auditor-agent.ts",
+    "src/orchestrator/security-auditor-agent.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-6-1",
+      "timestamp": "2026-07-14T18:50:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-6-1",
+  "updatedAt": "2026-07-14T18:50:00Z",
+  "completedAt": "2026-07-14T18:50:00Z"
+}

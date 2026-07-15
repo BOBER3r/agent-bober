@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-9",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-9-1", "met": true, "evidence": "Tool handler fires controller.abort() during turn 1; top-of-loop boundary check catches before turn 2's chat: stopReason 'aborted', turnsUsed 1, callCount 1 (no 2nd chat), promise resolves."},
+    {"criterionId": "sc-9-2", "met": true, "evidence": "Adapter test: mid-stream abort rejection propagates uncaught. Loop test: AbortingClient chat only rejects when signal fires; chatWithRetry's new abort-first branch (checked BEFORE isTransientError) throws AbortedError immediately — callCount 1 (never retried), result 'aborted'."},
+    {"criterionId": "sc-9-3", "met": true, "evidence": "Turn 1 completes {10,20} usage + 0.5 costUsd; turn 2 hangs until abort: result preserves turn-1 totals, turnsUsed 1, onStop exactly once with exact result object via finish()."},
+    {"criterionId": "sc-9-4", "met": true, "evidence": "IgnoresSignalClient aborts synchronously then returns a normal tool_use response; post-response pre-tool-batch check discards it: 'aborted', turnsUsed 0, tool handler never invoked, discarded turn's usage never accumulated."},
+    {"criterionId": "sc-9-5", "met": true, "evidence": "Paired-run deep-equal with never-fired signal; Object.hasOwn(lastParams,'abortSignal')===false when absent; adapter no-signal => options arg undefined for both create/stream; 'signal' never in requestBody (S8 body-identity invariant re-verified with signal set). Full suite 302 files / 3870 green."},
+    {"criterionId": "sc-9-6", "met": true, "evidence": "build + typecheck exit 0; lint 0 errors."}
+  ],
+  "filesChanged": [
+    {"path": "src/providers/types.ts", "action": "modified", "description": "ChatParams.abortSignal?: AbortSignal (web-standard); StopReason JSDoc documents 'aborted'."},
+    {"path": "src/providers/anthropic.ts", "action": "modified", "description": "requestOptions = signal ? {signal} : undefined as 2nd arg to create() AND stream(); never in requestBody."},
+    {"path": "src/providers/anthropic.test.ts", "action": "modified", "description": "5 tests: forwarding both paths, no-signal undefined options, signal-never-in-body, mid-stream abort propagates."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "AbortedError class; abortSignal on AgenticLoopParams; abortedResult() mirroring budget_exceeded; THREE exit points (top-of-turn, post-response pre-tool-batch, chatWithRetry catch) all through finish(); abort check BEFORE isTransientError keyed on signal.aborted (APIUserAbortError has err.name 'Error') with err.name==='AbortError' secondary."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "8 tests in sprint-9 describe block."}
+  ],
+  "testsAdded": ["anthropic.test.ts (5)", "agentic-loop.test.ts (8)"],
+  "commits": ["2f3636e - bober(sprint-9): mid-turn interrupt — AbortSignal through the loop and Anthropic streaming adapter"],
+  "blockers": [],
+  "notes": "turnsUsed on abort exits uses turn-1 matching the existing 'error' catch convention. openai/google/claude-code structurally ignore the optional field (no destructure). All 4 nonGoals respected; only the 5 estimated files changed; package.json untouched. Suite 3859->3870 (+11... 13 tests added across both files with 2 replacing none — net +11 per suite count)."
+}

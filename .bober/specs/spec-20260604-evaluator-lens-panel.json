@@ -1,0 +1,117 @@
+{
+  "specId": "spec-20260604-evaluator-lens-panel",
+  "version": 1,
+  "createdAt": "2026-06-04T01:00:00Z",
+  "updatedAt": "2026-06-04T01:00:00Z",
+  "title": "Multi-Lens Evaluator Panel",
+  "description": "Lets the qualitative evaluator step run a panel of narrow-lens LLM judges (correctness, security, regression, quality) instead of one general judge, reconciling them by majority vote (fail-closed on ties) via the already-built reconcile() reducer. Opt-in per config; off by default it is byte-identical to today's single-judge behavior. This is the near-term, workflow-independent payoff extracted from the dormant workflow engine: it works in CI, headless, and /bober-run today.",
+  "mode": "brownfield",
+  "status": "completed",
+  "completedAt": "2026-06-04T04:15:30Z",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Core + polish, 2 sprints: Sprint 1 ships the working capability (config + lens-aware eval + reconcile wiring); Sprint 2 adds the built-in lens prompt catalog, per-lens telemetry, and tests.",
+      "resolvedAt": "2026-06-04T01:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Byte-identical to today when the panel is OFF: panel.enabled=false OR lenses.length<2 runs the single existing agent eval call unchanged (same prompt, same one EvalResult, same combine logic). Zero behavior/cost change unless opted in.",
+      "resolvedAt": "2026-06-04T01:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts",
+      "resolvedAt": "2026-06-04T01:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The single qualitative judge lives in runAgentEvaluation() (src/orchestrator/evaluator-agent.ts:134); it is called once from runEvaluatorAgent (src/orchestrator/evaluator-agent.ts:86) and combined via passed = programmaticEval.passed && agentResult.passed (src/orchestrator/evaluator-agent.ts:112). The panel changes only how the one agentResult is produced — the combine, programmatic eval, and retry loop are untouched.",
+    "Config gets evaluator.panel: { enabled: boolean=false, lenses: string[]=[], maxConcurrent: number=4 } in EvaluatorSectionSchema (src/config/schema.ts:104), mirrored in createDefaultConfig (src/config/schema.ts:375).",
+    "The reducer is reused as-is from src/orchestrator/workflow/reconciler.ts. Its sprintId/round args do not affect output, so passing contract.contractId + an iteration/round number is safe.",
+    "Panel fans out with a bounded Promise.all (<= maxConcurrent); each lens is a focused variant of the existing evaluator prompt built in runAgentEvaluation. programmaticEval (typecheck/lint/build/test via src/evaluators/registry.ts:171 runEvaluation) is unchanged and still runs once.",
+    "Off-path guarantee: panel.enabled=false OR lenses.length<2 runs the existing single agent call verbatim. There is no existing evaluator-agent unit test, so the guarantee is proven by a NEW test that mocks the LLM client and asserts exactly one judge call on the off path.",
+    "The evaluator LLM call uses createClient (src/orchestrator/evaluator-agent.ts ~153); tests mock createClient / the client so no real LLM is invoked.",
+    "Per-lens telemetry uses the existing emit() (src/telemetry/emit.ts:69) and appendHistory; the reducer already retains lensVerdicts to surface."
+  ],
+  "outOfScope": [
+    "Anything touching the workflow engine, .claude/workflows, or the dormant invoke() — this is the TS evaluator path only.",
+    "Changing the programmatic evaluators, the combine logic (programmaticEval.passed && agentResult.passed), the retry loop, or the EvaluationRunResult shape.",
+    "Per-lens weighting or non-majority voting schemes (majority / fail-closed only, per the reducer).",
+    "Parallelizing across sprints or any cost-budgeting beyond the maxConcurrent cap.",
+    "Wiring lenses into the skill-driven (Claude-in-session) evaluator or the agents/*.md definitions."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Panel config and reconcile wiring",
+      "description": "Add the opt-in evaluator.panel config and make the qualitative evaluator fan out into a lens panel reconciled by the existing reducer, with byte-identical behavior when off.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When evaluator.panel is unset or enabled=false, runAgentEvaluation makes exactly one judge LLM call and returns the same EvalResult shape as today (verified by a client-mocked unit test).",
+        "AC2: When panel.enabled=true with >=2 lenses, runAgentEvaluation issues one judge call per lens (bounded by maxConcurrent) and returns reconcile()'s canonical evaluator='panel' EvalResult.",
+        "AC3: A 2-pass / 2-fail lens panel reconciles to passed=false (fail-closed), and the reconciled result flows unchanged into passed = programmaticEval.passed && agentResult.passed."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Lens catalog and per-lens telemetry",
+      "description": "Provide a built-in lens prompt catalog and surface each lens's verdict via telemetry/history so failures are attributable to a specific lens.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: Built-in lenses correctness/security/regression/quality resolve to distinct focus prompt fragments; an unknown custom lens string falls back to a generic focus without error.",
+        "AC2: When the panel runs, each lens's pass/fail verdict is emitted to history/telemetry (attributable by lens name).",
+        "AC3: The off-by-default guarantee and fan-out bounding are covered by tests; the full suite stays green."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "TypeScript strict and ESLint produce zero errors across changed files; ESM .js specifiers and consistent-type-imports respected.",
+      "verificationMethod": "Run npx tsc --noEmit and npx eslint src/; both exit 0."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Default (panel off) evaluator behavior is unchanged — exactly one judge call, same combine.",
+      "verificationMethod": "Client-mocked unit test asserts a single judge call on the off path; full vitest suite stays green with no new failures beyond the documented flaky tool-count baseline."
+    },
+    {
+      "category": "performance",
+      "requirement": "Panel fan-out never exceeds evaluator.panel.maxConcurrent concurrent judge calls.",
+      "verificationMethod": "Unit test with a counting/mocked client asserts peak concurrency <= maxConcurrent."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "src/orchestrator/evaluator-agent.ts (runAgentEvaluation — the single judge call to fan out)",
+      "src/orchestrator/workflow/reconciler.ts (reconcile — reused)",
+      "src/config/schema.ts (EvaluatorSectionSchema — new panel field)",
+      "src/telemetry/emit.ts (emit — per-lens verdicts)"
+    ],
+    "dataModel": "No new persistent shapes. Reuses EvalResult / EvaluationRunResult (frozen). evaluator.panel is a new config sub-object only.",
+    "securityConsiderations": [
+      "No SDK leakage outside providers/ adapters.",
+      "A 'security' lens is a prompt focus only — it does not change tool permissions."
+    ],
+    "existingPatterns": "Mirror the existing runAgentEvaluation prompt assembly and createClient usage. Reuse reconcile() verbatim. Add config via Zod with a safe default (off). Collocate *.test.ts with Vitest; mock createClient to avoid real LLM calls."
+  },
+  "sprints": [
+    "sprint-spec-20260604-evaluator-lens-panel-1",
+    "sprint-spec-20260604-evaluator-lens-panel-2"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "low",
+    "riskNotes": "Additive, opt-in, off by default. Main risk is preserving byte-identical off-path behavior, gated by a client-mocked single-call test. Reuses an already-tested reducer."
+  }
+}

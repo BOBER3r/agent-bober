@@ -1,0 +1,251 @@
+{
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "version": 1,
+  "createdAt": "2026-07-09T12:00:00.000Z",
+  "updatedAt": "2026-07-10T00:57:16.000Z",
+  "title": "Agent-Loop Capability Port: full Agent SDK parity on the own loop",
+  "description": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-price-table",
+      "answer": "All current providers (Anthropic, OpenAI, DeepSeek, xAI/Grok, Google) with best-known list prices and an as-priced date comment; claude-code always uses its real total_cost_usd.",
+      "resolvedAt": "2026-07-09T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-cost-persistence",
+      "answer": "Persist additively: optional costUsd fields on history.jsonl sprint events; byte-identical when absent.",
+      "resolvedAt": "2026-07-09T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-parallel-flag",
+      "answer": "Per-role config flag parallelReadOnlyTools (optional boolean, default false), consistent with effort/budget fields.",
+      "resolvedAt": "2026-07-09T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-dogfooding",
+      "answer": "No \u2014 ship default-off; enabling capabilities in this repo's bober.config.json is a deliberate manual step afterwards.",
+      "resolvedAt": "2026-07-09T12:00:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q5-deferred-areas-scope",
+      "answer": "User instructed to include the seven deferred capability areas in the spec as additional sprints (extends beyond ADR-1's minimal scope by explicit direction; ADRs 2-5 still govern their areas; all extensions remain additive/default-off/provider-agnostic).",
+      "resolvedAt": "2026-07-09T12:05:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "add those to the spec and then write the contracts, you can add more sprints",
+      "resolvedAt": "2026-07-09T12:05:00.000Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The approved architecture doc + 5 ADRs (.bober/architecture/arch-20260709-agent-sdk-agent-loop-harness-*.md) govern sprints 1-4 in full; sprints 5-10 are user-mandated extensions implemented in the own-loop idiom under the same hard constraints (provider-agnostic, additive, default-off, byte-identical when absent).",
+    "Cited line anchors (agentic-loop.ts:353, generator-agent.ts:260, anthropic.ts:32-45, budget.ts, schema.ts:83-129) may drift; generators re-locate by code pattern, not blind line numbers.",
+    "Price-table values are best-known list prices as of build date with guardrail-not-billing semantics; Grok/DeepSeek model ids may be placeholders \u2014 longest-prefix matching absorbs id drift; unknown models fail-open (estimateCostUsd returns undefined, USD axis inert, token ceiling still bounds).",
+    "The google adapter participates in cost estimation only to the extent it exposes normalized token usage; if its surface differs, its price rows stay present but unused.",
+    "Suite ~3686 tests green is the regression bar; every sprint is additive-only per the established byte-identical-when-absent pattern; the shared loop is re-touched across sprints so each sprint must include explicit byte-identity tests for the absent-config path.",
+    "Work lands on the current bober/medical-team branch like prior specs.",
+    "The text-only claude-code adapter boundary (claude-code.ts:10-31) is intentional and stays; streaming (sprint 8) and MCP bridge (sprint 10) target the API adapters only."
+  ],
+  "outOfScope": [
+    "Adopting @anthropic-ai/claude-agent-sdk as a dependency or engine path (rejected in ADR-1; all capabilities are ported into the own loop instead).",
+    "Enabling the new capabilities in this repo's own bober.config.json (dogfooding is a deliberate manual follow-up).",
+    "Live billing reconciliation or automatic price-table updates.",
+    "Mapping effort onto non-Anthropic reasoning parameters (e.g. DeepSeek/OpenAI reasoning_effort) \u2014 deferred open question.",
+    "Any change to the text-only claude-code adapter boundary (no tools, no streaming, no MCP through the CLI path).",
+    "Chat/telegram UI wiring for streaming deltas and mid-turn interrupt (loop + adapter surface only; consumers integrate later).",
+    "Cross-process session resume for fleet children (session store is per-run, single-process)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Refusal detection end-to-end",
+      "description": "A model refusal surfaces as StopReason 'refusal' and a refused flag on the loop result; write-capable roles fail closed, advisory roles surface the refusal text.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the provider returns a refusal stop reason, runAgenticLoop returns refused:true and stopReason 'refusal' without throwing.",
+        "AC2: When a generator run refuses after writing files, parseGeneratorResult returns success:false regardless of filesWritten.",
+        "AC3: When no refusal occurs, behavior and outputs are byte-identical to the pre-change loop."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Cost substrate and USD budget ceiling",
+      "description": "Every ChatResponse can carry costUsd (real for claude-code, estimated via a static price table elsewhere) and Budget enforces an optional maxUsd ceiling with a graceful in-loop stop.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When claude-code returns total_cost_usd, ChatResponse.costUsd equals the vendor value and never an estimate.",
+        "AC2: When an unknown model is used, estimateCostUsd returns undefined and the run is never falsely stopped on the USD axis.",
+        "AC3: When a configured maxUsd is exceeded, the loop returns a partial result with stopReason 'budget_exceeded' and never throws."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Per-role effort control",
+      "description": "config.<role>.effort drives ChatParams.effort through the loop to output_config.effort on Anthropic; other providers ignore it as a documented no-op.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When config sets a role's effort, the Anthropic request carries output_config.effort with that value.",
+        "AC2: When effort is unset, the rendered request payload is byte-identical to the pre-change adapter output."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Parallel read-only tool execution",
+      "description": "Read-only annotated tools (read_file/glob/grep) in one turn execute concurrently behind a per-role flag, order-preserved and never rejecting.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When parallelReadOnlyTools is enabled and a turn requests multiple read-only tools, they execute concurrently with results in original order.",
+        "AC2: When the flag is off or a tool is unmarked, execution is byte-identical to the serial loop.",
+        "AC3: When a parallel handler throws, its slot carries an isError result and the batch still resolves."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Structured loop event stream + host-style hooks",
+      "description": "An optional onEvent callback emits a typed LoopEvent union (init/turn/tool/result) and optional hooks (preToolUse veto, postToolUse, onStop) run host-side with zero context cost.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When onEvent is provided, a run emits ordered typed events covering init, each turn, each tool call, and the final result.",
+        "AC2: When preToolUse denies a call, the tool does not execute and the model receives a rejection tool result while the loop continues.",
+        "AC3: When neither onEvent nor hooks are provided, the loop is byte-identical."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Loop session persistence, resume and fork",
+      "description": "Opt-in per-run transcript persistence (provider-agnostic Message[] JSON under .bober/sessions/) with resume (continue with full context) and fork (branch a copy).",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When a session store is provided, the transcript is persisted per turn and a resumed loop continues with the prior messages in context.",
+        "AC2: When a session is forked, the fork diverges without mutating the original transcript.",
+        "AC3: When no session param is given, no files are written."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "In-context auto-compaction",
+      "description": "When cumulative context tokens cross a configured threshold, the loop summarizes older messages via one extra model call, keeps recent turns, and emits a compact-boundary event.",
+      "priority": "nice-to-have",
+      "acceptanceCriteria": [
+        "AC1: When the threshold is crossed, older messages are replaced by a summary message and recent turns are preserved verbatim.",
+        "AC2: When compaction config is absent, no compaction ever occurs.",
+        "AC3: A compact-boundary event with before/after token counts is emitted when onEvent is present."
+      ],
+      "dependencies": [
+        "feat-5"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-8",
+      "title": "Streaming text deltas + mid-turn interrupt",
+      "description": "Anthropic adapter streams text deltas to an optional callback while returning the identical ChatResponse; an optional AbortSignal cancels mid-turn (streaming) or at the next turn boundary, yielding stopReason 'aborted'.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When onTextDelta is set on the Anthropic path, the concatenated deltas equal the final response text and the ChatResponse is otherwise identical.",
+        "AC2: When the abort signal fires, the loop returns a partial result with stopReason 'aborted' and accumulated usage/cost, never throwing.",
+        "AC3: When neither is provided, the non-streaming request path is used and behavior is byte-identical."
+      ],
+      "dependencies": [
+        "feat-2",
+        "feat-5"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-9",
+      "title": "In-process scoped subagents + opt-in MCP tool bridge",
+      "description": "An opt-in spawn_subagent tool runs a nested fresh-context loop with a scoped tool subset and per-agent model/effort charging the parent Budget; an off-by-default config-gated bridge exposes MCP server tools as loop ToolDefs.",
+      "priority": "nice-to-have",
+      "acceptanceCriteria": [
+        "AC1: When subagents are configured, the parent can spawn a nested loop that sees only its scoped tools and returns final text as a tool result.",
+        "AC2: Subagent spend charges the same parent Budget instance.",
+        "AC3: With the MCP bridge disabled (default), no MCP process is spawned and the tool list is unchanged; enabled, MCP tools route through the bridge and close cleanly."
+      ],
+      "dependencies": [
+        "feat-2",
+        "feat-3"
+      ],
+      "estimatedComplexity": "high"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "The loop never throws on refusal, budget ceiling, abort, hook veto, or parallel tool failure \u2014 each is a graceful typed stop or in-slot error result.",
+      "verificationMethod": "Unit tests assert resolved (not rejected) promises and typed stopReason values for every new stop path."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Every new field/param is optional and default-off; omitting all new config yields byte-identical requests, control flow, and persisted artifacts.",
+      "verificationMethod": "Existing suite runs untouched; each sprint adds explicit absent-config byte-identity tests (e.g. deep-equal rendered request payloads, no new files written)."
+    },
+    {
+      "category": "security",
+      "requirement": "No provider SDK types outside adapter files; MCP bridge and any egress-adjacent surface default off preserving loop hermeticity.",
+      "verificationMethod": "Grep/lint check for SDK imports outside src/providers/; unit test asserts no MCP spawn with default config."
+    },
+    {
+      "category": "performance",
+      "requirement": "Parallel read-only tool batches reduce wall-clock versus serial for independent calls.",
+      "verificationMethod": "Unit test with artificially delayed fake handlers proves overlap (total elapsed < sum of individual delays)."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "Anthropic Messages API (output_config.effort, streaming)",
+      "claude -p CLI (total_cost_usd passthrough)",
+      "OpenAI/OpenAI-compat (DeepSeek, xAI) and Google APIs (cost estimation, refusal normalization)",
+      "MCP servers via existing MCP client transport (sprint 10, off by default)"
+    ],
+    "dataModel": "No new persistent entities. Optional per-role config keys (effort, budget.maxUsd, parallelReadOnlyTools), additive costUsd on history.jsonl sprint events, opt-in session transcripts as .bober/sessions/<id>.json (own Message[] union), static in-repo PriceTable.",
+    "securityConsiderations": [
+      "Refusal fail-closed for write-capable roles (ADR-5)",
+      "Budget stop is graceful, never a crash (ADR-4)",
+      "readOnly annotation conservative allow-list; bash never annotated (ADR-2)",
+      "MCP bridge off by default; hermetic --strict-mcp-config child path untouched",
+      "Session transcripts may contain prompt/tool content \u2014 stored under .bober/ like other artifacts, no new egress"
+    ],
+    "existingPatterns": "Follow the byte-identical-when-absent idiom used across fleet/medical specs; provider-agnostic types in src/providers/types.ts; Zod optional sections in src/config/schema.ts; filesystem state under .bober/; async fs only; type imports; unicode section comments."
+  },
+  "sprints": [
+    "sprint-spec-20260709-agent-loop-capability-port-1",
+    "sprint-spec-20260709-agent-loop-capability-port-2",
+    "sprint-spec-20260709-agent-loop-capability-port-3",
+    "sprint-spec-20260709-agent-loop-capability-port-4",
+    "sprint-spec-20260709-agent-loop-capability-port-5",
+    "sprint-spec-20260709-agent-loop-capability-port-6",
+    "sprint-spec-20260709-agent-loop-capability-port-7",
+    "sprint-spec-20260709-agent-loop-capability-port-8",
+    "sprint-spec-20260709-agent-loop-capability-port-9",
+    "sprint-spec-20260709-agent-loop-capability-port-10"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "15-25 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Sprints repeatedly touch the shared agentic loop that backs every role and fleet child; mitigated by strict additive/default-off contracts, per-sprint byte-identity tests, and risk-first ordering (architecture-backed sprints 1-4 first). Sprints 7-10 carry the most design judgment (compaction heuristics, streaming adapter surface, MCP bridge lifecycle)."
+  },
+  "completedAt": "2026-07-10T00:57:16.000Z"
+}

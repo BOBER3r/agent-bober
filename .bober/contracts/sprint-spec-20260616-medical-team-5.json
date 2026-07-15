@@ -1,0 +1,111 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-5",
+  "specId": "spec-20260616-medical-team",
+  "sprintNumber": 5,
+  "title": "Apple Health ingestion (SAX streaming) + `bober medical import`",
+  "description": "Implement bounded, streaming ingestion. IngestionNormalizer holds an IngestionAdapter registry and drives importFile through the matching adapter into the HealthDataStore via an ObservationSink. AppleHealthAdapter stream-parses Apple Health export XML via SAX with bounded (~1000-row) batches and pause/resume backpressure, never loading the whole ~4GB document into memory. A `bober medical import <file>` CLI command wires it end-to-end. importFile throws a clear error when no adapter canHandle the file.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260616-medical-team-4"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "All tests pass including new ingestion tests against a fixture Apple Health XML; the full pre-existing suite stays green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "AppleHealthAdapter ingests a fixture Apple Health export XML via STREAMING SAX (no whole-file read): a test asserts the parser is fed via a read stream and that batches are flushed at a bounded cap (e.g. <=1000 rows per writeBatch).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "Backpressure: the ObservationSink.writeBatch is awaited and the parse stream pauses/resumes around it so unbounded rows do not buffer in memory — asserted by a test using a slow sink that the parser waits on.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "Re-importing the same file is idempotent: the second import adds 0 new rows (dedup via HealthDataStore INSERT OR IGNORE), asserted against the store row count.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "IngestionNormalizer.importFile throws a clear error naming the problem when no registered adapter canHandle the file; register() adds adapters that canHandle dispatches to.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-8",
+      "description": "`bober medical import <file>` is registered in the CLI, callable, and reports an IngestionResult (e.g. new-row / total counts) on completion; a test or smoke invocation exercises the command wiring.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add Whoop or CSV adapters — Apple Health XML only (the registry makes them additive later).",
+    "Do not implement EgressGuard, medications, or the full SOP wiring (Sprint 6).",
+    "Do not implement literature retrieval (Sprint 7).",
+    "Do not parse medications from the file into HealthDataStore (medications are FactStore value-of-record — Sprint 6 / ADR-7).",
+    "Do not load the whole document into memory at any point."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Apple Health XML streams via SAX with bounded batches + backpressure, re-import is idempotent, unknown files throw, and `bober medical import` works end-to-end"
+  ],
+  "definitionOfDone": "src/medical/ gains IngestionNormalizer (register/importFile + adapter registry), an ObservationSink that batches into HealthDataStore.upsertObservations, and AppleHealthAdapter (SAX streaming, bounded batches, backpressure). A `bober medical import <file>` CLI command (registered like src/cli/commands/run.ts) drives importFile and prints the IngestionResult. Build, typecheck, and all tests pass.",
+  "assumptions": [
+    "A streaming SAX XML parser is available (e.g. an existing dep; if none, add a small well-known SAX dep such as 'sax' — justify in the PR and keep it light). Apple Health exports use <Record type=\"...\" unit=\"...\" value=\"...\" startDate=\"...\" endDate=\"...\" sourceName=\"...\"/> elements.",
+    "Record.type maps to HealthObservation.metric, value->value (parseFloat), unit->unit, startDate->tStart, endDate->tEnd, sourceName->source 'apple-health'. Non-numeric records are skipped.",
+    "writeBatch is async and awaited; the SAX stream is paused while a batch is flushing and resumed after (backpressure). Batch cap ~1000.",
+    "IngestionResult reports counts (recordsParsed, newRows) and is returned by importFile."
+  ],
+  "outOfScope": [
+    "Whoop/CSV adapters",
+    "Egress + full SOP + medications (Sprint 6)",
+    "Literature retrieval (Sprint 7)"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add src/medical/ingestion.ts (IngestionNormalizer + ObservationSink + IngestionAdapter interface), src/medical/adapters/apple-health.ts (AppleHealthAdapter), and a CLI command src/cli/commands/medical.ts (or extend an existing command registrar) for `bober medical import <file>`. Collocate tests.\n\nIngestionNormalizer: register(adapter) pushes to an array; importFile(filePath) finds the first adapter where canHandle(filePath) is true (e.g. by extension/sniff), else throw new Error(`No ingestion adapter can handle '${filePath}'`). Then await adapter.ingest(filePath, sink) and return its IngestionResult.\n\nObservationSink.writeBatch(obs, labs): await store.upsertObservations(obs) (sync call wrapped) + lab upsert; accumulate counts. Keep the sink small.\n\nAppleHealthAdapter.ingest: open a read stream (fs.createReadStream) and pipe into a SAX parser (streaming, event-based). On each <Record> open tag, map attributes to a HealthObservation, push into a buffer. When buffer.length >= 1000: parser.pause() (or stream.pause()), await sink.writeBatch(batch, []), clear buffer, parser.resume(). On stream end, flush the remainder. NEVER fs.readFile the whole file. canHandle: filePath endsWith '.xml' and (optionally) a quick header sniff for 'HealthData' / 'export.xml'.\n\nCLI: mirror src/cli/commands/run.ts registration. `bober medical import <file>`: build the medical HealthDataStore path under .bober/medical/health.db, construct the store + normalizer + AppleHealthAdapter, call importFile, print the IngestionResult counts, close the store.\n\nFIXTURE: create a small test fixture Apple Health XML (a handful of <Record> elements) under a test dir; a test asserts streaming (spy that fs.readFile is NOT called for the whole file; or assert createReadStream is used), bounded batches (cap), backpressure (a sink that delays and a test that the parser awaited it), idempotent re-import (run twice, second newRows===0), unknown-file throw, and the CLI command exists + runs on the fixture.\n\nIf adding the 'sax' dep, keep it isolated to the adapter file and ensure it has no network surface (it does not).",
+  "evaluatorNotes": "sc-5-4/5-5: run AppleHealthAdapter.ingest on the fixture with a sink that records batch sizes and introduces an await delay; assert every batch size <= the cap and that ingest awaited the slow sink (e.g. ordering/timing or a pause/resume spy). Assert the adapter uses createReadStream, not fs.readFile, on the whole file.\nsc-5-6: import the fixture twice into the same store; assert second IngestionResult.newRows === 0 and the store row count is unchanged.\nsc-5-7: importFile on a '.bin' file with no matching adapter throws an Error whose message contains the path.\nsc-5-8: invoke the `bober medical import <fixture>` command wiring (programmatically or via the CLI test harness) and assert it returns/prints counts and exits cleanly.\nFull suite + build + typecheck green; confirm S4 store dedup is what provides idempotency.",
+  "estimatedFiles": [
+    "src/medical/ingestion.ts",
+    "src/medical/adapters/apple-health.ts",
+    "src/cli/commands/medical.ts",
+    "src/medical/ingestion.test.ts",
+    "src/medical/adapters/apple-health.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260616-medical-team-5-1",
+      "result": "pass",
+      "note": "first generator attempt crashed on transient API socket error; recovered via focused lint-fix+commit"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260616-medical-team-5-1",
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-16T20:20:00.000Z",
+  "startedAt": "2026-06-16T20:03:05Z",
+  "completedAt": "2026-06-16T20:20:00.000Z"
+}

@@ -1,0 +1,227 @@
+{
+  "specId": "spec-20260604-docs-correction",
+  "version": 1,
+  "createdAt": "2026-06-04T18:13:40Z",
+  "updatedAt": "2026-07-14T20:30:00Z",
+  "title": "Documentation & Release-Metadata Correction (0.16.0)",
+  "description": "Bring agent-bober's user-facing documentation and release metadata back in sync with the shipped codebase. Documents the lens panels, workflow engine, multi-provider (DeepSeek/claude-code), graph telemetry, and auto-filter command features; cuts a dated CHANGELOG [0.16.0]; fixes the README command table and package.json metadata; and tags the untagged releases 0.12.0-0.16.0.",
+  "mode": "brownfield",
+  "status": "abandoned",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "scope",
+      "question": "How should the CHANGELOG frame the post-v0.15.0 work?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Keep under [Unreleased]"
+        },
+        {
+          "label": "B",
+          "description": "Cut a dated [0.16.0]"
+        }
+      ],
+      "recommendation": "A (keep [Unreleased]) is lowest-risk, but user chose B."
+    },
+    {
+      "questionId": "Q2",
+      "category": "scope",
+      "question": "Where should already-released-but-undocumented features (auto-filter, shipped ~0.12.0) be recorded?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Backfill into [0.12.0]"
+        },
+        {
+          "label": "B",
+          "description": "All in the new release block"
+        }
+      ]
+    },
+    {
+      "questionId": "Q3",
+      "category": "tech-constraints",
+      "question": "Where should the missing 0.12.0-0.15.0 git tags point?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Actual release commits"
+        },
+        {
+          "label": "B",
+          "description": "All at current HEAD"
+        }
+      ]
+    },
+    {
+      "questionId": "Q4",
+      "category": "scope",
+      "question": "Which docs beyond README/CHANGELOG/package.json should be corrected?",
+      "options": [
+        {
+          "label": "A",
+          "description": "COMMANDS.md"
+        },
+        {
+          "label": "B",
+          "description": "docs/providers.md"
+        },
+        {
+          "label": "C",
+          "description": "VISION.md"
+        }
+      ]
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Cut a dated [0.16.0] entry (2026-06-04) and bump package.json 0.15.0 -> 0.16.0 to keep version and changelog in sync. Empty [Unreleased] header retained above it.",
+      "resolvedAt": "2026-06-04T18:13:40Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "All newly-documented items land in [0.16.0]; auto-filter annotated inline as shipped in 0.12.0. No backfill into historical [0.12.0].",
+      "resolvedAt": "2026-06-04T18:13:40Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Tags point at the actual version-bump commits: v0.12.0->e30099f, v0.13.0->0ffc81e, v0.14.0->b83d641, v0.15.0->95f9965; v0.16.0 tags the doc-release commit. Annotated tags, created locally, NOT pushed.",
+      "resolvedAt": "2026-06-04T18:13:40Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Correct COMMANDS.md, docs/providers.md, and VISION.md in addition to README/CHANGELOG/package.json.",
+      "resolvedAt": "2026-06-04T18:13:40Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve + execute now",
+      "resolvedAt": "2026-06-04T18:13:40Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Cut a dated [0.16.0] section and bump package.json 0.15.0 -> 0.16.0 (user Q1). Verified current version is 0.15.0 (package.json:4).",
+    "All newly-documented items land in [0.16.0]; auto-filter annotated as shipped 0.12.0 (user Q2).",
+    "Workflow engine IS documented: pipeline.engine ('ts'|'skill'|'workflow', default 'ts') is committed on main at src/config/schema.ts:204 (last touched by PR #27/#25). The earlier 'unmerged' audit finding was incorrect.",
+    "Lens panels are real on main: evaluator.panel and architect.panel = { enabled:false, lenses:[], maxConcurrent:4 } at src/config/schema.ts:112 and :123; built-in evaluator lenses [correctness, security, regression, quality] and arch lenses [scalability, security, cost, operability, maintainability, reversibility].",
+    "Tags point at actual release commits (user Q3); created locally with annotated tags; NOT pushed without separate confirmation.",
+    "Doc edits committed on a new branch bober/docs-correction-0.16.0, staging ONLY the 6 doc files, because the working tree has substantial unrelated changes (graph CLI, agent files) that must not be swept in.",
+    "PR-link org/repo is BOBER3r/agent-bober (matches existing CHANGELOG links).",
+    "The 0.13.0 CHANGELOG date (2026-05-24) vs bump-commit date (2026-05-25, 0ffc81e) discrepancy is left as-is; not rewriting history.",
+    "docs/providers.md is already complete/accurate for DeepSeek + claude-code; lens panels are not a provider concern, so providers.md gets verification only (no forced edits).",
+    "COMMANDS.md is the CLI reference (not the slash-command catalog); its real gap is a missing DEEPSEEK_API_KEY env-var row, which is the accurate correction there."
+  ],
+  "outOfScope": [
+    "Publishing to npm (npm publish).",
+    "Pushing commits or tags to the remote (separate explicit confirmation required).",
+    "Any source-code changes (docs, metadata, and git tags only).",
+    "Rewriting existing historical CHANGELOG entries beyond appending the new [0.16.0] block.",
+    "Altering skill references/*.md or agents/*.md (already in sync with the shipped features)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "CHANGELOG [0.16.0] + npm metadata",
+      "description": "Cut a dated [0.16.0] CHANGELOG entry covering all features shipped after 0.15.0 plus the previously-undocumented auto-filter feature, and update package.json release metadata.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: CHANGELOG.md contains a '## [0.16.0] \u2014 2026-06-04' header between an empty '## [Unreleased]' and '## [0.15.0]', matching the existing em-dash header format.",
+        "AC2: The [0.16.0] entry documents (with PR links) the claude-code provider, DeepSeek provider, graph telemetry + update-all, evaluator lens panel, architect lens panel, native lens panel, config-selectable workflow engine, and auto-filter command filtering; plus a ### Fixed entry for the plugin PostToolUse hooks schema.",
+        "AC3: package.json version is '0.16.0'.",
+        "AC4: package.json description mentions DeepSeek and Claude Code; keywords array contains 'deepseek'.",
+        "AC5: package.json and CHANGELOG.md remain valid (JSON parses; changelog markdown well-formed)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "README corrections",
+      "description": "Document lens panels and the workflow engine in the README, expand the slash-command table to all 24 commands, and document the auto-filter command-filtering behavior.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: README has a Lens Panels section explaining opt-in evaluator.panel and architect.panel (off by default), listing the built-in lenses for each.",
+        "AC2: The Full Configuration Reference jsonc block documents evaluator.panel, an architect.panel section, and pipeline.engine.",
+        "AC3: The Slash Commands table lists all 24 installed commands (the 12 currently present plus bober-code-review, bober-debug, bober-deploy, bober-diagnose, bober-graph, bober-impact, bober-incident, bober-onboard, bober-postmortem, bober-runbook, bober-using-bober, bober-verify).",
+        "AC4: The README documents preset-aware (auto-filter) slash-command installation."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Ancillary docs (COMMANDS.md, VISION.md, docs/providers.md)",
+      "description": "Add the DeepSeek env var to the CLI reference, extend the VISION config reference with the panel and engine fields, and verify the provider guide.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: COMMANDS.md Environment Variables table includes a DEEPSEEK_API_KEY row.",
+        "AC2: VISION.md Configuration Reference documents pipeline.engine, evaluator.panel, and architect.panel.",
+        "AC3: docs/providers.md is verified accurate for DeepSeek + claude-code (no inaccurate or missing provider content)."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Git release tags 0.12.0-0.16.0",
+      "description": "Commit the doc changes on a feature branch and create the missing annotated release tags pointing at the correct commits.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: The 6 doc files are committed on branch bober/docs-correction-0.16.0 (only those files staged).",
+        "AC2: Annotated tags v0.12.0 (e30099f), v0.13.0 (0ffc81e), v0.14.0 (b83d641), v0.15.0 (95f9965) exist and point at those commits.",
+        "AC3: Annotated tag v0.16.0 exists and points at the doc-release commit.",
+        "AC4: No tags are pushed to the remote (git tag exists locally; git ls-remote --tags shows they are not yet pushed)."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2",
+        "feat-3"
+      ],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Documentation must match the actual shipped code on main (no documenting unmerged features, no inaccurate config keys).",
+      "verificationMethod": "Cross-check every documented config key against src/config/schema.ts and every documented command against .claude/commands/."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "New CHANGELOG/README content matches existing formatting conventions (em-dash headers, bold lead-in bullets, PR-link form).",
+      "verificationMethod": "Visual diff against existing [0.15.0] entry and Supported Providers table."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "N/A \u2014 documentation and git metadata only.",
+    "securityConsiderations": [
+      "No secrets added; DEEPSEEK_API_KEY documented as an env var only, never a literal."
+    ],
+    "existingPatterns": "CHANGELOG: '## [X.Y.Z] \u2014 YYYY-MM-DD' em-dash headers, '### Added/Fixed' subsections, '- **Lead-in** ([#N](url)): ...' bullets. README config reference is a jsonc block. VISION config reference uses '| Field | Type | Default | Since | Description |' tables."
+  },
+  "sprints": [
+    "sprint-spec-20260604-docs-correction-1",
+    "sprint-spec-20260604-docs-correction-2",
+    "sprint-spec-20260604-docs-correction-3",
+    "sprint-spec-20260604-docs-correction-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "2-3 hours",
+    "riskLevel": "low",
+    "riskNotes": "Documentation + git tags only; no code logic. Main risk is sweeping unrelated working-tree changes into the doc commit (mitigated by selective staging) and documenting features that differ from main (mitigated by schema cross-checks)."
+  },
+  "abandonedReason": "Superseded 2026-07-14: written for 0.16.0, but repo is now 0.18.0 (tags through v0.18.0). Re-scoped into a fresh 0.18.0 docs/metadata refresh spec at user request."
+}

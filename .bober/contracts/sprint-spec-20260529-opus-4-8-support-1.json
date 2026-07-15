@@ -1,0 +1,44 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-1",
+  "specId": "spec-20260529-opus-4-8-support",
+  "sprintNumber": 1,
+  "title": "Repoint opus shorthand to Claude Opus 4.8 with pinned 4.7 alias",
+  "description": "Update SHORTHAND_MAP in the model resolver so `opus` resolves to claude-opus-4-8, and add an `opus-4-7` shorthand that resolves to claude-opus-4-7 so existing pins keep working. Update model-resolver.test.ts accordingly. This sprint needs no SDK change and works on the installed @anthropic-ai/sdk 0.39.0 because the model id is a free string the API accepts server-side.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "resolveProviderModel('opus') returns { provider: 'anthropic', modelId: 'claude-opus-4-8' }, asserted by an updated model-resolver unit test.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C2", "description": "resolveProviderModel('opus-4-7') returns { provider: 'anthropic', modelId: 'claude-opus-4-7' }, asserted by a new model-resolver unit test for the pinned alias.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "The sonnet and haiku shorthands and the full-id passthrough for claude-opus-4-7 keep resolving to their current values, asserted by the existing resolver tests staying green.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "npm run build completes with exit code zero after the resolver change, producing an updated dist for the npm-linked cockpit.", "verificationMethod": "build", "required": true },
+    { "criterionId": "C5", "description": "npm run test introduces no new failures beyond the documented flaky 37-tool-count baseline, with the model-resolver suite passing.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "Do not modify the sonnet or haiku shorthand mappings.",
+    "Do not upgrade @anthropic-ai/sdk or modify the Anthropic adapter in this sprint.",
+    "Do not change role-to-model assignments in defaults.ts; roles already use the `opus` shorthand and inherit 4.8 automatically.",
+    "Do not remove the existing full-id passthrough behavior for claude-opus-4-7."
+  ],
+  "stopConditions": [
+    "Stop when the opus->4.8 and opus-4-7->4.7 resolver tests pass and the full suite shows only the flaky baseline failures.",
+    "Stop when only src/orchestrator/model-resolver.ts and src/orchestrator/model-resolver.test.ts have changed."
+  ],
+  "definitionOfDone": "The `opus` shorthand in SHORTHAND_MAP resolves to claude-opus-4-8 and a new `opus-4-7` shorthand resolves to claude-opus-4-7; model-resolver.test.ts asserts both mappings and the existing sonnet/haiku and full-id passthrough assertions stay green; no SDK or adapter files change; the package builds and the full unit-test suite shows no new failures beyond the documented flaky baseline.",
+  "assumptions": [
+    "claude-opus-4-8 is a dateless pinned snapshot, so no dated suffix is required.",
+    "Roles in defaults.ts reference the `opus` shorthand (not a hardcoded id), so repointing the shorthand updates them transitively."
+  ],
+  "outOfScope": ["SDK upgrade", "effort parameter", "mid_conv_system support", "docs/prose model references"],
+  "ambiguityScore": 1,
+  "generatorNotes": "Edit src/orchestrator/model-resolver.ts SHORTHAND_MAP (line ~22-26): change `opus: { provider: 'anthropic', modelId: 'claude-opus-4-7' }` to modelId 'claude-opus-4-8'; ADD `'opus-4-7': { provider: 'anthropic', modelId: 'claude-opus-4-7' }`. You MAY also add `'opus-4-8': { provider:'anthropic', modelId:'claude-opus-4-8' }` for symmetry (optional). In src/orchestrator/model-resolver.test.ts: the test 'resolves opus to anthropic/claude-opus-4-7' (line ~6-9) and the resolveModel('opus') assertion (line ~127) must change to claude-opus-4-8; ADD a test asserting resolveProviderModel('opus-4-7') -> claude-opus-4-7. KEEP the existing passthrough tests at line ~117 and ~139 (resolveProviderModel('claude-opus-4-7') / resolveModel('claude-opus-4-7')) — full-id passthrough still yields claude-opus-4-7 via the default-anthropic branch, so those remain valid. Do NOT touch the SDK or adapter. Conventional commit: bober(sprint-1): repoint opus shorthand to claude-opus-4-8 + pin opus-4-7.",
+  "evaluatorNotes": "Read src/orchestrator/model-resolver.ts and confirm opus->claude-opus-4-8 and a new opus-4-7->claude-opus-4-7 entry. Run npx vitest run src/orchestrator/model-resolver.test.ts and confirm the updated opus assertion plus the new opus-4-7 test pass, and the sonnet/haiku/passthrough tests still pass. Run npm run typecheck and npm run build (exit 0). Run npm run test; only the 2 flaky 37-tool-count timeout baseline failures are tolerated. Confirm git diff touches only model-resolver.ts and its test. No SDK/adapter changes expected.",
+  "estimatedFiles": ["src/orchestrator/model-resolver.ts", "src/orchestrator/model-resolver.test.ts"],
+  "estimatedDuration": "small",
+  "iterationHistory": [{"iteration":1,"evalId":"eval-sprint-spec-20260529-opus-4-8-support-1-1","result":"pass","timestamp":"2026-05-29T18:30:00Z"}],
+  "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-1-1",
+  "createdAt": "2026-05-29T18:00:00Z",
+  "updatedAt": "2026-05-29T18:30:00Z",
+  "startedAt": "2026-05-29T18:20:00Z",
+  "completedAt": "2026-05-29T18:30:00Z"
+}

@@ -1,0 +1,87 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-4",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "sprintNumber": 4,
+  "title": "Add the standalone `bober security-audit` CLI with configurable blocking threshold",
+  "description": "The on-demand profound audit: a Commander command `bober security-audit [target]` that synthesizes a lightweight contract descriptor from the target path (or working tree), runs runSecurityAudit with evaluation=null, persists the artifact, prints a findings summary, and exits with a CI-friendly code driven by security.standaloneBlockOn ('critical' default, or 'important' to also fail on important-bucket findings). The pipeline gate's critical-only veto is untouched.",
+  "status": "completed",
+  "createdAt": "2026-07-12T09:30:00.000Z",
+  "updatedAt": "2026-07-12T12:02:25.000Z",
+  "completedAt": "2026-07-12T12:02:25.000Z",
+  "dependsOn": [
+    "sprint-spec-20260712-security-audit-agent-team-2"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "`bober security-audit [target]` is registered following the existing CLI command-module pattern; it runs runSecurityAudit(descriptor, null, projectRoot, config) where the descriptor is synthesized from the target path (or the working tree when omitted) with a timestamped descriptor id (never colliding with pipeline contractIds), and persists the artifact via saveSecurityAudit.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "Exit-code semantics: with default standaloneBlockOn 'critical', the process exit code is 2 iff review.critical is non-empty, else 0; with standaloneBlockOn 'important', exit 2 also when only important-bucket findings exist; an audit error / parsed:false exits 2 (fail-closed) with the error on stderr.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "The command prints a human-readable summary (verdict, counts per bucket, top findings with path:line, artifact path) and works when config.security is absent by falling back to the schema defaults for the audit run (standalone mode does not require enabled:true \u2014 the CLI invocation IS the opt-in).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "The pipeline gate's veto logic is unaffected: security-gate tests still pass unchanged, and no gate code path reads standaloneBlockOn.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green. The built dist CLI registers the command (help output lists security-audit).",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not require security.enabled=true for the standalone command (the explicit invocation is consent); do NOT let this looseness leak into the gate.",
+    "Do not implement scanners or hub emission here (sprints 5-6) \u2014 but do not preclude them: the command calls the same core.",
+    "Do not audit remote URLs \u2014 target is a local path only.",
+    "Do not add a skill wrapper yet (sprint 7)."
+  ],
+  "stopConditions": [
+    "All five criteria verified; exit codes proven by test at the command-action level (injected exit/process boundary per repo CLI test convention).",
+    "Full suite green."
+  ],
+  "definitionOfDone": "An operator can run `bober security-audit` (optionally scoped to a target path) against any local codebase under any configured provider, get a cited findings summary plus a persisted .bober/security/ artifact, and wire the exit code into CI with a configurable severity threshold.",
+  "assumptions": [
+    "The CLI uses Commander with per-command registration modules (precedent: src/cli/commands/research.ts registered in src/cli/index.ts) and keeps clock/process.exit at the .action boundary so core logic stays testable.",
+    "standaloneBlockOn and the full SecuritySectionSchema already exist from sprint 1; when config.security is absent the CLI constructs the section via SecuritySectionSchema.parse({}) to obtain defaults for the run.",
+    "A 'descriptor' is whatever minimal SprintContract-shaped object runSecurityAudit needs for its prompt (id/title/description/scope hint from the target path) \u2014 sprint 2's core signature accepts it; if the core needs a narrower input type, tighten the core's parameter type rather than fabricating fake contract fields.",
+    "Auditing the working tree means the auditor's read-only tools explore projectRoot (or the target subpath) \u2014 no git-diff scoping is required for the first cut."
+  ],
+  "outOfScope": [
+    "Scanner pre-filter execution (sprint 5 \u2014 flows in automatically once the core gains priors), hub emission (sprint 6), skill wrapper and docs (sprint 7)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) Mirror src/cli/commands/research.ts: a registerSecurityAuditCommand(program) exporting from src/cli/commands/security-audit.ts, wired in src/cli/index.ts next to the other registrations; .action stays thin \u2014 parse config, build descriptor, call an exported runStandaloneSecurityAudit(deps) that returns {result, exitCode} so tests never spawn a process. (2) Descriptor id: `security-audit-<ISO-ish timestamp slug>` \u2014 timestamp taken at the .action boundary (repo convention: no Date.now() in core, inject the clock). (3) Exit codes: 0 pass, 2 blocked-by-threshold or fail-closed error \u2014 reserve 1 for Commander's own usage errors; set process.exitCode rather than calling process.exit() mid-flow if that matches existing commands. (4) Threshold: pure exported thresholdVerdict(review, standaloneBlockOn) \u2192 boolean; keep it in the CLI module (NOT the gate) so sc-4-4 is structural. (5) Summary printing: follow the logger/chalk style of existing commands; include the .bober/security/ artifact path. (6) Tests: fake runSecurityAudit via dependency injection; table-test the threshold matrix (critical-only config \u00d7 {critical, important-only, clean, parse-fail} results).",
+  "evaluatorNotes": "For sc-4-2: demand the full threshold matrix as tests \u2014 {standaloneBlockOn: critical|important} \u00d7 {critical findings, important-only, clean, parsed:false, core throws} = assert exit code for all ten cells. For sc-4-3: run with a config object lacking the security key and assert the audit still executes with defaults (spy on the injected core to inspect the section it received). For sc-4-4: grep standaloneBlockOn usages \u2014 must appear only in CLI module + schema + tests, never in security-gate.ts or pipeline.ts. For sc-4-5: after npm run build, execute `node dist/cli/index.js security-audit --help` (built-dist smoke, the lesson from the medical sax bug) and confirm it prints usage without crashing. Full suite green.",
+  "estimatedFiles": [
+    "src/cli/commands/security-audit.ts",
+    "src/cli/commands/security-audit.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-4-1",
+      "timestamp": "2026-07-12T12:02:25.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-4-1"
+}

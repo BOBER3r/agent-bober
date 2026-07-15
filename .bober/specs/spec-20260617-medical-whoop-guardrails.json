@@ -1,0 +1,141 @@
+{
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "version": 1,
+  "createdAt": "2026-06-17T14:32:38Z",
+  "updatedAt": "2026-06-17T14:32:38Z",
+  "title": "Medical Team — WHOOP Connection + Code-Enforced Refusal Guardrails",
+  "description": "Bring the medical team to production-grade for a single self-responsible user: close the code-enforced non-emergency refusal gap (prescriptions/dosing/treatment-plans never reach an LLM unrefused) and add WHOOP device-connection ingestion behind a new zero-default egress axis. Additive extension of the base medical team (arch-20260616-medical-team); Apple Health stays the offline SAX file-import path unchanged.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-17T16:13:00Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "approve",
+      "resolvedAt": "2026-06-17T14:32:38Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Mode 'greenfield' to match bober.config.json project.mode; work lands on branch bober/medical-team as an additive extension of arch-20260616-medical-team (ADRs 1-7 not contradicted).",
+    "WHOOP OAuth credentials come from process.env (WHOOP_CLIENT_ID / WHOOP_CLIENT_SECRET) mirroring src/providers/factory.ts:96-136; the long-lived offline-scope refresh token is persisted at .bober/medical/whoop-token.json with mode 0600 (ADR-2). No new in-tree secret store.",
+    "WHOOP sync is manual/on-demand via a new `bober medical whoop sync` CLI subcommand, NOT webhooks (webhooks need a public HTTPS endpoint and only deliver notifications) (arch CP1 assumption #2).",
+    "A new third EgressAxis value 'device-connection' is added, default false, independent of cloud-inference and literature-retrieval (ADR-1 / arch CP3).",
+    "All WHOOP network code is confined to one new ESLint-excepted file src/medical/whoop/whoop-client.ts (sibling to src/medical/retrieval/medline-source.ts), guarded at runtime by EgressGuard.assertAllowed('device-connection') before any HTTP (ADR-1).",
+    "WHOOP v2 UUID resource IDs do NOT become the local primary key; the existing content-derived dedup key SHA-256(metric|tStart|source|value) with source='whoop' is retained (arch CP1 assumption #5).",
+    "Refuse categories are prescription, specific-dosing, and individualized-treatment-plan; the refuse reason text is fixed and never model-generated; GuardrailContext stays empty (ADR-3).",
+    "Apple Health 'connection' is the existing offline export.zip/export.xml SAX file-import path (src/medical/adapters/apple-health.ts) — confirmation only, no new code (arch CP1 assumption #6).",
+    "WHOOP HTTP transport is an injectable FetchLike (mirroring src/medical/retrieval/medline-source.ts) so all tests run on fixtures and never touch the real network."
+  ],
+  "outOfScope": [
+    "WHOOP webhooks / any inbound listener or public endpoint",
+    "Multi-provider device abstraction (Oura, Garmin, Fitbit) — rejected as ADR-1 Approach C (speculative for one in-scope provider)",
+    "OS keychain credential storage (deferred; env vars + 0600 sidecar per ADR-2)",
+    "UUID-keyed upsert / WHOOP in-place-record-mutation handling (Open Question; content-derived dedup only)",
+    "Persisted per-collection sync cursor / checkpoint (Open Question; idempotent re-run instead, ADR-4)",
+    "Live Apple HealthKit API connection (no public third-party export API exists)",
+    "LLM-based or in-line model content-policy filtering for refusals (rejected; deterministic pre-LLM only)",
+    "FFDCA §201(h) regulatory/counsel review (external, non-engineering; tracked in the base architecture)",
+    "New numerics primitives for WHOOP-specific metrics (reuse the existing closed whitelist, ADR-3 of base)",
+    "Any change to ts|skill|workflow engines or the programming team behavior"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Code-enforced non-emergency refusal layer",
+      "description": "A deterministic, pre-LLM RefusalDetector that, via MedicalGuardrails.evaluate, emits the already-defined {kind:'refuse'} verdict for prescription / specific-dosing / individualized-treatment-plan requests, dispatched by MedicalSopEngine.run with a 'refuse' audit entry and zero downstream numerics/retrieval/LLM.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a prompt requests a prescription, a specific dose, or an individualized treatment/care plan, MedicalGuardrails.evaluate returns {kind:'refuse', rule, reason} with fixed (never model-generated) reason text.",
+        "AC2: When a refuse verdict is produced, MedicalSopEngine.run returns a MedicalAnswer carrying the canned reason (shortCircuit:true) and appends an audit entry with event:'refuse' containing IDs/enums only (ruleId, rulesetVersion, patternsetVersion) — never prompt text.",
+        "AC3: When a refuse-category prompt is processed, a spy LLMClient is NEVER invoked (0 LLM calls before refusal), asserted as with the red-flag short-circuit.",
+        "AC4: When a prompt matches BOTH a red-flag and a refuse pattern, the red-flag short-circuit wins (emergency escalation takes precedence over refusal).",
+        "AC5: When a benign medical question is asked, evaluate still returns {kind:'allow'} and the normal SOP proceeds (no regression)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "WHOOP egress axis + authenticated transport",
+      "description": "Add a third 'device-connection' EgressAxis (default false, independent of the other two) plus WhoopTokenStore (env credentials + 0600 refresh-token sidecar) and WhoopClient (OAuth2 refresh, v2 paginated fetch, rate-limit and 401 handling) confined to one ESLint-excepted network file guarded by assertAllowed.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: EgressAxis includes 'device-connection'; EgressGuard.isAllowed/assertAllowed handle all three axes exhaustively (compile-time never check) and the config schema gains medical.egress.deviceConnection defaulting to false.",
+        "AC2: Enabling 'device-connection' does not enable cloud-inference or literature-retrieval, and enabling either of those does not enable 'device-connection' (axis independence preserved).",
+        "AC3: WhoopClient calls EgressGuard.assertAllowed('device-connection') before any HTTP and throws when the axis is off; all WHOOP network imports live only in src/medical/whoop/whoop-client.ts and the ESLint medical-boundary passes with the added exception.",
+        "AC4: WhoopTokenStore.clientCredentials() throws a clear message when WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET are unset; writeTokens persists at .bober/medical/whoop-token.json with mode 0600; readRefreshToken returns undefined when not yet authorized.",
+        "AC5: WhoopClient.fetchPage handles pagination via cursor, refreshes + retries once on HTTP 401, and waits the Reset-header seconds on HTTP 429 — all exercised with an injected FetchLike against fixtures, with no real network access in tests."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "WHOOP sync adapter + CLI",
+      "description": "WhoopSyncAdapter pulls v2 recovery/sleep/cycle/workout records, maps them to HealthObservation[] (source='whoop'), and feeds the existing ObservationSink with idempotent resume; the `bober medical whoop sync [--since]` subcommand wires the pieces and mirrors the existing `medical import` command.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: WhoopSyncAdapter.sync(window, sink) maps each WHOOP record to a HealthObservation with source='whoop' and a fixed metric+unit, writing via ObservationSink.writeBatch into HealthDataStore in bounded batches and returning {recordsParsed, newRows}.",
+        "AC2: Re-running a sync over an overlapping window adds 0 new rows (idempotent via INSERT OR IGNORE on the content-derived dedup key).",
+        "AC3: `bober medical whoop sync` prints recordsParsed/newRows on success and, when the device-connection axis is off, prints a clear 'not enabled' message and exits with code 1 (never throws).",
+        "AC4: When credentials are unset or no refresh token exists, the command prints a clear 'set WHOOP_CLIENT_ID/SECRET' or 'authorize first' message and exits with code 1.",
+        "AC5: When a fetch fails mid-pagination (5xx/network/429-exhausted), the sync aborts with committed batches intact and the store is not partially corrupted; a re-run completes the window."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "Zero outbound bytes by default: the device-connection egress axis defaults false and is enforced by BOTH the scoped ESLint no-restricted-imports boundary and a runtime EgressGuard.assertAllowed call before any WHOOP HTTP request.",
+      "verificationMethod": "Unit test asserting WhoopClient throws when the axis is off; ESLint run confirming network imports exist only in the excepted whoop-client file; grep confirming no network import elsewhere under src/medical."
+    },
+    {
+      "category": "security",
+      "requirement": "The WHOOP refresh token at rest is mode 0600 within the 0700 .bober/medical directory; the audit log records IDs/enums only (never prompt text or health values).",
+      "verificationMethod": "Inspect WhoopTokenStore.writeTokens for the 0600 mode; assert the refuse audit entry contains only ruleId/rulesetVersion/patternsetVersion."
+    },
+    {
+      "category": "reliability",
+      "requirement": "All highest-stakes decisions are code-enforced and never pass through an LLM: the refuse decision is deterministic and runs before any model call.",
+      "verificationMethod": "Spy LLMClient assertion proving 0 invocations on a refuse-category prompt; RefusalDetector is pure/synchronous (no async/fs/network/LLM)."
+    },
+    {
+      "category": "reliability",
+      "requirement": "A partial WHOOP sync never partially corrupts the store; recovery is by idempotent re-run, not manual cleanup.",
+      "verificationMethod": "Test that a mid-pagination failure leaves committed batches valid and a re-run reaches the same end-state with newRows reflecting only genuinely-new records."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "WHOOP integration adds only a new adapter/network surface and a third egress axis; the IngestionAdapter interface, ObservationSink, HealthDataStore schema, and the two existing egress axes are unchanged.",
+      "verificationMethod": "Diff review: no changes to the IngestionAdapter/ObservationSink interfaces or the health_observations schema; the existing two-axis behavior is byte-identical."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "WHOOP v2 API (api.prod.whoop.com): OAuth2 Authorization Code + offline-scope refresh; endpoints /v2/recovery, /v2/activity/sleep, /v2/cycle, /v2/activity/workout; rate limits 100/min + 10,000/day."
+    ],
+    "dataModel": "Reuses HealthObservation (id=SHA-256(metric|tStart|source|value), source='whoop') in the existing health_observations table. New on-disk artifact: .bober/medical/whoop-token.json {accessToken, refreshToken, expiresAtIso} at 0600. Refuse adds no new entity — reuses GuardrailVerdict {kind:'refuse'} and the existing 'refuse' AuditEvent.",
+    "securityConsiderations": [
+      "Third egress axis default false; runtime assertAllowed + scoped ESLint import boundary (defense in depth).",
+      "Refresh token 0600 at rest; documented plaintext-at-rest risk acceptable for a single self-responsible user.",
+      "Refusals deterministic + pre-LLM; fixed reason text never model-generated.",
+      "Audit entries hold IDs/enums only."
+    ],
+    "existingPatterns": "Follow src/medical/red-flag.ts (pure detector) for RefusalDetector; src/medical/retrieval/medline-source.ts (ESLint-excepted network file + injectable FetchLike + assertAllowed) for WhoopClient; src/medical/egress.ts for the axis extension; src/cli/commands/medical.ts ('medical import') for the whoop sync subcommand; src/medical/ingestion.ts ObservationSink/StoreObservationSink + health-store.ts upsertObservations for persistence."
+  },
+  "sprints": [
+    "sprint-spec-20260617-medical-whoop-guardrails-1",
+    "sprint-spec-20260617-medical-whoop-guardrails-2",
+    "sprint-spec-20260617-medical-whoop-guardrails-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Sprint 1 (refuse layer) is low-risk, self-contained, and closes the production-grade guardrail gap with zero external dependency. Sprints 2-3 carry the WHOOP OAuth/network unknowns (token refresh, pagination, rate limits) isolated behind a zero-default egress axis and fixture-driven tests. Top risks: egress-axis bypass (mitigated by runtime assertAllowed + ESLint boundary + CLI re-assert), refuse false-negative (mitigated by versioned reviewable patternset, never an LLM filter), and WHOOP in-place record mutation double-counting (tracked Open Question, deferred). Architecture: arch-20260617-medical-team-whoop-guardrails."
+  }
+}

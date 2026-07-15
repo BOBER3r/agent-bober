@@ -1,0 +1,83 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-2",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "sprintNumber": 2,
+  "title": "Derived FactStore index over note frontmatter (reconcile-at-ingest)",
+  "description": "Add a pure mapping from a VaultNote's frontmatter to FactInput records and a reindex function that applies them to a FactStore through the existing writeFact/reconcileFact path, honoring notes flagged status:superseded. This makes the FactStore a derived, rebuildable active-state index over canonical note frontmatter.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-obsidian-vault-store-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project compiles: `npm run build` (tsc) completes with no errors after the mapping and reindex modules are added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A unit test asserts noteToFacts maps a note to one FactInput per frontmatter key with scope=domain, subject=frontmatter id when present else the vault-relative path, predicate=the key, and value=the stringified frontmatter value.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A unit test runs reindexNotes twice over identical notes against a :memory: FactStore and asserts the second pass returns all-noop actions and the active-fact count is unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A unit test changes one frontmatter value between two reindex passes and asserts the prior fact row has t_invalidated set (superseded) while the new value is the only active fact for that subject/predicate.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "A unit test reindexes a note whose frontmatter contains status:superseded and asserts getActiveFacts returns zero facts contributed by that note.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add the CLI command in this sprint (deferred to sprint 3).",
+    "Do not modify src/state/facts.ts or src/orchestrator/memory/reconcile.ts \u2014 consume them as-is.",
+    "Do not call Date.now() or new Date() inside the mapping or reindex functions \u2014 accept an injected `now` parameter.",
+    "Do not introduce a second persistence mechanism \u2014 write only through writeFact/reconcileFact.",
+    "Do not hardcode medical frontmatter keys; the mapping iterates whatever keys the note carries."
+  ],
+  "stopConditions": [
+    "All success criteria sc-2-1..sc-2-5 pass under the evaluator.",
+    "`npm test` passes including the new mapping/reindex tests with no pre-existing test regressed.",
+    "reindexNotes returns a summary object with notesParsed, factsAdded, factsSuperseded, and factsNoop counts."
+  ],
+  "definitionOfDone": "Given a set of parsed VaultNotes and a target FactStore plus an injected now timestamp, reindexNotes walks each non-superseded note, maps its frontmatter to FactInput records, and writes them via writeFact so duplicate values become noop and changed values supersede the prior fact. A note flagged status:superseded contributes no active facts. The FactStore is thereby a derived, rebuildable index over canonical frontmatter, and re-running reindex over unchanged notes mutates nothing.",
+  "assumptions": [
+    "writeFact (src/orchestrator/memory/reconcile.ts:148-154) is the sanctioned reconcile-at-ingest entry point; no judge is wired here so ambiguous-key collisions fall back to deterministic ADD (reconcile.ts:93-96).",
+    "FactInput requires scope, subject, predicate, value, confidence, sourceRunId, tValid, tCreated (src/state/facts.ts:22-31); reindex sets tValid=tCreated=now (injected) and confidence=1, sourceRunId=null unless caller supplies one.",
+    "subject identity = frontmatter `id` if present else the vault-relative note path (spec Q1).",
+    "value stringification: scalars via String(), lists/objects via stable JSON.stringify, so identical frontmatter produces identical fact ids (src/state/facts.ts:58-69 deterministic id)."
+  ],
+  "outOfScope": [
+    "Walking the filesystem to load notes (the CLI in sprint 3 supplies parsed notes / a loader).",
+    "Wiring an LLM FactJudge into reconcile (deterministic path only).",
+    "Bitemporal querying beyond active/superseded state (git history is the bitemporal source)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/vault/index-map.ts (noteToFacts(note, { scope, now, sourceRunId? }): FactInput[] \u2014 PURE) and src/vault/reindex.ts (reindexNotes(store: FactStore, notes: VaultNote[], { scope, now, judge? }): Promise<ReindexSummary>). Import FactStore + writeFact + FactInput from '../state/facts.js' (writeFact is re-exported there per src/state/facts.ts:13). Tally the ReconcileAction returned by writeFact (add/update/noop) into the summary. Detect superseded notes by reading note.frontmatter.status === 'superseded' (use the convention constant \u2014 coordinate with sprint 5 if it lands first, otherwise inline the literal 'superseded' and export a SUPERSEDED_STATUS const for sprint 5 to consume). Stringify list/object values with JSON.stringify so deterministic ids stay stable. Keep both functions clock-free: accept `now` as an ISO string param (mirror src/cli/commands/facts.ts:86 boundary discipline). Use a :memory: FactStore in tests (new FactStore(':memory:')).",
+  "evaluatorNotes": "Confirm reindexNotes goes through writeFact (not store.insertFact directly) by inspecting imports. Verify the second-pass-all-noop test actually asserts ReconcileAction==='noop' for every fact, not just an unchanged count. For the supersede test, query the raw row (store.getFact(id) or getActiveFacts) to confirm t_invalidated is non-null on the old value. For the status:superseded test, confirm zero active facts from that note's keys. Confirm no Date.now/new Date in src/vault/index-map.ts or reindex.ts. Run the full suite.",
+  "estimatedFiles": [
+    "src/vault/index-map.ts",
+    "src/vault/reindex.ts",
+    "src/vault/index-map.test.ts",
+    "src/vault/reindex.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T14:20:40.000Z",
+  "completedAt": "2026-06-28T14:20:40.000Z"
+}

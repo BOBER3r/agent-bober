@@ -1,0 +1,44 @@
+{
+  "handoffId": "handoff-sprint-spec-20260529-anthropic-prompt-caching-1-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "specId": "spec-20260529-anthropic-prompt-caching",
+  "timestamp": "2026-05-29T17:08:00Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Iteration 1 implemented Anthropic prompt caching correctly. Evaluator passed 6/7 criteria. Only C4 failed — purely a TEST-COVERAGE gap, not a code bug. The factory code already resolves and forwards the flag correctly. This retry adds the missing factory unit test ONLY.",
+    "completedSprints": [],
+    "currentBranch": "bober/anthropic-prompt-caching",
+    "relevantFiles": [
+      "src/providers/factory.test.ts — ADD the new tests here (currently has 24 passing tests, zero promptCaching coverage)",
+      "src/providers/factory.ts (lines ~161-165) — the anthropic case already reads providerConfig.promptCaching (default true) and forwards { promptCaching } to AnthropicAdapter; DO NOT change this",
+      "src/providers/anthropic.ts — AnthropicAdapter constructor(apiKey?, opts?: { promptCaching?: boolean }); the flag is a PRIVATE field, so capture it via the constructor spy/mock rather than reading it off the instance"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260529-anthropic-prompt-caching-1.json",
+  "specPath": ".bober/specs/spec-20260529-anthropic-prompt-caching.json",
+  "config": {
+    "commands": { "build": "npm run build", "test": "npm run test", "lint": "npm run lint", "typecheck": "npm run typecheck" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "keyPrinciples": [
+    "ESM: relative imports end in .js. consistent-type-imports. Prefix unused with _.",
+    "Follow the existing factory.test.ts structure/imports; do not regress its 24 tests.",
+    "Conventional commit: bober(sprint-1): <description>."
+  ],
+  "evaluatorFeedback": {
+    "evalId": "eval-sprint-spec-20260529-anthropic-prompt-caching-1-1",
+    "failedCriteria": [
+      {
+        "criterionId": "C4",
+        "description": "createClient reads promptCaching from providerConfig, defaults to enabled for anthropic, and forwards it to the AnthropicAdapter constructor — asserted by a factory unit test.",
+        "feedback": "The factory CODE is correct (factory.ts:161-165). The criterion fails only because src/providers/factory.test.ts has zero promptCaching coverage. Add factory unit tests that exercise the flag through createClient.",
+        "file": "src/providers/factory.test.ts",
+        "expected": "Two new tests in factory.test.ts: (1) createClient('anthropic', null, { apiKey: <fake key>, promptCaching: false }) constructs an AnthropicAdapter that received { promptCaching: false }; (2) createClient('anthropic', null, { apiKey: <fake key> }) with promptCaching OMITTED constructs an AnthropicAdapter that received { promptCaching: true } (the default). Because the adapter stores promptCaching privately, capture the constructor's 2nd argument via vi.spyOn or vi.mock('./anthropic.js'). Do NOT set BOBER_TEST_DETERMINISTIC (it short-circuits createClient to the stub and bypasses the adapter)."
+      }
+    ],
+    "regressions": [],
+    "generatorFeedback": ["Scope this retry to factory.test.ts only. Do not modify factory.ts or anthropic.ts — they already pass. Keep the existing 24 factory tests green and the 2 flaky 37-tool-count baseline failures are the only tolerated test failures."]
+  }
+}

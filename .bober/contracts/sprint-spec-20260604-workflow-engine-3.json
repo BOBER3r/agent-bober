@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260604-workflow-engine-3",
+  "specId": "spec-20260604-workflow-engine",
+  "sprintNumber": 3,
+  "title": "Pure-JS reducer port and twin/port drift gate",
+  "description": "Hand-write a pure-JS port of the reconciler at .claude/workflows/lib/reconcile.js mirroring the TS twin exactly (ADR-4), and add a shared fixture set of lens-vectors plus a CI conformance test asserting the TS twin and JS port produce byte-identical reconciled EvalResult (timestamp excluded) over every fixture. This is the drift gate that prevents a sprint passing under one engine and failing under the other.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260604-workflow-engine-2"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": ".claude/workflows/lib/reconcile.js exports a pure reconcile(sprintId, round, lensVerdicts, timestamp) with no fs/Date.now/Math.random, parseable as an ES module, structurally mirroring the TS twin.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "A shared fixtures file (e.g. src/orchestrator/workflow/__fixtures__/lens-vectors.json) holds named lens-vectors covering ties, majority-pass, majority-fail, unanimous, single-lens, and empty-detail cases, consumed by both the TS and JS conformance assertions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "A conformance test (reconcile-conformance.test.ts) imports both the TS twin and the JS port, runs every fixture through both with a fixed sentinel timestamp, and asserts deep-equality of the resulting EvalResult; the test fails if either implementation is edited divergently.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "The JS port output validates against EvalResultSchema for every fixture (imported into the test for validation).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck, npm run build, and the lint command exit 0; the conformance suite is green and runs as part of npm run test.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not auto-generate the JS port from the TS source via a build step — it is hand-written per ADR-4.",
+    "Do not implement the full bober-pipeline.js script yet (sprint 5).",
+    "Do not change the TS reconciler's algorithm; if a divergence is found, fix the port to match the twin, not vice versa, unless the twin has a genuine bug (note it).",
+    "Do not add a runtime dependency on the workflow runtime."
+  ],
+  "stopConditions": [
+    "Stop when twin and port are byte-identical over all fixtures and the conformance test is wired into npm run test.",
+    "Stop when changes are confined to .claude/workflows/lib/reconcile.js, the fixtures file, and the conformance test."
+  ],
+  "definitionOfDone": "A hand-written pure-JS reconcile port mirrors the TS twin; a shared fixture set drives a CI conformance test asserting byte-identical EvalResult across twin and port; the port output is schema-valid; typecheck/build/lint/test are green and the gate trips on divergence.",
+  "assumptions": [
+    "Vitest can import the .js port directly (ESM) from a test alongside the TS twin.",
+    "Deep-equality with the timestamp field excluded (or both passed the same sentinel) is the correct byte-identity check."
+  ],
+  "outOfScope": [
+    "bober-pipeline.js orchestration",
+    "args builder",
+    "flusher",
+    "engine wiring"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create .claude/workflows/lib/reconcile.js as a plain ESM module: `export function reconcile(sprintId, round, lensVerdicts, timestamp) { ... }` mirroring src/orchestrator/workflow/reconciler.ts line-for-line in behavior (same majority math, same fail-closed tie, same detail de-dup key `${criterion}␟${message}`, same summary/feedback construction, same evaluator:'panel'). No TypeScript syntax. No imports of Node builtins. Create src/orchestrator/workflow/__fixtures__/lens-vectors.json: an array of { name, lensVerdicts: EvalResult[] } objects covering: single-lens, unanimous-pass, unanimous-fail, majority-pass (3p/2f), majority-fail (2p/3f), tie (2p/2f), empty-detail lenses (lenses with details:[]). Use minimal valid EvalResult objects (evaluator, passed, details, summary, feedback, timestamp). Create src/orchestrator/workflow/reconcile-conformance.test.ts: import { reconcile as tsReconcile } from './reconciler.js'; import { reconcile as jsReconcile } from '../../../.claude/workflows/lib/reconcile.js' (use a relative path that resolves from the test file; if path resolution is awkward, place the test so the relative import works, or add a tiny re-export shim — but do NOT duplicate logic). Load fixtures, and for each, with a fixed timestamp '2026-01-01T00:00:00.000Z', assert expect(jsReconcile(...)).toEqual(tsReconcile(...)) and EvalResultSchema.safeParse(jsReconcile(...)).success===true. Verify ESLint is OK with importing a .js file outside src (adjust eslint ignores only if necessary and minimally; prefer importing via a relative path the linter accepts). Conventional commit: bober(sprint-3): add pure-JS reconciler port + twin/port drift conformance gate.",
+  "evaluatorNotes": "Confirm .claude/workflows/lib/reconcile.js is pure JS (no TS types, no Date.now, no Math.random, no fs/require). Run npx vitest run src/orchestrator/workflow/reconcile-conformance.test.ts: every fixture must show toEqual parity between tsReconcile and jsReconcile and schema validity. Deliberately reason about whether a hand-edit to one side would trip the test (it should). Run npm run typecheck, npm run build, and the lint command (exit 0). Confirm npm run test includes the conformance test and it passes (tolerate only the flaky tool-count baseline). Confirm git diff is confined to the JS port, the fixtures JSON, the conformance test, and at most a minimal eslint ignore tweak if strictly required.",
+  "estimatedFiles": [
+    ".claude/workflows/lib/reconcile.js",
+    "src/orchestrator/workflow/__fixtures__/lens-vectors.json",
+    "src/orchestrator/workflow/reconcile-conformance.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-03T23:36:43.496Z",
+  "startedAt": "2026-06-03T23:25:54.042Z",
+  "completedAt": "2026-06-03T23:36:43.496Z",
+  "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-3-1",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260604-workflow-engine-3-1",
+      "result": "pass",
+      "timestamp": "2026-06-03T23:36:43.496Z"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260531-multi-provider-deepseek-claude-code-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-3",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T14:31:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-provider harness. This sprint improves DX for the optional `openai` peer dependency: (1) verify (with a test) the existing call-time hard error in openai.ts that fires when import('openai') fails, and (2) add a preflight check that, when a role is configured to an openai-family provider (openai, openai-compat, or a deepseek shorthand that resolves to openai-compat) but the openai package is not installed, emits an actionable hint containing 'npm install openai' BEFORE the first model call — a warning/hint, never a hard abort.",
+    "completedSprints": [
+      {"contractId": "sprint-1", "title": "Fix eslint peer-dep", "summary": "eslint ^10; npm install clean."},
+      {"contractId": "sprint-2", "title": "DeepSeek resolution + key", "summary": "deepseek/-v4-pro/-v4-flash resolve to openai-compat @ https://api.deepseek.com via resolveProviderModel; DEEPSEEK_API_KEY env fallback + DeepSeek-specific missing-key error in validateApiKey (endpoint threaded as 4th param). openai client mocked in tests via vi.doMock."}
+    ],
+    "currentBranch": "spike/claude-code-provider",
+    "relevantFiles": ["src/providers/preflight.ts", "src/providers/preflight.test.ts", "src/providers/openai.ts", "src/providers/openai.test.ts", "src/providers/factory.ts", "src/orchestrator/model-resolver.ts", "src/config/schema.ts", "src/utils/logger.ts"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principles": "ESM (.js import extensions, NodeNext). consistent-type-imports (`import type`). no-explicit-any warned (unknown+narrowing). Zero type + lint errors are hard gates. No SDK lock-in: NEVER import the openai package outside provider adapter files — the preflight must DETECT openai presence via a dynamic import('openai') wrapped in try/catch (mirroring openai.ts getClient), NOT a static import. Small utility modules. Use logger from src/utils/logger.ts. Tests mock the dynamic import (vi.mock/vi.doMock). Conventional commit: bober(sprint-3): description.",
+  "evaluatorFeedback": null,
+  "baseline": {
+    "note": "2 pre-existing environmental vitest TIMEOUT flakes on this branch (mcp 'registers exactly 37 tools' tests) — baseline, ignore, they pass in isolation."
+  },
+  "notesForGenerator": "Stay on branch spike/claude-code-provider. Follow the contract generatorNotes + the briefing. Key design points: (1) The preflight must be a WARNING/HINT, never a hard error that aborts startup (nonGoal). (2) Detect openai-family roles by scanning each configured role's model/provider through resolveProviderModel — deepseek shorthands resolve to openai-compat, so they count. anthropic-only config must emit NOTHING. (3) Detect openai presence by attempting import('openai') and catching rejection — make this mockable in tests (a thin wrapped helper you can vi.mock, or accept an injectable importer for testability). (4) Do NOT change the existing call-time error wording in openai.ts — only add a TEST for it. (5) Do NOT add openai to package.json dependencies. Add tests for: missing-package throw (import mocked to reject), preflight hint when openai-family + openai absent, preflight silent when openai present, preflight silent for anthropic-only. Verify build + lint exit 0 before committing."
+}

@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260628-do-bridge-3",
+  "specId": "spec-20260628-do-bridge",
+  "sprintNumber": 3,
+  "title": "Reconcile promotion outcome to done and prove registry extensibility",
+  "description": "Add reconcilePromotions(projectRoot): for each Finding whose promotesTo.status === 'launched', read the linked run's run-state.json via src/state/run-state.ts readRunState; when the run reached 'completed' transition the Finding in-progress->done (supersede) and set promotesTo.status='completed'; when 'aborted'/'failed' set promotesTo.status='aborted' and return the Finding to 'open'; 'running' leaves it unchanged. Expose it via `bober do --reconcile` and call it best-effort at the start of every `bober do`. Prove extensibility by registering a second stub promoter under a different PromoterKey and asserting unsupported (domain,kind) pairs fail closed. Add docs/do-bridge.md describing the promoter-registry extension point.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-do-bridge-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "`npm run build` (tsc) finishes with zero type errors after reconcilePromotions, the `--reconcile` flag, the second stub promoter, and docs are added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "Given a Finding with promotesTo.status 'launched' and a run-state fake reporting status 'completed', reconcilePromotions transitions the finding to 'done' and sets promotesTo.status 'completed'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "Given a run-state fake reporting 'aborted', reconcilePromotions returns the finding to status 'open' and sets promotesTo.status 'aborted'; given 'running' it leaves the finding at 'in-progress' unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A second stub promoter registered under PromoterKey {domain:'projects', kind:'action'} resolves for a projects/action finding, while registry.resolve() for an unregistered (domain,kind) returns undefined and `bober do` then exits non-zero with a message naming the (domain,kind).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "docs/do-bridge.md exists and documents the PromoterRegistry.register extension point (the register call site and the Promoter interface) for adding future medical/financial promoters.",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement medical or financial promoters - only document the extension point and add a non-functional stub for the test.",
+    "Do not poll or block waiting for an in-flight run to finish - reconcile reads the current run-state.json snapshot and returns immediately.",
+    "Do not delete or rewrite history.jsonl or progress.md.",
+    "Do not change the Sprint 1/2 public types or the approval-marker format."
+  ],
+  "stopConditions": [
+    "`npm run build` passes and `npm test -- src/do-bridge` shows completed->done, aborted->open, and running->unchanged transitions plus the unsupported-(domain,kind) path returning undefined."
+  ],
+  "definitionOfDone": "After a promoted coding run finishes, `bober do --reconcile` (and the next `bober do`) reads the run's run-state.json and advances the linked Finding from in-progress to done, recording the terminal outcome on promotesTo; an aborted run returns the Finding to open and a running one is left alone. A second registered promoter demonstrates the registry accepts new domains, an unregistered pair fails closed, and docs/do-bridge.md shows a maintainer exactly where to register medical/financial promoters later.",
+  "assumptions": [
+    "Run terminal state is readable via src/state/run-state.ts readRunState; RunSpawner writes running->aborted there (run-spawner.ts:160-167) and the pipeline writes completed.",
+    "Marking a Finding done = supersede bitemporal close (src/state/facts.ts:291) per research §3a line 131 'Completion = supersede', applied through the FindingStore port update method.",
+    "Best-effort start-of-command reconcile mirrors the seedProjectFacts try/catch in src/orchestrator/pipeline.ts:981 (a reconcile failure must never abort `bober do`)."
+  ],
+  "outOfScope": [
+    "Functional medical/financial promoters (future specs).",
+    "Calendar, Telegram, scheduler surfaces."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "reconcilePromotions iterates findings that have an active promotesTo via the FindingStore port; map run-state.status -> finding transition (completed->done, aborted/failed->open, running->no-op). Use the port's update method (supersede semantics from src/state/facts.ts:291) to persist. Wire `--reconcile` as a commander flag on `bober do`; also call reconcile at the start of the normal handler wrapped in best-effort try/catch (mirror seedProjectFacts in src/orchestrator/pipeline.ts:981) so a missing/corrupt run-state never throws. The second stub promoter exists only to prove registration; mark it non-functional in code comments. docs/do-bridge.md should mirror the structure/length of docs/teams.md or docs/chat-steer.md and name the exact register() call site.",
+  "evaluatorNotes": "Verify the three run-state -> finding transitions with a run-state fake, extensibility resolution plus fail-closed on an unregistered pair, and that reconcile never throws on a missing run-state file. Confirm docs/do-bridge.md names the register() call site and the Promoter interface.",
+  "estimatedFiles": [
+    "src/do-bridge/reconcile.ts",
+    "src/do-bridge/reconcile.test.ts",
+    "src/do-bridge/registry.test.ts",
+    "src/cli/commands/do.ts",
+    "src/cli/commands/do.test.ts",
+    "docs/do-bridge.md"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-29T17:21:10.993Z"
+}

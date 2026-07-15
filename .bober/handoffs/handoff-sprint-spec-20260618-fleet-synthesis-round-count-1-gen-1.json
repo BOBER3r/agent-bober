@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-synthesis-round-count-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-synthesis-round-count-1",
+  "specId": "spec-20260618-fleet-synthesis-round-count",
+  "timestamp": "2026-06-18T20:06:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Small confined change in src/fleet/: make FleetCoordinator.executeRounds return the ACTUAL executed round count (the terminating round; ==maxRounds on a full run, <maxRounds on early-stop) and surface it in BOTH .bober/fleet-synthesis.json (replacing the maxRounds-cap value) and .bober/fleet-report.json (a new OPTIONAL rounds field, blackboard runs only → no-blackboard report byte-identical). Closes the Phase-B known limitation. synthesis.ts is unchanged.",
+    "completedSprints": [
+      {
+        "contractId": "spec-20260618-fleet-blackboard-exchange (Phase B, prior plan)",
+        "title": "Bounded inter-agent blackboard + rounds loop + synthesis",
+        "summary": "Built executeRounds (bounded rounds, scaffold-once, early-stop on no-new-findings) + runFleet blackboard branch + collect→fleet-synthesis.json. The known limitation THIS sprint fixes: runFleet hardcodes roundsRun=maxRounds (index.ts:181-184 with a bober: ceiling comment) because executeRounds returned only the final-round executions without a count."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/coordinator.ts (executeRounds :55-82 — change return to {executions, roundsRun}; the loop var r at :69 is the terminating round; DO NOT touch runChildRound/early-stop)",
+      "src/fleet/index.ts (runFleet blackboard branch :165-213 — destructure executeRounds, delete the bober: comment :181-183 + hardcoded roundsRun=maxRounds :184, pass rounds into reporter.build only when bb is set, collect already gets roundsRun)",
+      "src/fleet/reporter.ts (PortfolioReport :17-24 + build :39-62 — add optional rounds?: number via a guarded second arg so no-arg build is byte-identical)",
+      "src/fleet/synthesis.ts (collect :29-39 — NO change; already takes rounds:number)",
+      "src/fleet/coordinator.test.ts / index.test.ts / reporter.test.ts (test patterns; update executeRounds callers to destructure .executions)"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md — ESM .js imports, import type, node:fs/promises only, unicode section headers, conventional commits 'bober(sprint-1): ...'. HARD INVARIANTS: (a) no-blackboard fleet-report.json byte-identical — PortfolioReport.rounds OPTIONAL, build(outcomes) with no rounds arg omits the key, runFleet passes rounds only when bb!=null; (b) roundsRun = the round the loop terminated at (set roundsRun=r at top of each iteration so it's captured even when the break fires); (c) collect stays PURE (synthesis.ts unchanged); (d) never-throw exit-0 contract + early-stop logic untouched; (e) remove the obsolete bober: ceiling comment.",
+  "evaluatorFeedback": null
+}

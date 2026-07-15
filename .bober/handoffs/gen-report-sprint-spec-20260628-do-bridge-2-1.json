@@ -1,0 +1,10 @@
+{
+  "contractId": "sprint-spec-20260628-do-bridge-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": [
+    "cf33acb"
+  ],
+  "savedAt": "2026-06-29T16:51:48.777Z",
+  "summary": "Approve-gated detached launch. PromotionRef serialized into existing promotesTo string field (hub schema byte-unchanged). Launcher injected. 58 do-bridge tests, 334 regression green."
+}

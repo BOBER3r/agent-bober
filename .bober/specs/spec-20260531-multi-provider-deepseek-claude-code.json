@@ -1,0 +1,287 @@
+{
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "version": 1,
+  "createdAt": "2026-05-31T00:00:00.000Z",
+  "updatedAt": "2026-05-31T00:00:00.000Z",
+  "title": "Multi-Provider Strategy — DeepSeek + Claude Code Subscription",
+  "description": "Turns two proven spikes into shippable features: DeepSeek as a first-class provider via the existing openai-compat adapter, and a claude-code subscription provider for prompt-only roles. Also fixes an eslint peer-dependency conflict that breaks npm install, adds role-aware provider fallback for claude-code, and documents the provider capability matrix. anthropic stays the default.",
+  "status": "completed",
+  "mode": "greenfield",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "tech-constraints",
+      "question": "Should deepseek-reasoner/deepseek-chat (deprecating 2026-07-24) be mapped, or only the v4 line?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Map only the v4 line (deepseek, deepseek-v4-pro, deepseek-v4-flash)."
+        },
+        {
+          "label": "B",
+          "description": "Also map deepseek-reasoner and deepseek-chat."
+        }
+      ],
+      "recommendation": "A — avoid shipping soon-dead aliases (PRD Open Questions leans v4-only).",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q2",
+      "category": "tech-constraints",
+      "question": "For claude-code, should we expose a bober->--model mapping or pass the model string through verbatim?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Pass the model string through verbatim to claude --model."
+        },
+        {
+          "label": "B",
+          "description": "Add shorthand expansion (e.g. opus -> --model opus)."
+        }
+      ],
+      "recommendation": "A — the spike already passes verbatim (claude-code.ts:137-139); lowest risk.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "error-handling",
+      "question": "Should the openai-compat preflight be a hard error or a warning when an openai-family provider is configured but openai is not installed?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Warning + actionable hint; users may install openai later."
+        },
+        {
+          "label": "B",
+          "description": "Hard error that aborts startup."
+        }
+      ],
+      "recommendation": "A — PRD US-004 says 'prints an actionable hint'; keep the existing call-time throw as backstop.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q4",
+      "category": "tech-constraints",
+      "question": "Is a generic openai-compat + DEEPSEEK_API_KEY special-case acceptable, or should key-env be configurable per endpoint?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Special-case DEEPSEEK_API_KEY keyed on the api.deepseek.com endpoint."
+        },
+        {
+          "label": "B",
+          "description": "Make key-env configurable per endpoint (future multi-vendor)."
+        }
+      ],
+      "recommendation": "A — PRD FR-3 specifies exactly this; per-vendor key-env is a Non-Goal.",
+      "ambiguityWeight": 2
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Map only the v4 line. PRD Open Questions and task instructions both direct 'map only the deepseek v4 line'.",
+      "resolvedAt": "2026-05-31T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Pass the model string through verbatim. src/providers/claude-code.ts lines 137-139 already do args.push('--model', model) with no expansion.",
+      "resolvedAt": "2026-05-31T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Warning/actionable hint before the first model call (not a hard abort); the existing call-time throw in openai.ts:284-286 stays as the backstop. PRD US-004 AC and Open Questions support warning.",
+      "resolvedAt": "2026-05-31T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Special-case DEEPSEEK_API_KEY keyed on api.deepseek.com endpoint, per PRD FR-3. Per-vendor configurable key-env is explicitly deferred.",
+      "resolvedAt": "2026-05-31T00:00:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "anthropic remains the default provider; DeepSeek and claude-code are opt-in (PRD Goals).",
+    "Both spikes are already proven: src/providers/claude-code.ts and scripts/spike-deepseek.mjs exist on branch spike/claude-code-provider; DeepSeek works through the existing openai-compat adapter with zero new adapter code (PRD Empirical findings).",
+    "Only the deepseek v4 line (deepseek, deepseek-v4-pro, deepseek-v4-flash) is mapped (Q1).",
+    "claude-code passes its model string to claude --model verbatim (Q2); claude-code.ts:137-139.",
+    "The openai-absent preflight is a warning/hint, not a hard error (Q3); the existing call-time throw in openai.ts:284-286 is the backstop.",
+    "DEEPSEEK_API_KEY is special-cased on the api.deepseek.com endpoint (Q4, PRD FR-3).",
+    "Provider tests mock execa (claude-code) and the openai client (deepseek) so CI needs no keys/binaries/subscription (PRD Technical Considerations).",
+    "Smoke scripts are key/binary-gated and excluded from npm test (PRD US-008, FR-9).",
+    "Tool-using roles are curator, generator, evaluator, code-reviewer; prompt-only roles are planner and researcher (PRD Provider Capability Matrix).",
+    ".env is already gitignored (.gitignore lines 10-12), so the no-key-persistence rule needs documentation, not new ignore entries."
+  ],
+  "outOfScope": [
+    "Making claude-code work for tool-using roles (would require driving tools through Claude Code's native loop via custom MCP).",
+    "Changing the default provider away from anthropic.",
+    "Adding the Claude Agent SDK (@anthropic-ai/claude-agent-sdk) as a dependency.",
+    "Auto-installing openai on the user's behalf.",
+    "Bundling/committing any API key, or a key manager/secrets vault.",
+    "Cost dashboards or usage metering UI.",
+    "Other OpenAI-compatible vendors beyond DeepSeek."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Fix eslint peer-dependency conflict",
+      "description": "Upgrade eslint to ^10 so @eslint/js@^10 is satisfied and npm install succeeds without --legacy-peer-deps.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: eslint devDependency is ^10 and npm install exits 0 with no ERESOLVE on a clean tree.",
+        "AC2: npm run lint, npm run build, and npm test all pass with no lint-rule changes (only version + config shims)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "DeepSeek shorthand in model-resolver",
+      "description": "Map deepseek, deepseek-v4-pro, deepseek-v4-flash to openai-compat at https://api.deepseek.com.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: resolveProviderModel('deepseek-v4-pro') returns provider openai-compat, modelId deepseek-v4-pro, endpoint https://api.deepseek.com.",
+        "AC2: deepseek and deepseek-v4-flash resolve to the same endpoint with their respective modelIds; existing ollama/ and anthropic shorthands are unchanged."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "DeepSeek API-key resolution and validation",
+      "description": "Add a DEEPSEEK_API_KEY env fallback to the openai-compat key chain and a DeepSeek-specific missing-key error when the endpoint is api.deepseek.com.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Key resolves from providerConfig.apiKey else process.env.DEEPSEEK_API_KEY for the deepseek endpoint.",
+        "AC2: validateApiKey throws a DEEPSEEK_API_KEY-named error when the deepseek endpoint has no key, instead of the Ollama no-key skip."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "openai optional-peer preflight and missing-package error",
+      "description": "Verify the missing-openai-package error fires and add a preflight warning when an openai-family provider is configured but openai is absent.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: The openai adapter throws an error containing 'npm install openai' when import('openai') fails (test mocks the import).",
+        "AC2: A preflight emits a 'npm install openai' hint only when an openai-family provider is configured and openai is absent; silent otherwise."
+      ],
+      "dependencies": [
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Promote claude-code subscription provider",
+      "description": "Wire ClaudeCodeAdapter into createClient; no API key, preflight the claude binary, honor binary/timeoutMs overrides, keep the tools-guard throw.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: createClient('claude-code', ...) returns a ClaudeCodeAdapter and validateApiKey requires no key but errors when the claude binary is absent.",
+        "AC2: chat maps the mocked execa JSON result/usage into ChatResponse and throws when tools are passed."
+      ],
+      "dependencies": [
+        "feat-4"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Role-aware provider fallback for claude-code",
+      "description": "At config load, tool roles on claude-code fall back to another configured provider, or hard-error naming the role when none exists; prompt roles are unaffected; decisions are logged.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A tool role resolving to claude-code with another provider configured uses the other provider; with none, config load fails naming the role.",
+        "AC2: planner/researcher on claude-code are allowed and each role's resolved provider is logged."
+      ],
+      "dependencies": [
+        "feat-5"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "Documentation — provider matrix, costs, ToS",
+      "description": "Update README and add docs/providers.md with the capability matrix, costs, ToS, prerequisites, and the no-key-persistence rule.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: README Supported Providers contains the capability matrix and docs/providers.md has copy-paste config per provider.",
+        "AC2: Docs state agent-bober never persists keys; markdownlint passes."
+      ],
+      "dependencies": [
+        "feat-6"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-8",
+      "title": "Key-gated provider smoke scripts",
+      "description": "Keep deepseek and add claude-code smoke scripts that skip when key/binary absent and are excluded from npm test.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: Smoke scripts skip (exit 0) without DEEPSEEK_API_KEY / claude binary and make no network call.",
+        "AC2: npm test does not execute any smoke script."
+      ],
+      "dependencies": [
+        "feat-5"
+      ],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "techStack": [
+    "TypeScript",
+    "Node.js ESM",
+    "Zod",
+    "Vitest",
+    "ESLint flat config",
+    "execa",
+    "openai (optional peer)"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "DeepSeek API at https://api.deepseek.com via the openai-compat adapter",
+      "local claude CLI in headless mode (claude -p --output-format json) for subscription billing"
+    ],
+    "dataModel": "No persistent data model. Provider resolution maps config (model/provider/endpoint/providerConfig) to an LLMClient adapter. Role->provider resolution computed at config load.",
+    "securityConsiderations": [
+      "Never persist or commit API keys; .env stays gitignored.",
+      "DEEPSEEK_API_KEY read from env only.",
+      "claude-code uses subscription auth — no ANTHROPIC_API_KEY read.",
+      "Smoke scripts key/binary-gated and excluded from CI."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "npm install on a clean clone succeeds with exit 0 and no ERESOLVE without --legacy-peer-deps.",
+      "verificationMethod": "Clean rm -rf node_modules && npm install exits 0 with no ERESOLVE in output."
+    },
+    {
+      "category": "security",
+      "requirement": "No API key is ever written to a committed file; .env remains gitignored.",
+      "verificationMethod": "git check-ignore .env returns .env; grep source tree for hardcoded keys finds none."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Provider tests run with no keys/binaries by mocking execa and the openai client.",
+      "verificationMethod": "npm test exits 0 with no real network or process spawn (mocks asserted)."
+    }
+  ],
+  "constraints": [
+    "anthropic stays the default provider.",
+    "ESM everywhere, .js import extensions, import type.",
+    "No SDK imports outside provider adapter files.",
+    "Zod for config validation; no hand-rolled validation."
+  ],
+  "sprints": [],
+  "completedAt": "2026-05-31T15:20:00Z"
+}

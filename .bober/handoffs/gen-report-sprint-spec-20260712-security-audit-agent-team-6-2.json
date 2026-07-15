@@ -1,0 +1,49 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+  "status": "complete",
+  "iteration": 2,
+  "fixApplied": "sc-6-2 only \u2014 widened the try boundary at both emitFindingsToHub call sites to cover ensureFactsDir + new FactStore + emitSecurityFindings + close; +2 regression tests using the evaluator's exact mkdir-EEXIST reproduction",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-6-2",
+      "met": true,
+      "evidence": "gate: mkdir-EEXIST repro resolves {blocked:true, reason:'critical-finding'} unchanged + warning logged; CLI: resolves {exitCode:0} for important-only under 'critical' + warning logged; both new tests pass"
+    },
+    {
+      "criterionId": "sc-6-5",
+      "met": true,
+      "evidence": "build+tsc clean, eslint 0 errors (touched files 0 warnings), full suite 313 files / 4045 tests (+2)"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/orchestrator/security-gate.ts",
+      "action": "modified",
+      "description": "single try/catch/finally around full default-sink sequence"
+    },
+    {
+      "path": "src/cli/commands/security-audit.ts",
+      "action": "modified",
+      "description": "identical guard"
+    },
+    {
+      "path": "src/orchestrator/security-gate.test.ts",
+      "action": "modified",
+      "description": "+1 regression test"
+    },
+    {
+      "path": "src/cli/commands/security-audit.test.ts",
+      "action": "modified",
+      "description": "+1 regression test"
+    }
+  ],
+  "testsAdded": [
+    "security-gate.test.ts +1 (mkdir-EEXIST never rejects)",
+    "security-audit.test.ts +1 (mkdir-EEXIST never rejects)"
+  ],
+  "commits": [
+    "3d99fbc - bober(sprint-6): guard default-sink store setup in security-hub emission (sc-6-2 fix)"
+  ],
+  "blockers": [],
+  "notes": "Exactly the 4 permitted files touched. security-hub.ts/security-auditor-agent.ts/src/hub/ untouched. deriveFindingId triplication left as marked (no action this sprint)."
+}

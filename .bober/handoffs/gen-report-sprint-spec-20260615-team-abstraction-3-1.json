@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["dc3dd4e - bober(sprint-3): team-aware pipeline-shape selection"],
+  "filesChanged": [
+    {"path": "src/orchestrator/workflow/selector.ts", "action": "modified", "description": "Added Team import + Team-aware section: resolveEngineNameForTeam(team, config) + selectPipelineEngineForTeam(team, config), reusing the SAME exhaustive switch + byte-identical downgrade log line. selectPipelineEngine/resolveEngineName unchanged."},
+    {"path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "runPipeline now imports selectPipelineEngineForTeam + loadTeam; opts gains optional teamId?; resolves teamId = opts?.teamId ?? config.defaultTeam, loadTeam(config, teamId), selectPipelineEngineForTeam(team, config). No-team path -> programming, identical to before."},
+    {"path": "src/orchestrator/workflow/selector.test.ts", "action": "modified", "description": "+8 tests (6->14): sc-3-4 programming equivalence, sc-3-5 workflow routing + ineligible/careful downgrade (logger.info call counts), sc-3-6 runPipeline team wiring (no-team -> programming, defaultTeam, opts.teamId override). vi.mock eligibility."}
+  ],
+  "testsAdded": ["src/orchestrator/workflow/selector.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "test": "167 files / 1961 passed / 3 skipped (+8)",
+    "lint": "0 errors, 2 pre-existing warnings"
+  },
+  "blockers": [],
+  "notes": "Downgrade log line in resolveEngineNameForTeam (selector.ts:86) byte-identical to original (selector.ts:31). programming path preserved: loadTeam(config,undefined).pipelineShape === resolveEngineName(config) by construction (registry.ts:68). runPipeline's only non-test caller (cli/commands/run.ts:148) passes {runId} — backward compatible with additive optional teamId."
+}

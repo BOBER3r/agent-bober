@@ -1,0 +1,25 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-7-1", "met": true, "evidence": "Escalating-usage client crosses threshold on turn 5: summarizerCalls===1; final chat call's messages deep-equal [summary, t3/t4/t5 assistant+toolResult pairs] — one summary replacing head, tail verbatim."},
+    {"criterionId": "sc-7-2", "met": true, "evidence": "Exactly one compact-boundary event {type, turn:5, messagesBefore:9, messagesAfter:5, inputTokensAtTrigger:100000} with onEvent; without onEvent compaction still happens (message inspection). loop-events.ts union member implements full 3-field payload."},
+    {"criterionId": "sc-7-3", "met": true, "evidence": "Budget spies include summarizer's usage {5,7} and 0.02 USD; result.usage + costUsd equal sum of 6 turns PLUS summarizer contribution."},
+    {"criterionId": "sc-7-4", "met": true, "evidence": "Summarizer throws -> run completes stopReason 'end', no summary message appears, final request still carries all 11 messages (nothing dropped). summarizeMessages returns undefined on rejection."},
+    {"criterionId": "sc-7-5", "met": true, "evidence": "Absent config: summarizerCalls===0, 6 chats only; paired run with never-triggering config deep-equal to no-config run."},
+    {"criterionId": "sc-7-6", "met": true, "evidence": "build + typecheck exit 0."}
+  ],
+  "filesChanged": [
+    {"path": "src/orchestrator/loop-events.ts", "action": "modified", "description": "compact-boundary union member with {turn, messagesBefore, messagesAfter, inputTokensAtTrigger}; reserved comment now lists only text-delta."},
+    {"path": "src/orchestrator/loop-events.test.ts", "action": "modified", "description": "Narrowing test extended."},
+    {"path": "src/orchestrator/compaction.ts", "action": "created", "description": "Pure summarizeMessages -> CompactionOutcome {summaryMessage, usage, costUsd?} | undefined; serializes head to plain text (no raw tool blocks to a no-tools call), dedicated system prompt, bounded maxTokens 4096, fails open."},
+    {"path": "src/orchestrator/compaction.test.ts", "action": "created", "description": "Unit tests incl. fail-open."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "compaction? param; gated block between per-turn budget charge and exceeded() gate (summarizer charge caught by same post-turn check); trigger = tool_use stop && per-request inputTokens > threshold; in-place splice preserving tail identity; charges accumulators + budget; safeEmit compact-boundary."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "5 new tests with CompactionScriptedClient (summarizer recognized by system prompt)."}
+  ],
+  "testsAdded": ["src/orchestrator/compaction.test.ts", "agentic-loop.test.ts (5)", "loop-events.test.ts (extended)"],
+  "commits": ["8b8fd13 - bober(sprint-7): in-context auto-compaction (threshold-triggered summarization + compact-boundary event)"],
+  "blockers": [],
+  "notes": "All 7 briefing design decisions followed exactly. Only 6 sprint-scoped files touched; no role-agent files (no default enablement); context-handoff.ts/summarizeOlderSprints untouched; package.json unchanged. Suite 3832->3843 (+11). Full suite green with extended timeouts (machine-load caveat)."
+}

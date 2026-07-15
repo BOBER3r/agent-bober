@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-analysis-5-1",
+  "contractId": "sprint-spec-20260628-medical-analysis-5",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T20:01:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "246 files, 3142 passed; research 2 files 28 tests; +28 vs 3114" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "eslint research/ + medical.ts exit 0" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "tsc --noEmit zero errors" },
+    { "criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "online-research.ts:91-93 axis check is FIRST action, returns {disabled:true} before LiteratureRetriever/MedlineSource construction (line 105); MedlineSource.fetchPassages spy never called; no files written" },
+    { "criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "research/2026-06-28-ldl.md; serializeResearchNote flattens Citation[] -> citationTitles/citationUrls + scalar source=medlineplus; no nested objects / no [object Object]" },
+    { "criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "online-research.ts:124-127 if(result.answer.abstained) continue -> skips writeFile+notesWritten+writeFinding+findingsWritten; tests: no files, writeFinding spy not called" },
+    { "criterionId": "sc-5-5", "required": true, "result": "pass", "evidence": "inference.ts:44-48 cloud-inference OFF + cloud provider requested -> factory(openai-compat, localhost:11434, undefined, llama3), never anthropic; ON -> factory[0]=anthropic" },
+    { "criterionId": "sc-5-6", "required": true, "result": "pass", "evidence": "returns {disabled,notesWritten,findingsWritten}: off->{true,0,0}; 1 approved->{false,1,1}; 2 approved+1 reject->{2,2}" },
+    { "criterionId": "sc-5-7", "required": false, "result": "pass", "evidence": "research subcommand --marker, clock at CLI boundary, disabled/ran+counts output, catch->exitCode=1 never throws, exits 0" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 5 (final) passes all 6 required criteria. Three invariants confirmed in SOURCE: zero-egress-when-off (axis check first, returns before retriever/MedlineSource construction; spy proves fetchPassages never called), fail-closed-abstain (continue on answer.abstained skips note+finding write), fail-closed-local-model (buildMedicalInferenceClient -> openai-compat localhost when cloud-inference off). Suite 3142 green, no regressions, engine.ts byte-unchanged, all retrieval/synthesis primitives reused (not re-implemented)."
+}

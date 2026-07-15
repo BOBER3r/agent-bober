@@ -1,0 +1,18 @@
+{
+  "contractId": "sprint-spec-20260604-docs-correction-4",
+  "specId": "spec-20260604-docs-correction",
+  "sprintNumber": 4,
+  "title": "Git release tags 0.12.0-0.16.0",
+  "status": "pending",
+  "description": "Commit the doc changes on a feature branch and create the missing annotated release tags pointing at the correct commits. Local only — no push.",
+  "filesInScope": ["README.md", "CHANGELOG.md", "package.json", "COMMANDS.md", "VISION.md", "docs/providers.md"],
+  "successCriteria": [
+    "Doc files committed on branch bober/docs-correction-0.16.0; ONLY the 6 doc files staged (git show --stat shows no unrelated files).",
+    "Annotated tag v0.12.0 -> e30099f, v0.13.0 -> 0ffc81e, v0.14.0 -> b83d641, v0.15.0 -> 95f9965.",
+    "Annotated tag v0.16.0 -> the doc-release commit.",
+    "git tag lists v0.9.0, v0.9.1, v0.10.0-v0.10.2, v0.11.5, v0.12.0, v0.13.0, v0.14.0, v0.15.0, v0.16.0.",
+    "No tags pushed (git ls-remote --tags origin does not list v0.12.0-v0.16.0)."
+  ],
+  "generatorNotes": "CRITICAL: the working tree has many unrelated changes. Stage explicitly: git add README.md CHANGELOG.md package.json COMMANDS.md VISION.md docs/providers.md. Create the branch first (git checkout -b bober/docs-correction-0.16.0) since we start on main. Use annotated tags: git tag -a v0.12.0 e30099f -m '...' etc. Tag v0.16.0 at HEAD after committing. Do NOT git push or git push --tags.",
+  "evaluatorNotes": "Verify git rev-parse v0.12.0^{commit} == e30099f (and the others). Verify git show --stat HEAD lists exactly the 6 doc files. Verify git ls-remote --tags origin does NOT contain the new tags."
+}

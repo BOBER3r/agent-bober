@@ -1,0 +1,87 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 7,
+  "title": "In-context auto-compaction (threshold-triggered summarization + compact-boundary event)",
+  "description": "Keep long runs inside the context window without the coarse sprint-boundary reset. When AgenticLoopParams.compaction is set and the last response's cumulative input tokens cross the configured threshold, the loop makes one summarization call via the SAME client/model over the older messages, replaces them with a single summary message (keeping the most recent turns verbatim), emits a compact-boundary LoopEvent, and continues the run. Absent config \u2192 never compacts, byte-identical.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260709-agent-loop-capability-port-5"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "When cumulative input tokens exceed compaction.maxContextTokens, messages older than the configured keepRecentTurns are replaced by exactly one summary message produced via a client.chat summarization call, and the most recent turns survive verbatim (deep-equal).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "A compact-boundary LoopEvent fires with { messagesBefore, messagesAfter, inputTokensAtTrigger } when onEvent is present, and compaction still works when onEvent is absent.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "The summarization call's usage and costUsd are charged to the run's Budget (when present) and included in AgenticLoopResult.usage/costUsd totals.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "A failed summarization call fails open: the loop logs, skips compaction for that turn, and continues uncompacted (never throws, never drops messages without a summary).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "Without compaction config, no summarization call is ever made and behavior is byte-identical (full existing suite unchanged).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not replace or modify the existing sprint-boundary compaction (summarizeOlderSprints / contextReset) \u2014 this is a different, in-run layer.",
+    "Do not compact the system prompt or the pending tool-result exchange (only completed older turns).",
+    "Do not add per-provider token counting \u2014 the trigger uses the usage.inputTokens the adapters already report.",
+    "Do not enable compaction for any role by default."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: threshold-triggered replacement with recent turns preserved, event emission, budget/cost accounting of the extra call, fail-open on summarizer error, and the never-compacts absence path.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "A loop given compaction config survives past its token threshold by summarizing older turns in-run via one extra model call, preserving recent turns, accounting the extra call's cost, and emitting a compact-boundary event \u2014 while a loop without the config never changes behavior. Build and full suite green.",
+  "assumptions": [
+    "usage.inputTokens on each ChatResponse reflects the prompt size the provider saw and is the trigger signal (no independent tokenizer needed).",
+    "Sprint 5's LoopEvent union reserved 'compact-boundary'; this sprint implements it (hard dependsOn).",
+    "The summary message is a plain user-role text Message ('[Conversation summary] ...') in the own Message union so every provider accepts it.",
+    "keepRecentTurns defaults to 2 exchanges when unset; the pending turn currently being answered is never compacted away."
+  ],
+  "outOfScope": [
+    "CLAUDE.md-style summarization steering (could be a later compaction.instructions field).",
+    "Persisting pre-compaction transcripts (sprint 6 sessions already capture per-turn state when enabled)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Extend AgenticLoopParams with compaction?: { maxContextTokens: number; keepRecentTurns?: number; instructions?: string }. Implementation point: after each turn's usage accumulation (and budget charge if sprint 3 landed), if compaction is set and response.usage.inputTokens > maxContextTokens, split messages into [head ... | tail = last keepRecentTurns*2 messages + any in-flight tool exchange]; call client.chat once with a summarization system prompt ('Summarize this conversation preserving: task objective, file paths touched, decisions made, errors seen' + optional instructions) over the head; on success replace head with one summary Message, emit compact-boundary event, charge the call's usage/costUsd to the same accumulators/Budget; on failure log via existing logger and continue uncompacted. Guard against thrash: after a compaction, do not re-trigger until inputTokens again exceeds the threshold (the shrunken prompt naturally resets this). Keep ALL logic inside agentic-loop.ts or a sibling compaction.ts pure helper (summarizeMessages(client, model, messages, instructions) \u2192 Promise<Message | undefined>) for testability.",
+  "evaluatorNotes": "Script a fake client whose responses report escalating inputTokens crossing the threshold on turn 3, and whose summarization call (recognize by system prompt) returns a fixed summary. sc-7-1: after the run, inspect messages sent on turn 4 \u2014 exactly one summary message where the head was, tail turns deep-equal. sc-7-2: collect events with onEvent; assert payload fields; re-run without onEvent asserting compaction still happened (message inspection). sc-7-3: Budget spy \u2014 chargeTokens/chargeUsd called for the summarizer call; result totals include it. sc-7-4: summarizer call rejects \u2192 run completes, messages uncompacted, no throw. sc-7-5: no compaction config \u2192 assert client.chat call count has no extra summarizer call and FULL suite passes. Build + typecheck.",
+  "estimatedFiles": [
+    "src/orchestrator/compaction.ts",
+    "src/orchestrator/compaction.test.ts",
+    "src/orchestrator/agentic-loop.ts",
+    "src/orchestrator/agentic-loop.test.ts",
+    "src/orchestrator/loop-events.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-09T23:40:02.000Z",
+  "completedAt": "2026-07-09T23:40:02.000Z"
+}

@@ -1,0 +1,73 @@
+{
+  "evalId": "eval-sprint-spec-20260605-scale-safe-history-memory-2-1",
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-2",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "timestamp": "2026-06-04T23:30:29Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "details": "exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "details": "exit 0"
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "details": "60 state tests (24 new memory) green"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "details": "eslint exit 0, no warnings"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "C1",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C2",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C3",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C4",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C5",
+      "required": true,
+      "result": "pass"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 5 required criteria pass. Provenance invariant enforced (.min(1) rejects empty sourceEntryRefs), upsert avoids lesson-1/lesson-12 collision, loadLessonIndex proven index-only via delete-then-load test. typecheck/build/lint/tests all clean; diff confined to memory.ts + memory.test.ts; nonGoals respected."
+}

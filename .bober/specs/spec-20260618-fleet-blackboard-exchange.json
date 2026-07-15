@@ -1,0 +1,168 @@
+{
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "version": 1,
+  "createdAt": "2026-06-18T19:30:00Z",
+  "updatedAt": "2026-06-18T19:30:00Z",
+  "title": "Phase B — bounded inter-agent blackboard + round loop + synthesis",
+  "description": "Give fleet children a bounded way to exchange findings: a head enables --blackboard, the FleetCoordinator runs children in up to 3 rounds sharing one WAL facts.db, children read/publish findings explicitly via an `agent-bober blackboard` CLI, and after the rounds a pure collector writes a separate fleet-synthesis.json for the head to synthesize. This is Phase B of arch-20260618-heterogeneous-multi-provider-agent-team (the deferred inter-agent-exchange substrate); it is additive — omit --blackboard and the fleet runs byte-identically to Phase A.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-18T19:45:45Z",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-exchange-model",
+      "answer": "Coordinator re-run loop: FleetCoordinator runs all children, collects findings, and re-runs them up to maxRounds rounds so each round sees prior rounds' findings; early-stop when a round adds zero new findings. Single-pass (byte-identical) when --blackboard is absent.",
+      "resolvedAt": "2026-06-18T19:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-child-seam",
+      "answer": "Explicit `agent-bober blackboard` subcommand only — bober provides the SharedBlackboard module + path injection + a publish/read CLI; children participate only if their task prompt calls it. No auto-wiring into `agent-bober run`.",
+      "resolvedAt": "2026-06-18T19:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-synthesis-output",
+      "answer": "Separate synthesis artifact: SynthesisStep writes .bober/fleet-synthesis.json (not the fleet report). Pure data assembly {childResults, findings}, no LLM call — the head/dynamic-workflow does the actual synthesis.",
+      "resolvedAt": "2026-06-18T19:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts. (User approved assumptions + out-of-scope via the plan approval gate.)",
+      "resolvedAt": "2026-06-18T19:30:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Coordinator re-run loop: with --blackboard, FleetCoordinator runs children via mapBounded for rounds 1..maxRounds (scaffold each child's config ONLY on round 1; re-spawn `agent-bober run` each round), early-stopping when a round adds ZERO new findings to the blackboard. Without --blackboard: single pass (round 1 only) → byte-identical to today's coordinator.execute.",
+    "Explicit child seam: children participate ONLY by their task prompt invoking `agent-bober blackboard publish|read`; bober does NOT auto-wire the blackboard into `agent-bober run`. The head authors task prompts that call it.",
+    "Separate synthesis artifact: SynthesisStep writes <rootDir>/.bober/fleet-synthesis.json (NOT fleet-report.json), only when blackboard-enabled; it is PURE data assembly {childResults, findings, rounds}, with NO LLM call — the head synthesizes.",
+    "Shared blackboard = ONE WAL facts.db at a head-injected ABSOLUTE path join(resolve(rootDir),'.bober','memory',namespace,'facts.db'), computed once in runFleet and injected into each child's bober.config.json fleet section; the `agent-bober blackboard` CLI reads config.fleet.blackboardDbPath from its cwd and NEVER re-derives the path from cwd (ADR-5).",
+    "WAL is opt-in for the blackboard only: SharedBlackboard opens the shared db with PRAGMA journal_mode=WAL + busy_timeout; existing FactStore callers (medical FactStore ADR-7, run-memory) stay byte-identical — achieved via an optional FactStore opts param defaulting OFF, or a separate WAL-setting connection (ADR-3). FactStore.insertFact (facts.ts:164) and getActiveFacts (facts.ts:213) are the write/read primitives.",
+    "Findings are FactRecords: scope=namespace, subject=childFolder, predicate='finding', value=the published payload string (FactInput requires value.min(1)); readSiblings(selfFolder) returns getActiveFacts(namespace, undefined, 'finding') filtered to subject !== selfFolder; BLACKBOARD_MAX_ROUNDS=3 is a hard cap (publish throws past it; manifest maxRounds is clamped to <=3 at parse).",
+    "BoberConfig gains an OPTIONAL `fleet` section {blackboardDbPath, blackboardNamespace, blackboardSubject, maxRounds} (because BoberConfigSchema strips unknown keys, schema.ts:405) — the child-visible channel; FleetManifest gains optional blackboard {namespace, maxRounds<=3}; a --blackboard <namespace> flag on `agent-bober fleet <manifest>`. Omit all three → byte-identical (no rounds, no synthesis file, single pass).",
+    "ACCEPTED TRADEOFF: the re-run loop re-invokes the FULL `agent-bober run` per round (natural for research/exchange tasks that refine with accumulated findings; wasteful for code-rebuild tasks). The operator controls maxRounds (1-3) and the no-new-findings early-stop bounds waste. Findings appear ONLY if task prompts call `agent-bober blackboard` (explicit, by design)."
+  ],
+  "outOfScope": [
+    "Auto-wiring the blackboard into `agent-bober run` (explicit `agent-bober blackboard` subcommand only).",
+    "Any LLM synthesis inside bober (SynthesisStep is pure collection; the head/dynamic-workflow synthesizes).",
+    "Semantic convergence judging (the loop stops only on no-new-findings or maxRounds; it does not judge whether findings 'agree').",
+    "Any change to the no-blackboard fleet path, Phase A tier routing, or single-provider behavior.",
+    "A blackboard for non-fleet runs, or a cross-machine / networked shared db.",
+    "Findings richer than a string payload (no structured/large-blob findings).",
+    "Changing FactStore's default behavior for existing callers (the WAL option is opt-in only)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "SharedBlackboard module (WAL facts.db wrapper)",
+      "description": "A bounded inter-agent exchange wrapper over one shared facts.db opened with WAL + busy_timeout, exposing publish/readSiblings/readAll/close keyed on FactRecord, with a hard round/publish cap.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: SharedBlackboard.open(dbPath) opens the db with PRAGMA journal_mode=WAL and a busy_timeout, creating the file+table if absent; a test confirms journal_mode is 'wal' after open.",
+        "AC2: publish(finding, now) writes a FactRecord (scope=namespace, subject=childFolder, predicate='finding', value=payload) via FactStore.insertFact and THROWS when the caller's round exceeds BLACKBOARD_MAX_ROUNDS (=3).",
+        "AC3: readSiblings(selfFolder) returns all active 'finding' facts in the namespace EXCLUDING subject===selfFolder; readAll() returns all of them; both return [] when empty (not an error).",
+        "AC4: Concurrent writers do not deadlock: a test spawns N concurrent publish() calls to one shared db and asserts all succeed (WAL + busy_timeout absorb contention).",
+        "AC5: Existing FactStore callers are unaffected — opening a FactStore without the WAL option behaves exactly as before (default journal mode); a test asserts the default-FactStore path is unchanged."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "config.fleet section + manifest.blackboard + path injection + `agent-bober blackboard` CLI",
+      "description": "Add the optional BoberConfig.fleet section and manifest.blackboard block, compute+inject the absolute shared-db path per child, and expose an `agent-bober blackboard publish|read` CLI that uses the local config to reach the shared blackboard.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: BoberConfigSchema gains an optional `fleet` section {blackboardDbPath, blackboardNamespace, blackboardSubject, maxRounds}; a config without it parses identically to today (the field is optional and absent).",
+        "AC2: FleetManifestSchema gains an optional blackboard {namespace, maxRounds:int min1 max3 default3}; a manifest without it parses identically; maxRounds>3 is a ZodError.",
+        "AC3: resolveBlackboardPath(manifest) returns the absolute path join(resolve(rootDir),'.bober','memory',namespace,'facts.db') when blackboard is set, else undefined; the scaffolder writes the fleet section (with the per-child folder as blackboardSubject + the absolute path) into each child's bober.config.json when a blackboard is configured, and omits it otherwise.",
+        "AC4: `agent-bober blackboard publish <value>` loads the cwd's bober.config.json, opens SharedBlackboard at config.fleet.blackboardDbPath, and writes a finding with subject=config.fleet.blackboardSubject; it errors clearly (exit 1, no throw) when no fleet section is present.",
+        "AC5: `agent-bober blackboard read [--all]` prints the sibling findings (or all with --all) as readable lines; exits 0 with an empty result when there are none.",
+        "AC6: The CLI reads the absolute path from config ONLY and never re-derives it from cwd; a test in two distinct cwds pointing at one shared path sees each other's findings."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Coordinator re-run loop (rounds, idempotent re-spawn, early-stop)",
+      "description": "When a blackboard is configured, run children for up to maxRounds rounds sharing the blackboard, scaffolding config only on round 1 and re-spawning each round, stopping early when a round adds no new findings; byte-identical single-pass when no blackboard.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: With a blackboard configured (maxRounds=N), the coordinator runs the children up to N rounds; round 1 scaffolds each child's config, rounds 2..N re-spawn `agent-bober run` WITHOUT re-scaffolding/clobbering the round-1 config.",
+        "AC2: The loop EARLY-STOPS when a completed round adds zero new findings to the blackboard (measured by the active 'finding' count before vs after the round); it never exceeds maxRounds.",
+        "AC3: When NO blackboard is configured, the coordinator runs exactly one pass (round 1 only) and its behavior + return value are byte-identical to the pre-Phase-B coordinator.execute (proven by the existing fleet coordinator/runner tests passing unchanged).",
+        "AC4: runFleet computes resolveBlackboardPath once, ensures the db directory exists, opens/closes the SharedBlackboard around the rounds, and threads the absolute path into each child's config; a test asserts the path is injected and the rounds run.",
+        "AC5: Per-child failures remain data (the loop never throws on a child failure); only batch-setup errors throw, preserving the existing fleet exit-0 contract."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "SynthesisStep + fleet-synthesis.json artifact",
+      "description": "After the rounds complete, assemble a pure data bundle of the final child results plus all blackboard findings and write it to a separate fleet-synthesis.json for the head to synthesize.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: SynthesisStep.collect(blackboard, childResults) returns {childResults, findings, rounds} where findings = blackboard.readAll(); when blackboard is null it returns {childResults, findings:[]} and writes NO file.",
+        "AC2: When blackboard-enabled, runFleet writes <rootDir>/.bober/fleet-synthesis.json containing the final-round child results + all findings + the round count; the existing fleet-report.json is still written and unchanged in shape.",
+        "AC3: SynthesisStep performs NO LLM call and no network — it is pure assembly (a test asserts no provider/client is constructed).",
+        "AC4: When no blackboard is configured, NO fleet-synthesis.json is written and the run output is byte-identical to Phase A."
+      ],
+      "dependencies": ["feat-3"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Concurrent WAL writers under mapBounded do not deadlock or drop findings: N children publishing to one shared facts.db all succeed.",
+      "verificationMethod": "A concurrency test issuing N parallel publish() calls and asserting all FactRecords are present; WAL + busy_timeout enabled in SharedBlackboard.open."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Byte-identical no-blackboard path: a fleet run without --blackboard writes no fleet-synthesis.json, runs a single pass, and matches Phase A behavior.",
+      "verificationMethod": "The existing fleet coordinator/runner/index tests pass unchanged; a test asserts no fleet-synthesis.json is created on a no-blackboard run."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Existing FactStore callers (medical, run-memory) are unaffected by the WAL option; the option is opt-in and defaults off.",
+      "verificationMethod": "Grep/inspect that the FactStore default path is unchanged; the medical + memory FactStore tests pass unchanged."
+    },
+    {
+      "category": "security",
+      "requirement": "The blackboard adds no outbound network and no new SDK; findings are local SQLite rows only.",
+      "verificationMethod": "Grep the new modules for network/SDK imports (none); SharedBlackboard depends only on better-sqlite3 via FactStore."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "FactStore (src/state/facts.ts) — insertFact/getActiveFacts over the shared WAL facts.db",
+      "FleetCoordinator (src/fleet/coordinator.ts) — the rounds loop wraps execute",
+      "runFleet (src/fleet/index.ts) — resolveBlackboardPath + blackboard lifecycle + synthesis write",
+      "CLI (src/cli/index.ts) — a new `agent-bober blackboard` command beside fleet/medical"
+    ],
+    "dataModel": "Findings are FactRecords (scope=namespace, subject=childFolder, predicate='finding', value=payload string). New optional config: BoberConfig.fleet {blackboardDbPath, blackboardNamespace, blackboardSubject, maxRounds}; manifest.blackboard {namespace, maxRounds<=3}. New artifact: .bober/fleet-synthesis.json {rounds, childResults, findings}. No schema migration; the shared db is the existing facts schema opened in WAL mode.",
+    "securityConsiderations": [
+      "Head-injected absolute path only; children never re-derive from cwd (prevents N disjoint dbs).",
+      "WAL opt-in for the blackboard; existing FactStore callers untouched.",
+      "No LLM/network in SynthesisStep or the blackboard."
+    ],
+    "existingPatterns": "Reuse FactStore.insertFact/getActiveFacts and factsDbPath; mirror registerFleetCommand/registerMedicalCommand for the new `agent-bober blackboard` command (CLI index.ts:318-321); reuse mapBounded for the per-round fan-out; reuse the atomic tmp+rename writer for fleet-synthesis.json; follow arch-20260618 ADR-3 (WAL+shared-path+<=3 rounds) and ADR-5 (head-injected absolute path)."
+  },
+  "sprints": [
+    "sprint-spec-20260618-fleet-blackboard-exchange-1",
+    "sprint-spec-20260618-fleet-blackboard-exchange-2",
+    "sprint-spec-20260618-fleet-blackboard-exchange-3",
+    "sprint-spec-20260618-fleet-blackboard-exchange-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "6-9 hours",
+    "riskLevel": "medium",
+    "riskNotes": "The novel/risky parts are the WAL concurrency (Sprint 1) and the coordinator re-run loop with idempotent re-spawn + early-stop (Sprint 3). All changes are additive and gated on --blackboard, so the no-flag path stays byte-identical. The re-run-full-build-per-round tradeoff is accepted (operator-bounded maxRounds + early-stop). SynthesisStep is pure data — the head does the actual synthesis."
+  }
+}

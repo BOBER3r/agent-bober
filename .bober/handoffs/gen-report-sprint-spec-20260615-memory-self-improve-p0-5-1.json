@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-5",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["3a407ce - bober(sprint-5): auto-producer — deterministic project-fact detector + fact retrieval into context"],
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "met": true, "evidence": "build + typecheck exit 0; full suite 184 files / 2210 pass." },
+    { "criterionId": "sc-5-2", "met": true, "evidence": "fact-detector.ts detectProjectFacts(inputs, scope='') PURE (no readFile/fs/Date/createClient in fn body); maps test/build scripts, lockfile→packageManager, dep→framework; thin seedProjectFacts() does fs + new Date()." },
+    { "criterionId": "sc-5-3", "met": true, "evidence": "17 detector tests: fixture detection + double-writeFact NOOP-on-unchanged + supersede-on-changed (one active row per predicate)." },
+    { "criterionId": "sc-5-4", "met": true, "evidence": "pipeline.ts: guarded try/catch after loadTeam, before engine.run, seedProjectFacts + logger.warn-and-continue. chat-session.ts: guarded block in start() after banner, before for-await. Facts failure never aborts run." },
+    { "criterionId": "sc-5-5", "met": true, "evidence": "retrieveRelevantFacts → getActiveFacts(scope) (WHERE scope=? AND t_invalidated IS NULL) + deterministic token-overlap rank; serializeFactsForContext slice(0,charBudget). 13 tests: scope isolation (A never surfaces for B), charBudget hard cap (<=budget, 0→empty), keyword/topK/tiebreak." },
+    { "criterionId": "sc-5-6", "met": true, "evidence": "lint 0 errors (2 pre-existing warnings in eval-persist.test.ts)." }
+  ],
+  "filesChanged": [
+    "src/orchestrator/memory/fact-detector.ts (+ seedProjectFacts IO caller)", "src/orchestrator/memory/fact-detector.test.ts", "src/orchestrator/memory/fact-retrieve.ts", "src/orchestrator/memory/fact-retrieve.test.ts", "src/orchestrator/pipeline.ts (guarded seed block)", "src/chat/chat-session.ts (guarded seed block)", "src/orchestrator/planner-agent.ts (guarded facts injection into userMessage)"
+  ],
+  "testsAdded": ["src/orchestrator/memory/fact-detector.test.ts", "src/orchestrator/memory/fact-retrieve.test.ts"],
+  "blockers": [],
+  "notes": "30 new tests (17 detector + 13 retrieval). Full suite 184 files / 2210 pass / 3 skipped, zero regressions. No LLM on produce path (createClient only in a comment). Planner injection guarded so retrieval failure never blocks planning. scope='' (default/programming team) consistent across detector/retrieval/injection. Sensitive files pipeline.ts/chat-session.ts/planner-agent.ts changed additively + guarded only. Leftover facts.db removed by orchestrator."
+}

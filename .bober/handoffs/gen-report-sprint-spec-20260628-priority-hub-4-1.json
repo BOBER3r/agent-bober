@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-4",
+  "status": "complete",
+  "iteration": 1,
+  "commits": ["d82a27f - bober(sprint-4): priority.md renderer + bober hub priority/decide"],
+  "filesChanged": [
+    "src/hub/priority-md.ts (created — PURE renderPriorityMd, hand-rolled YAML frontmatter + 7-col Dataview table + rationale; no IO/re-rank)",
+    "src/hub/priority-md.test.ts (created, 11 tests)",
+    "src/hub/hub-config.ts (created — resolveOutVault raw-JSON read else <parent>/kb-hub absolute; priorityMdPath)",
+    "src/cli/commands/hub.ts (modified — runHubPriority DI core + priority/decide subcommands; runHubList byte-stable)",
+    "src/cli/commands/hub.test.ts (modified, +4 tests)"
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "met": true},
+    {"criterionId": "sc-4-2", "met": true},
+    {"criterionId": "sc-4-3", "met": true},
+    {"criterionId": "sc-4-4", "met": true},
+    {"criterionId": "sc-4-5", "met": true}
+  ],
+  "notes": "runHubPriority(findings, scope, llm, outVault, now) is the DI core; commander actions build the real client via createClient (chat.ts pattern) + resolveOutVault(projectRoot). Missing-vault gate: fileExists(outVault) false => chalk.red stderr + process.exitCode=1 + return (never throws, never ensureDir on outVault). ensureDir only on the file parent (== outVault, already exists). Renderer pure, escapes pipes, no re-rank. Sibling source stores unchanged (mtime test). 104 tests green (hub 87 + blackboard 8 + medical 9); typecheck/build/lint clean. NB stray tasks/ and twitter file NOT committed (explicit git add)."
+}

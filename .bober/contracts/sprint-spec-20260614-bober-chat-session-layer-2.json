@@ -1,0 +1,107 @@
+{
+  "contractId": "sprint-spec-20260614-bober-chat-session-layer-2",
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "sprintNumber": 2,
+  "title": "Non-blocking detached spawn with session-generated runId (--run-id flag)",
+  "description": "Add an additive `--run-id <id>` flag to the `agent-bober run` command, threaded into the pipeline so the detached child honors a caller-supplied runId instead of self-generating one. Implement RunSpawner.spawn: the ChatSession generates a runId, RunSpawner writes the roster state.json (so the run is visible the same turn), launches a detached `agent-bober run <task> --run-id <id>` child (cwd=projectRoot, detached, stdio ignore, unref), records runId->pid in a session pid sidecar, and returns an immediate ack. Wire the classifier `spawn` action to this path. Existing `run` invocations without --run-id remain unchanged.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260614-bober-chat-session-layer-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds successfully with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "TypeScript compilation produces zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "All tests pass with zero failures, including new collocated tests for this sprint.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "`agent-bober run <task> --run-id X` causes the pipeline to use id X as its run identifier: the completion marker .bober/runs/X.completed.json is keyed on X (not a run-<timestamp> id). Verified by a unit/integration test that invokes the run command's handler (or the threaded pipeline runId param) with a fixed id and asserts the id propagates to pipelineRunId.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "`agent-bober run <task>` WITHOUT --run-id behaves exactly as before (self-generates run-<timestamp>); an existing run-command test (or a new one) confirms no regression.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "RunSpawner.spawn writes the roster state.json via writeRunState BEFORE launching the child and returns a SpawnAck synchronously (does not await child completion); a unit test asserts the state.json exists with status 'running' immediately after spawn returns and that spawn did not block (uses a fake spawn function).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "RunSpawner records runId->{pid,task,spawnedAt} in .bober/chat/<sessionId>.pids.json; a unit test asserts the sidecar contains the entry after spawn and that a fresh sidecar read (new instance) still returns it (persistence).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "The classifier spawn action routes to RunSpawner.spawn and the session returns an immediate ack string containing the runId; /runs then lists the new run as running (roster read shows it).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-9",
+      "description": "The detached child is launched with cwd=projectRoot so it writes into the same .bober/ the session reads; a unit test asserts the spawn invocation passes cwd=projectRoot and detached:true with .unref() semantics (via an injected spawn function capturing the args).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement completion weaving / history tailing (Sprint 3)",
+    "Do not implement stop / kill-by-PID (Sprint 4)",
+    "Do not change runPipeline's signature beyond honoring an injected runId; the change must be additive (optional param / option)",
+    "Do not block the REPL waiting for the spawned run"
+  ],
+  "stopConditions": [
+    "All nine success criteria pass",
+    "Asking the chat to build a feature spawns a detached run that survives REPL exit, returns an immediate ack, and shows up under /runs as running"
+  ],
+  "definitionOfDone": "An additive --run-id <id> flag exists on `agent-bober run` and threads through to pipelineRunId so the child honors it (marker + roster keyed on the id). RunSpawner.spawn(task, runId) writes the roster state.json then launches a detached `agent-bober run <task> --run-id <id>` child (cwd=projectRoot, detached, stdio:'ignore', unref), records the runId->pid pid sidecar, and returns an immediate SpawnAck without blocking. The ChatSession generates the runId and routes the classifier spawn action to RunSpawner. Existing run invocations are unaffected. Build, typecheck, and all tests pass.",
+  "assumptions": [
+    "runPipeline (or the run command handler) can accept an injected runId via an additive optional parameter/option without breaking existing callers \u2014 pipelineRunId is generated at src/orchestrator/pipeline.ts:583 and can default to that when no id is supplied",
+    "writeRunState (src/state/run-state.ts) is the correct primitive for the session-owned spawn-time roster write",
+    "The CLI entry path used by the detached child is the same resolved entry used by the fleet ChildRunner (src/fleet/runner.ts:91-100)"
+  ],
+  "outOfScope": [
+    "Completion detection (Sprint 3) and stop (Sprint 4)",
+    "Killing or supervising the child beyond launch",
+    "Any non-additive change to the run command or pipeline"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Two parts: (A) the additive flag, (B) RunSpawner.\n\n(A) --run-id flag: in src/cli/commands/run.ts add an optional `--run-id <id>` option to RunCommandOptions and the commander registration. Thread it to runPipeline. In src/orchestrator/pipeline.ts the id is generated at line 583 (`const pipelineRunId = `run-${Date.now()}``); change to honor an injected id: `const pipelineRunId = opts?.runId ?? `run-${Date.now()}``, adding an optional field to the pipeline's config/opts object WITHOUT breaking existing callers (default preserves current behavior). Confirm where the completion marker writeCompletionMarker(projectRoot, pipelineRunId, ...) is called (src/orchestrator/checkpoints/feedback-router.ts:387) so the keyed id flows through.\n\n(B) RunSpawner (src/chat/run-spawner.ts): spawn(task, runId): writeRunState(projectRoot, {runId, task, status:'running', startedAt:nowIso(), progress:{completed:0,total:0}, projectRoot, ...}) \u2014 match the RunState shape (run-manager.ts:35-55); then spawn the detached child using the SAME shape as src/fleet/runner.ts:91-100 but with the args [cliEntry, 'run', task, '--run-id', runId] and options {cwd: projectRoot, detached: true, stdio: 'ignore'}; call .unref(). Resolve cliEntry the same way the fleet runner does. Record the pid via a PidSidecar module (src/chat/pid-sidecar.ts) writing .bober/chat/<sessionId>.pids.json. Return SpawnAck {runId, task, pid, cwd, spawnError?}. On spawn error, set spawnError and do not throw.\n\nDependency-inject the spawn function (default execa) so tests can capture args without launching a process. Time: avoid Date.now() nondeterminism in tests by injecting a clock or asserting on structure not exact time.\n\nChatSession: on classifier {action:'spawn',task}, generate runId (e.g. `run-${injectedClock()}-${counter}` or randomUUID), call RunSpawner.spawn, append the ack to ConversationStore, return it. Keep it non-blocking.",
+  "evaluatorNotes": "sc-2-4: drive the run handler/pipeline with runId='test-run-123' and assert pipelineRunId === 'test-run-123' (and/or the completion marker path includes test-run-123). \nsc-2-5: with no --run-id, assert the id still matches /^run-\\d+/.\nsc-2-6: inject a fake spawn that records the call and returns a fake pid; assert state.json with status 'running' exists synchronously after spawn() resolves and that the fake spawn was called once (no await on run completion).\nsc-2-7: after spawn, read .bober/chat/<sessionId>.pids.json and assert the runId entry; construct a new PidSidecar and assert it reads the same entry.\nsc-2-8: feed a classifier action {action:'spawn',task:'build X'} (fake classifier) and assert the returned reply contains the runId; then RosterReader.read shows it.\nsc-2-9: assert the injected spawn received cwd===projectRoot, detached:true, and that unref was invoked on the returned child.\nUse temp dirs; do not launch real long-running pipelines. Run build, typecheck, test.",
+  "estimatedFiles": [
+    "src/cli/commands/run.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/chat/run-spawner.ts",
+    "src/chat/pid-sidecar.ts",
+    "src/chat/chat-session.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-14T00:00:00Z",
+  "updatedAt": "2026-06-14T00:00:00Z",
+  "completedAt": "2026-06-14T13:55:58Z"
+}

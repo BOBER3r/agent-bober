@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-5",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T20:02:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 6 — The Medical Team. This sprint (S5) adds Apple Health export ingestion via STREAMING SAX (handles ~4GB XML without loading into memory) behind an IngestionNormalizer + adapter registry, plus a `bober medical import <file>` CLI command. Idempotent re-import via the S4 HealthDataStore dedup.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260616-medical-team-1", "title": "Plumbing + team", "summary": "60215d2" },
+      { "contractId": "sprint-spec-20260616-medical-team-2", "title": "Consent/audit/disclaimer (Gate 1)", "summary": "4e0286d" },
+      { "contractId": "sprint-spec-20260616-medical-team-3", "title": "Red-flag short-circuit (Gate 2)", "summary": "6fc7c97" },
+      { "contractId": "sprint-spec-20260616-medical-team-4", "title": "HealthDataStore + NumericsQueryLayer", "summary": "907bae4 — upsertObservations(observations) INSERT OR IGNORE returns NEW-row count; HealthObservation{id,metric,value,unit,tStart,tEnd?,source}. AuditEntry has an 'ingest' event ready." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": ["src/medical/health-store.ts", "src/medical/types.ts", "src/cli/commands/run.ts", "src/cli/commands/facts.ts", "src/cli/index.ts", "src/medical/health-store.test.ts", "package.json"]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260616-medical-team-5.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260616-medical-team-5-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "test": "npx vitest run", "lint": "npm run lint" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "criticalConstraints": [
+    "ADD the `sax` dependency (pure-JS streaming XML parser; no native build). It is NOT currently installed. Run `npm install sax` (and `npm install -D @types/sax` if types are needed). This dependency is justified and in-scope (the architecture mandates SAX streaming for the ~4GB Apple Health case). Keep the sax import ISOLATED to the AppleHealthAdapter file only.",
+    "AppleHealthAdapter MUST stream-parse via createReadStream + SAX with BOUNDED (~1000-row) batches and pause/resume BACKPRESSURE: on reaching the batch cap, PAUSE the read stream, await the sink write, then RESUME. NEVER read the whole file into memory (no readFile/readFileSync of the XML). A test must assert the batch-size cap and that createReadStream (not a whole-file read) is used.",
+    "IngestionNormalizer + IngestionAdapter registry + ObservationSink: importFile(file) selects the adapter whose canHandle(file) returns true; throws a CLEAR error naming the problem when NO adapter canHandle the file. ObservationSink wraps HealthDataStore.upsertObservations.",
+    "Idempotent re-import: a second import of the same file adds 0 NEW rows (rely on S4 HealthDataStore INSERT OR IGNORE dedup). A test asserts second-import new-count === 0.",
+    "`bober medical import <file>` CLI command: register mirroring the existing pattern (registerFactsCommand in src/cli/commands/facts.ts + src/cli/index.ts wiring). It must be callable and report an IngestionResult (counts) on completion.",
+    "Map Apple Health <Record> attributes to HealthObservation: type -> metric, unit -> unit, value -> value (number), startDate -> tStart (ISO). Follow the briefing's exact mapping.",
+    "ESM/NodeNext .js extensions; strict TS; no SDK types outside src/providers/. Tests use a small fixture XML in a temp dir (NO real 4GB file, NO fs mocks). Add IngestionResult/IngestionAdapter/ObservationSink types additively to src/medical/types.ts.",
+    "Do NOT wire ingestion into the SOP engine. nonGoals: NO egress/full SOP (S6), NO retrieval (S7), NO Whoop/CSV adapters (Apple Health XML only; the registry makes others additive later)."
+  ],
+  "evaluatorFeedback": null
+}

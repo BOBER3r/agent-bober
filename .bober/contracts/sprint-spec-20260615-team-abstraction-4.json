@@ -1,0 +1,101 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-4",
+  "specId": "spec-20260615-team-abstraction",
+  "sprintNumber": 4,
+  "title": "Second team as data + CLI wiring + docs (the platform proof)",
+  "description": "Prove the abstraction end-to-end: define a minimal NON-medical example team purely as data (a `teams` config entry, no new code path), wire team selection into `bober run` (--team <id>) and `bober chat` (team selection), and document how to add a team. Running the example team must route to its own memory namespace, pipeline shape, and provider routing; omitting the flag uses the programming team unchanged. This is the sprint that demonstrates 'adding a team is data, not code'.",
+  "status": "completed",
+  "completedAt": "2026-06-15T12:55:00Z",
+  "dependsOn": [
+    "sprint-spec-20260615-team-abstraction-2",
+    "sprint-spec-20260615-team-abstraction-3"
+  ],
+  "features": ["feat-4"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "All tests pass with zero failures, including new CLI/team-routing tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A minimal example team is defined purely as a `teams` config entry (a fixture/config, no new code branch). A unit test asserts loadTeam(config, 'example') returns its declared memoryNamespace, pipelineShape, and merged providers.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "`bober run --team <id>` is additive and threads the team id to runPipeline; existing `bober run` invocations without --team behave exactly as before (programming team). A unit test asserts the flag is parsed and propagated, and that its absence yields the programming default.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "`bober chat` selects a team (positional arg or --team) and routes the session's memory distill + spawned runs to that team; omitting it uses programming. A unit test asserts the chat session resolves the named team and its namespace.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "End-to-end routing: a lesson produced while the example team is active lands in the example team's .bober/memory/<namespace>/ (not the programming path). A unit/integration test asserts the lesson location by namespace.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-8",
+      "description": "Documentation explains 'adding a team is data, not code', including the `teams` config shape, the three axes (providers/memory namespace/pipeline shape), and the deferred file-registry path. A doc file (README section or a docs/ page) is added/updated.",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not build the medical team or any guardrail enforcement (Phase 6)",
+    "Do not add a .bober/teams/*.json file registry (Option A only; mention as deferred in docs)",
+    "Do not introduce semantic_facts or memory hygiene (Phase 3)",
+    "Do not add a second PRODUCTION team — the example team is a minimal validation fixture"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "`bober run --team example` and `bober chat` with the example team route to its namespace + shape + providers; default (no flag) is the programming team unchanged; docs updated"
+  ],
+  "definitionOfDone": "A minimal non-medical example team exists purely as data. `bober run` gains an additive --team <id> flag threaded to runPipeline (default programming); `bober chat` selects a team (positional/--team) and routes its memory distill and spawned runs to that team. A lesson produced under the example team lands in its namespace. Documentation describes how to add a team (config shape, the three axes, deferred file-registry). Build, typecheck, and all tests pass; existing no-flag behavior is unchanged.",
+  "assumptions": [
+    "The example team is a small, harmless fixture (e.g. a 'docs'/'research-only' team) used to validate the abstraction; it does not need a bespoke pipeline engine — reusing 'ts' with a distinct namespace and a provider override is sufficient proof.",
+    "Phase 1's `bober chat <team>` argument was accepted but ignored (label-only); this sprint makes it actually select the team.",
+    "--team on `bober run` mirrors the additive pattern used for --run-id in Phase 1 (src/cli/commands/run.ts): absent = today's behavior."
+  ],
+  "outOfScope": [
+    "Medical team + guardrails (Phase 6)",
+    "File-registry team source (deferred)",
+    "semantic_facts / memory hygiene (Phase 3)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "This sprint wires together S1-S3 and proves the claim; it should add almost no new abstraction — only CLI flags, an example team fixture, routing, and docs.\n\nVerified touch points:\n- src/cli/commands/run.ts: runRunCommand (~:42). Add an additive `--team <id>` option; resolve via loadTeam(config, id) and thread the team id into runPipeline (the opts/teamId path added in Sprint 3). Absent flag => programming default (unchanged behavior).\n- src/cli/commands/chat.ts: resolveRoleProviders at :28 and the ChatSession construction. Accept a team (positional arg like `bober chat <team>` per Phase 1, or --team) and pass the active team's namespace/providers into ChatSession so buildMemoryDistill (Sprint 2) and RunSpawner route to that team. Default 'programming'.\n- Example team: declare it as a `teams` entry. For tests use a config fixture; optionally add a commented example to docs. Do NOT hardcode it as a code branch — it must flow through loadTeam (the whole point).\n- Docs: add a section (README.md and/or docs/) titled e.g. 'Teams: adding a team is data, not code' covering the `teams` config shape ({displayName, memoryNamespace, pipelineShape, providers}), the three differentiation axes (provider routing / memory namespace / pipeline shape), the built-in programming default, and the deferred .bober/teams/*.json file registry. Cross-reference the research doc Phase 4.\n\nKeep --team strictly additive (mirror Phase 1's --run-id). Tests: assert flag parse + propagation with an injected/stubbed runPipeline; assert chat resolves the named team; assert a lesson written during an active example-team session lands under .bober/memory/<example-namespace>/. Use temp dirs, no network.",
+  "evaluatorNotes": "sc-4-4: loadTeam(config,'example') returns the declared namespace/shape/providers (merged over resolved defaults).\nsc-4-5: parse `run --team example` and assert the team id reaches runPipeline (stub it); parse `run` with no --team and assert programming default reaches runPipeline.\nsc-4-6: construct the chat command with team 'example' and assert ChatSession uses the example namespace for buildMemoryDistill; with no team, programming/current path.\nsc-4-7: drive a memory write through the active example team and assert the file lands under .bober/memory/<example-namespace>/, not .bober/memory/.\nsc-4-8: confirm a docs file/section exists describing the teams config shape, the three axes, and the deferred file registry.\nRegression: `bober run` with no --team unchanged; full suite green. Run npm run build, npm run typecheck, npm run test.",
+  "estimatedFiles": [
+    "src/cli/commands/run.ts",
+    "src/cli/commands/chat.ts",
+    "src/cli/commands/run.test.ts",
+    "src/cli/commands/chat.test.ts",
+    "README.md",
+    "docs/teams.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-15T00:00:00Z",
+  "updatedAt": "2026-06-15T00:00:00Z"
+}

@@ -1,0 +1,80 @@
+{
+  "specId": "spec-20260529-anthropic-prompt-caching",
+  "version": 1,
+  "createdAt": "2026-05-29T13:30:00Z",
+  "updatedAt": "2026-05-29T17:16:00Z",
+  "title": "Anthropic Prompt Caching",
+  "description": "Add Anthropic prompt-caching breakpoints to the AnthropicAdapter so the stable prefix (system prompt + recent message history) is cached across the many multi-turn calls agent-bober makes. This cuts input-token cost on every Anthropic-backed agent run, gated by a providerConfig flag that defaults on for Anthropic and is a no-op for every other provider.",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 2,
+  "assumptions": [
+    "The borrow target is agent-bober's Anthropic adapter only; the cockpit (openhands-bober) consumes the rebuilt dist via npm link and needs no change for this feature.",
+    "The @anthropic-ai/sdk version in package-lock supports the stable cache_control ephemeral field on system content blocks and message content blocks.",
+    "The 'system-and-last-3' breakpoint strategy is the chosen default, capped at Anthropic's maximum of four cache_control breakpoints per request.",
+    "Verification is done against a mocked SDK client capturing messages.create arguments; no live Anthropic API call is made in tests.",
+    "promptCaching lives as a free-form key inside the existing per-role providerConfig record, so no Zod config-schema migration is required."
+  ],
+  "outOfScope": [
+    "Adding caching to the OpenAI, Google, or OpenAI-compat adapters",
+    "Extending ChatResponse.usage with cache_read / cache_creation token fields (deferred metrics feature)",
+    "Surfacing cache savings in telemetry or the cockpit UI",
+    "Changing the default model, max_tokens, tool conversion, or response normalization",
+    "Any live-API integration test or cost-measurement harness"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Anthropic prompt caching behind a default-on flag",
+      "description": "The AnthropicAdapter places ephemeral cache_control breakpoints on the system prompt and the most recent message content when prompt caching is enabled, and emits the previous plain-string-system payload when disabled. The factory resolves the flag from per-role providerConfig, defaulting to enabled for Anthropic.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When promptCaching is enabled, chat() passes the system prompt as a content-block array whose text block carries cache_control of type ephemeral.",
+        "AC2: When promptCaching is enabled with two or more messages, a cache_control breakpoint is attached to the latest message content and the request carries at most four cache_control breakpoints total.",
+        "AC3: When promptCaching is disabled, chat() sends system as a plain string and no system block, message block, or tool entry carries cache_control.",
+        "AC4: createClient reads promptCaching from the role providerConfig, defaults it to enabled for the anthropic provider, and forwards it into the AnthropicAdapter constructor.",
+        "AC5: All non-Anthropic provider behavior and the existing provider test suites are preserved, and the package typechecks, lints, and builds."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "performance",
+      "requirement": "Enabling prompt caching must reduce repeated input-token billing on multi-turn Anthropic calls by reusing the cached system+prefix, without altering generated output.",
+      "verificationMethod": "Unit test asserts cache_control breakpoints are present on the system block and recent message in the captured messages.create payload when the flag is on."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Disabling the flag must produce a request payload matching the previous plain-string-system shape so the change is fully reversible per call.",
+      "verificationMethod": "Unit test asserts the disabled-path payload contains a string system and zero cache_control fields anywhere in the request."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Caching logic stays confined to the Anthropic adapter and factory wiring; no other provider adapter gains cache_control references.",
+      "verificationMethod": "Grep src/providers for cache_control and confirm matches occur only in anthropic.ts and its test file."
+    }
+  ],
+  "techStack": ["typescript", "@anthropic-ai/sdk", "vitest", "zod"],
+  "techNotes": {
+    "integrationPoints": [
+      "src/providers/anthropic.ts — AnthropicAdapter constructor (line ~133) and chat() (line ~140)",
+      "src/providers/factory.ts — anthropic case (lines ~159-161) resolves promptCaching from providerConfig",
+      "src/config/schema.ts — per-role providerConfig is z.record(z.string(), z.unknown()); promptCaching is a free-form key (no migration)"
+    ],
+    "dataModel": "No persisted data. A boolean promptCaching option threads config -> factory -> adapter; Anthropic system accepts string | TextBlockParam[], and content blocks accept an optional cache_control: { type: 'ephemeral' }.",
+    "securityConsiderations": [
+      "Do not log full cached prompts; preserve existing behavior around API keys and request payloads."
+    ],
+    "existingPatterns": "Mirror how OpenAIAdapter already receives providerConfig from the factory (factory.ts:163-168). Follow the existing per-provider .test.ts style (openai.test.ts, google.test.ts) using vitest with a mocked SDK."
+  },
+  "sprints": ["sprint-spec-20260529-anthropic-prompt-caching-1"],
+  "metadata": {
+    "estimatedTotalDuration": "1-3 hours",
+    "riskLevel": "low",
+    "riskNotes": "Single-adapter change with a default-on flag and full unit-test coverage via a mocked SDK. Main care points: converting string message content to a content-block array to attach cache_control, and honoring Anthropic's four-breakpoint cap.",
+    "sourceResearch": "openhands-bober/.bober/research/research-20260529-borrow-from-hermes-agent.md (borrow #1 from nousresearch/hermes-agent)"
+  },
+  "completedAt": "2026-05-29T17:16:00Z"
+}

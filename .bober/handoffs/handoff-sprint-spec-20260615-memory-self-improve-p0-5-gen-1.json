@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-memory-self-improve-p0-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-5",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T20:25:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase 3, Sprint 5 of 5 (final). Make facts populate automatically and feed planning. A deterministic detector reads manifests/config → project facts (testCommand/buildCommand/packageManager/framework) written through reconcile (Sprint 2) at runPipeline + chat-session startup, guarded so a facts failure NEVER aborts a run. retrieveRelevantFacts + a bounded serializer inject scope-isolated active facts into planner/curator context next to the lessons block. NO LLM produces facts — only reconcile's ambiguity branch may.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-1", "title": "SQLite facts store + CLI", "summary": "FactStore (insertFact/getActiveFacts(scope,subject?,predicate?)/getFact/invalidateFact/supersedeFact/close), FactSchema, factId, factsDbPath, ensureFactsDir. .bober/memory/facts.db." },
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-2", "title": "Reconcile-on-write", "summary": "reconcileFact(store, incoming, {judge?, now}) + writeFact wrapper (re-exported from facts.ts) → ReconcileAction. Deterministic NOOP/ADD/UPDATE-supersede; ambiguity→injected judge w/ ADD fallback. USE writeFact for the detector's writes (idempotent: unchanged→NOOP, changed→supersede)." },
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-3", "title": "Lesson hygiene", "summary": "retrieve.ts tokenize/scoreRecord pattern to mirror for fact ranking; serializeLessonsForPlanner pattern to mirror for serializeFactsForContext." },
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-4", "title": "Fail→pass contrast", "summary": "distill signal (d). Unrelated to this sprint." }
+    ],
+    "currentBranch": "bober/memory-self-improve-p0",
+    "relevantFiles": [
+      "src/orchestrator/memory/fact-detector.ts",
+      "src/orchestrator/memory/fact-retrieve.ts",
+      "src/state/facts.ts",
+      "src/orchestrator/memory/reconcile.ts",
+      "src/orchestrator/memory/retrieve.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/chat/chat-session.ts"
+    ]
+  },
+  "decisionsLocked": {
+    "Q3": "B — wire an auto-producer. DETERMINISTIC project-fact detector (NO LLM to produce facts). detectProjectFacts is PURE — takes already-parsed inputs ({packageJson, boberConfig}); fs reads live in a thin caller.",
+    "guardedWiring": "The detect+reconcile block at runPipeline start AND chat-session startup MUST be wrapped in try/catch that logs a warning and CONTINUES — a facts failure must NEVER abort a pipeline/chat run. Additive only; do not reorder existing phases.",
+    "scopeIsolation": "retrieveRelevantFacts returns only t_invalidated IS NULL rows for the requested scope and NEVER another scope's facts. serializeFactsForContext respects a hard charBudget (output length <= budget). Default scope '' / programming team per the namespace convention.",
+    "noLLMonProducePath": "The only LLM anywhere in the production fact path is reconcile's ambiguity branch (Sprint 2). The detector and retrieval are LLM-free."
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": "Read .bober/principles.md. Gates: TS strict (zero errors), ESLint consistent-type-imports (`import type`), ESM .js specifiers, no `any` unjustified, section comments, deterministic output, conventional commit `bober(sprint-5): ...`. SENSITIVE FILES: pipeline.ts and chat-session.ts are load-bearing — make ONLY additive, guarded changes near startup; do not touch existing phase ordering or unrelated logic; keep the existing full suite (2180 tests) green.",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-calendar-planner-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-calendar-planner-1",
+  "specId": "spec-20260628-calendar-planner",
+  "timestamp": "2026-06-29T18:01:19.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Calendar planner sub-system for agent-bober's knowledge platform. Consumes pre-ranked Findings from the priority hub and places them into open calendar slots via a DETERMINISTIC synchronous slotter (the LLM never packs slots), proposes through the existing approve/steer gate, and writes via a connector-agnostic interface (.ics local-first + Google MCP). This Sprint 1 builds ONLY the deterministic slot-fill engine, the Finding consume-type, a JSON finding-source, and a `bober calendar plan --dry-run` CLI that writes nothing.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/numerics.ts (COPY the purity contract EXACTLY: pure synchronous, no async/fs/network/LLM import, identical input => identical output, closed enum + exhaustive switch + never guard)",
+      "src/cli/commands/medical.ts (model the extracted-core runWhoopSync pattern: runCalendarPlan(projectRoot, opts, deps) with injectable deps, chalk output, process.exitCode on failure)",
+      "src/cli/index.ts (register the calendar command next to registerMedicalCommand near line 319)",
+      "src/config/schema.ts (reference only this sprint; SlotConstraints is a plain TS type, no config section yet)",
+      ".bober/research/research-20260627-knowledge-platform-landscape.md lines 115-135 (Finding schema + 'do NOT let the LLM pack slots')",
+      ".bober/principles.md (ESM .js imports, node:fs/promises only, type-only imports, unicode section headers, collocated *.test.ts)"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260628-calendar-planner-1.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": null,
+  "evaluatorFeedback": null
+}

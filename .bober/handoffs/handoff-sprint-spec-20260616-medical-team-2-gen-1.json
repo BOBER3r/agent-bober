@@ -1,0 +1,52 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-2",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T19:06:27Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 6 — The Medical Team. A local-first, conversational health/wellness Team instance running a fixed SOP (consent -> red-flag-gate -> numerics -> retrieve -> answer-with-abstention). Regulatory refusals, the emergency short-circuit, numerics, and zero-egress are CODE-ENFORCED, never prompt-only. This sprint (S2) adds the first code-enforced gate (consent) + the audit substrate.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260616-medical-team-1",
+        "title": "Additive pipeline plumbing + medical team registration",
+        "summary": "commit 60215d2 — added 'medical-sop' to PipelineEngineName + both mirrored Zod enums; extended both exhaustive switches in src/orchestrator/workflow/selector.ts; created src/medical/{types.ts, engine.ts (MedicalSopEngine stub, zero LLM calls), team.ts (buildMedicalTeam + buildMedicalGuardrails)}; registered built-in 'medical' team in src/teams/registry.ts. Byte-zero impact on ts|skill|workflow + programming team."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/types.ts",
+      "src/medical/engine.ts",
+      "src/medical/team.ts",
+      "src/medical/engine.test.ts",
+      "src/orchestrator/workflow/selector.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/incident/timeline.ts",
+      "src/chat/careful-sidecar.ts",
+      "src/state/memory.ts",
+      "src/orchestrator/checkpoints/audit.test.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260616-medical-team-2.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260616-medical-team-2-briefing.md",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "test": "npx vitest run",
+      "lint": "npm run lint"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "criticalConstraints": [
+    "MedicalSopEngine MUST keep a zero-arg constructor — src/orchestrator/workflow/selector.ts:126 calls `new MedicalSopEngine()` with no args. Inject fakes (clock/audit/consent) via an OPTIONAL deps object with safe real defaults, never required constructor params.",
+    "Fail-closed: with no recorded consent, MedicalSopEngine.run returns a refuse verdict and makes ZERO downstream calls (no numerics, no retrieval, no LLM). Verify with a spy LLMClient asserted never invoked.",
+    "AuditLog entries hold IDs/enums ONLY (event, rulesetVersion, patternsetVersion, ruleId) — NEVER prompt text or health values. File opened O_APPEND|O_CREAT, mode 0600. Reuse the append-only mode-0600 JSONL pattern from src/incident/timeline.ts:67-82.",
+    "ALL timestamps (consent acceptedAtIso, audit tIso) are INJECTED parameters (e.g. a `now: string` arg or injected clock), NEVER read from the system wall clock. Reuse the injected-timestamp pattern from src/state/memory.ts:66-72. A deterministic test must assert this.",
+    "ESM/NodeNext with .js import extensions; strict TS; no SDK types outside src/providers/; no sync fs except the (future) better-sqlite3 store — consent/audit/disclaimer use node:fs/promises or the explicit-mode append pattern. Tests use temp dirs + cleanup, NO fs mocks.",
+    "Do NOT implement the red-flag detector logic (Sprint 3), HealthDataStore/numerics (Sprint 4), ingestion (Sprint 5), egress/full SOP (Sprint 6), or retrieval (Sprint 7). This sprint is consent gate + audit log + disclaimer + wiring Gate 1 ONLY."
+  ],
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260621-codebase-health-remediation-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-3",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "timestamp": "2026-06-21T20:08:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — ESM/TypeScript. Final sprint: remove the two verified dead-code orphans (stashAndRestore, saveOutline) + their barrel lines. Tiny, isolated, low-risk.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260621-codebase-health-remediation-1", "title": "Break fleet cycle (DI)", "summary": "Done — unrelated files." },
+      { "contractId": "sprint-spec-20260621-codebase-health-remediation-2", "title": "runSprintCycle params object", "summary": "Done — unrelated files." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/utils/git.ts",
+      "src/utils/index.ts",
+      "src/state/outline-state.ts",
+      "src/state/index.ts"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "See .bober/principles.md — ESM .js specifiers, import type, no sync fs, unicode section headers, conventional commits. STRICT: noUnusedLocals + noUnusedParameters; eslint no-unused-vars is an ERROR.",
+  "criticalNotes": [
+    "stashAndRestore: definition src/utils/git.ts:154 (doc comment 149-171). Delete the whole function + doc. Remove its barrel re-export line in src/utils/index.ts:8. Per curator, git.ts needs NO import changes (nothing else used those imports exclusively) — but double-check after deleting and prune anything that becomes unused.",
+    "saveOutline: definition src/state/outline-state.ts:28 (doc 17-37). Delete ONLY this function. DO NOT delete the file — it ALSO exports readOutline which is LIVE (called at pipeline.ts:828). Remove its barrel re-export line in src/state/index.ts:44.",
+    "MANDATORY IMPORT PRUNE: after deleting saveOutline, the imports `writeFile` (outline-state.ts line 1) and `ensureDir` (line 4) become unused. They MUST be removed or build/lint FAILS (noUnusedLocals + no-unused-vars=error). Verify readOutline does not also use them before pruning — if readOutline uses one of them, keep that one.",
+    "There are NO test files referencing stashAndRestore or saveOutline (curator grep-verified). Do NOT create new tests.",
+    "DO NOT touch the 3 false positives: runPlanAnswerInteractive (cli/index.ts:152), summarizeSprint (context-handoff.ts:171), readBriefing (src/index.ts:153 public export). git diff must NOT include cli/commands/plan.ts, context-handoff.ts, briefing-state.ts, or the readBriefing line in src/index.ts."
+  ],
+  "toolingNote": "tokensave v6.1.1 available. Use `npx vitest run`. The 6 known cockpit-integration E2E MCP failures are pre-existing — ignore.",
+  "evaluatorFeedback": null
+}

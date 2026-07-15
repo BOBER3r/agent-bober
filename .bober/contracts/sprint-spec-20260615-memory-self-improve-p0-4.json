@@ -1,0 +1,69 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-4",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "sprintNumber": 4,
+  "title": "Fail\u2192pass contrast extractor in distill",
+  "description": "Mine the signal the generator-evaluator retry loop currently discards. Extend the pure distill() to detect sprints whose iterationHistory shows one or more fail iterations followed by a pass, and emit a new 'fix-contrast' lesson category capturing which eval strategy/criterion flipped and the sprint provenance. Stays fully deterministic \u2014 no LLM, no clock, no fs, no new git calls inside the pure function.",
+  "status": "completed",
+  "createdAt": "2026-06-15T12:00:00.000Z",
+  "updatedAt": "2026-06-15T17:24:47Z",
+  "completedAt": "2026-06-15T17:24:47Z",
+  "dependsOn": [],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The project builds (`npm run build`, exit 0) and typecheck passes (`npm run typecheck`, zero errors).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "Given a contract whose iterationHistory is [{iteration:1,result:'fail'},{iteration:2,result:'fail'},{iteration:3,result:'pass'}], distill() emits exactly one lesson whose category starts with 'fix-contrast:' and whose sourceEntryRefs cite the failing iterations and the passing iteration.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A contract that passed on its first iteration (or never passed) produces NO fix-contrast lesson; covered by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "distill() remains pure: src/orchestrator/memory/distill.ts imports nothing from ../providers, contains no Date.now()/new Date(), no fs/network, and repeated calls on identical input return byte-identical output (sorted by lessonId).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "After `bober memory distill` over history/contracts containing a fail\u2192pass sprint, the new fix-contrast lesson appears in INDEX.md and `bober memory list`.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "ESLint reports zero errors on new and modified files (`npm run lint`).",
+      "verificationMethod": "lint",
+      "required": false
+    }
+  ],
+  "generatorNotes": "Extend the existing pure distiller at src/orchestrator/memory/distill.ts \u2014 do NOT create a parallel path. Add a fourth signal alongside the existing (a) failed-criterion, (b) failing-strategy, (c) rework signals. ALGORITHM: for each contract, scan contract.iterationHistory (real shape {iteration, evalId, result}); if there is at least one result==='fail' that is FOLLOWED (by iteration order) by a result==='pass', this is a fail\u2192pass transition. Emit a group with category `fix-contrast:${contractId}` (or keyed by the flipped strategy if resolvable from the linked eval results passed in), tags ['phase:fix-contrast', `sprintId:${contractId}`], a summary like `Sprint '<id>' flipped from fail to pass after N iteration(s)`, and sourceEntryRefs citing `${contractId}:iteration-<n>` for the failing iterations AND the passing one. Reuse the existing upsertGroup/lessonIdFromSignature/severityFor helpers so the new lessons are content-hashed and byte-stable. If eval results (DistillableEval[]) are available for those iterations, you MAY enrich tags with the strategy/criterion that flipped from fail\u2192pass, but keep it deterministic and resilient to missing fields (the inputs are read leniently). PURITY IS A HARD CONSTRAINT: the file header forbids ../providers imports, Date.now(), fs, and network \u2014 keep it that way; createdAt stays SENTINEL_CREATED_AT and is stamped by the CLI. Add tests to src/orchestrator/memory/distill.test.ts (or the existing distill test file) covering the [fail,fail,pass] positive case, the first-iteration-pass negative case, and a never-passed (all fail) negative case.",
+  "evaluatorNotes": "Run build, typecheck, and `npm test -- distill`. For sc-4-2: read the test and confirm a single fix-contrast lesson with refs to the fail AND pass iterations; confirm ordering matters (a pass BEFORE a fail with no later pass is not a transition). For sc-4-3: confirm both the first-iteration-pass and all-fail cases yield no fix-contrast lesson. For sc-4-4 (the load-bearing purity check): grep src/orchestrator/memory/distill.ts for `providers`, `Date.now`, `new Date(`, `readFile`, `fetch` \u2014 there must be NONE; run the distill test twice and confirm identical output, and confirm new lessons sort into the array by lessonId. For sc-4-5: in a temp dir seed a contract with a [fail,pass] iterationHistory and a matching history.jsonl, run `node dist/cli/index.js memory distill`, then `node dist/cli/index.js memory list` and confirm a fix-contrast lesson is listed. Verify the existing distill signals (a/b/c) still produce their lessons (no regression).",
+  "estimatedFiles": [
+    "src/orchestrator/memory/distill.ts",
+    "src/orchestrator/memory/distill.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-4-1",
+      "timestamp": "2026-06-15T17:24:47Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260615-memory-self-improve-p0-4-1"
+}

@@ -1,0 +1,16 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-3-1",
+  "contractId": "sprint-spec-20260628-task-inbox-3",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "requiredPassed": 4,
+    "requiredFailed": 0,
+    "requiredTotal": 4
+  },
+  "summary": "All 5 criteria pass. build/typecheck/lint clean (0 errors). Full suite 3291->3297, zero regressions. finding.ts unmodified (wake time in tags[] only); isVisibleInDefaultList pure (injected now); --until normalized to toISOString() before storage so lexicographic ISO compare is safe; re-snooze replaces tag; done-on-snoozed works; bad --until -> exitCode=1 no throw."
+}

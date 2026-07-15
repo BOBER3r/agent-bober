@@ -1,0 +1,92 @@
+{
+  "contractId": "sprint-spec-20260604-workflow-engine-5",
+  "specId": "spec-20260604-workflow-engine",
+  "sprintNumber": 5,
+  "title": "bober-pipeline.js workflow script and RunResultFlusher",
+  "description": "Author the pure-JS workflow script .claude/workflows/bober-pipeline.js that orchestrates plan→curate→generate→adversarial-panel→reconcile→retry via agent({agentType}) in parity with the TS pipeline stages, owning no truth, skipping resumeCursor.completedSprintNumbers, chunking the panel ≤16, and returning a WorkflowRunResult. Implement the host-side RunResultFlusher.flush that commits a WorkflowRunResult to durable .bober/ state (saveContract/updateContract, appendHistory, updateProgress), stamping ISO timestamps as the only clock source, atomic per file, flushing after each contract for crash-safety. Since live invoke is dormant, the script is authored + parse/lint-checked and the flusher is unit-tested with a synthetic WorkflowRunResult.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260604-workflow-engine-3",
+    "sprint-spec-20260604-workflow-engine-4"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": ".claude/workflows/bober-pipeline.js begins with a literal `export const meta = { name, description, phases }` block (pure literal) and exposes a main(args) flow that calls agent({agentType,...}) for planner/curator/generator/evaluator and uses the JS reconcile port from ./lib/reconcile.js; it parses as an ES module (node --check or an import in a test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "The script logic skips contracts whose sprintNumber is in resumeCursor.completedSprintNumbers, runs the evaluator panel per lens with chunking so no fan-out exceeds 16, branches the retry loop on reconcile().passed, and returns a WorkflowRunResult shape (verified by extracting/importing its pure helper functions in a unit test, or by a structural assertion on a dry-run harness).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "RunResultFlusher.flush(projectRoot, config, result) persists the spec, each contract (saveContract/updateContract), appends history (appendHistory) and updates progress (updateProgress), stamping ISO timestamps on pendingHistory entries and contract completedAt; it returns a PipelineResult. A unit test with a synthetic WorkflowRunResult asserts the written .bober/ files.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "flush is crash-safe: it commits after each contract (not once at end) and is idempotent — re-flushing the same result does not duplicate history beyond the documented commit-by-message idempotency; a unit test re-runs flush and asserts no duplicate contract corruption.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck, npm run build, and the lint command exit 0; the new flusher and script suites are green within npm run test.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not execute the script against the live Workflows runtime — it is dormant this release.",
+    "Do not implement WorkflowEngine.run/invoke or the eligibility wiring (sprint 6).",
+    "Do not implement careful-flow stage-splitting.",
+    "Do not let the script perform fs, Date.now, or Math.random — all clock/fs work is host-side in the flusher."
+  ],
+  "stopConditions": [
+    "Stop when the script parses and its pure helpers + the flusher pass unit tests and typecheck/build/lint are green.",
+    "Stop when changes are confined to .claude/workflows/bober-pipeline.js, src/orchestrator/workflow/flusher.ts, and their tests."
+  ],
+  "definitionOfDone": "A pure-JS bober-pipeline.js script with a literal meta block orchestrates the plan→curate→generate→panel→reconcile→retry stages via agentType, skips completed sprints, chunks the panel ≤16, and returns a WorkflowRunResult owning no truth; the host RunResultFlusher commits that result to durable .bober/ state stamping timestamps, atomic and flush-after-each-contract; script parses, flusher and script-helper unit tests pass, and typecheck/build/lint are green.",
+  "assumptions": [
+    "The script's pure helper functions (e.g. partition lenses into ≤16 chunks, decide retry) can be factored so they are unit-testable without the live agent() runtime.",
+    "Testing the script via a structural import + helper-function assertions is sufficient given the dormant runtime; full end-to-end execution is a manual Claude Code check.",
+    "RunResultFlusher reuses the same state helpers the TS pipeline uses so artifacts are byte-equivalent."
+  ],
+  "outOfScope": [
+    "WorkflowEngine wiring",
+    "eligibility probe refinement",
+    "careful stage-split",
+    "live agent dispatch"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create .claude/workflows/bober-pipeline.js. Start with `export const meta = { name: 'bober-pipeline', description: '...', phases: [{title:'Plan'},{title:'Sprint'}] }` (PURE literal — no variables). Body uses the workflow runtime hooks (agent, parallel, pipeline, phase, log) as documented for Dynamic Workflows. main(args): PLAN → agent({agentType:'bober-planner', model: args.models.planner, schema: <PlanSpec schema ref>}); if needsClarification return early. PER-CONTRACT loop over args.preloadedContracts (or planned sprints), skipping sprintNumbers in args.resumeCursor.completedSprintNumbers: CURATE agent({agentType:'bober-curator'}); RETRY 1..args.knobs.maxIterations: GENERATE agent({agentType:'bober-generator'}); PANEL run args.evaluatorLenses via parallel chunked into groups of ≤16, each agent({agentType:'bober-evaluator', schema: EvalResult}); reconcile with the JS port `import { reconcile } from './lib/reconcile.js'` (timestamp: pass a placeholder like '' — host re-stamps on flush, or pass args-provided sentinel); if reconcile().passed break else feed feedback into next iteration. Return { spec, perSprint:[{contract, finalVerdict, iterationsUsed, outcome, lensVerdicts}], needsClarification, pendingHistory }. Factor pure helpers (chunk(lenses, 16), decideOutcome(...)) into ./lib/ so they can be unit-tested; OR export them from the script for testing. NO fs/Date.now/Math.random in the script. Create src/orchestrator/workflow/flusher.ts: `export class RunResultFlusher { async flush(projectRoot, config, result): Promise<PipelineResult> }` using saveContract/updateContract (sprint-state.ts), appendHistory (history.ts), updateProgress (history.ts), stamping new Date().toISOString() onto pendingHistory entries (the ONLY clock source) and onto contract completed/updated timestamps; flush per-contract in a loop; build and return a PipelineResult (success, spec, completedSprints, failedSprints, duration). Unit-test flusher with a synthetic WorkflowRunResult against a temp .bober dir (real fs, cleanup). Unit-test the script's pure helpers + a `node --check` style parse (or import the script module and assert typeof meta === 'object' and meta.name). Conventional commit: bober(sprint-5): add bober-pipeline.js workflow script + RunResultFlusher.",
+  "evaluatorNotes": "Confirm .claude/workflows/bober-pipeline.js parses: run `node --check .claude/workflows/bober-pipeline.js` (exit 0) OR confirm a test imports it. Confirm meta is a pure literal with name/description/phases and matches the phase titles used. Inspect the script for fs/Date.now/Math.random — must be none. Confirm the panel is chunked so no parallel fan-out exceeds 16 and completed sprintNumbers are skipped (read the loop). For RunResultFlusher: run its unit test — assert the temp .bober has the spec, contracts with stamped completedAt, history lines appended, progress updated; re-run flush and assert no corruption/duplication. Confirm timestamps are produced ONLY in the flusher (host), never in the script. Run npm run typecheck, npm run build, and lint (exit 0); suites green tolerating only the flaky tool-count baseline. Confirm git diff confined to the script, flusher.ts, and their tests.",
+  "estimatedFiles": [
+    ".claude/workflows/bober-pipeline.js",
+    "src/orchestrator/workflow/flusher.ts",
+    "src/orchestrator/workflow/flusher.test.ts",
+    "src/orchestrator/workflow/script-helpers.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-04T00:05:13.310Z",
+  "startedAt": "2026-06-03T23:51:34.930Z",
+  "completedAt": "2026-06-04T00:05:13.310Z",
+  "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-5-1",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260604-workflow-engine-5-1",
+      "result": "pass",
+      "timestamp": "2026-06-04T00:05:13.310Z"
+    }
+  ]
+}

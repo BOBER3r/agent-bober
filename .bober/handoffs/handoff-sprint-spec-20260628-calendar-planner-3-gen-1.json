@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-calendar-planner-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-calendar-planner-3",
+  "specId": "spec-20260628-calendar-planner",
+  "timestamp": "2026-06-29T18:50:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Calendar planner sub-system. Sprint 1 (DONE) = pure deterministic slotter + types + dry-run CLI. Sprint 2 (DONE) = CalendarConnector interface (src/calendar/connector.ts) + zero-egress .ics exporter (src/calendar/ics-connector.ts) + `bober calendar plan --export-ics`. This Sprint 3 adds the SECOND connector: a Google Calendar connector via the external-MCP subprocess pattern, gated behind a NEW default-false fail-closed cloud-calendar egress axis + a `calendar` config section, sending ONLY calendarSafeTitle to the cloud.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-calendar-planner-1",
+        "title": "Deterministic slot-fill engine + dry-run plan CLI",
+        "summary": "src/calendar/{types,slotter,finding-source}.ts + src/cli/commands/calendar.ts. Finding has calendarSafeTitle?, evidence[], title, tags[]. planSlots consumes BusyInterval[] + ranked Finding[] -> ProposedPlan. commit 0d141c1."
+      },
+      {
+        "contractId": "sprint-spec-20260628-calendar-planner-2",
+        "title": "Connector interface + .ics export",
+        "summary": "src/calendar/connector.ts defines CalendarConnector { readonly name; readFreeBusy(window): Promise<BusyInterval[]>; writeEvents(items: PlanItem[]): Promise<WriteResult> } + WriteResult { writtenCount, target } + FreeBusyWindow. src/calendar/ics-connector.ts implements it (createIcsConnector). The Google connector this sprint MUST implement the SAME interface. commit 0481407."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/calendar/connector.ts (the CalendarConnector interface the Google connector MUST implement)",
+      "src/calendar/types.ts (Finding with calendarSafeTitle?, evidence[], title, tags[]; PlanItem; BusyInterval)",
+      "src/medical/egress.ts:5-58 (EgressGuard pattern — model the new cloud-calendar guard on this; fail-closed throw naming the flag)",
+      "src/config/schema.ts:374-401 (MedicalSectionSchema — model the new `calendar` config section on this; ADDITIVE — no-flag/default path must stay byte-identical for existing config)",
+      "src/mcp/external-client.ts:69 (error sanitization — strip KEY=VALUE, never include token/mcpEnv), :81-103 (listTools/callTool discovery pattern the production adapter wraps)",
+      "src/medical/whoop/whoop-token.ts (0600 token sidecar reader pattern; refuse with .ics suggestion when token absent)",
+      "src/cli/commands/medical.ts:53-62 (runWhoopSync axis-off branch — check the guard BEFORE constructing any MCP client)",
+      ".bober/principles.md (ESM .js imports, Zod for the config section, node:fs/promises, type-only imports, unicode section headers)"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260628-calendar-planner-3.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": null,
+  "evaluatorFeedback": null
+}

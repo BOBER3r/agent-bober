@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-5",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "sprintNumber": 5,
+  "title": "Implement the scanner pre-filter with slither and semgrep parsers",
+  "description": "Deterministic ground truth for the LLM auditor: a SecurityScannerPreFilter that runs config.security.scanners commands under the shared audit AbortSignal with per-scanner isolation (missing binary \u2192 [], hang \u2192 SIGKILL), dedicated parsers mapping slither JSON and semgrep JSON output to SecurityFinding[] (fixture-tested, binaries NOT required in CI), a raw-text fallback for unknown scanners, and wiring of the resulting priors into runSecurityAudit's prompt (ADR-4: absent scanners config = pure LLM pass, zero child processes).",
+  "status": "completed",
+  "createdAt": "2026-07-12T09:30:00.000Z",
+  "updatedAt": "2026-07-12T12:27:08.000Z",
+  "completedAt": "2026-07-12T12:27:08.000Z",
+  "dependsOn": [
+    "sprint-spec-20260712-security-audit-agent-team-2"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "The slither parser maps a committed slither --json output fixture to the expected SecurityFinding[] (path, line, severity bucket, vulnClass, description) and the semgrep parser does the same for a committed semgrep --json fixture; both are pure functions with malformed-input tests returning [] (never throwing).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "runScannerPreFilter executes each configured scanner command via execa with per-scanner isolation: a missing binary (ENOENT) or nonzero exit yields [] for that scanner while other scanners still run and contribute; the function never rejects.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "When the shared AbortSignal fires mid-scan, scanner child processes are killed (SIGKILL/forceKill semantics) and the pre-filter resolves with the findings gathered so far (partial results, no hang).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "Parser selection is name/command-based (slither\u2192slither parser, semgrep\u2192semgrep parser, anything else\u2192raw-text-excerpt fallback finding priors), and scanner priors appear in the auditor prompt under a deterministic-ground-truth section with scannerRan:true on the result; with scanners:[] no child process is spawned, scannerRan is false, and the prompt has no priors section (byte-identical to sprint 2 behavior).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green \u2014 and no test requires slither or semgrep binaries to be installed (fixtures only).",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add parsers beyond slither and semgrep (raw-text fallback covers the rest).",
+    "Do not let scanner findings bypass the LLM auditor or directly drive the verdict \u2014 they are priors; the audit's review buckets remain the verdict source.",
+    "Do not install or vendor scanner binaries; do not add npm dependencies (execa already exists).",
+    "Do not change the gate or CLI (they inherit priors through the core)."
+  ],
+  "stopConditions": [
+    "All five criteria verified; CI-offline property confirmed (suite passes on a machine without slither/semgrep).",
+    "Full suite green."
+  ],
+  "definitionOfDone": "Operators can configure scanner commands per project; slither/semgrep output arrives as typed, fixture-verified SecurityFinding priors in the auditor prompt under the shared time-box, unknown scanners degrade to raw-text priors, and unconfigured audits remain pure LLM passes with zero child processes.",
+  "assumptions": [
+    "Scanner entries reuse the EvalStrategy shape's command field (config.security.scanners: EvalStrategySchema[] from sprint 1, per ADR-4); the scanner 'name' for parser selection derives from the strategy's name/command string (e.g. command starts with or contains 'slither'/'semgrep').",
+    "execa (already a dependency) supports signal-based cancellation/forceKill for sc-5-3; child stdout is bounded (maxBuffer or truncation) so a pathological scanner cannot exhaust memory.",
+    "Slither fixture shape: results.detectors[] with elements[].source_mapping (filename_relative, lines[]), impact (High/Medium/Low), check id, description. Semgrep fixture shape: results[] with path, start.line, extra.severity (ERROR/WARNING), check_id, extra.message. Severity mapping: slither High-impact and semgrep ERROR \u2192 critical bucket priors; lower severities \u2192 important. The generator verifies these shapes against real tool docs/output when writing fixtures and documents the mapping in code.",
+    "Priors are prompt-side only: sprint 2's runSecurityAudit already accepts priors?: SecurityFinding[] (or gains it now with a default that keeps existing tests green)."
+  ],
+  "outOfScope": [
+    "Hub emission (sprint 6), skill/dogfood/docs (sprint 7), any additional scanner parsers, dependency-vulnerability audit wiring (npm audit etc.)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) src/orchestrator/security-scanners.ts: export runScannerPreFilter({scanners, projectRoot, signal}) plus pure parseSlitherOutput(json: unknown) and parseSemgrepOutput(json: unknown) \u2014 parse with defensive narrowing (unknown \u2192 shape checks), NEVER trust fixture shape at runtime; malformed \u2192 []. Map vulnClass heuristically from check ids (e.g. slither 'reentrancy-*' \u2192 leave vulnClass undefined unless a clean mapping exists \u2014 vulnClass is optional; do not force wrong classes). (2) execa usage: follow existing execa call sites (fleet spawner, eval strategies) for options style; pass {reject:false} or try/catch per scanner; wire signal via execa's cancelSignal/signal option and forceKillAfterDelay for sc-5-3. Cap stdout (maxBuffer) and truncate raw-text fallback priors to a bounded excerpt (~2000 chars). (3) Fixtures: commit realistic minimal slither/semgrep JSON files under a __fixtures__ dir next to the tests (grep for how medical MedlinePlus fixtures are laid out and follow that convention). (4) Wire into runSecurityAudit: when config.security.scanners is non-empty, call the pre-filter INSIDE the audit path (so the gate's existing Promise.race time-box covers it) before building the prompt; pass an AbortSignal derived from the same timeout \u2014 check how sprint 3's gate structured the race and thread the signal (if the gate races an un-abortable promise today, create the AbortController in runSecurityAudit keyed to security.timeoutMs and pass its signal to the pre-filter). (5) For the abort test: use a fake long-running command (node -e with a sleep) rather than a real scanner \u2014 keep it fast with a short signal fire.",
+  "evaluatorNotes": "For sc-5-1: verify fixtures look like REAL tool output (spot-check field names against slither/semgrep documentation \u2014 a fixture invented to match the parser is circular); malformed-input tests must include truncated JSON and a valid-JSON-wrong-shape case. For sc-5-2: three-scanner test where the middle one is a nonexistent binary \u2014 assert the other two contribute and no rejection. For sc-5-3: fire the AbortSignal after the first scanner completes and assert partial findings + child killed (process no longer running) within a bounded time. For sc-5-4: capture the fake client's prompt with and without scanners configured; assert the priors section is present/absent respectively and scannerRan flag matches; assert zero execa calls with scanners:[] (spy or injected runner). For sc-5-5: grep the new tests for any invocation of real 'slither'/'semgrep' binaries \u2014 none allowed. Full suite green.",
+  "estimatedFiles": [
+    "src/orchestrator/security-scanners.ts",
+    "src/orchestrator/security-scanners.test.ts",
+    "src/orchestrator/security-scanners-fixtures (slither/semgrep JSON fixture files)",
+    "src/orchestrator/security-auditor-agent.ts",
+    "src/orchestrator/security-auditor-agent.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-5-1",
+      "timestamp": "2026-07-12T12:27:08.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-5-1"
+}

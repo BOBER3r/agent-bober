@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-priority-hub-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-priority-hub-3",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-28T20:45:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober priority-hub spec. Sprint 3 (highest complexity) adds: src/hub/scope.ts (Scope discriminated union general|decision{a,b}|filtered{domain?,dueWithinDays?,tag?} + parseScope + pure applyFilter), src/hub/lenses.ts (hub-specific prioritization lens catalog mirroring eval-lenses LENS_CATALOG shape — NOT reusing eval lenses), src/hub/judge.ts (rankFindings: pass1 relevance-filter via injected LLMClient for decision/general, applyFilter for filtered; pass2 prioritization-lens fan-out with strict-majority fail-closed-on-tie reconcile; then deterministic JS final ordering). The LLM NEVER emits the final ordered list — deterministic JS arranges over LLM-produced scores.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260628-priority-hub-1", "title": "Finding schema + source + hub list", "summary": "src/hub/finding.ts (FindingSchema/Finding), finding-source.ts (FactStoreFindingSource, HUB_SCOPE), hub.ts (runHubList)."},
+      {"contractId": "sprint-spec-20260628-priority-hub-2", "title": "Collector + resolver + readonly", "summary": "src/hub/collector.ts (collectFindings dedup by id), repo-resolver.ts, FactStore { readonly } flag. hub list aggregates across siblings."}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/hub/finding.ts (Finding type — REUSE, do not change)",
+      "src/orchestrator/eval-lenses.ts:1-31 (LENS_CATALOG + resolveLensFocus fan-out SHAPE to mirror — but define hub-specific prioritization lenses: urgency, impact, effort/ROI, deadline-risk)",
+      "skills/shared/lens-panel.md:73-89 (strict-majority + fail-closed-on-tie reconcile semantics to port: passCount>failCount, tie => not included => flagged-for-review)",
+      "src/chat/answerer.ts:11-17 (LLMClient injection pattern to mirror for testable judge)",
+      "src/providers/types.ts (LLMClient / chat interface)",
+      "src/medical/* deterministic-numerics discipline (LLM-ranks / deterministic-JS-arranges boundary)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test"},
+    "generator": {"model": "sonnet", "autoCommit": true, "provider": "anthropic"}
+  },
+  "principlesRef": ".bober/principles.md (ESM .js extensions, import type, Zod safeParse for LLM output, provider-agnostic LLMClient, async fs, vitest collocated, conventional commits)",
+  "evaluatorFeedback": null
+}

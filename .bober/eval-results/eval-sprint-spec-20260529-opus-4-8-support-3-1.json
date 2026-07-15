@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260529-opus-4-8-support-3-1",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-3",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T19:25:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0; effort union has no | null." },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "exit 0." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "exit 0." },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "1341 passed; all 76 provider tests green; only the 2 flaky 37-tool-count baseline failures." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "C1", "required": true, "result": "pass", "evidence": "types.ts:133 effort?: 'low'|'medium'|'high'|'xhigh'|'max' (no | null); typecheck 0." },
+    { "criterionId": "C2", "required": true, "result": "pass", "evidence": "anthropic.ts:239 conditional spread; test asserts output_config.effort==='max'." },
+    { "criterionId": "C3", "required": true, "result": "pass", "evidence": "unset => empty spread; test asserts not.toHaveProperty + JSON scan has no output_config." },
+    { "criterionId": "C4", "required": true, "result": "pass", "evidence": "openai.test.ts C4: adapter accepts effort, returns normally, no output_config; openai.ts source unchanged." },
+    { "criterionId": "C5", "required": true, "result": "pass", "evidence": "build exit 0; only flaky baseline failures; no provider regressions." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "5/5 pass. effort threads to output_config.effort only when set, omitted otherwise; non-anthropic ignores it; all provider tests green; only flaky baseline failures remain."
+}

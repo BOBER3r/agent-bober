@@ -1,0 +1,85 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-9",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 9,
+  "title": "Labelled vulnerable/safe benchmark corpus + measurement harness (verified, not asserted)",
+  "description": "Make detection quality measurable rather than asserted. Author a small labelled corpus of vulnerable/safe code fixtures across the key money/credential/injection/supply-chain classes, plus a deterministic measurement harness that runs the finder-only path vs the finder+verifier path over the corpus and reports detection retention (recall on the vulnerable set) and false-positive-block reduction (on the safe set). This delivers architecture success criterion #3.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-8"
+  ],
+  "features": [
+    "feat-benchmark"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-9-1",
+      "description": "A benchmark corpus exists under a stable dir (e.g. src/orchestrator/security-knowledge/benchmark/fixtures/ or test-fixtures/security-benchmark/) with labelled cases: each case is a small code fixture + a JSON label {expected: 'vulnerable'|'safe', vulnClass?, signatureId?, stack} covering at least 12 vulnerable and 12 safe cases across iGaming money-integrity (TOCTOU, client-odds), dex-backend (withdrawal race, decimals, hot-wallet key), injection (SQLi, command, SSRF), supply-chain (malicious postinstall), and access-control (BOLA).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-2",
+      "description": "A measurement harness (pure/deterministic, no live LLM) accepts a pluggable 'finder' and 'verifier' function so it can be driven by injected fakes in CI; it computes, over the corpus: vulnerable-set recall (fraction of vulnerable cases flagged critical) and safe-set false-positive-block rate (fraction of safe cases flagged critical), for finder-only vs finder+verifier.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-3",
+      "description": "Using deterministic injected fakes that model the verifier disproving a labelled subset of the finder's safe-case false positives while confirming true vulnerable-case criticals, the harness demonstrates finder+verifier has a STRICTLY LOWER safe-set false-positive-block rate than finder-only AND equal-or-higher vulnerable-set recall (detection retained) \u2014 the measured realization of architecture success criterion #3.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-4",
+      "description": "Every vulnerable fixture's declared vulnClass/signatureId corresponds to an actual signature present in the relevant skills/bober.security-*/SKILL.md (a test cross-checks labels against the parsed index), so the corpus is grounded in the shipped knowledge rather than arbitrary.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-5",
+      "description": "The harness and corpus are runnable offline in CI (no network, no live provider); an optional documented command/flag allows running it against a real provider locally, but the required CI test uses injected fakes. npm run build + typecheck + lint pass; full suite green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not require a live LLM in CI (the required test path uses deterministic injected finder/verifier fakes).",
+    "Do not gate the pipeline on benchmark thresholds (this is a measurement harness, not a new blocking gate).",
+    "Do not author an exhaustive corpus \u2014 a small, representative, grounded set is the goal."
+  ],
+  "stopConditions": [
+    "The harness deterministically shows FP-block reduction with retained recall using injected fakes.",
+    "Every vulnerable label maps to a real shipped signature."
+  ],
+  "definitionOfDone": "A grounded labelled vulnerable/safe corpus and a deterministic, offline measurement harness exist and demonstrate the finder+verifier pipeline reduces false-positive blocks while retaining detection, delivering the architecture's measurable success criterion, with the suite green.",
+  "assumptions": [
+    "The finder and verifier can be represented as injectable function types so the harness is deterministic in CI; the real runSecurityAudit/runSecurityVerifier satisfy those shapes.",
+    "Corpus fixtures are small illustrative snippets, not runnable apps; labels reference the vulnClass/signatureId taxonomy shipped in sprints 1-4.",
+    "This corpus doubles as few-shot exemplar material and as a regression guard for future signature edits."
+  ],
+  "outOfScope": [
+    "Dogfood enablement + docs (sprint 10)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "(1) fixtures: small files (e.g. .ts/.sol snippets) + a manifest JSON listing {file, expected, stack, vulnClass?, signatureId?}. Draw vulnerable/safe PAIRS from the unsafeExample/safeExample already in the skill files where possible (keeps them grounded). (2) harness.ts: pure function measure(corpus, finderFn, verifierFn) -> {finderOnly:{recall,fpBlockRate}, finderPlusVerifier:{recall,fpBlockRate}}. finderFn/verifierFn are injected; for CI, provide deterministic fakes: finderFake flags a case critical iff its label is vulnerable OR it is in a fixed 'false-positive' safe subset; verifierFake disproves the safe subset and confirms vulnerable ones. (3) test asserts finderPlusVerifier.fpBlockRate < finderOnly.fpBlockRate AND finderPlusVerifier.recall >= finderOnly.recall. (4) label-grounding test: parse the index, assert each vulnerable label's signatureId/vulnClass exists. (5) Optionally add a documented `describe.skip`/env-gated block that wires the real finder+verifier for local manual runs. Keep CI offline/deterministic.",
+  "evaluatorNotes": "sc-9-1: count vulnerable>=12 and safe>=12 across the named classes. sc-9-2/9-3: run the harness with the deterministic fakes and assert the strict FP-block reduction + retained recall inequalities; make sure the harness itself is deterministic (no Math.random/Date). sc-9-4: cross-check every vulnerable label against the parsed SecurityKnowledgeIndex. sc-9-5: confirm no network/live-provider in the required test; build+typecheck+lint+full suite.",
+  "estimatedFiles": [
+    "src/orchestrator/security-knowledge/benchmark/harness.ts",
+    "src/orchestrator/security-knowledge/benchmark/harness.test.ts",
+    "src/orchestrator/security-knowledge/benchmark/fixtures/manifest.json",
+    "src/orchestrator/security-knowledge/benchmark/fixtures/README.md"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-9-1",
+      "timestamp": "2026-07-14T19:56:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-9-1",
+  "updatedAt": "2026-07-14T19:56:00Z",
+  "completedAt": "2026-07-14T19:56:00Z"
+}

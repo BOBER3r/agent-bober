@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["cd4a2ea - bober(sprint-3): import-labs command — fail-closed cloud-inference gate + vault + audit"],
+  "filesChanged": [
+    "src/cli/commands/medical.ts (modified — ImportLabsDeps + runImportLabs + import-labs subcommand)",
+    "src/cli/commands/medical.test.ts (modified — sc-3-2/3-3/3-4 tests)"
+  ],
+  "testsAdded": ["src/cli/commands/medical.test.ts"],
+  "selfVerify": {
+    "build": "exit 0", "typecheck": "exit 0",
+    "lint": "0 errors (2 pre-existing any warnings unrelated)",
+    "fullSuite": "2947 passed (231 files); medical.test.ts 9 tests (6 WHOOP + 3 new import-labs)"
+  },
+  "notes": "Fail-closed ordering: cloud-inference EgressGuard check is step 2, process.exitCode=1 + return BEFORE readFile/buildMedicalInferenceClient. sc-3-3 proves parser spy callCount 0 + no note file + exitCode 1. Audit = { tIso, event:'ingest' } only (no marker/value/panel/count/PHI). import-labs nested under medical (not top-level)."
+}

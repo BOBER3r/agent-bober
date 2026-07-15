@@ -1,0 +1,13 @@
+{
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["5f7824e - bober(sprint-1): add Anthropic prompt caching behind default-on flag"],
+  "filesChanged": [
+    {"path": "src/providers/anthropic.ts", "action": "modified", "description": "promptCaching field + optional opts 2nd ctor arg (default true); buildCachedSystem() + attachMessageBreakpoints() helpers; chat() branches on this.promptCaching (enabled: TextBlockParam[] system + system-and-last-3 breakpoints capped at 4; disabled: byte-identical plain-string path)."},
+    {"path": "src/providers/factory.ts", "action": "modified", "description": "anthropic case resolves promptCaching from providerConfig (typeof===boolean, default true) and forwards { promptCaching } to AnthropicAdapter."},
+    {"path": "src/providers/anthropic.test.ts", "action": "created", "description": "7 tests (C1, C1-default, C2, C2-edge, C3, C3-multi, response-normalization) via top-level vi.mock('@anthropic-ai/sdk')."}
+  ],
+  "testsAdded": ["src/providers/anthropic.test.ts"],
+  "notes": "Only test failures in full run are 2 flaky timeout-style baseline failures (37-tool-count tests); disk approval-poll passed this run. cache_control isolated to anthropic.ts(+test); other adapters byte-unchanged. C4 coverage relied on existing factory instanceof tests + the C1-default adapter test, NOT a new dedicated factory test asserting providerConfig.promptCaching:false is honored end-to-end."
+}

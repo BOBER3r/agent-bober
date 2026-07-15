@@ -1,0 +1,131 @@
+{
+  "specId": "spec-20260618-fleet-expand-deep-critique",
+  "version": 1,
+  "createdAt": "2026-06-18T10:06:20Z",
+  "updatedAt": "2026-06-18T10:45:14Z",
+  "title": "Fleet Critique Loop (fleet expand-deep --critique)",
+  "description": "Adds a self-judged semantic quality gate to `fleet expand-deep` behind a `--critique` flag (Approach B / Phase 4). A fresh boolean approve|reject critic reviews the structurally-valid manifest and, on reject, re-expands once via a feedback-seeded fresh runExpandStage, bounded by CRITIQUE_MAX_ROUNDS=1 and a closed-form budget DEEP_CRITIQUE_MAX_TOTAL_CALLS=8. Purely additive: with --critique absent the path is byte-identical to the shipped Phase 3 expand-deep. Implements arch-20260618-fleet-expand-deep-critique (ADR-1..5).",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "2 sprints: Sprint 1 = the critique engine src/fleet/critic-deep.ts (constants, CritiqueVerdictSchema+validateVerdict, CRITIQUE_SYSTEM_PROMPT+callCritic+getCriticVerdict, runCritiqueLoop) PLUS the additive opt-in threading in decomposer-deep.ts (DecomposeDeepInput.critique?, runExpandStage.critiqueFeedback?, decomposeGoalDeep routing) \u2014 fully testable end-to-end via ScriptedClient with critique:true, no CLI. Sprint 2 = the --critique CLI flag in index.ts + byte-lock/golden assertions. Mirrors the proven Phase-2/Phase-3 engine-then-CLI split.",
+      "resolvedAt": "2026-06-18T10:06:20Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve \u2014 write contracts. User selected 'Approve \u2014 write contracts' at the planning gate, accepting the assumptions, out-of-scope, and the 2-sprint split (engine+threading, then CLI flag).",
+      "resolvedAt": "2026-06-18T10:06:20Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "All NEW components live in a new sibling module src/fleet/critic-deep.ts (CritiqueConstants, CritiqueVerdictSchema+validateVerdict, CRITIQUE_SYSTEM_PROMPT/CRITIQUE_COERCION_INSTRUCTION+callCritic+getCriticVerdict, runCritiqueLoop). src/fleet/decomposer-deep.ts and src/fleet/index.ts receive ONLY minimal additive edits (architecture Component Breakdown; ADR-2).",
+    "DecomposeDeepInput gains a single optional field `critique?: boolean` (src/fleet/decomposer-deep.ts:81-88). Absent/false reproduces the byte-identical Phase-3 plan->expand->return call sequence; the threading uses a guarded spread `...(opts.critique ? { critique: true } : {})` at the CLI decompose call so the arg object is structurally identical when the flag is absent (ADR-2).",
+    "runExpandStage gains a single optional field `critiqueFeedback?: string` appended to the FIRST EXPAND user message ONLY when present; the Outline from runPlanStage is captured once in decomposeGoalDeep and reused across all critique rounds (no second PLAN call), which keeps the budget closed-form (ADR-4).",
+    "Verdict shape is CritiqueVerdictSchema = z.object({ verdict: z.enum(['approve','reject']), feedback: z.string() }); validateVerdict(rawText) returns the {ok:true,verdict}|{ok:false,error} discriminated union and NEVER throws, mirroring validateOutline's tolerant extract-then-Zod ladder (src/fleet/decomposer-deep.ts:107-155; ADR-3).",
+    "Constants: CRITIQUE_MAX_ROUNDS=1, CRITIQUE_PARSE_MAX_RETRIES=1, DEEP_CRITIQUE_MAX_TOTAL_CALLS=8 = DEEP_MAX_TOTAL_CALLS + CRITIQUE_MAX_ROUNDS*((1+CRITIQUE_PARSE_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES)) = 4 + 1*(2+2), pinned by a co-located audit test mirroring decomposer-deep.test.ts:76-80 (ADR-1/ADR-3).",
+    "Fail-open: getCriticVerdict returns {verdict:'approve',feedback:''} after (1+CRITIQUE_PARSE_MAX_RETRIES) unparseable critic responses; accept-best: runCritiqueLoop returns the best manifest on round exhaustion (tiebreak: most children, then first-seen baseline). The loop NEVER throws once entered \u2014 write-and-stop remains the human backstop (ADR-1/ADR-3).",
+    "The critic is a FRESH call: callCritic builds its OWN clean CRITIQUE_SYSTEM_PROMPT + message array, presents the candidate as third-party input ('review this manifest'), is never told it authored the manifest, and never extends the 3-message EXPAND coercion; both critic chat calls set jsonObjectMode:true and NEVER responseSchema (src/providers/types.ts:174,183; LOCK1/LOCK5).",
+    "Gate ordering is load-bearing: the critic runs strictly AFTER the structural validateManifest (which already ran inside runExpandStage, decomposer-deep.ts:303) and strictly BEFORE the atomic write (index.ts:349), inside decomposeGoalDeep whose return reaches index.ts:325 ahead of the Step-4 write (ADR-5).",
+    "Tests use the existing ScriptedClient fake LLMClient (decomposer-deep.test.ts pattern) and the makeFakeDecompose/makeFakeClientBuilder/runFleetSpy DI helpers (expand-deep.test.ts) \u2014 zero network in every test.",
+    "validateManifest is reused verbatim by both the baseline expand and every re-expand; it is NOT modified and remains the sole structural gate (LOCK6)."
+  ],
+  "outOfScope": [
+    "A re-plan round-type that re-runs runPlanStage to fix plan-level (not expand-level) degeneracy \u2014 deferred per architecture Open Question (a); would add a PLAN call per round and break the closed-form budget.",
+    "Raising CRITIQUE_MAX_ROUNDS above 1 \u2014 deferred per Open Question (b); the constant is the documented upgrade knob (budget would grow 8->12 at rounds=2).",
+    "A graded per-dimension rubric with numeric scores and an accept threshold (the rejected Approach B from CP2) \u2014 deferred per Open Question (c).",
+    "Any change to the byte-locked surface: decomposeGoal + DECOMPOSE_* constants (decomposer.ts), runFleet, FleetManifestSchema/FleetChildSchema, the `fleet <manifest>` and `fleet expand` commands, the DEFAULT no-flag `fleet expand-deep` path, validateManifest, and src/providers/*.",
+    "Real DeepSeek network calls in tests; any provider-adapter change.",
+    "Changing the on-disk manifest contract, the default output path .bober/fleet-expand.json, the --yes spawn gate, or the write-and-stop default."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Critique engine (critic-deep.ts) + opt-in threading",
+      "priority": "must-have",
+      "estimatedComplexity": "high",
+      "description": "New module src/fleet/critic-deep.ts implementing the bounded fresh-critic critique/refine loop, plus the additive opt-in threading in decomposer-deep.ts so decomposeGoalDeep({...,critique:true}) routes a structurally-valid baseline manifest through runCritiqueLoop before returning. Fully testable end-to-end with a ScriptedClient fake; no CLI.",
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "AC1: Constants assert CRITIQUE_MAX_ROUNDS===1, CRITIQUE_PARSE_MAX_RETRIES===1, and DEEP_CRITIQUE_MAX_TOTAL_CALLS===8===DEEP_MAX_TOTAL_CALLS+CRITIQUE_MAX_ROUNDS*((1+CRITIQUE_PARSE_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES)) as a fixed audit relation.",
+        "AC2: validateVerdict NEVER throws \u2014 returns {ok:false,error} for non-JSON / shape-invalid text (bad enum, missing feedback) and {ok:true,verdict} for a valid {verdict,feedback} object; mirrors validateOutline's tolerant extraction.",
+        "AC3: Both critic chat calls captured by the ScriptedClient have jsonObjectMode===true and responseSchema===undefined; callCritic uses its own CRITIQUE_SYSTEM_PROMPT and presents the candidate as third-party input (a fresh message array, NOT an appended EXPAND turn).",
+        "AC4: getCriticVerdict fail-open \u2014 after (1+CRITIQUE_PARSE_MAX_RETRIES)=2 consecutive unparseable critic responses it returns {verdict:'approve',feedback:''} and never throws; the coercion retry uses the 3-message [user,assistant,user] shape.",
+        "AC5: runCritiqueLoop on scripted reject-then-richer-expand folds critic feedback into a FRESH runExpandStage (critiqueFeedback present) and returns the re-expanded multi-child manifest; on scripted all-reject it returns accept-best (tiebreak most children, else first-seen baseline) and NEVER throws.",
+        "AC6: Across a fully-failing critique run the total ScriptedClient.chat calls NEVER exceed DEEP_CRITIQUE_MAX_TOTAL_CALLS=8.",
+        "AC7: decomposeGoalDeep({...,critique:true}) on a degenerate baseline (e.g. 2 children) with a scripted reject + richer re-expand returns the multi-child manifest, and the manifest handed to the critic is already FleetManifestSchema-valid (critic runs after the structural validateManifest gate).",
+        "AC8: decomposeGoalDeep with critique absent/false emits ZERO critic calls \u2014 the chat call sequence is byte-identical to Phase 3 (plan + expand only, <=DEEP_MAX_TOTAL_CALLS=4); decomposer-deep.ts edits are purely additive and decomposer.ts/manifest.ts/providers stay byte-unchanged."
+      ]
+    },
+    {
+      "featureId": "feat-2",
+      "title": "fleet expand-deep --critique CLI flag (additive, byte-lock preserved)",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "description": "Add a --critique boolean flag to the existing `fleet expand-deep <goal>` subcommand and thread it through runFleetExpandDeep into the decomposeGoalDeep call via a guarded spread, leaving the default no-flag path byte-identical to Phase 3 and the byte-locked command tree intact.",
+      "dependencies": [
+        "feat-1"
+      ],
+      "acceptanceCriteria": [
+        "AC1: `agent-bober fleet expand-deep <goal> --critique` with no --yes writes a FleetManifestSchema-valid manifest to the resolved outPath and does NOT call runFleet (write-and-stop preserved) \u2014 verified with DI stubs.",
+        "AC2: runFleetExpandDeep threads critique via the guarded spread: with --critique the injected decompose receives critique:true; WITHOUT --critique the decompose arg object is byte-identical to Phase 3 (no critique key) AND zero extra chat calls are emitted \u2014 asserted on the arg object / call record.",
+        "AC3: --critique is exposed as a flag on the expand-deep subcommand ALONGSIDE the existing options (--count/--provider/--model/--root/--concurrency/--out/--yes); the byte-locked command tree remains intact: `fleet <manifest>` positional + --concurrency/--root, the `fleet expand` subcommand, and the default `expand-deep` options.",
+        "AC4: Credential fail-fast (createClient first, no file written on missing key, decompose never called), write-before-spawn (manifest exists on disk before runFleet), and the --yes sole-spawn-gate semantics are unchanged on the --critique path.",
+        "AC5: With --yes and --critique, runFleet is called exactly once with outPath AFTER the manifest (critic-reviewed) is written.",
+        "AC6: `npm run build` and the full `npm test` suite pass; existing fleet suites (decomposer.test.ts, decomposer-deep.test.ts, expand.test.ts, expand-deep.test.ts, index.test.ts) remain green (no regression)."
+      ]
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Total LLMClient.chat calls for any --critique run are bounded by the explicit constant DEEP_CRITIQUE_MAX_TOTAL_CALLS=8; the loop never opens unbounded and never throws once entered (fail-open / accept-best).",
+      "verificationMethod": "Unit test seeds a ScriptedClient with exactly 8 responses on an all-reject run and asserts the loop never requests a 9th and resolves with a structurally-valid manifest."
+    },
+    {
+      "category": "security",
+      "requirement": "No child run may spawn unless the operator could first inspect the manifest: write-before-spawn, write-and-stop default, --yes sole gate \u2014 all preserved on the --critique path; only a critic-reviewed manifest is ever written.",
+      "verificationMethod": "DI test asserts default (no --yes) never calls runFleet, --yes calls runFleet exactly once AFTER the file exists, and the critic runs before the atomic write."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Critic structured output uses jsonObjectMode:true never responseSchema (DeepSeek rejects strict json_schema); provider/SDK types never leak outside src/providers/ (critic-deep.ts imports only LLMClient/Message types).",
+      "verificationMethod": "Assert captured ChatParams on both critic calls has jsonObjectMode===true and responseSchema===undefined; confirm critic-deep.ts imports only from providers/types.js."
+    },
+    {
+      "category": "reliability",
+      "requirement": "With --critique absent the byte-locked Phase-3 surface (decomposeGoalDeep call sequence, atomic write, printed output, --yes gate, the `fleet <manifest>`/`fleet expand` commands, decomposeGoal/DECOMPOSE_*, FleetManifestSchema, validateManifest) is unchanged.",
+      "verificationMethod": "git diff shows only additive edits; a golden test asserts the critique-absent decompose call sequence equals the Phase-3 sequence; existing fleet suites stay green."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "DeepSeek via the provider-agnostic LLMClient built by createClient (reused from Phase 2/3, index.ts:308-315) for callCritic + re-expand.",
+      "Reused validateManifest (decomposer.ts:95-155) as the unchanged structural gate before/within every expand.",
+      "Reused runExpandStage (decomposer-deep.ts:280-315) as the fresh re-expand seam, augmented with optional critiqueFeedback.",
+      "Reused atomic tmp+rename write, --yes gate, runFleet, write-and-stop default (index.ts:338-385)."
+    ],
+    "dataModel": "Transient in-memory only: Outline = { areas: { name:string; intent:string }[] } (existing, unchanged); CritiqueVerdict = { verdict:'approve'|'reject'; feedback:string } (new, never persisted). On-disk: unchanged FleetManifestSchema-valid children-only manifest at .bober/fleet-expand.json.",
+    "securityConsiderations": [
+      "Credential fail-fast: createClient throws synchronously on missing DEEPSEEK_API_KEY before any FS write or LLM IO.",
+      "Spawn-safety: write-before-spawn, write-and-stop default, --yes sole gate; only a critic-reviewed manifest is written.",
+      "Budget bound + fail-open/accept-best mean a flaky critic degrades to Phase-3 behavior, never below, and never blocks a valid manifest."
+    ],
+    "existingPatterns": "Mirror runExpandStage's bounded loop + 3-message coercion (decomposer-deep.ts:202-315); mirror validateOutline's discriminated-union tolerant parse (decomposer-deep.ts:107-155); mirror runFleetExpandDeep's six steps + DI seam (index.ts:299-432); reuse ScriptedClient + makeFakeDecompose/makeFakeClientBuilder/runFleetSpy. ESM .js imports, Zod, provider-agnostic boundary, async fs, .bober/ state."
+  },
+  "sprints": [
+    "sprint-spec-20260618-fleet-expand-deep-critique-1",
+    "sprint-spec-20260618-fleet-expand-deep-critique-2"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Additive change against the byte-locked Phase-1/2/3 surface. Primary risks: (1) an extra chat call leaking onto the no-flag default path breaking byte-identity (mitigated by the guarded spread + golden call-sequence test); (2) the call budget exceeding 8 (mitigated by all-constant bounded loop + an 8-response ceiling test); (3) responseSchema leaking into the critic call (DeepSeek 400 \u2014 mitigated by an explicit ChatParams assertion); (4) gate-order regression writing an un-reviewed manifest (mitigated by an ordering test: no write before a critic call on the --critique path). All failure modes fail-open / accept-best, degrading to Phase-3 behavior but never below it."
+  },
+  "completedAt": "2026-06-18T10:45:14Z"
+}

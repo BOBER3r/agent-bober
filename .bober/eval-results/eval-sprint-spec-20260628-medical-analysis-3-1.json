@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-analysis-3-1",
+  "contractId": "sprint-spec-20260628-medical-analysis-3",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T19:18:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "242 files, 3097 passed; recommend 5 files 68 tests; +25 vs 3072 baseline" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "eslint recommend/ + medical.ts exit 0" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "tsc --noEmit zero errors" },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "accepted kind=action Finding; title=recommendation.slice(0,120), evidence=[recommendation]; no hedging text in accepted path; test negative-asserts on written md" },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "no-consensus -> only kind=question 'flagged for your review' + dissent lines; no kind=action written" },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "red-flag -> escalated canned 911; writeFinding spy not called; audit event short-circuit ruleId cardiac; red-flag fires first in runJudgeLoop" },
+    { "criterionId": "sc-3-5", "required": true, "result": "pass", "evidence": "cloud-inference OFF -> else branch builds via buildMedicalInferenceClient(local openai-compat localhost:11434) for all 4 lenses + generator; cloud-ON tier branch skipped; factory spy never called with anthropic/x.ai/deepseek" },
+    { "criterionId": "sc-3-6", "required": true, "result": "pass", "evidence": "accepted Finding urgency:4 severity:3 (clampInt 1..5) + tag confidence:0.92; border 5/1 verified" },
+    { "criterionId": "sc-3-7", "required": false, "result": "pass", "evidence": "recommend subcommand: clock at CLI boundary, try/catch->exitCode=1 never throws, prints accepted/flagged/escalated/refused, exits 0; --goal wired" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 3 passes all 6 required + the optional criterion. fail-closed model-selection (sc-3-5) confirmed in source: cloud-inference OFF => buildMedicalInferenceClient local openai-compat for all four lenses + generator, cloud tier branch entirely skipped, spy proves no anthropic/x.ai/deepseek call. No-hedging (sc-3-2) confirmed: accepted Finding carries the recommendation directly, no hedging inserted. Suite 3097 green, no regressions, engine.ts untouched, runJudgeLoop imported (not re-implemented)."
+}

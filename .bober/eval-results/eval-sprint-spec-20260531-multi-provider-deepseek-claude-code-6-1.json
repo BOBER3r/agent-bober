@@ -1,0 +1,24 @@
+{
+  "evalId": "eval-sprint-spec-20260531-multi-provider-deepseek-claude-code-6-1",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-6",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T15:19:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "lint", "required": false, "result": "pass", "output": "docs/providers.md markdownlint EXIT 0; README still 80 (no new errors)"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "1410 pass; 2 baseline mcp timeout flakes; npm test EXIT 0, no smoke executed"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-6-1", "result": "pass", "required": true, "evidence": "README Capability Matrix: 6 roles x anthropic/deepseek/claude-code; claude-code 'no (runs own loop)' for tool roles; deepseek prereqs + claude-code ToS/overhead notes present"},
+    {"criterionId": "sc-6-2", "result": "pass", "required": true, "evidence": "docs/providers.md: anthropic/deepseek/claude-code config snippets + no-key-persistence + .env gitignored statement"},
+    {"criterionId": "sc-6-3", "result": "pass", "required": true, "evidence": "markdownlint docs/providers.md EXIT 0; README count 80 (unchanged)"},
+    {"criterionId": "sc-6-4", "result": "pass", "required": true, "evidence": "spike-deepseek.mjs skip+exit 0 (guard before createClient, no network)"},
+    {"criterionId": "sc-6-5", "result": "pass", "required": true, "evidence": "claude-code smoke probes claude binary, skip+exit 0 when absent; not in npm test"},
+    {"criterionId": "sc-6-6", "result": "pass", "required": true, "evidence": "npm test EXIT 0; no vitest config; scripts/*.mjs not collected"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass. README matrix + docs/providers.md complete; markdownlint clean on new file, no new README errors; smoke scripts key/binary-gated (skip+exit 0); npm test green. Diff scoped to README/docs/scripts — no source or package.json changes."
+}

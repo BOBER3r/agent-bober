@@ -1,0 +1,125 @@
+{
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "version": 1,
+  "createdAt": "2026-07-14T00:00:00.000Z",
+  "updatedAt": "2026-07-14T20:20:00Z",
+  "title": "Per-Stack Security Auditor with Skill-File Signatures + Adversarial Verifier",
+  "description": "Upgrades the bober-security-auditor from a near-blind single-pass reviewer into a profound per-stack money-handling auditor. Adds human-editable per-stack security SKILL files (7 stacks + generic) parsed into typed signatures behind a top-K retrieval index, a fresh-context adversarial verifier stage that downgrades false-positive criticals, a supply-chain/dependency/secret axis, a widened vulnerability taxonomy with structured cwe/severity/taint metadata, an orchestrator-owned real-diff provider, and a labelled vulnerable/safe benchmark corpus that measures the verifier's false-positive reduction. Implements arch-20260714-security-auditor-per-stack-skills (ADR-1..7). Every stage is additive and default-off so a config omitting security stays byte-identical; all proven fail-closed/read-only/hub invariants are preserved.",
+  "mode": "greenfield",
+  "status": "completed",
+  "architectureId": "arch-20260714-security-auditor-per-stack-skills",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-skill-depth",
+      "category": "scope",
+      "question": "How comprehensive should the 8 per-stack security SKILL files be in this build?",
+      "answer": "Comprehensive from the research: each stack's SKILL.md fully authored with the money/credential/injection/supply-chain signatures gathered in research-20260714 (iGaming TOCTOU/odds/idempotency/RNG/rollback/bonus, DEX withdrawal-race/decimals/key-custody/SIWE, solidity reentrancy/oracle/access-control, node/payments/react/anchor, generic OWASP).",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-benchmark",
+      "category": "scope",
+      "question": "Include the labelled vulnerable/safe fixture corpus + measurement harness now (success criterion #3) or defer?",
+      "answer": "Include a corpus + measurement now, so the finder->verifier false-positive reduction is verified, not asserted.",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-dogfood",
+      "category": "integrations",
+      "question": "After the build, enable the new verifier + offline supply-chain stages for this repo's own sprints?",
+      "answer": "Enable verifier + offline supply-chain inspector in this repo's bober.config.json (offline only; onlineResearch stays off), self-tested by a final wiring sprint.",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "category": "gate",
+      "question": "Approval of assumptions + outOfScope before writing contracts.",
+      "answer": "Interactive approval via the three scope answers above, plus autonomous self-approval: every assumption is backed by cited evidence in arch-20260714-security-auditor-per-stack-skills-architecture.md.",
+      "resolvedBy": "user",
+      "metadata": {
+        "approvalEvidence": [
+          ".bober/architecture/arch-20260714-security-auditor-per-stack-skills-architecture.md",
+          ".bober/architecture/arch-20260714-security-auditor-per-stack-skills-adr-1.md",
+          ".bober/research/research-20260714-security-auditor-pentest-deep-upgrade-research.md",
+          "src/orchestrator/security-audit-types.ts",
+          "src/orchestrator/stack-knowledge.ts",
+          "src/orchestrator/security-scanners.ts",
+          "src/orchestrator/security-auditor-agent.ts",
+          "src/orchestrator/security-gate.ts",
+          "src/orchestrator/security-hub.ts",
+          "src/config/schema.ts"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "The existing security subsystem shape is as cited in the architecture: VulnClass + SecurityFinding at src/orchestrator/security-audit-types.ts:9-25; ALL_VULN_CLASSES + STACK_SKILL_MAP + extractSecurityExcerpt + resolveStackSecurityContext at src/orchestrator/stack-knowledge.ts:38-212; ScannerRunner/detectScannerKind/parseScannerStdout/runOneScanner nonzero-exit branch at src/orchestrator/security-scanners.ts:36-369; runSecurityAudit + read-only curator toolset + fail-closed parse at src/orchestrator/security-auditor-agent.ts:48-345; evaluateSecurityGate + hub emission at src/orchestrator/security-gate.ts:83-205; mapAuditToFindings + stable id at src/orchestrator/security-hub.ts:39-159; SecuritySectionSchema at src/config/schema.ts:210-228.",
+    "The LOCKED ReviewResult/ReviewFinding shapes are imported type-only from code-reviewer-agent.ts; SecurityFinding only extends them with OPTIONAL fields; deriveVerdict (blocked iff critical.length>0) is never changed.",
+    "The read-only 'curator' role toolset (read_file/glob/grep, no Bash/Write/Edit) is reused for BOTH the finder and the new verifier; git and scanner subprocesses run in orchestrator Node, never as an auditor tool.",
+    "Anchors (line numbers) may have drifted since the architecture was written; the generator re-locates by pattern, not by absolute line.",
+    "This is a large feature at the 10-sprint ceiling; the two skill-authoring sprints (S3, S4) are content-dense and may need a generator iteration to parse cleanly against the S2 format.",
+    "The tokensave GraphClient (getGraphState/getGraphDeps in src/orchestrator/tools/index.ts) is the graph seam for optional diff-neighborhood expansion; when the engine is not 'ready' the diff provider skips neighborhood and still returns git changedFiles.",
+    "npm-audit/osv-scanner/gitleaks binaries may be absent on any given machine; a missing binary yields [] for that scanner (per-scanner isolation), and the offline SupplyChainDiffInspector is the always-available floor."
+  ],
+  "outOfScope": [
+    "A sandboxed proof-of-concept / dynamic-execution verifier role that runs the target code (the verifier stays LLM-only and read-only; a PoC role would be a separate future spec behind a new execution axis).",
+    "On-chain smart-contract dynamic analysis or symbolic execution (Slither/Mythril integration beyond the existing generic scanner-kind seam).",
+    "Multi-model / N-of-M voting across different provider vendors for the verifier (single-model adversarial verifier this build).",
+    "Telegram/hub UX beyond the existing FactStore Finding emission (metadata rides existing tags + title only; the hub Finding schema is unchanged).",
+    "Auto-remediation or patch generation (the auditor never writes code; it only reports).",
+    "Turning on network-egress supply-chain checks in this repo (onlineResearch stays off in the dogfood config; only offline supply-chain + verifier are enabled)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-taxonomy",
+      "title": "Widened taxonomy + structured finding metadata + hub mapping",
+      "priority": "must-have"
+    },
+    {
+      "featureId": "feat-signatures",
+      "title": "Signature type + parser + authoring format + per-stack security skill files",
+      "priority": "must-have"
+    },
+    {
+      "featureId": "feat-retrieval",
+      "title": "Stack registry + knowledge index + selector + context resolver (fixes G3)",
+      "priority": "must-have"
+    },
+    {
+      "featureId": "feat-diff",
+      "title": "Orchestrator-owned real-diff provider (fixes G4)",
+      "priority": "must-have"
+    },
+    {
+      "featureId": "feat-supplychain",
+      "title": "Supply-chain axis: scanner kinds + nonzero-exit fix + offline inspector (fixes G9)",
+      "priority": "must-have"
+    },
+    {
+      "featureId": "feat-verifier",
+      "title": "Adversarial finder->verifier stage for false-positive control",
+      "priority": "must-have"
+    },
+    {
+      "featureId": "feat-benchmark",
+      "title": "Labelled vulnerable/safe benchmark corpus + measurement harness",
+      "priority": "should-have"
+    },
+    {
+      "featureId": "feat-dogfood",
+      "title": "Dogfood enablement + docs + update-all sync",
+      "priority": "should-have"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    "Zero regression: all existing security tests (77+) stay green; a config omitting the security section parses byte-identically (deep-equal, not assertion-of-absence).",
+    "Fail-closed preserved end to end: unparseable finder output, unparseable/errored verifier, timeout, and audit error all resolve to blocked; the verifier may only downgrade, never manufacture a clean pass.",
+    "Read-only preserved: neither the finder nor the verifier gains Bash/Write/Edit; git + scanners run in orchestrator Node.",
+    "Additive/default-off: every new config key defaults off; diff.mode defaults to 'estimated-files' (today's behavior); no network egress unless egress.onlineResearch is explicitly true.",
+    "Bounded resource use: the finder+verifier share one Promise.race time-box via a single AbortController; top-K signature selection and diff size caps keep the prompt bounded; no unbounded parallel child processes."
+  ],
+  "techNotes": "Implements arch-20260714-security-auditor-per-stack-skills. Knowledge is authored as skills/bober.security-<stack>/SKILL.md discrete labelled signature blocks (ADR-1/ADR-3), parsed by a total SecuritySignatureParser into typed SecuritySignature[] carrying cwe/severity/vulnClass/invariant, indexed by a per-process memoised SecurityKnowledgeIndex (ADR-7), selected top-K per diff by SecuritySignatureSelector. The verifier (ADR-2/ADR-6) is a new read-only bober-security-verifier agent run sequentially inside the gate time-box, fed finder critical+important findings ONLY (never the sprint contract), told to disprove, downgrade-only, fail-closed ran:false=>keep. Supply-chain (ADR-4) is deterministic scanner-kinds (npm-audit/osv-scanner/gitleaks) + an offline SupplyChainDiffInspector, with the G9 nonzero-exit fix via per-kind scannerExitPolicy at security-scanners.ts:355; network scanners gated behind egress.onlineResearch. The real diff (ADR-5) is computed by an orchestrator-owned SecurityDiffProvider (git + optional tokensave graph slice), never by giving the auditor Bash. Taxonomy widening + optional SecurityFinding fields extend the LOCKED ReviewFinding; hub title fix (G10) folds signatureId/cwe into the id-deriving string.",
+  "completedAt": "2026-07-14T20:20:00Z"
+}

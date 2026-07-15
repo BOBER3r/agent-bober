@@ -1,0 +1,208 @@
+{
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "version": 1,
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T15:30:02Z",
+  "title": "Chat Interrupt / Approve / Steer (Chattable-Team research Phase 2)",
+  "description": "Add mid-flight human-in-the-loop control over chat-spawned runs: pause an approval-gated run at curated checkpoints, approve/reject with feedback, inject free-text guidance, and soft pause/resume — all cross-process via the filesystem, reusing the existing disk-approval engine (DiskCheckpointMechanism + approval-state.ts) without rebuilding it or adding a new orchestration engine. This is research-roadmap Phase 2; Phase 1 (chat session layer, PR #44) and Phase 4 (team abstraction, PR #45) are already on main.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-careful-opt-in",
+      "answer": "Session toggle: `/careful on` makes every subsequent chat spawn approval-gated until `/careful off`. Mode is a session setting persisted in a chat sidecar, not per-spawn. (`bober run --mode`/`--approve-gates` is the underlying lever.)",
+      "resolvedAt": "2026-06-15T17:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-pause-points",
+      "answer": "Curated subset: a chat-spawned careful run pauses only at post-research, post-plan, and post-sprint (per sprint). The chat injects a curated checkpointOverrides mapping these three gates to the disk mechanism; pre-curator/pre-generator/pre-evaluator/pre-code-reviewer/post-sprint-contract/end-of-pipeline stay noop.",
+      "resolvedAt": "2026-06-15T17:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-steer-scope",
+      "answer": "All three steer capabilities, beyond the already-built hard /stop: (A) approve/reject-with-feedback at checkpoints (reject feedback becomes the rework signal, reusing the disk mechanism + runCheckpointWithFeedback); (B) free-text mid-run guidance injection picked up at the next checkpoint boundary; (C) soft pause/resume that suspends a run without killing the process.",
+      "resolvedAt": "2026-06-15T17:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "approve",
+      "resolvedAt": "2026-06-15T17:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Scope is research-roadmap Phase 2 'Interrupt/approve/steer in chat'. Phase 1 (chat session layer, PR #44) and Phase 4 (team abstraction, PR #45) are already merged to main; build on main's current tree (the 'unpushed' notes in auto-memory are stale).",
+    "Phase 1's cross-process model holds: `bober chat` is a pure-reader process; runs are detached `bober run --run-id` children; all coordination is via the filesystem (.bober/runs/<id>/, .bober/approvals/, .bober/history.jsonl, the pid sidecar under .bober/chat/). Evidence: src/chat/run-spawner.ts:93, src/chat/roster-reader.ts, src/chat/completion-tailer.ts.",
+    "The disk-approval engine is reused as-is, not rebuilt: DiskCheckpointMechanism (src/orchestrator/checkpoints/mechanisms/disk.ts:49) already writes <id>.pending.json, polls for <id>.approved.json/<id>.rejected.json/<id>.timeout.json, deletes the pending marker, and resumes — fully cross-process. approval-state.ts (savePending/saveApproved/saveRejected/listPending/listPendingApprovals/pendingExists) and the approve.ts/reject.ts/list-approvals.ts CLI are reused. Phase 2 wires this into chat.",
+    "The pipeline already wires every checkpoint gate (post-research:663, post-plan:809, post-sprint-contract:872, post-sprint:506, plus per-sprint pre-curator/pre-generator/pre-evaluator/pre-code-reviewer, and end-of-pipeline:942 in src/orchestrator/pipeline.ts), each resolving via getCheckpointMechanismFor(id, config, 'noop'). Curated gating is achieved by setting pipeline.checkpointOverrides for the 3 chosen gates to 'disk' (the override wins over mode), so no global config edit and no --mode change are required.",
+    "`bober run` already accepts --mode <autopilot|careful> (run.ts:17,104), --run-id (run.ts:155), and --team. A new additive `--approve-gates <comma-list>` flag follows the same pattern and merges {gate -> 'disk'} into config.pipeline.checkpointOverrides for this run only; absent flag = today's behavior.",
+    "/careful is a SESSION TOGGLE persisted in a chat-scoped sidecar (mirrors src/chat/pid-sidecar.ts under .bober/chat/), applied to subsequent spawns. When on, RunSpawner.spawn passes --approve-gates post-research,post-plan,post-sprint to the detached child.",
+    "RunState grammar extension is additive: status union gains 'input-required' and 'paused'; optional fields pendingCheckpointId, pendingPrompt, pendingSince, pausedAt are added. Existing readers tolerate new values (roster.summarize uppercases status generically; readRunStatesFromDisk is schema-loose). Evidence: src/mcp/run-manager.ts:34, src/chat/roster-reader.ts.",
+    "input-required and paused are DERIVED by the chat process (which owns RunState for chat-spawned runs) from disk markers; the detached child never writes RunState. Confirmed: the only non-test writeRunState callers are RunSpawner (src/chat/run-spawner.ts:105,158,170) and RunManager (src/mcp/run-manager.ts); runPipeline/run.ts write no RunState.",
+    "Free-text guidance injection and cooperative pause are ADDITIVE read points at existing checkpoint boundaries in pipeline.ts — no change to phase order or algorithm (the src/orchestrator/pipeline.ts:571 invariant). Guidance and pause markers are keyed by runId under .bober/runs/<id>/ (e.g. guidance.jsonl, paused.json).",
+    "Single approval-gated (careful) chat run at a time is supported this phase: DiskCheckpointMechanism marker files are checkpointId-keyed in a shared .bober/approvals dir (disk.ts:75; registry.ts:131), so two concurrent careful runs would collide on e.g. post-research.pending.json. This is a documented limitation; runId-scoped marker filenames are the follow-up. Autopilot fire-and-forget runs remain concurrent.",
+    "resume-cursor.ts (ResumeCursorReconstructor, src/orchestrator/workflow/resume-cursor.ts:11) is OUT of the approval path — it reconstructs completed-sprint numbers for pipeline restart, orthogonal to checkpoint-approval resume (which the disk poll handles). The research doc lumped them; the code separates them.",
+    "Classifier intent extensions (approve/reject/tell/pause/resume) reuse the existing loose-JSON jsonObjectMode classifier (src/chat/turn-classifier.ts), not strict tool-calling, so they stay DeepSeek-safe.",
+    "CLI-first, provider-agnostic, no new heavy deps: new code is ESM/NodeNext strict TS with .js import extensions; no SDK types outside src/providers/."
+  ],
+  "outOfScope": [
+    "Concurrent multiple approval-gated (careful) chat runs, and runId-scoped approval marker filenames (documented limitation; deferred follow-up).",
+    "MCP-cockpit / agent-bober-ide surfacing of input-required/paused (this phase is the `bober chat` CLI only).",
+    "An A2A HTTP server or network protocol, and A2A states beyond input-required/paused (auth-required, policy-reject).",
+    "Approval-timeout UX changes (the disk mechanism's 24h timeout is reused unchanged).",
+    "Any change to the pipeline algorithm or phase order — only additive read/block points at existing checkpoint boundaries are allowed.",
+    "Guidance that mutates an agent call already executing (guidance is applied at the NEXT checkpoint boundary, not mid-agent).",
+    "semantic_facts / memory hygiene (research Phase 3); self-improvement / GEPA / fail->pass extractor (Phases 3/5); the medical team + guardrails (Phase 6).",
+    "Changing the public behavior of autopilot runs (no --approve-gates) or of the existing approve/reject/list-approvals CLI commands."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "RunState grammar + careful-mode chat spawn + /careful toggle",
+      "description": "Extend the RunState status grammar with input-required/paused (additive), add a session-persisted /careful on|off toggle, and make a careful chat spawn launch the detached run with a curated --approve-gates set so the run pauses at post-research/post-plan/post-sprint. Adds the additive `bober run --approve-gates` flag.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When `/careful on` is issued then a run is spawned from chat, the detached child is launched with `--approve-gates post-research,post-plan,post-sprint`; when careful is off (default), no --approve-gates is passed and spawn behaves exactly as Phase 1.",
+        "AC2: When `bober run --approve-gates post-research,post-plan,post-sprint <task>` is invoked, config.pipeline.checkpointOverrides gains {post-research:'disk', post-plan:'disk', post-sprint:'disk'} for that run only; an unknown gate name is rejected with a clear error and the other gates still apply.",
+        "AC3: The RunState status union accepts 'input-required' and 'paused' and the optional fields pendingCheckpointId/pendingPrompt/pendingSince/pausedAt round-trip through writeRunState/readRunState; existing statuses and readers are unaffected.",
+        "AC4: The /careful toggle persists across turns in a chat-scoped sidecar and `/careful` with no arg reports the current state; an autopilot spawn after `/careful off` produces no pending markers."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Surface pending approvals in chat (read path) + roster input-required",
+      "description": "An ApprovalReader over .bober/approvals/*.pending.json, a poll-prelude that weaves a one-time 'run X is waiting at <gate>: <prompt>' notice into the chat reply, and roster/`/runs` output that shows runs as INPUT-REQUIRED by correlating a pending marker's runId to a running run.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a <gate>.pending.json marker exists for a running chat run, the next chat turn surfaces a notice naming the runId, checkpoint id, and the rendered prompt; the roster summary shows that run as [INPUT-REQUIRED].",
+        "AC2: A given pending marker is announced at most once (announce-once dedupe, mirroring the CompletionTailer cursor pattern); a still-pending marker does not re-announce on every subsequent turn.",
+        "AC3: When no pending markers exist, chat behavior is identical to Phase 1 (no spurious notices); a corrupted or unparseable marker is skipped silently.",
+        "AC4: The pending checkpoint id/prompt are reflected onto the chat-owned RunState (pendingCheckpointId/pendingPrompt/pendingSince + status input-required) so /runs is consistent across turns."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Resolve approvals from chat (write path): /approve, /reject + feedback, NL",
+      "description": "Slash commands /approve <id> and /reject <id> [feedback], plus natural-language approve/reject intent via the classifier, that write the .approved.json/.rejected.json markers (reusing saveApproved/saveRejected with the pendingExists guard and resolveApprover). The detached child's disk poll then resumes automatically; rejection feedback flows into the pipeline's rework.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When `/approve <checkpointId>` is issued for an existing pending marker, an <id>.approved.json is written (approverId from env) and the chat acks that the run is resuming; if no pending marker exists, a clear 'no pending checkpoint' message is returned and nothing is written.",
+        "AC2: When `/reject <checkpointId> <feedback>` is issued, an <id>.rejected.json carrying the feedback is written; the disk mechanism returns {approved:false, feedback} and the pipeline's runCheckpointWithFeedback consumes that feedback for the rework round (verified against the existing feedback path).",
+        "AC3: Natural-language approval/rejection ('yes, approve the plan' / 'reject — split sprint 2, <reason>') is classified and routed to the same approve/reject handlers via the existing loose-JSON classifier; when ambiguous, the turn asks which checkpoint rather than guessing.",
+        "AC4: After a marker is resolved, the chat-owned RunState clears its pending fields and reflects the run back to running on the next poll; /help lists /approve and /reject."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Free-text guidance injection: /tell <runId> <text> + pipeline read point",
+      "description": "A runId-keyed guidance channel (.bober/runs/<id>/guidance.jsonl) that the chat appends to via /tell <runId> <text> (and NL 'tell run X to …'), and an additive pipeline read point that drains pending guidance at each checkpoint boundary and injects it as extra context into the next agent invocation.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When `/tell <runId> <text>` is issued for a known run, the text is appended as a guidance entry to .bober/runs/<id>/guidance.jsonl and the chat acks; for an unknown run a clear error is returned and nothing is written.",
+        "AC2: At a checkpoint boundary the pipeline reads and drains any pending guidance entries for the active runId and injects them as additional context into the next agent (curator/generator) handoff; drained entries are marked consumed so they are not re-injected.",
+        "AC3: The pipeline read point is purely additive — with no guidance present, the pipeline behaves byte-for-byte as before (the pipeline.ts:571 invariant holds), confirmed by the existing suite staying green.",
+        "AC4: Natural-language 'tell run X to <instruction>' is classified and routed to the same /tell handler."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Soft pause / resume: /pause, /resume + paused RunState + cooperative gate",
+      "description": "A runId-keyed pause marker (.bober/runs/<id>/paused.json) written by /pause (and NL), an additive cooperative-pause check at each checkpoint boundary that blocks (polls) while the marker is present, and /resume that removes it. RunState reflects paused<->running. Distinct from the already-built hard /stop (kill-by-PID).",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When `/pause <runId>` is issued for a running run, a paused.json marker is written, the run's RunState shows 'paused', and the chat acks (process stays alive — distinct from /stop).",
+        "AC2: A paused run reaching its next checkpoint boundary blocks (polls) until the marker is cleared; `/resume <runId>` removes the marker, the run continues, and RunState returns to 'running'.",
+        "AC3: The cooperative-pause check is additive — a run with no pause marker runs through boundaries unchanged (no added latency beyond a single existence check); the existing suite stays green.",
+        "AC4: Natural-language pause/resume intent is classified and routed to the /pause//resume handlers; /help lists /pause and /resume; /pause on an unknown or non-running run returns a clear message."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Hygiene, docs, and end-to-end verification",
+      "description": "Clean up stale pending/guidance/pause markers and pending RunState fields on run completion or abort, document the single-careful-run limitation and the runId-scoped-marker follow-up, update /help + README + docs, and verify the full mid-flight HITL loop end-to-end.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a run completes or is aborted, its stale .bober/approvals/*.pending.json (for that run), guidance.jsonl drain-state, and paused.json are cleaned up, and the chat-owned RunState pending/paused fields are cleared.",
+        "AC2: Documentation (README chat section + a docs/ page) describes /careful, the curated gates, /approve, /reject, /tell, /pause, /resume, and explicitly states the single-careful-run-at-a-time limitation plus the runId-scoped-marker follow-up.",
+        "AC3: An end-to-end test drives: /careful on -> spawn -> pause at post-plan -> /tell guidance -> /approve -> resume -> /pause -> /resume -> completion, asserting the disk markers and RunState transitions at each step (using a stubbed/fast pipeline, temp dirs, no network).",
+        "AC4: /help reflects the full command set and build + typecheck + the full test suite pass."
+      ],
+      "dependencies": [
+        "feat-3",
+        "feat-4",
+        "feat-5"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "All chat<->run coordination is cross-process via the filesystem and tolerant of partial/corrupt markers; no in-memory assumption about the detached child. Poll/read errors never break a chat turn.",
+      "verificationMethod": "Unit tests with synthetic and corrupted markers assert graceful handling; the chat turn still returns a reply when a poll throws (mirror Phase 1's try/catch prelude)."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Pipeline changes are strictly additive read/block points at existing checkpoint boundaries; phase order and algorithm are unchanged (the src/orchestrator/pipeline.ts:571 invariant).",
+      "verificationMethod": "The full existing pipeline test suite stays green with no guidance/pause present; diff review confirms no reordering of phases."
+    },
+    {
+      "category": "security",
+      "requirement": "runId and checkpoint ids used in marker paths are constrained to safe path segments so a malicious id cannot traverse outside .bober/.",
+      "verificationMethod": "Unit test that a runId/gate containing path separators or '..' is rejected before any file write."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Provider-agnostic, ESM/NodeNext strict TS, .js import extensions, no SDK types outside src/providers/; classifier extensions use loose JSON (DeepSeek-safe).",
+      "verificationMethod": "typecheck + build; grep new files for SDK imports (must be none); classifier uses jsonObjectMode."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "Additive RunState fields (src/mcp/run-manager.ts:34): status |= 'input-required'|'paused'; pendingCheckpointId?, pendingPrompt?, pendingSince?, pausedAt? (all optional strings). New chat-layer files under src/chat/: careful-sidecar.ts (session careful toggle, mirrors pid-sidecar.ts), approval-reader.ts (over listPending/listPendingApprovals), approval-cursor.ts (announce-once dedupe, mirrors cursor-store.ts). New disk channels keyed by runId under .bober/runs/<id>/: guidance.jsonl (append-only guidance entries {ts, text, consumed?}), paused.json (presence = paused). New `bober run --approve-gates <comma-list>` flag in src/cli/commands/run.ts merges {gate->'disk'} into config.pipeline.checkpointOverrides. Reused unchanged: src/orchestrator/checkpoints/mechanisms/disk.ts, src/state/approval-state.ts, src/cli/commands/{approve,reject,list-approvals}.ts.",
+    "securityConsiderations": [
+      "Validate runId and gate ids against a safe-segment regex before constructing any marker path (no path traversal).",
+      "/approve and /reject reuse the pendingExists guard so a dangling .approved.json is never written (mirrors approve.ts:44).",
+      "Guidance and pause are advisory and only take effect at a pipeline-controlled boundary — chat never mutates an in-flight agent call."
+    ],
+    "existingPatterns": "Reuse and extend: src/chat/chat-session.ts (handleTurn poll-prelude + slash dispatch + classify path; handleStop pattern at :201), src/chat/slash-commands.ts (dispatch + HELP_TEXT), src/chat/turn-classifier.ts (loose-JSON jsonObjectMode classify; add approve/reject/tell/pause/resume intents), src/chat/run-spawner.ts (spawn args at :93-118; thread --approve-gates), src/chat/roster-reader.ts (summarize status), src/chat/completion-tailer.ts + cursor-store.ts (dedupe/cursor pattern for the announce-once approval reader), src/chat/pid-sidecar.ts (sidecar shape for the careful toggle). Approval engine: src/orchestrator/checkpoints/mechanisms/disk.ts:49, src/state/approval-state.ts (savePending/saveApproved/saveRejected/listPending/listPendingApprovals/pendingExists/deletePending), src/cli/commands/{approve,reject,list-approvals}.ts (resolveApprover, marker writes). Pipeline boundaries: getCheckpointMechanismFor + the checkpoint sites in src/orchestrator/pipeline.ts (post-research:663, post-plan:809, post-sprint:506) and runCheckpointWithFeedback (feedback path). Config: src/config/schema.ts PipelineSectionSchema.checkpointOverrides (record of checkpointId->mechanism). RunState persistence: src/state/run-state.ts (writeRunState/readRunState/readRunStatesFromDisk). Research: .bober/research/20260614-chattable-team-of-agents-platform.md (section 5 load-bearing invariants; roadmap Phase 2).",
+    "suggestedStack": ""
+  },
+  "sprints": [
+    "sprint-spec-20260615-chat-interrupt-approve-steer-1",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-2",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-5",
+    "sprint-spec-20260615-chat-interrupt-approve-steer-6"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "9-13 hours",
+    "riskLevel": "medium-high",
+    "riskNotes": "Most of the approval substrate already exists and resumes cross-process, which lowers risk; the concentrated risk is in: (S1) keeping autopilot spawns byte-for-byte unchanged while adding the curated --approve-gates path; (S2) correct announce-once correlation of checkpointId-keyed pending markers to runs; (S4/S5) ADDITIVE read/block points in the protected pipeline.ts without disturbing phase order; and cross-process timing. The checkpointId-keyed shared marker dir means only one careful chat run at a time is supported this phase (documented limitation; runId-scoped markers are the follow-up). Each capability is isolated to its own sprint and verified independently with synthetic markers + a final e2e in S6."
+  },
+  "completedAt": "2026-06-15T15:30:02Z"
+}

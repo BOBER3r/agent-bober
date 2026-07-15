@@ -1,0 +1,100 @@
+{
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-1",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "sprintNumber": 1,
+  "title": "Code-enforced non-emergency refusal layer",
+  "description": "Close the production-grade guardrail gap: the {kind:'refuse'} verdict already exists in GuardrailVerdict (src/medical/types.ts:14) and the 'refuse' AuditEvent exists (src/medical/types.ts:69), but MedicalGuardrails.evaluate (src/medical/guardrails.ts:80-98) never emits refuse — prescription/dosing/treatment-plan prompts fall through to {kind:'allow'} and are only refused prompt-only by the LLM. Add a deterministic, pure, synchronous RefusalDetector (sibling to RedFlagDetector, src/medical/red-flag.ts) that classifies a prompt into prescription | specific-dosing | individualized-treatment-plan | none. Wire MedicalGuardrails.evaluate to run RedFlagDetector FIRST (short-circuit wins), then RefusalDetector, returning {kind:'refuse', rule, reason} with FIXED never-model-generated reason text (mirror the canned escalation strings at guardrails.ts:30-39). Add a refuse-dispatch branch in MedicalSopEngine.run mirroring the existing consent-refuse path (engine.ts:217-248): return a MedicalAnswer carrying the canned reason with shortCircuit:true, append an audit entry event:'refuse' with ruleId/rulesetVersion/patternsetVersion (IDs/enums only), and reach ZERO downstream numerics/retrieval/LLM. GuardrailContext stays empty (ADR-3). This sprint is self-contained, has no network, and does not touch WHOOP.",
+  "status": "completed",
+  "completedAt": "2026-06-17T15:30:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "The full test suite passes with zero failures including new collocated src/medical/refusal*.test.ts (npm run test); no regression in the pre-existing suite.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "RefusalDetector.detect(prompt) returns category 'prescription' for prescription requests, 'specific-dosing' for specific dose requests, 'individualized-treatment-plan' for personalized treatment/care-plan requests, and 'none' otherwise; it is pure and synchronous (no async/fs/network/LLM) and exposes a patternsetVersion. A unit test covers each category plus benign 'none' cases.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "MedicalGuardrails.evaluate returns {kind:'refuse', rule, reason} for each refuse category with FIXED reason text (asserted byte-equal to a constant, proving it is not model-generated), and still returns {kind:'allow'} for benign prompts.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "When a prompt matches BOTH a red-flag and a refuse pattern, evaluate returns the red-flag {kind:'short-circuit'} (emergency precedence), not refuse. A unit test constructs such a prompt and asserts short-circuit wins.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "MedicalSopEngine.run on a refuse-category prompt returns a MedicalAnswer with body===the canned reason, shortCircuit:true, abstained:false, citations:[], and appends exactly one audit entry with event:'refuse' carrying ruleId/rulesetVersion/patternsetVersion and NO prompt text or health values.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "On a refuse-category prompt, an injected spy LLMClient is invoked 0 times and NumericsQueryLayer / FactStore / LiteratureRetriever are never reached (0 LLM, 0 egress) — asserted with a spy that fails if called, mirroring the red-flag spy assertion at engine.ts:53-56.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-8",
+      "description": "No network/LLM import is added under src/medical for this sprint and the scoped ESLint medical boundary still passes (npm run lint); RefusalDetector and the guardrails change introduce no @anthropic-ai/sdk, openai, or node:net/http imports.",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add WHOOP, any egress axis, or any network code (Sprints 2-3).",
+    "Do not add fields to GuardrailContext — it stays the empty placeholder (ADR-3).",
+    "Do not use an LLM or in-line model filter for refusal classification — deterministic patterns only (research REFUTED the LLM policy filter).",
+    "Do not change RedFlagDetector behavior or the existing short-circuit/consent/allow paths beyond inserting the refuse branch.",
+    "Do not alter the MedicalSopEngine.run signature or the zero-arg constructor."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "A refuse-category prompt yields a code-enforced refusal + 'refuse' audit entry with 0 LLM calls, red-flag still wins over refuse, benign prompts still allow, and the build/typecheck/test/lint gates are green with no regression"
+  ],
+  "definitionOfDone": "src/medical/refusal.ts exports a pure synchronous RefusalDetector { detect(prompt): RefusalMatch; readonly patternsetVersion } with category union prescription|specific-dosing|individualized-treatment-plan|none and fixed canned reason strings. src/medical/guardrails.ts evaluate() runs RedFlagDetector then RefusalDetector and returns {kind:'refuse', rule, reason} on a match. src/medical/engine.ts adds a refuse-dispatch branch after the short-circuit branch, mirroring the consent-refuse path, returning the canned MedicalAnswer and appending an event:'refuse' audit entry (IDs/enums only). GuardrailContext unchanged. Collocated tests cover detection, fixed-text, red-flag precedence, engine dispatch + audit, and the spy-LLM-never-called assertion. Build, typecheck, test, and lint pass with no regression.",
+  "assumptions": [
+    "RefusalDetector mirrors RedFlagDetector's shape (src/medical/red-flag.ts:195-212): a pure detect(prompt) returning { category, ruleId? } plus a versioned patternsetVersion, no constructor dependencies.",
+    "MedicalGuardrails.evaluate keeps its signature evaluate(prompt, ctx): GuardrailVerdict (src/medical/types.ts:25-28); the empty-prompt throw at guardrails.ts:81-83 is retained.",
+    "The refuse audit entry uses the existing AuditEntry shape (src/medical/types.ts:77-87) with event:'refuse'; the engine already has an AuditLog instance and a now/runId injection seam (engine.ts opts).",
+    "The canned refuse reason text is a decline + see-a-licensed-clinician message (distinct from the 911/988 emergency escalations), fixed per category and never passed through an LLM."
+  ],
+  "outOfScope": [
+    "WHOOP / device-connection / egress axis (Sprint 2)",
+    "WHOOP sync adapter + CLI (Sprint 3)",
+    "GuardrailContext field additions",
+    "Any change to existing engine/guardrail public behavior beyond the refuse branch"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Read FIRST: src/medical/red-flag.ts (full — copy its pure-detector structure, versioned patternset, and category-switch idiom), src/medical/guardrails.ts:1-104 (where evaluate lives and where the placeholder comment at :94-95 says refusals land), src/medical/engine.ts:191-289 (gate ordering; the consent-refuse path at :217-248 is the exact template for the refuse branch; the red-flag short-circuit branch at :255-289 and the spy assertion at :53-56), src/medical/types.ts (GuardrailVerdict :11-14, AuditEvent :64-71, AuditEntry :77-87, GuardrailContext :18-22).\n\nNew file src/medical/refusal.ts: export type RefusalCategory = 'prescription'|'specific-dosing'|'individualized-treatment-plan'|'none'; export const REFUSAL_PATTERNSET_VERSION = 'refusal-2026.06.17'; export class RefusalDetector { detect(prompt: string): RefusalMatch; get patternsetVersion() }. Use conservative case-insensitive phrase/keyword matching (e.g. 'prescribe', 'what dose', 'how many mg', 'should I take ... mg', 'treatment plan for me', 'what should I do to treat my'). Keep the patternset small, reviewable, and versioned — accept false-negatives (fall through to 'none'), NEVER false-positive into medical advice. Define fixed canned reason strings per category as module constants (mirror ESCALATION_911/988 at guardrails.ts:30-39).\n\nguardrails.ts: instantiate a readonly RefusalDetector alongside the existing RedFlagDetector; in evaluate(), after the red-flag match check (which returns short-circuit), add: const r = this.refusal.detect(prompt); if (r.category !== 'none') return { kind:'refuse', rule: r.ruleId ?? r.category, reason: REASON[r.category] }; then the existing return { kind:'allow' }. Expose the refusal patternsetVersion if the engine needs it for the audit (add a getter like the existing patternsetVersion at guardrails.ts:101-103).\n\nengine.ts: after the short-circuit dispatch branch, add `if (verdict.kind === 'refuse') { await auditLog.append({ tIso: now, event:'refuse', ruleId: verdict.rule, rulesetVersion: guardrails.rulesetVersion, patternsetVersion: <refusal patternset> }); return <MedicalAnswer {body: verdict.reason, abstained:false, citations:[], disclaimerFooter: disclaimer.footer(), shortCircuit:true}> wrapped into a PipelineResult exactly as the consent-refuse path does }. Confirm zero calls to numerics/factstore/retriever/llm on this path.\n\nTests: refusal.test.ts (each category + 'none'); guardrails.test.ts additions (refuse verdict + fixed text + red-flag precedence + allow); engine.test.ts additions (refuse MedicalAnswer shape + single 'refuse' audit entry with no prompt text + spy LLMClient never invoked using the existing spy pattern). Pure/no-network; follow ESM/.js import extensions and unicode section headers.",
+  "evaluatorNotes": "sc-1-3: call RefusalDetector.detect on representative prompts for each category and on benign questions; confirm purity (no async signature, no imports of fs/net/providers in refusal.ts via grep).\nsc-1-4: assert the returned reason is byte-equal to the exported constant (proves fixed/not model-generated); assert allow on a benign prompt.\nsc-1-5: craft a prompt containing both an emergency red-flag trigger and a refuse trigger; assert evaluate returns kind==='short-circuit' (red-flag wins).\nsc-1-6/sc-1-7: drive MedicalSopEngine.run with a refuse-category prompt and a spy LLMClient that throws if called; assert MedicalAnswer.body===canned reason, shortCircuit===true, abstained===false, citations===[]; read the audit jsonl and assert exactly one event:'refuse' entry containing ruleId/rulesetVersion/patternsetVersion and NO prompt substring or health value; assert the spy recorded 0 calls.\nsc-1-8: npm run lint clean; grep src/medical/refusal.ts and the guardrails diff for '@anthropic-ai/sdk', 'openai', 'node:net', 'node:http', 'fetch' — expect none.\nBuild + typecheck clean; run the FULL suite to confirm no regression in the existing medical and non-medical tests.",
+  "estimatedFiles": [
+    "src/medical/refusal.ts",
+    "src/medical/refusal.test.ts",
+    "src/medical/guardrails.ts",
+    "src/medical/guardrails.test.ts",
+    "src/medical/engine.ts",
+    "src/medical/engine.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-17T14:32:38Z",
+  "updatedAt": "2026-06-17T14:32:38Z"
+}

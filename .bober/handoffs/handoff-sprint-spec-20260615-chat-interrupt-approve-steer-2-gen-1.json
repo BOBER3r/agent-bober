@@ -1,0 +1,38 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-chat-interrupt-approve-steer-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-2",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T13:52:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Chat Interrupt / Approve / Steer (Phase 2). Sprint 2 = surface pending approvals in chat, READ-ONLY (never writes approval markers). ApprovalReader over .bober/approvals/*.pending.json, announce-once dedupe cursor, poll-prelude notice in handleTurn, [INPUT-REQUIRED] in roster/`/runs`, and reflect pending fields onto chat-owned RunState.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-1", "commit": "14c2be6", "summary": "Extended RunState (src/mcp/run-manager.ts ~:55-63) with status input-required/paused + optional pendingCheckpointId/pendingPrompt/pendingSince/pausedAt — Sprint 2 SETS these. Added CarefulSidecar, /careful, --approve-gates, RunSpawner careful spawn. chat-session.ts was edited: notices now weave at ~:140-145 (slash path) and ~:187-192 (LLM path)." }
+    ],
+    "currentBranch": "bober/chat-interrupt-approve-steer",
+    "relevantFiles": [
+      "src/state/approval-state.ts (listPending(projectRoot): PendingMarker[] @ ~:80 — already tolerant of missing dir/corrupt files; reuse, DO NOT add write fns)",
+      "src/chat/cursor-store.ts + src/chat/careful-sidecar.ts (cursor/sidecar persistence pattern to mirror for approval-cursor.ts under .bober/chat/)",
+      "src/chat/completion-tailer.ts (poll + weave-into-reply prelude pattern)",
+      "src/chat/chat-session.ts (handleTurn poll prelude; weave notice into BOTH reply paths ~:140-145 and ~:187-192; try/catch so a read error never breaks the turn)",
+      "src/chat/roster-reader.ts (summarize uppercases status generically -> [INPUT-REQUIRED] free; optionally append pending prompt)",
+      "src/state/run-state.ts (writeRunState/readRunState/readRunStatesFromDisk — idempotent flip running->input-required only)",
+      "src/mcp/run-manager.ts (RunState type — Sprint 1 fields present @ ~:55-63)"
+    ]
+  },
+  "keyInvariants": [
+    "READ-ONLY w.r.t. the approvals dir: this sprint NEVER writes .approved.json/.rejected.json/.pending.json and does NOT modify approval-state.ts write functions or DiskCheckpointMechanism (Sprint 3 owns the write path).",
+    "sc-2-8 PHASE-1 PARITY: with no pending markers, handleTurn output has NO approval notice and existing chat-session/roster tests stay green. Build the notice only when there ARE new markers; empty -> no-op (do not append empty strings to replies).",
+    "WEAVE INTO BOTH PATHS: the notice must appear in both the slash-command reply path and the LLM reply path, exactly like completion notices (curator verified ~:140-145 and ~:187-192 post-Sprint-1).",
+    "ANNOUNCE-ONCE: cursor identity key = `${checkpointId}@${requestedAt}`; persist per session under .bober/chat/<sessionId>.approvals-cursor.json; tolerate missing file. A still-pending marker does not re-announce next turn.",
+    "IDEMPOTENT RunState REFLECTION: when a pending marker correlates by runId to a RUNNING RunState, flip it to status='input-required' + set pendingCheckpointId/pendingPrompt/pendingSince. NEVER clobber completed/aborted/failed. A marker with no runId is still surfaced ('unknown run') but cannot reflect onto a RunState.",
+    "Curator note: roster-reader.test.ts uses a non-canonical RunProgress shape — use {completed,total} when constructing synthetic progress in tests."
+  ],
+  "successCriteriaSummary": "sc-2-1 build clean; sc-2-2 typecheck clean; sc-2-3 all tests pass incl new ones; sc-2-4 ApprovalReader.read() returns markers (runId optional), skips corrupted JSON silently, missing dir -> []; sc-2-5 correlated pending marker weaves one-time notice (runId+checkpointId+prompt) into reply; sc-2-6 announce-once dedupe across two turns; sc-2-7 roster shows [INPUT-REQUIRED] + chat RunState gains pending fields+status; sc-2-8 no markers -> identical to Phase 1.",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" }
+  },
+  "principlesRef": ".bober/principles.md (ESM/NodeNext, .js import extensions, no SDK types outside src/providers/, async fs only, collocated *.test.ts, no fs mocks — temp dirs, conventional commit bober(sprint-2): ...)",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-2",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "20d42cb",
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "met": true, "evidence": "diverseBlocks() enumerates tiers via tierPolicy.resolveTier(), dedups to 4 distinct provider/model labels; runner.test asserts Set(models).size>=2 + each answer in note body"},
+    {"criterionId": "sc-2-2", "met": true, "evidence": "note-writer serializeResearchNote frontmatter jobId/question/models[]/generatedAt via serializeFrontmatter; runner.test reads back via parseFrontmatter"},
+    {"criterionId": "sc-2-3", "met": true, "evidence": "findingSink called exactly once; Finding {id,domain,title,kind=watch,evidence[],surfacedAt} validated via FindingSchema.parse"},
+    {"criterionId": "sc-2-4", "met": true, "evidence": "research run <jobId> with createClient queryModel + ingestFinding findingSink; ResearchRunOverrides for test injection; prints note path; build exit 0"}
+  ],
+  "filesChanged": ["src/research/model-diversity.ts", "src/research/note-writer.ts", "src/research/note-writer.test.ts", "src/research/runner.ts", "src/research/runner.test.ts", "src/cli/commands/research.ts", "src/cli/commands/research.test.ts"],
+  "testsAdded": ["src/research/note-writer.test.ts", "src/research/runner.test.ts"],
+  "commits": ["20d42cb - bober(sprint-2): multi-model research runner -> vault note + hub Finding"],
+  "blockers": [],
+  "notes": "tierPolicy single export (tier-policy.ts:75). Distinct labels: openai-compat/deepseek (cheap), openai-compat/grok (standard), anthropic/sonnet, anthropic/opus. findingSink bound to ingestFinding(store,finding,{now}) finding-store.ts:140. Full suite 3540 (+21). Re-run: npx vitest run src/research/ src/cli/commands/research.test.ts"
+}

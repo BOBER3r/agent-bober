@@ -1,0 +1,31 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-medical-grounding-critic-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-medical-grounding-critic-2",
+  "specId": "spec-20260618-medical-grounding-critic",
+  "timestamp": "2026-06-18T16:25:30Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical-sop pipeline. Sprint 2 composes the Sprint-1 grounding critic with synthesize into a fail-closed gate (synthesize -> critic -> one re-synth -> abstain) and wires it into the engine's grounded-synthesis branch, preserving every zero-LLM negative assertion on non-grounded paths.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260618-medical-grounding-critic-1", "title": "Grounding-critic module (fail-closed core)", "summary": "src/medical/retrieval/grounding-critic.ts exports getGroundingVerdict (bounded retry, fail-closed reject on parse exhaustion), validateGroundingVerdict (never-throws), buildGroundingSystemPrompt, GROUNDING_PARSE_MAX_RETRIES, GROUNDING_MAX_LLM_CALLS. getGroundingVerdict does NOT catch transport errors (they propagate). Commit 10bb964." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/retrieval/grounding-critic.ts",
+      "src/medical/retrieval/literature.ts",
+      "src/medical/engine.ts",
+      "src/medical/engine.test.ts",
+      "src/fleet/critic-deep.ts",
+      "src/medical/retrieval/medline-source.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-medical-grounding-critic-2.json",
+  "specRef": ".bober/specs/spec-20260618-medical-grounding-critic.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

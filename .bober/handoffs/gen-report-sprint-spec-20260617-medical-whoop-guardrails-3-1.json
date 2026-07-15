@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["7d829a2 - bober(sprint-3): WhoopSyncAdapter + bober medical whoop sync CLI"],
+  "filesChanged": [
+    { "path": "src/medical/whoop/whoop-sync.ts", "action": "created", "description": "WhoopSyncAdapter + WHOOP_FIELD_MAP (4 collections) + mapWhoopRecords pure helper; sync(window,sink) pagination loop, fail-closed error propagation, per-batch writeBatch. No network import." },
+    { "path": "src/medical/whoop/whoop-sync.test.ts", "action": "created", "description": "fakeClient + temp-dir HealthDataStore: mapping/source/counts (sc-3-2), idempotent resume (sc-3-3), partial-failure + re-run (sc-3-4)." },
+    { "path": "src/cli/commands/medical.ts", "action": "modified", "description": "Exported WhoopSyncDeps + runWhoopSync() helper; `bober medical whoop sync [--since <iso>]` subcommand (assertAllowed-first, env/token checks w/ exit 1 never-throw, store.close() in finally, 'ingest' audit). `medical import` block unchanged." },
+    { "path": "src/cli/commands/medical.test.ts", "action": "created", "description": "vi.mock loadConfig + WhoopTokenStore; runWhoopSync() direct-call: axis-off (sc-3-5), env-unset + no-token (sc-3-6), success prints/close/audit (sc-3-8), commander smoke." }
+  ],
+  "testsAdded": ["src/medical/whoop/whoop-sync.test.ts", "src/cli/commands/medical.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "lint": "exit 0 (2 pre-existing eval-persist warnings)",
+    "test_full": "203 files, 2484 passed | 3 skipped"
+  },
+  "blockers": [],
+  "notes": "All 8 criteria met. 2473->2484 (+11). runWhoopSync() direct-call helper (mirrors run.test.ts runRunCommand) keeps CLI tests offline. No network import in whoop-sync.ts or medical.ts; all HTTP in whoop-client.ts. id left to store's content-derived SHA-256 (not WHOOP UUID). Clock read only at CLI boundary; adapter/store never read clock. ingest audit IDs/enums-only (PHI-free verified)."
+}

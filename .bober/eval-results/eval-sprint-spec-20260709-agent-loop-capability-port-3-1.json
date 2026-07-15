@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-3-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T21:26:53Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "Unrelated file."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "298 files / 3770 tests green (28.69s)", "details": "Matches expectation exactly."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "description": "Per-role effort + budget.maxUsd schema, fixtures unchanged", "required": true, "result": "pass", "evidence": "EffortSchema/BudgetSectionSchema optional on 4 role sections; 24 tests incl. no-defaults-injected fixture check.", "feedback": ""},
+    {"criterionId": "sc-3-2", "description": "effort on-wire only when configured; non-Anthropic never carries it", "required": true, "result": "pass", "evidence": "Loop spread at :297; anthropic.ts untouched (pre-existing :315 forwarding); openai C4 asserts no effort wire field.", "feedback": ""},
+    {"criterionId": "sc-3-3", "description": "Graceful budget_exceeded, assertWithinBudget never called", "required": true, "result": "pass", "evidence": "Optional-chained exceeded() at :320-347 mirrors max-turns shape; spy never called; no-budget path cannot fire (falsy undefined); $200-no-budget test gets 'end'.", "feedback": ""},
+    {"criterionId": "sc-3-4", "description": "Cumulative costUsd present/absent correctly", "required": true, "result": "pass", "evidence": "Conditional spread verified on all four return sites (:312/:345/:393/:479); sum + Object.hasOwn tests green.", "feedback": ""},
+    {"criterionId": "sc-3-5", "description": "history.jsonl optional costUsd, byte-identical when absent", "required": true, "result": "pass", "evidence": "sprint-passed details conditional spread; round-trip tests with/without.", "feedback": ""},
+    {"criterionId": "sc-3-6", "description": "Generator constructs Budget from config; unchanged args when unset", "required": true, "result": "pass", "evidence": "budgetFromMaxUsd helper; mocked-dep spies assert absent keys when config omits both, Budget remainingUsd()===3 when set, none when null.", "feedback": ""},
+    {"criterionId": "sc-3-7", "description": "build + typecheck", "required": true, "result": "pass", "evidence": "Independently re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 7 criteria independently verified against git show b9c936c with full re-runs. nonGoals explicitly checked: loop never throws BudgetExceededError, own bober.config.json byte-unchanged, effort never on OpenAI wire, ceiling fires only at turn boundaries. All four loop return sites use conditional costUsd spreads. Iteration-1 pass."
+}

@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-8-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-10T00:01:19Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "None introduced."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "302 files / 3859 tests green (extended timeouts, 28.57s)", "details": "Matches +16 claim; sprint files green in isolation too."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-8-1", "description": "Delta-join equals text; streamed deep-equal non-streamed", "required": true, "result": "pass", "evidence": "Both branches call the SAME normalizeResponse (moved verbatim per git diff); paired-mock deep-equal green.", "feedback": ""},
+    {"criterionId": "sc-8-2", "description": "tool_use streaming parity", "required": true, "result": "pass", "evidence": "Streamed tool_use normalizes identically; deep-equal green.", "feedback": ""},
+    {"criterionId": "sc-8-3", "description": "Non-Anthropic adapters no-op", "required": true, "result": "pass", "evidence": "Per-adapter tests: spy never called, no 'onTextDelta' in serialized request; only doc comments in source.", "feedback": ""},
+    {"criterionId": "sc-8-4", "description": "Loop threading + events + non-streaming default", "required": true, "result": "pass", "evidence": "emitTextDelta conditional spread (key absent when unset); streamMock never called absent callback; paired-run deep-equal.", "feedback": ""},
+    {"criterionId": "sc-8-5", "description": "Mid-stream error parity with chatWithRetry", "required": true, "result": "pass", "evidence": "Stream errors reject un-swallowed (only per-delta cb try/catch'd); chatWithRetry/isTransientError untouched (:172-228 zero diff).", "feedback": ""},
+    {"criterionId": "sc-8-6", "description": "build + typecheck", "required": true, "result": "pass", "evidence": "Independently re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "low", "category": "quality", "file": "src/providers/anthropic.ts", "description": "streaming+structured-output combination has no interaction test/guard: with both set, deltas may fire while text derives from the forced tool's JSON, breaking the delta-join==text guarantee in that combo. Not a contract violation; flag for whichever change first combines them.", "expected": "Document or guard when combined."}
+  ],
+  "summary": "All 6 criteria independently verified; no SDK-type leakage outside anthropic.ts; no nonGoal violations; changed files match estimatedFiles (+the 4 test-only no-op tests). Iteration-1 pass."
+}

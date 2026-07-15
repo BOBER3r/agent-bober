@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-medical-grounding-critic-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-medical-grounding-critic-3",
+  "specId": "spec-20260618-medical-grounding-critic",
+  "timestamp": "2026-06-18T16:45:30Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical-sop pipeline. Sprint 3 makes the synthesis/critic model+provider configurable via config.medical.inference, gates cloud usage behind the existing cloud-inference egress axis (default false; fail-closed to local), and records the critic outcome as an IDs/enums-only criticVerdict in the audit log.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260618-medical-grounding-critic-1", "title": "Grounding-critic module (fail-closed core)", "summary": "grounding-critic.ts: getGroundingVerdict (fail-closed reject on parse exhaustion). Commit 10bb964." },
+      { "contractId": "sprint-spec-20260618-medical-grounding-critic-2", "title": "Gated synthesis + engine wiring", "summary": "synthesizeGrounded in literature.ts (synthesize->critic->one re-synth->abstain, try/catch->abstain on throw, GROUNDED_GATE_MAX_LLM_CALLS=6); engine.ts:403 swapped synthesize->synthesizeGrounded. The engine still constructs the local llmClient at ~engine.ts:402 and appends event:'answer'|'abstain' at ~:417 (NO criticVerdict yet). Commit 90c3ca3." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/medical/egress.ts",
+      "src/providers/factory.ts",
+      "src/medical/engine.ts",
+      "src/medical/types.ts",
+      "src/medical/retrieval/literature.ts",
+      "src/medical/audit.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-medical-grounding-critic-3.json",
+  "specRef": ".bober/specs/spec-20260618-medical-grounding-critic.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-3",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "met": true, "evidence": "npx tsc --noEmit exit 0; npx tsc exit 0"},
+    {"criterionId": "sc-3-2", "met": true, "evidence": "node dist/cli/index.js vault reindex --help lists --scope <domain> + --vault <dir>; registerVaultCommand imported index.ts:41, called :323"},
+    {"criterionId": "sc-3-3", "met": true, "evidence": "fixture vault (2 notes) -> runVaultReindex -> facts.db at factsDbPath(tmpDir,ns) has active facts (drug=metformin) + summary counts>0"},
+    {"criterionId": "sc-3-4", "met": true, "evidence": "missing vault -> resolves undefined (no throw), process.exitCode=1, red stderr, FactStore.prototype.close spy called (finally)"}
+  ],
+  "filesChanged": [
+    {"path": "src/cli/commands/vault.ts", "action": "created", "description": "runVaultReindex(projectRoot,opts,deps?) + registerVaultCommand. Local resolveDefaultNamespace (re-impl of facts.ts logic, not exported there). Explicit stat() vault guard after store construct so finally always closes. --vault defaults to projectRoot. Handler never throws."},
+    {"path": "src/cli/index.ts", "action": "modified", "description": "import registerVaultCommand (line 41) + call (line 323) in a // -- vault -- block between medical and fleet"},
+    {"path": "src/cli/commands/vault.test.ts", "action": "created", "description": "3 tests: sc-3-3 success, sc-3-4 missing-vault no-throw/exit1/close, sc-3-2 commander wiring"}
+  ],
+  "testsAdded": ["src/cli/commands/vault.test.ts"],
+  "commits": ["82ebc23 - bober(sprint-3): add bober vault reindex CLI command"],
+  "blockers": [],
+  "notes": "vitest run src/cli/commands/vault.test.ts 3/3; src/vault/ src/cli/ 159/159; full suite 226 files 2872 tests pass (was 2869). FactStore constructed BEFORE stat() guard so finally closes on error path. --vault default projectRoot. NOTE: resolveDefaultNamespace re-implemented locally (facts.ts does not export it) — evaluator should confirm path parity with facts CLI."
+}

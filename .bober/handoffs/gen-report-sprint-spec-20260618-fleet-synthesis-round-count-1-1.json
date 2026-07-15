@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-synthesis-round-count-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["5a4d6b7 - bober(sprint-1): real executed round count in fleet synthesis + report"],
+  "filesChanged": [
+    { "path": "src/fleet/coordinator.ts", "action": "modified", "description": "executeRounds → Promise<{executions, roundsRun}>; roundsRun=r as first for-body stmt (captured before break); return {executions, roundsRun}." },
+    { "path": "src/fleet/index.ts", "action": "modified", "description": "Removed bober: ceiling comment + hardcoded roundsRun=maxRounds; destructured executeRounds; reporter.build(outcomes, bb ? {rounds: roundsRun} : undefined)." },
+    { "path": "src/fleet/reporter.ts", "action": "modified", "description": "PortfolioReport.rounds?: number; build(outcomes, opts?:{rounds?}) guarded spread → byte-identical no-arg." },
+    { "path": "src/fleet/coordinator.test.ts", "action": "modified", "description": "destructure .executions at 3 call-sites; roundsRun===3 (full), ===2 (early-stop), ===1 (maxRounds=1)." },
+    { "path": "src/fleet/reporter.test.ts", "action": "modified", "description": "build([]) no 'rounds' key; build([],{rounds:2}).rounds===2." },
+    { "path": "src/fleet/index.test.ts", "action": "modified", "description": "early-stop blackboard run → synthesis.rounds===2 AND report.rounds===2; no-blackboard report has no 'rounds' key; fake coordinator stub returns {executions:[],roundsRun:0}." }
+  ],
+  "criteriaResults": "all 7 (sc-1-1..sc-1-7) reported met",
+  "verification": {
+    "build": "exit 0", "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings)",
+    "test": "2789 passed, 3 skipped, 6 failed (all pre-known cockpit MCP); fleet 276/276"
+  },
+  "notes": "roundsRun = terminating round (first for-body stmt → captured even on break). Full run → maxRounds; early-stop at round r → r. No-blackboard report byte-identical: bb null → build(outcomes, undefined) → guarded spread {} → no rounds key. synthesis.ts unchanged (NOT in commit; only the value passed changed). bober: ceiling comment removed (grep NOT FOUND). Only 6 declared files changed."
+}

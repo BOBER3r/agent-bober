@@ -1,0 +1,94 @@
+{
+  "contractId": "sprint-spec-20260604-workflow-engine-4",
+  "specId": "spec-20260604-workflow-engine",
+  "sprintNumber": 4,
+  "title": "Workflow types, ResumeCursorReconstructor, and ArgsPayloadBuilder",
+  "description": "Add the new TS types (WorkflowArgs, WorkflowRunResult, ResumeCursor, ConformanceReport) and the host-side input plumbing. ResumeCursorReconstructor re-derives completed-sprint state from durable contract status + history for crash-safe resume. ArgsPayloadBuilder marshals config, principles, models, and lenses into one JSON-serializable WorkflowArgs, throwing MissingKnobError on an unset required knob, AgentCapError when the worst-case agent count (maxSprints × maxIterations × lenses) exceeds the 16/1000 caps, and NonSerializableArgError on a non-serializable model.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260604-workflow-engine-1"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "src/orchestrator/workflow/types.ts defines WorkflowArgs, WorkflowRunResult, ResumeCursor, and ConformanceReport exactly per the architecture data model, reusing frozen PlanSpec/SprintContract/EvalResult/HistoryEntry types from src/contracts/.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "ResumeCursorReconstructor.reconstruct(projectRoot, specId) returns a ResumeCursor whose completedSprintNumbers are derived from durable contract status (status passed/completed) via loadHistory + contract reads; with no history it returns completedSprintNumbers:[]; when contract status disagrees with history it trusts contract status. Unit tests cover all three.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "ArgsPayloadBuilder.build(userPrompt, config, cursor) returns a fully JSON-serializable WorkflowArgs (JSON.parse(JSON.stringify(args)) deep-equals args), with knobs/models/evaluatorLenses populated from config (lenses from config.evaluator.strategies or a sensible default).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "build throws MissingKnobError when a required knob is unset, AgentCapError when maxSprints × maxIterations × lenses > 16 concurrent or > 1000 total (computed worst-case, pre-invoke), and NonSerializableArgError on a non-serializable model value; each path has a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck and npm run build exit 0 and the new suites are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write bober-pipeline.js or the RunResultFlusher (sprint 5) or the WorkflowEngine (sprint 6).",
+    "Do not perform any agent dispatch.",
+    "Do not change the contracts protocol or history schema; only read them.",
+    "Do not introduce SDK types into these modules."
+  ],
+  "stopConditions": [
+    "Stop when types compile, reconstruct and build behave per criteria with green tests, and typecheck/build pass.",
+    "Stop when changes are confined to new files under src/orchestrator/workflow/ (types.ts, resume-cursor.ts, args-builder.ts, errors.ts, and their tests)."
+  ],
+  "definitionOfDone": "Workflow types are defined reusing frozen contract types; ResumeCursorReconstructor crash-safely re-derives completed sprints from durable status+history; ArgsPayloadBuilder emits a JSON-serializable WorkflowArgs and throws the three typed errors (MissingKnob/AgentCap/NonSerializableArg) at build time; unit tests cover every branch; typecheck and build are green.",
+  "assumptions": [
+    "Lenses default to a single 'default' lens when config.evaluator.strategies implies one evaluator pass; multiple lenses can be derived from strategies or an explicit evaluatorLenses config if present.",
+    "Worst-case agent count uses sprint.maxSprints and evaluator.maxIterations as upper bounds since actual sprint count is unknown pre-plan.",
+    "loadHistory exists at src/state/history.ts and contract reads are available via src/state/sprint-state.ts."
+  ],
+  "outOfScope": [
+    "script orchestration",
+    "flush",
+    "engine.run",
+    "live invoke",
+    "conformance harness"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/orchestrator/workflow/errors.ts with `export class MissingKnobError extends Error`, `AgentCapError`, `NonSerializableArgError`, `WorkflowUnavailableError` (the last is used in sprint 6 but define it here). Create src/orchestrator/workflow/types.ts: WorkflowArgs, WorkflowRunResult, ResumeCursor, ConformanceReport exactly as in the architecture's Data Model section (import type PlanSpec from '../../contracts/spec.js' or wherever it lives, SprintContract from '../../contracts/sprint-contract.js', EvalResult + HistoryEntry from '../../contracts/eval-result.js'/'../../state/history.js' — locate the real HistoryEntry type; pendingHistory is Array<Omit<HistoryEntry,'timestamp'>>). Create src/orchestrator/workflow/resume-cursor.ts: `export class ResumeCursorReconstructor { async reconstruct(projectRoot, specId): Promise<ResumeCursor> }` — read all contracts for the spec (from .bober/contracts via existing state helpers; if a load-by-spec helper is missing, glob contract files and filter by specId+status), collect sprintNumbers with status passed/completed into completedSprintNumbers, set lastObservedSprintNumber to the max observed; use loadHistory (history.ts:74) to corroborate but trust contract status on conflict. Create src/orchestrator/workflow/args-builder.ts: `export class ArgsPayloadBuilder { build(userPrompt, config, resumeCursor): WorkflowArgs }`. Pull knobs from config (maxIterations from evaluator.maxIterations, maxSprints from sprint.maxSprints, researchPhase/architectPhase from pipeline, curatorEnabled from curator?.enabled, codeReviewEnabled from codeReview?.enabled, requireContracts from sprint.requireContracts) — throw MissingKnobError if any required one is undefined (don't silently default). models: resolve planner/curator/generator/evaluator model strings from config sections. evaluatorLenses: from config (e.g. derive from evaluator.strategies labels, or ['default']). principles: pass through (caller supplies the principles text; accept a param or read is host-side — keep build pure by accepting principles via config or a param; if reading fs, do it in a separate host method, NOT in build). Cap check: const total = knobs.maxSprints * knobs.maxIterations * evaluatorLenses.length; if (evaluatorLenses.length > 16 || total > 1000) throw new AgentCapError(...). Serializability: try JSON.stringify and compare; throw NonSerializableArgError on failure. Add reconstruct/build unit tests with temp .bober dirs (follow the no-mock-fs principle: create temp dirs, write real contract JSON, clean up). Use import type, ESM .js specifiers, unicode section headers. Conventional commit: bober(sprint-4): add workflow types, ResumeCursorReconstructor, ArgsPayloadBuilder.",
+  "evaluatorNotes": "Confirm types.ts matches the architecture data model field-for-field (WorkflowArgs.knobs has the 7 knobs; WorkflowRunResult.perSprint entries have contract/finalVerdict/iterationsUsed/outcome/lensVerdicts; pendingHistory omits timestamp). For ResumeCursorReconstructor: write temp contracts with mixed statuses and assert completedSprintNumbers contains only passed/completed numbers; empty dir → []; conflicting history vs status → status wins. For ArgsPayloadBuilder: assert JSON round-trip equality; force a MissingKnobError (config missing a required knob), an AgentCapError (set maxSprints/maxIterations/lenses to exceed caps), and a NonSerializableArgError (inject a function/BigInt model). Run npm run typecheck and npm run build (exit 0); new suites green. Confirm no SDK imports and changes confined to the new workflow files. Tolerate only the flaky tool-count baseline.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/types.ts",
+    "src/orchestrator/workflow/errors.ts",
+    "src/orchestrator/workflow/resume-cursor.ts",
+    "src/orchestrator/workflow/resume-cursor.test.ts",
+    "src/orchestrator/workflow/args-builder.ts",
+    "src/orchestrator/workflow/args-builder.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-03T23:50:28.318Z",
+  "startedAt": "2026-06-03T23:37:21.575Z",
+  "completedAt": "2026-06-03T23:50:28.318Z",
+  "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-4-1",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260604-workflow-engine-4-1",
+      "result": "pass",
+      "timestamp": "2026-06-03T23:50:28.318Z"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260531-multi-provider-deepseek-claude-code-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-5",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T14:54:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-provider harness. claude-code can only drive prompt->text roles (planner/researcher) — it throws on tools. This sprint adds resolveRoleProviders(config), invoked at config load, so that: tool-using roles (curator, generator, evaluator, code-reviewer) that would resolve to claude-code are routed to another configured provider; if claude-code is the SOLE option for a tool role, config load FAILS at load time with a message naming the role; planner/researcher on claude-code are always allowed; each role's resolved provider is logged.",
+    "completedSprints": [
+      {"contractId": "sprint-2", "title": "DeepSeek resolution", "summary": "resolveProviderModel(model) -> {provider, modelId, endpoint?}; deepseek shorthands resolve to openai-compat."},
+      {"contractId": "sprint-3", "title": "openai preflight", "summary": "src/providers/preflight.ts exports async preflightOpenaiPeer(config, importer?) + usesOpenaiFamily(config); returns a hint (and logger.warn) when an openai-family role is configured but openai is absent; returns null otherwise. NOT yet wired into a startup call site."},
+      {"contractId": "sprint-4", "title": "claude-code provider", "summary": "createClient accepts 'claude-code'; validateApiKey no-op for it; preflightClaudeBinary(binary, probe?) exported. ProviderName includes 'claude-code'."}
+    ],
+    "currentBranch": "spike/claude-code-provider",
+    "relevantFiles": ["src/config/role-providers.ts", "src/config/role-providers.test.ts", "src/config/loader.ts", "src/config/loader.test.ts", "src/config/schema.ts", "src/orchestrator/model-resolver.ts", "src/utils/logger.ts", "src/providers/preflight.ts"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "facts": {
+    "loadConfig": "src/config/loader.ts exports `async function loadConfig(projectRoot): Promise<BoberConfig>` (line 141). resolveRoleProviders must be invoked inside it after schema parse so a stuck-on-claude-code tool role fails at load.",
+    "schema": "schema.ts has per-role section schemas (PlannerSectionSchema, CuratorSectionSchema (optional), GeneratorSectionSchema, EvaluatorSectionSchema) wired at lines 309-312. There is NO dedicated researcher role section — researchPhase is a boolean flag. Treat researcher as planner-style (prompt-only) per the contract generatorNotes.",
+    "roleProvider": "Each role's provider is config.<role>.provider (may be undefined); resolve the effective provider as config.<role>.provider ?? resolveProviderModel(config.<role>.model).provider, with the global/default provider falling back per existing config semantics. Confirm exact field names + default-provider source from schema.ts when implementing.",
+    "toolRoles": "curator, generator, evaluator, codeReview (code-reviewer).",
+    "promptRoles": "planner, researcher (researcher has no section; allowed on claude-code unconditionally)."
+  },
+  "principles": "ESM (.js import extensions, NodeNext). consistent-type-imports (`import type`). no-explicit-any warned. Zod for config validation (schemas in schema.ts; do NOT hand-roll). Filesystem state in .bober/. Use logger from src/utils/logger.ts. Tests must NOT mock the filesystem — use real parsed config objects / temp dirs; spying on the logger is fine. Conventional commit: bober(sprint-5): description.",
+  "evaluatorFeedback": null,
+  "baseline": {"note": "2 pre-existing environmental mcp tool-count timeout flakes — baseline, ignore."},
+  "notesForGenerator": "Stay on branch spike/claude-code-provider. PRIMARY task (gates sc-5-1..sc-5-6): implement src/config/role-providers.ts exporting resolveRoleProviders(config) returning a role->provider map and THROWING (message naming the role + stating claude-code cannot drive tools) when a tool role would land on claude-code with no alternative. Fallback rule (PRD US-006): a tool role resolving to claude-code uses the 'other configured provider' = a non-claude-code per-role override on that role, OR a non-claude-code default/global provider. planner/researcher on claude-code: always allowed. Log one line per role (role + finally-resolved provider) via logger. Wire resolveRoleProviders into loadConfig (loader.ts) AFTER schema parse so load fails for a stuck tool role. Add role-providers.test.ts (sc-5-1..sc-5-4) + a loader test (sc-5-5). \n\nSECONDARY / NON-GATING BONUS (addresses a Sprint-3 advisory): while you are editing loader.ts, ALSO await preflightOpenaiPeer(config) there (after the role resolution) so the openai-missing hint fires at config load before the first model call. This must remain a WARNING ONLY — it must NEVER throw or fail config load, and must NOT break any existing loader test. If wiring it cleanly without disturbing existing loader tests is not straightforward, SKIP it and leave a note — it does NOT gate this sprint. Do not let this bonus jeopardize the primary criteria. \n\nVerify build + lint exit 0 and the new tests pass before committing."
+}

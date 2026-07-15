@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-ingest-2-1",
+  "contractId": "sprint-spec-20260628-medical-ingest-2",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T16:00:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors; 4 new files zero lint output", "details": "2 pre-existing any warnings unrelated" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "231 files / 2944 tests passed; +33", "details": "full suite clean" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0; both modules compile strict" },
+    { "criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "write->read->parse round-trip asserts all 10 frontmatter keys" },
+    { "criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "table-driven deriveLabStatus low/normal/high/critical + boundaries; pure/sync no-LLM" },
+    { "criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "reindex 3 notes -> getLabSeries returns each with matching value/unit/collectedAtIso" },
+    { "criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "second run newRows==0 AND getLabSeries length unchanged (labResultId dedup)" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 5 required criteria pass. Guardrail greps clean: no createClient/fetch/new Date/Date.now/readFileSync/writeFileSync in runtime code; no src/vault imports. Suite 2944 green."
+}

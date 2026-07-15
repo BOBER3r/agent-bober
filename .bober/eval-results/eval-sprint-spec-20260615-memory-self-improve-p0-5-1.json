@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-5-1",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-5",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T17:42:45.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit zero errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors on new/modified files; 2 pre-existing warnings in eval-persist.test.ts." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "fact-detector 17 + fact-retrieve 13 = 30 new; full suite 184 files / 2210 pass / 3 skipped; zero regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "build + typecheck exit 0." },
+    { "criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "detectProjectFacts (lines 58-108) PURE — no readFile/new Date/createClient; all IO in seedProjectFacts (144-201); createClient only in a comment." },
+    { "criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "fixture detection (test/build/packageManager=npm/framework=react); double-reconcile NOOP-on-unchanged, supersede-on-changed, one active row per predicate." },
+    { "criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "pipeline.ts +12 at L1030 (between loadTeam and engine.run) try/catch warn-and-continue; chat-session.ts +9 at L504 (after banner, before for-await) try/catch swallow. Additive, no phase reorder; facts failure cannot abort run." },
+    { "criterionId": "sc-5-5", "required": true, "result": "pass", "evidence": "retrieveRelevantFacts → getActiveFacts(scope) SQL 'WHERE scope=? AND t_invalidated IS NULL' (scope isolation + active-only at DB layer); serializeFactsForContext slice(0,charBudget) (<=budget, 0→''); scope A never surfaces for scope B (tested both store + retrieval level)." },
+    { "criterionId": "sc-5-6", "required": false, "result": "pass", "evidence": "lint 0 errors on all new/modified files." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Final sprint passes all 6 criteria. Pure detectProjectFacts vs thin seedProjectFacts IO boundary correct; pipeline.ts + chat-session.ts wiring additive and guarded; scope isolation enforced at SQL layer; charBudget hard cap; no LLM on produce path. 30 new tests, full 2213-test suite green, zero regressions across the load-bearing pipeline/chat/planner files."
+}

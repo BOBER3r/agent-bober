@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["90842ec - bober(sprint-4): supplements markdown-frontmatter list -> FactStore + supplements CLI"],
+  "filesChanged": [
+    "src/medical/supplements.ts (created — parseSupplementsFile + supplementToFact + runSupplementAdd/List)",
+    "src/medical/supplements.test.ts (created — 15 tests)",
+    "src/cli/commands/medical.ts (modified — nested supplements add|list subtree under medical)"
+  ],
+  "testsAdded": ["src/medical/supplements.test.ts"],
+  "selfVerify": {
+    "build": "exit 0", "typecheck": "exit 0",
+    "lint": "0 errors (2 pre-existing any warnings unrelated)",
+    "fullSuite": "2962 passed (232 files), up from 2947 (+15)",
+    "guardrails": "grep: supplements.ts has 0 createClient/fetch/Date.now/FactJudge/src/vault in executable code"
+  },
+  "notes": "FactInput { scope:'medical', subject:name, predicate:'dose', value:dose ?? placeholder } via writeFact NO judge. sc-4-3 NOOP: reconcileFact exact-match returns 'noop' on second identical add -> getActiveFacts length stays 1. supplements nested under medical (not top-level). subject=name/predicate='dose' diverges intentionally from meds (subject='patient'/predicate='takes-medication') per ADR-7."
+}

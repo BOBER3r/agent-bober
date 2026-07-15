@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-calendar-planner-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-calendar-planner-4",
+  "specId": "spec-20260628-calendar-planner",
+  "timestamp": "2026-06-29T19:20:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Calendar planner — FINAL sprint. Sprint 1 = pure slotter (planSlots -> ProposedPlan). Sprint 2 = CalendarConnector interface + .ics connector. Sprint 3 = egress-gated Google connector + safe-title privacy + `calendar` config section. This Sprint 4 composes the SAFETY FLOW: `bober calendar plan` (live, no --dry-run/--export-ics) slots findings, writes a PENDING approval marker via the EXISTING approval gate, writes ZERO events until an ApprovedMarker exists; `bober calendar apply <checkpointId>` writes via the connector exactly once on approval, never on reject; a /tell-style constraint delta re-runs the slotter and re-proposes without writing. REUSE src/state/approval-state.ts + the existing /approve //reject //tell handlers — do NOT build a new approval mechanism.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260628-calendar-planner-1", "title": "Slotter + dry-run CLI", "summary": "planSlots(findings, busy, constraints) -> ProposedPlan { scheduled: PlanItem[], unscheduled[] }; src/cli/commands/calendar.ts runCalendarPlan core + CalendarPlanDeps. commit 0d141c1." },
+      { "contractId": "sprint-spec-20260628-calendar-planner-2", "title": "Connector + .ics", "summary": "src/calendar/connector.ts CalendarConnector { name, readFreeBusy, writeEvents }; createIcsConnector. --export-ics path. commit 0481407." },
+      { "contractId": "sprint-spec-20260628-calendar-planner-3", "title": "Google connector + egress", "summary": "createGoogleConnector (egress-gated, safe-title only); `calendar` config section (calendar.connector default 'ics', calendar.egress.cloudCalendar default false); CalendarEgressGuard. commit 123c7c4." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/state/approval-state.ts (REUSE: PendingMarker/ApprovedMarker/RejectedMarker + save/read/delete fns — the CURATOR will surface the EXACT exported function names; do NOT re-implement approval storage)",
+      "src/chat/slash-commands.ts:103-135 (existing /approve, /reject, /tell dispatch — reuse, do not duplicate)",
+      "src/calendar/connector.ts (CalendarConnector.writeEvents(items: PlanItem[]) — apply calls this exactly once on approval)",
+      "src/calendar/slotter.ts + src/calendar/types.ts (planSlots + SlotConstraints — adjustPlan re-runs slotter with a constraint delta, PURE, no write)",
+      "src/cli/commands/calendar.ts (extend: default `bober calendar plan` -> proposePlan; add `bober calendar apply <checkpointId>`; keep --dry-run and --export-ics paths unchanged)",
+      "src/cli/commands/do.ts + src/do-bridge/promote.ts (REFERENCE: how do-bridge reused approval-state markers via runPromotionGate — same machinery, mirror its marker usage)",
+      ".bober/principles.md (ESM .js imports, node:fs/promises, type-only imports, unicode section headers)"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260628-calendar-planner-4.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": null,
+  "evaluatorFeedback": null
+}

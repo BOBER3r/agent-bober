@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-5",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["9895965 - bober(sprint-5): ProfileSchema + SOPS cipher seam + writeProfile/readProfile + profile CLI"],
+  "filesChanged": [
+    "src/medical/profile.ts (created — ProfileSchema + ProfileCipher seam + default sops/execa cipher + hand-rolled YAML emit/parse + writeProfile/readProfile + runProfileShow/Set)",
+    "src/medical/profile.test.ts (created — 13 tests)",
+    "src/cli/commands/medical.ts (modified — nested profile show|set subtree under medical)"
+  ],
+  "testsAdded": ["src/medical/profile.test.ts"],
+  "selfVerify": {
+    "build": "exit 0", "typecheck": "exit 0",
+    "lint": "0 errors (2 pre-existing any warnings unrelated)",
+    "fullSuite": "2975 passed (233 files), up from 2962 (+13)",
+    "guardrails": "no real sops invoked in tests (fake cipher injected); no src/vault import; profile nested under medical"
+  },
+  "notes": "sc-5-3 safety: writeProfile checks cipher.available() BEFORE serializing/writing — only ciphertext reaches disk; no plaintext when unavailable. sc-5-2 round-trip via reversible base64+'SOPS:' fakeCipher (age/sex/goals + array fields). sc-5-4 Zod rejects negative age + unknown sex. Default cipher uses execaSync --version probe (binary probe, not a filesystem op)."
+}

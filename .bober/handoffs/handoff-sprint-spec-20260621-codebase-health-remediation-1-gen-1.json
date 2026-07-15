@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260621-codebase-health-remediation-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-1",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "timestamp": "2026-06-21T18:50:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — ESM/TypeScript multi-agent harness. This sprint breaks the only genuine runtime import cycle in src/fleet/: critic-deep.ts ↔ decomposer-deep.ts, via dependency injection (inject runExpandStage into runCritiqueLoop) plus relocating the Outline type to a dependency-free leaf. Pure structural refactor, zero behavior change.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/critic-deep.ts",
+      "src/fleet/decomposer-deep.ts",
+      "src/fleet/decomposer-deep-constants.ts",
+      "src/fleet/critic-deep.test.ts",
+      "src/fleet/decomposer-deep.test.ts"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principles": "See .bober/principles.md — ESM everywhere with .js import specifiers, `import type` (consistent-type-imports enforced), no synchronous fs, unicode box-drawing section headers, collocated *.test.ts, conventional commits (bober(sprint-N): ...). Provider-agnostic interfaces via providers/types.ts.",
+  "toolingNote": "This project has tokensave (code-graph MCP, v6.1.1) initialised. Prefer tokensave_context/tokensave_search/tokensave_callers for any code exploration before falling back to grep/Read. Use `npx vitest run` (NOT bare `vitest`, which watches). The 6 known cockpit-integration E2E MCP failures are pre-existing and unrelated — do not treat them as regressions.",
+  "evaluatorFeedback": null
+}

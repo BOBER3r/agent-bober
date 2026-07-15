@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-workflow-engine-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-workflow-engine-6",
+  "specId": "spec-20260604-workflow-engine",
+  "timestamp": "2026-06-04T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "FINAL sprint. Assemble WorkflowEngine (PipelineEngine name='workflow') wiring ResumeCursorReconstructor -> ArgsPayloadBuilder -> invoke (dormant) -> RunResultFlusher, with TS re-dispatch when ineligible/unavailable BEFORE any .bober/ flush. Register it in the selector. Implement EngineConformanceHarness asserting ts/skill artifact equivalence as a CI gate. Closes the loop: engine='workflow' completes via TS downgrade in CI with no partial flush.",
+    "completedSprints": [
+      { "contractId": "1", "title": "seam + selector", "summary": "src/orchestrator/workflow/{engine.ts (PipelineEngine, PipelineEngineName), eligibility.ts (isWorkflowEligible -> false), ts-engine.ts (TsPipelineEngine), selector.ts (resolveEngineName downgrades workflow->ts when ineligible/careful; selectPipelineEngine)}." },
+      { "contractId": "4", "title": "types + cursor + args + errors", "summary": "types.ts, errors.ts (WorkflowUnavailableError, MissingKnobError, AgentCapError, NonSerializableArgError), resume-cursor.ts (ResumeCursorReconstructor), args-builder.ts (ArgsPayloadBuilder)." },
+      { "contractId": "5", "title": "script + flusher", "summary": ".claude/workflows/bober-pipeline.js, flusher.ts (RunResultFlusher)." }
+    ],
+    "currentBranch": "bober/workflow-engine",
+    "relevantFiles": [
+      "src/orchestrator/workflow/selector.ts",
+      "src/orchestrator/workflow/ts-engine.ts",
+      "src/orchestrator/workflow/eligibility.ts",
+      "src/orchestrator/workflow/resume-cursor.ts",
+      "src/orchestrator/workflow/args-builder.ts",
+      "src/orchestrator/workflow/flusher.ts",
+      "src/orchestrator/workflow/errors.ts",
+      "src/orchestrator/workflow/selector.test.ts",
+      "src/state/sprint-state.ts",
+      "src/state/history.ts"
+    ]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true }
+  },
+  "principles": "See .bober/principles.md.",
+  "evaluatorFeedback": null,
+  "notes": "TWO HARD CI CONSTRAINTS: (A) runPipeline is NEVER run end-to-end in tests — it would spawn real LLM agents (runPlanner/runResearch/runGenerator/runEvaluatorAgent). Do NOT write a test that executes runPipeline or the real TS/skill engines live. (B) The default env is ineligible (isWorkflowEligible -> false), so resolveEngineName already downgrades 'workflow'->'ts' (sprint 1) — select() returns TsPipelineEngine and WorkflowEngine is never constructed in the default path. WORKFLOWENGINE.run ORDERING (critical — avoids the sprint-4 MissingKnobError trap): run() must FIRST check isWorkflowEligible(config); if NOT eligible -> log once + re-dispatch `return new TsPipelineEngine().run(...)` IMMEDIATELY, BEFORE building args (so MissingKnobError on absent optional config sections is never hit on the downgrade path). Only when eligible: reconstruct cursor (read-only) -> buildArgs -> try { invoke } catch (WorkflowUnavailableError) { log once + re-dispatch TsPipelineEngine BEFORE any flush } -> flush. invoke() is DORMANT: `private async invoke(args){ throw new WorkflowUnavailableError('Dynamic Workflows runtime not available (research-preview/paid/version gate); dormant in this release'); }`. So even an eligible probe re-dispatches cleanly. CRITICAL: no contract/eval flush may occur before invoke succeeds — reconstruct is read-only and buildArgs is pure, so this holds; assert it in the test by checking the temp .bober has no workflow-written contracts after a forced-unavailable run. SELECTOR: keep resolveEngineName as the primary gate (already downgrades). Register/return WorkflowEngine for name 'workflow' for the eligible case (belt-and-suspenders with the run()-level catch). For TESTABILITY of WorkflowEngine.run re-dispatch, allow injecting the TS engine and/or the invoke behavior via constructor params or protected methods so a test can (1) force eligible=true + invoke throwing WorkflowUnavailableError and assert TS re-dispatch + zero flush, and (2) use a fake TS engine that returns a sentinel PipelineResult without spawning agents. CONFORMANCE HARNESS (artifact-diff, NO live engines): EngineConformanceHarness.assertEquivalent(fixtureSpec, engines, projectRootFactory): Promise<ConformanceReport>. Design it to run a pluggable engine-RUNNER per engine name against a fresh projectRoot from the factory, then read back + NORMALIZE .bober/ artifacts (spec, contracts, eval-results, history — strip volatile fields: timestamps, durations, runIds, startedAt/completedAt) and deep-compare, populating diffs[] with {artifact,path,engines}. In the TEST, inject DETERMINISTIC stub runners (NOT real engines) that write fixed normalized artifact sets for 'ts' and 'skill': equal sets -> equivalent:true; an injected divergence -> equivalent:false with a populated diff. Do NOT run real LLM engines and do NOT silently skip a lane. C4 INTEGRATION TEST (no live agents): assert that selectPipelineEngine(configWithEngine='workflow') in the default ineligible env resolves to the TS engine (name==='ts' or instanceof TsPipelineEngine), proving runPipeline would delegate to TS — that IS the integration assertion. Optionally also call WorkflowEngine.run with a fake TS engine injected and assert the returned PipelineResult shape matches. Confine changes to NEW files: src/orchestrator/workflow/workflow-engine.ts, workflow-engine.test.ts, conformance.ts, conformance.test.ts, and a minimal edit to selector.ts to register/return WorkflowEngine. Do NOT modify pipeline.ts, the agents, or contracts/."
+}

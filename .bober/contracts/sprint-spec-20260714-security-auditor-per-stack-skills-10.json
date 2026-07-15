@@ -1,0 +1,86 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-10",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 10,
+  "title": "Dogfood enablement + docs + update-all sync",
+  "description": "Turn the new capability on for this repo and document it. Enable the verifier + offline supply-chain inspector (network egress OFF) in this repo's bober.config.json so every future sprint here is self-tested by the new pipeline, update docs/security-audit.md + the bober.security-audit skill + the auditor/verifier agent docs to describe the per-stack skill registry, verifier, supply-chain axis, and structured metadata, and run the skill/agent sync so the new bober-security-verifier agent and the 8 security skill files land in the .claude copies. Includes a build-dist smoke check that the enabled pipeline loads.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-9"
+  ],
+  "features": [
+    "feat-dogfood"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-10-1",
+      "description": "This repo's bober.config.json security section is updated to enable the new stages: verifier.enabled=true, supplyChain.enabled=true, diff.mode='git-diff', egress.onlineResearch=false (network stays OFF); project.stack is set to a value that resolves to the 'node' security stack (this repo is a Node/TS CLI) so the auditor uses a real per-stack fragment rather than generic. A test/parse confirms the config is valid and resolves to a real stack skill.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-2",
+      "description": "docs/security-audit.md is updated with new sections describing: the per-stack security skill registry (skills/bober.security-<stack>/SKILL.md, 8 stacks) and how to add/edit a signature, the finder->verifier pipeline and its fail-closed downgrade-only semantics, the supply-chain axis (scanner kinds + offline inspector + egress gating), the widened taxonomy + structured finding metadata, and the config keys (verifier/supplyChain/diff/egress/threatModelPath).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-3",
+      "description": "skills/bober.security-audit/SKILL.md is updated to reference the new per-stack skills, the verifier stage, and the supply-chain axis; agents/bober-security-auditor.md is updated to describe the widened taxonomy + structured finding fields + that it receives retrieved per-stack signatures and a real diff; agents/bober-security-verifier.md (from sprint 8) is referenced in the skill catalog/docs.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-4",
+      "description": "The skill/agent sync (npm run update-all or the documented equivalent) copies the 8 new skills/bober.security-*/SKILL.md and the new agents/bober-security-verifier.md into the project's .claude copies; a test/check asserts .claude/agents/bober-security-verifier.md exists and at least the generic + node security skills are present in the .claude skills copy (or documents the exact sync command if update-all is not runnable in the sprint environment).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-5",
+      "description": "A build-dist smoke check: npm run build succeeds and loading the built dist with this repo's now-enabled security config resolves the security stack, index, and verifier wiring without error (an offline, no-live-LLM smoke that the enabled pipeline is constructable); full suite green; typecheck + lint clean.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not enable network egress (onlineResearch stays false).",
+    "Do not run a live end-to-end audit against a real provider in CI (offline constructability smoke only).",
+    "Do not change any runtime component behavior (this sprint is config + docs + sync)."
+  ],
+  "stopConditions": [
+    "This repo's config enables verifier + offline supply-chain with egress off and resolves to a real per-stack skill.",
+    "Docs + skill/agent updates reflect the new pipeline; the new agent + skills are synced into .claude."
+  ],
+  "definitionOfDone": "This repo dogfoods the new verifier + offline supply-chain pipeline (network off) against a real per-stack skill, the docs and skill/agent files describe the new capability, and the new agent + security skills are synced into .claude, with the build-dist smoke passing and the suite green.",
+  "assumptions": [
+    "npm run update-all is the documented sync command (per the distribution memory: CLI symlink + skills copied per project + update-all); if it cannot run in the sprint sandbox, the sprint documents the exact command and asserts the source files exist ready to sync.",
+    "Setting project.stack to a node-resolving value (e.g. {backend:'node'} or {language:'typescript'}) makes SecurityStackRegistry.resolve return the 'node' stack for this repo.",
+    "Enabling verifier + supplyChain in bober.config.json affects only THIS repo's future sprints and is reversible by flipping the flags."
+  ],
+  "outOfScope": [
+    "Any further signature content or new components (feature complete at sprint 9)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "(1) bober.config.json: extend the existing security section (currently {enabled:true,scanners:[]}) with verifier:{enabled:true}, supplyChain:{enabled:true}, diff:{mode:'git-diff'}, egress:{onlineResearch:false}; set project.stack so it resolves to 'node'. Keep it minimal and valid against the schema. (2) docs/security-audit.md: add the new sections; keep the existing content. (3) skills/bober.security-audit/SKILL.md + agents/bober-security-auditor.md: additive updates describing the new pipeline; reference agents/bober-security-verifier.md. (4) sync: run `npm run update-all` if available; otherwise write the check to assert the source files exist and document the command. (5) smoke: a test that imports the built/enabled config path and constructs the security stack context + verifier wiring offline (inject fakes for the LLM loop) to prove constructability. Mirror the 'build-dist child-process smoke' lesson from the medical-import sax memory. Reference the distribution memory for the sync mechanism.",
+  "evaluatorNotes": "sc-10-1: parse the updated bober.config.json, assert the new flags + that SecurityStackRegistry.resolve(project.stack) returns 'node' with a real skill. sc-10-2/10-3: grep the docs/skill/agent files for the new concepts (per-stack skill registry, verifier, supply-chain axis, structured metadata). sc-10-4: assert .claude/agents/bober-security-verifier.md and .claude security skills exist after sync, OR that the documented command + source files are present. sc-10-5: npm run build; offline constructability smoke (no live LLM); full suite + typecheck + lint. Confirm egress.onlineResearch is false.",
+  "estimatedFiles": [
+    "bober.config.json",
+    "docs/security-audit.md",
+    "skills/bober.security-audit/SKILL.md",
+    "agents/bober-security-auditor.md",
+    "src/orchestrator/security-knowledge/dogfood-smoke.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-10-1",
+      "timestamp": "2026-07-14T20:20:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-10-1",
+  "updatedAt": "2026-07-14T20:20:00Z",
+  "completedAt": "2026-07-14T20:20:00Z"
+}

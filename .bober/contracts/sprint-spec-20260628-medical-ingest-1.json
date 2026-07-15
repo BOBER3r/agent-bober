@@ -1,0 +1,80 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-1",
+  "specId": "spec-20260628-medical-ingest",
+  "sprintNumber": 1,
+  "title": "Lab-PDF -> structured JSON parser (Claude document block, egress-gated)",
+  "description": "Add an additive optional ChatParams.documents field rendered only by the Anthropic adapter as a `document` content block, and a new parseLabPdf() in src/medical/lab-pdf-parser.ts that base64-encodes a native-text lab PDF, sends it via an injectable LLMClient using schema-constrained output, and returns a Zod-validated ParsedLabReport (panel, collection date, markers each with name/value/unit/optional reference low+high). Malformed model output is rejected by Zod and never returned unvalidated.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "Running `npm run build` (tsc) compiles the new lab-pdf-parser module, the ParsedLabReport Zod schema, and the provider document-block change with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "Running `npm run typecheck` (tsc --noEmit) reports zero errors across src/, including the new optional ChatParams.documents field and its Anthropic adapter mapping.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A vitest in src/medical/lab-pdf-parser.test.ts injects a fake LLMClient returning canned structured JSON and asserts parseLabPdf() returns a ParsedLabReport whose markers length and first marker value/unit/collectedAtIso equal the canned fixture values.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A vitest asserts that when the fake client returns JSON missing required marker fields, parseLabPdf() throws a Zod validation error (expect().rejects/toThrow) rather than returning an unvalidated object.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A vitest on the Anthropic adapter asserts ChatParams.documents produces a content block of type 'document' with source.type 'base64' and media_type 'application/pdf' on the first user message, and that omitting documents leaves the rendered request byte-identical to the prior behaviour.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not make any real network call or hit the Anthropic API in tests -- every parser test injects a fake LLMClient.",
+    "Do not implement the CLI command, vault note writing, or store reindex in this sprint -- only the parse function plus its provider plumbing.",
+    "Do not add OCR or scanned-image PDF handling -- assume native-text PDFs.",
+    "Do not change non-Anthropic provider adapters beyond ignoring the new documents field."
+  ],
+  "stopConditions": [
+    "npm run build and npm run typecheck both exit 0 and the lab-pdf-parser plus Anthropic-adapter vitest cases pass.",
+    "parseLabPdf returns a Zod-validated ParsedLabReport for the canned fixture and rejects input missing required marker fields."
+  ],
+  "definitionOfDone": "A new parseLabPdf(pdfBytes, deps) lives in src/medical/lab-pdf-parser.ts. It base64-encodes a native-text lab PDF, sends it as an Anthropic `document` content block through an injectable LLMClient (responseSchema or jsonObjectMode), and returns a Zod-validated ParsedLabReport: a panel name, an ISO collection date, and a markers array where each marker has a name, a numeric value, a unit, and optional reference low/high. Model output that fails the schema is rejected, never returned unvalidated. The provider layer gains an additive optional ChatParams.documents field that only the Anthropic adapter renders; all other adapters ignore it and existing calls stay byte-identical.",
+  "assumptions": [
+    "ChatParams.documents is additive and optional; only the Anthropic adapter renders it -- evidence: src/providers/types.ts ChatParams optional fields (responseSchema/jsonObjectMode); src/providers/anthropic.ts:80-132 content-block builder.",
+    "Claude parses native-text lab PDFs to structured JSON without OCR -- evidence: research-20260627-knowledge-platform-landscape.md section 2 Angle 3 (line 67).",
+    "ParsedLabReport markers map onto the existing LabResult shape (biomarker/value/unit/collectedAtIso/referenceLow/referenceHigh) -- evidence: src/medical/types.ts:118-127.",
+    "Tests inject a fake LLMClient (no network), mirroring the ClientFactory seam at src/medical/inference.ts:17."
+  ],
+  "outOfScope": [
+    "Egress gating and fail-closed CLI behaviour (Sprint 3).",
+    "Writing vault notes or reindexing into the store (Sprint 2).",
+    "Image/scanned PDF OCR."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Put the ParsedLabReport Zod schema in a new src/medical/lab-types.ts (ParsedLabMarker { name, value:number, unit, referenceLow?:number, referenceHigh?:number, critical?:boolean } and ParsedLabReport { panel, collectedAtIso, markers[] }) to avoid churning the large src/medical/types.ts. Build the structured request via ChatParams.responseSchema (preferred) or jsonObjectMode; the provider contract says response.text holds the JSON document (see ChatParams.responseSchema doc in src/providers/types.ts). For the document block, follow the content-block construction pattern in src/providers/anthropic.ts toAnthropicMessage (lines 80-132): add an optional documents?: { base64: string; mediaType: string }[] to ChatParams and, in the Anthropic adapter only, prepend a { type: 'document', source: { type: 'base64', media_type, data } } block to the FIRST user message. Make parseLabPdf accept a deps object { client: LLMClient; model: string } so tests inject a fake; production callers will pass the result of buildMedicalInferenceClient (wired in Sprint 3). Validate the model JSON with the Zod schema and throw on failure -- do not silently coerce.",
+  "evaluatorNotes": "Confirm no real network: grep the test for a fake/stub client and ensure no fetch/Anthropic SDK call escapes. Verify the malformed-input test actually exercises the Zod failure path (not just a happy path). Verify the Anthropic-adapter test inspects the constructed request shape (document block with base64 source + application/pdf) and that a request WITHOUT documents is unchanged from prior snapshots. Verify build + typecheck are green. Confirm non-anthropic adapters were not modified to handle documents.",
+  "estimatedFiles": [
+    "src/providers/types.ts",
+    "src/providers/anthropic.ts",
+    "src/medical/lab-types.ts",
+    "src/medical/lab-pdf-parser.ts",
+    "src/medical/lab-pdf-parser.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T00:00:00Z",
+  "updatedAt": "2026-06-28T15:43:29Z",
+  "completedAt": "2026-06-28T15:43:29Z"
+}

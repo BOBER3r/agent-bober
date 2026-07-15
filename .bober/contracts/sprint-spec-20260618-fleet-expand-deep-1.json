@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-1",
+  "specId": "spec-20260618-fleet-expand-deep",
+  "sprintNumber": 1,
+  "title": "Robust two-stage decomposition engine (decomposer-deep.ts)",
+  "description": "Create a NEW sibling module src/fleet/decomposer-deep.ts (beside the byte-locked decomposer.ts) implementing a bounded PLAN -> EXPAND robust decomposer. PlanStage makes one bounded LLM call to produce a transient in-memory Outline ({ areas: [{name, intent}] }) gated by validateOutline; ExpandStage makes one bounded LLM call to turn that Outline into raw text and validates it through the REUSED validateManifest (imported verbatim from decomposer.ts) \u2014 inheriting JSON-extract + FleetManifestSchema.safeParse + the per-child config-key guard. decomposeGoalDeep orchestrates both within a fixed total budget DEEP_MAX_TOTAL_CALLS = 4 = (1+DEEP_PLAN_MAX_RETRIES)+(1+DEEP_EXPAND_MAX_RETRIES). Both calls set jsonObjectMode:true and NEVER responseSchema. No CLI, no disk IO, no network \u2014 fully unit-tested with a scripted fake LLMClient.",
+  "status": "completed",
+  "createdAt": "2026-06-18T07:32:33Z",
+  "updatedAt": "2026-06-18T07:32:33Z",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds successfully (tsc) with zero errors after adding decomposer-deep.ts.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors (strict mode); no explicit any; provider/SDK types are NOT imported outside src/providers/ (only LLMClient/Message types from providers/types.js).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "ESLint reports zero errors on the new file and tests (consistent-type-imports, no-unused, ESM .js import extensions).",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "Given a ScriptedClient returning a valid Outline JSON then a valid children-only manifest JSON, decomposeGoalDeep resolves with a FleetManifest that FleetManifestSchema.parse accepts and whose children carry ONLY {folder, task} (no config). (feat-1 AC1, AC2)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "Both ChatParams recorded by the ScriptedClient have jsonObjectMode === true AND responseSchema === undefined (asserted on BOTH the PLAN and EXPAND calls). (feat-1 AC3)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "runPlanStage throws after exactly (1 + DEEP_PLAN_MAX_RETRIES) = 2 attempts when every PLAN response fails validateOutline, the error carries the accumulated lastError, and ExpandStage's LLM call is never made (recorded calls == 2). (feat-1 AC4)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "runExpandStage throws after exactly (1 + DEEP_EXPAND_MAX_RETRIES) = 2 attempts when every EXPAND response fails the REUSED validateManifest \u2014 including a response whose child carries a config key (config-key guard rejects it and triggers a coercion retry). Across a fully-failing deep run the total recorded client.chat calls never exceed DEEP_MAX_TOTAL_CALLS = 4. (feat-1 AC5)",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-8",
+      "description": "validateOutline never throws: returns { ok:false, error } for non-JSON / shape-invalid text and { ok:true, outline } for a valid { areas: [{name, intent}] } object. Each stage's coercion retry uses the 3-message [user, assistant, user] shape re-stating the required JSON. Constants assert DEEP_PLAN_MAX_RETRIES===1, DEEP_EXPAND_MAX_RETRIES===1, DEEP_MAX_TOTAL_CALLS===4. (feat-1 AC6, AC7, AC8)",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "No CLI surface (Sprint 2): no runFleetExpandDeep, no registerFleetExpandDeepSubcommand, no edits to src/fleet/index.ts.",
+    "No edits to the byte-locked decomposer.ts (decomposeGoal, its prompts, DECOMPOSE_MAX_RETRIES) \u2014 validateManifest is IMPORTED, never copied or modified.",
+    "No edits to FleetManifestSchema / FleetChildSchema / manifest.ts.",
+    "No disk IO and no real network \u2014 all LLM interaction is via an injected fake LLMClient.",
+    "No self-critique / generate->critique->revise round (Approach B, deferred).",
+    "No new on-disk contract: the Outline is in-memory only, never serialized; no Outline loader/schema/CLI."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass programmatic verification.",
+    "A scripted happy-path PLAN->EXPAND yields a FleetManifestSchema-valid children-only manifest; both calls assert jsonObjectMode:true + responseSchema:undefined; every failing path throws within the bounded budget (total chat calls <= 4) with no leakage past the stage boundary."
+  ],
+  "definitionOfDone": "New file src/fleet/decomposer-deep.ts exports: types Outline = { areas: OutlineArea[] } and OutlineArea = { name: string; intent: string } (transient, in-memory only); DecomposeDeepInput { goal; client: LLMClient; model; count?; planMaxRetries?; expandMaxRetries? }; async decomposeGoalDeep(input): Promise<FleetManifest>; runPlanStage({ client; model; goal; count?; maxRetries }): Promise<Outline>; validateOutline(rawText): { ok:true; outline } | { ok:false; error }; runExpandStage({ client; model; outline; goal; maxRetries }): Promise<FleetManifest>; and constants DEEP_PLAN_SYSTEM_PROMPT, DEEP_PLAN_COERCION_INSTRUCTION, DEEP_EXPAND_SYSTEM_PROMPT, DEEP_EXPAND_COERCION_INSTRUCTION, DEEP_PLAN_MAX_RETRIES=1, DEEP_EXPAND_MAX_RETRIES=1, DEEP_MAX_TOTAL_CALLS=4. The EXPAND stage imports validateManifest from ./decomposer.js and feeds it raw LLM text verbatim. Both stages run a bounded for-loop (attempt 0..maxRetries) mirroring decomposeGoal's maxAttempts=1+maxRetries; the first turn sends a single user message, retries send the 3-message [user, assistant, user] coercion shape; every client.chat call sets jsonObjectMode:true and never responseSchema. On exhaustion each stage throws an Error with the accumulated lastError (\"deep plan failed after N attempts...\" / \"deep expand failed after N attempts...\"). decomposeGoalDeep calls runPlanStage then runExpandStage(outline) and returns the manifest; PLAN strictly precedes EXPAND (never parallel). Collocated tests in src/fleet/decomposer-deep.test.ts reuse a ScriptedClient (recording every ChatParams) covering: happy-path multi-child output, both-calls jsonObjectMode assertion, PLAN exhaustion (2 calls, no EXPAND), EXPAND exhaustion incl. a config-bearing child (guard rejects), total-budget bound <=4, validateOutline ok/not-ok cases, and the constants. Build, typecheck, lint clean; all new and existing tests pass.",
+  "assumptions": [
+    "validateManifest is already exported from src/fleet/decomposer.ts:95 and is reused verbatim \u2014 it does JSON-extraction (direct parse, fenced, first {..} block), FleetManifestSchema.safeParse, and rejects any child with a config key.",
+    "The ScriptedClient pattern in src/fleet/decomposer.test.ts:17-35 (implements LLMClient, records calls[], returns scripted text in order) is the fake to reuse; it already returns ChatResponse { text, toolCalls:[], stopReason:'end', usage }.",
+    "The 3-message coercion shape and bounded maxAttempts loop are copied in spirit from src/fleet/decomposer.ts:57-187 (callDecomposer + decomposeGoal) but adapted for two prompts (Outline, then children-only manifest).",
+    "jsonObjectMode is the correct knob (providers/types.ts:175-183); responseSchema must never be set (DeepSeek rejects strict json_schema).",
+    "FleetManifest / FleetChild types come from ./manifest.js; LLMClient / Message / ChatParams / ChatResponse from ../providers/types.js."
+  ],
+  "outOfScope": [
+    "CLI wiring and the expand-deep subcommand (Sprint 2).",
+    "Any change to decomposer.ts, manifest.ts, index.ts, or providers/.",
+    "Persisting the Outline; a self-critique round; a hard --count cap."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create NEW file src/fleet/decomposer-deep.ts + collocated src/fleet/decomposer-deep.test.ts. Do NOT edit decomposer.ts, manifest.ts, index.ts, or anything in providers/.\n\n1. READ FIRST: src/fleet/decomposer.ts (FULL \u2014 mirror callDecomposer's 3-message coercion :57-91, the bounded loop in decomposeGoal :159-187, and IMPORT validateManifest :95 verbatim for EXPAND), src/fleet/decomposer.test.ts:1-56 (ScriptedClient + helpers to reuse), src/fleet/manifest.ts (FleetManifest/FleetChild types), src/providers/types.ts:155-222 (ChatParams.jsonObjectMode :183, responseSchema :174, LLMClient :216, Message).\n\n2. Constants (module top, mirror DECOMPOSE_* tone):\n   - DEEP_PLAN_SYSTEM_PROMPT: instruct emit ONLY { \"areas\": [ { \"name\": \"<free-form area name>\", \"intent\": \"<what this sub-project area covers>\" } ] } \u2014 a coarse outline of INDEPENDENT sub-project areas for the goal; at least 1 area; no prose/fences; name is free-form (NOT yet a kebab folder).\n   - DEEP_PLAN_COERCION_INSTRUCTION: re-state the exact Outline JSON shape after a failed parse.\n   - DEEP_EXPAND_SYSTEM_PROMPT: expand the given outline into children-only { \"children\": [ { \"folder\": \"<short-kebab-case>\", \"task\": \"<self-contained build instruction>\" } ] } \u2014 mirror DECOMPOSE_SYSTEM_PROMPT rules verbatim (kebab folder, self-contained task, >=1 child, NO config/concurrency/rootDir/provider keys, each child ONLY folder+task).\n   - DEEP_EXPAND_COERCION_INSTRUCTION: re-state children-only manifest shape after a failed validation.\n   - DEEP_PLAN_MAX_RETRIES = 1; DEEP_EXPAND_MAX_RETRIES = 1; DEEP_MAX_TOTAL_CALLS = 4.\n\n3. Types: export type OutlineArea = { name: string; intent: string }; export type Outline = { areas: OutlineArea[] }; export interface DecomposeDeepInput { goal: string; client: LLMClient; model: string; count?: string; planMaxRetries?: number; expandMaxRetries?: number }.\n\n4. validateOutline(rawText: string): { ok:true; outline:Outline } | { ok:false; error:string } \u2014 NEVER throws. Reuse the SAME JSON-extraction strategy as validateManifest (try JSON.parse(trim), then fenced ```json block, then first {..lastIndexOf('}')} block); then check parsed is an object with an `areas` array of >=1 items each having non-empty string name + string intent. Return { ok:false, error } otherwise. (Either hand-roll the shape check or use a small local zod schema \u2014 do NOT touch manifest.ts.)\n\n5. Internal one-call helpers mirroring callDecomposer (first turn = single user message; retry = [ {role:'user',content: goal-or-outline-prompt}, {role:'assistant',content: priorText}, {role:'user',content: `${COERCION}\\n\\nPrevious validation error:\\n${formattedError}`} ]). EVERY client.chat sets { model, system, messages, jsonObjectMode: true } and NEVER responseSchema.\n   - PLAN call uses goal (+ optional count hint folded in, e.g. soft '(Outline into approximately {count} areas.)') as the first user message and DEEP_PLAN_SYSTEM_PROMPT.\n   - EXPAND call serializes the Outline (JSON.stringify) into the first user message alongside the goal and uses DEEP_EXPAND_SYSTEM_PROMPT.\n\n6. runPlanStage: const maxAttempts = 1 + maxRetries; loop attempt 0..maxAttempts-1; call PLAN (priorText/formattedError only when attempt>0); validateOutline; on ok return outline; else record lastError+priorText; after loop throw new Error(`deep plan failed after ${maxAttempts} attempt(s):\\n${lastError}`).\n\n7. runExpandStage: identical bounded loop but call EXPAND and validate via the IMPORTED validateManifest(rawText); on ok return manifest; after loop throw new Error(`deep expand failed after ${maxAttempts} attempt(s):\\n${lastError}`).\n\n8. decomposeGoalDeep(input): const outline = await runPlanStage({ client, model, goal, count, maxRetries: input.planMaxRetries ?? DEEP_PLAN_MAX_RETRIES }); const manifest = await runExpandStage({ client, model, outline, goal, maxRetries: input.expandMaxRetries ?? DEEP_EXPAND_MAX_RETRIES }); return manifest. PLAN strictly precedes EXPAND.\n\n9. Style: ESM .js import extensions; `import type` for all type-only imports; no explicit any; section comments mirroring decomposer.ts. Import validateManifest from './decomposer.js'.\n\n10. Tests (src/fleet/decomposer-deep.test.ts) reuse ScriptedClient: (a) happy path \u2014 script [validOutlineJson, validMultiChildManifestJson]; assert FleetManifestSchema.parse(result) ok, children only folder+task; (b) assert client.calls[0] and client.calls[1] each have jsonObjectMode===true && responseSchema===undefined; (c) PLAN-fail \u2014 script ['not json','still not json']; expect decomposeGoalDeep rejects, client.calls.length===2 (EXPAND never ran); (d) EXPAND-fail incl config child \u2014 valid outline then repeated {children:[{folder:'x',task:'t',config:{}}]} (and/or schema-invalid); expect rejects, and total client.calls.length<=4; assert the EXPAND error mentions the config-key guard on the config case; (e) validateOutline unit cases (valid object -> ok; '' / 'nope' / {areas:[]} -> not ok, no throw); (f) constants are 1/1/4.",
+  "evaluatorNotes": "Independently verify each criterion against src/fleet/decomposer-deep.ts and its tests.\nsc-1-4: Run the happy-path test; confirm decomposeGoalDeep returns a FleetManifestSchema.parse-valid manifest with multiple children carrying ONLY folder+task (no config). Confirm validateManifest is the IMPORTED symbol from ./decomposer.js (grep the import) \u2014 not re-implemented.\nsc-1-5: Inspect the test asserting BOTH recorded ChatParams have jsonObjectMode===true and responseSchema===undefined. Also grep decomposer-deep.ts to confirm responseSchema is never referenced and every chat() call literally sets jsonObjectMode:true.\nsc-1-6: Force PLAN to always fail; assert the thrown error names the plan stage + accumulated error, and recorded calls === 2 (EXPAND's call absent).\nsc-1-7: Force EXPAND to always fail including a child-with-config response; assert the guard error surfaces, the stage throws after 2 EXPAND attempts, and TOTAL recorded calls across the full deep run is <= DEEP_MAX_TOTAL_CALLS (4). This is the budget bound \u2014 verify it structurally (constants) AND behaviorally (call count).\nsc-1-8: Confirm validateOutline returns (not throws) on bad input; confirm the 3-message coercion shape is used on retries (inspect the messages array sent on attempt>0); confirm the three constants equal 1, 1, 4.\nAlso check: decomposer.ts / manifest.ts / index.ts / providers/ are byte-unchanged (git diff names only decomposer-deep.ts + its test); no synchronous fs, no network; ESM .js extensions; import type; no explicit any; no SDK import outside providers/. Run the full suite \u2014 existing decomposer.test.ts / expand.test.ts / index.test.ts must stay green.",
+  "estimatedFiles": [
+    "src/fleet/decomposer-deep.ts",
+    "src/fleet/decomposer-deep.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "startedAt": "2026-06-18T07:57:59Z",
+  "completedAt": "2026-06-18T08:08:18Z"
+}

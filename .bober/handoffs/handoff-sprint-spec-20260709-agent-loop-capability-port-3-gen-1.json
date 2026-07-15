@@ -1,0 +1,143 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T20:57:22.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+        "title": "Refusal detection end-to-end",
+        "summary": "Commit 35a2dbd: explicit 'refusal' StopReason in anthropic+openai adapters, spread-conditional refused:true on AgenticLoopResult completion branch (never throws), parseGeneratorResult exported with fail-closed refusal guard. Suite 3699."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+        "title": "Cost substrate: CostMeter, ChatResponse.costUsd, Budget maxUsd",
+        "summary": "Commits 8d68248/c73b95d/d5c8b9d/73053c0: pure src/providers/cost-meter.ts (dated PRICE_TABLE, longest-prefix, no catch-all rows, claude-code->undefined), optional ChatResponse.costUsd in anthropic (structured+normal returns) / openai (refusal+normal, protected costProvider discriminator) / openai-compat (costProvider='openai-compat') / claude-code (real total_cost_usd passthrough, no cost-meter import), Budget maxUsd axis (chargeUsd non-finite/negative->no-op, usdSpent, remainingUsd Infinity uncapped, exceeded()/assertWithinBudget() extended, BudgetExceededError kind 'usd'). Budget has ZERO production callers (dormant, this sprint wires it). Suite 3731."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/config/schema.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/generator-agent.ts",
+      "src/orchestrator/generator-agent.test.ts",
+      "src/orchestrator/pipeline.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 3,
+    "title": "Loop wiring: per-role effort, USD ceiling enforcement, config schema, cost persistence",
+    "description": "Drive the sprint-2 substrate from config through the loop. Per-role Zod fields effort and budget.maxUsd; AgenticLoopParams gains effort and budget; the loop forwards effort to ChatParams (spread like maxTokens), charges the Budget per turn (tokens + costUsd), and on a hit ceiling breaks gracefully with stopReason 'budget_exceeded' \u2014 never throwing (ADR-4). AgenticLoopResult gains cumulative costUsd, persisted additively into history.jsonl sprint events.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260709-agent-loop-capability-port-2"
+    ],
+    "features": [
+      "feat-2",
+      "feat-3"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-3-1",
+        "description": "Per-role config sections accept optional effort (enum low|medium|high|xhigh|max) and budget { maxUsd: positive number | null }; every existing bober.config.json fixture parses unchanged.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-2",
+        "description": "config.<role>.effort reaches the Anthropic request as output_config.effort; when unset, the rendered request payload is deep-equal to the pre-change payload (no output_config key) and non-Anthropic adapters never carry effort on the wire.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-3",
+        "description": "With a Budget on AgenticLoopParams, the loop charges tokens and costUsd once per turn and, when exceeded(), returns a partial result with stopReason 'budget_exceeded' via a resolved promise (mirrors the max-turns return; assertWithinBudget is never called).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-4",
+        "description": "AgenticLoopResult.costUsd equals the sum of per-turn response costUsd values when any were present and the key is absent when none were.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-5",
+        "description": "Sprint-completion history.jsonl events carry an optional costUsd field when the run produced one and are byte-identical (no new key) when it did not.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-6",
+        "description": "A role entry point (generator at minimum) constructs Budget from config.<role>.budget.maxUsd and passes effort/budget into runAgenticLoop; with neither key set, its loop invocation arguments are unchanged.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-7",
+        "description": "npm run build and npm run typecheck pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not throw BudgetExceededError from the loop (ADR-4: no catcher exists around runGenerator in pipeline.ts).",
+      "Do not enable any effort/budget value in this repo's own bober.config.json (dogfooding declined).",
+      "Do not map effort to non-Anthropic reasoning params.",
+      "Do not add mid-turn cost interruption (ceiling fires between turns; sprint 9 adds abort)."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: schema round-trip compatibility, effort on-wire only when configured, graceful budget_exceeded stop without throwing, cumulative costUsd, and additive history persistence.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "Setting config.<role>.effort and config.<role>.budget.maxUsd drives real behavior: Anthropic requests carry output_config.effort, spend is charged per turn, a hit ceiling ends the run gracefully with stopReason 'budget_exceeded', and per-run cost lands on AgenticLoopResult.costUsd plus optional history.jsonl fields. Omitting both keys is byte-identical end-to-end. Build and full suite green.",
+    "assumptions": [
+      "ChatParams.effort already exists (types.ts:155) and anthropic.ts already forwards it (~:310 output_config conditional spread) \u2014 this sprint only creates callers.",
+      "Per-role Zod sections live at src/config/schema.ts (~:83-129); the additive-optional pattern used by research/fleet sections applies.",
+      "Role entry points construct loop params in src/orchestrator/<role>-agent.ts (generator ~:115-145); wiring the generator plus a shared helper the other roles can adopt satisfies sc-3-6.",
+      "The loop accumulates usage after chatWithRetry (~:293) \u2014 budget charging inserts there; the max-turns return (~:406) is the convention the budget_exceeded return mirrors.",
+      "History events are appended as JSON lines; adding an optional key is additive (approved planning answer Q2)."
+    ],
+    "outOfScope": [
+      "Fleet child config plumbing beyond what buildChildConfig already inherits from the shared schema.",
+      "Cost display in chat/telegram UIs."
+    ],
+    "ambiguityScore": 3,
+    "generatorNotes": "Schema: add EffortSchema = z.enum(['low','medium','high','xhigh','max']).optional() and BudgetSectionSchema = z.object({ maxUsd: z.number().positive().nullable().optional() }).optional() in src/config/schema.ts, attach both to each per-role section (planner/curator/generator/evaluator; follow how existing optional fields sit in those sections). Loop: extend AgenticLoopParams with effort?: Effort and budget?: Budget (import type from workflow/budget.ts); spread effort into the chatWithRetry params exactly where maxTokens is spread (~:264-266); after the usage accumulation (~:293) call budget?.chargeTokens(response.usage) and budget?.chargeUsd(response.costUsd ?? 0), then if (budget?.exceeded()) return the partial-result shape used by the max-turns path with stopReason 'budget_exceeded'. Result: track a running cost sum (only when at least one response carried costUsd) and attach via conditional spread. Generator wiring (~generator-agent.ts:115-145): read config values, construct Budget only when maxUsd != null, pass both conditionally so absent config \u2192 identical params object. Persistence: where the sprint-completion history event is appended (grep for \"sprint-completed\" or the history append helper in src/utils or orchestrator/pipeline.ts), conditionally include costUsd. Keep BudgetExceededError untouched for the workflow interpreter's existing fail-fast use.",
+    "evaluatorNotes": "sc-3-1: parse every config fixture in the repo plus a config with the new keys; assert old fixtures produce deep-equal parsed output vs the pre-change schema behavior (no defaults injected). sc-3-2: spy on the Anthropic SDK create call \u2014 with effort set assert output_config.effort; without, deep-equal the request object to the baseline and assert no output_config key; assert openai adapter request never contains effort. sc-3-3: fake client with fixed per-turn costUsd and a Budget maxUsd crossed on turn 2 \u2192 assert resolved result, stopReason 'budget_exceeded', turnsUsed 2, and that chat was not called a third time. sc-3-4: runs with and without costUsd-bearing responses; Object.hasOwn checks. sc-3-5: temp .bober dir, run the history append with and without cost; parse lines and assert key presence/absence. sc-3-6: invoke the generator entry with a config lacking the new keys and spy on runAgenticLoop params (no effort/budget keys). Build + full suite.",
+    "estimatedFiles": [
+      "src/config/schema.ts",
+      "src/config/schema.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/generator-agent.ts",
+      "src/orchestrator/generator-agent.test.ts",
+      "src/orchestrator/pipeline.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-09T20:57:22.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

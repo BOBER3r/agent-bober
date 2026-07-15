@@ -1,0 +1,37 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "met": true, "evidence": "cost-meter.ts: PRICE_TABLE (anthropic/openai/openai-compat DeepSeek+Grok/google, dated 2026-07 comment) + estimateCostUsd longest-prefix match. 14 tests: exact prefix, longer-prefix-wins (gpt-4.1 vs gpt-4.1-mini, grok-4 vs grok-4-fast), unknown -> undefined, claude-code -> undefined always, arithmetic derived from PRICE_TABLE, zero-usage -> 0."},
+    {"criterionId": "sc-2-2", "met": true, "evidence": "claude-code.ts conditional-spreads parsed.total_cost_usd (typeof-guarded) as costUsd; no cost-meter import. 2 tests: passthrough === 0.0123, Object.hasOwn false when absent."},
+    {"criterionId": "sc-2-3", "met": true, "evidence": "anthropic.ts computes costUsd once, spread into structured + normal returns. openai.ts adds protected costProvider (default 'openai'), spreads into refusal + normal returns. openai-compat.ts overrides costProvider='openai-compat' so DeepSeek/Grok price via compat rows. Tests prove openai has no deepseek row while compat estimate matches result."},
+    {"criterionId": "sc-2-4", "met": true, "evidence": "budget.ts: BudgetOptions.maxUsd?, chargeUsd (non-finite/negative -> no-op), usdSpent, remainingUsd (Infinity uncapped), exceeded()/assertWithinBudget() extended, BudgetExceededError kind gains 'usd'. 6 new tests incl. NaN/negative/±Infinity -> 0 and source-compat check."},
+    {"criterionId": "sc-2-5", "met": true, "evidence": "Full suite 298 files / 3731 tests green (3699 baseline + 32). grep confirms Budget still has zero production callers (Sprint-3-dormant per nonGoals)."},
+    {"criterionId": "sc-2-6", "met": true, "evidence": "build exit 0, typecheck exit 0, lint 0 errors (2 pre-existing warnings in untouched eval-persist.test.ts)."}
+  ],
+  "filesChanged": [
+    {"path": "src/providers/cost-meter.ts", "action": "created", "description": "Pure CostMeter: PriceRow/PriceTable, dated static PRICE_TABLE, estimateCostUsd longest-prefix, claude-code always undefined."},
+    {"path": "src/providers/cost-meter.test.ts", "action": "created", "description": "14 unit tests."},
+    {"path": "src/providers/types.ts", "action": "modified", "description": "Optional ChatResponse.costUsd with JSDoc."},
+    {"path": "src/providers/claude-code.ts", "action": "modified", "description": "Conditional-spread total_cost_usd as costUsd; no cost-meter import (ADR-3)."},
+    {"path": "src/providers/claude-code.test.ts", "action": "modified", "description": "2 passthrough/omission tests."},
+    {"path": "src/providers/anthropic.ts", "action": "modified", "description": "estimateCostUsd wired into structured + normal returns."},
+    {"path": "src/providers/anthropic.test.ts", "action": "modified", "description": "3 tests incl. structured branch."},
+    {"path": "src/providers/openai.ts", "action": "modified", "description": "protected costProvider discriminator + costUsd on refusal + normal returns."},
+    {"path": "src/providers/openai.test.ts", "action": "modified", "description": "3 tests incl. refusal branch."},
+    {"path": "src/providers/openai-compat.ts", "action": "modified", "description": "costProvider override 'openai-compat'."},
+    {"path": "src/providers/openai-compat.test.ts", "action": "modified", "description": "3 tests: deepseek/grok priced via compat rows, unpriced local model omits key."},
+    {"path": "src/orchestrator/workflow/budget.ts", "action": "modified", "description": "Additive USD axis; existing signatures preserved."},
+    {"path": "src/orchestrator/workflow/budget.test.ts", "action": "modified", "description": "6 USD-axis tests."}
+  ],
+  "testsAdded": ["src/providers/cost-meter.test.ts", "extended: claude-code/anthropic/openai/openai-compat/budget tests"],
+  "commits": [
+    "8d68248 - bober(sprint-2): pure CostMeter + optional ChatResponse.costUsd",
+    "c73b95d - bober(sprint-2): add optional maxUsd ceiling to Budget",
+    "d5c8b9d - bober(sprint-2): thread claude-code's real total_cost_usd into ChatResponse",
+    "73053c0 - bober(sprint-2): estimate costUsd in anthropic/openai/openai-compat adapters"
+  ],
+  "blockers": [],
+  "notes": "GoogleAdapter deliberately NOT wired (sc-2-3 scopes anthropic/openai/openai-compat only; google price rows present in table per sc-2-1, reserved for later). Deliberately NO broad catch-all rows (e.g. 'anthropic:claude') because 'claude-nonexistent-99' would falsely prefix-match — every key is a real model-family prefix from model-resolver.ts SHORTHAND_MAP, preserving fail-open. Budget has zero production callers; package.json/src/config untouched (all 4 nonGoals satisfied). Full suite 3731/3731."
+}

@@ -1,0 +1,86 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-2",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "sprintNumber": 2,
+  "title": "DeepSeek shorthand resolution and API-key handling",
+  "description": "Map deepseek, deepseek-v4-pro, and deepseek-v4-flash shorthands to openai-compat at https://api.deepseek.com, add a DEEPSEEK_API_KEY environment fallback to the openai-compat key chain, and give a DeepSeek-specific missing-key error in validateApiKey when the resolved endpoint is api.deepseek.com.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260531-multi-provider-deepseek-claude-code-1"
+  ],
+  "features": [
+    "feat-2",
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "resolveProviderModel(\"deepseek-v4-pro\") returns provider \"openai-compat\", modelId \"deepseek-v4-pro\", and endpoint \"https://api.deepseek.com\", asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "resolveProviderModel(\"deepseek\") and resolveProviderModel(\"deepseek-v4-flash\") each return openai-compat with the api.deepseek.com endpoint and the corresponding modelId (deepseek-v4-pro and deepseek-v4-flash respectively), asserted by unit tests.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "resolveProviderModel(\"ollama/llama3\") still returns openai-compat at http://localhost:11434/v1 and resolveProviderModel(\"sonnet\") still returns anthropic — proving no regression to existing shorthands.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "When the resolved endpoint is api.deepseek.com and neither providerConfig.apiKey nor process.env.DEEPSEEK_API_KEY is set, validateApiKey throws an error whose message contains the string DEEPSEEK_API_KEY; a unit test asserts this.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "When DEEPSEEK_API_KEY is set in the environment, an OpenAICompatAdapter constructed for the deepseek endpoint passes that key to the mocked openai client constructor (no key-missing error), asserted by a unit test with the openai client mocked.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "npm run build exits 0 and npm run lint exits 0 after the changes.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not map deepseek-reasoner or deepseek-chat shorthands (they deprecate 2026-07-24).",
+    "Do not hardcode any API key value anywhere in source.",
+    "Do not make DEEPSEEK_API_KEY apply to non-deepseek openai-compat endpoints (Ollama must keep its no-key behavior).",
+    "Do not add the openai package as a hard dependency."
+  ],
+  "stopConditions": [
+    "All six success criteria pass: deepseek shorthands resolve to the api.deepseek.com endpoint, the DEEPSEEK_API_KEY fallback and DeepSeek-specific missing-key error work, no existing-shorthand regression, and build plus lint exit 0."
+  ],
+  "definitionOfDone": "A user can write model \"deepseek-v4-pro\" (or \"deepseek\", \"deepseek-v4-flash\") in bober.config.json and the resolver points it at https://api.deepseek.com through the openai-compat adapter. agent-bober reads the key from providerConfig.apiKey or DEEPSEEK_API_KEY, and when both are absent for a deepseek endpoint it fails with a message that names DEEPSEEK_API_KEY rather than silently skipping like Ollama. Existing Ollama and anthropic resolution is unchanged.",
+  "assumptions": [
+    "Q1: only the v4 deepseek line is mapped — evidence: PRD Open Questions leans v4-only, task instructions confirm 'map only the deepseek v4 line'.",
+    "Q4: DEEPSEEK_API_KEY is special-cased keyed on the api.deepseek.com endpoint — evidence: PRD FR-3 specifies exactly this; per-vendor configurable key-env is a Non-Goal.",
+    "Tests mock the openai client so no real network call or key is needed — evidence: PRD Technical Considerations 'Tests must mock the openai client (deepseek)'."
+  ],
+  "outOfScope": [
+    "The openai-absent preflight warning (Sprint 3).",
+    "claude-code provider wiring (Sprint 4)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Add to SHORTHAND_MAP in src/orchestrator/model-resolver.ts entries for deepseek, deepseek-v4-pro, deepseek-v4-flash. Because SHORTHAND_MAP entries currently only carry {provider, modelId}, you must extend resolveProviderModel to attach endpoint https://api.deepseek.com for these (mirror how the ollama/ branch returns an endpoint). In src/providers/openai-compat.ts the apiKey already flows to OpenAIAdapter; add the DEEPSEEK_API_KEY fallback either in OpenAICompatAdapter (when endpoint includes api.deepseek.com) or in factory.ts createClient's openai-compat branch (line ~179-195) and in openai.ts getClient key chain (line ~289-293). In factory.ts validateApiKey, the openai-compat case (line 87-89) currently no-ops; add: if endpoint/resolved target is api.deepseek.com and no apiKey and no process.env.DEEPSEEK_API_KEY, throw a DeepSeek-specific error. Mock the openai client in tests (vi.mock).",
+  "evaluatorNotes": "Run npm test and confirm new tests in model-resolver.test.ts cover all three deepseek shorthands plus a no-regression assertion for ollama/ and sonnet. Confirm factory.test.ts (or openai-compat.test.ts) covers: key-missing throws with DEEPSEEK_API_KEY in the message, and key-present passes the key to the mocked client. Run npm run build and npm run lint and assert exit 0. Verify no real network call occurs (openai client is mocked).",
+  "estimatedFiles": [
+    "src/orchestrator/model-resolver.ts",
+    "src/orchestrator/model-resolver.test.ts",
+    "src/providers/factory.ts",
+    "src/providers/factory.test.ts",
+    "src/providers/openai-compat.ts",
+    "src/providers/openai-compat.test.ts",
+    "src/providers/openai.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-31T14:30:00Z"
+}

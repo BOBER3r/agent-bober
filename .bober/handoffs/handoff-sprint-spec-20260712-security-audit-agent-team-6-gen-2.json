@@ -1,0 +1,169 @@
+{
+  "handoffId": "handoff-sprint-spec-20260712-security-audit-agent-team-6-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T13:10:31.000Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Adds a single stack-aware bober-security-auditor role driving one runSecurityAudit() core, consumed by an in-pipeline fail-closed gate that vetoes sprint-passed on critical findings/timeout/parse-failure and a standalone `bober security-audit` CLI with a configurable blocking threshold. Findings reuse the locked ReviewResult shape, persist to .bober/security/, and flow into the priority hub; an opt-in deterministic scanner pre-filter (with slither and semgrep parsers) grounds the LLM judgment. Implements arch-20260712-security-audit-agent-team (ADR-1..6) for users whose generated code manages real customer funds.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-1",
+        "title": "Security config section, audit types, .bober/security store",
+        "summary": "SecuritySectionSchema opt-in default-off (incl. hub: z.boolean().default(true) \u2014 consumed THIS sprint); security-audit-types.ts (SecurityFinding extends ReviewFinding, optional vulnClass; SecurityAuditResult {review, stack, scannerRan, parsed, verdict}); security-audit-state.ts."
+      },
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+        "title": "bober-security-auditor agent + runSecurityAudit core + stack knowledge",
+        "summary": "runSecurityAudit(contract, evaluation|null, projectRoot, config, priors?) fail-closed; persists internally. Findings live in result.review.critical[] / result.review.important[] (evidence[] entries carry path/line)."
+      },
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+        "title": "Fail-closed SecurityAuditGate in the pipeline",
+        "summary": "security-gate.ts evaluateSecurityGate -> SecurityGateVerdict {blocked, reason, result?}; pipeline gate additive, byte-identical when disabled."
+      },
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-4",
+        "title": "Standalone `bober security-audit` CLI",
+        "summary": "security-audit.ts CLI: DI core runStandaloneSecurityAudit, thresholdVerdict, exit 2/0 fail-closed."
+      },
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-5",
+        "title": "Scanner pre-filter with slither/semgrep parsers",
+        "summary": "security-scanners.ts runScannerPreFilter (execa cancelSignal/SIGKILL, per-scanner isolation, raw-text fallback) + pure fixture-tested parsers; wired inside runSecurityAudit behind non-empty config.security.scanners; scannerRan = scanners configured || priors non-empty. Commit bf2a31b. Suite 4019."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/security-hub.ts",
+      "src/orchestrator/security-hub.test.ts",
+      "src/orchestrator/security-auditor-agent.ts",
+      "src/cli/commands/security-audit.ts",
+      "src/orchestrator/security-gate.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+    "specId": "spec-20260712-security-audit-agent-team",
+    "sprintNumber": 6,
+    "title": "Emit security audit findings into the priority hub",
+    "description": "Make audit results visible in the unified priority surface: after an audit completes (pipeline gate or standalone CLI), critical and important findings are mapped to the canonical hub Finding shape (FindingSchema imported from src/hub/finding.ts, never redefined) and ingested via the existing finding-store path, gated by security.hub (default true within the opt-in security section). Duplicate emission across retries is absorbed by the hub's existing content-hash dedup.",
+    "status": "in-progress",
+    "createdAt": "2026-07-12T09:30:00.000Z",
+    "updatedAt": "2026-07-12T13:10:31.000Z",
+    "completedAt": null,
+    "dependsOn": [
+      "sprint-spec-20260712-security-audit-agent-team-2"
+    ],
+    "features": [
+      "feat-6"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-6-1",
+        "description": "A pure exported mapping function converts a SecurityAuditResult into hub Finding objects (one per critical/important finding) that validate against the canonical FindingSchema imported from src/hub/finding.ts, with a severity mapping documented in code (critical bucket \u2192 the hub's highest applicable severity; important \u2192 a mid severity) and title/body carrying vulnClass, path:line, and description.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-2",
+        "description": "When an audit completes with findings and security.hub is true (default), the Findings are ingested via the existing finding-store ingest function through an injected sink (research-runner precedent); with security.hub:false, zero hub writes occur for an otherwise identical audit; a hub ingest failure is caught and logged and never alters the audit verdict or blocks the pipeline/CLI.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-3",
+        "description": "Emitting the same audit result twice produces no duplicate hub entries (the hub's existing content-hash dedup absorbs it), demonstrated with the real finding-store in a temp directory.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-4",
+        "description": "FindingSchema and the ingest path are imported from src/hub/ \u2014 grep confirms no redefinition of the Finding shape and no schema drift; clean audits (no critical/important findings) emit nothing.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-6-5",
+        "description": "npm run build and npm run typecheck pass; ESLint zero errors; full suite green \u2014 existing hub tests unchanged.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not surface findings in Telegram (out of scope per spec).",
+      "Do not modify src/hub/ (FindingSchema, finding-store, priority logic) \u2014 consume only.",
+      "Do not emit info/minor buckets or scanner-only priors that the LLM auditor did not confirm into the review buckets.",
+      "Do not make hub emission affect the gate verdict, exit codes, or timing (fire-and-forget with caught errors, after the verdict is computed)."
+    ],
+    "stopConditions": [
+      "All five criteria verified with the dedup test running against the REAL finding-store in a temp dir.",
+      "Full suite green."
+    ],
+    "definitionOfDone": "Security findings from any audit appear as canonical Findings in the priority hub (deduped, severity-mapped, source-attributed), silenced by security.hub:false, and a hub failure can never change an audit outcome.",
+    "assumptions": [
+      "src/hub/finding.ts owns the canonical Zod FindingSchema and src/hub/ exposes an ingest function (research runner binds findingSink\u2192ingestFinding at finding-store.ts:140 per progress notes); the exact severity enum and required fields are read from the actual schema at implementation time \u2014 the mapping documented in code must use REAL enum values, not invented ones.",
+      "The hub dedup key is content-derived (sha256 over domain|title|kind per prior art), so stable titles per finding (vulnClass + path:line) give retry-idempotent emission.",
+      "A 'security' (or closest existing) domain/kind tag is representable in FindingSchema; if the schema has a closed domain enum without a fitting value, use the closest existing value and record the limitation in code comments and the sprint handoff rather than editing the hub schema.",
+      "Emission call sites are the audit completion points in runSecurityAudit or its two callers \u2014 one shared helper, invoked after verdict computation."
+    ],
+    "outOfScope": [
+      "Telegram surfaces, hub schema changes, digest/priority re-ranking, skill/dogfood/docs (sprint 7)."
+    ],
+    "ambiguityScore": 3,
+    "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) READ src/hub/finding.ts and src/hub/finding-store.ts first; mirror how src/research/runner.ts imports FindingSchema/Finding type and takes an INJECTED findingSink dependency (so tests pass a spy and the CLI/pipeline bind ingestFinding at the boundary) \u2014 do not import finding-store deep into the auditor core if the research precedent injects instead. (2) New src/orchestrator/security-hub.ts (or a section in security-auditor-agent.ts if tiny): export mapAuditToFindings(result: SecurityAuditResult): Finding[] (pure) and emitSecurityFindings(result, sink, logger) (try/catch, logs failures, returns void). (3) Wire emission after verdict computation in the shared core path so gate and CLI both get it; gate/CLI must not await-fail on it \u2014 catch inside emitSecurityFindings. (4) Respect config.security.hub with the ?? true default semantics from the schema; when config.security is absent entirely (standalone CLI default-parse case) the parsed section carries hub:true \u2014 fine, the CLI explicitly opted in by running. (5) Dedup test: use the real ingest in a temp .bober; emit twice; count stored findings.",
+    "evaluatorNotes": "For sc-6-1: validate every mapped object with the REAL FindingSchema.parse (not a hand-rolled check); verify severity mapping uses actual enum members by reading src/hub/finding.ts yourself and cross-checking the code's mapping table. For sc-6-2: three tests \u2014 hub:true ingests N findings; hub:false ingests zero; sink that throws \u2192 verdict/exit unchanged and a logged warning. For sc-6-3: real finding-store in temp dir, emit twice, assert store count equals first-emission count. For sc-6-4: grep 'z.object' in the new files for any Finding-shaped redefinition; grep imports to confirm they point at src/hub/. Confirm clean-audit no-op (sink zero calls). Full suite green including hub tests.",
+    "estimatedFiles": [
+      "src/orchestrator/security-hub.ts",
+      "src/orchestrator/security-hub.test.ts",
+      "src/orchestrator/security-auditor-agent.ts",
+      "src/cli/commands/security-audit.ts",
+      "src/orchestrator/security-gate.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [
+      {
+        "iteration": 1,
+        "result": "fail",
+        "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-1",
+        "timestamp": "2026-07-12T13:10:31.000Z",
+        "reason": "sc-6-2: unguarded default-sink store setup rejects on fs failure, flips clean audit to blocked"
+      }
+    ],
+    "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-1"
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": [
+    {
+      "priority": "critical",
+      "category": "bug",
+      "file": "src/orchestrator/security-gate.ts",
+      "line": "181-192",
+      "description": "Default-sink path unguarded: ensureFactsDir()/new FactStore() errors propagate as unhandled rejections (also src/cli/commands/security-audit.ts:196-226). A hub fs failure (disk full, EACCES, blocked path, locked db) IS the 'hub ingest failure' sc-6-2 requires to be caught.",
+      "expected": "Wrap the full sequence in a single try/catch/finally at both call sites; logger.warn on failure; never propagate. Add regression tests using the reproduction (touch <tmp>/.bober/memory as a FILE so mkdir fails) asserting: gate resolves with verdict unchanged; CLI resolves exitCode 0 for a non-blocking audit.",
+      "reproduction": "mkdir -p <tmp>/.bober && touch <tmp>/.bober/memory; call runStandaloneSecurityAudit with projectRoot=<tmp>, hub:true, important-only findings, standaloneBlockOn:'critical' -> expected {exitCode:0}, actual rejection EEXIST."
+    },
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/security-hub.ts",
+      "line": "33-41",
+      "description": "deriveFindingId sha256 formula now has 3 copies (finding-store.ts private, research/runner.ts, security-hub.ts) \u2014 drift risk, future consolidation",
+      "expected": "no action this sprint"
+    },
+    {
+      "note": "sc-6-1/3/4/5 all PASS \u2014 do not rework them. The ONLY fix: guard the default-sink store setup at both call sites and add the two regression tests. Everything else stays untouched."
+    }
+  ]
+}

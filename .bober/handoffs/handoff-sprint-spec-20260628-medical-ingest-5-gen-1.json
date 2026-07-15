@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-ingest-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-ingest-5",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T16:37:02Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical knowledge template — FINAL sprint of the medical-ingest spec. Add a Zod-validated personalization profile (age/sex/conditions/medications/supplements/allergies/goals) persisted as a SOPS-encrypted <vaultDir>/profile.yaml behind an INJECTABLE cipher seam (encrypt/decrypt, default = sops age shell-out via execa). Tests inject a reversible fake cipher (no real sops binary). When the cipher signals sops unavailable, read/write REFUSE and write NO plaintext PHI. Adds `bober medical profile show|set`.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260628-medical-ingest-2", "title": "lab-note", "summary": "src/medical/lab-note.ts hand-rolled frontmatter helper — reuse the YAML-emit approach for the profile if it serializes plain objects, else a minimal YAML emit is acceptable. No YAML dep is vendored." },
+      { "contractId": "sprint-spec-20260628-medical-ingest-3", "title": "import-labs CLI", "summary": "runImportLabs extracted-core + injected-deps + nested-subcommand pattern in src/cli/commands/medical.ts — MIRROR this for runProfileShow/runProfileSet." },
+      { "contractId": "sprint-spec-20260628-medical-ingest-4", "title": "supplements CLI", "summary": "runSupplementAdd/List + nested `supplements` subtree under `medical`. Mirror the same nested-subtree registration for `profile show|set`." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/cli/commands/medical.ts (runImportLabs/runSupplement* extracted-core + injected-deps + nested subtree registration; .action sets process.exitCode and returns on error, never throws)",
+      "src/medical/inference.ts (injectable-factory seam precedent ~line 17)",
+      "src/medical/lab-note.ts (frontmatter/YAML-emit helper to reuse for plain-object serialization)",
+      "src/medical/profile.ts (NEW)",
+      "src/medical/profile.test.ts (NEW)"
+    ],
+    "depsAvailable": { "execa": "^9.5.2 (use for the default sops shell-out)", "yaml": "NOT vendored — hand-roll a minimal YAML emit/parse for the small flat profile" }
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

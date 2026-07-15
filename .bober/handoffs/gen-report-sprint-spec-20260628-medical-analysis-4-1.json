@@ -1,0 +1,35 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-4",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "92a0481",
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "met": true, "evidence": "tsc --noEmit zero errors" },
+    { "criterionId": "sc-4-2", "met": true, "evidence": "ldl >365d old -> gap finding naming biomarker + interval 365; ldl ~178d within cadence -> 0 gap findings" },
+    { "criterionId": "sc-4-3", "met": true, "evidence": "biomarker absent from RECOMMENDED_CADENCE_DAYS -> 0 gap findings (no guessed cadence)" },
+    { "criterionId": "sc-4-4", "met": true, "evidence": "ldl=200 + triglycerides=400 both OOR -> single kind=question offer, evidence has both names, tags=['cross-marker','ldl','triglycerides']; llmSpy never called; no provider/network imports in detection files" },
+    { "criterionId": "sc-4-5", "met": true, "evidence": "runProactiveReview one offline pass -> trend + gap + offer findings (>=3 written, one kind=question with cross-marker tag)" },
+    { "criterionId": "sc-4-6", "met": true, "evidence": "digDeeper reads offer frontmatter, recovers pair, calls injected generateRecommendation spy once with question containing ldl+triglycerides" },
+    { "criterionId": "sc-4-7", "met": true, "evidence": "review --dig-deeper <id> option added; plain review prints counts incl gap+offer; try/catch->exitCode=1 never throws" }
+  ],
+  "filesChanged": [
+    "src/medical/analysis/cadence.ts (created: CLOSED RECOMMENDED_CADENCE_DAYS + detectTestGaps pure zero-LLM, skips unknown)",
+    "src/medical/analysis/cadence.test.ts (created)",
+    "src/medical/analysis/cross-marker.ts (created: CLOSED CROSS_MARKER_PAIRS + detectCrossMarkerPatterns pure zero-LLM, tags pair for dig-deeper)",
+    "src/medical/analysis/cross-marker.test.ts (created)",
+    "src/medical/analysis/review-pass.ts (modified: extend findings to trend+gap+offer; DigDeeperDeps + digDeeper() delegating to generateRecommendation)",
+    "src/medical/analysis/review-pass.test.ts (modified: +sc-4-5, sc-4-6)",
+    "src/cli/commands/medical.ts (modified: review --dig-deeper <id> branch)"
+  ],
+  "testsAdded": ["src/medical/analysis/cadence.test.ts", "src/medical/analysis/cross-marker.test.ts"],
+  "selfVerify": {
+    "tsc": "exit 0",
+    "eslint": "exit 0",
+    "vitest-analysis": "6 files, 60 tests pass (incl unchanged sprint-1)",
+    "vitest-full": "244 files, 3114 passed (baseline 3097 +17)",
+    "engine-untouched": "engine.ts NOT in commit 92a0481",
+    "no-llm-in-detection": "grep providers/|fetch|http|EgressGuard|createClient on cadence.ts+cross-marker.ts = empty"
+  },
+  "blockers": [],
+  "notes": "Distinct ruleKeys avoid id collisions; sc-1-4 idempotency preserved (ldl seed ~178d within 365d cadence -> no gap fires for that seed). Only --dig-deeper crosses the LLM gate via imported generateRecommendation."
+}

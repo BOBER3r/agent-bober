@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-workflow-engine-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-workflow-engine-4",
+  "specId": "spec-20260604-workflow-engine",
+  "timestamp": "2026-06-04T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 4 adds the workflow host plumbing: new TS types (WorkflowArgs, WorkflowRunResult, ResumeCursor, ConformanceReport), ResumeCursorReconstructor (re-derives completed sprints from durable contract status + history), and ArgsPayloadBuilder (marshals config→WorkflowArgs with MissingKnobError/AgentCapError/NonSerializableArgError). Also define WorkflowUnavailableError (used in sprint 6).",
+    "completedSprints": [
+      { "contractId": "1", "title": "engine seam", "summary": "pipeline.engine + selector + PipelineEngine interface (src/orchestrator/workflow/engine.ts) + isWorkflowEligible (eligibility.ts)." },
+      { "contractId": "2", "title": "TS reconciler", "summary": "src/orchestrator/workflow/reconciler.ts" },
+      { "contractId": "3", "title": "JS port + drift gate", "summary": ".claude/workflows/lib/reconcile.js + conformance test" }
+    ],
+    "currentBranch": "bober/workflow-engine",
+    "relevantFiles": [
+      "src/contracts/spec.ts",
+      "src/contracts/sprint-contract.ts",
+      "src/state/history.ts",
+      "src/state/sprint-state.ts",
+      "src/config/schema.ts",
+      "src/orchestrator/workflow/engine.ts",
+      ".bober/architecture/arch-20260603-adopt-claude-code-dynamic-workflows-architecture.md"
+    ]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true }
+  },
+  "principles": "See .bober/principles.md. No SDK imports. ESM .js specifiers, import type, no synchronous fs (use node:fs/promises). Tests create real temp dirs (no fs mocks).",
+  "evaluatorFeedback": null,
+  "notes": "EXACT LOCATIONS — PlanSpec type: src/contracts/spec.ts (PlanSpec). SprintContract type + SprintContractSchema: src/contracts/sprint-contract.ts. HistoryEntry type + loadHistory(projectRoot): src/state/history.ts (HistoryEntry at line 44, loadHistory at line 74 returns Promise<HistoryEntry[]>). Contract loaders in src/state/sprint-state.ts: loadContract (line 70), listContracts (line 113), updateContract (line 152), saveContract (line 38). Use listContracts to enumerate all contracts then filter by specId + status in ('passed','completed') for completedSprintNumbers. Reuse src/contracts/index.ts barrel for type imports where available. WorkflowArgs/WorkflowRunResult/ResumeCursor/ConformanceReport shapes are specified verbatim in the architecture Data Model section — copy them exactly; pendingHistory is Array<Omit<HistoryEntry,'timestamp'>>. Worst-case agent count for the cap check = knobs.maxSprints * knobs.maxIterations * evaluatorLenses.length; throw AgentCapError if evaluatorLenses.length>16 OR that product>1000. Keep ArgsPayloadBuilder.build pure (no fs) — accept principles text as input, do NOT read it from disk inside build. Confine to new files under src/orchestrator/workflow/: types.ts, errors.ts, resume-cursor.ts, resume-cursor.test.ts, args-builder.ts, args-builder.test.ts."
+}

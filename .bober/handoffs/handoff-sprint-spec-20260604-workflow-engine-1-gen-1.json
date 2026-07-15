@@ -1,0 +1,26 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-workflow-engine-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-workflow-engine-1",
+  "specId": "spec-20260604-workflow-engine",
+  "timestamp": "2026-06-04T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent harness building apps autonomously. This plan adds Claude Code Dynamic Workflows as a third, config-selected orchestration engine (pipeline.engine) behind the frozen runPipeline seam. Sprint 1 introduces the seam, the pipeline.engine config field (default 'ts'), the PipelineEngine interface, a PipelineEngineSelector mirroring checkpoints/registry.ts resolution, and a default-ineligible eligibility probe. The TS engine must wrap the existing runPipeline body with ZERO behavior change.",
+    "completedSprints": [],
+    "currentBranch": "bober/workflow-engine",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/config/schema.ts",
+      "src/orchestrator/checkpoints/registry.ts",
+      ".bober/architecture/arch-20260603-adopt-claude-code-dynamic-workflows-architecture.md"
+    ]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": "See .bober/principles.md — TS strict zero-error, ESLint zero-error, ESM with .js import specifiers, Zod for config, no synchronous fs, consistent-type-imports, conventional commits. READ IT.",
+  "evaluatorFeedback": null,
+  "notes": "Architecture seam is at src/orchestrator/pipeline.ts:515 (exported runPipeline). The selector pattern to mirror is src/orchestrator/checkpoints/registry.ts:65 (resolveCheckpointMechanismName — pure resolver + lookup). PipelineResult is defined at src/orchestrator/pipeline.ts:62 and must be reused verbatim. Do NOT change any agents/*.md, the contracts protocol, or providers/types.ts. The full unit suite has a documented flaky tool-count timeout baseline (~2 failures) that is tolerated."
+}

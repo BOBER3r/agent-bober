@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-4",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "sprintNumber": 4,
+  "title": "Planner reads bounded memory (close the arc) + demonstrably-improves gate",
+  "description": "Close the feedback arc: wire the planner to retrieve a topK-bounded, deterministically-ranked set of lessons from the .bober/memory index at plan time, so it learns from past sprint outcomes without ever reading raw history.jsonl. Add retrieveRelevantLessons (tag/keyword overlap, index-only, hard-capped), update bober.plan Step 2 and agents/bober-planner.md to consume it, and document the close-the-arc flow plus its findPrecisionIssues A/B measure so the improvement is observable.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260605-scale-safe-history-memory-2",
+    "sprint-spec-20260605-scale-safe-history-memory-3"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "retrieveRelevantLessons(projectRoot, keywords, { topK }) returns at most topK lessons ranked by deterministic tag/keyword overlap, reading only INDEX.md; a test asserts the topK cap, that a matching keyword surfaces the expected lesson, and that a non-matching keyword returns an empty result.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "The retrieval path reads .bober/memory/INDEX.md and never reads .bober/history.jsonl; a test asserts no read is issued against history.jsonl during retrieval.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "Retrieved planner context is bounded: the serialized lessons block is capped at topK entries and a configured character budget; a test seeds more than topK lessons and asserts the serialized block respects both caps.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "skills/bober.plan/SKILL.md Step 2 and agents/bober-planner.md instruct the planner to load the bounded lessons index via retrieveRelevantLessons (topK-capped) and explicitly forbid reading raw history.jsonl; a test or grep asserts both files reference the memory index and the topK cap.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck and npm run build exit 0 and the retrieval tests pass with no new failures beyond the documented flaky baseline.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "C6",
+      "description": "A docs section documents the close-the-arc flow and the manual A/B measure (plan a feature with and without memory present, compare findPrecisionIssues counts), naming the metric and the expected direction; a reviewer confirms the documented procedure.",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not feed lessons into the generator or evaluator \u2014 this sprint wires memory into the planner only.",
+    "Do not read history.jsonl from the planner or the retrieval path; only the bounded index may be read.",
+    "Do not introduce embeddings or semantic search; retrieval is deterministic tag/keyword overlap.",
+    "Do not auto-distill; the planner consumes whatever the explicit bober memory distill command last wrote."
+  ],
+  "stopConditions": [
+    "Stop when retrieveRelevantLessons returns a topK-bounded, index-only result, the planner skill and agent are updated to consume it instead of raw history, the flow is documented, and typecheck, build, and tests are green.",
+    "Stop when changes are confined to src/orchestrator/memory/, skills/bober.plan/SKILL.md, agents/bober-planner.md, docs, and collocated tests."
+  ],
+  "definitionOfDone": "The feedback arc closes: the planner retrieves a topK-bounded, deterministically-ranked set of lessons from the .bober/memory index at plan time and never touches raw history.jsonl. Retrieval and the serialized planner context are hard-capped, the bober.plan skill and bober-planner agent are updated to read the index, the close-the-arc flow plus its findPrecisionIssues A/B measure are documented, and typecheck, build, and tests pass.",
+  "assumptions": [
+    "bober.plan Step 2 already reads project context files, so adding a bounded lessons-index read is a localized extension.",
+    "Deterministic tag/keyword retrieval over the bounded index is sufficient before the store outgrows the markdown pattern."
+  ],
+  "outOfScope": [
+    "embeddings or vector retrieval",
+    "generator-facing memory",
+    "auto-distillation"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/orchestrator/memory/retrieve.ts exporting retrieveRelevantLessons(projectRoot, keywords: string[], { topK, charBudget }): it loads the bounded index via loadLessonIndex (sprint 2), scores each record by deterministic overlap between keywords and the record's tags/category/summarySnippet (e.g. count of shared lowercased tokens), sorts descending with a stable tiebreak (lessonId), and returns the top `topK`. Add a serializeLessonsForPlanner(records, { charBudget }) that renders a compact block and truncates to the character budget. Wire it: in skills/bober.plan/SKILL.md Step 2, add a bullet 'Read the bounded lessons index via retrieveRelevantLessons(keywords from the feature title/description, topK) \u2014 do NOT read .bober/history.jsonl directly'; in agents/bober-planner.md add the same instruction in the context-gathering phase. Add a docs section (docs/ or README) describing the close-the-arc flow and the findPrecisionIssues A/B measure. Keep retrieval pure and index-only. Use import type; ESM .js specifiers. Conventional commit: bober(sprint-4): planner reads bounded memory (close the arc).",
+  "evaluatorNotes": "Verify retrieveRelevantLessons caps at topK, surfaces a lesson whose tags match a keyword, and returns empty for non-matching keywords. Verify it reads INDEX.md only and never history.jsonl (spy/path assertion). Verify the serialized block respects topK and the character budget when more than topK lessons exist. Grep skills/bober.plan/SKILL.md and agents/bober-planner.md for the retrieveRelevantLessons / memory-index instruction and the explicit prohibition on reading raw history. Confirm the docs section names findPrecisionIssues as the A/B metric and the expected direction (fewer precision issues with memory present). Run npm run typecheck (exit 0), npm run build (exit 0), and the retrieval tests. Confirm git diff is confined to src/orchestrator/memory/, the planner skill and agent, docs, and tests.",
+  "estimatedFiles": [
+    "src/orchestrator/memory/retrieve.ts",
+    "src/orchestrator/memory/retrieve.test.ts",
+    "skills/bober.plan/SKILL.md",
+    "agents/bober-planner.md",
+    "docs/self-improvement-memory.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260605-scale-safe-history-memory-4-1",
+  "createdAt": "2026-06-05T00:00:00Z",
+  "updatedAt": "2026-06-05T00:02:07Z",
+  "completedAt": "2026-06-05T00:02:07Z"
+}

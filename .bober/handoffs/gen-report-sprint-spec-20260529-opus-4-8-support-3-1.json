@@ -1,0 +1,14 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["da7c642 - bober(sprint-3): add effort control via output_config.effort"],
+  "filesChanged": [
+    {"path": "src/providers/types.ts", "action": "modified", "description": "ChatParams.effort?: 'low'|'medium'|'high'|'xhigh'|'max' (doc comment)."},
+    {"path": "src/providers/anthropic.ts", "action": "modified", "description": "chat() destructures effort; conditional spread `...(effort!==undefined ? { output_config: { effort } } : {})` on the top-level messages.create, independent of caching branches."},
+    {"path": "src/providers/anthropic.test.ts", "action": "modified", "description": "C2 (effort set -> output_config.effort) + C3 (unset -> no output_config key)."},
+    {"path": "src/providers/openai.test.ts", "action": "modified", "description": "C4: OpenAI adapter accepts effort, returns normally, no output_config in request. openai.ts source unchanged."}
+  ],
+  "testsAdded": ["src/providers/anthropic.test.ts", "src/providers/openai.test.ts"],
+  "notes": "typecheck/lint/build exit 0. Full suite: 1341 passed, 2 failed = flaky 37-tool-count baseline only. output_config confined to anthropic.ts + tests + types doc; openai/google/compat source unchanged."
+}

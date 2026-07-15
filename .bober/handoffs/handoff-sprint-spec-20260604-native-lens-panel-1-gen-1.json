@@ -1,0 +1,35 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-native-lens-panel-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-native-lens-panel-1",
+  "specId": "spec-20260604-native-lens-panel",
+  "timestamp": "2026-06-04T04:35:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Bringing the multi-lens evaluator panel to the NATIVE Claude Code surface (markdown agents/commands/skills). Sprint 1 is the foundation: create the canonical panel reference markdown (single source of truth embedding the eval-lenses.ts fragments + documenting split fan-out / majority-vote / lensVerdicts), add an OPTIONAL lensVerdicts field to EvalResultSchema, and add a vitest drift gate tying the markdown to eval-lenses.ts. Zero runtime behavior change.",
+    "completedSprints": [],
+    "currentBranch": "bober/evaluator-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/eval-lenses.ts",
+      "src/contracts/eval-result.ts",
+      "src/orchestrator/workflow/reconciler.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-native-lens-panel-1.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": {
+      "build": "tsc",
+      "typecheck": "tsc --noEmit",
+      "lint": "eslint src/",
+      "test": "vitest"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "The working tree has PRE-EXISTING uncommitted changes UNRELATED to this sprint (graph CLI: src/graph/cli.ts, src/cli/commands/graph.ts; agent .md files; .bober artifacts). When committing, stage ONLY the files you create/modify for THIS sprint with explicit paths: git add skills/shared/lens-panel.md src/contracts/eval-result.ts src/contracts/eval-result.test.ts src/orchestrator/lens-panel-parity.test.ts. NEVER run `git add -A` or `git add .`. Branch bober/evaluator-lens-panel (already checked out) — never main."
+}

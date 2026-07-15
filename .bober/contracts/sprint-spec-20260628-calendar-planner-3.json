@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-3",
+  "specId": "spec-20260628-calendar-planner",
+  "sprintNumber": 3,
+  "title": "Google Calendar MCP connector (egress-gated) + safe-title privacy",
+  "description": "Add a Google Calendar connector that implements CalendarConnector via the external-MCP subprocess pattern, gated behind a new default-false fail-closed cloud-calendar egress axis and a `calendar` config section. Free/busy is read and events are written through a GoogleCalendarToolAdapter (tool discovery via listTools, calls via callTool) with a stub adapter for tests since real tools surface only after OAuth. Cloud events carry only finding.calendarSafeTitle; the connector refuses with a clear message when the axis is off or no token is present, and the unfit-for-unattended-OAuth caveat is documented with the .ics fallback recommendation.",
+  "status": "completed",
+  "completedAt": "2026-06-29T19:15:00.000Z",
+  "dependsOn": [
+    "sprint-spec-20260628-calendar-planner-1",
+    "sprint-spec-20260628-calendar-planner-2"
+  ],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "`npm run build` (tsc) completes with zero errors after adding the calendar config section, the egress guard, and src/calendar/google-connector.ts.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "`npm run typecheck` confirms the Google connector structurally satisfies the CalendarConnector interface with zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "A vitest asserts that with calendar.egress.cloudCalendar=false the Google write path refuses with an error message naming the calendar.egress.cloudCalendar flag and never constructs the MCP client (no listTools/callTool calls on the stub).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A vitest with the axis enabled and a stub GoogleCalendarToolAdapter asserts writeEvents maps each scheduled item to an event whose summary equals finding.calendarSafeTitle and whose serialized payload contains none of the finding's evidence strings or full title.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "A vitest asserts readFreeBusy via the stub adapter returns BusyInterval[] that the Sprint 1 slotter consumes end-to-end to produce a ProposedPlan.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "A vitest asserts that a simulated adapter error does not include token values or MCP env in the thrown message (sanitized like src/mcp/external-client.ts:69), and a source/doc scan confirms the connector or docs/calendar.md states hosted OAuth is unfit for unattended runs and recommends the .ics fallback.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not perform live OAuth or call real Google APIs in tests — use the stub GoogleCalendarToolAdapter.",
+    "Do not send finding.evidence, the full title, or tags to the cloud connector — only calendarSafeTitle.",
+    "Do not enable the cloud-calendar egress axis by default — it defaults false and fails closed.",
+    "Do not write events when the axis is off or no token is present.",
+    "Do not log or embed token values or MCP env in any error message."
+  ],
+  "stopConditions": [
+    "The axis-off refusal test, the safe-title mapping test, the free/busy-into-slotter test, and the no-secret-leak test pass under `npm test`, and `npm run build` is green.",
+    "The Google connector implements the same CalendarConnector interface that the .ics connector implements."
+  ],
+  "definitionOfDone": "With calendar.egress.cloudCalendar disabled (the default), any attempt to write to Google refuses with a message naming the flag and never opens an MCP client. With the axis enabled and a token present, the connector reads free/busy and writes events through the MCP adapter, sending only calendarSafeTitle so no sensitive 'why' leaves the device, and tokens/MCP env never appear in errors. The connector and docs state that hosted OAuth is unfit for unattended/cron runs and point those runs to the .ics fallback. The Google connector and the .ics connector are interchangeable behind CalendarConnector.",
+  "assumptions": [
+    "Cloud-calendar write is egress; gated by a default-false fail-closed axis modeled on EgressGuard (src/medical/egress.ts:5-58) and a `calendar` config section modeled on MedicalSectionSchema (src/config/schema.ts:374-401).",
+    "Google MCP tool names surface only post-OAuth (research §3a line 135) — connector written against a GoogleCalendarToolAdapter interface with a stub for tests; live discovery via listTools/callTool mirrors src/mcp/external-client.ts:81-103.",
+    "Only calendarSafeTitle leaves the device (research §3a line 135).",
+    "0600 local-token sidecar path modeled on src/medical/whoop/whoop-token.ts for the interactive Google path; secret sanitization modeled on src/mcp/external-client.ts:69.",
+    "Hosted OAuth is unfit for unattended/cron (research §3a line 135) — scheduled runs use the .ics fallback from Sprint 2."
+  ],
+  "outOfScope": [
+    "Implementing the actual OAuth authorize handshake / token acquisition (provisioned out-of-band into the 0600 sidecar, as with WHOOP).",
+    "Two-way sync or reading existing event details beyond free/busy.",
+    "The approval gate (Sprint 4) — this sprint provides the connector the gate will call."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add a `calendar` section to BoberConfigSchema in src/config/schema.ts mirroring MedicalSectionSchema (src/config/schema.ts:374-401): `{ egress: { cloudCalendar: boolean default false }, connector: 'ics'|'google' default 'ics', timezone?: string }`. Create a small guard (e.g. src/calendar/calendar-egress.ts) modeled on EgressGuard (src/medical/egress.ts) with assertCloudCalendarAllowed() that throws naming calendar.egress.cloudCalendar when off — and check it BEFORE constructing any MCP client (mirror runWhoopSync axis-off branch in src/cli/commands/medical.ts:53-62). Create src/calendar/google-connector.ts implementing CalendarConnector via a GoogleCalendarToolAdapter interface { listTools(); callTool(name, args) } so tests inject a stub; the production adapter wraps ExternalMcpServer (src/mcp/external-client.ts). writeEvents maps each PlanItem to an event payload with summary = finding.calendarSafeTitle (fallback to a generic placeholder like 'Focus block' when absent) and NO evidence/title/tags. Sanitize errors per src/mcp/external-client.ts:69 (strip KEY=VALUE, never include mcpEnv/token). Add a 0600 token sidecar reader modeled on src/medical/whoop/whoop-token.ts; refuse with a clear message + .ics suggestion when the token is absent. Document the unattended-OAuth caveat in a module doc-comment and/or docs/calendar.md. Honor ESM .js imports, Zod, node:fs/promises, type-only imports.",
+  "evaluatorNotes": "Verify axis-off path throws naming calendar.egress.cloudCalendar and the stub adapter records zero listTools/callTool calls. Verify writeEvents summary equals calendarSafeTitle and the serialized payload excludes evidence/full-title. Verify free/busy from the stub flows into the Sprint 1 slotter. Verify error sanitization (inject a fake token into an error path and assert it is redacted). Confirm the caveat text exists. Confirm both connectors satisfy CalendarConnector (typecheck).",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/calendar/calendar-egress.ts",
+    "src/calendar/calendar-egress.test.ts",
+    "src/calendar/google-connector.ts",
+    "src/calendar/google-connector.test.ts",
+    "src/calendar/calendar-token.ts",
+    "docs/calendar.md"
+  ],
+  "estimatedDuration": "medium"
+}

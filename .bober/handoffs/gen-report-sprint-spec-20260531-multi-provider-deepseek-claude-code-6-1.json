@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-6",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["71d16be - bober(sprint-6): document provider capability matrix and key-gate smoke scripts"],
+  "filesChanged": [
+    {"path": "README.md", "action": "modified", "description": "added Capability Matrix subsection (aligned 6x3 table) + deepseek prereqs + claude-code notes; 0 new markdownlint errors"},
+    {"path": "docs/providers.md", "action": "created", "description": "matrix + anthropic/deepseek/claude-code config snippets + no-key-persistence statement; markdownlint clean"},
+    {"path": "scripts/spike-deepseek.mjs", "action": "modified", "description": "skip + exit 0 (no network) when DEEPSEEK_API_KEY unset"},
+    {"path": "scripts/spike-claude-code-provider.mjs", "action": "modified", "description": "spawnSync claude --version probe; skip + exit 0 when binary absent; asserts preserved"}
+  ],
+  "selfVerification": {
+    "docsMarkdownlint": "exit 0 (fully clean)",
+    "readmeMarkdownlint": "80 errors before AND after — 0 new",
+    "deepseekSmokeSkip": "exit 0, prints skip, no network",
+    "claudeCodeSmokeSkip": "exit 0, prints skip when claude not on PATH",
+    "npmTest": "111 files, 1412 pass, 3 skip, exit 0; no smoke executed"
+  },
+  "notes": "No provider source code changed. No secrets committed. scripts/ in package.json 'files' array is for publish packaging, not test."
+}

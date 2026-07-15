@@ -1,0 +1,25 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-4",
+  "iteration": 1,
+  "status": "complete",
+  "note": "Fresh generator after a prior attempt crashed (API socket) with no commit; partial reverted.",
+  "commits": ["8204a32 - bober(sprint-4): example team as data + --team CLI wiring + teams docs"],
+  "filesChanged": [
+    {"path": "src/cli/index.ts", "action": "modified", "description": "Registered .option('--team <id>') after --run-id; team added to cmdOpts; passed team:cmdOpts?.team to runRunCommand."},
+    {"path": "src/cli/commands/run.ts", "action": "modified", "description": "team?:string on RunCommandOptions; threaded teamId:options.team into runPipeline opts."},
+    {"path": "src/cli/commands/chat.ts", "action": "modified", "description": "Renamed _team->team; loadTeam(config,team); passed memoryNamespace:activeTeam.memoryNamespace||undefined to ChatSession."},
+    {"path": "src/cli/commands/run.test.ts", "action": "created", "description": "sc-4-4 (loadTeam example) + sc-4-5 (--team threads teamId; absent->undefined). vi.mock runPipeline/loadConfig."},
+    {"path": "src/cli/commands/chat.test.ts", "action": "created", "description": "sc-4-6 (chat resolves team namespace; no team->default) + sc-4-7 (lesson under example namespace lands in .bober/memory/example/). temp dirs."},
+    {"path": "docs/teams.md", "action": "created", "description": "Teams config shape, three axes, programming default, run --team / chat <team> usage, deferred file registry, research Phase 4 cross-ref."},
+    {"path": "README.md", "action": "modified", "description": "Teams section + teams/defaultTeam in Full Configuration Reference + --team/chat <team> CLI examples."}
+  ],
+  "testsAdded": ["src/cli/commands/run.test.ts", "src/cli/commands/chat.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "test": "169 files / 1977 passed / 3 skipped (+16 over 1961 baseline)",
+    "lint": "0 errors, 2 pre-existing warnings"
+  },
+  "blockers": [],
+  "notes": "Example team flows purely through loadTeam (no code branches on team id). Absent --team -> teamId undefined -> runPipeline falls back to programming (unchanged). chat memoryNamespace ''||undefined collapses programming sentinel to default path."
+}

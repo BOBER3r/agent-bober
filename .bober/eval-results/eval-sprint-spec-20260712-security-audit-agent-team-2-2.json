@@ -1,0 +1,96 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-2-2",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T11:17:14.000Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 7,
+    "criteriaPassed": 7,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit clean"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing unrelated warnings"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "308 files / 3960 tests green; auditor file 22/22 incl. 2 new nonGoal regression tests"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-2-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-7",
+      "required": true,
+      "result": "pass",
+      "evidence": "re-verified iteration 2; see evaluator transcript"
+    },
+    {
+      "criterionId": "nonGoal-3-fix",
+      "required": true,
+      "result": "pass",
+      "evidence": "curator role (read_file/glob/grep) for tools+system prompt; graph-gating path traced (never re-adds bash); .md frontmatter Read/Grep/Glob; 2 mutation-sensitive regression tests on real resolveRoleTools"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "nonGoal violation genuinely fixed; all 7 criteria re-verified; cumulative diff touches only 5 expected files; suite 3960 green. PASS."
+}

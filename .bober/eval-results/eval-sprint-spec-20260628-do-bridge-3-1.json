@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260628-do-bridge-3-1",
+  "contractId": "sprint-spec-20260628-do-bridge-3",
+  "specId": "spec-20260628-do-bridge",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "timestamp": "2026-06-29T17:21:10.991Z",
+  "lowPriorityFollowUp": "do.ts unsupported-promoter error names domain only, not (domain,kind) pair — criterion passed, cosmetic improvement.",
+  "summary": "Sprint 3 passes all 5. reconcile transitions + never-throw + snapshot-read verified, hub byte-unchanged, non-functional stub + fail-closed, docs/do-bridge.md names register() site. Full suite 3400 green."
+}

@@ -1,0 +1,31 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-architect-lens-panel-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-architect-lens-panel-3",
+  "specId": "spec-20260604-architect-lens-panel",
+  "timestamp": "2026-06-04T08:45:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Architect Decision Lens Panel — Sprint 3: refactor runArchitect Checkpoint 5 (review/assembly) into a discrete seam. Panel ON: assemble the draft architecture+ADRs, fan out one lens REVIEWER per lens (bounded by maxConcurrent), reconcile() a pass/fail verdict (fail-closed on tie) that gates final assembly. Panel OFF: CP5 runs as today (single-agent within the monolithic loop), byte-identical. Builds on Sprint 2's runArchitectPanel seam.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-1", "title": "synthesize() + arch-lenses + config", "summary": "Foundation. Commit 7de08b5." },
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-2", "title": "TS CP2 synthesis panel", "summary": "runArchitect gates on config.architect?.panel -> runArchitectSingleLoop (off, byte-identical) | runArchitectPanel (genApproaches + mapBounded per-lens score + synthesize winner + continuation CP1/3/4/5). ArchitectResult.lensScores + selectedApproach additive optional. mapBounded private helper exists. Commits 6f82cea + 1d02543." }
+    ],
+    "currentBranch": "bober/architect-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/architect-agent.ts",
+      "src/orchestrator/architect-agent.test.ts",
+      "src/orchestrator/workflow/reconciler.ts",
+      "src/orchestrator/arch-lenses.ts",
+      "src/contracts/eval-result.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-architect-lens-panel-3.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist. Stage ONLY: git add src/orchestrator/architect-agent.ts src/orchestrator/architect-agent.test.ts. NEVER `git add -A`. CRITICAL: CP5 panel is additive within runArchitectPanel (Sprint 2's on-path); the OFF path (runArchitectSingleLoop) stays byte-identical. reconcile() is REUSED from src/orchestrator/workflow/reconciler.ts (import, do not reimplement). Mock createClient + runAgenticLoop. A failing panel verdict must be RECORDED in the result (not silently dropped). Branch bober/architect-lens-panel — never main."
+}

@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-priority-hub-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-priority-hub-4",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-29T00:32:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober priority-hub spec. Sprint 4 adds: src/hub/priority-md.ts (PURE renderPriorityMd(ranked, scopeLabel, now) -> markdown string with YAML frontmatter + Dataview table + per-finding rationale; no IO, no re-ranking), kb-hub output path resolution (config.hub?.outVault else <parentOfProjectRoot>/kb-hub, resolved ABSOLUTE; target = <outVault>/priority.md), and `bober hub priority` (general/filtered) + `bober hub decide \"X vs Y\"` (decision) commands wiring the full collect->scope->judge->render->write pipeline. Missing kb-hub dir => clear error + process.exitCode=1, no uncaught throw.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260628-priority-hub-1", "title": "Finding + source + hub list", "summary": "finding.ts, finding-source.ts (FactStoreFindingSource, HUB_SCOPE), hub.ts (runHubList DI core + registerHubCommand)."},
+      {"contractId": "sprint-spec-20260628-priority-hub-2", "title": "Collector + resolver", "summary": "collector.ts (collectFindings dedup), repo-resolver.ts (resolveSiblingRepos), FactStore readonly. hub.ts resolveConfiguredRepos reads raw JSON config (schema strips unknown)."},
+      {"contractId": "sprint-spec-20260628-priority-hub-3", "title": "Scope + judge", "summary": "scope.ts (Scope union, parseScope, applyFilter), lenses.ts (catalog+validators), judge.ts (rankFindings(findings, scope, llm, now) -> ranked Finding[], deterministic)."}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/hub/judge.ts (rankFindings — REUSE; produces the order the renderer consumes)",
+      "src/hub/scope.ts (parseScope — REUSE to build Scope from CLI args; decide parses 'X vs Y')",
+      "src/hub/collector.ts + repo-resolver.ts (REUSE collectFindings + resolveSiblingRepos)",
+      "src/cli/commands/hub.ts (extend with priority/decide; keep runHubList; add runHubPriority DI core)",
+      "src/cli/commands/chat.ts:33-39 (createClient from config chat/planner provider — pattern for the commander action; NOT for the test-facing core)",
+      "src/providers/factory.ts (createClient)",
+      "src/cli/commands/medical.ts:43-86 (handler error discipline: process.exitCode=1, never throw)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test"},
+    "generator": {"model": "sonnet", "autoCommit": true, "provider": "anthropic"}
+  },
+  "principlesRef": ".bober/principles.md (ESM .js extensions, import type, async fs only [ensureDir/writeFile from node:fs/promises], provider-agnostic via createClient, vitest collocated, conventional commits). CRITICAL: expose a DI-friendly runHubPriority core that accepts an injected LLMClient + resolved paths so unit tests run offline with a fake; the commander action wires createClient.",
+  "evaluatorFeedback": null
+}

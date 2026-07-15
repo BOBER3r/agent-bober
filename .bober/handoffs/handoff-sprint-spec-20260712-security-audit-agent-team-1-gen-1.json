@@ -1,0 +1,113 @@
+{
+  "handoffId": "handoff-sprint-spec-20260712-security-audit-agent-team-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-1",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T10:22:20.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Adds a single stack-aware bober-security-auditor role driving one runSecurityAudit() core, consumed by an in-pipeline fail-closed gate that vetoes sprint-passed on critical findings/timeout/parse-failure and a standalone `bober security-audit` CLI with a configurable blocking threshold. Findings reuse the locked ReviewResult shape, persist to .bober/security/, and flow into the priority hub; an opt-in deterministic scanner pre-filter (with slither and semgrep parsers) grounds the LLM judgment. Implements arch-20260712-security-audit-agent-team (ADR-1..6) for users whose generated code manages real customer funds.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/config/schema.test.ts",
+      "src/orchestrator/security-audit-types.ts",
+      "src/orchestrator/security-audit-types.test.ts",
+      "src/state/security-audit-state.ts",
+      "src/state/security-audit-state.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260712-security-audit-agent-team-1",
+    "specId": "spec-20260712-security-audit-agent-team",
+    "sprintNumber": 1,
+    "title": "Add security config section, audit result types, and .bober/security store",
+    "description": "Lay the typed foundation for the security auditor: an opt-in default-off SecuritySectionSchema wired as an OPTIONAL key on BoberConfigSchema (existing configs byte-identical), the SecurityAuditResult/SecurityFinding/VulnClass types wrapping the LOCKED ReviewResult/ReviewFinding shapes, a pure verdict-derivation function, and a security-audit-state store persisting human-readable markdown to .bober/security/ (separate from .bober/reviews/ per ADR-3).",
+    "status": "in-progress",
+    "createdAt": "2026-07-12T09:30:00.000Z",
+    "updatedAt": "2026-07-12T10:22:20.000Z",
+    "completedAt": null,
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "SecuritySectionSchema exists in src/config/schema.ts with fields enabled (default false), failClosed (default true), timeoutMs (default 300000), model (default 'opus'), maxTurns (default 20), provider?/endpoint?/providerConfig?, budget? (reusing BudgetSectionSchema), scanners (z.array(EvalStrategySchema) default []), standaloneBlockOn (enum 'critical'|'important' default 'critical'), hub (boolean default true); it is wired as security: SecuritySectionSchema.optional() on BoberConfigSchema.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "Every existing config fixture and the repo's own bober.config.json parse to output deep-equal to the pre-change parse (no security key injected, no defaults materialized when the section is absent); all pre-existing config tests pass unchanged.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "src/orchestrator/security-audit-types.ts exports SecurityFinding (extends ReviewFinding with optional vulnClass), the VulnClass union ('injection'|'authn-authz'|'secret-handling'|'input-validation'|'path-traversal'|'privilege-escalation'), SecurityAuditResult {review, stack, scannerRan, parsed, verdict}, and a pure deriveVerdict(review) returning 'blocked' iff review.critical.length > 0 \u2014 importing ReviewResult/ReviewFinding type-only from code-reviewer-agent.ts, never redefining them.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "src/state/security-audit-state.ts exports saveSecurityAudit/readSecurityAudit/listSecurityAudits over .bober/security/<contractId>-security-audit.md: save renders via the existing review markdown renderer applied to result.review, read of a missing id returns null without throwing, list returns saved contract ids; round-trip verified in a temp directory.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "npm run build and npm run typecheck pass; ESLint reports zero errors on new and modified files.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not implement runSecurityAudit, the gate, the CLI, scanners, or hub emission (sprints 2-6).",
+      "Do not modify ReviewResult/ReviewFinding, review-state.ts, or any code-reviewer behavior (locked).",
+      "Do not add security config to createDefaultConfig or any preset \u2014 the section is opt-in only.",
+      "Do not touch bober.config.json in this sprint (dogfooding is sprint 7)."
+    ],
+    "stopConditions": [
+      "All five success criteria verified; full existing suite green with zero regressions.",
+      "Config byte-identity proven by deep-equal parse tests, not by assertion of absence alone."
+    ],
+    "definitionOfDone": "The security config section, wrapper types, verdict derivation, and .bober/security/ store exist, fully tested, with every existing config parsing byte-identically and the full suite green.",
+    "assumptions": [
+      "BudgetSectionSchema, EvalStrategySchema, and ModelChoiceSchema are exported (or exportable) from src/config/schema.ts as cited at schema.ts:48-51 and :74-88 in the architecture; if ModelChoiceSchema has a different name, reuse whatever enum the reviewer/evaluator sections use for their model field.",
+      "The review markdown renderer (renderReviewMarkdown or equivalent) is exported from code-reviewer-agent.ts or its render module; if it is module-private, export it additively rather than duplicating it.",
+      "review-state.ts (src/state/review-state.ts:12-15) is the store pattern to mirror: async fs/promises only, ensureDir before write."
+    ],
+    "outOfScope": [
+      "Audit execution, gate wiring, CLI, scanner pre-filter, hub emission, skill, dogfooding (later sprints)."
+    ],
+    "ambiguityScore": 2,
+    "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) src/config/schema.ts: find the existing default-off section precedents (evaluator panel {enabled:false}, reviewer section, medical egress axes) and follow their exact style; place SecuritySectionSchema near the other role sections and wire `security: SecuritySectionSchema.optional()` onto BoberConfigSchema \u2014 CRITICAL: .optional() on the section, no top-level default, so absent stays absent. Include standaloneBlockOn (z.enum(['critical','important']).default('critical')) and hub (z.boolean().default(true)) \u2014 these are consumed by sprints 4 and 6 but belong to the schema now to avoid three schema-touch sprints. (2) src/orchestrator/security-audit-types.ts: import type { ReviewResult, ReviewFinding } from './code-reviewer-agent.js' (verify the actual export names at code-reviewer-agent.ts:17-37). deriveVerdict must be pure and exported for reuse by the core, gate, and CLI. (3) src/state/security-audit-state.ts: mirror review-state.ts structurally (same helper usage, ensureDir, node:fs/promises); filename pattern `${contractId}-security-audit.md`. (4) Tests collocated (*.test.ts): config deep-equal paired-parse test, verdict derivation table test, store round-trip in a temp dir (repo convention: real fs in temp dirs, no fs mocks). Use unicode box section comments per principles.md.",
+    "evaluatorNotes": "For sc-1-2: run the FULL config test file plus parse the repo's real bober.config.json before/after (checkout the schema module's behavior with the section absent) and deep-equal the outputs \u2014 do not accept a test that only checks 'security' in result. For sc-1-3: verify vulnClass is optional and that ReviewFinding/ReviewResult are imported type-only (grep for 'import type'); table-test deriveVerdict with critical empty/non-empty including important-only findings \u2192 'pass'. For sc-1-4: exercise read-of-missing \u2192 null (not throw) explicitly. Confirm no sync fs calls (grep readFileSync/writeFileSync in new files). Run build + typecheck + lint + full suite.",
+    "estimatedFiles": [
+      "src/config/schema.ts",
+      "src/config/schema.test.ts",
+      "src/orchestrator/security-audit-types.ts",
+      "src/orchestrator/security-audit-types.test.ts",
+      "src/state/security-audit-state.ts",
+      "src/state/security-audit-state.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "lastEvalId": null
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

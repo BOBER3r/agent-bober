@@ -1,0 +1,293 @@
+{
+  "specId": "spec-20260628-medical-ingest",
+  "version": 1,
+  "title": "Medical ingest: lab-PDF -> vault notes + profile + supplements",
+  "description": "Adds the lab-ingestion leg of the medical knowledge template: a lab-report PDF is parsed (Claude `document` block, no OCR) into structured markers, written as markdown-with-frontmatter notes in the canonical vault, and reindexed into the existing HealthDataStore as the derived index. Also adds a markdown-frontmatter supplements list flattened into FactStore and a SOPS-encrypted personalization profile.yaml (age/sex/conditions/meds/supplements/allergies/goals).",
+  "status": "completed",
+  "mode": "brownfield",
+  "ambiguityScore": 4,
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Lab-PDF structured parser (egress-gated)",
+      "description": "Parse a native-text lab-report PDF into a Zod-validated ParsedLabReport (panel, collection date, markers each with name/value/unit/reference range) using a Claude `document` content block via an injectable LLMClient. Cloud parse is honoured only behind the cloud-inference egress axis; otherwise the call is refused fail-closed.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: parseLabPdf base64-encodes a PDF and sends it as an Anthropic `document` content block through an injectable LLMClient, returning a Zod-validated ParsedLabReport.",
+        "AC2: Malformed model output (missing required marker fields) is rejected by Zod and never returned as an unvalidated object.",
+        "AC3: The provider layer gains an additive optional ChatParams.documents field rendered only by the Anthropic adapter; other adapters ignore it and existing calls remain byte-identical."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Lab-note vault storage + derived index + ingest dedup",
+      "description": "Serialize each parsed marker to a markdown note with structured YAML frontmatter (marker/value/unit/ref_low/ref_high/ref_range/date/status/panel/source) under the canonical vault directory, and reindex those notes into the existing HealthDataStore.lab_results. Status is derived in deterministic JS; duplicates dedup via the deterministic labResultId under INSERT OR IGNORE.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: writeLabNote writes a markdown file whose frontmatter carries the full marker schema and is parseable back into the same fields.",
+        "AC2: reindexLabNotes parses a vault directory of lab notes and upserts them into HealthDataStore.lab_results so getLabSeries(marker) returns each result.",
+        "AC3: Re-running reindex over unchanged notes inserts zero new rows (deterministic-id dedup).",
+        "AC4: Lab status (normal/low/high) is computed in deterministic JS from value vs reference range, not by an LLM."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "bober medical import-labs <pdf> end-to-end command",
+      "description": "Wire the parser (feat-1) and vault writer + reindex (feat-2) into a new `bober medical import-labs <pdf>` subcommand. The command refuses fail-closed when the cloud-inference egress axis is off, dedups at ingest, and appends an IDs/enums-only audit entry.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: With cloud-inference enabled and an injected fake parser, the command writes a lab note, reindexes so getLabSeries returns the marker, and appends an audit `ingest` entry.",
+        "AC2: With cloud-inference off (default), the command prints a clear message, sets exit code 1, and never invokes the parser or reads the PDF.",
+        "AC3: Re-importing the same report adds zero new lab_results rows (ingest-time dedup)."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Supplements markdown-frontmatter list -> FactStore",
+      "description": "A markdown-frontmatter supplements list flattened into FactStore via reconcile (dedup-aware), plus `bober medical supplements add|list` subcommands.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: `supplements add` reconciles a supplement (name + dose) into FactStore under the medical scope; getActiveFacts returns it.",
+        "AC2: Re-adding the same supplement+dose is a NOOP via reconcileFact exact-match (active count stays 1).",
+        "AC3: `supplements list` reads the supplements markdown-frontmatter file and prints each name + dose."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Personalization profile.yaml (SOPS-encrypted)",
+      "description": "A SOPS-encrypted personalization profile (age/sex/conditions/medications/supplements/allergies/goals) with Zod validation and an injectable cipher seam, plus `bober medical profile show|set` subcommands.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: writeProfile serializes to YAML, encrypts via the cipher seam, and writes <vaultDir>/profile.yaml; readProfile decrypts and returns a ProfileSchema-validated object that round-trips.",
+        "AC2: When the cipher seam reports SOPS unavailable, read/write refuse with a clear message and write no plaintext profile to disk.",
+        "AC3: ProfileSchema rejects invalid input (negative age, unknown sex)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "assumptions": [
+    "DESIGN-APPROVAL (gate): autonomous self-approval. Every assumption below cites file:line evidence in the agent-bober substrate and the locked research doc; approval evidence recorded in metadata.approvalEvidence.",
+    "ChatParams gains an additive optional `documents` field rendered only by the Anthropic adapter (other adapters ignore it) -- evidence: src/providers/types.ts ChatParams optional-field pattern (responseSchema/jsonObjectMode) and src/providers/anthropic.ts toAnthropicMessage content-block builder (lines 80-132).",
+    "Claude parses native-text lab PDFs to structured JSON without OCR; scanned/image PDFs are out of scope -- evidence: research-20260627-knowledge-platform-landscape.md section 2 Angle 3 (line 67) and section 4 (line 165).",
+    "When the cloud-inference egress axis is off (default), import-labs fails closed without reading the PDF or opening a connection, mirroring the WHOOP device-connection gate -- evidence: src/cli/commands/medical.ts:54-62 and the fail-closed resolver src/medical/inference.ts:43-49.",
+    "Parsed markers map onto the existing LabResult shape and dedup via the deterministic labResultId -- evidence: src/medical/types.ts:118-127 (LabResult) and src/medical/health-store.ts:48-53,212-230 (labResultId, upsertLabResult INSERT OR IGNORE).",
+    "The vault is canonical and the SQLite store is a derived, rebuildable index; reconcile/dedup runs at ingest time -- evidence: research section 3b (lines 150-153).",
+    "This spec does NOT hard-import the sibling vault-store module (spec-20260628-obsidian-vault-store); the medical lab-note writer and reindexer write/parse plain markdown+frontmatter directly so the build stays green regardless of sibling timing -- evidence: orchestrator dependsOn directive + research section 3b vault-canonical rule.",
+    "Lab status (normal/low/high) is computed in deterministic JS from value vs reference range; only a source-PDF critical flag is carried through -- evidence: deterministic-numerics guarantee in src/medical/numerics.ts and research section 4a #5 (line 183).",
+    "Supplements flatten into FactStore via reconcileFact/writeFact (exact-match NOOP/UPDATE dedup) -- evidence: src/orchestrator/memory/reconcile.ts:51-101,148-154 and src/state/facts.ts FactStore (line 136).",
+    "SOPS encrypts only the small structured profile.yaml (age backend, local, no egress); a real sops binary is abstracted behind an injectable cipher seam for testability -- evidence: research section 3b (lines 155-156) and the injectable-factory pattern at src/medical/inference.ts:17 + src/cli/commands/medical.ts:31-36 (WhoopSyncDeps)."
+  ],
+  "outOfScope": [
+    "Analysis/insights, proactive review pass, and the recommendation judge-loop (owned by spec-20260628-medical-analysis).",
+    "The generic vault layer + generic reindex + Dataview dashboards (owned by spec-20260628-obsidian-vault-store).",
+    "The unified priority hub and task inbox.",
+    "OCR / scanned-image PDF handling.",
+    "Rebuilding Apple Health (SAX) or WHOOP importers -- they are reused as-is.",
+    "Syncthing / binary-attachment handling for scan PDFs."
+  ],
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "tech-constraints",
+      "question": "How should a lab PDF reach the model, given the LLMClient abstraction has no document/PDF content block today?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Add an additive optional ChatParams.documents field rendered only by the Anthropic adapter; other adapters ignore it."
+        },
+        {
+          "label": "B",
+          "description": "Bypass the LLMClient seam and call the Anthropic SDK directly inside the parser."
+        }
+      ],
+      "recommendation": "A -- keeps the provider seam intact and additive; evidence src/providers/anthropic.ts:80-132.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q2",
+      "category": "error-handling",
+      "question": "When cloud-inference egress is off (default) and local llama3 cannot parse a PDF, what should import-labs do?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Fail closed: print a clear message, exit 1, never read the PDF or open a connection (mirror the WHOOP gate)."
+        },
+        {
+          "label": "B",
+          "description": "Attempt a local parse and degrade silently."
+        }
+      ],
+      "recommendation": "A -- mirrors src/cli/commands/medical.ts:54-62 and inference fail-closed at src/medical/inference.ts:43-49.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "data-model",
+      "question": "What is the canonical lab-note frontmatter schema and how does it map to the existing LabResult store?",
+      "options": [
+        {
+          "label": "A",
+          "description": "frontmatter marker/value/unit/ref_low/ref_high/ref_range/date/status/panel/source; reindex maps to LabResult via upsertLabResult."
+        }
+      ],
+      "recommendation": "A -- maps onto src/medical/types.ts:118-127 and src/medical/health-store.ts:212-230.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q4",
+      "category": "pattern-conflict",
+      "question": "Does this spec depend on the sibling vault-store module's exported API at build time?",
+      "options": [
+        {
+          "label": "A",
+          "description": "No hard import: write/parse plain markdown+frontmatter directly so the build is independent of sibling timing."
+        },
+        {
+          "label": "B",
+          "description": "Import the sibling module and block the build until it lands."
+        }
+      ],
+      "recommendation": "A -- vault-canonical/derived-index rule, research section 3b lines 150-153.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q5",
+      "category": "tech-constraints",
+      "question": "How is SOPS encryption of profile.yaml made testable without a real sops binary in CI?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Inject a cipher seam (encrypt/decrypt) defaulting to a sops age shell-out; tests inject a reversible fake; missing sops -> refuse."
+        }
+      ],
+      "recommendation": "A -- injectable-factory pattern src/medical/inference.ts:17 and src/cli/commands/medical.ts:31-36.",
+      "ambiguityWeight": 2
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Plan implements one locked part (medical lab ingestion) of the approved research design; every assumption cites file:line evidence in agent-bober + research-20260627-knowledge-platform-landscape.md.",
+      "resolvedAt": "2026-06-28T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q1",
+      "answer": "A -- add an additive optional ChatParams.documents field rendered only by the Anthropic adapter (others ignore). Evidence: src/providers/types.ts ChatParams optional fields; src/providers/anthropic.ts:80-132.",
+      "resolvedAt": "2026-06-28T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "A -- fail closed (message + exit 1, no PDF read, no connection). Evidence: src/cli/commands/medical.ts:54-62; src/medical/inference.ts:43-49.",
+      "resolvedAt": "2026-06-28T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "A -- frontmatter marker/value/unit/ref_low/ref_high/ref_range/date/status/panel/source mapped to LabResult via upsertLabResult. Evidence: src/medical/types.ts:118-127; src/medical/health-store.ts:212-230.",
+      "resolvedAt": "2026-06-28T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "A -- no hard import of the sibling vault-store module; write/parse plain markdown+frontmatter directly. Evidence: research section 3b lines 150-153.",
+      "resolvedAt": "2026-06-28T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "A -- injectable cipher seam defaulting to sops age shell-out; reversible fake in tests; missing sops -> refuse. Evidence: src/medical/inference.ts:17; src/cli/commands/medical.ts:31-36.",
+      "resolvedAt": "2026-06-28T00:00:00Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "techStack": [
+    "TypeScript (Node ESM)",
+    "better-sqlite3 (HealthDataStore / FactStore)",
+    "Anthropic provider adapter (document content block)",
+    "Zod (schema validation)",
+    "commander (CLI)",
+    "vitest",
+    "SOPS (age backend, abstracted behind an injectable cipher seam)"
+  ],
+  "techNotes": {
+    "dataModel": "Vault is canonical (markdown+frontmatter). Derived indexes: lab results -> HealthDataStore.lab_results (deterministic labResultId dedup); supplements + profile meds -> FactStore (reconcile dedup). ParsedLabReport { panel, collectedAtIso, markers[] } where each marker -> LabResult { biomarker, value, unit, collectedAtIso, referenceLow?, referenceHigh? }.",
+    "integrationPoints": [
+      "Anthropic provider adapter -- new document content block for native-PDF parse (cloud, gated).",
+      "Existing HealthDataStore (src/medical/health-store.ts) -- upsertLabResult / getLabSeries.",
+      "Existing FactStore (src/state/facts.ts) + reconcile (src/orchestrator/memory/reconcile.ts) -- supplements/meds.",
+      "Existing EgressGuard cloud-inference axis (src/medical/egress.ts) -- gates the cloud PDF parse.",
+      "Existing AuditLog (src/medical/audit.ts) -- IDs/enums-only ingest record."
+    ],
+    "securityConsiderations": [
+      "Zero-egress default preserved: cloud PDF parse only when medical.egress.cloudInference is true; otherwise fail closed before reading bytes.",
+      "Deterministic JS lab-status classification (no LLM numeric judgement) preserves the existing deterministic-numerics guarantee.",
+      "Audit log records IDs/enums only -- never health values or prompt text.",
+      "profile.yaml SOPS-encrypted (age, local, no network); missing sops refuses rather than writing plaintext PHI.",
+      "Lab numbers are import/command-only -- humans never hand-edit numeric frontmatter (research section 3b line 153)."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "No outbound network bytes for lab parsing unless medical.egress.cloudInference is true; the off path must exit before reading the PDF.",
+      "verificationMethod": "unit-test asserting the injected parser/client is never invoked and no file is read when the axis is off"
+    },
+    {
+      "category": "reliability",
+      "requirement": "Re-ingesting an identical lab report or supplement produces zero new store rows (idempotent ingest).",
+      "verificationMethod": "unit-test asserting second-run newRows is 0 and active fact count is unchanged"
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The medical ingest modules do not hard-import the sibling vault-store module, keeping the build independent of sibling timing.",
+      "verificationMethod": "build (tsc) succeeds with no reference to the sibling module"
+    }
+  ],
+  "constraints": [
+    "Additive only -- existing medical/provider/store callers stay byte-identical when the new fields/commands are unused.",
+    "All timestamps injected (no Date.now() in store/pure modules) per the existing medical purity contract.",
+    "Max 10 sprints, sprintSize medium."
+  ],
+  "metadata": {
+    "dependsOn": [
+      "spec-20260628-obsidian-vault-store"
+    ],
+    "contractIds": [
+      "sprint-spec-20260628-medical-ingest-1",
+      "sprint-spec-20260628-medical-ingest-2",
+      "sprint-spec-20260628-medical-ingest-3",
+      "sprint-spec-20260628-medical-ingest-4",
+      "sprint-spec-20260628-medical-ingest-5"
+    ],
+    "approvalEvidence": [
+      ".bober/research/research-20260627-knowledge-platform-landscape.md (sections 2, 3, 3b, 4, 4a)",
+      "src/medical/health-store.ts:48-53,196-230",
+      "src/medical/types.ts:118-127",
+      "src/medical/ingestion.ts:16-64",
+      "src/medical/inference.ts:17,31-56",
+      "src/medical/egress.ts:25-58",
+      "src/cli/commands/medical.ts:43-189",
+      "src/providers/types.ts (ChatParams) + src/providers/anthropic.ts:80-132",
+      "src/state/facts.ts:136 + src/orchestrator/memory/reconcile.ts:51-154"
+    ]
+  },
+  "createdAt": "2026-06-28T00:00:00Z",
+  "updatedAt": "2026-06-28T16:55:00Z",
+  "completedAt": "2026-06-28T16:55:00Z"
+}

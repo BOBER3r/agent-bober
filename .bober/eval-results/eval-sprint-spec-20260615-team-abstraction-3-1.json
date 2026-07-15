@@ -1,0 +1,31 @@
+{
+  "evalId": "eval-sprint-spec-20260615-team-abstraction-3-1",
+  "contractId": "sprint-spec-20260615-team-abstraction-3",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T15:35:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0,
+    "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6
+  },
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0, zero errors."},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0, clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings in eval-persist.test.ts (not in sprint files)."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "details": "167 files / 1961 passed / 3 skipped; selector.test.ts 6->14."},
+    {"strategy": "api-check", "required": false, "result": "skipped", "details": "No API endpoints."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "result": "pass", "evidence": "build exit 0."},
+    {"criterionId": "sc-3-2", "result": "pass", "evidence": "typecheck exit 0; import type Team, exhaustive switch, additive teamId?."},
+    {"criterionId": "sc-3-3", "result": "pass", "evidence": "1961 pass; eligibility.ts/workflow-engine untouched; no test weakening."},
+    {"criterionId": "sc-3-4", "result": "pass", "evidence": "programming team -> TsPipelineEngine, same name as legacy selectPipelineEngine(config); equivalence provable by construction (registry.ts:68 pipelineShape=resolveEngineName(config))."},
+    {"criterionId": "sc-3-5", "result": "pass", "evidence": "workflow+eligible -> WorkflowEngine; ineligible -> Ts + 1 log; careful -> Ts + 1 log. Downgrade log line byte-identical to resolveEngineName."},
+    {"criterionId": "sc-3-6", "result": "pass", "evidence": "pipeline.ts:982-984 teamId=opts?.teamId??config.defaultTeam, loadTeam, selectPipelineEngineForTeam. Tests: no-team->programming==legacy, defaultTeam->workflow, opts.teamId override. No .run() / vi.mock eligibility+logger -> no LLM calls."}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass. Additive team-aware selector + runPipeline wiring; programming/no-team path byte-for-byte today's behavior; eligibility + careful downgrade preserved with byte-identical log line. Commit dc3dd4e touches only the 3 estimatedFiles, no scope creep. Build/typecheck clean, 1961 tests pass, no real LLM calls in tests."
+}

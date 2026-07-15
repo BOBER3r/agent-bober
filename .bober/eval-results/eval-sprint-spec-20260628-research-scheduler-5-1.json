@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260628-research-scheduler-5-1",
+  "contractId": "sprint-spec-20260628-research-scheduler-5",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-30T00:50:30.000Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings"},
+    {"strategy": "unit-test", "required": true, "result": "pass", "details": "86 focused; full 3583/3583 (284 files); +8; zero regressions"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "buildDigest(since,now,deps) collects via injected collectRuns -> runs[{title,topFinding,generatedAt,source}]; test 2 runs => both titles+findings in md, json.runs length 2"},
+    {"criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "writes <date>.md + <date>.json (date=now.slice(0,10)); ensureDir from state/helpers (not utils/fs); CLI action thin; test reads both back from temp dir"},
+    {"criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "empty runs => '_No new research was produced in this window._' + both files written unconditionally; never throws; test asserts runs []"},
+    {"criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "build exit 0; digest --since <iso> registered; default since at .action boundary; no wall-clock in buildDigest core"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 5 (FINAL) passes all 4 required criteria. buildDigest clock-injected, ensureDir from state/helpers, CLI thin, empty-window writes both files with explicit statement, content non-sensitive (titles + frontmatter.question only). 3583/3583, only the 3 contracted files changed, zero regressions."
+}

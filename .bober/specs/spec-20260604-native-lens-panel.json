@@ -1,0 +1,152 @@
+{
+  "specId": "spec-20260604-native-lens-panel",
+  "version": 1,
+  "createdAt": "2026-06-04T04:30:00Z",
+  "updatedAt": "2026-06-04T04:30:00Z",
+  "title": "Native-Surface Multi-Lens Evaluator Panel",
+  "description": "Brings the opt-in multi-lens evaluator panel (correctness/security/regression/quality, majority-vote fail-closed) to the native Claude Code surface — the markdown agents/commands/skills path — so /bober-run, /bober-sprint, and /bober-eval can run lens judges in-session without the TypeScript orchestrator. Today the panel only exists in src/orchestrator/evaluator-agent.ts (Surface 2: CLI/headless/MCP). Off by default it is byte-identical to today's single-judge behavior.",
+  "mode": "brownfield",
+  "status": "completed",
+  "completedAt": "2026-06-04T06:12:00Z",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-fanout",
+      "answer": "Split model: the orchestrator runs the deterministic strategies (build/test/lint/typecheck) ONCE via one evaluator subagent in 'deterministic' mode, then fans out one evaluator per lens in 'qualitative' mode (judging the contract criteria through that lens, NOT re-running the strategy suite), majority-votes the lens verdicts (fail-closed on tie), and combines final = deterministic.passed && reconciled.passed — a faithful mirror of the TS path's `passed = programmaticEval.passed && agentResult.passed`.",
+      "resolvedAt": "2026-06-04T04:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-source-of-truth",
+      "answer": "Single source + drift gate: src/orchestrator/eval-lenses.ts (LENS_CATALOG via the exported resolveLensFocus) stays the one source. The markdown embeds the fragments verbatim and a vitest parity gate asserts the reference markdown contains each canonical fragment, preventing the two surfaces from silently diverging (same twin/port drift-gate pattern as the workflow-engine reconciler).",
+      "resolvedAt": "2026-06-04T04:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-surface-breadth",
+      "answer": "All three orchestrators (bober.run, bober.sprint, bober.eval) get the panel via a canonical panel reference copied into each skill's references/ dir (references are per-skill in this build model — there is no shared dir), with the drift gate asserting the copies are byte-identical to the canonical. The root agents/bober-evaluator.md is synced to .claude/agents/bober-evaluator.md per the distribution model.",
+      "resolvedAt": "2026-06-04T04:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-verdict-storage",
+      "answer": "Add an optional lensVerdicts: { lens, passed, summary }[] field to EvalResultSchema in src/contracts/eval-result.ts (additive, optional, backward-compatible). The native panel writes the same array into the saved eval-result JSON. Off-path results omit it.",
+      "resolvedAt": "2026-06-04T04:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts",
+      "resolvedAt": "2026-06-04T04:30:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "evaluator.panel config ALREADY exists and is off by default — added in commit 5dc7a5e (src/config/schema.ts EvaluatorSectionSchema.panel { enabled:false, lenses:[], maxConcurrent:4 }). The native path only READS config.evaluator.panel; NO config schema change is needed.",
+    "Lens focus fragments are canonical in src/orchestrator/eval-lenses.ts (LENS_CATALOG: correctness/security/regression/quality + resolveLensFocus generic fallback, exported). The markdown embeds these verbatim; resolveLensFocus(lens) is the test accessor so no new export is required.",
+    "Authoring sources are skills/bober.{run,sprint,eval}/SKILL.md (+ references/*.md, sorted-and-concatenated into .claude/commands/bober-*.md by installClaudeCommands in src/cli/commands/init.ts, mirrored by scripts/update-all.mjs:inlineSkill) and agents/bober-evaluator.md (copied to .claude/agents/bober-evaluator.md). The generator edits SOURCES and regenerates the .claude/ outputs byte-identically; it NEVER hand-edits a generated file.",
+    "Native fan-out is the SPLIT model: one deterministic-mode evaluator runs the strategy suite ONCE; N qualitative-mode lens evaluators judge the criteria (no strategy re-run); majority vote (fail-closed on tie); final = deterministic.passed && reconciled.passed.",
+    "References are per-skill (skills/bober.run has no references/ yet; bober.sprint has one; bober.eval has two). The canonical panel reference lives at a neutral non-inlined path (skills/shared/lens-panel.md — skills/shared is NOT a bober.* dir so update-all never emits it as a command) and is COPIED into each of the 3 skills' references/ dirs. The drift gate asserts every copy is byte-identical to the canonical AND the canonical embeds each LENS_CATALOG fragment.",
+    "Per-lens verdicts are surfaced by an OPTIONAL lensVerdicts field added to EvalResultSchema (src/contracts/eval-result.ts:60) and written into the native eval-result JSON. Off-path EvalResults omit it (backward compatible).",
+    "Off-by-default guarantee: when evaluator.panel.enabled=false OR lenses.length<2, every orchestrator drives EXACTLY ONE full evaluator subagent with NO lens focus — byte-identical prose to today. The panel instructions are purely additive and gated behind the enable check; the existing single-judge spawn prose is left untouched (verifiable by git diff).",
+    "The bober-evaluator agent gains a prompt-level MODE (full | deterministic | lens:<name>). MODE:full is the default and the unchanged off-path behavior; deterministic runs strategies only; lens:<name> judges criteria through one lens without re-running the strategy suite.",
+    "Markdown-prompt sprints are verified by machine-checkable vitest parity/drift gates plus git-diff additive-only checks and `npm run update-all:check` (no real LLM subagents are spawned in CI)."
+  ],
+  "outOfScope": [
+    "Any change to reconcile() semantics or to the TS runAgentEvaluation panel (Surface 2 is already complete). We only ADD the optional lensVerdicts schema field; we do NOT rewire the TS reconcile() to populate it.",
+    "Lens weighting or any non-majority voting scheme (majority / fail-closed only).",
+    "New config fields — evaluator.panel already exists and is reused as-is.",
+    "Cost budgeting beyond reading maxConcurrent as a fan-out cap hint in the orchestrator prose.",
+    "Wiring the panel into other agents (planner/curator/generator) or into commands beyond run/sprint/eval.",
+    "Changing the deterministic strategy set, the enriched native EvalResult JSON shape (beyond adding lensVerdicts), the retry loop, or the contract/spec schemas.",
+    "Unit-testing a live LLM lens fan-out — the gates are static-text + schema tests only; no subagent spawning is exercised in CI."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Canonical panel reference, lensVerdicts schema field, and drift gate",
+      "description": "Establish the single source of truth for native panel orchestration (a canonical markdown reference embedding the LENS_CATALOG fragments and documenting the split fan-out + majority-vote + lensVerdicts output), add the optional lensVerdicts field to EvalResultSchema, and add the vitest drift gate that ties the markdown to eval-lenses.ts.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A canonical reference markdown exists at skills/shared/lens-panel.md, embeds each of the four LENS_CATALOG fragments verbatim (correctness/security/regression/quality), and documents the split fan-out, majority-vote/fail-closed reconciliation, and the lensVerdicts output shape.",
+        "AC2: EvalResultSchema (src/contracts/eval-result.ts) gains an optional lensVerdicts: z.array(z.object({ lens: z.string(), passed: z.boolean(), summary: z.string() })).optional(); a result without lensVerdicts still parses (backward compatible).",
+        "AC3: A vitest drift gate asserts the canonical reference contains resolveLensFocus(lens) for every built-in lens; the gate fails if a fragment is edited in eval-lenses.ts without updating the markdown.",
+        "AC4: npx tsc --noEmit, npm run build, npx eslint src/ exit 0 and the full vitest suite stays green."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Lens-aware evaluator agent modes + sync gate",
+      "description": "Teach the bober-evaluator agent the full|deterministic|lens:<name> MODE so it can act as a deterministic-only runner or a single-lens qualitative judge, while MODE:full stays byte-identical to today. Sync the .claude/agents copy and gate the two copies against drift.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: agents/bober-evaluator.md gains an additive 'Panel / Lens Mode' section documenting MODE:full (default, unchanged), MODE:deterministic (run strategies only), and MODE:lens:<name> (judge criteria through one lens, no strategy re-run, emit a per-lens verdict). The existing single-judge instructions are unchanged.",
+        "AC2: .claude/agents/bober-evaluator.md is regenerated byte-identical to agents/bober-evaluator.md.",
+        "AC3: A vitest gate asserts agents/bober-evaluator.md and .claude/agents/bober-evaluator.md are byte-identical.",
+        "AC4: npx tsc --noEmit, npm run build, npx eslint src/ exit 0 and the full vitest suite stays green."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Wire run/sprint/eval orchestrators + per-skill reference copies + regenerate commands",
+      "description": "Add the gated panel branch at each evaluator-spawn step in the three SKILL.md sources, copy the canonical reference into each skill's references/ dir so it inlines into the generated commands, regenerate the .claude/commands outputs, and extend the drift gate to cover all three inlined copies.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: skills/bober.run/SKILL.md, skills/bober.sprint/SKILL.md, and skills/bober.eval/SKILL.md each gain a gated panel branch at the evaluator-spawn step: when evaluator.panel.enabled && lenses.length>=2, follow the split fan-out + majority-vote + write-lensVerdicts flow; otherwise spawn exactly one full evaluator as today.",
+        "AC2: skills/shared/lens-panel.md is copied to skills/bober.run/references/lens-panel.md, skills/bober.sprint/references/lens-panel.md, and skills/bober.eval/references/lens-panel.md (byte-identical copies).",
+        "AC3: .claude/commands/bober-run.md, bober-sprint.md, and bober-eval.md are regenerated to include the inlined reference and panel branch; npm run update-all:check reports no drift for this project.",
+        "AC4: The off-by-default guarantee holds — with panel disabled, the regenerated command prose drives exactly one full evaluator (the panel branch is additive and gated; the prior single-judge prose is intact per git diff).",
+        "AC5: The drift gate from feat-1 is extended to assert each of the three skills' references/lens-panel.md equals skills/shared/lens-panel.md; npx tsc --noEmit, npm run build, npx eslint src/ exit 0 and the full vitest suite stays green."
+      ],
+      "dependencies": ["feat-1", "feat-2"],
+      "estimatedComplexity": "high"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "The two surfaces (TS eval-lenses.ts and the native markdown) cannot silently diverge — a fragment change in one without the other fails CI.",
+      "verificationMethod": "Run npx vitest run on the drift-gate test; mutate a LENS_CATALOG fragment locally and confirm the gate goes red (described in evaluatorNotes)."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Default (panel off) native evaluation is byte-identical — exactly one full evaluator, same combine, no lens prose on the off path.",
+      "verificationMethod": "git diff shows the panel additions are gated and additive; the existing single-judge spawn prose is unchanged in all three skills and the agent."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Generated .claude/ artifacts stay in lockstep with their skills/ and agents/ sources.",
+      "verificationMethod": "npm run update-all:check reports no drift; the vitest sync gates for the agent and reference copies are green."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "src/orchestrator/eval-lenses.ts (resolveLensFocus — canonical lens fragments, reused)",
+      "src/contracts/eval-result.ts (EvalResultSchema — new optional lensVerdicts field)",
+      "skills/bober.{run,sprint,eval}/SKILL.md + references/ (native orchestrator sources)",
+      "agents/bober-evaluator.md → .claude/agents/bober-evaluator.md (evaluator agent source + synced copy)",
+      "scripts/update-all.mjs (inlineSkill format) / src/cli/commands/init.ts (installClaudeCommands)"
+    ],
+    "dataModel": "No new persistent shapes. EvalResultSchema gains one optional array field (lensVerdicts). evaluator.panel config already exists.",
+    "securityConsiderations": [
+      "A 'security' lens is a prompt focus only — it does not change any subagent's tool permissions.",
+      "No SDK leakage; no changes under src/providers/."
+    ],
+    "existingPatterns": "Mirror the twin/port drift-gate pattern used for the workflow-engine reconciler (a vitest test tying a generated/duplicated artifact to its source). Follow the existing inlineSkill concatenation format byte-for-byte. Tests read committed repo files via node:fs/promises (allowed — scanner tests already read the real codebase). Use import type, ESM .js specifiers, unicode section headers."
+  },
+  "sprints": [
+    "sprint-spec-20260604-native-lens-panel-1",
+    "sprint-spec-20260604-native-lens-panel-2",
+    "sprint-spec-20260604-native-lens-panel-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "4-6 hours",
+    "riskLevel": "low",
+    "riskNotes": "Additive, opt-in, off by default. Main risks: (1) preserving byte-identical off-path prose across three skills + the agent, gated by git-diff review and the unchanged single-judge sections; (2) keeping the generated .claude/ artifacts in lockstep with sources, gated by update-all:check and vitest sync gates. No TS runtime behavior changes beyond an optional schema field."
+  }
+}

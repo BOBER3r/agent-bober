@@ -1,0 +1,138 @@
+{
+  "handoffId": "handoff-sprint-spec-20260605-scale-safe-history-memory-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-4",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "timestamp": "2026-06-04T23:48:24Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober TS/ESM CLI. Plan spec-20260605-scale-safe-history-memory FINAL sprint: close the feedback arc. Add retrieveRelevantLessons(projectRoot, keywords, {topK, charBudget}) reading ONLY the .bober/memory INDEX (index-only, deterministic tag/keyword overlap, topK + char-budget capped) + serializeLessonsForPlanner. Wire into the planner skill (bober.plan Step 2) and the bober-planner agent so the planner learns from past outcomes WITHOUT ever reading raw history.jsonl. Document close-the-arc + findPrecisionIssues A/B measure.",
+    "completedSprints": [
+      {
+        "contractId": "...-1",
+        "title": "history rotation",
+        "summary": "loadHistory/loadRecentHistory in src/state/history.ts."
+      },
+      {
+        "contractId": "...-2",
+        "title": "lessons store",
+        "summary": "src/state/memory.ts: loadLessonIndex(root,{limit}) returns LessonIndexRecord[] (lessonId, category, severity, occurrences, tags, summarySnippet) index-only; loadLesson; appendLesson."
+      },
+      {
+        "contractId": "...-3",
+        "title": "distill + CLI",
+        "summary": "src/orchestrator/memory/distill.ts pure distill; src/cli/commands/memory.ts distill|list|show registered in src/cli/index.ts. retrieve.ts should live alongside distill.ts in src/orchestrator/memory/ and import loadLessonIndex from ../../state/memory.js."
+      }
+    ],
+    "currentBranch": "bober/scale-safe-history-memory",
+    "relevantFiles": [
+      "src/orchestrator/memory/retrieve.ts",
+      "src/orchestrator/memory/retrieve.test.ts",
+      "skills/bober.plan/SKILL.md",
+      "agents/bober-planner.md",
+      "docs/self-improvement-memory.md"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260605-scale-safe-history-memory-4",
+    "specId": "spec-20260605-scale-safe-history-memory",
+    "sprintNumber": 4,
+    "title": "Planner reads bounded memory (close the arc) + demonstrably-improves gate",
+    "description": "Close the feedback arc: wire the planner to retrieve a topK-bounded, deterministically-ranked set of lessons from the .bober/memory index at plan time, so it learns from past sprint outcomes without ever reading raw history.jsonl. Add retrieveRelevantLessons (tag/keyword overlap, index-only, hard-capped), update bober.plan Step 2 and agents/bober-planner.md to consume it, and document the close-the-arc flow plus its findPrecisionIssues A/B measure so the improvement is observable.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260605-scale-safe-history-memory-2",
+      "sprint-spec-20260605-scale-safe-history-memory-3"
+    ],
+    "features": [
+      "feat-4"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "C1",
+        "description": "retrieveRelevantLessons(projectRoot, keywords, { topK }) returns at most topK lessons ranked by deterministic tag/keyword overlap, reading only INDEX.md; a test asserts the topK cap, that a matching keyword surfaces the expected lesson, and that a non-matching keyword returns an empty result.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "C2",
+        "description": "The retrieval path reads .bober/memory/INDEX.md and never reads .bober/history.jsonl; a test asserts no read is issued against history.jsonl during retrieval.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "C3",
+        "description": "Retrieved planner context is bounded: the serialized lessons block is capped at topK entries and a configured character budget; a test seeds more than topK lessons and asserts the serialized block respects both caps.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "C4",
+        "description": "skills/bober.plan/SKILL.md Step 2 and agents/bober-planner.md instruct the planner to load the bounded lessons index via retrieveRelevantLessons (topK-capped) and explicitly forbid reading raw history.jsonl; a test or grep asserts both files reference the memory index and the topK cap.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "C5",
+        "description": "npm run typecheck and npm run build exit 0 and the retrieval tests pass with no new failures beyond the documented flaky baseline.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "C6",
+        "description": "A docs section documents the close-the-arc flow and the manual A/B measure (plan a feature with and without memory present, compare findPrecisionIssues counts), naming the metric and the expected direction; a reviewer confirms the documented procedure.",
+        "verificationMethod": "manual",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not feed lessons into the generator or evaluator \u2014 this sprint wires memory into the planner only.",
+      "Do not read history.jsonl from the planner or the retrieval path; only the bounded index may be read.",
+      "Do not introduce embeddings or semantic search; retrieval is deterministic tag/keyword overlap.",
+      "Do not auto-distill; the planner consumes whatever the explicit bober memory distill command last wrote."
+    ],
+    "stopConditions": [
+      "Stop when retrieveRelevantLessons returns a topK-bounded, index-only result, the planner skill and agent are updated to consume it instead of raw history, the flow is documented, and typecheck, build, and tests are green.",
+      "Stop when changes are confined to src/orchestrator/memory/, skills/bober.plan/SKILL.md, agents/bober-planner.md, docs, and collocated tests."
+    ],
+    "definitionOfDone": "The feedback arc closes: the planner retrieves a topK-bounded, deterministically-ranked set of lessons from the .bober/memory index at plan time and never touches raw history.jsonl. Retrieval and the serialized planner context are hard-capped, the bober.plan skill and bober-planner agent are updated to read the index, the close-the-arc flow plus its findPrecisionIssues A/B measure are documented, and typecheck, build, and tests pass.",
+    "assumptions": [
+      "bober.plan Step 2 already reads project context files, so adding a bounded lessons-index read is a localized extension.",
+      "Deterministic tag/keyword retrieval over the bounded index is sufficient before the store outgrows the markdown pattern."
+    ],
+    "outOfScope": [
+      "embeddings or vector retrieval",
+      "generator-facing memory",
+      "auto-distillation"
+    ],
+    "ambiguityScore": 3,
+    "generatorNotes": "Create src/orchestrator/memory/retrieve.ts exporting retrieveRelevantLessons(projectRoot, keywords: string[], { topK, charBudget }): it loads the bounded index via loadLessonIndex (sprint 2), scores each record by deterministic overlap between keywords and the record's tags/category/summarySnippet (e.g. count of shared lowercased tokens), sorts descending with a stable tiebreak (lessonId), and returns the top `topK`. Add a serializeLessonsForPlanner(records, { charBudget }) that renders a compact block and truncates to the character budget. Wire it: in skills/bober.plan/SKILL.md Step 2, add a bullet 'Read the bounded lessons index via retrieveRelevantLessons(keywords from the feature title/description, topK) \u2014 do NOT read .bober/history.jsonl directly'; in agents/bober-planner.md add the same instruction in the context-gathering phase. Add a docs section (docs/ or README) describing the close-the-arc flow and the findPrecisionIssues A/B measure. Keep retrieval pure and index-only. Use import type; ESM .js specifiers. Conventional commit: bober(sprint-4): planner reads bounded memory (close the arc).",
+    "evaluatorNotes": "Verify retrieveRelevantLessons caps at topK, surfaces a lesson whose tags match a keyword, and returns empty for non-matching keywords. Verify it reads INDEX.md only and never history.jsonl (spy/path assertion). Verify the serialized block respects topK and the character budget when more than topK lessons exist. Grep skills/bober.plan/SKILL.md and agents/bober-planner.md for the retrieveRelevantLessons / memory-index instruction and the explicit prohibition on reading raw history. Confirm the docs section names findPrecisionIssues as the A/B metric and the expected direction (fewer precision issues with memory present). Run npm run typecheck (exit 0), npm run build (exit 0), and the retrieval tests. Confirm git diff is confined to src/orchestrator/memory/, the planner skill and agent, docs, and tests.",
+    "estimatedFiles": [
+      "src/orchestrator/memory/retrieve.ts",
+      "src/orchestrator/memory/retrieve.test.ts",
+      "skills/bober.plan/SKILL.md",
+      "agents/bober-planner.md",
+      "docs/self-improvement-memory.md"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "lastEvalId": null,
+    "createdAt": "2026-06-05T00:00:00Z",
+    "updatedAt": "2026-06-04T23:48:24Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,30 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["0481407 - bober(sprint-2): CalendarConnector interface + zero-egress .ics exporter"],
+  "filesChanged": [
+    "src/calendar/connector.ts (created — CalendarConnector interface + WriteResult + FreeBusyWindow)",
+    "src/calendar/ics-connector.ts (created — RFC 5545 .ics writer, zero egress, node:fs/promises writeFile)",
+    "src/calendar/ics-connector.test.ts (created)",
+    "src/cli/commands/calendar.ts (modified — --export-ics path, makeConnector dep; NO writeFile import kept)",
+    "src/cli/commands/calendar.test.ts (modified — sc-2-6 tests)"
+  ],
+  "criteriaResults": {
+    "sc-2-1": "build green",
+    "sc-2-2": "typecheck green; createIcsConnector structurally satisfies CalendarConnector",
+    "sc-2-3": "2-item plan -> VCALENDAR with exactly 2 VEVENT, UTC Z timestamps",
+    "sc-2-4": "round-trip DTSTART/DTEND/SUMMARY equal source PlanItems (incl escaping)",
+    "sc-2-5": "no-egress source-scan: no http/https/fetch/external-client/child_process; uses node:fs/promises",
+    "sc-2-6": "runCalendarPlan --export-ics writes valid VCALENDAR, exit 0; Sprint-1 no-writeFile scan still passes"
+  },
+  "selfVerification": {
+    "build": "exit 0",
+    "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings unrelated)",
+    "calendarTests": "38 passed (4 files)",
+    "fullSuite": "3438 passed (271 files), zero regressions"
+  },
+  "blockers": [],
+  "notes": "File write lives ONLY in ics-connector.ts; calendar.ts calls connector.writeEvents(). nowIso dep threaded to DTSTAMP for determinism. Sprint-1 dry-run path unchanged (exportIcs branch only runs when set)."
+}

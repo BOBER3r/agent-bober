@@ -1,0 +1,79 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-1",
+  "specId": "spec-20260628-task-inbox",
+  "sprintNumber": 1,
+  "title": "Zero-friction task capture: persistence helper + `bober task add`",
+  "description": "Create the Finding persistence helper over FactStore (write + read by the shared pool convention) and the `bober task add` command. Capture builds a Finding (kind=action, status=open) from free text with deterministic safe enrichment only (id, surfacedAt, optional domain tag), leaves all unknown fields null, persists one active row, and never prompts or blocks.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project compiles: `npm run build` exits 0 with the new src/hub persistence helper and src/cli/commands/task.ts included.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "`npm run typecheck` (tsc) exits 0 — the Finding type imported from the priority-hub module type-checks against the persistence helper's read/write signatures.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A unit test calls captureTask with text 'renew passport' and an injected now, then reads getActiveFacts('hub') and asserts exactly one row with predicate='finding' whose parsed JSON has kind='action', status='open', title='renew passport', and dueBy null/absent.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A unit test invokes captureTask with no domain and asserts the Finding has no domain tag, then with domain='medical' and asserts the captured Finding carries that domain.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A unit test confirms the `bober task add` handler sets process.exitCode (0 on success, 1 on error) and returns without throwing when given empty input, proving capture never throws out of the CLI.",
+      "verificationMethod": "unit-test",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do NOT define or redefine the Finding Zod schema — import it from the spec-20260628-priority-hub module.",
+    "Do NOT add LLM-based enrichment in this sprint — capture must be deterministic and synchronous so it can never block; LLM triage is a later, separate concern.",
+    "Do NOT implement list/done/snooze/drop/ingest/chat/gmail here — those are later sprints.",
+    "Do NOT call Date.now()/new Date() inside the persistence helper — stamp now at the CLI handler boundary only.",
+    "Do NOT add new runtime dependencies."
+  ],
+  "stopConditions": [
+    "`npm run build` and `npm run typecheck` both exit 0 and the captureTask + `bober task add` unit tests pass.",
+    "`bober task add \"renew passport\"` exits 0 and a subsequent inspection of the hub pool shows one open kind=action Finding."
+  ],
+  "definitionOfDone": "A user can run `bober task add \"<text>\"` (optionally `--domain <d>`) and a single open action-Finding lands in the unified hub pool with all unknown fields left null. The command registers under the root program, opens the FactStore at the handler boundary, stamps now there, persists via the shared scope='hub'/predicate='finding'/subject=id/value=JSON convention, prints a confirmation, and exits 0 — and exits 1 with a stderr message (never throwing) on error.",
+  "assumptions": [
+    "The Finding schema + FindingKind/FindingStatus are importable from the priority-hub module (built first). Locate via grep for the kind union 'action|watch|risk|question' if the path is unknown.",
+    "If the imported schema marks urgency/severity as required, capture sets neutral defaults (urgency=3, severity=1) rather than prompting (research §3a line 129).",
+    "Persistence convention: scope='hub', predicate='finding', subject=finding.id, value=JSON.stringify(finding) (src/state/facts.ts:222-257)."
+  ],
+  "outOfScope": [
+    "Ranking, lens-panel judging, cross-repo collection (priority-hub).",
+    "Any status transition beyond initial status=open."
+  ],
+  "generatorNotes": "Mirror src/cli/commands/facts.ts closely. Create src/hub/finding-store.ts (or co-locate beside the priority-hub Finding module if it already exposes a writer): export writeFinding(store, finding, {now}) that serializes the Finding into a FactInput {scope:'hub', subject:finding.id, predicate:'finding', value:JSON.stringify(finding), confidence:1, sourceRunId:null, tValid:now, tCreated:now} and routes through writeFact (src/orchestrator/memory/reconcile.ts:148) so dedup/supersede work later. Export readFindings(store) that getActiveFacts('hub', undefined, 'finding').map(r => Finding.parse(JSON.parse(r.value))). Create src/hub/task-inbox.ts exporting captureTask(store, text, {domain?, now}) that builds a Finding (id = a stable id; surfacedAt=now; kind='action'; status='open'; tags = domain ? ['domain:'+domain] : []; everything else null/empty) and calls writeFinding. Import the Finding schema from priority-hub; DO NOT redefine it. Create src/cli/commands/task.ts exporting registerTaskCommand(program) with the `task` parent + `add <text>` subcommand (option --domain), copying the resolveRoot/resolveDefaultNamespace/ensureFactsDir/now-at-boundary/try-catch-exitCode pattern from facts.ts:54-144. Wire registerTaskCommand into src/cli/index.ts next to registerFactsCommand (imports at line ~37, call at line ~316).",
+  "evaluatorNotes": "Confirm the Finding schema is IMPORTED, not redefined (grep the new files for a local z.object defining kind action|watch|risk|question — there must be none). Verify writeFinding goes through writeFact/reconcileFact, not a raw insertFact, so later dedup works. Verify no Date.now()/new Date() appears in src/hub/*. Run the captureTask unit tests with an in-memory FactStore (':memory:'). Confirm registerTaskCommand is wired in src/cli/index.ts.",
+  "estimatedFiles": [
+    "src/hub/finding-store.ts",
+    "src/hub/finding-store.test.ts",
+    "src/hub/task-inbox.ts",
+    "src/hub/task-inbox.test.ts",
+    "src/cli/commands/task.ts",
+    "src/cli/commands/task.test.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "ambiguityScore": 5,
+  "completedAt": "2026-06-29T10:01:09.423Z"
+}

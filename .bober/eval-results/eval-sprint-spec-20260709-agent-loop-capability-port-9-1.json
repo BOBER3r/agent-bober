@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-9-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-9",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-10T00:23:59.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Clean."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "Not in sprint files."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "Targeted 85/85; full suite 302 files / 3870 green (28.58s)", "details": "Evaluator also ran 3 ad-hoc session+abort tests (deleted after) — all passed."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-9-1", "description": "Boundary abort before next chat", "required": true, "result": "pass", "evidence": "Check at :485-491 before any chat; test asserts callCount 1, 'aborted', turnsUsed 1.", "feedback": ""},
+    {"criterionId": "sc-9-2", "description": "Mid-flight abort never retried", "required": true, "result": "pass", "evidence": "chatWithRetry :239-252 checks signal.aborted BEFORE isTransientError; AbortedError; callCount 1.", "feedback": ""},
+    {"criterionId": "sc-9-3", "description": "Partials preserved + onStop once", "required": true, "result": "pass", "evidence": "abortedResult() reuses accumulators; all 3 exits (:490/:534/:562) through finish(); session-combined ad-hoc verified.", "feedback": ""},
+    {"criterionId": "sc-9-4", "description": "Non-cancellable degrade at boundary, response discarded", "required": true, "result": "pass", "evidence": "Post-response check :555-563 BEFORE usage accumulation, budget charging, tool batch; usage {0,0}, handler never invoked, budget never charged.", "feedback": ""},
+    {"criterionId": "sc-9-5", "description": "Byte-identical without signal", "required": true, "result": "pass", "evidence": "Paired deep-equal; hasOwn false; adapter options arg undefined; full suite green.", "feedback": ""},
+    {"criterionId": "sc-9-6", "description": "build + typecheck", "required": true, "result": "pass", "evidence": "Independently re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "low", "category": "quality", "file": "src/orchestrator/agentic-loop.test.ts", "description": "No permanent test combining session persistence with abort; evaluator ad-hoc verified all 3 exits persist correctly at last completed turn with no crash. Add a regression-guard test in a future sprint.", "expected": "'abort with session enabled persists the transcript at the last completed turn without crashing'."}
+  ],
+  "summary": "All 6 criteria independently verified: 3 abort exits through finish(), abort-first classification keyed on signal.aborted, signal only in the SDK options arg (S8 body-identity holds), discarded responses excluded from accumulators and Budget, byte-identical absence path. NonGoals respected; only 5 estimated files touched. Iteration-1 pass."
+}

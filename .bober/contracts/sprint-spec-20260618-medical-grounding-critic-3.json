@@ -1,0 +1,101 @@
+{
+  "contractId": "sprint-spec-20260618-medical-grounding-critic-3",
+  "specId": "spec-20260618-medical-grounding-critic",
+  "sprintNumber": 3,
+  "title": "Configurable model + cloud-inference egress gating + audit verdict",
+  "description": "Make the synthesis/critic model+provider configurable and record the critic outcome in the audit log, while keeping cloud egress strictly behind the existing cloud-inference axis. (1) Extend MedicalSectionSchema (src/config/schema.ts:374-385) with an optional `inference` block: { provider?: string; endpoint?: string; model?: string } (zod, all optional). (2) Add a resolver buildMedicalInferenceClient(config, egress) in a small module (e.g. src/medical/inference.ts) that returns { client: LLMClient; model: string }: when config.medical.inference specifies a CLOUD provider (anything other than the local openai-compat localhost / ollama default), it is used ONLY if egress.isAllowed('cloud-inference') (src/medical/egress.ts:35) is true; otherwise the resolver FAILS CLOSED — it falls back to the local default (openai-compat http://localhost:11434/v1, llama3) so no cloud egress occurs. Absent any inference config, it returns the current local default unchanged (back-compat). (3) Wire engine.ts grounded branch to obtain its LLMClient+model from buildMedicalInferenceClient(config, egress) instead of the hardcoded createClient at engine.ts:402, passing the resolved model through synthesizeGrounded to the critic. (4) Extend AuditEntry (src/medical/types.ts:77-87) with optional `criticVerdict?: 'approve' | 'reject-abstained' | 'error-abstained'` (IDs/enums only) and append it on the grounded path: approve when the gate returned an approved answer, reject-abstained when the gate abstained after a critic reject, error-abstained when it abstained due to a thrown error. No prompt text or health values; AuditLog 0600 mode preserved.",
+  "status": "completed",
+  "completedAt": "2026-06-18T16:55:30Z",
+  "dependsOn": ["sprint-spec-20260618-medical-grounding-critic-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "The full test suite passes with zero failures including new collocated src/medical/inference.test.ts and updated engine/audit tests (npm run test); no regression in the pre-existing suite.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "Given config.medical.inference specifying a cloud provider but medical.egress.cloudInference=false (default), buildMedicalInferenceClient returns the LOCAL default client (no cloud) — asserted by inspecting the resolved provider/endpoint and by a spy that fails if a cloud client is constructed/called.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "Given config.medical.inference specifying a cloud provider AND medical.egress.cloudInference=true, buildMedicalInferenceClient returns a client/model built from that cloud config (proving the 'any model' capability is reachable behind the opt-in) — asserted via the resolved provider/model and an injected factory spy.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "With NO config.medical.inference set, buildMedicalInferenceClient returns the exact current local default (openai-compat http://localhost:11434/v1, model llama3); a back-compat test asserts the grounded path behaves identically to Sprint 2.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "After a grounded turn, the audit-<date>.jsonl entry carries exactly one criticVerdict value in {approve, reject-abstained, error-abstained} matching the gate outcome, alongside the existing event:'answer'|'abstain'; the line contains NO substring of the prompt or answer body and NO health value.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "The audit file remains mode 0600 after appending the criticVerdict (stat assertion), and AuditEntry stays IDs/enums-only — criticVerdict is one of the three enum literals, never free text.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "Zero outbound egress unless cloud-inference is enabled: with cloudInference=false and a network spy that throws on use, the grounded turn completes without invoking it; the scoped medical ESLint boundary still passes (npm run lint) and no new disallowed network import is added outside the providers factory seam.",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add a new egress axis — reuse cloud-inference (src/medical/egress.ts:5,35).",
+    "Do not change synthesizeGrounded's gate logic or the one-re-synthesis bound (Sprint 2).",
+    "Do not add cloud fallback chains, streaming, or caching.",
+    "Do not log prompt text, answer body, citations, or any health value into the audit entry — criticVerdict is an enum only.",
+    "Do not change the MedicalSopEngine.run signature or the zero-arg constructor; resolver is built from the config already passed to run()."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Synthesis/critic model is configurable with cloud strictly gated by cloud-inference (fail-closed to local), back-compat is byte-identical with no config, the criticVerdict enum is audited IDs/enums-only at 0600, and build/typecheck/test/lint are green with no regression"
+  ],
+  "definitionOfDone": "src/config/schema.ts MedicalSectionSchema gains an optional inference:{provider?,endpoint?,model?} block. src/medical/inference.ts exports buildMedicalInferenceClient(config, egress):{client,model} — cloud only when cloudInference=true else fail-closed local default; identical local default when unset. src/medical/engine.ts grounded branch resolves its client+model via buildMedicalInferenceClient and threads the model into synthesizeGrounded. src/medical/types.ts AuditEntry gains optional criticVerdict enum; engine appends it on the grounded path. Collocated tests cover cloud-gated-off (local fallback), cloud-gated-on (cloud used), no-config back-compat, audit verdict value + PHI-free + 0600, and zero-egress-when-disabled. Build, typecheck, test, lint pass with no regression.",
+  "assumptions": [
+    "EgressGuard already exposes isAllowed('cloud-inference') and is built from config via EgressGuard.fromConfig(config) (src/medical/egress.ts:25-48); the engine builds it at engine.ts:384 and can pass it to the resolver.",
+    "The providers factory createClient(provider, endpoint, apiKey?, model?) (src/providers/factory.ts, used at engine.ts:402) is the single client-construction seam; buildMedicalInferenceClient uses it and is the only place that decides local-vs-cloud.",
+    "'Local default' = provider 'openai-compat', endpoint 'http://localhost:11434/v1', model 'llama3' (engine.ts:402) — treated as non-egressing; any other provider/endpoint is treated as cloud and gated.",
+    "AuditEntry criticVerdict is optional and additive; existing entries without it remain valid (the field is only populated on the grounded answer/abstain path).",
+    "The criticVerdict value is derived from the gate result the engine already has: approved answer -> 'approve'; abstained-after-reject -> 'reject-abstained'; abstained-after-throw -> 'error-abstained'. Sprint 2's synthesizeGrounded must surface enough signal (return the verdict alongside the answer, or an enum) for the engine to classify — extend its return type if needed without changing its gate behavior."
+  ],
+  "outOfScope": [
+    "New egress axes",
+    "Cloud fallback chains / streaming / caching",
+    "Any change to upstream gates or numerics"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Read FIRST: src/config/schema.ts:374-421 (MedicalSectionSchema + egress block; add the inference block as a sibling of egress, all-optional zod); src/medical/egress.ts (EgressGuard.fromConfig at :25, isAllowed at :35); src/providers/factory.ts (createClient signature + how validateApiKey behaves for cloud providers — used at fleet index.js:26); src/medical/engine.ts:383-428 (where egress is built at :384 and the client is constructed at :402, and where auditLog.append fires at :417); src/medical/retrieval/literature.ts synthesizeGrounded (Sprint 2 — you may need to widen its return to carry the verdict classification); src/medical/types.ts:64-87 (AuditEvent + AuditEntry — add the optional criticVerdict field).\n\nschema.ts: add to MedicalSectionSchema `inference: z.object({ provider: z.string().optional(), endpoint: z.string().optional(), model: z.string().optional() }).optional()`. Keep egress untouched.\n\nsrc/medical/inference.ts (new): export function buildMedicalInferenceClient(config: BoberConfig, egress: EgressGuard): { client: LLMClient; model: string }. Logic: const inf = config.medical?.inference; const LOCAL = { provider:'openai-compat', endpoint:'http://localhost:11434/v1', model:'llama3' }; const wantProvider = inf?.provider ?? LOCAL.provider; const isLocal = wantProvider === 'openai-compat' && (inf?.endpoint ?? LOCAL.endpoint).includes('localhost'); if (!isLocal && !egress.isAllowed('cloud-inference')) { /* FAIL-CLOSED */ return { client: createClient(LOCAL.provider, LOCAL.endpoint, undefined, LOCAL.model), model: LOCAL.model }; } const provider = inf?.provider ?? LOCAL.provider; const endpoint = inf?.endpoint ?? LOCAL.endpoint; const model = inf?.model ?? LOCAL.model; return { client: createClient(provider, endpoint, undefined, model), model }; Add a tiny seam (e.g. an optional injected factory param defaulting to createClient) so tests can spy without real network. Unicode section headers; import type for LLMClient/BoberConfig/EgressGuard.\n\nengine.ts: replace the hardcoded `const llmClient = this.deps?.llmClient ?? createClient('openai-compat', ...)` at :402 with `const { client: llmClient, model: synthModel } = this.deps?.llmClient ? { client: this.deps.llmClient, model: 'llama3' } : buildMedicalInferenceClient(config, egress);` (keep deps.llmClient injection winning for tests). Thread synthModel into synthesizeGrounded so the critic uses the same model. At the audit append (:417) add criticVerdict derived from the gate outcome — extend synthesizeGrounded (Sprint 2) to return e.g. { answer, verdict: 'approve'|'reject-abstained'|'error-abstained' } and pass verdict into auditLog.append alongside event.\n\ntypes.ts: add `criticVerdict?: 'approve' | 'reject-abstained' | 'error-abstained';` to AuditEntry with a doc comment 'IDs/enums only — never text'.\n\nTests: inference.test.ts (cloud-off->local fallback; cloud-on->cloud client via factory spy; no-config->exact local default; assert the factory spy is NEVER called with a cloud provider when cloudInference=false). engine.test.ts / audit additions: run a grounded turn and read the jsonl, assert criticVerdict is the right enum, assert the line has no prompt/answer substring, stat 0600. Keep all Sprint-2 zero-LLM and gate tests green.",
+  "evaluatorNotes": "sc-3-3: config.medical.inference.provider='anthropic' (or any non-local) with egress cloudInference=false -> assert buildMedicalInferenceClient resolves provider 'openai-compat' + localhost endpoint, and the injected factory spy is never called with a cloud provider. sc-3-4: same inference but cloudInference=true -> assert the factory spy IS called with provider 'anthropic' and the configured model, and the resolved model is threaded. sc-3-5: no inference block -> assert resolved {provider:'openai-compat', endpoint includes localhost, model:'llama3'} and a grounded turn matches Sprint-2 behavior. sc-3-6/sc-3-7: run grounded approve / reject->reject / throw turns; for each read audit-<date>.jsonl, assert exactly one criticVerdict in {approve,reject-abstained,error-abstained} matching the outcome, assert NO prompt or answer substring and no numeric health value in the line, and fs.stat the file mode === 0o600. sc-3-8: with cloudInference=false and a node-level network spy (e.g. patched fetch/createClient) that throws on cloud use, assert the grounded turn completes; npm run lint clean; grep the diff for disallowed network imports outside providers/. Build+typecheck clean; FULL suite no regression (fleet + all medical).",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/medical/inference.ts",
+    "src/medical/inference.test.ts",
+    "src/medical/types.ts",
+    "src/medical/engine.ts",
+    "src/medical/engine.test.ts",
+    "src/medical/retrieval/literature.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T16:00:00Z",
+  "updatedAt": "2026-06-18T16:00:00Z"
+}
