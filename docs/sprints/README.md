@@ -2220,3 +2220,18 @@ version/name/bin/deps/scripts unchanged.
 | 2 | [sprint-spec-20260714-docs-metadata-0-18-refresh-2.md](./sprint-spec-20260714-docs-metadata-0-18-refresh-2.md) | **Synced the README quick-reference + refreshed npm metadata.** Added a "Fleet orchestrator" README block (`fleet <manifest>`, `fleet expand <goal>`, `fleet expand-deep <goal>`) and a "Config, telemetry & introspection" block (`config`/`telemetry`/`worktree`/`memory`/`facts`), each a one-liner deferring to `COMMANDS.md` (matching the README's existing pattern; no entry removed or reordered). Extended `package.json`'s `description` to name the security-audit gate, fleet orchestrator, and knowledge platform, and added `security-audit`/`fleet`/`incident-response`/`knowledge-platform` to `keywords` (14 → 18). Version stayed `0.18.0`; name/bin/deps/peerDeps/scripts byte-identical. `README.md` + `package.json` only; passed **iteration 1**. |
 
 Full user-facing usage lives in [`COMMANDS.md`](../../COMMANDS.md); this spec's job was to make that reference complete and keep the README/`package.json` in step with it.
+
+## Ultimate SEO Agent + Skill Suite — in progress (1 of 14)
+
+`spec-20260715-ultimate-seo-suite` — the ultimate SEO agent + per-workflow skill suite
+(arch-20260715-ultimate-seo-agents-skills). A new `src/seo/` capability, entirely **opt-in and
+default-off**: the offline `LocalExportSource` path needs no network, and two independent live-data
+egress axes (`search-console` for Google Search Console, `serp-provider` for DataForSEO) each default
+`false`, so a config that omits the `seo` section is provably byte-identical to before. Sprint 1 lays
+the typed spine — the optional `seo` Zod config section, the `src/seo/` core types, and the
+`SeoEgressGuard` — with no parser, adapters, CLI, hub emitter, network client, or skill content yet.
+
+| # | Record | What it added |
+|---|--------|---------------|
+| 1 | [sprint-spec-20260715-ultimate-seo-suite-1.md](./sprint-spec-20260715-ultimate-seo-suite-1.md) | **Typed foundation — config axis + core SEO types + egress guard (byte-identical-when-off).** New optional `seo` section on `BoberConfigSchema` (`SeoConfigSchema`, `schema.ts:668`): two independent egress axes `search-console`/`serp-provider` (each `default false`), opt-in downgrade-only `verifier.enabled` (`default false`), optional `budget` (reuses `BudgetSectionSchema`; null/absent = uncapped), optional `defaultTarget`, and `blockThreshold` (`'never'\|'any-uncited'\|'critical-uncited'`, default `'critical-uncited'`) — `.optional()` with **no outer default**, so omitting `seo` leaks no defaults (golden-snapshot deep-equal test proves byte-identity). New `src/seo/types.ts` (pure `type`, zero imports): the 8-member `SeoWorkflow` union, three-arm `DataOutcome<T>` (`disabled`/`abstain`/`data`), `DataProvenance` (`local-export`/`gsc`/`dataforseo` + optional `costUsd`), `SeoSignature`, `SeoFinding` (`severity` a plain `1..5` union — **no `hub/finding.ts` import** until the later hub-emitter sprint), `SeoReport`, `SeoQuotaLedger`. New `SeoEgressGuard` (`src/seo/egress.ts`, mirrors `medical/egress.ts`): `fromConfig` reads `config.seo?.egress?.[axis] ?? false`, `isAllowed(axis)` returns the boolean, `assertAllowed(axis)` **throws** when the axis is off — the hard code-enforced barrier every future network adapter must clear (ADR-5). Axes are independent (opting one never opts the other). No parser/adapters/CLI/hub/network/skill content yet (later sprints). Passed **iteration 1**; suite **4300 passed \| 1 skipped \| 0 failed**. |
+
