@@ -18,3 +18,8 @@ export type {
 
 export { SeoEgressGuard } from "./egress.js";
 export type { SeoEgressAxis } from "./egress.js";
+
+export { SeoPlaybookParser } from "./parser.js";
+export { SeoPlaybookIndex } from "./playbook-index.js";
+export { SeoPlaybookRetriever } from "./retriever.js";
+export type { SeoRetrieveInput, SeoRetrieveResult } from "./retriever.js";
