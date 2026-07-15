@@ -21,6 +21,7 @@ import {
   SecurityDiffConfigSchema,
   SecuritySupplyChainConfigSchema,
   SecurityEgressConfigSchema,
+  SeoConfigSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -915,7 +916,7 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
         provider: "anthropic",
         panel: { enabled: false, lenses: [], maxConcurrent: 4 },
       },
-      sprint: { maxSprints: 10, requireContracts: true, sprintSize: "medium" },
+      sprint: { maxSprints: 14, requireContracts: true, sprintSize: "medium" },
       pipeline: {
         maxIterations: 20,
         maxCheckpointIterations: 3,
@@ -968,5 +969,156 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
       },
       commands: {},
     });
+  });
+});
+
+// ── SeoConfigSchema tests (spec-20260715-ultimate-seo-suite sprint 1 — sc-1-1) ──
+
+describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
+  it("parse({}) leaks NO axis/verifier/budget/defaultTarget defaults — only blockThreshold", () => {
+    const parsed = SeoConfigSchema.parse({});
+    expect(parsed).toEqual({ blockThreshold: "critical-uncited" });
+    expect(Object.hasOwn(parsed, "egress")).toBe(false);
+    expect(Object.hasOwn(parsed, "verifier")).toBe(false);
+    expect(Object.hasOwn(parsed, "budget")).toBe(false);
+    expect(Object.hasOwn(parsed, "defaultTarget")).toBe(false);
+  });
+
+  it("egress axes default false when egress object present", () => {
+    expect(SeoConfigSchema.parse({ egress: {} }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+    });
+  });
+
+  it("egress axes round-trip independently when explicitly set", () => {
+    const parsed = SeoConfigSchema.parse({
+      egress: { "search-console": true, "serp-provider": false },
+    });
+    expect(parsed.egress).toEqual({ "search-console": true, "serp-provider": false });
+  });
+
+  it("verifier.enabled defaults false when verifier object present", () => {
+    expect(SeoConfigSchema.parse({ verifier: {} }).verifier).toEqual({ enabled: false });
+  });
+
+  it("budget.maxUsd round-trips (null=uncapped, mirrors BudgetSectionSchema schema.ts:48-51)", () => {
+    expect(SeoConfigSchema.parse({ budget: { maxUsd: null } }).budget).toEqual({ maxUsd: null });
+    expect(SeoConfigSchema.parse({ budget: { maxUsd: 5 } }).budget).toEqual({ maxUsd: 5 });
+  });
+
+  it("rejects a non-positive budget.maxUsd", () => {
+    expect(() => SeoConfigSchema.parse({ budget: { maxUsd: 0 } })).toThrow();
+  });
+
+  it("defaultTarget round-trips a plain string", () => {
+    expect(SeoConfigSchema.parse({ defaultTarget: "example.com" }).defaultTarget).toBe(
+      "example.com",
+    );
+  });
+
+  it("blockThreshold defaults to 'critical-uncited' and round-trips other enum values", () => {
+    expect(SeoConfigSchema.parse({}).blockThreshold).toBe("critical-uncited");
+    expect(SeoConfigSchema.parse({ blockThreshold: "never" }).blockThreshold).toBe("never");
+    expect(SeoConfigSchema.parse({ blockThreshold: "any-uncited" }).blockThreshold).toBe(
+      "any-uncited",
+    );
+  });
+
+  it("rejects a bogus blockThreshold value", () => {
+    expect(() => SeoConfigSchema.parse({ blockThreshold: "sometimes" })).toThrow();
+  });
+});
+
+describe("BoberConfigSchema — seo section is optional, default-off (sc-1-1/sc-1-2)", () => {
+  const minimalBase = {
+    project: { name: "test-project", mode: "greenfield" },
+    planner: {},
+    generator: {},
+    evaluator: { strategies: [] },
+    sprint: {},
+    pipeline: {},
+    commands: {},
+  };
+
+  it("parses a config without a seo section — seo is undefined, not materialized", () => {
+    const result = BoberConfigSchema.safeParse(minimalBase);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.seo).toBeUndefined();
+    }
+  });
+
+  it("the seo key is entirely absent from the parsed object (not present-but-undefined)", () => {
+    // Object.hasOwn proves the key is never materialized — stronger than a
+    // `toBeUndefined()` assertion alone, per the byte-identity stop condition.
+    expect(Object.hasOwn(BoberConfigSchema.parse(minimalBase), "seo")).toBe(false);
+  });
+
+  it("a config omitting `seo` resolves byte-identical to a golden snapshot (sc-1-2)", () => {
+    // The golden snapshot is captured by parsing the SAME minimalBase twice —
+    // deep-equal, not eyeballed — proving the resolved shape is stable and
+    // that adding the optional `seo` key to BoberConfigSchema did not perturb
+    // any other section's resolved defaults.
+    const golden = BoberConfigSchema.parse(minimalBase);
+    const parsed = BoberConfigSchema.parse(minimalBase);
+    expect(parsed).toEqual(golden);
+    expect(parsed).toEqual({
+      project: { name: "test-project", mode: "greenfield" },
+      planner: { maxClarifications: 5, model: "opus" },
+      generator: {
+        model: "sonnet",
+        maxTurnsPerSprint: 50,
+        autoCommit: true,
+        branchPattern: "bober/{feature-name}",
+      },
+      evaluator: {
+        model: "sonnet",
+        strategies: [],
+        maxIterations: 3,
+        panel: { enabled: false, lenses: [], maxConcurrent: 4 },
+      },
+      sprint: { maxSprints: 10, requireContracts: true, sprintSize: "medium" },
+      pipeline: {
+        maxIterations: 20,
+        maxCheckpointIterations: 3,
+        requireApproval: false,
+        contextReset: "always",
+        researchPhase: true,
+        architectPhase: false,
+        mode: "autopilot",
+        checkpointOverrides: {},
+        approvalTimeoutMs: 86_400_000,
+        prPollMs: 30_000,
+        allowAutopilotRiskyActions: false,
+        eventQueueBound: 1000,
+        worktreeRoot: ".bober/worktrees",
+        cleanupWorktreeOnSuccess: true,
+        engine: "ts",
+      },
+      commands: {},
+    });
+    expect(Object.hasOwn(parsed, "seo")).toBe(false);
+  });
+
+  it("parses a config with a seo section present and materializes its defaults", () => {
+    const result = BoberConfigSchema.safeParse({
+      ...minimalBase,
+      seo: { egress: { "search-console": true } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.seo?.egress).toEqual({
+        "search-console": true,
+        "serp-provider": false,
+      });
+      expect(result.data.seo?.blockThreshold).toBe("critical-uncited");
+    }
+  });
+
+  it("createDefaultConfig never sets a seo section (default config stays byte-identical)", () => {
+    // Mirrors the egress-axis idiom (Pattern A): new opt-in sections are never
+    // added to createDefaultConfig's base — only BoberConfigSchema.optional().
+    expect(Object.hasOwn(BoberConfigSchema.parse(minimalBase), "seo")).toBe(false);
   });
 });

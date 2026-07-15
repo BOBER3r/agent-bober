@@ -654,6 +654,50 @@ export const ToolsSectionSchema = z.object({
 });
 export type ToolsSection = z.infer<typeof ToolsSectionSchema>;
 
+// ── SEO Section (Sprint 1 — ultimate-seo-suite; two egress axes default off) ──
+
+/**
+ * Configuration for the bober-seo capability (spec-20260715). Opt-in and
+ * default-off: the two live-data egress axes (`search-console`,
+ * `serp-provider`) each default false, and the whole `seo` section is wired
+ * `.optional()` on BoberConfigSchema with no top-level default, so a config
+ * that omits `seo` entirely stays byte-identical (no defaults leak in) —
+ * mirrors the security-section idiom (schema.ts:246-296) and the medical
+ * nested-egress idiom (schema.ts:525-536).
+ */
+export const SeoConfigSchema = z.object({
+  /**
+   * Two live-data egress axes (search-console, serp-provider). Both default
+   * false — the offline LocalExportSource path needs neither. OPTIONAL with
+   * no outer default — a config that omits `egress` entirely stays
+   * byte-identical, same guarantee as `security.egress` (schema.ts:280).
+   */
+  egress: z
+    .object({
+      /** When true, Google Search Console API egress is permitted. Default false. */
+      "search-console": z.boolean().default(false),
+      /** When true, DataForSEO SERP/keywords/backlinks egress is permitted. Default false. */
+      "serp-provider": z.boolean().default(false),
+    })
+    .optional(),
+  /**
+   * Opt-in adversarial downgrade-only verifier stage (mirrors
+   * `security.verifier`, schema.ts:289-295). OPTIONAL with no outer
+   * default — omitting `verifier` entirely stays byte-identical.
+   */
+  verifier: z.object({ enabled: z.boolean().default(false) }).optional(),
+  /**
+   * Per-run USD spend ceiling for PAYG DataForSEO calls. Reuses
+   * `BudgetSectionSchema` (schema.ts:48-51) verbatim; null/absent = uncapped.
+   */
+  budget: BudgetSectionSchema.optional(),
+  /** Default domain/URL/local path used when the CLI omits [target]. */
+  defaultTarget: z.string().optional(),
+  /** Citation-gate blocking threshold for the CI exit code. Default 'critical-uncited'. */
+  blockThreshold: z.enum(["never", "any-uncited", "critical-uncited"]).default("critical-uncited"),
+});
+export type SeoConfig = z.infer<typeof SeoConfigSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -699,6 +743,8 @@ export const BoberConfigSchema = z.object({
   tools: ToolsSectionSchema.optional(),
   // ── Security audit gate (opt-in, default-off) ──
   security: SecuritySectionSchema.optional(),
+  // ── Sprint 1 (ultimate-seo-suite): SEO capability, default-off egress axes ──
+  seo: SeoConfigSchema.optional(),
 });
 export type BoberConfig = z.infer<typeof BoberConfigSchema>;
 
