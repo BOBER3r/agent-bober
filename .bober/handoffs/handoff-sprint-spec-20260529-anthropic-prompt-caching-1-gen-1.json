@@ -1,0 +1,50 @@
+{
+  "handoffId": "handoff-sprint-spec-20260529-anthropic-prompt-caching-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "specId": "spec-20260529-anthropic-prompt-caching",
+  "timestamp": "2026-05-29T13:48:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober is a multi-agent sprint harness (TypeScript, ESM, strict TS). All LLM calls go through provider adapters behind providers/types.ts. This sprint adds Anthropic prompt caching (cache_control breakpoints) to the AnthropicAdapter, gated by a providerConfig.promptCaching flag that defaults ON for Anthropic and is a no-op for other providers. It is borrow #1 from a study of nousresearch/hermes-agent (agent/prompt_caching.py 'system_and_3').",
+    "completedSprints": [],
+    "currentBranch": "bober/anthropic-prompt-caching",
+    "relevantFiles": [
+      "src/providers/anthropic.ts — the adapter to modify (constructor ~line 133, chat() ~line 140)",
+      "src/providers/factory.ts — anthropic case (~lines 159-161) resolves promptCaching from providerConfig and passes it to the adapter",
+      "src/providers/types.ts — LLMClient / ChatParams / Message shapes (do NOT add cache fields to ChatResponse.usage this sprint)",
+      "src/providers/openai.ts — reference for how an adapter already receives providerConfig from the factory",
+      "src/providers/openai.test.ts and src/providers/google.test.ts — reference vitest patterns for a new src/providers/anthropic.test.ts",
+      "src/config/schema.ts — per-role providerConfig is z.record(z.string(), z.unknown()); promptCaching is a free-form key, NO migration needed"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260529-anthropic-prompt-caching-1.json",
+  "specPath": ".bober/specs/spec-20260529-anthropic-prompt-caching.json",
+  "config": {
+    "commands": {
+      "install": "npm install",
+      "build": "npm run build",
+      "test": "npm run test",
+      "lint": "npm run lint",
+      "typecheck": "npm run typecheck",
+      "dev": "npm run dev"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principlesPath": ".bober/principles.md",
+  "keyPrinciples": [
+    "ESM everywhere: all relative imports use .js extensions (NodeNext). The new test file imports './anthropic.js', './factory.js', etc.",
+    "No SDK lock-in: @anthropic-ai/sdk may ONLY be imported inside src/providers/anthropic.ts (and its test). Never leak Anthropic SDK types outside the adapter.",
+    "consistent-type-imports: import types with `import type { ... }`.",
+    "Prefix unused params with `_`; aim for zero `any` (use unknown + narrowing).",
+    "Vitest tests collocated as *.test.ts next to source. Mocking the @anthropic-ai/sdk module (vi.mock) is appropriate here — the 'no filesystem mocks' principle is about fs, not the LLM SDK.",
+    "Conventional commit: bober(sprint-1): <description>."
+  ],
+  "evaluatorFeedback": null
+}

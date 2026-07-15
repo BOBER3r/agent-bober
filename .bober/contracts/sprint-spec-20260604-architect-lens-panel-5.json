@@ -1,0 +1,49 @@
+{
+  "contractId": "sprint-spec-20260604-architect-lens-panel-5",
+  "specId": "spec-20260604-architect-lens-panel",
+  "sprintNumber": 5,
+  "title": "Wire native architect CP2+CP5, copy reference, regenerate command, extend drift gate",
+  "description": "Add gated, additive panel branches to the native architect skill's Checkpoint 2 and Checkpoint 5 spawn steps, copy the canonical arch-lens reference into the skill's references/, regenerate the inlined .claude/commands/bober-architect.md, and extend the drift gate to cover the reference copy and command recomputation. Off by default => the existing single-checkpoint architect flow, byte-identical.",
+  "status": "completed",
+  "completedAt": "2026-06-04T09:14:25Z",
+  "dependsOn": ["sprint-spec-20260604-architect-lens-panel-1", "sprint-spec-20260604-architect-lens-panel-4"],
+  "features": ["feat-5"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "skills/bober.architect/SKILL.md CP2 (approach selection) and CP5 (review/final assembly) spawn steps each gain an ADDITIVE GATED branch: when config.architect.panel.enabled is true AND panel.lenses.length >= 2 -> run the panel flow per the inlined arch-lens reference (CP2: spawn one MODE:lens-score:<name> subagent per lens bounded by maxConcurrent, then synthesize ranked winner; CP5: spawn one MODE:lens-review:<name> per lens, then reconcile pass/fail fail-closed); OTHERWISE -> run today's single-checkpoint subagent. The existing single-subagent spawn prose is the untouched else-path.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C2", "description": "skills/shared/arch-lens-panel.md is copied byte-identically to skills/bober.architect/references/arch-lens-panel.md.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C3", "description": ".claude/commands/bober-architect.md is regenerated using the EXACT inlineSkill format (SKILL.md content, then for each references/*.md in SORTED filename order: '\\n\\n---\\n\\n<!-- Reference: <file> -->\\n\\n<content>'), so it includes the inlined arch-lens-panel.md reference block and the CP2/CP5 panel branches.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "Off-by-default: with the panel disabled, the regenerated command drives the existing single-checkpoint architect flow. Verified by git diff showing the CP2/CP5 panel branches are additive and gated and the prior single-subagent spawn prose is intact.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C5", "description": "The drift gate (arch-lens-panel-parity.test.ts) is extended to assert (a) skills/bober.architect/references/arch-lens-panel.md is byte-identical to skills/shared/arch-lens-panel.md, AND (b) .claude/commands/bober-architect.md equals its recomputed inline (SKILL.md + sorted references in the inlineSkill format). npx tsc --noEmit, npm run build, npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented pre-existing skipped baseline.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT change the TS architect-agent.ts (sprints 2-3 own it) or the reducer/lens modules.",
+    "Do NOT change reconcile()/synthesize() semantics.",
+    "Do NOT modify scripts/update-all.mjs or src/cli/commands/init.ts inlining logic.",
+    "Do NOT hand-edit the generated .claude/commands/bober-architect.md as the source of truth — regenerate it from SKILL.md + references.",
+    "Do NOT wire any command other than bober-architect."
+  ],
+  "stopConditions": [
+    "Stop when CP2+CP5 have gated additive panel branches, the canonical reference is copied into the skill's references/, .claude/commands/bober-architect.md is regenerated with no recomputation drift, the drift gate covers the copy + the command, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to skills/bober.architect/SKILL.md, skills/bober.architect/references/arch-lens-panel.md, .claude/commands/bober-architect.md, and the drift-gate test."
+  ],
+  "definitionOfDone": "The native architect skill's CP2 and CP5 spawn steps gain gated, additive panel branches (CP2 synthesize ranking; CP5 reconcile fail-closed) with the off path driving the existing single-checkpoint flow byte-identically; the canonical arch-lens reference is copied into the skill's references/ and inlined into the regenerated command; the drift gate proves the reference copy matches the canonical and the command equals its recomputed inline; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "skills/bober.architect/SKILL.md has discrete CP2 (Step 6 — Approach Selection) and CP5 (Final Assembly) spawn steps to wrap with the gated branch; the existing single-subagent spawn prose becomes the else-path, untouched.",
+    "scripts/update-all.mjs:inlineSkill defines the canonical inline format (SKILL.md content, then for each '.md' ref in sorted filename order: '\\n\\n---\\n\\n<!-- Reference: <file> -->\\n\\n<content>'); the regenerated command must match it byte-for-byte.",
+    "The authoritative regeneration gate is the in-repo vitest recomputation (mirroring the native lens-panel sprint), NOT `npm run update-all:check` (which targets external sync projects and shows pre-existing drift).",
+    "After adding arch-lens-panel.md, the sorted reference order for bober.architect determines the inlined concatenation order — the generator must regenerate in that order."
+  ],
+  "outOfScope": ["TS architect changes", "reducer/lens semantics", "update-all.mjs logic", "other commands"],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read skills/shared/arch-lens-panel.md (the protocol to reference), skills/bober.architect/SKILL.md (locate the CP2 'Approach Selection' spawn step ~Step 6 and the CP5 'Final Assembly' spawn step), scripts/update-all.mjs (inlineSkill format), and src/orchestrator/arch-lens-panel-parity.test.ts (extend it). Also read the just-merged native lens-panel wiring (skills/bober.run/SKILL.md panel branch + src/orchestrator/lens-panel-parity.test.ts recomputeCommand helper) as the pattern to mirror. STEP 1 (wire CP2): at the CP2 spawn step in skills/bober.architect/SKILL.md, insert an additive gated branch: 'Read config.architect.panel. If panel.enabled AND panel.lenses.length >= 2 -> PANEL flow (see inlined Lens Panel reference): first spawn a generate-approaches subagent (2-3 approaches); then spawn one bober-architect subagent per lens in MODE:lens-score:<name> (bounded by panel.maxConcurrent) scoring the approaches; synthesize the ranked winner (per the reference) and proceed with it. Else -> spawn exactly one bober-architect CP2 subagent as below.' STEP 2 (wire CP5): at the CP5 spawn step, insert: 'If panel.enabled AND lenses>=2 -> spawn one bober-architect subagent per lens in MODE:lens-review:<name> (bounded by maxConcurrent) returning PASS/FAIL; reconcile (majority, fail-closed on tie) into the review verdict and record it in the assembly. Else -> today's single review subagent.' Leave the existing single-subagent prose as the else-body in both. STEP 3 (copy reference): copy skills/shared/arch-lens-panel.md verbatim to skills/bober.architect/references/arch-lens-panel.md. STEP 4 (regenerate command): regenerate .claude/commands/bober-architect.md from SKILL.md + sorted references via the EXACT inlineSkill format (do NOT rely on update-all:check). STEP 5 (extend drift gate): in src/orchestrator/arch-lens-panel-parity.test.ts add (a) skills/bober.architect/references/arch-lens-panel.md === skills/shared/arch-lens-panel.md; and (b) recompute .claude/commands/bober-architect.md (read SKILL.md, readdir references, sort, keep .md, concat in inlineSkill format) and assert byte-equality with the committed command. Mirror the lens-panel-parity recomputeCommand helper exactly. Conventional commit: bober(sprint-5): wire native architect CP2+CP5 panel + reference copy + regenerate command. GIT HYGIENE: stage only your files with explicit paths; never `git add -A`. Branch: the feature branch — never main.",
+  "evaluatorNotes": "For skills/bober.architect/SKILL.md: confirm BOTH the CP2 and CP5 spawn steps have additive, clearly gated panel branches (CP2 -> generate approaches + per-lens MODE:lens-score fan-out + synthesize ranked winner; CP5 -> per-lens MODE:lens-review fan-out + reconcile fail-closed), with the existing single-subagent prose intact as the else-path (git diff additive-only). Confirm skills/bober.architect/references/arch-lens-panel.md equals skills/shared/arch-lens-panel.md (diff directly). Do NOT use `npm run update-all:check` as a pass gate (it targets external projects and shows pre-existing drift) — the authoritative gate is the in-repo recomputation test. Confirm .claude/commands/bober-architect.md contains the inlined '<!-- Reference: arch-lens-panel.md -->' block and the CP2/CP5 panel branches, and run the extended arch-lens-panel-parity.test.ts: confirm the reference-copy equality and the command-recomputation byte-equality assertions are green. Confirm no changes leaked into the TS architect-agent.ts, arch-lenses.ts, synthesizer.ts, reconciler.ts, or update-all.mjs. Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the pre-existing skipped baseline).",
+  "estimatedFiles": [
+    "skills/bober.architect/SKILL.md",
+    "skills/bober.architect/references/arch-lens-panel.md",
+    ".claude/commands/bober-architect.md",
+    "src/orchestrator/arch-lens-panel-parity.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "createdAt": "2026-06-04T06:30:00Z",
+  "updatedAt": "2026-06-04T06:30:00Z"
+}

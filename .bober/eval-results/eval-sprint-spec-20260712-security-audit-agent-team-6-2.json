@@ -1,0 +1,78 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-6-2",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T13:21:11.000Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "313 files / 4045 tests green incl. 2 new regression tests + evaluator's own independent repro (temp vitest file, deleted)"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-6-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "iteration-2 verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-6-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "iteration-2 verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-6-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "iteration-2 verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-6-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "iteration-2 verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-6-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "iteration-2 verified; see evaluator transcript"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "sc-6-2 fix real and complete: full default-sink sequence guarded at both call sites; independently reproduced fs-failure now resolves with verdict/exitCode unchanged + warning logged. Scope exactly 4 permitted files. PASS."
+}

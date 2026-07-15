@@ -143,15 +143,64 @@ Finding { id, domain, title, kind: action|watch|risk|question,
 
 ---
 
+## 3b. Obsidian as storage + UI layer (locked with user 2026-06-28)
+
+Each `kb-*` repo **is an Obsidian vault** (markdown + frontmatter). The second person pulls via git, opens the folder in Obsidian, and gets search + graph + **Dataview** dashboards/tables over the data — i.e. **Obsidian is the v1 UI, nothing to build.** AI reads/writes the same files via mature **community** MCP servers (research §2: `cyanheads/obsidian-mcp-server`, Obsidian Local REST API plugin's built-in MCP, Nooscope on-device search).
+
+**Source-of-truth rule (LOCKED): the vault is canonical; FactStore (SQLite) is a derived, rebuildable index.**
+- Labs = markdown notes with structured frontmatter (`marker/value/unit/ref_range/date/status`). agent-bober parses frontmatter → SQLite for trend math / range checks / dedup; SQLite rebuildable via `bober medical reindex`. **The files ARE the data.**
+- Bitemporal history → **git history** (each correction = a commit; superseded result → `status: superseded`). Dedup/reconcile (FactStore `reconcileFact`) runs at **ingest time** (new lab note reconciles vs existing), not as store-of-record.
+- **Hard rule:** humans do NOT hand-edit lab *numbers* in Obsidian (re-import / command only) — typos must not corrupt trends. Notes/research/supplement-rationale/tasks → freely editable, markdown-canonical.
+
+**Encryption ↔ Obsidian-readability tension (accepted trade for 2-person trusted private repo):**
+- SOPS encrypts YAML/JSON *values*, NOT free-text markdown bodies; encrypted content is unreadable in Obsidian (defeats the UI). So: rely on **private repo** as primary protection; SOPS-encrypt only a small structured `profile.yaml` (identifiers); keep medical *content* (markers/notes/research) plaintext-in-private-repo so Obsidian + Dataview + AI all work. True encrypted-at-rest notes = a separate non-browsable vault (deliberate, not default).
+- **Binary attachments (scan PDFs) stay OUT of git** (don't merge, bloat history) → Syncthing or gitignored folder.
+
+**Layering:** Obsidian = desktop UI/edit; Telegram = mobile capture/approve/notify; both over the same vault. Hub `priority.md`, inbox tasks (frontmatter `status/due` → Dataview task dashboard), research notes = all browsable notes.
+
+---
+
 ## 4. Medical template — concrete end-to-end (ingest → store → analyze → chat)
 
 1. **Ingest** — `bober medical import` already does Apple Health (SAX) + WHOOP. **Add:** `bober medical import-labs <pdf>` → Claude document-block → versioned JSON (markers/SI/ranges/flags) → FactStore. Supplements: a simple markdown-frontmatter list flattened into FactStore.
-2. **Store** — FactStore (SQLite) for structured markers + meds + supplements; markdown-with-frontmatter for narrative/context. `kb-medical` repo, local-first, SOPS-encrypted values, zero-egress default (already enforced).
+2. **Store** — `kb-medical` repo **= Obsidian vault** (markdown+frontmatter is canonical; see §3b). FactStore (SQLite) is a derived/rebuildable index over the frontmatter for trend math + dedup. Local-first, private repo, zero-egress default (already enforced); only `profile.yaml` SOPS-encrypted.
 3. **Analyze** — `medical-sop` pipelineShape with its 5 code-enforced guarantees (consent fail-closed, red-flag short-circuit, deterministic numerics, abstain-unless-cited, grounding-critic gate). "What do we need / why" = grounded synthesis over the FactStore.
 4. **Chat** — `bober chat medical` (existing chat + interrupt/approve/steer) pointed at the medical team.
 5. **Share** — second person clones `kb-medical` + `agent-bober`; SOPS key handed over out-of-band; both run locally.
 
 Financial then **copies this template**: new Team config, same FactStore + SOPS + chat surface; ingest path swaps lab-PDF parsing for statement/CSV parsing (Plaid etc. — research separately, not covered here).
+
+---
+
+## 4a. Medical analysis logic (decisions locked with user 2026-06-28)
+
+**Already exists:** time-series lab store (`LabResult`/`getLabSeries`/`LabTrend`), red-flag 0-LLM short-circuit, deterministic numerics, reactive grounded-synthesis (abstain-unless-cited + grounding-critic fail-closed), MedlinePlus opt-in. The OPEN work is the proactive *intelligence layer*.
+
+**Decisions:**
+- **Reactive + proactive both.** Add a proactive **review pass** that emits Findings into the hub inbox (trigger: on-ingest and/or scheduled).
+- **Insight types:** (a) trends over time; (b) **suggest other tests worth running** (gap detection vs recommended cadence); (c) **online research on latest health findings + take notes** (egress-gated, scheduler-friendly); (d) push suggestions; (e) **"want me to dig deeper?"** prompts; (f) **cross-marker** patterns — behind the dig-deeper gate (offered, not auto-run).
+- **#4 It RECOMMENDS** (no refer-out hedging) — but every recommendation must clear a **multi-perspective fleet/judge loop** before surfacing. This is the first real job for the existing fleet multi-provider + lens-panel substrate.
+- **#5** deterministic numbers / LLM interpretation boundary = yes. **#6** personalization inputs = yes. **#7** urgency/severity = LLM-assigned.
+
+**Recommendation judge-loop (the new safety gate; built on fleet + lens-panel, each lens ideally a different model):**
+| Lens | Asks | Power |
+|---|---|---|
+| Evidence grader | backed by cited evidence? | vote |
+| Contraindication checker | conflicts w/ current meds/supplements/conditions (FactStore)? | **VETO** |
+| Conservative clinician | would a cautious doctor accept it, or overreach? | vote |
+| Optimization lens | actually useful/actionable for the stated goal? | vote |
+- Iterations: reject→regenerate up to ~3 rounds (reuse `fleet expand-deep --critique` loop pattern).
+- Accept: majority approve AND no contraindication veto.
+- **Fail-closed:** no consensus after cap → NOT surfaced as a recommendation; surfaced as "flagged for your review — panel disagreed" + dissent.
+- **Kept non-negotiable upstream:** red-flag short-circuit fires FIRST — emergencies refer out, never become a "recommendation."
+
+**Online research = egress** → needs an opt-in egress axis (reuse cloud-inference/device-connection axis pattern); pairs with the scheduler ("weekly: research my markers → notes").
+
+**Personalization profile** = `kb-medical/profile` (SOPS-encrypted): age, sex, conditions, meds/supplements (FactStore), allergies, **goals** (e.g. optimize energy/longevity/specific marker). Goals feed both the proactive pass and scoped questions ("analyze my labs *for fatigue*").
+
+**§201(h) note:** personal use = user's call; sharing recommendations with the 2nd person re-enters the legal question (policy, not engineering; doesn't block building).
+
+**Output → hub Finding:** kind=action/watch/risk, evidence=citations + panel verdict, LLM-assigned urgency/severity + confidence.
 
 ---
 

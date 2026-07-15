@@ -1,0 +1,74 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-4",
+  "specId": "spec-20260628-medical-ingest",
+  "sprintNumber": 4,
+  "title": "Supplements markdown-frontmatter list -> FactStore + supplements CLI",
+  "description": "Add a markdown-frontmatter supplements list flattened into FactStore via reconcile (dedup-aware), plus `bober medical supplements add|list` subcommands. add reconciles a supplement (name + dose) into FactStore under the medical scope; list reads the supplements markdown-frontmatter file and prints each entry. Re-adding the same supplement+dose is a NOOP.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-ingest-3"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "Running `npm run build` (tsc) compiles src/medical/supplements.ts and the extended medical CLI with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A vitest asserts runSupplementAdd reconciles a supplement into FactStore (scope medical, subject = supplement name, predicate carrying dose) via writeFact, and getActiveFacts returns the new fact.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A vitest asserts re-running runSupplementAdd with the same supplement and dose is a NOOP (reconcileFact exact-match), leaving the active-fact count at exactly 1.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A vitest asserts runSupplementList parses the supplements markdown-frontmatter file and writes each supplement name and dose to stdout (captured output contains the seeded entries).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not call any LLM or open any network connection -- reconcile runs deterministically with no FactJudge here.",
+    "Do not duplicate the lab ingest path -- supplements are FactStore facts, not HealthDataStore lab_results rows.",
+    "Do not add a new top-level command -- supplements is a subcommand of the existing `medical` command tree.",
+    "Do not require any field beyond the supplement name; dose is optional and defaults to an empty/unknown marker."
+  ],
+  "stopConditions": [
+    "npm run build exits 0 and the supplements vitest suite passes.",
+    "A second runSupplementAdd with identical name+dose leaves the active-fact count at 1."
+  ],
+  "definitionOfDone": "src/medical/supplements.ts parses a markdown-frontmatter supplements file (a list of { name, dose } entries) and flattens each into a FactInput (scope 'medical', subject = name, predicate = 'dose' or similar, value = dose) reconciled into FactStore via writeFact with an injected now and no judge. `bober medical supplements add <name> [--dose <d>]` reconciles one entry; `bober medical supplements list` prints every entry from the supplements markdown file. Re-adding an identical entry is a NOOP through reconcileFact exact-match, so the active-fact count does not grow.",
+  "assumptions": [
+    "Supplements flatten into FactStore via reconcileFact/writeFact with exact-match NOOP/UPDATE dedup -- evidence: src/orchestrator/memory/reconcile.ts:51-101,148-154.",
+    "FactStore is the canonical structured store for meds/supplements (ADR-7) -- evidence: src/state/facts.ts:136 (FactStore) + memory MEMORY.md medical-team note.",
+    "Capture is zero-friction: only the supplement name is required, unknowns left null -- evidence: research-20260627-knowledge-platform-landscape.md section 3a UX rule 1 (line 129).",
+    "now is injected at the CLI boundary (no Date.now() inside the pure reconcile path) -- evidence: src/orchestrator/memory/reconcile.ts:49-55."
+  ],
+  "outOfScope": [
+    "Lab PDF ingest (Sprints 1-3).",
+    "Profile.yaml encryption (Sprint 5).",
+    "Supplement-interaction analysis / contraindication checks (sibling analysis spec)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Reuse writeFact from src/orchestrator/memory/reconcile.ts and FactStore from src/state/facts.ts. Build the FactInput with scope 'medical', subject = supplement name, predicate = 'dose', value = dose string (default a placeholder like 'unspecified' when --dose is omitted, since FactSchema requires value min(1)), confidence 1, sourceRunId null, tValid and tCreated = injected now ISO. Do NOT pass a judge (deterministic path). For the markdown-frontmatter file, reuse the same frontmatter parse helper authored in Sprint 2 (lab-note) rather than adding a new dependency. Default the supplements file path under the vault/medical dir; accept an optional --file flag. Extract runSupplementAdd/runSupplementList cores for testability and register the subcommands under the existing `medical` command tree in src/cli/commands/medical.ts. Use an in-memory or temp-file FactStore in tests.",
+  "evaluatorNotes": "Verify sc-4-3 actually inserts once then re-runs and asserts getActiveFacts(scope) length is 1 (NOOP, not a second row). Confirm no FactJudge / LLM / network is used (grep). Verify list reads from the markdown-frontmatter file and prints name+dose. Verify supplements is nested under `medical`. Verify build is green.",
+  "estimatedFiles": [
+    "src/medical/supplements.ts",
+    "src/medical/supplements.test.ts",
+    "src/cli/commands/medical.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T00:00:00Z",
+  "updatedAt": "2026-06-28T16:36:23Z",
+  "completedAt": "2026-06-28T16:36:23Z"
+}

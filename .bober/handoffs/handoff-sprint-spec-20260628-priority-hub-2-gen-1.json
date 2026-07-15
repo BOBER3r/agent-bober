@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-priority-hub-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-priority-hub-2",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-28T23:25:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober priority-hub spec. Sprint 2 adds: an additive { readonly?: boolean } open flag to FactStore (the ONLY permitted edit to an existing core file; default path must stay byte-identical), a sibling-repo resolver (hub.repos config -> absolute paths, else discover kb-* dirs beside project root), and a cross-repo collector that opens each sibling FactStore read-only and pools their findings into one Finding[] deduplicated by id (mirroring fleet synthesis.collect). `bober hub list` is extended to aggregate across resolved siblings.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-priority-hub-1",
+        "title": "Canonical Finding schema, FactStore finding source, and bober hub list",
+        "summary": "Created src/hub/finding.ts (FindingSchema Zod + Finding type), src/hub/finding-source.ts (FindingSource interface + FactStoreFindingSource reading predicate-'finding' rows via getActiveFacts, JSON.parse+safeParse skip-on-fail, HUB_SCOPE='hub' constant), src/cli/commands/hub.ts (runHubList DI core + registerHubCommand, never-throw/process.exitCode discipline), registered in src/cli/index.ts. 21 tests."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/hub/finding-source.ts (REUSE FactStoreFindingSource + HUB_SCOPE from Sprint 1)",
+      "src/state/facts.ts (constructor ~lines 139-167 — add readonly flag here; factsDbPath ~line 77 to locate sibling stores)",
+      "src/fleet/synthesis.ts:29-39 (collect pooling pattern to mirror)",
+      "src/fleet/shared-blackboard.ts:103-105 (readAll convention)",
+      "src/cli/commands/hub.ts (extend list to aggregate across siblings — created in Sprint 1)",
+      "src/config/schema.ts (where hub.repos config would be declared if needed)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test"},
+    "generator": {"model": "sonnet", "autoCommit": true, "provider": "anthropic"}
+  },
+  "principlesRef": ".bober/principles.md (ESM .js extensions, import type, Zod, async fs, vitest collocated, conventional commits bober(sprint-N): ...)",
+  "evaluatorFeedback": null
+}

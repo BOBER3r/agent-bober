@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["2e16f19 - bober(sprint-3): coordinator rounds loop + runFleet blackboard branch"],
+  "filesChanged": [
+    { "path": "src/fleet/coordinator.ts", "action": "modified", "description": "Widened Scaffolder interface 3rd optional param; runChildRound (scaffold-once round 1, reuse absPath rounds 2+, never-reject try/catch); executeRounds (bounded loop, early-stop on readAll().length unchanged for r>1)." },
+    { "path": "src/fleet/index.ts", "action": "modified", "description": "runFleet branch: if(dbPath) ensureDir+SharedBlackboard.open+executeRounds in try/finally(close) else existing coordinator.execute; unchanged aggregate+reporter.write." },
+    { "path": "src/fleet/coordinator.test.ts", "action": "modified", "description": "executeRounds tests: sc-3-3 scaffold-once, sc-3-4 early-stop (2 rounds not 3), sc-3-5 no-blackboard single-pass, sc-3-7 failing-child-no-throw." },
+    { "path": "src/fleet/index.test.ts", "action": "modified", "description": "sc-3-5 no-blackboard (execute called/executeRounds not/no db dir) + sc-3-6 blackboard path (real coordinator, scaffold 3rd arg = abs dbPath)." }
+  ],
+  "criteriaResults": "all 8 (sc-3-1..sc-3-8) reported met",
+  "verification": {
+    "build": "exit 0", "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings)",
+    "test": "2781 passed, 3 skipped, 6 failed (all pre-known cockpit MCP); fleet 268 tests pass"
+  },
+  "notes": "No-blackboard path byte-identical (execute() once, no SharedBlackboard.open, no ensureDir, no facts.db; 5 pre-existing coordinator tests + all index tests unchanged). Scaffold-once (round===1 gate; rounds>=2 recompute absPath=resolve(rootDir,child.folder)). Early-stop (r>1 && readAll().length===prevCount; prevCount updated after break check so round 1 never stops). Never-throw via runChildRound try/catch → ChildExecution with scaffold.error. fleet-report.json from FINAL round. Scaffolder widened with OPTIONAL 3rd param (not overload) so existing fakes type-compatible."
+}

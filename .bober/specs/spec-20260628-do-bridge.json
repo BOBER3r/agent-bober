@@ -1,0 +1,231 @@
+{
+  "specId": "spec-20260628-do-bridge",
+  "version": 1,
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-29T17:21:10.994Z",
+  "title": "Do-bridge: promote a task to real work (coding -> bober run)",
+  "description": "Promote a hub Finding/task into real work. Defines the promotesTo semantics and a promotion mechanism that, after passing the existing approve gate, launches the coding/project proof path (Finding -> detached `agent-bober run` via runPipeline) through an extensible registry of domain/kind promoters, then records the run link and lifecycle outcome back on the Finding.",
+  "status": "completed",
+  "mode": "greenfield",
+  "ambiguityScore": 5,
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Promoter registry + FindingStore port + promotesTo semantics",
+      "description": "An extensible registry mapping a PromoterKey {domain, kind?} to a Promoter, a narrow FindingStore port (with a FactStore-backed adapter and an in-memory fake) so the do-bridge is testable in isolation from the sibling task-inbox/priority-hub storage, and the concrete PromotionRef shape that gives Finding.promotesTo its meaning.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: PromoterRegistry.resolve(finding) returns the most specific match (domain+kind, then domain-only) and undefined when no promoter is registered for the finding's domain.",
+        "AC2: A coding promoter converts a domain='coding'|'projects' Finding into a PromotionPlan {kind:'bober-run', task, teamId?}.",
+        "AC3: `bober do <findingId> --dry-run` prints the planned launch and mutates nothing (no Finding write, no approval marker, no spawn)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Approve-gated launch of real work",
+      "description": "`bober do <findingId>` writes a pending approval marker summarizing the plan, gates on it through the existing .bober/approvals marker mechanism (interactive prompts confirm in a TTY, external `bober approve`/`bober reject` in non-TTY, `--yes` auto-approve), and only on approval launches the coding work through an injected Launcher port whose default adapter wraps the chat RunSpawner.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: On approval the Launcher is invoked exactly once with the promoter's task and the Finding gains promotesTo {runId, status:'launched'} with status open->in-progress.",
+        "AC2: On rejection the Launcher is never invoked, the pending marker is removed, and the Finding remains at status 'open'.",
+        "AC3: The promotion reuses src/state/approval-state.ts markers so `bober approve promote-<id>` resolves it; no new approval format is introduced."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Outcome reconciliation + registry extensibility",
+      "description": "reconcilePromotions reads the linked run's run-state.json and advances the Finding (completed->done via supersede, aborted/failed->open, running->unchanged), exposed via `bober do --reconcile` and run best-effort at the start of every `bober do`. A second registered stub promoter and docs/do-bridge.md prove and document the extension point for future medical/financial promoters.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A 'completed' run-state transitions the linked Finding in-progress->done and sets promotesTo.status='completed'; 'aborted' returns it to 'open'; 'running' leaves it unchanged.",
+        "AC2: Registering a second promoter under a different PromoterKey resolves for that domain/kind while an unregistered pair fails closed with a clear error.",
+        "AC3: docs/do-bridge.md documents the PromoterRegistry.register extension point and the Promoter interface."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "assumptions": [
+    "task-inbox (spec-20260628-task-inbox) persists Findings on the shipped FactStore (src/state/facts.ts:136). Evidence: research-20260627-knowledge-platform-landscape.md §3a line 128 'Rides on FactStore machinery already shipped'. The do-bridge reads/writes Findings through a FindingStore port; the default adapter is FactStore-backed and an in-memory fake isolates do-bridge tests from the exact encoding.",
+    "priority-hub (spec-20260628-priority-hub) adds the optional `promotesTo?` field to the Finding schema (research §3a line 126). The do-bridge defines its concrete PromotionRef shape {kind:'bober-run', runId, launchedAt, status:'launched'|'completed'|'aborted'} and the helpers that read/write it.",
+    "Coding/project Findings carry domain in {coding, projects} (research §3a line 132 'coding task -> bober run'); the coding promoter is keyed on those domains.",
+    "The work-launcher reuses the chat RunSpawner (src/chat/run-spawner.ts:97), which shells `agent-bober run <task> --run-id <id>` detached (run-spawner.ts:113) -> runRunCommand (src/cli/commands/run.ts:181) -> runPipeline (src/orchestrator/pipeline.ts:970). Launching detached (not in-process) avoids blocking the CLI for the duration of a multi-hour run.",
+    "The approve gate reuses the disk markers in src/state/approval-state.ts (savePending:49, saveApproved:106, saveRejected:122, deletePending:138) -> the same gate `bober approve`/`bober reject` (src/cli/commands/approve.ts) and the chat inline buttons resolve; non-TTY waiting mirrors the poll loop in src/orchestrator/checkpoints/mechanisms/disk.ts.",
+    "Run terminal state is readable via src/state/run-state.ts readRunState; RunSpawner writes status running->aborted there (run-spawner.ts:160-167) and the pipeline writes completed. Marking a Finding done = supersede (src/state/facts.ts:291) per research §3a line 131 'Completion = supersede'."
+  ],
+  "outOfScope": [
+    "Task capture and lifecycle commands (bober task add|list|done|snooze|drop) - owned by spec-20260628-task-inbox.",
+    "Cross-repo finding aggregation, the ranking lens-panel, and the Finding schema definition - owned by spec-20260628-priority-hub.",
+    "Medical and financial domain promoters - future specs; only the extension point is delivered here.",
+    "Calendar planner, Telegram frontend, and scheduler (research §3a/§3.2).",
+    "A fleet-backed Launcher implementation - the Launcher port is kept open for it but only the RunSpawner-backed adapter is built."
+  ],
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "integration-risk",
+      "question": "Should the work-launcher run the pipeline in-process (runPipeline await) or spawn a detached `agent-bober run` child?",
+      "options": [
+        {
+          "label": "A",
+          "description": "In-process runPipeline await - simplest, but blocks the CLI for the whole multi-hour run."
+        },
+        {
+          "label": "B",
+          "description": "Detached spawn via the chat RunSpawner - returns immediately with a runId to link and reconcile later."
+        }
+      ],
+      "recommendation": "B - the chat layer already reuses the run entry this way (src/chat/run-spawner.ts:97); a detached run yields a linkable runId without freezing the CLI.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q2",
+      "category": "pattern-conflict",
+      "question": "Should the approve gate use a brand-new confirmation file format or reuse the existing .bober/approvals markers?",
+      "options": [
+        {
+          "label": "A",
+          "description": "A new do-bridge-specific confirmation file."
+        },
+        {
+          "label": "B",
+          "description": "Reuse src/state/approval-state.ts savePending/saveApproved/saveRejected so `bober approve`/`bober reject` and chat buttons already work."
+        }
+      ],
+      "recommendation": "B - reusing the shipped gate (approval-state.ts:49) keeps one approval surface across run, chat, and do-bridge.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q3",
+      "category": "data-model",
+      "question": "How is a promoted Finding marked 'done' given the launched run is detached?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Block and poll the run to completion inside `bober do`."
+        },
+        {
+          "label": "B",
+          "description": "Snapshot reconciliation: a reconcilePromotions step reads run-state.json on demand and supersedes the Finding when the run reached a terminal state."
+        }
+      ],
+      "recommendation": "B - reads readRunState (run-spawner.ts:160-167) and supersedes (facts.ts:291) without blocking; matches research §3a 'Completion = supersede'.",
+      "ambiguityWeight": 4
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. The locked research design (research-20260627-knowledge-platform-landscape.md §3a, esp. lines 126-132) plus the concrete shipped substrate (runPipeline, RunSpawner, approval-state markers, FactStore) fully determine the do-bridge shape; no high-stakes question remained unresolved, so the plan proceeds without user clarification.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          ".bober/research/research-20260627-knowledge-platform-landscape.md",
+          "src/orchestrator/pipeline.ts:970",
+          "src/cli/commands/run.ts:181",
+          "src/chat/run-spawner.ts:97",
+          "src/state/approval-state.ts:49",
+          "src/cli/commands/approve.ts",
+          "src/state/facts.ts:136",
+          "src/state/run-state.ts"
+        ]
+      }
+    },
+    {
+      "questionId": "Q1",
+      "answer": "B - detached spawn via the chat RunSpawner (src/chat/run-spawner.ts:97), which shells `agent-bober run` -> runPipeline; returns a linkable runId without blocking the CLI.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "B - reuse the existing .bober/approvals markers (src/state/approval-state.ts:49) so `bober approve`/`bober reject` and chat inline buttons resolve promotions with no new format.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "B - snapshot reconciliation via reconcilePromotions reading run-state.json (run-spawner.ts:160-167) and superseding the Finding (facts.ts:291); no blocking poll.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "techStack": [
+    "TypeScript (ESM, NodeNext, .js import extensions)",
+    "Zod",
+    "commander",
+    "better-sqlite3 (via FactStore)",
+    "execa (via RunSpawner)",
+    "Vitest"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "src/orchestrator/pipeline.ts runPipeline (reached via detached `agent-bober run`)",
+      "src/chat/run-spawner.ts RunSpawner (default Launcher adapter)",
+      "src/state/approval-state.ts (approve gate markers)",
+      "src/cli/commands/approve.ts / reject.ts (external gate resolution)",
+      "src/state/facts.ts FactStore + supersedeFact (FindingStore adapter)",
+      "src/state/run-state.ts readRunState (outcome reconciliation)",
+      "spec-20260628-task-inbox Finding store",
+      "spec-20260628-priority-hub Finding.promotesTo field"
+    ],
+    "dataModel": "Finding (schema owned by priority-hub) gains a concrete promotesTo: PromotionRef { kind:'bober-run', runId, launchedAt, status:'launched'|'completed'|'aborted' }. PromoterRegistry maps PromoterKey { domain:string, kind?:FindingKind } -> Promoter { canPromote(finding), plan(finding): PromotionPlan }. PromotionPlan = { kind:'bober-run', task:string, teamId?:string }.",
+    "securityConsiderations": [
+      "No work is launched without an explicit approve resolution (TTY confirm, `bober approve`, or `--yes`).",
+      "The Launcher is an injected port so unit tests never spawn a real process.",
+      "reconcilePromotions and start-of-command reconcile are best-effort and never abort the CLI."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "A promotion never launches work without an explicit approval resolution.",
+      "verificationMethod": "unit-test: the reject path and the no-resolution path invoke the Launcher zero times."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Adding a new domain promoter requires only a PromoterRegistry.register() call plus a Promoter implementation - no edits to the CLI handler or Launcher.",
+      "verificationMethod": "manual: docs/do-bridge.md plus the Sprint 3 second-promoter test."
+    },
+    {
+      "category": "reliability",
+      "requirement": "reconcilePromotions and the start-of-command reconcile never abort the CLI on a missing or corrupt run-state file.",
+      "verificationMethod": "unit-test: a missing run-state returns without throwing."
+    }
+  ],
+  "constraints": [
+    "Additive only: do not modify the task-inbox or priority-hub modules; consume them through the FindingStore port and the Finding schema.",
+    "ESM with .js import extensions; TypeScript strict mode; no SDK imports outside providers/.",
+    "CLI handlers never throw - set process.exitCode and return (mirrors src/cli/commands/memory.ts).",
+    "Filesystem state only - approvals as .bober/approvals markers, findings/runs via FactStore + run-state (no new database)."
+  ],
+  "metadata": {
+    "dependsOn": [
+      "spec-20260628-task-inbox",
+      "spec-20260628-priority-hub"
+    ],
+    "dependsOnNote": "task-inbox provides Finding capture/storage/lifecycle; priority-hub defines the Finding schema including the promotesTo field this spec gives meaning to. Both are upstream.",
+    "gateApproval": {
+      "mode": "autonomous-self-approval",
+      "approvalEvidence": [
+        ".bober/research/research-20260627-knowledge-platform-landscape.md §3a (lines 107-144, esp. 126-132)",
+        "src/orchestrator/pipeline.ts:970 (runPipeline entry)",
+        "src/cli/commands/run.ts:181 (run -> runPipeline)",
+        "src/chat/run-spawner.ts:97 (detached `agent-bober run` launcher)",
+        "src/state/approval-state.ts:49 (approve-gate markers)",
+        "src/state/facts.ts:136,291 (FactStore + supersede)",
+        "src/state/run-state.ts (run terminal state)"
+      ]
+    }
+  },
+  "completedAt": "2026-06-29T17:21:10.994Z"
+}

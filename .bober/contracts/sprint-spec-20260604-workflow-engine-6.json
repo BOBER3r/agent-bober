@@ -1,0 +1,93 @@
+{
+  "contractId": "sprint-spec-20260604-workflow-engine-6",
+  "specId": "spec-20260604-workflow-engine",
+  "sprintNumber": 6,
+  "title": "WorkflowEngine assembly, selector integration, and EngineConformanceHarness",
+  "description": "Assemble WorkflowEngine (implements PipelineEngine name='workflow') wiring ResumeCursorReconstructor → ArgsPayloadBuilder → invoke → RunResultFlusher. invoke probes eligibility and, when ineligible (the dormant default) or on WorkflowUnavailableError from the first invoke, re-dispatches the TS engine before any .bober/ flush. Register the workflow engine in the selector so engine='workflow' resolves it (then downgrades). Implement EngineConformanceHarness.assertEquivalent asserting ts vs skill emit equivalent .bober/ artifacts for a fixture spec, and wire it as a CI gate. This closes the loop: engine='workflow' completes via TS downgrade in CI with no partial flush.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260604-workflow-engine-1",
+    "sprint-spec-20260604-workflow-engine-5"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "WorkflowEngine implements PipelineEngine with name='workflow' and a run() that builds a cursor + args, calls invoke, and flushes; on WorkflowUnavailableError from the first invoke it re-dispatches the TS engine and no .bober/ contract/eval artifact is written by the workflow path before the re-dispatch. A unit test forces the unavailable path and asserts TS re-dispatch with zero partial flush.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "The selector registers and resolves the workflow engine: with engine='workflow' and the dormant ineligible probe, select() returns a path that completes via TS downgrade with exactly one downgrade log line; engine='ts' and 'skill' resolve unchanged. Unit tests cover each.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "EngineConformanceHarness.assertEquivalent(fixtureSpec, ['ts','skill'], projectRootFactory) returns a ConformanceReport with equivalent=true when the two engines produce matching .bober/ artifacts and equivalent=false with populated diffs when they differ (tested by injecting a divergence).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "An integration-style test runs runPipeline with config.pipeline.engine='workflow' in the default (ineligible) environment and asserts it completes through the TS engine producing the same PipelineResult shape as engine='ts', with no orphaned .bober/ writes from the workflow path.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck, npm run build, and the lint command exit 0; the full npm run test passes (tolerating only the documented flaky tool-count baseline) and the conformance gate runs as part of it.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the live programmatic invoke transport — invoke remains dormant (probe ineligible / throws WorkflowUnavailableError) this release.",
+    "Do not implement careful-flow stage-splitting; mode='careful' + engine='workflow' downgrades to TS via the selector (already handled in sprint 1).",
+    "Do not add a live three-engine diff to CI; the workflow lane in the harness is opt-in behind eligibility.",
+    "Do not modify the 10 agents/*.md, the contracts protocol, or providers/types.ts."
+  ],
+  "stopConditions": [
+    "Stop when engine='workflow' completes via TS downgrade with no partial flush, the conformance harness gates ts/skill equivalence, and typecheck/build/lint/test are green.",
+    "Stop when changes are confined to new files under src/orchestrator/workflow/ (workflow-engine.ts, conformance.ts, and tests) plus the selector registration in selector.ts."
+  ],
+  "definitionOfDone": "WorkflowEngine wires cursor→args→invoke→flush with a dormant probe and TS re-dispatch on WorkflowUnavailableError (no partial flush); the selector resolves engine='workflow' and downgrades cleanly with one log line; EngineConformanceHarness asserts ts/skill .bober/ artifact equivalence and is wired as a CI gate; an integration test confirms engine='workflow' completes via TS in CI; typecheck, build, lint, and test are green.",
+  "assumptions": [
+    "The dormant invoke() can be represented as a method that throws WorkflowUnavailableError (or returns ineligible) so the run path is fully testable without the live runtime.",
+    "'Equivalent artifacts' for ts vs skill is asserted on normalized .bober/ JSON (ignoring volatile timestamps/durations).",
+    "The skill engine for the harness can be represented by a deterministic stand-in that emits the same contracts protocol artifacts, since the skill orchestrator is Claude-in-session; if a runnable skill engine is unavailable, the harness compares ts against a recorded skill fixture."
+  ],
+  "outOfScope": [
+    "live invoke",
+    "careful stage-split",
+    "audit/migrate commands",
+    "planner panel"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/orchestrator/workflow/workflow-engine.ts: `export class WorkflowEngine implements PipelineEngine { readonly name = 'workflow'; async run(userPrompt, projectRoot, config): Promise<PipelineResult> }`. run(): reconstruct cursor (ResumeCursorReconstructor), build args (ArgsPayloadBuilder), then `try { const result = await this.invoke(args); return await new RunResultFlusher().flush(projectRoot, config, result); } catch (e) { if (e instanceof WorkflowUnavailableError) { logger.info('workflow runtime unavailable — re-dispatching TS engine'); return new TsPipelineEngine().run(userPrompt, projectRoot, config); } throw e; }`. invoke(args): dormant — `throw new WorkflowUnavailableError(...)` (or check isWorkflowEligible and throw if not). Ensure NO contract/eval flush happens before invoke succeeds (build args is pure; reconstruct is read-only). Update src/orchestrator/workflow/selector.ts: register/resolve WorkflowEngine for name 'workflow' (but resolveEngineName already downgrades workflow→ts when ineligible/careful, so in practice select() returns TsPipelineEngine; keep WorkflowEngine reachable for when eligible). Decide the cleanest composition: either (a) resolveEngineName stays the gate and only returns 'workflow' when eligible, so select('workflow') instantiates WorkflowEngine which itself re-dispatches on invoke failure — keep BOTH guards (selector downgrade + engine-level catch) per ADR-6 belt-and-suspenders. Create src/orchestrator/workflow/conformance.ts: `export class EngineConformanceHarness { async assertEquivalent(fixtureSpec, engines, projectRootFactory): Promise<ConformanceReport> }` — run each engine against a fresh projectRoot from the factory, read back normalized .bober/ artifacts (spec, contracts, eval-results, history), strip volatile fields (timestamps, durations, runIds), deep-compare, and populate diffs[]. For the skill lane, if no runnable skill engine exists, compare against a recorded fixture or skip with a logged note (do NOT silently pass). Wire the harness into a test that runs in npm run test as the CI gate. Add workflow-engine.test.ts (force WorkflowUnavailableError → assert TS re-dispatch + no partial flush by checking the temp .bober has only what TS wrote), selector workflow-resolution cases, conformance.test.ts (equivalent + injected-divergence). Use import type, ESM .js specifiers, unicode section headers. Conventional commit: bober(sprint-6): assemble WorkflowEngine + selector integration + EngineConformanceHarness CI gate.",
+  "evaluatorNotes": "This is the closing sprint — verify the whole seam end to end. Confirm WorkflowEngine.run re-dispatches TS on WorkflowUnavailableError and that, in that path, no workflow-written contract/eval artifacts exist before re-dispatch (inspect the temp .bober after a forced-unavailable run — it should match a plain TS run). Confirm exactly one downgrade/​unavailable log line. Run the selector tests (ts/skill/workflow branches). Run the conformance test: assertEquivalent(['ts','skill']) → equivalent:true on matching artifacts and equivalent:false with diffs when a divergence is injected; confirm it is part of npm run test. Run the integration test: runPipeline with engine='workflow' in the default env completes via TS with a PipelineResult matching engine='ts' shape. Run npm run typecheck, npm run build, lint (exit 0) and the full npm run test (tolerate only the flaky tool-count baseline). Confirm git diff is confined to the new workflow-engine.ts, conformance.ts, selector.ts registration, and tests; no agents/*.md, contracts/, or providers/types.ts changes. Spot-check that the exported runPipeline signature is still unchanged.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/workflow-engine.ts",
+    "src/orchestrator/workflow/workflow-engine.test.ts",
+    "src/orchestrator/workflow/conformance.ts",
+    "src/orchestrator/workflow/conformance.test.ts",
+    "src/orchestrator/workflow/selector.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-04T00:21:25.051Z",
+  "startedAt": "2026-06-04T00:07:12.592Z",
+  "completedAt": "2026-06-04T00:21:25.051Z",
+  "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-6-1",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260604-workflow-engine-6-1",
+      "result": "pass",
+      "timestamp": "2026-06-04T00:21:25.051Z"
+    }
+  ]
+}

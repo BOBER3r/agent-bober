@@ -1,0 +1,16 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-5-1",
+  "contractId": "sprint-spec-20260628-task-inbox-5",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "requiredPassed": 4,
+    "requiredFailed": 0,
+    "requiredTotal": 4
+  },
+  "summary": "All 5 criteria pass. build/typecheck/lint clean (0 errors). Full suite 3309, zero regressions. Source-verified: purely additive (new union member+schema option+parse branch+2 prompt lines+handleCaptureTask); FALLBACK={action:answer} byte-identical; existing classifier actions untouched; scope/decision-statement routes to answer NOT capture; handleCaptureTask reuses sprint-1 captureTask (single write path) + stamps now at boundary + never calls Answerer (OnceClient throw-on-2nd-call proves it); no new deps; approval/steer/pause untouched."
+}

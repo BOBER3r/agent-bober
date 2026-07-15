@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-research-scheduler-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-research-scheduler-3",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-30T00:10:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 3 of 5. Add a NEW research-owned opt-in egress axis 'online-research' (default false, fail-closed) mirroring medical EgressGuard, and gate the Sprint-2 runner's web-retrieval branch behind it. Axis off (default) => fully offline, zero outbound requests, byte-identical to Sprint 2. Axis on => retrieval client invoked, note cites retrieved source URLs.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260628-research-scheduler-1", "title": "schema/store/CLI", "summary": "0336e47"},
+      {"contractId": "sprint-spec-20260628-research-scheduler-2", "title": "runner -> note + Finding", "summary": "20d42cb — runResearchJob(job, deps); Sprint 3 MODIFIES runner.ts + runner.test.ts to add the gated retrieval branch"}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/egress.ts (EgressGuard to mirror line-for-line)",
+      "src/calendar/calendar-egress.ts (sibling research-owned egress guard precedent)",
+      "src/config/schema.ts (add ResearchSectionSchema next to CalendarSectionSchema, register optional)",
+      "src/medical/retrieval/literature.ts (retrieval-client shape to model online-retrieval.ts on)",
+      "src/research/runner.ts (Sprint 2 — insert gated retrieval branch)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run"},
+    "generator": {"model": "sonnet", "autoCommit": true, "commitFormat": "bober(sprint-N): description"}
+  },
+  "principles": "Read .bober/principles.md. Hard gates: strict TS zero errors; ZERO lint errors (consistent-type-imports, unused vars errored); ESM .js imports; Zod for ALL config (additive OPTIONAL section so existing configs parse unchanged); fail-closed default; async fs; clock injection. PROVIDER/CLIENT-agnostic: retrieval client is INJECTED and spied in tests — NO real network in tests.",
+  "evaluatorFeedback": null,
+  "curatorFindings": {
+    "egressGuard": "src/research/egress.ts mirrors src/medical/egress.ts:54-58 LINE-FOR-LINE for a single axis 'online-research'. assertAllowed throws the EXACT literal `Egress axis 'online-research' not enabled`. isAllowed returns false by default. static fromConfig(config) reads config.research?.egress?.onlineResearch ?? false. Also see src/calendar/calendar-egress.ts for a sibling research-owned guard precedent + its test.",
+    "schema": "Add `export const ResearchSectionSchema = z.object({ egress: z.object({ onlineResearch: z.boolean().default(false) }).optional() })` next to CalendarSectionSchema (~schema.ts:464-477). Register `research: ResearchSectionSchema.optional()` inside BoberConfigSchema immediately AFTER the calendar key (~line 517, before the closing `});` at ~518). grep confirmed NO existing `research` key. MUST be additive+optional.",
+    "retrieval": "src/research/online-retrieval.ts: retrieve(query, client) modeled on src/medical/retrieval/literature.ts shape — takes an INJECTED client, returns sources/URLs. Offline-testable. Do NOT touch src/medical/retrieval/.",
+    "runnerGate": "In src/research/runner.ts, gate retrieval BETWEEN the model loop (~runner.ts:163) and note serialization (~runner.ts:166). Add TWO NEW OPTIONAL RunDeps fields (e.g. egressGuard + retrievalClient, or a retrieve fn) so Sprint-2's offline path is BYTE-IDENTICAL when absent. When the axis is OFF: skip retrieval entirely — do NOT construct the client, zero calls. When ON: call assertAllowed/isAllowed, invoke retrieval, thread the source URLs into the note as a string[] (NEVER objects — serializeFrontmatter only handles scalars + string-arrays)."
+  },
+  "notes": "Contract: .bober/contracts/sprint-spec-20260628-research-scheduler-3.json. Briefing: .bober/briefings/sprint-spec-20260628-research-scheduler-3-briefing.md (mirror-templates for all 6 files). NON-GOALS: do NOT enable axis by default; do NOT widen/reuse medical axes; do NOT do real network in tests; no cadence (S4)/digest (S5). Verify BoberConfigSchema still parses a config with NO research section."
+}

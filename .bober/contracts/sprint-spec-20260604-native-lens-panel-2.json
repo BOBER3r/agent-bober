@@ -1,0 +1,46 @@
+{
+  "contractId": "sprint-spec-20260604-native-lens-panel-2",
+  "specId": "spec-20260604-native-lens-panel",
+  "sprintNumber": 2,
+  "title": "Lens-aware evaluator agent modes + sync gate",
+  "description": "Teach the bober-evaluator agent a prompt-level MODE (full | deterministic | lens:<name>) so the same agent can act as today's full evaluator (default, byte-identical), a deterministic-only strategy runner, or a single-lens qualitative judge that emits a per-lens verdict. Sync the generated .claude/agents copy and add a vitest gate that keeps the two copies from drifting.",
+  "status": "completed",
+  "completedAt": "2026-06-04T05:58:00Z",
+  "dependsOn": ["sprint-spec-20260604-native-lens-panel-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "agents/bober-evaluator.md gains an additive 'Panel / Lens Mode' section documenting three modes: MODE:full (default — today's behavior: run all strategies AND judge all criteria, unchanged), MODE:deterministic (run the configured strategies only and report strategyResults + strategy-backed criteria; skip qualitative lens judgment), and MODE:lens:<name> (judge the contract's qualitative/manual success criteria through the named lens's focus, do NOT re-run the strategy suite, and emit a single per-lens verdict { lens, passed, summary }). The section references skills/shared/lens-panel.md for the fragment definitions.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C2", "description": "The existing single-judge instructions in agents/bober-evaluator.md are unchanged — the MODE section is purely additive, and MODE:full is explicitly defined as the default applied when the spawn prompt specifies no mode (preserving byte-identical off-path behavior).", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C3", "description": ".claude/agents/bober-evaluator.md is regenerated to be byte-identical to agents/bober-evaluator.md (the distribution copy).", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C4", "description": "A vitest gate (extend src/orchestrator/lens-panel-parity.test.ts or add src/orchestrator/agent-sync.test.ts) reads both agents/bober-evaluator.md and .claude/agents/bober-evaluator.md and asserts they are byte-identical.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C5", "description": "npx tsc --noEmit, npm run build, and npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented pre-existing skipped baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do not change the evaluator's IRON LAW, the no-write rule, the EvalResult JSON shape, or any existing instruction prose — the MODE section is additive only.",
+    "Do not edit any SKILL.md or .claude/commands/*.md — that is sprint 3.",
+    "Do not change src/orchestrator/eval-lenses.ts, reconciler.ts, or eval-result.ts.",
+    "Do not introduce a new agent or rename the evaluator agent."
+  ],
+  "stopConditions": [
+    "Stop when the agent source documents the three modes additively (full = unchanged default), the .claude copy is byte-identical, the sync gate is green, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to agents/bober-evaluator.md, .claude/agents/bober-evaluator.md, and the sync-gate test."
+  ],
+  "definitionOfDone": "The bober-evaluator agent understands MODE:full|deterministic|lens:<name> with full as the unchanged default; the .claude/agents copy is byte-identical to the agents/ source; a vitest gate enforces that equality; the existing single-judge prose is untouched; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "agents/bober-evaluator.md is the source; .claude/agents/bober-evaluator.md is a verbatim copy (the distribution model copies agents/ → .claude/agents/).",
+    "A deterministic-mode evaluator reports strategy results and the pass/fail of strategy-backed criteria; the orchestrator (sprint 3) combines this with the reconciled lens verdicts. The agent does not need to know about reconciliation — it just emits its own result and, in lens mode, a single lens verdict.",
+    "Reading both committed .md files from a test via node:fs/promises is allowed (same pattern as sprint 1's drift gate)."
+  ],
+  "outOfScope": ["SKILL.md edits", "command regeneration", "schema changes", "eval-lenses changes"],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read agents/bober-evaluator.md fully first. Add ONE new additive section titled 'Panel / Lens Mode (opt-in)' near the top of the body (after the Subagent Context block, before or after the IRON LAW — place it where it reads naturally without disturbing existing sections). Document: (1) The orchestrator may pass a MODE in the spawn prompt. Absent any MODE, behave EXACTLY as the rest of this document specifies (MODE:full) — this is the default and the off-path behavior. (2) MODE:deterministic — run the configured evaluator.strategies (build/typecheck/lint/unit-test/etc.) and report strategyResults plus the pass/fail of any strategy-backed success criteria; do NOT perform qualitative/manual lens judgment; your result's passed reflects only the deterministic strategies. (3) MODE:lens:<name> — do NOT re-run the strategy suite (the deterministic pass already covered it); judge ONLY the contract's qualitative/manual success criteria through the lens focus for <name> (the focus fragments are defined in skills/shared/lens-panel.md — correctness/security/regression/quality, with a generic fallback for any custom lens name); in addition to your normal EvalResult, emit a single per-lens verdict object { lens: '<name>', passed: <bool>, summary: '<one-line>' } so the orchestrator can collect it into lensVerdicts. Keep it crisp and consistent with the existing JSON-output discipline. Do NOT alter any existing instruction. After editing the source, regenerate the .claude copy: it is a straight copy, so `cp agents/bober-evaluator.md .claude/agents/bober-evaluator.md` (or write identical content). Then add the sync gate: extend src/orchestrator/lens-panel-parity.test.ts (or create src/orchestrator/agent-sync.test.ts) to read both files via node:fs/promises and assert equality (toBe on the two strings). Use ESM .js specifiers and unicode section headers in any test. Conventional commit: bober(sprint-2): add lens-aware evaluator agent modes + sync gate. GIT HYGIENE: stage only your files with explicit paths; never `git add -A`. Branch is the feature branch — never main.",
+  "evaluatorNotes": "Read agents/bober-evaluator.md: confirm the new 'Panel / Lens Mode' section documents full (default/unchanged), deterministic (strategies only), and lens:<name> (qualitative-only through the lens focus, no strategy re-run, emits a {lens,passed,summary} verdict) and that it references skills/shared/lens-panel.md for the fragments. CRITICAL: confirm MODE:full is defined as the no-mode default and that NO pre-existing instruction prose was changed — run `git diff` on the file and verify the diff is purely additive (a single new section; no deletions/modifications elsewhere). Confirm .claude/agents/bober-evaluator.md is byte-identical to agents/bober-evaluator.md (diff the two files directly; they must match exactly). Run the sync-gate test and confirm green; reason that it would fail if the two copies diverged. Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the pre-existing skipped baseline). Confirm no SKILL.md or .claude/commands files were touched.",
+  "estimatedFiles": [
+    "agents/bober-evaluator.md",
+    ".claude/agents/bober-evaluator.md",
+    "src/orchestrator/lens-panel-parity.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T04:30:00Z",
+  "updatedAt": "2026-06-04T04:30:00Z"
+}

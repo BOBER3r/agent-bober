@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-calendar-planner-4-1",
+  "contractId": "sprint-spec-20260628-calendar-planner-4",
+  "specId": "spec-20260628-calendar-planner",
+  "timestamp": "2026-06-29T22:39:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "zero type errors across proposal-gate + calendar command" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "zero errors; 2 pre-existing warnings unrelated" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "full suite 3497 pass (276 files); 87 calendar tests; zero regressions" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "build green; proposal-gate.ts + apply CLI path" },
+    { "criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "typecheck green" },
+    { "criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "proposePlan writes .pending.json (savePending) + plan sidecar; has NO connector param so writeEvents structurally impossible before approval; checkpointId=calendar-<id>" },
+    { "criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "approved -> writeEvents EXACTLY ONCE + deletePending; rejected -> never called; markers detected inline via readdir (no readApproved/readRejected)" },
+    { "criterionId": "sc-4-5", "required": true, "result": "pass", "evidence": "adjustPlan synchronous re-run of planSlots; no fs writes; input not mutated" },
+    { "criterionId": "sc-4-6", "required": true, "result": "pass", "evidence": "e2e propose->approve->apply: pending written, 0 writes before approval, exactly 1 after, pending deleted; reject path 0" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass. Core safety invariant verified: proposePlan structurally cannot write events, applyPlan writes exactly once on approval / never on reject, adjustPlan pure, no auto-approve. Reuses approval-state.ts; calendar.ts has no writeFile (Sprint-1 scan holds); Google still egress-gated. Full suite 3497, zero regressions."
+}

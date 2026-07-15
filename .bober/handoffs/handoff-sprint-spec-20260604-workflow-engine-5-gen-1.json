@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-workflow-engine-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-workflow-engine-5",
+  "specId": "spec-20260604-workflow-engine",
+  "timestamp": "2026-06-04T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 5 authors the pure-JS Dynamic Workflows script .claude/workflows/bober-pipeline.js (dormant — parse-checked, not run live) and the host-side RunResultFlusher that commits a WorkflowRunResult to durable .bober/ state stamping timestamps. The script orchestrates plan->curate->generate->panel->reconcile->retry via agent({agentType}) hooks, owns NO truth, skips completed sprints, chunks the panel <=16, and returns a WorkflowRunResult. The flusher is the unit-tested host part.",
+    "completedSprints": [
+      { "contractId": "3", "title": "JS reducer port", "summary": ".claude/workflows/lib/reconcile.js exports reconcile(_sprintId,_round,lensVerdicts,timestamp) — the script imports this." },
+      { "contractId": "4", "title": "types + cursor + args", "summary": "src/orchestrator/workflow/types.ts (WorkflowArgs, WorkflowRunResult, ResumeCursor), errors.ts (incl. WorkflowUnavailableError), resume-cursor.ts, args-builder.ts." }
+    ],
+    "currentBranch": "bober/workflow-engine",
+    "relevantFiles": [
+      ".claude/workflows/lib/reconcile.js",
+      "src/orchestrator/workflow/types.ts",
+      "src/state/history.ts",
+      "src/state/sprint-state.ts",
+      "src/state/index.ts",
+      "src/orchestrator/pipeline.ts",
+      ".bober/architecture/arch-20260603-adopt-claude-code-dynamic-workflows-architecture.md"
+    ]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true }
+  },
+  "principles": "See .bober/principles.md. The script is OUTSIDE src/ — not linted/typechecked by tsc. The flusher is under src/ — full strict + lint applies. No synchronous fs in the flusher (use node:fs/promises via the existing state helpers).",
+  "evaluatorFeedback": null,
+  "notes": "DYNAMIC WORKFLOWS SCRIPT API (.claude/workflows/bober-pipeline.js): MUST begin with `export const meta = { name, description, phases }` as a PURE LITERAL (no variables/calls/interpolation). Runtime hooks available in the script body (do NOT import them — they are injected): agent(promptOrOpts) / agent(prompt, {agentType, model, schema, label, phase}) -> Promise; parallel(thunks: Array<()=>Promise>) -> Promise<any[]> (barrier, <=16 concurrent); pipeline(items, ...stages); phase(title); log(msg); args (the WorkflowArgs). The script body runs in async context (use await). Date.now/Math.random/new Date are UNAVAILABLE in scripts — must NOT use them; pass timestamps via args or leave host to stamp. IMPORTANT for testability: factor PURE helper functions (e.g. `export function chunk(arr, size)`, `export function decideOutcome(reconciled, iteration, maxIterations)`, `export function skipCompleted(contracts, completedSprintNumbers)`) so a Vitest test under src/ can import them from the script module and assert behavior WITHOUT the live runtime. The script imports reconcile from './lib/reconcile.js'. main(args): PLAN agent({agentType:'bober-planner', model: args.models.planner}); if needsClarification return early with {needsClarification:true,...}. For each contract not in args.resumeCursor.completedSprintNumbers: CURATE agent({agentType:'bober-curator'}); RETRY 1..args.knobs.maxIterations: GENERATE agent({agentType:'bober-generator'}); PANEL = chunk(args.evaluatorLenses,16) then for each chunk parallel(lenses.map(lens => () => agent({agentType:'bober-evaluator', schema: EvalResult-ish}))); reconciled = reconcile(contractId, iteration, lensVerdicts, ''); if reconciled.passed break else feed feedback. Push {contract, finalVerdict: reconciled, iterationsUsed, outcome, lensVerdicts} to perSprint. Return {spec, perSprint, needsClarification:false, pendingHistory:[]}. RunResultFlusher (src/orchestrator/workflow/flusher.ts): `export class RunResultFlusher { async flush(projectRoot, config, result): Promise<PipelineResult> }`. For each perSprint entry: update the contract status (passed->'completed', needs-rework, failed) via updateContract/saveContract (src/state/sprint-state.js), set completedAt/updatedAt with new Date().toISOString() (the flusher IS the host clock — allowed here). appendHistory (src/state/history.js) for each result + stamp timestamp on each pendingHistory entry (Omit<HistoryEntry,'timestamp'> -> add new Date().toISOString()). updateProgress(projectRoot, contracts, spec) (src/state/history.js). Return PipelineResult {success, spec, completedSprints, failedSprints, duration, needsClarification}. Flush per-contract in the loop (crash-safe). Unit-test the flusher with a SYNTHETIC WorkflowRunResult against a real temp .bober dir (mkdtemp/cleanup). Also unit-test the script's pure helpers (import from ../../../.claude/workflows/bober-pipeline.js) AND assert the script parses (typeof meta==='object', meta.name truthy). Confine to: .claude/workflows/bober-pipeline.js, src/orchestrator/workflow/flusher.ts, flusher.test.ts, script-helpers.test.ts."
+}

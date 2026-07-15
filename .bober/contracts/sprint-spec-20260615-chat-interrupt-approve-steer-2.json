@@ -1,0 +1,102 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-2",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "sprintNumber": 2,
+  "title": "Surface pending approvals in chat (read path) + roster input-required",
+  "description": "Make a blocked run visible in chat. Add an ApprovalReader over .bober/approvals/*.pending.json (reusing approval-state.ts list helpers), an announce-once dedupe cursor (mirroring the CompletionTailer/cursor-store pattern), and a poll-prelude in the chat turn that weaves a 'run <id> is waiting at <gate>: <prompt>' notice into the reply. The roster / `/runs` output shows the correlated run as [INPUT-REQUIRED], and the pending checkpoint id/prompt are reflected onto the chat-owned RunState so /runs is consistent across turns. Read-only: this sprint never writes approval markers.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260615-chat-interrupt-approve-steer-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "All tests pass, including new ApprovalReader, dedupe-cursor, and chat-surfacing tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "ApprovalReader.read() returns the pending markers from .bober/approvals/*.pending.json (checkpointId, runId, prompt, requestedAt). A unit test with two synthetic pending markers (one with a runId, one without) returns both; a corrupted JSON file in the dir is skipped silently; a missing dir returns [].",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "When a pending marker correlates (by runId) to a running chat run, handleTurn weaves a one-time notice naming the runId, checkpoint id, and rendered prompt into the reply. A unit test injects a synthetic pending marker + matching running RunState and asserts the notice text appears in the turn output.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "Announce-once dedupe: a given pending marker (keyed by checkpointId+requestedAt) is surfaced at most once across turns; a still-pending marker does not re-announce on the next turn. A unit test runs two turns against the same marker and asserts the notice appears only on the first.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "The roster summary / `/runs` shows a correlated run as [INPUT-REQUIRED] and the chat-owned RunState gains pendingCheckpointId/pendingPrompt/pendingSince + status input-required. A unit test asserts both the summary line and the persisted RunState fields.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "With no pending markers present, chat behavior is identical to Phase 1 — no spurious notices and the existing chat-session/roster tests stay green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write .approved.json / .rejected.json from chat (Sprint 3)",
+    "Do not add guidance injection or pause/resume (Sprints 4 and 5)",
+    "Do not modify the DiskCheckpointMechanism or approval-state.ts write functions",
+    "Do not clean up markers on completion yet (Sprint 6 hygiene)"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "A blocked run is surfaced once in chat and shown [INPUT-REQUIRED] in /runs; no-pending behavior is unchanged; build + typecheck + full suite green"
+  ],
+  "definitionOfDone": "Chat surfaces pending approvals: an ApprovalReader over the approvals dir, an announce-once dedupe cursor, a poll-prelude notice in handleTurn, [INPUT-REQUIRED] in the roster, and the pending fields reflected onto the chat-owned RunState. Read-only — no markers are written. With no pending markers, behavior matches Phase 1. Build, typecheck, and the full suite pass.",
+  "assumptions": [
+    "Correlation is by the pending marker's optional runId field (PendingMarker.runId, approval-state.ts:27) matched against running RunStates from RosterReader. A marker with no runId is surfaced as 'unknown run' but still announced (so a CLI-spawned careful run is not silently hidden).",
+    "Because marker files are checkpointId-keyed in a shared dir, at most one careful chat run is expected at a time this phase; correlation ambiguity from concurrent careful runs is the documented limitation (handled in Sprint 6 docs).",
+    "The dedupe cursor mirrors src/chat/cursor-store.ts and is stored per session under .bober/chat/; identity key = checkpointId + requestedAt (stable while pending, changes if the gate is re-requested in a later round)."
+  ],
+  "outOfScope": [
+    "Resolve/write path (Sprint 3)",
+    "Guidance (Sprint 4), pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read-only surfacing, modeled on the Phase 1 completion-tailer prelude. Verified touch points:\n- src/state/approval-state.ts already has listPending(projectRoot): Promise<PendingMarker[]> (:80) and listPendingApprovals (:179). Reuse listPending for full markers (it carries runId + prompt). DO NOT add write functions here.\n- New src/chat/approval-reader.ts: class ApprovalReader(projectRoot) with read(): Promise<PendingMarker[]> delegating to listPending. Mirror roster-reader.ts structure/style. Add a summarize/notice helper or keep formatting in chat-session.\n- New src/chat/approval-cursor.ts (or reuse the cursor-store pattern in src/chat/cursor-store.ts): track already-announced markers per session by key = `${checkpointId}@${requestedAt}`. API: filterNew(markers): returns markers not yet announced and records them. Persist under .bober/chat/<sessionId>.approvals-cursor.json. Tolerate missing file.\n- src/chat/chat-session.ts handleTurn (:116): in the poll prelude (next to this.tailer.poll() at :120), also read ApprovalReader + dedupe via the cursor, build a notice string for new pending markers, and weave it into BOTH the slash-path reply (:135) and the LLM-path reply (:181) exactly like completion notices are woven. Notice format e.g. `[run <runId> waiting at <checkpointId>: <prompt(first line / truncated)>]`. Wrap in try/catch so a read error never breaks the turn (mirror the completion poll try/catch at :119-123).\n- Reflect onto RunState: when a pending marker correlates to a running RunState, set that RunState's status='input-required' + pendingCheckpointId/pendingPrompt/pendingSince via writeRunState (the chat process owns RunState for chat-spawned runs). Keep this idempotent (only flip running->input-required; do not clobber completed/aborted). Roster.summarize already uppercases status so [INPUT-REQUIRED] appears for free; verify the formatting reads cleanly.\n- src/chat/roster-reader.ts summarize: optionally append the pending prompt/checkpoint to the input-required line for readability (small, additive).\nKeep it read-only w.r.t. the approvals dir. Tests: synthetic .pending.json files in a temp .bober/approvals, synthetic RunStates in temp .bober/runs, two-turn dedupe test, no-pending no-op test, corrupted-file skip. Run build+typecheck+test before handoff.",
+  "evaluatorNotes": "sc-2-4: drop two .pending.json (one with runId, one without) + one corrupted file into a temp approvals dir; assert ApprovalReader.read() returns the two valid markers and skips the corrupted one; assert missing dir => [].\nsc-2-5: synthetic pending marker with runId X + a running RunState X in temp runs; call handleTurn and assert the woven notice names X, the checkpoint id, and the prompt.\nsc-2-6: two consecutive handleTurn calls with the same still-present marker; assert the notice appears only in the first call's output.\nsc-2-7: after surfacing, read the RunState back from disk and assert status==='input-required' with pendingCheckpointId/pendingPrompt/pendingSince set; assert roster.summarize includes [INPUT-REQUIRED] for that run.\nsc-2-8: no markers present -> handleTurn output has no approval notice; existing chat-session and roster tests green.\nRegression: full suite, build, typecheck. Confirm approval-state.ts write functions are untouched.",
+  "estimatedFiles": [
+    "src/chat/approval-reader.ts",
+    "src/chat/approval-reader.test.ts",
+    "src/chat/approval-cursor.ts",
+    "src/chat/approval-cursor.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/chat-session-approval.test.ts",
+    "src/chat/roster-reader.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-2-1",
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T17:00:00Z",
+  "completedAt": "2026-06-15T14:04:25Z"
+}

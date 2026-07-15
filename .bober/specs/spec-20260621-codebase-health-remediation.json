@@ -1,0 +1,186 @@
+{
+  "specId": "spec-20260621-codebase-health-remediation",
+  "version": 1,
+  "createdAt": "2026-06-21T18:45:00Z",
+  "updatedAt": "2026-06-21T18:45:00Z",
+  "title": "Codebase Health Remediation: break fleet cycle, refactor runSprintCycle params, remove dead-code orphans",
+  "description": "Targeted structural cleanup from research-20260621-codebase-health-hotspots-cycles. Fully breaks the only genuine runtime import cycle (fleet/critic-deep ↔ decomposer-deep) via dependency injection, collapses runSprintCycle's 7 positional parameters into a single typed options object, and removes the two verified dead-code orphans. Pure internal refactor with zero behavior change and no public-API impact.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-21T23:10:00Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "scope",
+      "question": "Which of the research findings should this plan act on?",
+      "options": [
+        { "label": "A", "description": "Break Cycle 2 (fleet runtime cycle)" },
+        { "label": "B", "description": "Remove verified dead-code orphans" },
+        { "label": "C", "description": "Add tests to untested hotspot leaves" },
+        { "label": "D", "description": "Refactor runSprintCycle params" }
+      ],
+      "recommendation": "A + B + D (skip C; Cycle 1 is type-only/benign and excluded)"
+    },
+    {
+      "questionId": "Q2",
+      "category": "tech-constraints",
+      "question": "How should Cycle 2 (critic-deep ↔ decomposer-deep) be broken?",
+      "options": [
+        { "label": "A", "description": "Dependency injection — inject the re-expand function, invert one edge" },
+        { "label": "B", "description": "Extract shared orchestration into a third module" },
+        { "label": "C", "description": "Defer to generator" }
+      ],
+      "recommendation": "A — minimal surface, runCritiqueLoop has one production caller"
+    },
+    {
+      "questionId": "Q3",
+      "category": "scope",
+      "question": "How aggressively should dead-code be handled?",
+      "options": [
+        { "label": "A", "description": "Verify-then-remove genuine orphans only" },
+        { "label": "B", "description": "Annotate, don't remove" },
+        { "label": "C", "description": "Not in scope" }
+      ],
+      "recommendation": "A — verification already disqualified 3 of 5 candidates as false positives"
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Break Cycle 2 (fleet), Remove dead-code orphans, Refactor runSprintCycle params. (Add-tests and silence-Cycle-1 explicitly NOT selected.)",
+      "resolvedAt": "2026-06-21T18:44:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Dependency injection — invert one edge with a minimal injected function parameter.",
+      "resolvedAt": "2026-06-21T18:44:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Verify-then-remove genuine orphans only.",
+      "resolvedAt": "2026-06-21T18:44:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval",
+      "resolvedAt": "2026-06-21T18:45:00Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          "src/fleet/critic-deep.ts:4 (import { type Outline, runExpandStage } from ./decomposer-deep.js — the runtime value edge to break)",
+          "src/fleet/critic-deep.ts:208,247 (runCritiqueLoop calls runExpandStage — the injection point)",
+          "src/fleet/decomposer-deep.ts:5,337,367 (decomposer-deep imports runCritiqueLoop; decomposeGoalDeep is the SOLE production caller at :367)",
+          "src/fleet/decomposer-deep.ts:86 (export type Outline — single external importer is critic-deep.ts:4; must relocate to a leaf)",
+          "src/fleet/decomposer-deep-constants.ts:10-13 (existing dependency-free leaf pattern from commit a73526c; model for the Outline-type relocation)",
+          "src/orchestrator/pipeline.ts:158 (runSprintCycle def, 7 positional params) and :931 (SOLE production call site)",
+          "src/orchestrator/code-reviewer-agent.test.ts:229,333 + src/orchestrator/documenter-agent.test.ts:229,265,299 (the 5 test call sites to update)",
+          "grep: runSprintCycle absent from src/index.ts and src/mcp/ (not public API — internal-only refactor)",
+          "src/utils/git.ts:153 stashAndRestore + src/utils/index.ts:8 (barrel re-export, no caller — removable)",
+          "src/state/outline-state.ts:27 saveOutline + src/state/index.ts:44 (barrel re-export, no caller — removable)",
+          "DISQUALIFIED false positives (keep): src/cli/index.ts:152 calls runPlanAnswerInteractive; src/orchestrator/context-handoff.ts:171 calls summarizeSprint; src/index.ts:153 exports readBriefing (public API)"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "Cycle 2 is a genuine runtime cycle: critic-deep.ts:4 value-imports runExpandStage from decomposer-deep.ts, and decomposer-deep.ts:5 value-imports runCritiqueLoop from critic-deep.ts. Breaking ONE direction breaks the cycle.",
+    "runCritiqueLoop (critic-deep.ts:208) has exactly ONE production caller — decomposeGoalDeep at decomposer-deep.ts:367 (grep-verified across src/). decomposeGoalDeep lives in the same file as runExpandStage, so it can pass runExpandStage into runCritiqueLoop with no new import.",
+    "Injecting runExpandStage INTO runCritiqueLoop (rather than the reverse) is the minimal break: it touches one production call site + the 9 runCritiqueLoop test calls in critic-deep.test.ts, and leaves decomposeGoalDeep's PUBLIC signature unchanged.",
+    "critic-deep.ts also imports `type Outline` from decomposer-deep.ts (type-only). To eliminate even the type-level file edge (which tokensave_circular counts — see Cycle 1), `Outline` (decomposer-deep.ts:86, sole external importer critic-deep.ts) must be relocated to a dependency-free leaf, mirroring the decomposer-deep-constants.ts pattern from commit a73526c.",
+    "runSprintCycle (pipeline.ts:158) takes 7 positional params; its 48-outgoing fan-out overstates blast radius — it has ONE production caller (pipeline.ts:931) plus 5 test call sites (code-reviewer-agent.test.ts, documenter-agent.test.ts), and is NOT exported from src/index.ts or used by MCP, so the params-object refactor is internal-only.",
+    "Dead-code verification disqualified 3 of the 5 research candidates: runPlanAnswerInteractive (live caller cli/index.ts:152), summarizeSprint (live caller context-handoff.ts:171), readBriefing (public API src/index.ts:153). Only stashAndRestore (utils/git.ts:153) and saveOutline (outline-state.ts:27) are genuinely removable — each is a barrel re-export with no consumer.",
+    "Verify stack is `tsc` (build), `tsc --noEmit` (typecheck), `eslint src/` (lint), `vitest` (test), per package.json. The 6 known cockpit-integration E2E MCP failures are pre-existing and unrelated to this work.",
+    "All three work streams are independent (disjoint file sets, no shared symbols) — no forward dependencies between sprints; each builds and passes on its own."
+  ],
+  "outOfScope": [
+    "Cycle 1 (orchestrator/memory/fact-judge ↔ reconcile) — both edges are `import type`, erased at compile, NO runtime cycle; explicitly excluded as benign/cosmetic.",
+    "Adding unit tests to fileExists or other untested hotspot leaves (research finding C — user did not select it).",
+    "Removing or altering the dynamic-dispatch dead-code false positives (checkpoint renderers, registry lookups, entry points like createBoberMCPServer).",
+    "Removing runPlanAnswerInteractive, summarizeSprint, or readBriefing — verified live / public API.",
+    "Any behavior change, new logging, new CLI surface, or schema change.",
+    "Refactoring runTsPipeline or other hubs; touching the dist/ build output.",
+    "Changing critique/expand budget constants, early-stop logic, or fleet behavior."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Break the critic-deep ↔ decomposer-deep runtime import cycle (dependency injection)",
+      "description": "Inject runExpandStage into runCritiqueLoop so src/fleet/critic-deep.ts no longer imports src/fleet/decomposer-deep.ts (neither value nor type). decomposeGoalDeep passes its local runExpandStage in at the single call site; the Outline type moves to a dependency-free leaf.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the change is complete, `grep -nE 'decomposer-deep' src/fleet/critic-deep.ts` returns ZERO matches — critic-deep imports nothing (value or type) from decomposer-deep.",
+        "AC2: When runCritiqueLoop runs, it calls an injected re-expand function (a parameter on its input object) instead of the previously-imported runExpandStage; critic-deep.ts:247's call site uses the injected function.",
+        "AC3: When decomposeGoalDeep invokes runCritiqueLoop (decomposer-deep.ts:367), it passes its in-file runExpandStage as the injected dependency; decomposeGoalDeep's exported signature is byte-unchanged.",
+        "AC4: When critic-deep references the Outline type, it imports it from a dependency-free leaf module (e.g. decomposer-deep-types.ts), not from decomposer-deep.ts; decomposer-deep re-exports Outline so its public surface is unchanged.",
+        "AC5: When `tokensave sync` + circular check (or `madge --circular`) runs, the critic-deep ↔ decomposer-deep pair is no longer reported; only a one-directional decomposer-deep → critic-deep edge remains.",
+        "AC6: build + typecheck + full vitest suite pass (only the 6 known cockpit-integration failures may remain); critic-deep.test.ts (9 runCritiqueLoop calls) and decomposer-deep.test.ts updated to the injected signature."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Collapse runSprintCycle's 7 positional params into a single typed options object",
+      "description": "Replace runSprintCycle(contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId?) with a single typed params object, updating the one production caller and 5 test call sites. Pure mechanical refactor; the function body only gains a destructure.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When runSprintCycle is called, it takes a single object argument typed by an exported/adjacent type (e.g. RunSprintCycleParams) carrying the same 7 fields (pipelineRunId optional); no positional params remain.",
+        "AC2: When the build runs, the production call site (pipeline.ts:931) and all 5 test call sites (code-reviewer-agent.test.ts, documenter-agent.test.ts) pass an object literal; typecheck + test pass.",
+        "AC3: The function body is behavior-identical — only param access changes (destructure or params.x); no control-flow or logic edits inside runSprintCycle.",
+        "AC4: runSprintCycle remains internal — not added to src/index.ts or any MCP tool; `grep runSprintCycle src/index.ts src/mcp/` stays empty."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Remove the two verified dead-code orphans",
+      "description": "Delete stashAndRestore (utils/git.ts) and saveOutline (outline-state.ts) and their barrel re-export lines. Leave the three disqualified false positives untouched.",
+      "priority": "nice-to-have",
+      "acceptanceCriteria": [
+        "AC1: When the change is complete, stashAndRestore is removed from src/utils/git.ts AND its re-export at src/utils/index.ts:8 is removed; saveOutline is removed from src/state/outline-state.ts AND its re-export at src/state/index.ts:44 is removed.",
+        "AC2: runPlanAnswerInteractive, summarizeSprint, and readBriefing are NOT modified (verified live callers / public API).",
+        "AC3: When `grep -rnE '\\b(stashAndRestore|saveOutline)\\b' src/` runs, it returns ZERO matches; build + typecheck + lint + full test suite pass."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "The critic-deep ↔ decomposer-deep file-level circular dependency (runtime AND type-level) is eliminated; no new cycles are introduced.",
+      "verificationMethod": "grep src/fleet/critic-deep.ts for 'decomposer-deep' returns nothing; tokensave_circular (after sync) / madge --circular no longer lists the fleet pair."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Zero behavior change across all three sprints — the full test suite stays green (minus the 6 known pre-existing cockpit failures).",
+      "verificationMethod": "Run vitest; compare pass count to baseline; no production logic edits beyond signature/destructure and deletions."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Each sprint's diff is confined to its named files only (no cross-sprint contamination).",
+      "verificationMethod": "git diff --stat after each sprint matches the contract's estimatedFiles."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "N/A — no data-model changes.",
+    "securityConsiderations": [],
+    "existingPatterns": "ESM with .js import specifiers, `import type` (consistent-type-imports), unicode box-drawing section headers, no synchronous fs, collocated *.test.ts. The dependency-free-leaf pattern in src/fleet/decomposer-deep-constants.ts (commit a73526c) is the model for relocating the Outline type. Source of findings: .bober/research/research-20260621-codebase-health-hotspots-cycles-research.md."
+  },
+  "sprints": [
+    "sprint-spec-20260621-codebase-health-remediation-1",
+    "sprint-spec-20260621-codebase-health-remediation-2",
+    "sprint-spec-20260621-codebase-health-remediation-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "2-4 hours",
+    "riskLevel": "low",
+    "riskNotes": "All three streams are internal-only refactors with no public-API or behavior change, each backed by grep/graph-verified call-site maps. The highest-value item (feat-1) touches well-tested modules (critic-deep.test.ts 637 lines, decomposer-deep.test.ts 394 lines). runSprintCycle's apparent risk (48 fan-out) is mitigated by it having a single production caller and no external exposure."
+  }
+}

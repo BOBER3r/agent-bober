@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["181f30c - bober(sprint-2): lab-note vault writer + HealthDataStore reindex + ingest dedup"],
+  "filesChanged": [
+    "src/medical/lab-note.ts (created)",
+    "src/medical/lab-reindex.ts (created)",
+    "src/medical/lab-note.test.ts (created)",
+    "src/medical/lab-reindex.test.ts (created)"
+  ],
+  "testsAdded": ["src/medical/lab-note.test.ts", "src/medical/lab-reindex.test.ts"],
+  "selfVerify": {
+    "build": "exit 0",
+    "lint": "0 errors (2 pre-existing any warnings in eval-persist.test.ts)",
+    "fullSuite": "2944 passed (231 files), up from 2911 (+33)",
+    "guardrails": "grep: 0 createClient/fetch/new Date/Date.now in code; 0 imports from src/vault; all async fs (node:fs/promises)"
+  },
+  "notes": "deriveLabStatus pure/sync; hand-rolled frontmatter serializer (no YAML dep, never imports src/vault); reindex returns genuine new-row count via upsert info.changes; deterministic labResultId dedup -> second run returns 0."
+}

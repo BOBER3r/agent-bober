@@ -1,0 +1,44 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-4",
+  "specId": "spec-20260529-opus-4-8-support",
+  "sprintNumber": 4,
+  "title": "Add mid-conversation system blocks (mid_conv_system)",
+  "description": "Add a provider-agnostic Message variant representing a mid-conversation system instruction with an optional ephemeral cache TTL, and have the Anthropic adapter render it as a mid_conv_system content block inside a message. This lets instructions be updated mid-task without breaking the prompt cache. Non-anthropic adapters render it as best-effort text or skip it, never throwing.",
+  "status": "completed",
+  "dependsOn": ["sprint-spec-20260529-opus-4-8-support-2"],
+  "features": ["feat-4"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "The provider Message union gains a variant carrying mid-conversation system instruction text plus an optional ephemeral cache TTL, and the package typechecks with the new variant handled in the conversion code.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "C2", "description": "The Anthropic adapter renders the new variant as a content block of type mid_conv_system whose content is a single text block containing the supplied instruction text, asserted by a unit test capturing messages.create.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "When the variant supplies a cache TTL, the emitted mid_conv_system block carries cache_control of type ephemeral with that ttl; when no TTL is supplied, the block carries no cache_control, asserted by unit tests for both cases.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "A non-anthropic adapter given the new variant returns a normal response and raises no error, rendering it as best-effort text or skipping it, asserted by a unit test.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C5", "description": "npm run build exits zero and npm run test shows no new failures beyond the documented flaky baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do not add a role:'system' message variant; the Messages API has no system role inside the messages array.",
+    "Do not change how the top-level system prompt or the existing prompt-caching breakpoints are emitted.",
+    "Do not require non-anthropic adapters to faithfully implement mid_conv_system; a best-effort text rendering or a documented skip that does not throw is acceptable.",
+    "Do not introduce unjustified `any` casts around the new SDK block type."
+  ],
+  "stopConditions": [
+    "Stop when the new Message variant renders to a mid_conv_system block on the anthropic path with the correct optional cache_control, non-anthropic adapters do not throw, and the suite is green except the flaky baseline.",
+    "Stop when the change is confined to types.ts, the provider adapters, and the relevant *.test.ts files."
+  ],
+  "definitionOfDone": "The provider Message union includes a mid-conversation-system variant carrying instruction text and an optional ephemeral cache TTL; the Anthropic adapter converts it to a content block of type mid_conv_system whose content is a single text block, attaching cache_control ephemeral with the given ttl only when a ttl is supplied; non-anthropic adapters render it as best-effort text or skip it without throwing; unit tests capture the emitted block shape for the ttl and no-ttl cases and prove a non-anthropic adapter tolerates the variant; typecheck, lint, and build pass and the suite shows only the documented flaky baseline failures.",
+  "assumptions": [
+    "mid_conv_system is a content block placed inside a message's content array (not a top-level role), shaped { type:'mid_conv_system', content:[{type:'text',text}], cache_control?:{type:'ephemeral',ttl} } per the API reference.",
+    "The SDK upgrade from sprint 2 types the mid_conv_system block so it can be constructed without a cast."
+  ],
+  "outOfScope": ["effort parameter", "role:'system' messages", "orchestrator wiring that actually emits mid-conversation updates"],
+  "ambiguityScore": 4,
+  "generatorNotes": "In src/providers/types.ts add a new Message variant for a mid-conversation system instruction, e.g. interface SystemUpdateMessage { role: 'user'; systemUpdate: string; cacheTtl?: '5m' | '1h' } (the exact field names are your choice but it MUST carry the instruction text and an optional ephemeral ttl), and add it to the Message union. Update the conversion in src/providers/anthropic.ts (toAnthropicMessage) to emit a MessageParam whose content array contains a block: { type: 'mid_conv_system', content: [{ type: 'text', text: <instruction> }], ...(ttl ? { cache_control: { type: 'ephemeral', ttl } } : {}) }. Per the API reference this block sits inside a message's content array, positioned anywhere; it is NOT a top-level role. Confirm the upgraded SDK (sprint 2) types the mid_conv_system block (grep node_modules) so no cast is needed. For the non-anthropic adapters (openai.ts, google.ts, openai-compat.ts): map the variant to a plain text message (e.g. an OpenAI system or user message with the instruction) OR skip it — it MUST NOT throw. Mirror the existing anthropic.test.ts top-level vi.mock pattern to capture and assert the emitted block for ttl and no-ttl cases. Conventional commit: bober(sprint-4): add mid-conversation system blocks (mid_conv_system).",
+  "evaluatorNotes": "Read types.ts and confirm the new Message variant (text + optional ephemeral ttl) is in the union and handled in conversion (typecheck would fail on an unhandled union member). Read anthropic.ts and confirm toAnthropicMessage emits a mid_conv_system block with a text child equal to the instruction, and cache_control ephemeral with the ttl ONLY when a ttl is supplied. Run the unit tests: capture the request and assert the block shape for ttl and no-ttl cases. Confirm a non-anthropic adapter test passes the variant and returns normally with no throw. Verify NO role:'system' entry is emitted into the messages array. Run typecheck/lint/build (exit 0) and npm run test (only flaky baseline failures tolerated). Confirm changes are limited to types.ts, the adapters, and *.test.ts.",
+  "estimatedFiles": ["src/providers/types.ts", "src/providers/anthropic.ts", "src/providers/openai.ts", "src/providers/google.ts", "src/providers/openai-compat.ts", "src/providers/anthropic.test.ts"],
+  "estimatedDuration": "medium",
+  "iterationHistory": [{"iteration":1,"evalId":"eval-sprint-spec-20260529-opus-4-8-support-4-1","result":"pass","timestamp":"2026-05-29T19:40:00Z"}],
+  "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-4-1",
+  "createdAt": "2026-05-29T18:00:00Z",
+  "updatedAt": "2026-05-29T19:40:00Z",
+  "startedAt": "2026-05-29T19:26:00Z",
+  "completedAt": "2026-05-29T19:40:00Z"
+}

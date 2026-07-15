@@ -1,0 +1,40 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-2-2",
+  "contractId": "sprint-spec-20260628-task-inbox-2",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "requiredPassed": 4,
+    "requiredFailed": 0,
+    "requiredTotal": 4
+  },
+  "strategyResults": [
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "details": "0 errors (2 pre-existing unrelated warnings in eval-persist.test.ts). Iteration-1 unused-var error resolved by using task2.id in an assertion."
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "details": "Full suite 258 files / 3291 tests pass; no regressions."
+    }
+  ],
+  "summary": "Sprint 2 PASS on iteration 2. Iteration-1 evaluator confirmed all 5 criteria + build + typecheck pass; the only failure was a lint hard-gate error (unused var task2 in task.test.ts:132). Rework (commit 26f45db) added expect(output).toContain(task2.id), clearing the error and strengthening sc-2-3. Orchestrator deterministically re-confirmed lint=0 errors, build/typecheck exit 0, full suite 3291 green."
+}

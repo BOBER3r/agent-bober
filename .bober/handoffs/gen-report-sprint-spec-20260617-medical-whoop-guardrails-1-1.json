@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["2a8ff70 - bober(sprint-1): Code-enforced non-emergency refusal layer"],
+  "filesChanged": [
+    { "path": "src/medical/refusal.ts", "action": "created", "description": "Pure synchronous RefusalDetector: 3-category union, REFUSAL_PATTERNSET_VERSION, fixed REFUSAL_REASONS record, conservative RULES array, detect(prompt):RefusalMatch." },
+    { "path": "src/medical/refusal.test.ts", "action": "created", "description": "31 tests: purity/determinism, each category, 8 benign 'none', byte-fixed reasons, no-network source-scan." },
+    { "path": "src/medical/guardrails.ts", "action": "modified", "description": "readonly RefusalDetector; refuse check in evaluate() AFTER red-flag return (emergency precedence); refusalPatternsetVersion getter." },
+    { "path": "src/medical/guardrails.test.ts", "action": "modified", "description": "refuse verdict + byte-equal fixed text (3 categories), red-flag precedence (2 combined prompts), getter test." },
+    { "path": "src/medical/engine.ts", "action": "modified", "description": "refuse-dispatch branch after short-circuit: event:'refuse' audit (IDs/enums only), MedicalAnswer canned body/shortCircuit:true/abstained:false/citations:[]." },
+    { "path": "src/medical/engine.test.ts", "action": "modified", "description": "3 refuse tests: canned answer shape, 0 LLM/numerics spy, single refuse audit entry, PHI-free key set." }
+  ],
+  "testsAdded": ["src/medical/refusal.test.ts", "src/medical/guardrails.test.ts", "src/medical/engine.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings in eval-persist.test.ts, unrelated)",
+    "test_medical": "228 passed",
+    "test_full": "2438 passed | 3 skipped (199 files)"
+  },
+  "blockers": [],
+  "notes": "All 8 criteria met. Test count 2393->2438 (+45). RuleIds are opaque short-form (rx-request-modal, dose-quantity-mg, txplan-for-me) to avoid PHI/prompt-text leakage in audit. RULES patternset deliberately conservative (4 rules/category), accepting false-negatives per spec."
+}

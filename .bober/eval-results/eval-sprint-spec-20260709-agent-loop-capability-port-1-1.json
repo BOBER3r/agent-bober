@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-1-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T20:28:07Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Zero type errors with widened AgenticLoopResult.refused and parseGeneratorResult param."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings (eval-persist.test.ts)", "details": "New files introduce zero new warnings."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "Clean build with extended types."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "297 files / 3699 tests passed (28.68s)", "details": "Baseline 3686 + 13 new tests, all green."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-1-1", "description": "Anthropic normalizeStopReason explicit 'refusal' case + documented union value", "required": true, "result": "pass", "evidence": "Explicit case before default branch; types.ts doc comment updated; adapter test green.", "feedback": ""},
+    {"criterionId": "sc-1-2", "description": "OpenAI-family maps refusal surface to 'refusal'", "required": true, "result": "pass", "evidence": "content_filter case + message.refusal override in chat(); openai-compat inherits via super.chat (verified untouched); 3 tests green.", "feedback": ""},
+    {"criterionId": "sc-1-3", "description": "runAgenticLoop resolves with refused:true, stopReason 'refusal', incl. after tool_use turns", "required": true, "result": "pass", "evidence": "Spread-conditional refused on completion branch, never throws; same-turn and after-tool_use tests green.", "feedback": ""},
+    {"criterionId": "sc-1-4", "description": "parseGeneratorResult fail-closed on refusal before filesWritten check", "required": true, "result": "pass", "evidence": "Refusal guard is first statement; verified wired at real call site generator-agent.ts:151; both tests with non-empty filesWritten green.", "feedback": ""},
+    {"criterionId": "sc-1-5", "description": "No refused key on non-refusal path; pre-existing tests unchanged", "required": true, "result": "pass", "evidence": "Object.hasOwn === false asserted for normal and max-turns paths; full 3686-test baseline green.", "feedback": ""},
+    {"criterionId": "sc-1-6", "description": "build + typecheck pass", "required": true, "result": "pass", "evidence": "Both independently re-run, exit 0.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria independently verified against commit 35a2dbd: explicit refusal mapping in both adapter families, non-throwing refused:true loop propagation, fail-closed generator override verified at the real call site, byte-identical non-refusal path. 3699/3699 tests green; no nonGoal violations; claude-code.ts untouched; no new dependencies."
+}

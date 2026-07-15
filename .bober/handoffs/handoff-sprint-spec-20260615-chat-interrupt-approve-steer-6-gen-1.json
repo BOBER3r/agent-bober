@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-chat-interrupt-approve-steer-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-6",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T15:12:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Chat Interrupt / Approve / Steer (Phase 2) — Sprint 6 FINALE: hygiene cleanup + full /help + consolidated docs (README + docs/chat-steer.md incl. the single-careful-run limitation) + a full-loop e2e test. Integration/polish sprint; minimal new abstraction.",
+    "completedSprints": [
+      { "contractId": "...-1", "commit": "14c2be6", "summary": "RunState grammar, CarefulSidecar /careful, --approve-gates, RunSpawner careful spawn (--approve-gates post-research,post-plan,post-sprint)." },
+      { "contractId": "...-2", "commit": "67495fc", "summary": "ApprovalReader, ApprovalCursor announce-once, handleTurn surfacing prelude, RunState input-required reflection, roster waiting=<gate>." },
+      { "contractId": "...-3", "commit": "fb4b787", "summary": "/approve, /reject+feedback, NL; handleApprove/handleReject reuse saveApproved/saveRejected; RunState clear-on-resolve." },
+      { "contractId": "...-4", "commit": "b74dfcb", "summary": "src/state/guidance.ts (appendGuidance/drainGuidance/hasRunDir + exported safeSegment); /tell + NL; additive pipeline guidance read point." },
+      { "contractId": "...-5", "commit": "bd14e02", "summary": "src/state/pause.ts (setPaused/clearPaused/isPaused + waitWhilePaused injected-clock); /pause//resume + NL; additive cooperative-pause gate; no-kill distinct from /stop." }
+    ],
+    "currentBranch": "bober/chat-interrupt-approve-steer",
+    "relevantFiles": [
+      "src/chat/chat-session.ts (CLEANUP HOOK SITE: the completion poll prelude at ~:140-146 — insert cleanup after :146, BEFORE the ~:148 approval prelude; best-effort, never throw into the turn)",
+      "src/chat/completion-tailer.ts (how terminal completions for runId R are detected — cleanup keys off the same signal)",
+      "src/state/approval-state.ts (deletePending(projectRoot, id) ~:138 for stale pending markers; listPending to find a run's pending markers by correlated runId)",
+      "src/state/guidance.ts + src/state/pause.ts (guidance.jsonl + paused.json paths under .bober/runs/<id>/ to unlink best-effort)",
+      "src/state/run-state.ts (writeRunState/readRunState to clear pending/paused fields)",
+      "src/chat/slash-commands.ts (HELP_TEXT at ~:17-31 ALREADY lists the full set — sc-6-6 is TEST-ONLY; just assert each command appears)",
+      "src/chat/chat-session-{spawn,approval,steer,completion}.test.ts (the e2e harness helpers: injectPending/injectRunningRun/injectCompletion/makeMarker + the calls-capturing spawn for --approve-gates)",
+      "README.md (chat section to extend with the steer subsection) + docs/teams.md + .bober/research/20260614-chattable-team-of-agents-platform.md Phase 2 (cross-refs for docs/chat-steer.md)"
+    ]
+  },
+  "keyInvariants": [
+    "CLEANUP IS BEST-EFFORT: cleanupTerminalRun(projectRoot, runId) must tolerate ENOENT and NEVER throw into a chat turn (wrap in try/catch, mirror the Phase 1 completion-prelude try/catch). It runs when the chat process observes a run reach a terminal status (completed/aborted) at the completion-prelude hook (~:140-146, insert after :146).",
+    "CLEANUP SCOPE: for terminal runId R — deletePending for R's correlated pending marker(s); unlink .bober/runs/R/guidance.jsonl and .bober/runs/R/paused.json (best-effort); clear the chat-owned RunState pending/paused fields (pendingCheckpointId/pendingPrompt/pendingSince/pausedAt) and leave the terminal status as-is via writeRunState.",
+    "CORRELATION CAVEAT = THE DOCUMENTED LIMITATION: pending markers are checkpointId-keyed in a SHARED .bober/approvals dir (not runId-scoped). Correlating a pending marker to runId R is exactly why only ONE careful run at a time is supported this phase. The docs MUST state this limitation + the runId-scoped-marker follow-up (sc-6-7).",
+    "ADDITIVE/NO-REGRESSION: do NOT change phase order or the pipeline; do NOT implement runId-scoped markers (follow-up only); do NOT add cockpit/IDE surfacing or any new steer capability. /help already lists the full set — sc-6-6 just verifies it.",
+    "E2E IS THE INTEGRATION PROOF (sc-6-5): stub the pipeline/run loop + RunSpawner (NO real LLM, no network, temp dirs). Drive: setCareful(on) -> spawn (assert --approve-gates in args) -> write synthetic post-plan.pending.json (simulate child at gate) -> turn asserts surfaced + RunState input-required -> handleTell asserts guidance entry -> handleApprove('post-plan') asserts approved.json + pending cleared -> simulate post-sprint pending -> handlePause asserts paused.json + RunState paused -> handleResume asserts cleared -> simulate completion marker -> assert cleanup removed stale markers + RunState fields. Assert at the disk-artifact + RunState level."
+  ],
+  "successCriteriaSummary": "sc-6-1 build; sc-6-2 typecheck; sc-6-3 tests incl hygiene + e2e; sc-6-4 completion/abort cleans stale pending+guidance+paused markers + clears RunState pending/paused fields (unit test for completed AND aborted); sc-6-5 full-loop e2e (stubbed, offline) asserting markers + RunState transitions at each step; sc-6-6 /help lists full set (/careful,/approve,/reject,/tell,/pause,/resume,/stop,/runs,/help,/exit) — test-only; sc-6-7 README chat section + docs/chat-steer.md document /careful + curated gates (post-research/post-plan/post-sprint) + approve/reject/tell/pause/resume + EXPLICIT single-careful-run limitation + runId-scoped follow-up.",
+  "config": { "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" } },
+  "principlesRef": ".bober/principles.md (ESM/NodeNext, .js imports, no SDK types outside src/providers/, async fs only, best-effort unlink tolerating ENOENT, collocated *.test.ts, no fs mocks, no network, conventional commit bober(sprint-6): ...)",
+  "notesForGenerator": "Baseline after Sprint 5 is 2130 tests passing. Known PRE-EXISTING flake in src/mcp/tools/list-active-runs.test.ts (intermittent ENOTEMPTY cleanup race; passes on re-run/isolation) — this Sprint 6 is the documented place it was flagged, but the contract does NOT ask you to fix it; if it's the ONLY failure on your run, re-run once to confirm green and note it. You may optionally harden that test's temp-dir cleanup if trivial and clearly the race, but do not let it expand scope or risk the sprint — prefer noting it. Docs: README chat section + docs/chat-steer.md are YOUR deliverable (the per-sprint documenters intentionally left these for you). Cross-reference research Phase 2 + docs/teams.md. `npm run update-all` to sync .claude copies is a HUMAN follow-up — mention it in docs, do not run it.",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,50 @@
+{
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-3",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "sprintNumber": 3,
+  "title": "Remove the two verified dead-code orphans (stashAndRestore, saveOutline)",
+  "description": "Delete the only two dead-code candidates that verification confirmed as genuinely orphaned: stashAndRestore (src/utils/git.ts:154) and saveOutline (src/state/outline-state.ts:28). Each is exported solely through a barrel (src/utils/index.ts:8, src/state/index.ts:44) with zero consumers (grep-verified). Remove both functions AND their barrel re-export lines. CRITICAL (curator): outline-state.ts ALSO exports readOutline (LIVE — called at pipeline.ts:828), so the file is KEPT and only saveOutline is removed; removing saveOutline orphans the writeFile + ensureDir imports in outline-state.ts which MUST be pruned (noUnusedLocals + no-unused-vars=error). git.ts needs no import changes. The three other research candidates are explicitly LEFT ALONE — runPlanAnswerInteractive (live caller cli/index.ts:152), summarizeSprint (live caller context-handoff.ts:171), and readBriefing (public API via src/index.ts:153).",
+  "status": "completed",
+  "completedAt": "2026-06-21T23:10:00Z",
+  "dependsOn": [],
+  "features": ["feat-3"],
+  "successCriteria": [
+    { "criterionId": "sc-3-1", "description": "Build + typecheck pass with zero errors (npm run build, npm run typecheck).", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-3-2", "description": "stashAndRestore is removed from src/utils/git.ts AND its re-export line in src/utils/index.ts is removed. saveOutline is removed from src/state/outline-state.ts AND its re-export line in src/state/index.ts is removed.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-3-3", "description": "`grep -rnE '\\b(stashAndRestore|saveOutline)\\b' src/` returns ZERO matches.", "verificationMethod": "command", "required": true },
+    { "criterionId": "sc-3-4", "description": "runPlanAnswerInteractive, summarizeSprint, and readBriefing are NOT modified — `git diff` shows no changes to src/cli/commands/plan.ts, src/orchestrator/context-handoff.ts, src/state/briefing-state.ts, or the readBriefing export in src/index.ts.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-3-5", "description": "lint passes (zero errors — no newly-unused imports left behind in git.ts/outline-state.ts after the deletions) and the full vitest suite passes (only the 6 known cockpit-integration failures may remain). Any collocated test that referenced the removed functions is deleted/updated.", "verificationMethod": "unit-test", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT remove or alter runPlanAnswerInteractive, summarizeSprint, or readBriefing (all verified live / public API).",
+    "Do NOT touch the dynamic-dispatch dead-code false positives (checkpoint renderers, registry lookups, createBoberMCPServer, etc.).",
+    "Do NOT remove other exports from utils/git.ts, outline-state.ts, or the two barrel files.",
+    "Do NOT change behavior of any retained function.",
+    "Do NOT remove dist/ artifacts or change .gitignore."
+  ],
+  "stopConditions": [
+    "All five success criteria pass",
+    "stashAndRestore and saveOutline (and their barrel lines) are gone, the 3 false positives are untouched, and build/typecheck/test/lint are green"
+  ],
+  "definitionOfDone": "stashAndRestore and saveOutline are deleted from their source files and their barrel re-exports (utils/index.ts, state/index.ts) are removed; grep finds zero remaining references; the three false-positive candidates are untouched; any collocated tests of the removed fns are removed; build/typecheck/test/lint green.",
+  "assumptions": [
+    "stashAndRestore is `async function stashAndRestore<T>(cwd, fn)` at src/utils/git.ts:153; its only reference outside the def is the barrel re-export at src/utils/index.ts:8 (grep-verified, no call site).",
+    "saveOutline is `async function saveOutline(projectRoot, specId, content)` at src/state/outline-state.ts:27; its only reference outside the def is the barrel re-export at src/state/index.ts:44 (grep-verified, no call site).",
+    "After deletion, any imports that stashAndRestore/saveOutline themselves used (e.g. git stash helpers, fs writers) may become unused in git.ts/outline-state.ts — remove those now-orphaned imports too so lint stays green.",
+    "outline-state.ts may contain other functions besides saveOutline (e.g. a readOutline); delete ONLY saveOutline and keep the rest. If saveOutline is the file's only export, deleting the whole file + its barrel line is acceptable — verify first.",
+    "The three retained candidates have confirmed live usage: cli/index.ts:152 (runPlanAnswerInteractive), context-handoff.ts:171 (summarizeSprint), src/index.ts:153 (readBriefing public export)."
+  ],
+  "outOfScope": [
+    "runPlanAnswerInteractive, summarizeSprint, readBriefing",
+    "Dynamic-dispatch dead-code false positives",
+    "Any behavior change"
+  ],
+  "ambiguityScore": 1,
+  "generatorNotes": "Read FIRST: src/utils/git.ts around :153 (the full stashAndRestore body — note what it imports/uses), src/utils/index.ts:8 (the re-export), src/state/outline-state.ts around :27 (saveOutline + whether the file has other exports), src/state/index.ts:44 (the re-export).\n\nSTEP 1 — delete stashAndRestore from src/utils/git.ts (the whole function + its doc comment). Remove the `stashAndRestore,` line from src/utils/index.ts:8. If stashAndRestore was the only user of some import in git.ts (e.g. a stash/pop helper), remove that now-unused import too.\n\nSTEP 2 — delete saveOutline from src/state/outline-state.ts. Remove the `saveOutline,` line from src/state/index.ts:44. If outline-state.ts has OTHER exports, keep them; if saveOutline was the sole export, you may delete the file and its barrel line entirely — confirm by reading the file first. Remove any imports left unused after the deletion.\n\nSTEP 3 — search for collocated tests: `grep -rnE 'stashAndRestore|saveOutline' src/` (incl. *.test.ts). Delete or update any test that exercised the removed functions.\n\nSTEP 4 — verify `grep -rnE '\\b(stashAndRestore|saveOutline)\\b' src/` is empty, then run build/typecheck/lint/test. Do NOT touch plan.ts, context-handoff.ts, briefing-state.ts, or the readBriefing line in src/index.ts. Commit: `bober(sprint-3): remove verified dead-code orphans stashAndRestore + saveOutline`.",
+  "evaluatorNotes": "sc-3-3 (CRITICAL): `grep -rnE '\\b(stashAndRestore|saveOutline)\\b' src/` MUST return nothing (functions, barrel lines, and any tests all gone). sc-3-2: confirm both source deletions AND both barrel-line removals. sc-3-4 (false-positive guard): `git diff --name-only` must NOT include src/cli/commands/plan.ts, src/orchestrator/context-handoff.ts, src/state/briefing-state.ts; confirm src/index.ts still exports readBriefing (grep readBriefing src/index.ts still matches). sc-3-5: lint clean (no leftover unused imports in git.ts/outline-state.ts); full vitest, only the 6 known cockpit failures. Build/typecheck clean. git diff --stat should be confined to src/utils/git.ts, src/utils/index.ts, src/state/outline-state.ts, src/state/index.ts (+ any deleted test).",
+  "estimatedFiles": ["src/utils/git.ts", "src/utils/index.ts", "src/state/outline-state.ts", "src/state/index.ts"],
+  "estimatedDuration": "small",
+  "iterationHistory": [],
+  "createdAt": "2026-06-21T18:45:00Z",
+  "updatedAt": "2026-06-21T18:45:00Z"
+}

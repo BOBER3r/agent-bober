@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-research-scheduler-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-research-scheduler-4",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-30T00:40:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 4 of 5. Deterministic cadence math (computeNextDue, clock-free) + idempotent `bober research tick` that runs only due jobs (nextDueAt <= injected now, or unset), advances nextDueAt and records lastRunAt, + optional --watch loop. Document scheduling tradeoff. Invokes Sprint 2 runResearchJob unchanged.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260628-research-scheduler-1", "title": "schema/store/CLI", "summary": "0336e47"},
+      {"contractId": "sprint-spec-20260628-research-scheduler-2", "title": "runner", "summary": "20d42cb — tick invokes runResearchJob per due job"},
+      {"contractId": "sprint-spec-20260628-research-scheduler-3", "title": "egress axis", "summary": "0150737 — runner deps gained OPTIONAL egress/retrievalClient; tick passes deps through unchanged"}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/research/types.ts (EXTEND ResearchJobSchema)",
+      "src/research/job-store.ts (addJob upsert persist path)",
+      "src/research/runner.ts (runResearchJob — invoke unchanged)",
+      "src/cli/commands/research.ts (add tick [--watch] subcommand)",
+      "src/state/facts.ts + src/calendar/slotter.ts (clock-free pure-Date-math references)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run"},
+    "generator": {"model": "sonnet", "autoCommit": true, "commitFormat": "bober(sprint-N): description"}
+  },
+  "principles": "Read .bober/principles.md. Hard gates: strict TS zero errors; ZERO lint errors; ESM .js imports; Zod; async fs; CLOCK INJECTION — no Date.now()/new Date() inside cadence.ts or scheduler.ts cores; only at the CLI .action boundary (~research.ts:209).",
+  "evaluatorFeedback": null,
+  "curatorFindings": {
+    "schemaGap": "CONFIRMED: ResearchJobSchema (src/research/types.ts:33-54) does NOT have nextDueAt/lastRunAt. You MUST extend it with `nextDueAt: z.string().datetime().optional()` and `lastRunAt: z.string().datetime().optional()`. REASON: addJob does ResearchJobSchema.safeParse (job-store.ts:48) before write and z.object STRIPS unknown keys — without these fields, scheduler updates would be silently dropped. (This adds types.ts to the file set; contract estimatedFiles omitted it — that's expected.) Ensure computeNextDue returns a .datetime()-valid ISO string (Date.toISOString() satisfies it).",
+    "persistPath": "Scheduler persists an advanced job by reusing addJob as an in-place UPSERT (job-store.ts:42-60). jobId hashes ONLY question|createdAt (job-store.ts:28-33), so adding nextDueAt/lastRunAt does NOT change the id => re-adding the same id overwrites the same file. NO dedicated updateJob needed (but you may add a thin updateJob wrapper for clarity if it still routes through the stable id). Verify the id does NOT incorporate nextDueAt/lastRunAt.",
+    "cadence": "src/research/cadence.ts computeNextDue(cadence, fromIso): string — PURE, clock-free. Parse fromIso (Date.parse / new Date(fromIso) on the INJECTED instant is fine — it's not the wall clock), add daily=+1 day, weekly=+7 days, monthly=+1 month, return toISOString(). Mirror the pure Date math in src/calendar/slotter.ts. Watch month-length edges (use setUTCMonth or document the JS Date rollover behavior).",
+    "schedulerAndCli": "src/research/scheduler.ts tick(deps) where deps={now, runJob, jobStore (or load/list+persist fns)}: list all jobs, select nextDueAt<=now OR nextDueAt unset, invoke runJob(job) (=runResearchJob) per due job, then set job.lastRunAt=now, job.nextDueAt=computeNextDue(job.cadence, now), persist via addJob upsert. CLI: add `tick [--watch]` to research.ts injecting now=new Date().toISOString() at the .action boundary; --watch uses setInterval but the loop body must delegate to the same injected-now tick for testability. In tick help text DOCUMENT the tradeoff: in-repo --watch loop (simple, dies with process) vs OS cron/launchd calling `bober research tick` (survives reboots, RECOMMENDED for unattended) vs harness scheduler; note hosted-OAuth schedulers unfit for unattended runs."
+  },
+  "notes": "Contract: .bober/contracts/sprint-spec-20260628-research-scheduler-4.json. Briefing: .bober/briefings/sprint-spec-20260628-research-scheduler-4-briefing.md. NON-GOALS: no wall-clock read in cores; do NOT change how a single run executes (runResearchJob unchanged); no new egress (S3 owns it); no digest (S5); no distributed/locked scheduling; single-process. Idempotency is the key property: a 2nd tick at the SAME now must run ZERO jobs."
+}

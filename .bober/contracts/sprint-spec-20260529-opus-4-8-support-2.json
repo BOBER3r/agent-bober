@@ -1,0 +1,45 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-2",
+  "specId": "spec-20260529-opus-4-8-support",
+  "sprintNumber": 2,
+  "title": "Upgrade @anthropic-ai/sdk to expose output_config.effort and mid_conv_system",
+  "description": "Bump @anthropic-ai/sdk from 0.39.0 to a version whose published types include the top-level output_config.effort field and the mid_conv_system content block, update package-lock, and fix any breaking changes in the Anthropic adapter so it compiles and keeps all existing behavior (including the prompt-caching helpers) intact. No new feature behavior is added here; this sprint is purely the dependency upgrade plus compile/regression fixes.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "package.json declares an @anthropic-ai/sdk version (e.g. 0.100.x) whose installed types expose output_config.effort and the mid_conv_system content block, and package-lock.json is regenerated to match.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C2", "description": "grep of node_modules/@anthropic-ai/sdk type declarations finds both an effort field under output_config and a mid_conv_system block type after the upgrade.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "C3", "description": "npm run typecheck exits zero against the upgraded SDK with no new TypeScript errors in the Anthropic adapter.", "verificationMethod": "typecheck", "required": true },
+    { "criterionId": "C4", "description": "npm run lint and npm run build both exit zero after the upgrade.", "verificationMethod": "build", "required": true },
+    { "criterionId": "C5", "description": "Every existing provider unit test passes, including the prompt-caching tests in anthropic.test.ts, with only the documented flaky 37-tool-count baseline failures remaining.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C6", "description": "@anthropic-ai/sdk remains imported only inside src/providers/anthropic.ts, verified by grepping the src tree for the package name.", "verificationMethod": "manual", "required": true }
+  ],
+  "nonGoals": [
+    "Do not add the effort field or mid_conv_system handling in this sprint; sprints 3 and 4 own those.",
+    "Do not change adapter request/response behavior beyond what the upgrade requires to compile and keep tests green.",
+    "Do not introduce unjustified `any` casts to paper over SDK type changes.",
+    "Do not modify other provider adapters except where the upgrade forces a compile fix."
+  ],
+  "stopConditions": [
+    "Stop when the upgraded SDK compiles, typecheck/lint/build exit zero, and the full suite is green except the flaky baseline.",
+    "Stop when the installed @anthropic-ai/sdk types include output_config.effort and the mid_conv_system block."
+  ],
+  "definitionOfDone": "@anthropic-ai/sdk is upgraded in package.json and package-lock to a version whose installed type declarations expose output_config.effort and the mid_conv_system content block; the Anthropic adapter compiles with its existing behavior preserved (prompt-caching helpers included); npm run typecheck, lint, and build all exit zero; every provider unit test passes apart from the documented flaky baseline; and @anthropic-ai/sdk stays imported only inside the adapter.",
+  "assumptions": [
+    "The current latest @anthropic-ai/sdk (0.100.1) types both new fields; if an earlier version already does, that is acceptable as long as both are present.",
+    "Sprint 1 may or may not be merged first; this sprint does not depend on it."
+  ],
+  "outOfScope": ["Implementing effort behavior", "Implementing mid_conv_system behavior", "Raising default max_tokens"],
+  "ambiguityScore": 4,
+  "generatorNotes": "Upgrade @anthropic-ai/sdk to the current latest (0.100.1) or the minimum version that types output_config.effort and the mid_conv_system block. Update package.json and run npm install to regenerate package-lock. This is a LARGE version jump (0.39 -> ~0.100): expect possible breaking changes in messages.create params, the content-block param/response unions, usage fields (input_tokens/output_tokens and the cache_read_input_tokens/cache_creation_input_tokens names), the stop_reason union, and the cache_control / TextBlockParam / CacheControlEphemeral types that the recently-added prompt-caching helpers (buildCachedSystem, attachMessageBreakpoints) rely on. Fix imports/usages in src/providers/anthropic.ts ONLY (keep the SDK out of every other file). Verify the prompt-caching unit tests still pass unchanged. Confirm the new types are present: `grep -rn 'mid_conv_system\\|output_config\\|effort' node_modules/@anthropic-ai/sdk/resources`. Tolerate ONLY the 2 flaky 37-tool-count baseline failures. If a clean compile needs more than mechanical fixes, prefer correct typed code over `any`; document anything non-obvious. Conventional commit: bober(sprint-2): upgrade @anthropic-ai/sdk for Opus 4.8 API fields.",
+  "evaluatorNotes": "Read package.json — confirm @anthropic-ai/sdk version raised and package-lock updated. Run `grep -rn 'output_config\\|effort\\|mid_conv_system' node_modules/@anthropic-ai/sdk/resources` and confirm both effort (under output_config) and mid_conv_system types are present. Run npm run typecheck, lint, build (all exit 0). Run npm run test — anthropic.test.ts (7) and factory.test.ts (26) and all other provider suites must pass; only the 2 flaky 37-tool-count baseline failures are tolerated; confirm the caching tests still pass (behavior unchanged). Run `grep -rln '@anthropic-ai/sdk' src` and confirm the only match is src/providers/anthropic.ts. Check the adapter diff for any unjustified `any`.",
+  "estimatedFiles": ["package.json", "package-lock.json", "src/providers/anthropic.ts", "src/providers/anthropic.test.ts"],
+  "estimatedDuration": "large",
+  "iterationHistory": [{"iteration":1,"evalId":"eval-sprint-spec-20260529-opus-4-8-support-2-1","result":"pass","timestamp":"2026-05-29T18:50:00Z"}],
+  "lastEvalId": "eval-sprint-spec-20260529-opus-4-8-support-2-1",
+  "createdAt": "2026-05-29T18:00:00Z",
+  "updatedAt": "2026-05-29T18:50:00Z",
+  "startedAt": "2026-05-29T18:40:00Z",
+  "completedAt": "2026-05-29T18:50:00Z"
+}

@@ -1,0 +1,16 @@
+{
+  "handoffId": "handoff-sprint-spec-20260714-security-auditor-per-stack-skills-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-2",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 establishes the on-disk authoring format for per-stack security knowledge + the total parser that reads it. Define SecuritySignature type, author skills/bober.security-generic/SKILL.md as discrete labelled signature blocks, implement a pure/total SecuritySignatureParser. No runtime audit behavior changes yet.",
+    "completedSprints": [{"contractId":"sprint-spec-20260714-security-auditor-per-stack-skills-1","title":"Widen taxonomy + structured metadata + hub collision fix","summary":"VulnClass now 17 classes; FindingSeverity/FindingConfidence/TaintPath aliases + optional SecurityFinding fields (cwe/severity/confidence/taint/signatureId) added; inferVulnClass extended with dedicated xss branch. These types are available to import."}],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": ["src/orchestrator/security-audit-types.ts","src/orchestrator/security-scanners.ts","skills/bober.security-generic","skills/bober.solidity/SKILL.md","src/orchestrator/stack-knowledge.ts"]
+  },
+  "config": {"commands":{"build":"tsc","typecheck":"tsc --noEmit","lint":"eslint src/","test":"vitest run"}},
+  "principles": "See .bober/principles.md",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["7f0b1b6 - bober(sprint-1): add bi-temporal SQLite semantic-facts store + bober facts CLI"],
+  "criteriaResults": [
+    { "criterionId": "sc-1-1", "met": true, "evidence": "npm run build (tsc) exits 0; better-sqlite3 + @types/better-sqlite3 added and compiled." },
+    { "criterionId": "sc-1-2", "met": true, "evidence": "npm run typecheck exits 0, zero type errors." },
+    { "criterionId": "sc-1-3", "met": true, "evidence": "FactStore exports insertFact, getActiveFacts(scope,subject?,predicate?), getFact, invalidateFact, close; ctor accepts ':memory:'/path; no Date.now/new Date inside store (only JSDoc)." },
+    { "criterionId": "sc-1-4", "met": true, "evidence": "semantic_facts 11 columns + idx_facts_sp (scope,subject,predicate) and idx_facts_active (scope,t_invalidated); fully parameterized SQL." },
+    { "criterionId": "sc-1-5", "met": true, "evidence": "npm test -- facts: 5 tests pass (insert→active, invalidate→absent-but-getFact, id determinism, subject filter, double-invalidate false)." },
+    { "criterionId": "sc-1-6", "met": true, "evidence": "CLI add/list/show/invalidate exercised against dist; unknown-id invalidate exits 1 without throwing." },
+    { "criterionId": "sc-1-7", "met": true, "evidence": "npm run lint: 0 errors (2 pre-existing warnings in eval-persist.test.ts)." }
+  ],
+  "filesChanged": [
+    "package.json", "package-lock.json", "src/state/facts.ts", "src/state/facts.test.ts", "src/cli/commands/facts.ts", "src/cli/index.ts"
+  ],
+  "testsAdded": ["src/state/facts.test.ts"],
+  "blockers": [],
+  "notes": "Pre-existing scanner.test.ts failure (detects bober commit messages in recent git history) was present BEFORE this sprint — confirmed against stash-clean HEAD; zero new regressions. FactStore interface keeps better-sqlite3 types from leaking (swappable). facts.db default path .bober/memory/facts.db (programming scope). Leftover test db removed by orchestrator post-run."
+}

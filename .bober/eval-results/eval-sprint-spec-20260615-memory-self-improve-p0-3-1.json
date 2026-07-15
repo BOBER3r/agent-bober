@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-3-1",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-3",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T17:05:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0, zero errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings in eval-persist.test.ts." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "Full suite 182 files / 2176 pass / 3 skipped; targeted retrieve/hygiene/memory all pass; zero regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "build + typecheck exit 0." },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "sort overlap DESC → occurrences DESC → lessonId ASC; equal-overlap higher-occurrence wins; C1 empty-on-no-match + lessonId tiebreak still pass; zero-overlap filter keeps token-overlap dominant." },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "hygiene.ts zero Date.now/new Date (grep); now is required param; returns {kept,quarantined}; Date.parse of injected strings only." },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "CLI prune in temp ns: INDEX 2→1, QUARANTINE.md provenance line added, per-lesson .md retained, summary printed; empty INDEX → friendly no-throw exit 0; error path exitCode=1." },
+    { "criterionId": "sc-3-5", "required": true, "result": "pass", "evidence": "keep+avoid sprintId:s1 pair (occurrences 5, and 100) BOTH quarantined by conflict detection (not decay); kept empty." },
+    { "criterionId": "sc-3-6", "required": false, "result": "pass", "evidence": "lint 0 errors on sprint files." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 3 passes all 5 required + the optional lint criterion. Build/typecheck/lint/full 2176-test suite green, zero regressions. hygiene.ts pure (injected now), retrieve ranking occurrence-weighted with token-overlap dominant, quarantine never deletes per-lesson .md, conflict-quarantine confirmed for high-occurrence contradictory pairs."
+}

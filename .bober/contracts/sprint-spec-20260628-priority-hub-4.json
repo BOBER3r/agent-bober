@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-4",
+  "specId": "spec-20260628-priority-hub",
+  "sprintNumber": 4,
+  "title": "priority.md renderer and `bober hub priority` / `bober hub decide`",
+  "description": "Render a ranked Finding[] into a priority.md note (YAML frontmatter + Dataview-friendly table + per-finding rationale) written into the kb-hub sibling vault, and wire the full collect to scope to judge to render pipeline behind `bober hub priority` (general/filtered) and `bober hub decide` (decision). Resolve the kb-hub output path to an absolute path with a documented default.",
+  "status": "completed",
+  "completedAt": "2026-06-29T00:50:45.000Z",
+  "dependsOn": [
+    "sprint-spec-20260628-priority-hub-3"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "src/hub/priority-md.ts renders a ranked Finding[] into markdown with a YAML frontmatter block and one table row per finding containing rank, title, domain, kind, urgency, severity, and dueBy.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "Running `bober hub priority` against two seeded sibling stores writes priority.md to the resolved kb-hub vault path and prints a ranked summary listing each finding's rank and title to stdout.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "Running `bober hub decide \"X vs Y\"` writes a priority.md whose findings are limited to those the decision-scope filter marked relevant to X or Y, ranked within that frame.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "The kb-hub output path resolves to an absolute path from config with a documented default beside the project root, and when the kb-hub directory is missing the command prints a clear error and sets a non-zero exit code instead of throwing an uncaught stack trace.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "npm run build completes with zero TypeScript errors after the renderer and the priority/decide commands are added.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the do-bridge that acts on Finding.promotesTo (owned by do-bridge spec).",
+    "Do not implement calendar slot-fill or write to any calendar connector (owned by calendar-planner spec).",
+    "Do not add the chat hub surface or new slash commands (Sprint 5).",
+    "Do not write into any sibling repo other than the kb-hub output vault.",
+    "Do not let the renderer re-rank; it consumes the order the judge produced."
+  ],
+  "stopConditions": [
+    "priority-md.ts plus the `bober hub priority` and `bober hub decide` commands exist, run the collect-scope-judge-render pipeline end to end, and all five success criteria pass evaluation.",
+    "npm run build exits zero and the renderer and command unit tests pass."
+  ],
+  "definitionOfDone": "Running `bober hub priority` collects findings across resolved siblings, ranks them under general/filtered scope, writes a Dataview-friendly priority.md into the kb-hub vault at a resolved absolute path, and prints a ranked summary; `bober hub decide \"X vs Y\"` does the same under decision scope. A missing kb-hub directory yields a clear error and non-zero exit, the build is green, and the new tests pass.",
+  "assumptions": [
+    "priority.md is a browsable Obsidian/Dataview note in the kb-hub sibling vault and writing it is a local filesystem operation (research:146-159).",
+    "The judge from Sprint 3 produces the order; the renderer only formats it.",
+    "The kb-hub path comes from config (e.g. hub.outVault) with a kb-hub-beside-project-root default, resolved absolute (research:112).",
+    "CLI handlers set process.exitCode and never throw, mirroring src/cli/commands/medical.ts."
+  ],
+  "outOfScope": [
+    "chat hub surface (Sprint 5).",
+    "do-bridge, calendar, telegram, scheduler (sibling specs).",
+    "Editing findings or writing back to source sibling repos."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "src/hub/priority-md.ts: export renderPriorityMd(ranked, scopeLabel, now) returning a string with a YAML frontmatter block (generatedAt, scope, count) and a markdown table (| rank | title | domain | kind | urgency | severity | dueBy |) plus a short per-finding rationale/evidence section below the table for Dataview readers (research:159). Keep it pure (no IO). Add path resolution (src/hub/hub-config.ts or extend repo-resolver): read config.hub?.outVault if present else default to <parentOfProjectRoot>/kb-hub, resolve absolute; the priority.md target is <outVault>/priority.md. Extend src/cli/commands/hub.ts with `priority` (options --domain --due --tag select filtered scope, otherwise general) and `decide <expr>` (parse 'X vs Y' into decision scope via Sprint 3 parseScope). Each command: resolve siblings (Sprint 2 collector) -> collectFindings -> build Scope -> rankFindings(..., llm via createClient from src/providers/factory.js using config chat/planner provider like src/cli/commands/chat.ts:33-39) -> renderPriorityMd -> ensureDir + write file -> print ranked summary. If the kb-hub directory does not exist, print a clear message and set process.exitCode=1 (do not auto-create another repo's vault root; only ensure the file's own parent if outVault exists). Use the medical.ts handler error pattern (src/cli/commands/medical.ts:43-86).",
+  "evaluatorNotes": "Snapshot renderPriorityMd output and assert frontmatter keys and one table row per finding with the seven columns. Run `bober hub priority` against two temp sibling stores under a temp parent that also contains a kb-hub dir; assert priority.md is written at <kb-hub>/priority.md (absolute) and stdout lists ranks+titles. Run decide with 'X vs Y' and a fake/seeded judge and assert only X/Y-relevant findings appear. Remove the kb-hub dir and assert a clear error message plus non-zero exit, no uncaught throw. Assert no sibling source store file is modified. Confirm npm run build is green.",
+  "estimatedFiles": [
+    "src/hub/priority-md.ts",
+    "src/hub/priority-md.test.ts",
+    "src/hub/hub-config.ts",
+    "src/cli/commands/hub.ts",
+    "src/cli/commands/hub.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

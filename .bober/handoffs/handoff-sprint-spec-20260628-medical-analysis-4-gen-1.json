@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-analysis-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-analysis-4",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T19:22:31.081Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 4 of spec-20260628-medical-analysis: extend the deterministic OFFLINE proactive review pass (sprint 1) with TWO analyzers — (a) detectTestGaps over a CLOSED recommended-cadence table that flags biomarkers overdue for re-testing relative to injected now (unknown biomarkers SKIPPED, no guessed cadence), and (b) detectCrossMarkerPatterns that deterministically OFFERS a 'want me to dig deeper?' Finding (kind=question) for related markers both out of range WITHOUT making any LLM call. runProactiveReview now emits trend + gap + offer findings in one offline pass. A separate `bober medical review --dig-deeper <findingId>` path runs the deeper analysis by DELEGATING to sprint-3 generateRecommendation (no re-implementation).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260628-medical-analysis-1", "title": "Proactive trend Findings + vault writer + review pass", "summary": "src/medical/analysis/{finding,finding-writer,trends,review-pass}.ts. runProactiveReview orchestrates analyzeTrends -> writeFinding -> writeDashboard. MedicalFinding + deterministic findingId (SHA-256 domain|biomarker|ruleKey, excludes now). HealthDataStore.listBiomarkers() + getLabSeries. Commit 307e5e7. EXTEND review-pass.ts to also call the new cadence + cross-marker analyzers; reuse finding/finding-writer." },
+      { "contractId": "sprint-spec-20260628-medical-analysis-3", "title": "Recommendation generation end-to-end + recommend CLI", "summary": "src/medical/recommend/{context,urgency,recommend}.ts. generateRecommendation(question, opts/deps) — red-flag-first, egress-gated fail-closed lenses, judge-loop, emits action/question Finding + audit. `bober medical recommend` subcommand. Commit 3b2abb9. IMPORT generateRecommendation for the --dig-deeper deep analysis; do NOT re-implement." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/analysis/review-pass.ts",
+      "src/medical/analysis/finding.ts",
+      "src/medical/analysis/finding-writer.ts",
+      "src/medical/analysis/trends.ts",
+      "src/medical/health-store.ts",
+      "src/medical/types.ts",
+      "src/medical/recommend/recommend.ts",
+      "src/cli/commands/medical.ts"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npx tsc --noEmit", "typecheck": "npx tsc --noEmit", "lint": "npx eslint src/", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "notes": "Full contract (sc-4-1..sc-4-7, nonGoals, stopConditions, assumptions, estimatedFiles) in .bober/contracts/sprint-spec-20260628-medical-analysis-4.json. Read the Sprint Briefing at .bober/briefings/sprint-spec-20260628-medical-analysis-4-briefing.md FIRST. CRITICAL: the proactive offer/gap detection makes ZERO LLM/network calls (deterministic, offline) — only the explicit --dig-deeper CLI flag crosses into the gated LLM path via generateRecommendation. Cadence is a CLOSED code-reviewed table (unknown biomarkers skipped, no guessing — mirror the NumericPrimitive closed-whitelist discipline). Cross-marker offers are deterministic (configured related-marker pairs both out of reference range). Dig-deeper maps an offer findingId back to its marker pair via the offer finding's frontmatter. Do NOT modify engine.ts."
+}

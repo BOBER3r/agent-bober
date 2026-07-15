@@ -1,0 +1,112 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-3",
+  "specId": "spec-20260616-medical-team",
+  "sprintNumber": 3,
+  "title": "Red-flag emergency short-circuit (Gate 2, 0 LLM calls)",
+  "description": "The headline safety guarantee. Implement a deterministic, pure/synchronous RedFlagDetector (categories cardiac|stroke|anaphylaxis|self-harm|overdose|none with a patternsetVersion) and the real GuardrailSet.evaluate (allow|short-circuit|refuse with rulesetVersion) wrapping it, wired into MedicalSopEngine.run immediately AFTER the consent gate and BEFORE any numerics or LLM call. A red-flag match returns a short-circuit verdict with a canned 911/988 escalation and makes ZERO downstream calls (no numerics, no retrieval, no LLM). The short-circuit is audited with ruleId + versions. This replaces the allow-only GuardrailSet stub from Sprints 1-2.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260616-medical-team-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "All tests pass including new RedFlagDetector + GuardrailSet tests; the full pre-existing suite stays green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "For at least one representative prompt in EACH red-flag category (cardiac, stroke, anaphylaxis, self-harm, overdose), GuardrailSet.evaluate returns a short-circuit verdict with a canned escalation, and MedicalSopEngine.run makes ZERO LLM calls and ZERO numerics calls — verified with spy/fake dependencies asserted never invoked.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "RedFlagDetector.detect is pure and synchronous (no async, no I/O, no network, no model): identical input yields identical RedFlagMatch across repeated calls, asserted by a test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "A non-emergency prompt returns category 'none' and the SOP proceeds past the guardrail to normal (allow) handling.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "A short-circuit appends an audit entry with event 'short-circuit' carrying ruleId, rulesetVersion, and patternsetVersion (IDs/enums only — no prompt text).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "GuardrailSet.evaluate throws on an empty prompt; the detector and guardrail require no network and no LLMClient (a test confirms no provider is constructed).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement HealthDataStore or numerics (Sprint 4) — the numerics dependency in run may remain a fake/stub this sprint.",
+    "Do not implement ingestion (Sprint 5).",
+    "Do not implement EgressGuard, medications, or the full retrieval SOP (Sprint 6).",
+    "Do not implement literature retrieval (Sprint 7).",
+    "Do not use an LLM for red-flag classification — detection is deterministic and local ONLY."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Every red-flag category short-circuits with a canned escalation and 0 LLM/numerics calls; 'none' proceeds; short-circuit is audited; evaluate throws on empty prompt"
+  ],
+  "definitionOfDone": "src/medical/ gains RedFlagDetector (pure detect(prompt): RedFlagMatch over a versioned pattern set, categories cardiac|stroke|anaphylaxis|self-harm|overdose|none) and a real GuardrailSet implementation whose evaluate(prompt, ctx) runs the detector first and returns short-circuit{rule,cannedResponse} on a match, refuse{rule,reason} for code-enforced refusals, else allow. MedicalSopEngine.run runs consent (S2) then GuardrailSet.evaluate; a short-circuit returns the canned escalation MedicalAnswer (shortCircuit=true) with the disclaimer footer + a 'short-circuit' audit entry and reaches NO numerics/LLM. Build, typecheck, and all tests pass.",
+  "assumptions": [
+    "RedFlagMatch = { category: 'cardiac'|'stroke'|'anaphylaxis'|'self-harm'|'overdose'|'none'; ruleId?: string }. patternsetVersion is a string constant exported by the detector.",
+    "The pattern set is conservative keyword/phrase matching (case-insensitive, word-boundary aware) — deliberately favoring escalation reliability over paraphrase coverage (architecture ADR-2 accepts possible misses on novel phrasing).",
+    "self-harm/overdose escalate to 988 (US Suicide & Crisis Lifeline); cardiac/stroke/anaphylaxis escalate to 911. Canned responses are fixed strings, not model-generated.",
+    "The numerics dependency may be a fake this sprint; the LLMClient is injected so a spy can assert zero calls."
+  ],
+  "outOfScope": [
+    "Numerics/store (Sprint 4)",
+    "Ingestion (Sprint 5)",
+    "Egress + full SOP + medications (Sprint 6)",
+    "Literature retrieval (Sprint 7)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Add src/medical/red-flag.ts (RedFlagDetector + patternsetVersion) and src/medical/guardrails.ts (the real GuardrailSet replacing the S1 allow-only stub), collocated *.test.ts.\n\nRedFlagDetector.detect MUST be a pure sync function: normalize the prompt (lowercase, trim), test against a per-category list of conservative patterns (word-boundary regexes or phrase includes), return the first matching category + a ruleId, else { category:'none' }. NO async, NO fs, NO network, NO LLM import. Export a patternsetVersion string (e.g. 'redflag-2026.06.16'). Keep categories: cardiac (e.g. 'chest pain' + radiating/short of breath), stroke (FAST: face droop, arm weakness, slurred speech, 'sudden numbness'), anaphylaxis ('throat closing', 'trouble breathing' + 'allergic'/sting/peanut), self-harm ('kill myself','suicidal','end my life'), overdose ('overdose','took too many','too much'). Favor reliability; document that novel phrasing may miss (ADR-2 risk).\n\nGuardrailSet.evaluate(prompt, ctx): throw on empty/whitespace prompt; run detector; if category !== 'none' return { kind:'short-circuit', rule: ruleId, cannedResponse: escalationFor(category) }; (refuse branch for non-emergency code-enforced refusals can be a documented placeholder this sprint or minimal); else { kind:'allow' }. Expose rulesetVersion (e.g. 'guardrail-2026.06.16').\n\nescalationFor(category): fixed strings. 911 for cardiac/stroke/anaphylaxis ('This may be a medical emergency. Call 911 (or your local emergency number) now.'), 988 for self-harm/overdose ('If you are in crisis, call or text 988 (US Suicide & Crisis Lifeline) now, or 911 if you are in immediate danger.'). NEVER model-generated.\n\nMedicalSopEngine.run wiring: after consent gate, call this.guardrails.evaluate(prompt, ctx). On short-circuit: append audit { event:'short-circuit', ruleId, rulesetVersion, patternsetVersion } and return MedicalAnswer { body: cannedResponse, abstained:false, shortCircuit:true, citations:[], disclaimerFooter: footer() } WITHOUT calling numerics or the LLM. On allow: proceed to the placeholder normal path (numerics fake + footer). Inject the LLMClient and numerics layer so tests can spy.\n\nTests: parametrized over the 5 categories asserting short-circuit + spy LLM/numerics zero calls + audit entry; determinism (call detect twice, deep-equal); 'none' proceeds; empty prompt throws; assert guardrails.ts has no provider/network import.",
+  "evaluatorNotes": "sc-3-4: for each category, feed a representative emergency prompt to MedicalSopEngine.run with a spy LLMClient and a spy numerics layer; assert result.shortCircuit===true, body contains the right hotline (911 vs 988), and BOTH spies have zero calls.\nsc-3-5: call detect(samePrompt) twice; deepEqual the results; assert the function is synchronous (not returning a Promise) and red-flag.ts imports nothing from src/providers or any network module.\nsc-3-6: a benign prompt ('what was my average resting heart rate last week') => detect 'none' and run proceeds to the allow path.\nsc-3-7: after a short-circuit, read the audit file; assert an entry with event 'short-circuit', a ruleId, rulesetVersion, patternsetVersion, and NO prompt text.\nsc-3-8: evaluate('') and evaluate('   ') throw.\nFull suite + build + typecheck green; confirm S1/S2 still pass (consent gate still fires before the guardrail).",
+  "estimatedFiles": [
+    "src/medical/red-flag.ts",
+    "src/medical/guardrails.ts",
+    "src/medical/engine.ts",
+    "src/medical/red-flag.test.ts",
+    "src/medical/guardrails.test.ts",
+    "src/medical/engine.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260616-medical-team-3-1",
+      "result": "pass"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260616-medical-team-3-1",
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-16T19:42:00.000Z",
+  "startedAt": "2026-06-16T19:24:53Z",
+  "completedAt": "2026-06-16T19:42:00.000Z"
+}

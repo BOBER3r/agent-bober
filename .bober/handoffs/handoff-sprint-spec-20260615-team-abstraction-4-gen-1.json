@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-team-abstraction-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-team-abstraction-4",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T15:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase 4 makes a 'team' a data object. Sprints 1-3 (DONE) built the Team model + loadTeam, per-team memory namespacing, and team-aware pipeline-shape selection (runPipeline accepts an additive opts.teamId, default 'programming'). Sprint 4 is the platform proof: a minimal example team defined purely as data, --team wiring on `bober run` and `bober chat`, end-to-end namespace routing, and docs that say 'adding a team is data, not code'. Almost no new abstraction — only CLI flags, a fixture, routing, and docs.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260615-team-abstraction-1", "title": "Team data model + registry", "summary": "src/teams/ Team + loadTeam(config, teamId?). commit 274338b."},
+      {"contractId": "sprint-spec-20260615-team-abstraction-2", "title": "Per-team memory namespacing", "summary": "memoryDir centralizes ns->path; persistence fns + CLI/chat callers thread namespace via loadTeam; ChatSessionOptions.memoryNamespace. commit 2d89d8c."},
+      {"contractId": "sprint-spec-20260615-team-abstraction-3", "title": "Team-aware pipeline-shape selection", "summary": "selectPipelineEngineForTeam(team,config); runPipeline opts.teamId ?? config.defaultTeam -> loadTeam -> team.pipelineShape; programming path byte-identical. commit dc3dd4e."}
+    ],
+    "currentBranch": "bober/team-abstraction",
+    "relevantFiles": [
+      "src/cli/commands/run.ts",
+      "src/cli/commands/chat.ts",
+      "src/teams/registry.ts",
+      "src/chat/chat-session.ts",
+      "src/config/schema.ts",
+      "README.md"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-team-abstraction-4.json",
+  "specRef": ".bober/specs/spec-20260615-team-abstraction.json",
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test"},
+    "generator": {"model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic"}
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

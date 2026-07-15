@@ -38,3 +38,11 @@ pnpm-debug.log*
 # Bober runtime state (managed per-project, not in the package itself)
 .bober/snapshots/
 .tokensave
+
+# Personal data — never commit (repo has a public GitHub remote)
+.bober/medical/
+.bober/chat/
+
+# Regenerable runtime state
+.bober/memory/*.db
+.bober/graph/.hook-queue.jsonl

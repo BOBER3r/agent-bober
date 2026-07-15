@@ -1,0 +1,8 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-5",
+  "iteration": 1, "status": "complete", "commit": "bd14e02",
+  "filesChanged": ["src/state/pause.ts(+test)", "src/orchestrator/pipeline.ts(+8/-0)", "src/orchestrator/pipeline.pause.test.ts", "src/chat/chat-session.ts", "src/chat/chat-session-steer.test.ts", "src/chat/slash-commands.ts(+test)", "src/chat/turn-classifier.ts(+test)"],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "test": "177 files, 2130 passed, 3 skipped; +44", "lint": "0 errors, 2 pre-existing warnings" },
+  "pipelineDiff": "+8/-0 pure addition: import waitWhilePaused (~:63) + single guarded `if(pipelineRunId){await waitWhilePaused(...)}` at ~:305-308, immediately after Sprint 4 guidance block. runTsPipeline(:614)/runPipeline(:1017)/:570-587 invariant untouched (verified 0 deletions).",
+  "notes": "pause.ts CLONES guidance.ts, reuses EXPORTED safeSegment (guidance.ts untouched). setPaused(atomic {pausedAt})/clearPaused(best-effort unlink)/isPaused(bool). waitWhilePaused: injected now()+pollMs, bounded timeoutMs, no-marker -> inline isPaused check, returns immediately zero ticks (sc-5-7). NO-KILL: handlePause = setPaused+writeRunState only; test asserts killCalls.length===0 (vs /stop ===1). handleResume = clearPaused+writeRunState running (pausedAt dropped). HELP_TEXT distinguishes /stop (hard kill) from /pause (process stays alive). NL pause/resume classifier actions. PROTECTED FILES untouched: disk.ts/approval-state.ts/feedback-router.ts/guidance.ts."
+}

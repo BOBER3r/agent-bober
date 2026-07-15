@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-2-1",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-2",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T14:03:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0, zero errors" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "173 files, 2021 passed, 3 skipped; +19 new (approval-reader 3, approval-cursor 8, chat-session-approval 8); zero regressions on clean run" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors, 2 pre-existing warnings" }
+  ],
+  "regressions": [],
+  "notes": "PRE-EXISTING FLAKE: src/mcp/tools/list-active-runs.test.ts intermittent ENOTEMPTY cleanup race on first full-suite run; passes on re-run and in isolation. NOT caused by Sprint 2. Candidate for Sprint 6 hygiene review.",
+  "summary": "All 8 required criteria pass. ApprovalReader/ApprovalCursor/chat-session approval prelude implemented + 19 collocated tests. nonGoals honored (approval-state.ts write fns untouched, DiskCheckpointMechanism unchanged, no Sprint 3-6 leak). Build/typecheck/lint/2021-test suite green, zero attributable regressions."
+}

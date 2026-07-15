@@ -1,0 +1,88 @@
+{
+  "contractId": "sprint-spec-20260604-workflow-engine-2",
+  "specId": "spec-20260604-workflow-engine",
+  "sprintNumber": 2,
+  "title": "EvaluatorPanelReconciler — pure TS majority-vote reducer",
+  "description": "Implement reconcile(sprintId, round, lensVerdicts): EvalResult as a pure, side-effect-free majority-vote reducer over per-lens EvalResult[] (ADR-4). It produces a canonical EvalResult with evaluator='panel', passed=strict-majority, fail-closed on tie, unioning failing details and feedback from minority/failing lenses. The timestamp is supplied by the caller (no Date.now). Empty input throws. This is the conformance-critical core; the JS port and drift gate follow in sprint 3.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260604-workflow-engine-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "reconcile is a pure function with signature reconcile(sprintId: string, round: number, lensVerdicts: EvalResult[], timestamp: string): EvalResult; it calls no Date.now/Math.random and performs no fs/IO, verified by code inspection and a passing unit suite.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "passed=true only when a strict majority of lenses have passed=true; a tie (equal pass/fail) yields passed=false (fail-closed), asserted by unit tests for unanimous-pass, unanimous-fail, majority-pass, majority-fail, and 2v2 tie vectors.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "The canonical result has evaluator='panel', details = the union of all failing details across lenses (de-duplicated by criterion+message), and feedback aggregating the failing lenses' feedback; the injected timestamp is used verbatim.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "reconcile([]) throws a descriptive error; a single-lens input returns that lens's verdict re-stamped as evaluator='panel'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "The returned object validates against EvalResultSchema (zod safeParse success), and npm run typecheck + npm run build exit 0 with the new suite green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write the pure-JS port or any .claude/workflows/ file — that is sprint 3.",
+    "Do not wire reconcile into any pipeline or script yet.",
+    "Do not introduce a new EvalResult shape; reuse the frozen EvalResultSchema from src/contracts/eval-result.ts.",
+    "Do not generate the timestamp inside the reducer."
+  ],
+  "stopConditions": [
+    "Stop when reconcile passes all fixture-vector unit tests, returns schema-valid EvalResults, and typecheck/build are green.",
+    "Stop when changes are confined to new files under src/orchestrator/workflow/ (reconciler.ts + reconciler.test.ts)."
+  ],
+  "definitionOfDone": "A pure reconcile reducer producing a canonical evaluator='panel' EvalResult by strict-majority vote (fail-closed on tie) with unioned failing details and a caller-injected timestamp; empty input throws; output validates against EvalResultSchema; comprehensive unit tests over ties/mixed/empty-detail/unanimous vectors pass; typecheck and build green.",
+  "assumptions": [
+    "Strict majority means passCount > failCount; equal counts fail closed.",
+    "Detail de-duplication by (criterion, message) is acceptable for the union; severity is preserved from the first occurrence."
+  ],
+  "outOfScope": [
+    "JS port",
+    "conformance harness",
+    "script wiring",
+    "host flush"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create src/orchestrator/workflow/reconciler.ts. Import type { EvalResult, EvalDetail } from '../../contracts/eval-result.js'. Signature: `export function reconcile(sprintId: string, round: number, lensVerdicts: EvalResult[], timestamp: string): EvalResult`. Algorithm: throw if lensVerdicts.length===0. passCount = lenses with passed===true. passed = passCount > (lensVerdicts.length - passCount). Build details: concat all details where passed===false across lenses, de-dup by `${criterion}␟${message}`. summary: e.g. `Panel verdict: ${passCount}/${n} lenses passed`. feedback: join failing lenses' feedback with newlines (or 'All lenses passed.' when passed). Set evaluator:'panel', timestamp (the injected arg), passed, details, summary, feedback. Optionally compute score as round(100*passCount/n). Keep it pure — no Date, no Math.random, no IO. Single-lens: return that lens re-stamped (evaluator:'panel', timestamp). Add a unicode section header. Create src/orchestrator/workflow/reconciler.test.ts with Vitest: cases for n=1, unanimous pass, unanimous fail, 3-pass/2-fail (majority pass), 2-pass/3-fail (majority fail), 2v2 tie (fail-closed), empty (expect throw), empty-detail lenses, and a zod safeParse assertion on the output. ESM .js specifiers, import type for types. Conventional commit: bober(sprint-2): add pure EvaluatorPanelReconciler majority-vote reducer.",
+  "evaluatorNotes": "Inspect reconciler.ts for any Date.now/new Date()/Math.random/fs usage — there must be none. Run npx vitest run src/orchestrator/workflow/reconciler.test.ts and confirm all vectors pass, especially the 2v2 tie → passed:false and empty → throw. Confirm the output object passes EvalResultSchema.safeParse (the test should assert this; if not, run a quick check). Verify the injected timestamp is echoed verbatim (pass a sentinel like '2026-01-01T00:00:00.000Z' and assert equality). Run npm run typecheck and npm run build (exit 0). Confirm git diff is confined to the two new reconciler files. Tolerate only the documented flaky tool-count baseline in the full suite.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/reconciler.ts",
+    "src/orchestrator/workflow/reconciler.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-03T23:25:18.549Z",
+  "startedAt": "2026-06-03T23:17:28.605Z",
+  "completedAt": "2026-06-03T23:25:18.549Z",
+  "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-2-1",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260604-workflow-engine-2-1",
+      "result": "pass",
+      "timestamp": "2026-06-03T23:25:18.549Z"
+    }
+  ]
+}

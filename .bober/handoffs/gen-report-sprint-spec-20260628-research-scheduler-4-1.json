@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-4",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "c8c4b53",
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "met": true, "evidence": "computeNextDue pure clock-free; daily+1d/weekly+7d/monthly+1mo via setUTCMonth; 9 tests incl 4 month-rollover edges"},
+    {"criterionId": "sc-4-2", "met": true, "evidence": "tick selects nextDueAt unset OR Date.parse(nextDueAt)<=Date.parse(now), skips future; boundary-inclusive; 10 scheduler tests"},
+    {"criterionId": "sc-4-3", "met": true, "evidence": "post-run lastRunAt=now, nextDueAt=computeNextDue>now; 2nd tick same now => ran.length 0; persisted via readJob per cadence"},
+    {"criterionId": "sc-4-4", "met": true, "evidence": "build/typecheck/lint exit 0; tick [--watch] [--interval] registered; full suite 3575 (+22)"}
+  ],
+  "filesChanged": ["src/research/types.ts", "src/research/cadence.ts", "src/research/cadence.test.ts", "src/research/scheduler.ts", "src/research/scheduler.test.ts", "src/cli/commands/research.ts", "src/cli/commands/research.test.ts"],
+  "testsAdded": ["src/research/cadence.test.ts", "src/research/scheduler.test.ts"],
+  "commits": ["c8c4b53 - bober(sprint-4): cadence due-dates + idempotent `bober research tick`"],
+  "blockers": [],
+  "notes": "Schema extended with nextDueAt/lastRunAt z.string().datetime().optional(); jobId hashes only question|createdAt (stable on update); addJob upsert persists. No argless new Date()/Date.now() in cores (only new Date(Date.parse(fromIso)) on injected instant). --watch setInterval delegates to injected-now tick. Full suite 3575."
+}

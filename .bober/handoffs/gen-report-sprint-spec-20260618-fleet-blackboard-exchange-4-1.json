@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["297a8f2 - bober(sprint-4): SynthesisStep + fleet-synthesis.json artifact"],
+  "filesChanged": [
+    { "path": "src/fleet/synthesis.ts", "action": "created", "description": "Pure SynthesisBundle interface + collect(blackboard|null, childResults, rounds) → {rounds, childResults, findings: readAll()|[]}; no LLM/network/provider imports." },
+    { "path": "src/fleet/index.ts", "action": "modified", "description": "writeSynthesis() atomic tmp+rename (mirrors reporter); hoisted bb/roundsRun to outer scope, outer try/finally so bb.close() runs AFTER collect+write; synthesis write gated on bb!=null after reporter.write." },
+    { "path": "src/fleet/synthesis.test.ts", "action": "created", "description": "collect seeded-blackboard, collect(null), source no-network-import assertion." },
+    { "path": "src/fleet/index.test.ts", "action": "modified", "description": "sc-4-4 synthesis written on blackboard run + report unchanged; sc-4-6 synthesis absent on no-blackboard run." }
+  ],
+  "criteriaResults": "all 7 (sc-4-1..sc-4-7) reported met",
+  "verification": {
+    "build": "exit 0", "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings)",
+    "test": "2786 passed, 3 skipped, 6 failed (all pre-known cockpit MCP); fleet 273/273 pass"
+  },
+  "notes": "collect pure (0 provider/SDK imports). bb.close() AFTER synthesis write (outer finally) so readAll() runs on open db. fleet-synthesis.json only on blackboard runs (bb!=null gate); no-blackboard byte-identical (file absent). fleet-report.json shape unchanged + always written. ATTENTION: roundsRun = effectiveManifest.blackboard!.maxRounds (configured cap), NOT actual rounds executed, because executeRounds returns only final-round executions w/o a count and modifying the coordinator is a Sprint-4 non-goal."
+}

@@ -1,0 +1,31 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "met": true, "evidence": "ToolDef.readOnly?: boolean (types.ts:37-49, JSDoc absent=>serial). readOnly:true on exactly readFileTool/globTool/grepTool in schemas.ts; bash/write_file/edit_file undefined. 2 annotation-coverage tests."},
+    {"criterionId": "sc-4-2", "met": true, "evidence": "Real-timer tests measure serial vs parallel of the SAME 3x50ms batch: serial >= ~140ms (hard lower bound), parallel < serial*0.7 (self-calibrated relative comparison, anti-flake), order preserved by toolUseId regardless of completion order. Verified across 5+ runs."},
+    {"criterionId": "sc-4-3", "met": true, "evidence": "Throwing middle handler -> in-slot {toolUseId, content:'Error: Tool execution failed: boom', isError:true} byte-identical to serial shape; unknown middle tool -> byte-identical unknown-tool shape incl. handler-keys ordering; never-rejects test with EVERY handler throwing; loop-level test completes stopReason 'end' despite mid-batch throw."},
+    {"criterionId": "sc-4-4", "met": true, "evidence": "parallel:false -> strict input-order invocation (callOrder recorded); unmarked write-tool batch stays serial even with parallel:true; NO hard-coded tool names in agentic-loop.ts/executor.ts (grep-verified); all 10 pre-existing loop tests pass unmodified."},
+    {"criterionId": "sc-4-5", "met": true, "evidence": "parallelReadOnlyTools: z.boolean().optional() (no default) on GeneratorSectionSchema; createDefaultConfig omits the key (Object.hasOwn false); generator conditional-spreads into runAgenticLoop per Sprint-3 convention; 4 wiring tests."},
+    {"criterionId": "sc-4-6", "met": true, "evidence": "build + typecheck exit 0 clean."}
+  ],
+  "filesChanged": [
+    {"path": "src/providers/types.ts", "action": "modified", "description": "ToolDef.readOnly?: boolean with ADR-2 JSDoc."},
+    {"path": "src/orchestrator/tools/schemas.ts", "action": "modified", "description": "readOnly:true on read_file/glob/grep only (3 lines)."},
+    {"path": "src/orchestrator/tools/executor.ts", "action": "created", "description": "executeToolBatch: maximal contiguous readOnly runs via Promise.all when parallel; serial otherwise; mirrors serial success/unknown-tool/thrown-handler shapes + logger.warn byte-for-byte; results by original index; never rejects."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "AgenticLoopParams.parallelReadOnlyTools?; readOnlyTools derived once from params.tools; serial for-of replaced with executeToolBatch call; ToolResultMessage append + onTurnComplete unchanged."},
+    {"path": "src/config/schema.ts", "action": "modified", "description": "parallelReadOnlyTools optional (no default) on GeneratorSectionSchema."},
+    {"path": "src/orchestrator/generator-agent.ts", "action": "modified", "description": "Conditional spread of the flag into runAgenticLoop."},
+    {"path": "src/orchestrator/tools/executor.test.ts", "action": "created", "description": "9 tests: annotation coverage, concurrency proof, error containment, serial fallback."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "4 loop-integration tests."},
+    {"path": "src/orchestrator/generator-agent.test.ts", "action": "modified", "description": "4 sc-4-5 wiring tests."}
+  ],
+  "testsAdded": ["src/orchestrator/tools/executor.test.ts", "agentic-loop.test.ts (4)", "generator-agent.test.ts (4)"],
+  "commits": [
+    "4ab7040 - bober(sprint-4): parallel read-only tool execution via executeToolBatch",
+    "59b4b23 - bober(sprint-4): make sc-4-2 concurrency proof self-calibrated (anti-flake)"
+  ],
+  "blockers": [],
+  "notes": "MACHINE LOAD CAVEAT: shared dev machine under heavy unrelated background load (tokensave daemons, figma MCP, Adobe CC — ps-verified, none repo-related). This intermittently times out UNRELATED pre-existing tests (mcp/tools, cli memory/vault/chat, e2e cockpit, external-server-graph, onboarding-composer) at the default 5000ms. Clean full-suite runs reproduced twice with --testTimeout=20000 --hookTimeout=20000: 299 files / 3787 tests (3770 baseline + 17 new). sc-4-2 originally used a fixed absolute-ms bound, flaked once under load, replaced with same-run relative comparison in 59b4b23 (test-only commit, no production code). package.json untouched; no allow-list in loop; bash never annotated; no default for the flag anywhere."
+}

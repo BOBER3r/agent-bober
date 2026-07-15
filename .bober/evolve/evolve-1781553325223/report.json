@@ -1,0 +1,45 @@
+{
+  "runId": "evolve-1781553325223",
+  "role": "generator",
+  "seed": 0,
+  "dryRun": true,
+  "promoted": false,
+  "winnerPath": null,
+  "baselineRegressions": 0,
+  "baselineImprovements": 0,
+  "baselinePassCount": 0,
+  "variantsTried": 3,
+  "paretoFrontier": [
+    {
+      "variantId": "v2",
+      "promptLength": 30186,
+      "replayPassCount": 0,
+      "regressions": 0,
+      "improvements": 0,
+      "eligible": false
+    }
+  ],
+  "allScores": [
+    {
+      "variantId": "v0",
+      "promptLength": 30322,
+      "replayPassCount": 0,
+      "regressions": 0,
+      "improvements": 0
+    },
+    {
+      "variantId": "v1",
+      "promptLength": 30194,
+      "replayPassCount": 0,
+      "regressions": 0,
+      "improvements": 0
+    },
+    {
+      "variantId": "v2",
+      "promptLength": 30186,
+      "replayPassCount": 0,
+      "regressions": 0,
+      "improvements": 0
+    }
+  ]
+}

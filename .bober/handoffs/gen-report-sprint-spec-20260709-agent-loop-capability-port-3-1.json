@@ -1,0 +1,29 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "met": true, "evidence": "EffortSchema (low|medium|high|xhigh|max) + BudgetSectionSchema ({maxUsd positive|null, optional}) attached as optional fields to Planner/Curator/Generator/Evaluator sections. 24 new schema tests: no defaults injected, valid/invalid values, null maxUsd, minimalBase fixture parses unchanged. 62/62 in schema.test.ts."},
+    {"criterionId": "sc-3-2", "met": true, "evidence": "Loop spreads ...(effort !== undefined ? {effort} : {}) at the maxTokens site. anthropic.ts UNTOUCHED (output_config forwarding pre-existed). Tests capture client.lastParams: effort forwarded when set, Object.hasOwn false when unset."},
+    {"criterionId": "sc-3-3", "met": true, "evidence": "budget.chargeTokens/chargeUsd once per turn after usage accumulation; on exceeded() returns partial result mirroring max-turns shape with stopReason 'budget_exceeded', never throws. Test: 2 turns at 0.6 USD vs maxUsd 1.0 -> stopReason budget_exceeded, turnsUsed 2, callCount 2, assertWithinBudget spy never called."},
+    {"criterionId": "sc-3-4", "met": true, "evidence": "totalCostUsd accumulates only when turns report costUsd; conditional spread on ALL FOUR return sites (error, budget_exceeded, completion/refusal, max_turns). Tests: sums 0.75/1.2/200 present; Object.hasOwn false when no cost."},
+    {"criterionId": "sc-3-5", "met": true, "evidence": "pipeline.ts sprint-passed event conditionally spreads lastGeneratorResult?.costUsd into details (HistoryEntry.details is z.record, no schema change). history.test.ts round-trips with/without costUsd."},
+    {"criterionId": "sc-3-6", "met": true, "evidence": "generator-agent.ts reads config.generator.effort + budget.maxUsd via new exported budgetFromMaxUsd(maxUsd) helper (workflow/budget.ts); passes both conditionally into runAgenticLoop. Mocked-dep tests spy on actual invocation args: no effort/budget keys when config omits both; Budget with remainingUsd()===3 when maxUsd=3; NOT constructed when maxUsd null."},
+    {"criterionId": "sc-3-7", "met": true, "evidence": "build + typecheck exit 0 clean."}
+  ],
+  "filesChanged": [
+    {"path": "src/config/schema.ts", "action": "modified", "description": "EffortSchema + BudgetSectionSchema attached to 4 per-role sections."},
+    {"path": "src/config/schema.test.ts", "action": "modified", "description": "24 sc-3-1 tests."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "AgenticLoopParams effort/budget; AgenticLoopResult costUsd; per-turn charging; graceful budget_exceeded return."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "Param-capture + call-count; 7 new tests."},
+    {"path": "src/orchestrator/generator-agent.ts", "action": "modified", "description": "GeneratorResult.costUsd; config-driven effort/budget wiring via budgetFromMaxUsd; costUsd on all parseGeneratorResult paths."},
+    {"path": "src/orchestrator/generator-agent.test.ts", "action": "modified", "description": "Mocked-dep sc-3-6 suite (vi.hoisted, evaluator-agent.test.ts convention); 8 new tests."},
+    {"path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "sprint-passed event conditionally includes costUsd."},
+    {"path": "src/orchestrator/workflow/budget.ts", "action": "modified", "description": "Exported budgetFromMaxUsd shared helper."},
+    {"path": "src/state/history.test.ts", "action": "modified", "description": "2 sc-3-5 round-trip tests."}
+  ],
+  "testsAdded": ["schema.test.ts (24)", "agentic-loop.test.ts (7)", "generator-agent.test.ts (8)", "history.test.ts (2)"],
+  "commits": ["b9c936c - bober(sprint-3): loop wiring for per-role effort, USD budget ceiling, cost persistence"],
+  "blockers": [],
+  "notes": "anthropic.ts untouched (effort forwarding pre-existed). assertWithinBudget/BudgetExceededError untouched for workflow interpreter (ADR-4). bober.config.json NOT modified (dogfooding declined). Suite 3731->3770 (+39), zero regressions. budgetFromMaxUsd satisfies the shared-helper language of sc-3-6; other roles not wired (out of scope)."
+}

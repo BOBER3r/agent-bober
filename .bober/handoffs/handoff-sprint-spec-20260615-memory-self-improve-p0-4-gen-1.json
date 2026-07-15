@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-memory-self-improve-p0-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-4",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T20:05:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase 3, Sprint 4 of 5. Mine the fail→pass signal the generator-evaluator retry loop discards. Extend the EXISTING pure distill() (src/orchestrator/memory/distill.ts) to detect a sprint whose iterationHistory shows fail(s) then a pass, and emit a new 'fix-contrast' lesson category. Fully deterministic — no LLM, no clock, no fs, no git inside the pure fn. Small surface: distill.ts + distill.test.ts only.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-1", "title": "SQLite facts store", "summary": "Facts store — unrelated." },
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-2", "title": "Reconcile-on-write", "summary": "Facts reconcile — unrelated." },
+      { "contractId": "sprint-spec-20260615-memory-self-improve-p0-3", "title": "Lesson hygiene", "summary": "retrieve.ts now occurrence-weighted; hygiene.ts pruneLessons; memory.ts quarantinePath + rewriteIndexForQuarantine; `memory prune` CLI. distill.ts was NOT touched." }
+    ],
+    "currentBranch": "bober/memory-self-improve-p0",
+    "relevantFiles": [
+      "src/orchestrator/memory/distill.ts",
+      "src/orchestrator/memory/distill.test.ts"
+    ]
+  },
+  "decisionsLocked": {
+    "Q4": "A — offline deterministic. Extend the pure distill() to mine fail→pass transitions; NO LLM.",
+    "purityHardConstraint": "distill.ts MUST NOT import from ../providers, MUST NOT call Date.now()/new Date(), MUST NOT do fs/network/git inside the pure fn. createdAt stays SENTINEL_CREATED_AT, stamped by the CLI. Repeated calls on identical input → byte-identical output (sorted by lessonId).",
+    "extendNotFork": "Add a FOURTH signal alongside the existing (a) failed-criterion, (b) failing-strategy, (c) rework signals — reuse upsertGroup/lessonIdFromSignature/severityFor. Do NOT create a parallel distiller path. Existing signals must keep producing their lessons (no regression)."
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principles": "Read .bober/principles.md. Gates: TS strict (zero errors), ESLint consistent-type-imports (`import type`), ESM .js specifiers, no `any` unjustified, section comments, deterministic/byte-stable output, conventional commit `bober(sprint-4): ...`. The distill purity discipline is the load-bearing constraint here.",
+  "evaluatorFeedback": null
+}

@@ -117,6 +117,7 @@ The following skills are available in this repo but are domain-specific, not par
 
 - `bober.anchor` — project anchoring and context establishment
 - `bober.brownfield` — brownfield (existing codebase) conventions and anti-patterns
+- `bober.design` — frontend design team: premium, non-generic landing pages/UI via intake → art direction → build → screenshot critique → polish (agents: bober-art-director, bober-frontend-builder, bober-design-critic)
 - `bober.graph` — knowledge graph queries and code review using code-review-graph MCP
 - `bober.impact` — change impact analysis
 - `bober.onboard` — project onboarding

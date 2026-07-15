@@ -1,0 +1,33 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-2",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "fb467c6",
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "met": true, "evidence": "tsc --noEmit exit 0" },
+    { "criterionId": "sc-2-2", "met": true, "evidence": "all-approve no-veto -> accepted, rounds===1, generateCandidate called once" },
+    { "criterionId": "sc-2-3", "met": true, "evidence": "contraindication veto + 3 approve -> rejected reason contraindication-veto; reconcilePanel checks veto BEFORE vote" },
+    { "criterionId": "sc-2-4", "met": true, "evidence": "2-2 tie -> rejected (strict majority approveCount>rejectCount, tie=false)" },
+    { "criterionId": "sc-2-5", "met": true, "evidence": "red-flag + refuse guards short-circuit; generateCandidate spy not called" },
+    { "criterionId": "sc-2-6", "met": true, "evidence": "all-reject maxRounds=2 -> rejected reason no-consensus, rounds===2, 4 dissent strings; generateCandidate called maxRounds times" },
+    { "criterionId": "sc-2-7", "met": true, "evidence": "throwing lens -> counted reject, runJudgeLoop resolves without throwing; all-throw -> rejected" }
+  ],
+  "filesChanged": [
+    "src/medical/recommend/types.ts (created: budget constants MEDICAL_PANEL_MAX_TOTAL_CALLS=27 closed-form, LensName/LensVerdict/PanelOutcome)",
+    "src/medical/recommend/lenses.ts (created: validateLensVerdict never-throwing, getLensVerdict fail-closed reject on exhaustion, 4 lens prompts)",
+    "src/medical/recommend/lenses.test.ts (created: 27 tests)",
+    "src/medical/recommend/judge-panel.ts (created: reconcilePanel veto-before-vote + strict-majority fail-closed-tie, runJudgeLoop red-flag-first + bounded loop)",
+    "src/medical/recommend/judge-panel.test.ts (created: 16 tests incl budget bound)"
+  ],
+  "testsAdded": ["src/medical/recommend/lenses.test.ts", "src/medical/recommend/judge-panel.test.ts"],
+  "selfVerify": {
+    "tsc": "exit 0",
+    "eslint": "exit 0 on src/medical/recommend/",
+    "vitest-recommend": "2 files, 43 passed",
+    "vitest-full": "239 files, 3072 passed (3072)",
+    "engine-untouched": "engine.ts NOT in commit fb467c6",
+    "purely-additive": "all 5 files new, no existing file modified"
+  },
+  "blockers": [],
+  "notes": "MEDICAL_PANEL_MAX_TOTAL_CALLS=27 = MEDICAL_PANEL_MAX_ROUNDS*(1+4*LENS_MAX_LLM_CALLS). Veto checked before vote count. Fail-closed inversion comments reference grounding-critic.ts vs critic-deep.ts:206."
+}

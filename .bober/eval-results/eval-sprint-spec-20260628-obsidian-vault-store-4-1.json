@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260628-obsidian-vault-store-4-1",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:45:50.000Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "npx tsc --noEmit exit 0", "details": "zero type errors"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "npx tsc exit 0", "details": "clean build"},
+    {"strategy": "lint", "required": false, "result": "fail", "output": "src/vault/mcp-adapter.test.ts:8:36 error 'beforeEach' is defined but never used @typescript-eslint/no-unused-vars; 1 error EXIT:1", "details": "Unused 'beforeEach' import in new test file (commit 4f5288d). Violates principles.md 'Zero lint errors is a hard gate'."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "mcp-adapter+schema 62 tests; full suite 227 files 2907 tests pass", "details": "zero test failures/regressions"},
+    {"strategy": "api-check", "required": false, "result": "skipped", "output": "N/A", "details": "no endpoints"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "tsc + tsc --noEmit exit 0", "feedback": ""},
+    {"criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "vault.obsidian round-trips mcpEnv + toolNames; vault-less config undefined; 37 schema tests", "feedback": ""},
+    {"criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "default cyanheads tool names + overrides (custom_read/write, list_vault_files) exact-name asserted; parsed VaultNote returned; 25 tests", "feedback": ""},
+    {"criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "https/wss/non-loopback -> rejects + startSpy.not.toHaveBeenCalled for read/write/list; error excludes mcpEnv secret; adapter wraps via ToolDescriptor type-import only, never imports concrete ExternalMcpServer; external-client.ts untouched", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "high", "category": "quality", "file": "src/vault/mcp-adapter.test.ts", "line": "8", "description": "Unused import 'beforeEach' from vitest violates 'Zero lint errors is a hard gate'. Line 8 is `import { describe, it, expect, vi, beforeEach } from \"vitest\";` but beforeEach is never referenced.", "expected": "Remove 'beforeEach' from the import: `import { describe, it, expect, vi } from \"vitest\";`. No other change needed; all 25 tests pass.", "reproduction": "npx eslint src/vault/mcp-adapter.test.ts -> 1 error at 8:36, exit 1."}
+  ],
+  "summary": "All 4 success criteria pass (build clean, config round-trips mcpEnv+overrides, adapter exact-tool-name + parsed VaultNote, on-device guard start()-never-called + no mcpEnv leak). FAIL solely on a principles violation: unused 'beforeEach' import in src/vault/mcp-adapter.test.ts:8 -> eslint error exit 1. One-line fix."
+}

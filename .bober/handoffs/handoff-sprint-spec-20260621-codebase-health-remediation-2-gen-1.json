@@ -1,0 +1,35 @@
+{
+  "handoffId": "handoff-sprint-spec-20260621-codebase-health-remediation-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-2",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "timestamp": "2026-06-21T19:55:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — ESM/TypeScript multi-agent harness. This sprint collapses runSprintCycle's 7 positional params (pipeline.ts:158) into a single typed RunSprintCycleParams object. Pure mechanical refactor; runSprintCycle is internal (not in src/index.ts or MCP); zero behavior change.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260621-codebase-health-remediation-1", "title": "Break critic-deep ↔ decomposer-deep cycle (DI)", "summary": "Cycle broken via runExpandStage injection + Outline leaf; 2815/2815 green. Unrelated files — no overlap with this sprint." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/code-reviewer-agent.test.ts",
+      "src/orchestrator/documenter-agent.test.ts",
+      "src/orchestrator/agentic-loop.ts"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "See .bober/principles.md — ESM .js specifiers, `import type` (consistent-type-imports), no synchronous fs, unicode box-drawing section headers, collocated *.test.ts, conventional commits.",
+  "criticalNotes": [
+    "MAP BY POSITION, NOT NAME: the production call site (pipeline.ts:931) passes a local var named `completedSprints` into the THIRD positional slot, which is the `completedContracts` parameter. When converting to the object literal, the field MUST be `completedContracts: completedSprints` (field name from the param, value from the local var). Read the call site carefully.",
+    "The 5 test call sites use the 6-ARG form (no pipelineRunId) — pipelineRunId is optional, so omit it from those object literals.",
+    "House convention (per curator): export an `interface RunSprintCycleParams` and destructure-at-top of the body, mirroring runAgenticLoop/AgenticLoopParams in agentic-loop.ts. Reuse the existing type imports already in pipeline.ts (SprintContract, PlanSpec, BoberConfig, ProjectContext) — do NOT re-import or guess.",
+    "Zero shadowing: the curator confirmed none of the 7 param names are reassigned/shadowed in the body, so a single destructure at the top is a safe drop-in.",
+    "runSprintCycle MUST stay internal — do NOT add it to src/index.ts or any MCP tool."
+  ],
+  "toolingNote": "tokensave v6.1.1 available — prefer tokensave_context/tokensave_search before grep. Use `npx vitest run` (not bare vitest). The 6 known cockpit-integration E2E MCP failures are pre-existing — ignore.",
+  "evaluatorFeedback": null
+}

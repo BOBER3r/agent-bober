@@ -1,0 +1,116 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-2",
+  "specId": "spec-20260616-medical-team",
+  "sprintNumber": 2,
+  "title": "Consent gate, append-only audit log, and disclaimer footer (Gate 1 + audit substrate)",
+  "description": "Implement the compliance substrate and wire it as the FIRST gate of the medical SOP. ConsentGate is fail-closed: when no ConsentRecord is present, MedicalSopEngine.run returns a refuse verdict and makes ZERO downstream calls. AuditLog appends IDs/enums-only entries to .bober/medical/audit-<date>.jsonl with O_APPEND|O_CREAT and file mode 0600 — never prompt text or health values. DisclaimerComposer produces a versioned per-response footer. ConsentGate depends on AuditLog (records a 'consent' event). This sprint wires consent + audit + footer into the engine stub from Sprint 1; the red-flag gate (S3), numerics (S4), and retrieval (S6/S7) are later.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260616-medical-team-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "TypeScript strict-mode typecheck passes with zero errors (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "All tests pass including new collocated tests for ConsentGate, AuditLog, and DisclaimerComposer; the full pre-existing suite stays green.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "Fail-closed consent: with no ConsentRecord present, MedicalSopEngine.run returns a refuse verdict (MedicalAnswer with shortCircuit/refuse semantics) and makes ZERO downstream calls — verified with a spy/fake for numerics + LLMClient asserted never invoked.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "ConsentGate.recordConsent persists a ConsentRecord and ConsentGate.current()/hasConsent() round-trip it (consentVersion, acceptedAtIso, rulesetVersion, disclaimerVersion).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "AuditLog.append writes to .bober/medical/audit-<date>.jsonl with file mode 0600 and append-only (O_APPEND|O_CREAT) semantics; a test asserts the file mode and that a second append adds a line without truncating the first.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "Audit entries contain IDs/enums ONLY (event, rulesetVersion?, patternsetVersion?, ruleId?, tIso) — a test feeds prompts/health values through the SOP and asserts NO prompt text and NO health value substring appears anywhere in the serialized audit file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "DisclaimerComposer.footer() returns a non-empty string carrying disclaimerVersion, and every MedicalAnswer the engine produces includes the footer; all timestamps (acceptedAtIso, audit tIso) are injected parameters, asserted by a deterministic test (no wall-clock read).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement red-flag detection — GuardrailSet.evaluate still returns allow this sprint (Sprint 3 adds the detector).",
+    "Do not implement HealthDataStore or numerics (Sprint 4).",
+    "Do not implement ingestion (Sprint 5).",
+    "Do not implement EgressGuard, the full SOP ordering, or medications (Sprint 6).",
+    "Do not implement literature retrieval (Sprint 7).",
+    "Do not read timestamps from the system clock anywhere — timestamps are parameters."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "No-consent => refuse + 0 downstream calls; audit is 0600 append-only IDs/enums-only with no PHI leak; footer carries disclaimerVersion; timestamps are injected"
+  ],
+  "definitionOfDone": "src/medical/ gains ConsentGate (hasConsent/recordConsent/current; fail-closed), AuditLog (append to .bober/medical/audit-<date>.jsonl, O_APPEND|O_CREAT, 0600, IDs/enums only), and DisclaimerComposer (versioned footer). MedicalSopEngine.run runs the consent gate FIRST: absent consent => refuse with zero downstream calls + a 'refuse' (or 'consent') audit entry; present consent => proceeds to the (still allow-only) guardrail and attaches the disclaimer footer to the MedicalAnswer. Timestamps are injected parameters. Build, typecheck, and all tests pass; no PHI in the audit file.",
+  "assumptions": [
+    "ConsentRecord + AuditEntry shapes are per the spec data model. The audit 'date' in the filename is derived from an injected timestamp parameter, not Date.now().",
+    "ConsentRecord persists as JSON under .bober/medical/ (e.g. consent.json) via node:fs/promises; AuditLog uses an O_APPEND|O_CREAT file handle with mode 0600.",
+    "MedicalAnswer.shortCircuit/abstained/refuse semantics: a consent refusal sets a refuse-style MedicalAnswer (body = canned consent-required message, abstained=false, shortCircuit semantics) — match the data model union.",
+    "ConsentGate depends on AuditLog (records a 'consent' event on recordConsent) per the architecture component graph."
+  ],
+  "outOfScope": [
+    "Red-flag logic (Sprint 3)",
+    "Numerics/store (Sprint 4)",
+    "Ingestion (Sprint 5)",
+    "Egress + full SOP + medications (Sprint 6)",
+    "Literature retrieval (Sprint 7)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Add small files under src/medical/: consent.ts (ConsentGate), audit.ts (AuditLog), disclaimer.ts (DisclaimerComposer), collocated *.test.ts. Wire them into the MedicalSopEngine stub from Sprint 1.\n\nAuditLog: open with node:fs/promises fs.open(path, 'a', 0o600) or appendFile with mode; for the mode-0600 + O_APPEND guarantee prefer fs.open(path, constants.O_APPEND | constants.O_CREAT | constants.O_WRONLY, 0o600) then handle.write(JSON.stringify(entry)+'\\n'). Ensure .bober/medical/ exists (fs.mkdir recursive, mode 0700). Filename audit-<date>.jsonl where <date> is YYYY-MM-DD derived from the injected tIso parameter — NEVER new Date()/Date.now(). The AuditEntry written must include ONLY: tIso, event, rulesetVersion?, patternsetVersion?, ruleId?. Do NOT serialize the prompt, the answer body, or any health value.\n\nConsentGate: hasConsent() reads .bober/medical/consent.json existence + validity; current() returns the parsed ConsentRecord | undefined; recordConsent(record) writes it (and appends a 'consent' audit entry via AuditLog). Fail-closed: hasConsent() false on missing/corrupt file.\n\nDisclaimerComposer: footer() returns a fixed, non-empty, non-diagnostic wellness disclaimer string; expose readonly disclaimerVersion. Keep wording low-risk (general wellness, not diagnosis/treatment) consistent with the FFDCA posture in the architecture.\n\nMedicalSopEngine.run ordering THIS sprint: (1) ConsentGate.hasConsent() — if false, append audit 'refuse' (ruleId 'consent-required'), return a refuse MedicalAnswer with the disclaimer footer, and DO NOT touch numerics/LLM; (2) else GuardrailSet.evaluate (still allow), then return a placeholder answer WITH the footer + an 'answer' audit entry. The timestamp used for audit/consent comes from opts or an injected clock param so tests are deterministic — thread a `now: string` (ISO) parameter or a small injected Clock; default it from opts.runId-independent injected value, not the wall clock.\n\nTests: assert no-consent => refuse + spy LLMClient never called + numerics fake never called; recordConsent round-trip; audit file mode === 0o600 (statSync mode & 0o777); append-only (two appends => two lines, first intact); PHI-leak test (feed a prompt containing 'my blood pressure is 180' and a health value, assert neither appears in the audit file bytes); footer non-empty + disclaimerVersion present; deterministic-timestamp test (inject a fixed ISO, assert it appears verbatim in the entry).",
+  "evaluatorNotes": "sc-2-4: construct MedicalSopEngine with fakes for the numerics layer and LLMClient; call run with no consent on disk; assert the result is a refuse MedicalAnswer and BOTH fakes recorded zero calls.\nsc-2-6: statSync the audit file, assert (mode & 0o777) === 0o600; append twice, assert two newline-delimited JSON lines and the first line is byte-identical after the second append.\nsc-2-7: run an SOP turn with a prompt embedding a distinctive token (e.g. 'SECRETBP=180') and a numeric health value; read the audit file bytes and assert the token and the value string are ABSENT; assert each line parses to an object whose keys are a subset of {tIso,event,rulesetVersion,patternsetVersion,ruleId}.\nsc-2-8: assert footer() is non-empty and includes/exposes disclaimerVersion; inject a fixed ISO timestamp and assert it appears verbatim in the consent record and audit entries (proves no wall-clock read).\nsc-2-5: recordConsent then current()/hasConsent round-trip.\nRun full suite + build + typecheck; confirm Sprint 1 plumbing still green.",
+  "estimatedFiles": [
+    "src/medical/consent.ts",
+    "src/medical/audit.ts",
+    "src/medical/disclaimer.ts",
+    "src/medical/engine.ts",
+    "src/medical/consent.test.ts",
+    "src/medical/audit.test.ts",
+    "src/medical/disclaimer.test.ts",
+    "src/medical/engine.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260616-medical-team-2-1",
+      "result": "pass"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260616-medical-team-2-1",
+  "createdAt": "2026-06-16T00:00:00Z",
+  "updatedAt": "2026-06-16T22:15:30.000Z",
+  "startedAt": "2026-06-16T19:06:27Z",
+  "completedAt": "2026-06-16T22:15:30.000Z"
+}

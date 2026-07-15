@@ -1,0 +1,72 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-3",
+  "specId": "spec-20260628-research-scheduler",
+  "sprintNumber": 3,
+  "title": "Online-research egress axis (default off) + gated web retrieval",
+  "description": "Add a new opt-in egress axis for online/web research that mirrors the medical EgressGuard pattern (default false, fail-closed), introduce a ResearchEgressGuard, and wire the runner's web-retrieval step behind it so that with the axis off a run is fully offline and with the axis on the run retrieves sources the note cites.",
+  "status": "completed",
+  "completedAt": "2026-06-29T21:14:45.000Z",
+  "dependsOn": ["sprint-spec-20260628-research-scheduler-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "A ResearchSection in src/config/schema.ts adds egress.onlineResearch defaulting to false, and a ResearchEgressGuard.fromConfig reads it; isAllowed('online-research') returns false when absent from config.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "ResearchEgressGuard.assertAllowed('online-research') throws an Error when the axis is off and returns void when egress.onlineResearch is true, matching the throw semantics of src/medical/egress.ts.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "With the axis off (default config), a run records zero invocations of the injected fetch/retrieval client; with the axis on, the retrieval client is invoked and the resulting note frontmatter or body lists the retrieved source URLs.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "The project compiles with the new ResearchSection wired into BoberConfigSchema and the runner gated by ResearchEgressGuard.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not enable the axis by default — egress.onlineResearch must default to false (fail-closed).",
+    "Do not reuse or widen the medical egress axes; create a separate research-owned axis so the two domains stay independent.",
+    "Do not perform real network calls in tests — the retrieval client is injected and spied.",
+    "Do not implement cadence/tick (Sprint 4) or digest (Sprint 5)."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: default isAllowed false, assertAllowed throws when off, zero retrieval calls when off, retrieval invoked and sources cited when on.",
+    "The ResearchEgressGuard gates the runner's retrieval branch and the no-egress default path is byte-identical to Sprint 2's offline run."
+  ],
+  "definitionOfDone": "Online/web research is a separate code-enforced egress axis defaulting to false. ResearchEgressGuard mirrors src/medical/egress.ts: isAllowed returns false by default and assertAllowed throws when off. The runner only performs retrieval when the axis is opted in; a default-config run issues zero outbound requests, and an opted-in run cites the retrieved sources in the note. Build is green and prior tests still pass.",
+  "assumptions": [
+    "The new axis mirrors src/medical/egress.ts:1-60 EgressGuard exactly (constructor of booleans, fromConfig, isAllowed, assertAllowed) but for a research-owned 'online-research' axis (resolved per egress pattern). Evidence: src/medical/egress.ts:1-60, src/config/schema.ts:374-401.",
+    "ResearchSectionSchema is added to BoberConfigSchema as an optional section, additive and default-off, so existing configs validate unchanged. Evidence: MedicalSectionSchema optional-section pattern in src/config/schema.ts:374-447.",
+    "The retrieval step may reuse the shape of src/medical/retrieval/literature.ts but lives in src/research/ and takes an injected client so it is offline-testable."
+  ],
+  "outOfScope": [
+    "Choosing a specific search/literature provider beyond an injectable client interface.",
+    "Cadence/scheduling (Sprint 4) and digest (Sprint 5).",
+    "Medical literature retrieval internals (src/medical/retrieval/ stays untouched)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Add ResearchSectionSchema to src/config/schema.ts with `egress: z.object({ onlineResearch: z.boolean().default(false) }).optional()`, and register it as `research: ResearchSectionSchema.optional()` on BoberConfigSchema next to the medical section (~L447). Create src/research/egress.ts modeled line-for-line on src/medical/egress.ts:1-60: EgressAxis type = 'online-research', class ResearchEgressGuard with constructor(boolean), static fromConfig(config) reading config.research?.egress?.onlineResearch ?? false, isAllowed, and assertAllowed that throws `Egress axis 'online-research' not enabled`. Create src/research/online-retrieval.ts with a retrieve(query, client) function. In src/research/runner.ts, guard the retrieval branch: call guard.assertAllowed('online-research') (or check isAllowed) before invoking the retrieval client; when off, skip retrieval entirely so no client is constructed. Thread retrieved source URLs into the note frontmatter/body.",
+  "evaluatorNotes": "Assert ResearchEgressGuard.fromConfig({}) .isAllowed('online-research') === false (sc-3-1). Assert assertAllowed throws when off and is silent when on (sc-3-2). Run the runner with a spy retrieval client: default config -> spy called 0 times; config.research.egress.onlineResearch=true -> spy called and note lists the returned source URLs (sc-3-3). Confirm BoberConfigSchema still parses a config with no `research` section (additive). Confirm npm run build passes.",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/research/egress.ts",
+    "src/research/egress.test.ts",
+    "src/research/online-retrieval.ts",
+    "src/research/runner.ts",
+    "src/research/runner.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z"
+}

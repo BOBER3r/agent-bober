@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-2",
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "sprintNumber": 2,
+  "title": "TierProviderPolicy + buildChildConfig tier overlay",
+  "description": "Add a closed difficulty-tier enum on FleetChild and a TierProviderPolicy that maps each tier to a planner/generator/evaluator provider block, overlaid in buildChildConfig BEFORE the existing shallow-merge so the result is byte-identical when tier is absent. New file src/fleet/tier-policy.ts exports: type RoleProviderBlock = {provider: ProviderName; model: string; endpoint?: string|null}; type TieredRoleBlock = {planner: RoleProviderBlock; generator: RoleProviderBlock; evaluator: RoleProviderBlock}; type DifficultyTier = 'default'|'cheap'|'standard'|'hard'|'frontier'; a TIER_POLICY table (cheap->DeepSeek openai-compat api.deepseek.com, standard->Grok openai-compat api.x.ai/v1, hard->Anthropic Sonnet, frontier->Anthropic Opus); resolveTier(tier): TieredRoleBlock|undefined ('default'/undefined -> undefined = NO overlay); knownTiers(). claude-code is NEVER in the table (children build = TOOL_ROLES). src/fleet/manifest.ts FleetChildSchema gains `tier: z.enum(['default','cheap','standard','hard','frontier']).optional()`. src/fleet/child-config.ts buildChildConfig adds an applyTier(base, child.tier) step that, when resolveTier returns a block, sets base.planner/generator/evaluator = {...base.role, ...block.role} — applied BEFORE the UNCHANGED `const merged = {...base, ...(child.config ?? {})}` at child-config.ts:43 so an explicit child.config still wins. When tier is undefined or 'default', applyTier returns base UNCHANGED and the whole function output is byte-identical to today.",
+  "status": "completed",
+  "completedAt": "2026-06-18T18:58:00Z",
+  "dependsOn": ["sprint-spec-20260618-fleet-tier-provider-routing-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "The full test suite passes with zero new failures (npm run test); only the 6 known cockpit-integration MCP failures may fail; the existing fleet child-config/manifest tests pass unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "FleetChildSchema parses a child WITH tier (any enum value) and WITHOUT tier; a tier outside the closed enum is a ZodError; a manifest with no tier on any child parses field-for-field identically to before (the new field is optional and absent).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "TierProviderPolicy.resolveTier returns undefined for 'default' and undefined input, and the correct TieredRoleBlock for cheap (DeepSeek), standard (Grok openai-compat https://api.x.ai/v1), hard (anthropic Sonnet), frontier (anthropic Opus). No tier block places claude-code on any role.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "buildChildConfig(child) with NO tier returns a BoberConfig deep-equal to the pre-change DeepSeek-default output — proven by a test that constructs the expected config (planner/generator/evaluator on DeepSeek) and asserts deepEqual. This is the byte-identical guarantee.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "buildChildConfig(child) with tier='standard' yields planner/generator/evaluator on provider 'openai-compat' with endpoint 'https://api.x.ai/v1'; tier='hard' yields provider 'anthropic' + a Sonnet model; tier='frontier' yields 'anthropic' + an Opus model; tier='cheap' yields DeepSeek. Each asserted on the parsed BoberConfig.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "child.config precedence is preserved: a child with BOTH tier='standard' AND child.config.generator={provider:'anthropic',model:'...'} yields generator on anthropic (child.config wins over the tier block), proving the overlay runs BEFORE the shallow-merge at child-config.ts:43.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "lint passes (npm run lint, zero errors); the change is confined to tier-policy.ts (new), manifest.ts, child-config.ts (+ tests); no new SDK/network imports; ProviderName unchanged.",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT place claude-code in any tier block (children build = tool roles).",
+    "Do NOT add the ToolRoleGuard (Sprint 3) — though tier blocks must never produce a claude-code tool role in the first place.",
+    "Do NOT change the decomposer EXPAND prompt or the never-throw validateManifest shape guard.",
+    "Do NOT add BoberConfig.fleet / blackboard / Phase B fields.",
+    "Do NOT alter the `merged = {...base, ...(child.config ?? {})}` line itself (apply the overlay BEFORE it)."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "A tier-less child config is deep-equal to today's DeepSeek default, each tier maps to its specified provider block, child.config still wins, and build/typecheck/test/lint are green with no new failures"
+  ],
+  "definitionOfDone": "src/fleet/tier-policy.ts exports DifficultyTier, RoleProviderBlock, TieredRoleBlock, TierProviderPolicy (resolveTier/knownTiers), and a TIER_POLICY table (cheap=DeepSeek, standard=Grok api.x.ai, hard=anthropic Sonnet, frontier=anthropic Opus; default=>undefined). src/fleet/manifest.ts FleetChildSchema has optional tier enum. src/fleet/child-config.ts applies the tier overlay before the unchanged shallow-merge, byte-identical when tier absent. Collocated tests cover schema parse (with/without/invalid tier), resolveTier per tier, the deep-equal byte-identical no-tier config, each tier's resolved provider block, and child.config precedence. Build/typecheck/test/lint green.",
+  "assumptions": [
+    "buildChildConfig today (child-config.ts:20-44) sets planner/generator/evaluator to DEEPSEEK_* then `const merged = {...base, ...(child.config ?? {})}` then BoberConfigSchema.parse(merged); the tier overlay is inserted on `base` BEFORE that merge line so child.config precedence is preserved.",
+    "RoleProviderBlock matches the per-role section shape buildChildConfig already writes (provider, model, endpoint); anthropic tiers set endpoint to null/undefined, openai-compat tiers set the deepseek/x.ai endpoint.",
+    "Tier model ids use model-resolver shorthands or full ids (deepseek -> deepseek + api.deepseek.com; grok -> grok + api.x.ai from Sprint 1; hard -> a Sonnet id e.g. 'sonnet'/'claude-sonnet-4-6'; frontier -> an Opus id e.g. 'opus'/'claude-opus-4-8'); ids are overridable via child.config.",
+    "Grok routing/endpoint from Sprint 1 (resolveProviderModel grok -> openai-compat + api.x.ai/v1) is available, so the standard tier block can specify provider 'openai-compat' + that endpoint + a grok model."
+  ],
+  "outOfScope": [
+    "Grok provider wiring (Sprint 1, dependency)",
+    "ToolRoleGuard (Sprint 3)",
+    "Blackboard / Phase B"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/fleet/child-config.ts (FULL — the DeepSeek hard-set at :24-41 and the `const merged = {...base, ...(child.config ?? {})}` at :43, then BoberConfigSchema.parse(merged) at :44); src/fleet/manifest.ts (FleetChildSchema :6-9, FleetManifestSchema :13-17); src/config/schema.ts (the per-role section shape: provider/model/endpoint fields, so RoleProviderBlock matches); src/providers/factory.ts ProviderName; arch ADR-2 in .bober/architecture/arch-20260618-heterogeneous-multi-provider-agent-team-adr-2.md.\n\nNew src/fleet/tier-policy.ts: define DifficultyTier union; RoleProviderBlock {provider: ProviderName; model: string; endpoint?: string | null}; TieredRoleBlock {planner,generator,evaluator: RoleProviderBlock}; a const TIER_POLICY: Record<Exclude<DifficultyTier,'default'>, TieredRoleBlock> with the four entries (cheap: all three roles -> {provider:'openai-compat', model:'deepseek', endpoint:'https://api.deepseek.com'}; standard -> {provider:'openai-compat', model:'grok', endpoint:'https://api.x.ai/v1'}; hard -> {provider:'anthropic', model:'sonnet', endpoint: null}; frontier -> {provider:'anthropic', model:'opus', endpoint: null}); export const tierPolicy: TierProviderPolicy with resolveTier(tier) => (tier && tier !== 'default') ? TIER_POLICY[tier] : undefined, and knownTiers().\n\nmanifest.ts: add `tier: z.enum(['default','cheap','standard','hard','frontier']).optional()` to FleetChildSchema. Keep config field.\n\nchild-config.ts: after the three DeepSeek hard-sets and BEFORE `const merged = ...`, insert: `const block = tierPolicy.resolveTier(child.tier); if (block) { base.planner = {...base.planner, ...block.planner}; base.generator = {...base.generator, ...block.generator}; base.evaluator = {...base.evaluator, ...block.evaluator}; }`. Then the UNCHANGED merge + parse. When block is undefined the function is byte-identical. Be careful endpoint: for anthropic tiers set endpoint to null/undefined exactly as the existing anthropic config sections do (check schema default) so the parsed config matches a normal anthropic role section.\n\nTests: tier-policy.test.ts (resolveTier per tier incl default/undefined => undefined; assert no block has provider 'claude-code'); manifest.test.ts additions (parse with/without/invalid tier); child-config.test.ts additions (deep-equal no-tier vs an explicit expected DeepSeek config = the byte-identical proof; each tier's resolved planner/generator/evaluator provider+endpoint+model; child.config-wins-over-tier precedence). Use BoberConfigSchema to build the expected config in the deep-equal test so field defaults match. Follow ESM .js imports, import type, unicode section headers.",
+  "evaluatorNotes": "sc-2-3: parse a FleetManifest with a child tier of each enum value, one with no tier, and one with tier:'bogus' (expect ZodError); assert the no-tier parse equals the prior shape. sc-2-4: resolveTier('default')===undefined, resolveTier(undefined)===undefined, resolveTier('standard').generator.endpoint==='https://api.x.ai/v1', resolveTier('hard').generator.provider==='anthropic', resolveTier('frontier') Opus; grep tier-policy.ts to confirm no 'claude-code' literal. sc-2-5 (CRITICAL byte-identical): build the expected DeepSeek-default BoberConfig and assert deepEqual to buildChildConfig({folder,task}) with no tier. sc-2-6: buildChildConfig with each tier -> assert planner/generator/evaluator provider+endpoint+model. sc-2-7: child with tier:'standard' + config.generator={provider:'anthropic',model:'sonnet'} -> assert resulting generator.provider==='anthropic' (child.config wins). sc-2-2: FULL suite, only the 6 known cockpit failures allowed. Build/typecheck/lint clean.",
+  "estimatedFiles": [
+    "src/fleet/tier-policy.ts",
+    "src/fleet/tier-policy.test.ts",
+    "src/fleet/manifest.ts",
+    "src/fleet/manifest.test.ts",
+    "src/fleet/child-config.ts",
+    "src/fleet/child-config.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T18:30:00Z",
+  "updatedAt": "2026-06-18T18:30:00Z"
+}

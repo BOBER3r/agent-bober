@@ -1,0 +1,38 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-analysis-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-analysis-2",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T18:36:19.350Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of spec-20260628-medical-analysis: a PURE, INJECTABLE multi-lens judge loop that gates candidate medical recommendations through four lenses (evidence-grader, contraindication-checker with VETO, conservative-clinician, optimization-lens), reconciles by strict majority with an absolute contraindication veto, regenerates on rejection up to a bounded number of rounds, and FAILS CLOSED (no recommendation surfaced, dissent captured) when consensus is not reached. The red-flag short-circuit runs first and bypasses generation entirely. NO real LLM/FactStore/fs/network — everything is injected.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-medical-analysis-1",
+        "title": "Proactive trend Findings + vault writer + dashboard + review pass",
+        "summary": "Added src/medical/analysis/{finding,finding-writer,trends,review-pass}.ts. MedicalFinding shape (id,domain,title,kind action|watch|risk|question,urgency 1-5,severity 1-5,evidence[],surfacedAt,tags[],status), deterministic findingId (SHA-256 of domain|biomarker|ruleKey, excludes now), serializeFindingToMarkdown reuses src/vault/frontmatter.ts. Commit 307e5e7. NOTE: the MedicalFinding type + serializer from sprint 1 are the canonical in-repo finding shape sprint 3 will reuse to EMIT; sprint 2 only produces verdicts/outcomes, it does NOT emit findings."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/retrieval/grounding-critic.ts",
+      "src/fleet/critic-deep.ts",
+      "src/medical/guardrails.ts",
+      "src/medical/analysis/finding.ts",
+      "skills/shared/lens-panel.md"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc --noEmit",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "notes": "Full contract (sc-2-1..sc-2-7, nonGoals, stopConditions, assumptions, estimatedFiles) is in .bober/contracts/sprint-spec-20260628-medical-analysis-2.json. Read the Sprint Briefing at .bober/briefings/sprint-spec-20260628-medical-analysis-2-briefing.md FIRST. CRITICAL: invert fleet fail-open to FAIL-CLOSED (mirror grounding-critic.ts:206, NOT critic-deep.ts:206). Contraindication veto is absolute — never overridable by vote majority. Red-flag fires FIRST (generateCandidate spy must never be called). Loop never throws; bounded by MEDICAL_PANEL_MAX_TOTAL_CALLS."
+}

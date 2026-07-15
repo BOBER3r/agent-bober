@@ -1,0 +1,72 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-6",
+  "status": "complete",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-6-1",
+      "met": true,
+      "evidence": "pure mapAuditToFindings: critical->severity 5/urgency 5, important->3/3; every object FindingSchema.parse-validated; stable title '[security] <vulnClass> at <path>:<line>'; evidence flattening + fallbacks; 12/12"
+    },
+    {
+      "criterionId": "sc-6-2",
+      "met": true,
+      "evidence": "emitSecurityFindings never throws (throwing sink swallowed+logged); wired at gate + CLI AFTER verdict/exitCode, guarded by security.hub; hub:false -> zero sink calls; verdict/exitCode unchanged in all cases; 22/22 gate + 30/30 CLI"
+    },
+    {
+      "criterionId": "sc-6-3",
+      "met": true,
+      "evidence": "real file-backed FactStore in mkdtemp: same finding emitted twice -> 1 active row (same-now NOOP + later-now supersede cases); proven end-to-end at both gate and CLI boundaries against real facts.db"
+    },
+    {
+      "criterionId": "sc-6-4",
+      "met": true,
+      "evidence": "no z.object in security-hub.ts; only hub import is `import type { Finding } from '../hub/finding.js'`; src/hub/ untouched; minor/approvedAreas never emitted"
+    },
+    {
+      "criterionId": "sc-6-5",
+      "met": true,
+      "evidence": "build+tsc clean, lint 0 errors, suite 313 files / 4043 tests (+24); existing hub tests pass unmodified"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/orchestrator/security-hub.ts",
+      "action": "created",
+      "description": "mapAuditToFindings + emitSecurityFindings + SecurityFindingSink; local sha256 deriveFindingId replica per research-runner precedent"
+    },
+    {
+      "path": "src/orchestrator/security-hub.test.ts",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/security-gate.ts",
+      "action": "modified",
+      "description": "optional SecurityGateInput.findingSink; emitFindingsToHub after parse-failure check, outside Promise.race, guarded by config.security.hub; lazy FactStore w/ finally close"
+    },
+    {
+      "path": "src/orchestrator/security-gate.test.ts",
+      "action": "modified",
+      "description": "no-op findingSink added to 9 pre-existing call sites (fixes real /tmp/project side-effect risk; stray facts.db artifact deleted) + 6 new hub tests"
+    },
+    {
+      "path": "src/cli/commands/security-audit.ts",
+      "action": "modified",
+      "description": "optional deps.findingSink; emitFindingsToHub after parsed check before thresholdVerdict; reuses deps.now"
+    },
+    {
+      "path": "src/cli/commands/security-audit.test.ts",
+      "action": "modified",
+      "description": "+6 hub tests"
+    }
+  ],
+  "testsAdded": [
+    "src/orchestrator/security-hub.test.ts",
+    "security-gate.test.ts +6",
+    "security-audit.test.ts +6"
+  ],
+  "commits": [
+    "5b9a214 - bober(sprint-6): emit security audit findings into the priority hub"
+  ],
+  "blockers": [],
+  "notes": "security-auditor-agent.ts untouched (two-caller design keeps the core free of hub imports, preserving the Promise.race time-box). Discovered+fixed genuine side-effect: pre-existing gate tests use hardcoded '/tmp/project' root; unguarded hub emission would have written real sqlite there \u2014 injected no-op sinks (additive) and deleted the stray artifact. TS pitfall documented: let-in-closure narrowing to never; solved with early-return + const store."
+}

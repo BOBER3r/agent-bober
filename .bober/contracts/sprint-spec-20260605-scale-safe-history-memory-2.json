@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-2",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "sprintNumber": 2,
+  "title": "Deterministic lessons memory store (LessonEntry schema + .bober/memory state module)",
+  "description": "Add a new append-only lessons store under .bober/memory/, mirroring the MEMORY.md curated-index pattern. Introduce a zod LessonEntry schema whose sourceEntryRefs provenance array is mandatory and non-empty, persistence that writes one markdown file per lesson plus a single bounded INDEX.md line, and a capped index reader that never opens individual lesson files. This sprint is schema + persistence + bounded read only \u2014 no distillation logic, no CLI, no planner wiring.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "LessonEntrySchema in src/state/memory.ts is a zod object with lessonId, createdAt, category, tags (string[]), summary, occurrences (positive int), severity (enum), and sourceEntryRefs (non-empty string[]); a test asserts a valid lesson parses and a lesson with an empty sourceEntryRefs array is rejected.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "appendLesson writes .bober/memory/<lessonId>.md (front-matter plus body) and upserts a single one-line entry into .bober/memory/INDEX.md; a test asserts both files exist and INDEX.md gains exactly one line per distinct lessonId across repeated appends of the same id.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "loadLessonIndex(projectRoot, { limit }) returns at most `limit` index records parsed from INDEX.md without opening any individual lesson file; a test asserts the cap and that no <lessonId>.md read is issued during the index load.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "loadLesson(projectRoot, lessonId) round-trips a persisted LessonEntry, and the provenance invariant holds: every persisted lesson carries at least one sourceEntryRef; a test writes then reads a lesson and asserts equality plus a non-empty sourceEntryRefs.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck and npm run build exit 0 and the new src/state/memory tests pass with no new failures beyond the documented flaky baseline.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not compute or distill lessons in this sprint \u2014 only the schema, persistence, and bounded index read.",
+    "Do not call any LLM, embedding, or network API.",
+    "Do not wire the planner or any CLI command to this store yet.",
+    "Do not read or modify history.jsonl in this sprint."
+  ],
+  "stopConditions": [
+    "Stop when LessonEntry, appendLesson, loadLessonIndex, and loadLesson exist with passing round-trip and provenance tests and a bounded index read.",
+    "Stop when changes are confined to src/state/memory.ts and its collocated test."
+  ],
+  "definitionOfDone": "A deterministic, append-only lessons store exists under .bober/memory/: each lesson persists as <lessonId>.md with structured front-matter and a one-line entry in a bounded INDEX.md, mirroring the MEMORY.md pattern. The zod LessonEntry schema enforces a non-empty sourceEntryRefs provenance array, loadLessonIndex offers a capped read that never opens individual lesson files, and typecheck, build, and tests pass.",
+  "assumptions": [
+    "No .bober/memory directory exists today (verified via ls), so the store is greenfield and additive.",
+    "Mirroring src/state/history.ts (path helpers plus zod safeParse plus append) keeps the module consistent with existing state code."
+  ],
+  "outOfScope": [
+    "distillation logic",
+    "CLI surface",
+    "planner retrieval",
+    "embeddings"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Create src/state/memory.ts mirroring history.ts conventions. Define memoryDir(projectRoot) = .bober/memory, lessonPath(root, id) = .bober/memory/<id>.md, indexPath(root) = .bober/memory/INDEX.md. LessonEntrySchema = z.object({ lessonId: z.string().min(1), createdAt: z.string().datetime(), category: z.string().min(1), tags: z.array(z.string()).default([]), summary: z.string().min(1), occurrences: z.number().int().positive(), severity: z.enum(['info','warn','high']), sourceEntryRefs: z.array(z.string().min(1)).min(1) }). appendLesson: ensureDir, write <id>.md as YAML-ish front-matter (between --- fences) carrying the structured fields plus a human-readable body, then upsert one INDEX.md line of the form `- <lessonId> [<category>/<severity>] (x<occurrences>) tags: a,b \u2014 <summary first 80 chars>`; upsert means replace the existing line for that lessonId or append if absent (read INDEX.md, split lines, filter out the prior line for this id, push the new line, rewrite). loadLessonIndex parses INDEX.md lines into lightweight records { lessonId, category, severity, occurrences, tags, summarySnippet } and returns the last `limit`. loadLesson reads <id>.md, parses the front-matter, and validates via LessonEntrySchema.safeParse. Use import type; ESM .js specifiers; box-drawing headers. Conventional commit: bober(sprint-2): deterministic lessons memory store.",
+  "evaluatorNotes": "Verify LessonEntrySchema rejects empty sourceEntryRefs and accepts a valid lesson. Verify appendLesson creates <id>.md and a single INDEX.md line, and that appending the same lessonId twice keeps INDEX.md at one line for that id (upsert, not duplicate). Verify loadLessonIndex caps to `limit` and does not open per-lesson files (assert via spy or by deleting a <id>.md and confirming the index load still succeeds). Verify loadLesson round-trips a written lesson and the provenance invariant. Run npm run typecheck (exit 0), npm run build (exit 0), and the memory tests. Confirm git diff is confined to src/state/memory.ts and its test.",
+  "estimatedFiles": [
+    "src/state/memory.ts",
+    "src/state/memory.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260605-scale-safe-history-memory-2-1",
+  "createdAt": "2026-06-05T00:00:00Z",
+  "updatedAt": "2026-06-04T23:30:29Z",
+  "completedAt": "2026-06-04T23:30:29Z"
+}

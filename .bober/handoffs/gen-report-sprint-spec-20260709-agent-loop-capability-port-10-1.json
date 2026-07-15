@@ -1,0 +1,27 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-10",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-10-1", "met": true, "evidence": "Integration test: child's captured chat params show tools=['tool_a'] only + fresh messages=[{user 'do X'}] (no parent turns); parent's next ToolResultMessage carries child summary, isError:false."},
+    {"criterionId": "sc-10-2", "met": true, "evidence": "def.model->clientFactory+resolveModel override, def.effort forwarded/omitted, maxTurns default-10/override, budget REFERENCE equality; shared Budget(maxUsd 1.0) charged 0.3 parent + 0.8 child = usdSpent 1.1, parent's next turn capped by same ceiling."},
+    {"criterionId": "sc-10-3", "met": true, "evidence": "Unknown name -> isError listing valid names without calling runLoop; refusal/budget_exceeded/error/aborted -> isError naming reason; throwing runLoop -> isError never throws; parent continues in integration tests."},
+    {"criterionId": "sc-10-4", "met": true, "evidence": "No subagents -> tools REFERENCE equality (same array), no spawn_subagent; empty [] equally byte-identical; config parse never sets tools; createDefaultConfig never adds it; bridge has no import-time side effects."},
+    {"criterionId": "sc-10-5", "met": true, "evidence": "8 bridge tests: 'mcp__echo' prefix, Object.hasOwn(tool,'readOnly')===false, round-trip via ORIGINAL upstream name, close() exactly once on success AND throw (finally), multi-part text join, isError mapping, thrown callTool never escapes."},
+    {"criterionId": "sc-10-6", "met": true, "evidence": "build + typecheck exit 0 fresh."}
+  ],
+  "filesChanged": [
+    {"path": "src/orchestrator/subagents.ts", "action": "created", "description": "SubagentDef + buildSubagentTool(defs, parentParams, opts{runLoop}): scoped fresh child params (SAME Budget, subagents:undefined one-level cap; session/compaction/onEvent/hooks/onTextDelta/initialMessages excluded; parallelReadOnlyTools/abortSignal/maxTokens inherited), never-throwing result mapping."},
+    {"path": "src/orchestrator/tools/mcp-bridge.ts", "action": "created", "description": "McpBridgeClientLike injectable interface; SdkMcpBridgeClient wrapping @modelcontextprotocol/sdk Client+StdioClientTransport (existing dep, mirrors src/mcp/external-client.ts); createMcpToolBridge (mcp__ prefix, non-readOnly); runWithMcpBridge (close in finally)."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "subagents?: SubagentDef[]; local tools/handlers augmentation via buildSubagentTool with runLoop:runAgenticLoop (breaks cycle via type-only import in subagents.ts); SAME references when absent/empty."},
+    {"path": "src/config/schema.ts", "action": "modified", "description": "McpBridgeServerSchema + ToolsSectionSchema {mcpBridge {enabled default false, server}}; tools optional on BoberConfigSchema; NOT in createDefaultConfig."},
+    {"path": "src/orchestrator/subagents.test.ts", "action": "created", "description": "12 unit tests incl. field-by-field child-param table."},
+    {"path": "src/orchestrator/tools/mcp-bridge.test.ts", "action": "created", "description": "8 tests with injected stub, no process spawn."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "6 sprint-10 integration tests (system-prompt-branching scripted client)."},
+    {"path": "src/config/schema.test.ts", "action": "modified", "description": "6 tools-section tests."}
+  ],
+  "testsAdded": ["subagents.test.ts (12)", "mcp-bridge.test.ts (8)", "agentic-loop.test.ts (6)", "schema.test.ts (6)"],
+  "commits": ["288fc4f - bober(sprint-10): in-process scoped subagents (spawn_subagent) + opt-in MCP tool bridge"],
+  "blockers": [],
+  "notes": "All 5 briefing design decisions followed: SDK-based bridge (reuses existing @modelcontextprotocol/sdk dep, mirrors external-client.ts), McpBridgeClientLike injectable idiom, type-only import + runLoop DI breaks the cycle, loop stays hermetic (runWithMcpBridge is the consumer-side composition helper, never wired into runAgenticLoop), child-param inherit/exclude table implemented + unit-tested. Deliberately NOT wired: no role section exposes subagents/bridge; no automated call site invokes createMcpToolBridge (a future consumer reads config.tools.mcpBridge.enabled). Suite 3870->3903 (+33). Full suite green with extended timeouts."
+}

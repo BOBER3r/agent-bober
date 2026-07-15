@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260628-do-bridge-2-1",
+  "contractId": "sprint-spec-20260628-do-bridge-2",
+  "specId": "spec-20260628-do-bridge",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "timestamp": "2026-06-29T16:56:10.013Z",
+  "summary": "Sprint 2 passes all 5. Approve-gate + injected detached launch; hub schema byte-unchanged (promotesTo stays string, PromotionRef serialized); approval-state reuse; 58 do-bridge + 334 regression tests green."
+}

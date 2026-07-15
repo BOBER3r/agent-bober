@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-4",
+  "specId": "spec-20260628-task-inbox",
+  "sprintNumber": 4,
+  "title": "Domain finding intake (pool ingest + dedup)",
+  "description": "Provide the seam domains write AUTO-surfaced findings through: an exported ingestFinding(store, finding, {now}) and a `bober task ingest` CLI that reads a Finding JSON (file or stdin). Ingest assigns/uses a content-derived stable id (hash of domain+title+kind) so a re-surfaced finding reconciles to NOOP/UPDATE rather than duplicating, validates against the Finding schema, and the finding then appears in `bober task list`.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-task-inbox-1"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "`npm run build` exits 0 with ingestFinding and the `bober task ingest` subcommand added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A unit test ingests a watch-kind Finding JSON and asserts it appears in the active hub pool and is returned by the list query.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A unit test ingests two findings with identical domain+title+kind and asserts exactly one active row exists for that id afterward (dedup via reconcile NOOP/UPDATE, not a second ADD).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A unit test feeds malformed JSON / a payload missing required Finding fields and asserts ingest rejects it, the CLI sets exitCode=1, and no row is written and nothing is thrown.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "`npm run typecheck` exits 0 — ingestFinding accepts the imported Finding type and returns a typed reconcile action.",
+      "verificationMethod": "typecheck",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT implement any domain's proactive review pass that generates findings — only the ingest entry point they call.",
+    "Do NOT bypass the Finding schema — every ingested payload is validated before persistence.",
+    "Do NOT duplicate captureTask's persistence — reuse writeFinding/writeFact.",
+    "Do NOT read the clock inside ingestFinding — now is injected.",
+    "Do NOT add new dependencies."
+  ],
+  "stopConditions": [
+    "`npm run build` and `npm run typecheck` exit 0 and the ingest + dedup + rejection unit tests pass.",
+    "Ingesting a sample domain Finding makes it visible in `bober task list`, and ingesting it again leaves a single active row."
+  ],
+  "definitionOfDone": "Domain pipelines have one entry point — ingestFinding(store, finding, {now}) plus `bober task ingest` (reading a Finding JSON from a file path or stdin) — to push an AUTO-surfaced finding into the unified hub pool. Ingest derives a stable id from domain+title+kind so a repeated finding reconciles to a single active row instead of duplicating, validates the payload against the imported Finding schema, surfaces the finding in `bober task list`, and reports malformed input on stderr with exitCode=1 without throwing.",
+  "assumptions": [
+    "Stable id = a short hash of `${domain}|${title}|${kind}` (mirroring factId in src/state/facts.ts:58-69) so re-surfacing collides on subject and reconciles (reconcile.ts:56-78).",
+    "ingestFinding reuses writeFinding (which routes through writeFact) so the reconcile NOOP/UPDATE/ADD logic applies for free.",
+    "A finding supplied without an id gets the derived id; a finding with an id keeps it."
+  ],
+  "outOfScope": [
+    "Chat capture (sprint 5) and Gmail bridge (sprint 6).",
+    "Ranking/judging of ingested findings (priority-hub)."
+  ],
+  "generatorNotes": "Add ingestFinding(store, finding, {now}) to src/hub/finding-store.ts: validate finding via the imported Finding schema (.parse — throws into a caught boundary), derive id when absent as a 16-char hash of `${domain}|${title}|${kind}` (reuse the createHash('sha256').slice(0,16) approach from factId at src/state/facts.ts:58-69), set surfacedAt=now if absent, then call writeFinding (so reconcile dedups). Return the ReconcileAction. Add a `ingest` subcommand to src/cli/commands/task.ts taking an optional <file> arg (read stdin when omitted), JSON.parse the payload, call ingestFinding, and print the action (added/updated/unchanged). On parse/validation failure: chalk.red message, exitCode=1, return — write nothing. Keep now injected at the boundary.",
+  "evaluatorNotes": "Verify dedup: ingest the same domain+title+kind twice with an in-memory store and assert getActiveFacts('hub',undefined,'finding') has length 1. Verify validation rejects a payload missing required schema fields and that NO row is written on rejection. Confirm ingestFinding reuses writeFinding/writeFact rather than a raw insertFact. Confirm the derived id is deterministic (same inputs -> same id) and that now is a parameter.",
+  "estimatedFiles": [
+    "src/hub/finding-store.ts",
+    "src/hub/finding-store.test.ts",
+    "src/cli/commands/task.ts",
+    "src/cli/commands/task.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "ambiguityScore": 5,
+  "completedAt": "2026-06-29T10:52:49.261Z"
+}

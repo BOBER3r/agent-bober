@@ -1,0 +1,86 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-4",
+  "specId": "spec-20260628-calendar-planner",
+  "sprintNumber": 4,
+  "title": "Approve-gate: propose -> /approve|/tell -> write events",
+  "description": "Compose the full safety flow: `bober calendar plan` (live path) runs the slotter, writes the ProposedPlan as a pending approval marker via the existing approval gate, and writes ZERO events until an ApprovedMarker exists. After approval the chosen connector's writeEvents is called exactly once; on rejection it is never called; a /tell-style constraint adjustment re-runs the slotter and re-proposes without writing. Reuses src/state/approval-state.ts and the existing /approve, /reject, /tell handlers — no new approval mechanism.",
+  "status": "completed",
+  "completedAt": "2026-06-29T22:39:30.000Z",
+  "dependsOn": [
+    "sprint-spec-20260628-calendar-planner-1",
+    "sprint-spec-20260628-calendar-planner-2",
+    "sprint-spec-20260628-calendar-planner-3"
+  ],
+  "features": ["feat-4"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "`npm run build` (tsc) completes with zero errors after adding src/calendar/proposal-gate.ts and the live `bober calendar plan` + `bober calendar apply` CLI paths.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "`npm run typecheck` reports zero type errors across the proposal-gate module and the calendar command after wiring the approval flow.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A vitest asserts the live `bober calendar plan` path writes a .bober/approvals/<id>.pending.json marker (via savePending) and the connector's writeEvents is not called before an ApprovedMarker exists.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A vitest asserts that after an ApprovedMarker is recorded for the checkpoint, applying the plan calls a stub connector's writeEvents exactly once with the proposed PlanItems, and that with a RejectedMarker writeEvents is never called.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "A vitest asserts a /tell-style constraint adjustment (e.g. excludeInterval or a shifted window) re-runs the Sprint 1 slotter and yields a new ProposedPlan reflecting the constraint, with no events written.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "An end-to-end vitest exercises propose -> approve -> apply against a stub connector and asserts the marker lifecycle (pending written, then approved, then pending deleted) plus exactly one writeEvents call.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write events to any connector before an ApprovedMarker exists for the checkpoint.",
+    "Do not build a new approval mechanism — reuse src/state/approval-state.ts and the existing /approve, /reject, /tell handlers (src/chat/slash-commands.ts:103-135).",
+    "Do not bypass the Sprint 3 cloud-calendar egress axis when the chosen connector is Google.",
+    "Do not auto-approve in any mode, including autopilot.",
+    "Do not modify the slot-fill algorithm or the connector implementations from earlier sprints."
+  ],
+  "stopConditions": [
+    "The propose-then-no-write test, the approve-then-write-once test, the reject-then-no-write test, and the end-to-end lifecycle test pass under `npm test`, and `npm run build` is green.",
+    "`bober calendar plan` creates a pending approval and writes no events until the checkpoint is approved."
+  ],
+  "definitionOfDone": "Running `bober calendar plan` on the live path slots the findings, writes a pending approval marker describing the proposed schedule, and prints the checkpointId plus how to approve (bober approve <id> or /approve <id> in chat) — with zero events written yet. Approving the checkpoint causes the chosen connector to write the proposed events exactly once; rejecting it aborts with no write; and /tell-style feedback re-runs the slotter under the new constraint and re-proposes. The entire gate reuses the existing approval-state machinery and slash-command handlers rather than introducing a parallel one.",
+  "assumptions": [
+    "Approval gate reuse: PendingMarker/ApprovedMarker/RejectedMarker + savePending/saveApproved/saveRejected/readPending/deletePending from src/state/approval-state.ts; /approve, /reject, /tell already dispatched in src/chat/slash-commands.ts:103-135.",
+    "PendingMarker.artifact holds a summary + path of the proposed schedule; events are written only when an ApprovedMarker is present (research §3a line 135: propose -> /approve -> write).",
+    "/tell guidance is interpreted as deterministic constraint deltas (exclude interval / shift window) fed back into the Sprint 1 slotter — the LLM does not place slots.",
+    "The live path defaults to the configured connector (calendar.connector, default 'ics'); when Google is chosen the Sprint 3 egress axis still gates the write."
+  ],
+  "outOfScope": [
+    "Editing or deleting already-written events after approval.",
+    "Conflict resolution against events created outside this planner.",
+    "Telegram inline-button approval surface (sibling presentation adapter) — this sprint targets the CLI/chat gate."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/calendar/proposal-gate.ts: proposePlan(projectRoot, plan, connectorName) builds a PendingMarker (checkpointId, artifact { type:'calendar-plan', path, summary, lines }, prompt) and calls savePending (src/state/approval-state.ts); applyPlan(projectRoot, checkpointId, connector) reads the approved/rejected markers — if approved, call connector.writeEvents(plan.scheduled) exactly once then deletePending; if rejected, abort with the feedback; if still pending, report waiting. Provide adjustPlan(plan-inputs, constraintDelta) that re-runs the Sprint 1 slotter with an updated SlotConstraints (e.g. add an excludeInterval or shift window) — pure, deterministic, no write. Update src/cli/commands/calendar.ts: default `bober calendar plan` (no --dry-run/--export-ics) goes through proposePlan and prints the checkpointId + approval instructions; add `bober calendar apply <checkpointId>`. Do NOT re-implement approval storage — import from src/state/approval-state.ts. Keep extracted-core + injectable-deps for tests (stub connector). Honor ESM .js imports, node:fs/promises, type-only imports, unicode section headers.",
+  "evaluatorNotes": "Verify a pending marker file appears and writeEvents is not called before approval. Inject an ApprovedMarker and confirm writeEvents is called exactly once with the scheduled items and the pending marker is deleted. Inject a RejectedMarker and confirm writeEvents is never called. Verify adjustPlan re-slots under a constraint with no write. Confirm proposal-gate imports approval-state rather than re-implementing it (read the file). Confirm no auto-approve path exists.",
+  "estimatedFiles": [
+    "src/calendar/proposal-gate.ts",
+    "src/calendar/proposal-gate.test.ts",
+    "src/cli/commands/calendar.ts",
+    "src/calendar/calendar-e2e.test.ts"
+  ],
+  "estimatedDuration": "medium"
+}

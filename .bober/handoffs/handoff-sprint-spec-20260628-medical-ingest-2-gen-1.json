@@ -1,0 +1,40 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-ingest-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-ingest-2",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T15:44:21Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical knowledge template — lab-ingestion leg. Sprint 2: serialize each parsed lab marker to a markdown note with structured YAML frontmatter under the vault dir, and reindex those notes into the existing HealthDataStore.lab_results. Deterministic JS status (low/normal/high/critical); deterministic labResultId dedup. NO LLM, NO network, NO import of the sibling vault-store module.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-medical-ingest-1",
+        "title": "Lab-PDF -> structured JSON parser",
+        "summary": "Added src/medical/lab-types.ts (ParsedLabMarker { name, value:number, unit, referenceLow?, referenceHigh?, critical? } + ParsedLabReport { panel, collectedAtIso, markers[] } Zod schemas). REUSE these schemas in Sprint 2 — import from './lab-types.js'. Also added Anthropic-only ChatParams.documents + parseLabPdf() (not needed this sprint)."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/lab-types.ts (reuse ParsedLabMarker)",
+      "src/medical/types.ts (LabResult shape ~lines 118-127)",
+      "src/medical/health-store.ts (upsertLabResult / getLabSeries / labResultId, ~lines 48-53, 196-230)",
+      "src/medical/numerics.ts (deterministic numerics precedent)",
+      "src/medical/lab-note.ts (NEW)",
+      "src/medical/lab-note.test.ts (NEW)",
+      "src/medical/lab-reindex.ts (NEW)",
+      "src/medical/lab-reindex.test.ts (NEW)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

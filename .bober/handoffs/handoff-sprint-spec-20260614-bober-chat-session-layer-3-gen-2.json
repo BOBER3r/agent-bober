@@ -1,0 +1,13 @@
+{
+  "handoffId":"handoff-sprint-spec-20260614-bober-chat-session-layer-3-gen-2",
+  "type":"to-generator","contractId":"sprint-spec-20260614-bober-chat-session-layer-3",
+  "specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T14:14:51Z","iteration":2,
+  "context":{"projectOverview":"Sprint 3 retry. The tailer/cursor/weaving implementation from iteration 1 (commit 625cb9a) is correct and ALL its sc-3-4..sc-3-8 tests pass. Only sc-3-3 failed due to a self-scan test regression.","currentBranch":"bober/chat-session-layer"},
+  "principles":"see .bober/principles.md",
+  "evaluatorFeedback":{
+    "failedCriteria":["sc-3-3"],
+    "regression":"src/discovery/scanner.test.ts line 380 asserts the agent-bober repo's dominant file naming style is 'camelCase'. After this plan added ~20 kebab-case files under src/chat/, the repo's true dominant style is now 'kebab-case', so the assertion fails (got 'kebab-case', expected 'camelCase'). At baseline commit a0f7d4c this test passed 52/52.",
+    "fix":"Make the MINIMAL change: in src/discovery/scanner.test.ts, change the assertion on/near line 380 from expect(report?.fileNaming.dominant).toBe('camelCase') to expect(report?.fileNaming.dominant).toBe('kebab-case'), and update the stale explanatory comment (~line 379) to reflect that the src/chat module makes kebab-case dominant. The scanner heuristic itself is correct — do NOT change scanner source, do NOT weaken or delete the test, do NOT rename any source files. After the edit, run the FULL npx vitest run and confirm 0 failures, plus npm run typecheck and npm run build clean.",
+    "doNotTouch":"Do not modify the iteration-1 chat tailer code (completion-tailer.ts, cursor-store.ts, chat-session.ts) — it already passes. This retry is ONLY the scanner test expectation fix."
+  }
+}

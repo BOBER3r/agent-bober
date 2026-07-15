@@ -1,0 +1,30 @@
+{
+  "evalId": "eval-sprint-spec-20260616-medical-team-4-1",
+  "contractId": "sprint-spec-20260616-medical-team-4",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T19:56:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "zero errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "clean" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "193 files, 2338 passed, 3 skipped", "details": "+15 health-store +20 numerics; temp-dir DBs / :memory:" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "no new issues" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "description": "build clean", "required": true, "result": "pass", "evidence": "build exit 0", "feedback": "" },
+    { "criterionId": "sc-4-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit exit 0", "feedback": "" },
+    { "criterionId": "sc-4-3", "description": "tests green incl. store+numerics", "required": true, "result": "pass", "evidence": "2338 passed; temp-dir/:memory:, no fs mocks", "feedback": "" },
+    { "criterionId": "sc-4-4", "description": "INSERT OR IGNORE new-row count", "required": true, "result": "pass", "evidence": "5->5, re-insert->0, partial 3+2->2; info.changes accumulation; SHA-256(metric|tStart|source|value)", "feedback": "" },
+    { "criterionId": "sc-4-5", "description": "8 primitives correct", "required": true, "result": "pass", "evidence": "independently recomputed: mean=25,min=10,max=40,latest=40,delta=30,slope≈10/day,p50=25,p25=17.5,zscore≈1.3416 (popStd √125) — all mathematically correct" },
+    { "criterionId": "sc-4-6", "description": "empty window abstain", "required": true, "result": "pass", "evidence": "all 8 primitives -> {value:null,sampleCount:0} no throw; getLabTrend unknown -> nulls", "feedback": "" },
+    { "criterionId": "sc-4-7", "description": "cross-unit refusal", "required": true, "result": "pass", "evidence": "kg+lb -> {value:null,sampleCount:2}; same-unit -> 70.5; distinguishable from empty via sampleCount>0", "feedback": "" },
+    { "criterionId": "sc-4-8", "description": "no dynamic execution", "required": true, "result": "pass", "evidence": "independent grep + genuine readFileSync guard test: no eval/new Function/vm/child_process/execa; comment reword irrelevant to /\\beval\\b/ guard", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "low", "category": "quality", "file": "src/medical/numerics.test.ts", "line": "2,346,347", "description": "Uses readFileSync (sync fs) for the sc-4-8 source-grep test — violates the project's 'node:fs/promises only' principle. Only such violation in the codebase. Functionally correct.", "expected": "Convert to await readFile(join(dir,'numerics.ts'),'utf8') from node:fs/promises. Bundle with the S3 test-cleanup carry-forward in S6 (or a final cleanup pass)." }
+  ],
+  "summary": "Sprint 4 passes all 8 required criteria. Typecheck/build/full suite (2338 tests) green; all 8 numeric primitives independently verified correct; dedup returns new-row count only; cross-unit refusal distinguishable from empty-window abstain; no dynamic execution confirmed by grep + genuine guard test. Design deviation (3 tables vs 'single generic events table' wording) accepted — no criterion mandates single-table. One low-priority finding: readFileSync in numerics.test.ts (carry-forward cleanup to S6)."
+}

@@ -1,0 +1,158 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-8-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T23:40:25.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+        "title": "Refusal detection",
+        "summary": "35a2dbd: openai refusal branch; anthropic explicit 'refusal' case."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+        "title": "Cost substrate",
+        "summary": "8d68248..73053c0: anthropic computes costUsd once, spread into BOTH structured and normal returns \u2014 streaming normalization must produce the identical ChatResponse incl. costUsd."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+        "title": "Loop wiring",
+        "summary": "b9c936c: effort spread into chat params at the maxTokens site \u2014 onTextDelta threads the same way."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+        "title": "Parallel read-only tools",
+        "summary": "4ab7040/59b4b23."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+        "title": "Loop events + hooks",
+        "summary": "d52f94c: LoopEvent union in loop-events.ts with text-delta RESERVED (this sprint implements it), safeEmit helper."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-6",
+        "title": "Session persistence",
+        "summary": "c51b28b."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+        "title": "Auto-compaction",
+        "summary": "8b8fd13: compaction.ts makes its own client.chat call \u2014 decide/document whether onTextDelta should flow into the summarizer call (recommend NO: internal call, not user-visible output). agentic-loop.ts ~750 lines; anthropic.ts edited by sprints 1-2; ALL anchors stale. Suite 3843."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/providers/types.ts",
+      "src/providers/anthropic.ts",
+      "src/providers/anthropic.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/loop-events.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 8,
+    "title": "Streaming text deltas (Anthropic adapter streaming + loop passthrough)",
+    "description": "Real-time output without changing the loop's turn model. ChatParams gains an optional provider-agnostic onTextDelta callback; when set, the Anthropic adapter switches to the SDK's streaming API, invokes the callback per text delta, and still returns the exact same normalized ChatResponse (text, toolCalls, stopReason, usage, costUsd) at the end. Other adapters accept the param and never call it (documented no-op). The loop threads AgenticLoopParams.onTextDelta through and additionally emits text via the LoopEvent stream when onEvent is present. Absent callback \u2192 the existing non-streaming request path, byte-identical.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260709-agent-loop-capability-port-5"
+    ],
+    "features": [
+      "feat-8"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-8-1",
+        "description": "On the Anthropic path with onTextDelta set, the callback receives deltas whose concatenation equals the final ChatResponse.text, and the returned ChatResponse (stopReason, toolCalls, usage, costUsd) is deep-equal to what the non-streaming path returns for the same underlying response.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-8-2",
+        "description": "Streaming responses containing tool_use blocks normalize identically to the non-streaming path (tool calls with ids and parsed inputs), so agentic tool turns stream safely.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-8-3",
+        "description": "openai/openai-compat/google/claude-code adapters accept ChatParams carrying onTextDelta without error and never invoke it (no-op degradation, nothing extra on the wire).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-8-4",
+        "description": "runAgenticLoop threads onTextDelta to every chat call and emits a text-delta LoopEvent when onEvent is present; with no callback the adapter's non-streaming create is used (spy: stream API never called) and behavior is byte-identical.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-8-5",
+        "description": "A mid-stream provider error is normalized to the same error handling as the non-streaming path (chatWithRetry semantics preserved: transient retried, else stopReason 'error').",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-8-6",
+        "description": "npm run build and npm run typecheck pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not implement abort/interrupt (sprint 9).",
+      "Do not stream on openai-family or google adapters this sprint (documented no-op; own follow-up if wanted).",
+      "Do not stream through the claude-code CLI path (text-only boundary stays).",
+      "Do not wire chat/telegram UIs to deltas (consumers integrate later)."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: delta-concatenation equals final text with identical normalized response, tool_use streaming parity, no-op on other adapters, loop threading + event emission, and mid-stream error parity.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "Setting onTextDelta streams Anthropic responses token-by-token to the caller while every downstream consumer sees the identical ChatResponse and loop behavior; leaving it unset uses the exact pre-change non-streaming path everywhere. Build and full suite green.",
+    "assumptions": [
+      "The installed @anthropic-ai/sdk (0.100.1) exposes a streaming API (messages.stream or create with stream:true) that yields text deltas and a final accumulated message with usage \u2014 SDK types stay inside anthropic.ts per the provider-agnosticism law.",
+      "onTextDelta lives on ChatParams as a plain (delta: string) => void \u2014 an own type, safe for every adapter to ignore.",
+      "chatWithRetry (~agentic-loop.ts:105) wraps client.chat uniformly; streaming happens inside the adapter so retry semantics are unchanged.",
+      "Sprint 5's LoopEvent union is present for the text-delta event (hard dependsOn)."
+    ],
+    "outOfScope": [
+      "Streamed thinking/reasoning blocks (text deltas only).",
+      "Partial tool-input streaming (tool calls surface only when complete)."
+    ],
+    "ambiguityScore": 4,
+    "generatorNotes": "types.ts: add onTextDelta?: (delta: string) => void to ChatParams with a doc comment that adapters MAY ignore it. anthropic.ts: when params.onTextDelta is set, use the SDK streaming surface (prefer client.messages.stream if available in 0.100.1 \u2014 it accumulates the final message for you; otherwise iterate create({stream:true}) events accumulating content blocks and usage manually); invoke the callback for each text delta; assemble the SAME normalized ChatResponse the non-streaming branch builds (reuse the existing normalization code by extracting a shared normalizeResponse(message) helper rather than duplicating). Wrap callback invocations in try/catch (a throwing consumer must not kill the request). Loop: add onTextDelta to AgenticLoopParams, pass into chat params alongside effort/maxTokens; when onEvent present, also emit { type:'text-delta', turn, delta } (add to the union). Other adapters: no code needed beyond the type accepting the field \u2014 add one no-op comment line in each documenting the degradation. Test with a mocked SDK stream (async iterable of events) \u2014 no live API.",
+    "evaluatorNotes": "sc-8-1: mock stream yielding 3 text deltas + final usage; collect callback output, assert join equals response.text; run the same underlying content through the non-streaming mock and deep-equal both ChatResponses. sc-8-2: mock stream with a tool_use block; assert toolCalls parity with non-streaming normalization. sc-8-3: pass onTextDelta to openai/openai-compat mocks; assert never called and request payload unchanged. sc-8-4: loop-level fake client records receipt of onTextDelta; onEvent collects text-delta events; without callback, spy asserts the streaming branch is not taken; FULL suite. sc-8-5: mock stream erroring mid-way \u2192 same retry/error classification as a non-streaming throw (assert via chatWithRetry behavior with a transient then success). Build + typecheck.",
+    "estimatedFiles": [
+      "src/providers/types.ts",
+      "src/providers/anthropic.ts",
+      "src/providers/anthropic.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/loop-events.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-09T23:40:25.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

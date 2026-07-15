@@ -1,0 +1,70 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+  "status": "complete",
+  "criteriaResults": [
+    {
+      "criterionId": "sc-3-1",
+      "met": true,
+      "evidence": "security-gate.test.ts table-tests all 5 SecurityGateVerdict reasons (disabled/clean/critical-finding/timeout/audit-error) incl. fake-timer timeout + parsed:false->audit-error elevation; disabled asserts runSecurityAudit zero calls; 16/16"
+    },
+    {
+      "criterionId": "sc-3-2",
+      "met": true,
+      "evidence": "pipeline.test.ts: blocked round -> NO sprint-passed event, security-audit-blocked event w/ details, defers to existing retry path (continue / needs-rework at maxIterations)"
+    },
+    {
+      "criterionId": "sc-3-3",
+      "met": true,
+      "evidence": "2nd runGenerator call receives '[CRITICAL] injection: ... at src/db.ts:88' via pendingSecurityFeedback->evalFeedbackParts (same channel as evaluator feedback); renderSecurityFeedback pure, 7 unit tests, 20-finding cap"
+    },
+    {
+      "criterionId": "sc-3-4",
+      "met": true,
+      "evidence": "frozen-clock paired run: config.security absent vs {enabled:false} -> deep-equal full results AND full appendHistory call arrays; runSecurityAudit 0 calls both runs"
+    },
+    {
+      "criterionId": "sc-3-5",
+      "met": true,
+      "evidence": "clean round: security-audit-clean + sprint-passed + runCodeReviewer/runDocumenter exactly once; blocked round: neither advisory stage called (gate sits before the passed block per ADR-6)"
+    },
+    {
+      "criterionId": "sc-3-6",
+      "met": true,
+      "evidence": "saveSecurityAudit rejection in clean AND blocked scenarios leaves verdict unchanged; logger.warn 'Security audit persistence failed'"
+    },
+    {
+      "criterionId": "sc-3-7",
+      "met": true,
+      "evidence": "build+tsc clean, eslint 0 errors, full suite 310 files / 3980 tests green (+20: 16 gate + 4 pipeline)"
+    }
+  ],
+  "filesChanged": [
+    {
+      "path": "src/orchestrator/security-gate.ts",
+      "action": "created",
+      "description": "evaluateSecurityGate (Promise.race time-box, fail-closed, never throws, best-effort save can never flip verdict) + renderSecurityFeedback (pure)"
+    },
+    {
+      "path": "src/orchestrator/pipeline.ts",
+      "action": "modified",
+      "description": "additive-only 98+/0-: gate at TOP of if(evaluation.passed) before updateContractStatus; pendingSecurityFeedback->evalFeedbackParts; security-audit-blocked/clean history events; mirrors eval-failed retry tail; zero statements execute when security absent/disabled"
+    },
+    {
+      "path": "src/orchestrator/security-gate.test.ts",
+      "action": "created"
+    },
+    {
+      "path": "src/orchestrator/pipeline.test.ts",
+      "action": "created"
+    }
+  ],
+  "testsAdded": [
+    "src/orchestrator/security-gate.test.ts",
+    "src/orchestrator/pipeline.test.ts"
+  ],
+  "commits": [
+    "e60422c - bober(sprint-3): wire fail-closed SecurityAuditGate into the pipeline"
+  ],
+  "blockers": [],
+  "notes": "code-reviewer/documenter untouched (line numbers shifted only). Veto reads only verdict/review.critical, never review.important. No auto-commit-revert on block. Type note: SecurityAuditResult.review typed as locked ReviewResult; runtime entries are SecurityFinding[] \u2014 documented narrowing cast `as SecurityFinding[]` in gate+pipeline rather than touching locked types. package.json untouched."
+}

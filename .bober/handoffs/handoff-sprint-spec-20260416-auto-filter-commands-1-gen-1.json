@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260416-auto-filter-commands-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260416-auto-filter-commands-1",
+  "specId": "spec-20260416-auto-filter-commands",
+  "timestamp": "2026-04-16T12:07:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober is a multi-agent harness for building applications autonomously with any LLM. This sprint modifies the init command to filter which slash commands are installed based on the project's mode and preset.",
+    "completedSprints": [],
+    "currentBranch": "bober/auto-filter-commands",
+    "relevantFiles": ["src/cli/commands/init.ts"]
+  },
+  "config": {
+    "commands": {
+      "install": "npm install",
+      "build": "npm run build",
+      "test": "npm run test",
+      "lint": "npm run lint",
+      "typecheck": "npm run typecheck"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "evaluatorFeedback": null
+}

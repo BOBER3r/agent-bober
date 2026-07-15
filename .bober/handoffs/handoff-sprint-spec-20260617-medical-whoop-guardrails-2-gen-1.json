@@ -1,0 +1,50 @@
+{
+  "handoffId": "handoff-sprint-spec-20260617-medical-whoop-guardrails-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-2",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "timestamp": "2026-06-17T15:33:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical team, branch bober/medical-team. Sprint 2 establishes authenticated, egress-gated WHOOP access WITHOUT persistence (Sprint 3 does sync/CLI). Add a third 'device-connection' EgressAxis (default false, independent of the existing two), WhoopTokenStore (env creds + 0600 sidecar), and WhoopClient (OAuth2 refresh, v2 paginated fetch, 401/429 handling) confined to ONE new ESLint-excepted network file.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260617-medical-whoop-guardrails-1",
+        "title": "Code-enforced non-emergency refusal layer",
+        "summary": "Commit 2a8ff70. RefusalDetector + guardrails refuse verdict + engine refuse-dispatch. Did NOT touch egress.ts or schema.ts."
+      },
+      {
+        "contractId": "spec-20260616-medical-team (all 7 sprints)",
+        "title": "Base medical team",
+        "summary": "EgressGuard exists in src/medical/egress.ts with TWO axes (cloud-inference + literature-retrieval, both default false), isAllowed/assertAllowed switch + never-guard, fromConfig reading MedicalSectionSchema. src/medical/retrieval/medline-source.ts is the EXISTING ESLint-excepted network file (the template: FetchLike injectable transport, module-const base URL, assertAllowed-before-fetch, fixture-driven tests). src/medical/audit.ts has the 0600 write + ensureDir + .bober/medical path pattern. src/providers/factory.ts:96-136 reads process.env credentials. eslint.config.js has the scoped src/medical/** network boundary with a single exception (medline-source.ts)."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/egress.ts",
+      "src/medical/retrieval/medline-source.ts",
+      "src/medical/audit.ts",
+      "src/config/schema.ts",
+      "src/providers/factory.ts",
+      "eslint.config.js"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260617-medical-whoop-guardrails-2.json",
+  "specRef": ".bober/specs/spec-20260617-medical-whoop-guardrails.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/medical-team",
+      "commitFormat": "bober(sprint-2): <description>"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

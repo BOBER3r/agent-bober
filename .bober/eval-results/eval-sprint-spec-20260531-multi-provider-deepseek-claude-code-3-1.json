@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260531-multi-provider-deepseek-claude-code-3-1",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-3",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T14:38:10.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit EXIT 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "eslint src/ EXIT 0"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "1382 pass; 2 pre-existing mcp timeout flakes (baseline)"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc EXIT 0"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "result": "pass", "required": true, "evidence": "openai.test.ts:427-445 asserts error contains 'npm install openai'; openai.ts unchanged this sprint"},
+    {"criterionId": "sc-3-2", "result": "pass", "required": true, "evidence": "preflight returns hint with 'npm install openai' for openai-family + importer rejecting"},
+    {"criterionId": "sc-3-3", "result": "pass", "required": true, "evidence": "importer resolves => null, no warn"},
+    {"criterionId": "sc-3-4", "result": "pass", "required": true, "evidence": "anthropic-only => null, importer not called"},
+    {"criterionId": "sc-3-5", "result": "pass", "required": true, "evidence": "build + lint EXIT 0"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "low", "category": "quality", "file": "src/providers/preflight.ts", "description": "ADVISORY (non-blocking): preflightOpenaiPeer is implemented + tested but not wired into a startup call site. definitionOfDone implies it should fire before the first model call. Wire it at config-load / client-factory entry in a follow-on sprint (Sprint 5 config-load resolution is the natural place).", "reproduction": "grep -r 'preflightOpenaiPeer' src/ shows only preflight.ts + test reference it."}
+  ],
+  "summary": "All 5 required criteria pass. nonGoals respected (never throws, no static openai import, error wording unchanged, openai not in deps). Advisory: preflight not yet wired into startup — carry to Sprint 5."
+}

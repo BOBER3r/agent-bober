@@ -1,0 +1,147 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-9-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-9",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-10T00:02:54.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+        "title": "Loop wiring",
+        "summary": "b9c936c: usage/costUsd accumulators + budget_exceeded return (mirror for the new aborted return)."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+        "title": "Events + hooks",
+        "summary": "d52f94c: single finish() helper fires result event + onStop exactly once \u2014 the aborted return MUST go through it."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-6",
+        "title": "Sessions",
+        "summary": "c51b28b: persistSession at turn-body completion points \u2014 decide whether the aborted path saves (recommend yes if session set, consistent with other stop paths)."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+        "title": "Compaction",
+        "summary": "8b8fd13: compaction.ts internal summarizer call \u2014 its params are self-built; decide whether abort should skip compaction (boundary check placement)."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-8",
+        "title": "Streaming",
+        "summary": "37405e2/016e9f5: anthropic.ts now has create() and messages.stream() branches sharing normalizeResponse \u2014 the abort signal must forward into BOTH; chatWithRetry/isTransientError at agentic-loop.ts ~:172-228 (untouched by S8) must special-case aborts to never retry. Suite 3859. Sprints 1-8 all edited agentic-loop.ts; anchors stale."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/providers/types.ts",
+      "src/providers/anthropic.ts",
+      "src/providers/anthropic.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-9",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 9,
+    "title": "Mid-turn interrupt: AbortSignal through the loop and streaming adapter",
+    "description": "Make a running loop cancellable. AgenticLoopParams gains an optional abortSignal (standard AbortSignal); the loop checks it at every turn boundary and threads it into ChatParams so the Anthropic adapter cancels an in-flight (streaming or non-streaming) request mid-turn. An aborted run resolves gracefully with stopReason 'aborted', preserving accumulated usage/costUsd/turnsUsed \u2014 never a throw. No signal \u2192 byte-identical.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260709-agent-loop-capability-port-3",
+      "sprint-spec-20260709-agent-loop-capability-port-8"
+    ],
+    "features": [
+      "feat-8"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-9-1",
+        "description": "A signal aborted between turns stops the loop before the next chat call and resolves with stopReason 'aborted' and a partial result (never a rejected promise).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-9-2",
+        "description": "A signal aborted during an in-flight Anthropic request (streaming and non-streaming mocks) cancels the request; the adapter's abort surfaces to the loop as the aborted outcome, not as a retryable transient error (chatWithRetry does not retry aborts).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-9-3",
+        "description": "The aborted result preserves usage, costUsd and turnsUsed accumulated before the abort, and fires the onStop hook / result LoopEvent exactly once.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-9-4",
+        "description": "Adapters without native cancellation (openai-family/google/claude-code) degrade documented: the request completes but the loop still returns 'aborted' at the next boundary without using the response for a further turn.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-9-5",
+        "description": "Without abortSignal, behavior is byte-identical (full existing suite unchanged).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-9-6",
+        "description": "npm run build and npm run typecheck pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not wire chat /pause or telegram to the signal (consumers integrate later; loop surface only).",
+      "Do not auto-abort on budget breach mid-turn (budget stays a turn-boundary check; a consumer MAY combine Budget + AbortController externally).",
+      "Do not implement pause/resume semantics \u2014 abort is terminal for the run (sprint 6 sessions enable continuing later from the transcript).",
+      "Do not add cancellation to the claude-code CLI path."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: boundary abort, mid-flight cancel without retry, accumulated partials + single onStop, degraded-adapter path, and byte-identical absence path.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "An AbortSignal on AgenticLoopParams cleanly ends a run mid-flight on the Anthropic path and at the next boundary elsewhere, always resolving with stopReason 'aborted' plus accumulated partial telemetry, with no signal meaning no change. Build and full suite green.",
+    "assumptions": [
+      "The @anthropic-ai/sdk request options accept an abort signal (standard fetch-based SDK surface) \u2014 confirm the exact option name inside the adapter; SDK types stay in the adapter file.",
+      "ChatParams gains abortSignal?: AbortSignal \u2014 a web-standard type, acceptable in the provider-agnostic surface (not an SDK type).",
+      "chatWithRetry's transient classification must special-case abort errors (name 'AbortError' or the signal's aborted flag) so aborts are never retried.",
+      "Sprint 8's streaming branch and sprint 3's usage/cost accumulators exist (hard dependsOn both)."
+    ],
+    "outOfScope": [
+      "Graceful mid-turn tool-execution cancellation (running tool handlers finish; the loop aborts after the batch).",
+      "Timeout-based auto-abort helpers."
+    ],
+    "ambiguityScore": 4,
+    "generatorNotes": "types.ts: add abortSignal?: AbortSignal to ChatParams. Loop: add abortSignal to AgenticLoopParams; at the top of each turn iteration check params.abortSignal?.aborted \u2192 finish with stopReason 'aborted' (reuse the finish helper from sprint 5 so onStop/result events fire once); pass the signal into chat params. chatWithRetry: before classifying an error as transient, check signal.aborted (or err.name === 'AbortError') \u2192 rethrow a typed AbortedError immediately (no retry); the loop catches it and finishes with 'aborted' instead of 'error'. anthropic.ts: forward the signal into the SDK call options for both streaming and non-streaming branches. Other adapters: accept the field, ignore it (one-line comment); the loop's boundary check covers them. Tests: AbortController fired via setTimeout mid-mock-stream; assert resolved result. Also assert a tool batch in progress completes before the abort takes effect (document this in a test name).",
+    "evaluatorNotes": "sc-9-1: abort() after turn 1's completion in a 3-turn script \u2192 chat called exactly twice? No \u2014 abort between turns means chat NOT called again: assert call count stays at 1 completed turn + 0 further calls, stopReason 'aborted', turnsUsed 1. sc-9-2: mocked SDK whose create/stream rejects with AbortError when the passed signal fires; assert no retry attempts (call count 1) and 'aborted' result. sc-9-3: accumulate usage/cost over turn 1, abort during turn 2; assert totals equal turn-1 values and onStop fired once. sc-9-4: fake non-cancellable adapter \u2014 abort mid-request; response returns but loop result is 'aborted' and the response's tool calls were NOT executed. sc-9-5: FULL suite + paired run without signal deep-equal. Build + typecheck.",
+    "estimatedFiles": [
+      "src/providers/types.ts",
+      "src/providers/anthropic.ts",
+      "src/providers/anthropic.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-10T00:02:54.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

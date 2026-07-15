@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-4",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T19:48:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 6 — The Medical Team. Numerical reasoning is 100% deterministic in-process TypeScript over a CLOSED whitelist; the LLM NEVER performs arithmetic. This sprint (S4) adds HealthDataStore (better-sqlite3 single-table, mirroring FactStore) + NumericsQueryLayer (8-primitive whitelist).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260616-medical-team-1", "title": "Plumbing + team", "summary": "60215d2" },
+      { "contractId": "sprint-spec-20260616-medical-team-2", "title": "Consent/audit/disclaimer (Gate 1)", "summary": "4e0286d" },
+      { "contractId": "sprint-spec-20260616-medical-team-3", "title": "Red-flag short-circuit (Gate 2)", "summary": "6fc7c97 — MedicalSopDeps has llmClient?+numerics? slots; engine has consent->redflag->placeholder-allow." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": ["src/state/facts.ts", "src/state/facts.test.ts", "src/state/helpers.ts", "src/medical/types.ts", "src/medical/engine.ts", "src/chat/conversation-store.test.ts", "package.json"]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260616-medical-team-4.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260616-medical-team-4-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "test": "npx vitest run", "lint": "npm run lint" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "criticalConstraints": [
+    "HealthDataStore (suggest src/medical/health-store.ts) MUST MIRROR FactStore (src/state/facts.ts): better-sqlite3 SYNC, single generic events table, CREATE TABLE IF NOT EXISTS, INSERT OR IGNORE on a deterministic SHA-256 id of (metric|tStart|source|value) computed with createHash exactly like factId (facts.ts:58-69). Do NOT invent a new DB pattern. Reuse the same import style for better-sqlite3.",
+    "upsertObservations returns the count of NEW rows ONLY (sum info.changes from INSERT OR IGNORE). A test inserts duplicates and asserts the count is new-rows-only. Methods: upsertObservations, getObservations, getLabSeries, getBaseline, putBaseline, getPreference.",
+    "NumericsQueryLayer (suggest src/medical/numerics.ts) exposes ONLY the closed whitelist: mean|min|max|latest|delta|slope|percentile|zscore + getLabTrend. NumericResult { primitive, value:number|null, unit, sampleCount }. Empty window => { value:null, sampleCount:0 } (ABSTAIN — never throw). zscore with n<2 abstains. Each primitive computes the correct value on a fixture series (use hand-computable formulas from the briefing).",
+    "NumericsQueryLayer reads the per-row unit and REFUSES to aggregate across heterogeneous units (per ADR-4) rather than silently mixing them.",
+    "ABSOLUTELY NO eval, Function constructor, vm, code generation, or child process (child_process/execa) anywhere in src/medical numerics code. A grep/readFileSync test (sc-4-8) must assert this. The LLM never performs arithmetic.",
+    "Timestamps (observation tStart) are INJECTED parameters, never wall-clock.",
+    "ESM/NodeNext .js extensions; strict TS; no SDK types outside src/providers/; better-sqlite3 sync is the ONLY allowed sync fs (per principles, sqlite store mirrors FactStore). Tests use temp-dir DBs + cleanup (no fs mocks). Add types additively to src/medical/types.ts.",
+    "Do NOT wire the full SOP into the engine this sprint (that is S6) — but the NumericsQueryLayer should be shaped to plug into deps.numerics later. nonGoals: NO ingestion (S5), NO egress/full SOP (S6), NO retrieval (S7)."
+  ],
+  "evaluatorFeedback": null
+}

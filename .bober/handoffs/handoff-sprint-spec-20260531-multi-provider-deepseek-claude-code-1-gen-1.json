@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260531-multi-provider-deepseek-claude-code-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-1",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T00:05:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-agent harness. This sprint fixes a pre-existing eslint peer-dependency conflict (@eslint/js@^10 requires eslint@^10 but eslint@9 is installed) that breaks `npm install` and prevents installing the optional `openai` peer needed for DeepSeek in later sprints.",
+    "completedSprints": [],
+    "currentBranch": "spike/claude-code-provider",
+    "relevantFiles": ["package.json", "package-lock.json", "eslint.config.js"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principles": "ESM everywhere (.js import extensions, NodeNext). ESLint flat config with consistent-type-imports enforced, no-explicit-any warned, unused vars errored (_ prefix escape). Zero lint errors and zero type errors are hard gates. Conventional commits: bober(sprint-N): description. Do NOT alter any lint RULE — only the eslint version bump + minimal flat-config shims required for eslint 10 to load.",
+  "evaluatorFeedback": null,
+  "baseline": {
+    "capturedBy": "orchestrator before generator run, on branch spike/claude-code-provider with eslint@9 still installed",
+    "typecheck": "tsc --noEmit exits 0 (clean).",
+    "lint": "npm run lint exits 1 with ONE error: no-useless-assignment at src/graph/preflight-telemetry.test.ts:116. This is pre-existing (uncommitted graph-telemetry work), NOT caused by anything in this sprint, and the file is NOT under src/providers/. You MUST fix this single line so sc-1-3 (lint exit 0) can pass — fix it by removing/restructuring the useless assignment without changing test behavior. This is the ONLY lint fix in scope.",
+    "test": "npx vitest run shows 2 pre-existing FAILURES, both the same test 'registerAllTools() registers exactly 37 tools' in src/mcp/tools/tools.test.ts and tests/mcp/external-server-graph.test.ts — both are 'Test timed out in 5000ms' timeouts caused by very slow module collection (collect ~73s), NOT logic failures and NOT related to eslint. 1353 tests pass. Do NOT attempt to fix these mcp tool-count timeouts — they are environmental/flaky and out of scope for an eslint version bump. For sc-1-5, the goal is 'no NEWLY failing tests' relative to this baseline; document these 2 as pre-existing in your report."
+  },
+  "notesForGenerator": "Stay on branch spike/claude-code-provider (do NOT create a new branch — this is a continuation branch). Edit package.json + regenerate package-lock.json + (only if needed) eslint.config.js shims; ALSO fix the single pre-existing lint error at src/graph/preflight-telemetry.test.ts:116 since sc-1-3 requires lint to exit 0. Run a clean `rm -rf node_modules && npm install` to regenerate the lockfile and confirm no ERESOLVE. typescript-eslint@^8.x already accepts eslint ^10 (curator verified) — only bump if eslint 10 forces it. Do NOT touch src/providers/. Do NOT chase the 2 pre-existing mcp tool-count test timeouts. Verify lint + build exit 0 and the test run shows no NEW failures before committing."
+}

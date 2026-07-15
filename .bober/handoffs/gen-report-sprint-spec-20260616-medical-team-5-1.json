@@ -1,0 +1,30 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-5",
+  "status": "complete",
+  "recoveryNote": "First generator attempt crashed on a transient API socket error after the implementation was complete (typecheck/build/full-suite green) but before commit + lint cleanup. A second focused generator fixed 4 unused-import lint errors, re-verified, and committed aa7f9be.",
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "met": true, "evidence": "npm run build exit 0" },
+    { "criterionId": "sc-5-2", "met": true, "evidence": "tsc --noEmit exit 0" },
+    { "criterionId": "sc-5-3", "met": true, "evidence": "vitest run 195 files, 2357 passed, 3 skipped; 9 ingestion + 10 apple-health tests green" },
+    { "criterionId": "sc-5-4", "met": true, "evidence": "2500-record test asserts every writeBatch <= 1000 obs; uses fs.createReadStream + sax.createStream, never fs.readFile" },
+    { "criterionId": "sc-5-5", "met": true, "evidence": "slow-sink (5ms/batch) test asserts write-start immediately precedes its write-end before next write-start -> sequential await = pause/resume backpressure" },
+    { "criterionId": "sc-5-6", "met": true, "evidence": "idempotent re-import: first newRows=2, second newRows=0, row count unchanged (S4 INSERT OR IGNORE)" },
+    { "criterionId": "sc-5-7", "met": true, "evidence": "importFile('.bin') throws Error with file path + 'No ingestion adapter'" },
+    { "criterionId": "sc-5-8", "met": true, "evidence": "bober medical import <file> registered (mirrors run.ts); CLI wiring test prints IngestionResult counts + exits cleanly" }
+  ],
+  "filesChanged": [
+    { "path": "package.json", "action": "modified", "description": "added sax@1.6.0" },
+    { "path": "package-lock.json", "action": "modified", "description": "lock for sax@1.6.0" },
+    { "path": "src/medical/types.ts", "action": "modified", "description": "additive IngestionAdapter/IngestionResult/ObservationSink" },
+    { "path": "src/medical/ingestion.ts", "action": "created", "description": "IngestionNormalizer (register/importFile + registry) + StoreObservationSink (newRows tracking)" },
+    { "path": "src/medical/ingestion.test.ts", "action": "created", "description": "registry dispatch, unknown-file throw, sink idempotency, CLI wiring" },
+    { "path": "src/medical/adapters/apple-health.ts", "action": "created", "description": "AppleHealthAdapter: createReadStream + sax.createStream, bounded 1000-row batches, pause/resume backpressure, skips non-numeric" },
+    { "path": "src/medical/adapters/apple-health.test.ts", "action": "created", "description": "canHandle, mapping, non-numeric skip, bounded batches (sc-5-4), backpressure (sc-5-5), idempotent re-import (sc-5-6)" },
+    { "path": "src/cli/commands/medical.ts", "action": "created", "description": "bober medical import <file>: HealthDataStore at .bober/medical/health.db, IngestionNormalizer+AppleHealthAdapter, prints counts" },
+    { "path": "src/cli/index.ts", "action": "modified", "description": "registered medical subcommand tree" }
+  ],
+  "testsAdded": ["src/medical/ingestion.test.ts", "src/medical/adapters/apple-health.test.ts"],
+  "commits": ["aa7f9be - bober(sprint-5): Apple Health SAX-streaming ingestion + bober medical import"],
+  "blockers": [],
+  "notes": "EVALUATOR FLAGS: (1) sax@1.6.0 added (pure-JS, no native build, no network surface) — verify the import is ISOLATED to apple-health.ts only. (2) Backpressure: on Record opentag, attrs -> HealthObservation buffer; at BATCH_CAP(1000) stream.pause() -> await sink.writeBatch -> stream.resume(); never fs.readFile. Verify the bounded-memory claim and that no whole-file read exists. (3) Attribute mapping: <Record> type->metric, unit->unit, value->value(number), startDate->tStart; non-numeric records skipped. (4) Commit aa7f9be is clean (9 files, 0 .bober). (5) Confirm sc-5-8 CLI command is genuinely registered + callable."
+}

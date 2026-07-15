@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["a980d30 - bober(sprint-3): remove verified dead-code orphans stashAndRestore + saveOutline"],
+  "filesChanged": [
+    { "path": "src/utils/git.ts", "action": "modified", "description": "Deleted stashAndRestore + doc (149-171). No import changes needed." },
+    { "path": "src/utils/index.ts", "action": "modified", "description": "Removed stashAndRestore re-export line." },
+    { "path": "src/state/outline-state.ts", "action": "modified", "description": "Deleted saveOutline + doc; pruned now-unused writeFile + ensureDir imports (kept readFile for readOutline). readOutline retained." },
+    { "path": "src/state/index.ts", "action": "modified", "description": "Removed saveOutline re-export line; readOutline retained." }
+  ],
+  "selfVerify": {
+    "build": "exit 0", "typecheck": "exit 0", "lint": "exit 0 (2 pre-existing warnings)",
+    "test": "npx vitest run → 2815/2815 (full suite)",
+    "sc-3-3": "grep '(stashAndRestore|saveOutline)' src/ → zero matches",
+    "sc-3-4": "git diff confined to the 4 files; readBriefing still at src/index.ts:153; plan/context-handoff/briefing-state untouched"
+  },
+  "notes": "Mandatory import prune in outline-state.ts done (writeFile + ensureDir removed) — without it noUnusedLocals would fail the build. readOutline (live, pipeline.ts:828) preserved. 3 false positives untouched."
+}

@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["be98982 - bober(sprint-1): add ParsedLabReport Zod schemas, ChatParams.documents field, Anthropic document-block renderer, and parseLabPdf() parser"],
+  "filesChanged": [
+    "src/medical/lab-types.ts (created)",
+    "src/medical/lab-pdf-parser.ts (created)",
+    "src/medical/lab-pdf-parser.test.ts (created)",
+    "src/providers/types.ts (modified — ChatParams.documents)",
+    "src/providers/anthropic.ts (modified — document block renderer)",
+    "src/providers/anthropic.test.ts (modified — 4 sc-1-5 tests)"
+  ],
+  "testsAdded": ["src/medical/lab-pdf-parser.test.ts", "src/providers/anthropic.test.ts"],
+  "selfVerify": {
+    "build": "exit 0",
+    "typecheck": "exit 0",
+    "lint": "0 errors (2 pre-existing any warnings in eval-persist.test.ts, not introduced here)",
+    "fullSuite": "2921 passed (229 files), up from 2911 (+10)"
+  },
+  "notes": "Non-Anthropic adapters (openai.ts, google.ts, openai-compat.ts, claude-code.ts) untouched. Buffer imported from node:buffer per project pattern."
+}

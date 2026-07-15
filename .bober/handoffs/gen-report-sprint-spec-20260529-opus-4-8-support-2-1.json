@@ -1,0 +1,12 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["b48c5bb - bober(sprint-2): upgrade @anthropic-ai/sdk to 0.100.1 for Opus 4.8 API fields"],
+  "filesChanged": [
+    {"path": "package.json", "action": "modified", "description": "@anthropic-ai/sdk ^0.39.0 -> ^0.100.1"},
+    {"path": "package-lock.json", "action": "modified", "description": "regenerated via npm install --legacy-peer-deps"}
+  ],
+  "testsAdded": [],
+  "notes": "Installed 0.100.1. ZERO adapter code changes — git diff src/providers/anthropic.ts empty; upgrade was fully type-backward-compatible. New types verified present: OutputConfig.effort (messages.d.ts:825), MidConversationSystemBlockParam (807, in ContentBlockParam union 527). npm install needed --legacy-peer-deps due to a PRE-EXISTING @eslint/js@10 vs eslint@9 peer conflict (present before this sprint). Provider tests 73/73 pass (anthropic 7, factory 26, google 18, openai-compat 8, openai 14). Full-suite failures: the 2 flaky 37-tool-count baseline tests + occasionally disk.test.ts (race under parallelism, passes 3/3 in isolation) — all pre-existing, none from the upgrade. SDK still imported only in anthropic.ts."
+}

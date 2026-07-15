@@ -1,0 +1,85 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-6",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 6,
+  "title": "Loop session persistence, resume and fork (.bober/sessions/)",
+  "description": "Opt-in model-context continuity for the own loop. When AgenticLoopParams carries a session option, the loop persists its provider-agnostic transcript (the Message[] union) to .bober/sessions/<sessionId>.json after every turn. resumeSession loads a transcript so a new loop invocation continues with full prior context; forkSession copies a transcript to a new id so approaches can branch without mutating the original. No session option \u2192 no files, byte-identical.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "With a session option, the transcript file exists after the first turn and is updated after every subsequent turn (crash-resumable), containing the full Message[] plus metadata (sessionId, model, createdAt, updatedAt, turnsUsed).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "A loop started via resumeSession(sessionId) sends the persisted prior messages to the client before the new user message (verified by inspecting the fake client's received messages) and appends its new turns to the same session file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "forkSession(sessionId) returns a new sessionId whose file starts as a copy; continuing the fork leaves the original transcript byte-identical while the fork diverges.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "Without a session option, no .bober/sessions/ file or directory is created and loop behavior is byte-identical (full existing suite unchanged).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "Corrupt or missing session files fail soft: resumeSession surfaces a typed error result (not a throw from the loop) and never silently starts an empty session in place of the requested one.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not auto-enable sessions for any pipeline role (opt-in surface only this sprint).",
+    "Do not implement cross-process/fleet-child session sharing.",
+    "Do not deduplicate or compact transcripts (sprint 7 owns compaction).",
+    "Do not replace the existing run-scoped chat /resume or do-bridge sessionId concepts \u2014 different layer, keep names distinct in docs."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: per-turn persistence with metadata, resume rehydration visible to the client, fork isolation, no-op absence path, and fail-soft corrupt handling.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "A SessionStore module persists loop transcripts under .bober/sessions/ per turn when opted in; resume continues a session with full prior context and fork branches a copy \u2014 original untouched. Omitting the option writes nothing and changes nothing. Build and full suite green.",
+  "assumptions": [
+    "The Message union (src/providers/types.ts:127) is JSON-serializable as-is (text/assistant/tool-result/system-update variants); if any variant carries non-serializable fields, the store normalizes them explicitly.",
+    "Filesystem-state principle applies: JSON under .bober/, async fs only, safeParse-on-read like job-store.ts (src/research/job-store.ts is the pattern).",
+    "The loop currently builds its messages array internally from systemPrompt+userMessage; resume passes an initialMessages?: Message[] param threaded ahead of the new user message.",
+    "sessionId generation follows the existing content-hash-or-injected-id pattern (no argless Date.now()/randomUUID in core; id injectable for tests)."
+  ],
+  "outOfScope": [
+    "UI/CLI surface for listing or pruning sessions (candidate follow-up: bober sessions list|rm).",
+    "Encryption of transcripts at rest."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/orchestrator/session-store.ts: SessionRecord { sessionId, model, createdAt, updatedAt, turnsUsed, messages: Message[] } with a Zod schema; SessionStore { save(record), load(sessionId), fork(sessionId, newId), path(sessionId) } over .bober/sessions/<id>.json (mirror src/research/job-store.ts: ensureDir, safeParse-before-write, async-only). Extend AgenticLoopParams with session?: { store: SessionStore; sessionId: string } and initialMessages?: Message[]. In the loop: when session present, after each turn's messages are appended, save the full record (await \u2014 per-turn durability beats speed here); when initialMessages present, seed the conversation before the user message. Export resumeSession(store, sessionId): Promise<{ initialMessages, sessionId } | { error }> and forkSession(store, sessionId, newId?): Promise<string>. Fail-soft: loop-level resume errors return a typed error result consistent with the existing stopReason 'error' path. Inject clock/id at boundaries per repo convention (no argless new Date() in core).",
+  "evaluatorNotes": "Use a temp dir as project root. sc-6-1: 3-turn scripted run \u2192 file exists after turn 1 (hook into per-turn callback to check mid-run), final record has turnsUsed 3 and full messages. sc-6-2: seed a session file, resume, assert fake client's first chat() call receives the seeded messages before the new user message; after run, file contains old+new. sc-6-3: fork, continue fork with different scripted responses, byte-compare original file before/after. sc-6-4: run without session; assert .bober/sessions absent; FULL suite. sc-6-5: corrupt JSON file \u2192 resumeSession returns error variant, no throw, and no empty-session file overwrites the corrupt one. Build + typecheck.",
+  "estimatedFiles": [
+    "src/orchestrator/session-store.ts",
+    "src/orchestrator/session-store.test.ts",
+    "src/orchestrator/agentic-loop.ts",
+    "src/orchestrator/agentic-loop.test.ts",
+    "src/providers/types.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-09T23:17:13.000Z",
+  "completedAt": "2026-07-09T23:17:13.000Z"
+}

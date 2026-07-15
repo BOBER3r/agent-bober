@@ -1,0 +1,8 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["5c77a49 - bober(sprint-4): domain finding ingest seam + dedup"],
+  "filesChanged": ["src/hub/finding-store.ts (deriveFindingId sha256.slice16, IngestInputSchema=FindingSchema.partial({id,surfacedAt}), ingestFinding validates assembled obj via full FindingSchema then writeFinding -> reconcile dedup, returns ReconcileAction)", "src/hub/finding-store.test.ts", "src/cli/commands/task.ts (readIngestInput file/stdin async, runTaskIngest DI core never-throws exitCode=1, task ingest [file] subcommand)", "src/cli/commands/task.test.ts"],
+  "notes": "build/typecheck/lint 0 errors; full suite 3303 (+6). Dedup via derived content id (domain|title|kind). Full FindingSchema validation before write (schema not bypassed). stdin via async iteration (TS typing). now injected."
+}

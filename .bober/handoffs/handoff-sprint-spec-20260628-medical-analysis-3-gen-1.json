@@ -1,0 +1,45 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-analysis-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-analysis-3",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T18:54:26.063Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 3 of spec-20260628-medical-analysis: wire the sprint-2 judge loop into a REAL recommendation path. Assemble profile context from FactStore + the medical profile, build per-lens clients with provider diversity via tier-policy (gated by cloud-inference egress, fail-closed to local), generate a candidate, gate it through the panel, then EMIT a Finding: kind=action on acceptance (LLM-assigned urgency/severity/confidence, NO refer-out hedging), kind=question 'flagged for your review' on no-consensus (with dissent), or canned escalation + no Finding on red-flag. Exposed via `bober medical recommend`.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-medical-analysis-1",
+        "title": "Proactive trend Findings + vault writer + dashboard + review pass",
+        "summary": "src/medical/analysis/{finding,finding-writer,trends,review-pass}.ts. MedicalFinding shape + deterministic findingId (SHA-256 domain|biomarker|ruleKey, excludes now) + serializeFindingToMarkdown (reuses src/vault/frontmatter.ts) + writeFinding/writeDashboard. config.medical.vaultDir. Vault resolves to config.medical.vaultDir ?? <projectRoot>/.bober/medical/vault. Commit 307e5e7. REUSE the sprint-1 finding-writer to emit findings here — do NOT rebuild it."
+      },
+      {
+        "contractId": "sprint-spec-20260628-medical-analysis-2",
+        "title": "Recommendation judge-loop core (4-lens panel, contraindication VETO, fail-closed)",
+        "summary": "src/medical/recommend/{types,lenses,judge-panel}.ts. runJudgeLoop(injected deps) — red-flag-first, 4 lenses (evidence-grader, contraindication-checker w/ absolute VETO, conservative-clinician, optimization-lens), strict-majority + veto, fail-closed-on-tie/no-consensus, never throws, bounded by MEDICAL_PANEL_MAX_TOTAL_CALLS=27. Outcome union: accepted | rejected(reason: contraindication-veto|no-consensus) | short-circuit | refuse, with per-lens verdicts/dissent. Commit fb467c6. IMPORT runJudgeLoop here — do NOT re-implement it."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/recommend/judge-panel.ts",
+      "src/medical/recommend/types.ts",
+      "src/medical/recommend/lenses.ts",
+      "src/medical/analysis/finding.ts",
+      "src/medical/analysis/finding-writer.ts",
+      "src/medical/inference.ts",
+      "src/medical/egress.ts",
+      "src/fleet/tier-policy.ts",
+      "src/medical/engine.ts",
+      "src/medical/guardrails.ts",
+      "src/medical/audit.ts",
+      "src/cli/commands/medical.ts"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npx tsc --noEmit", "typecheck": "npx tsc --noEmit", "lint": "npx eslint src/", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "notes": "Full contract (sc-3-1..sc-3-7, nonGoals, stopConditions, assumptions, estimatedFiles) in .bober/contracts/sprint-spec-20260628-medical-analysis-3.json. Read the Sprint Briefing at .bober/briefings/sprint-spec-20260628-medical-analysis-3-briefing.md FIRST. CRITICAL: per-lens model diversity via tierPolicy.resolveTier honoured ONLY when egress.isAllowed('cloud-inference'); otherwise ALL clients + generator fail-closed to local via buildMedicalInferenceClient (no cloud client constructed — sc-3-5). Red-flag fires first (reuse MedicalGuardrails.evaluate). Accepted Finding body must NOT contain refer-out hedging. Do NOT modify engine.ts / reactive Q&A. Audit entries IDs/enums only."
+}

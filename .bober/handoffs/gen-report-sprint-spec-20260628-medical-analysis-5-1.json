@@ -1,0 +1,32 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-5",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "07b0fb9",
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "met": true, "evidence": "tsc --noEmit zero errors" },
+    { "criterionId": "sc-5-2", "met": true, "evidence": "axis OFF -> {disabled:true,0,0}; retriever.retrieve never called; MedlineSource.fetchPassages spy never called; no files written; returns before constructing LiteratureRetriever" },
+    { "criterionId": "sc-5-3", "met": true, "evidence": "research/2026-06-28-ldl.md with source=medlineplus + citationUrls/citationTitles flattened; no [object Object]" },
+    { "criterionId": "sc-5-4", "met": true, "evidence": "double-REJECT -> synthesizeGrounded abstained -> skip note + finding (notesWritten=0,findingsWritten=0); no files" },
+    { "criterionId": "sc-5-5", "met": true, "evidence": "cloud-inference OFF + inference.provider=anthropic -> factory called openai-compat localhost:11434, NOT anthropic; ON -> factory[0][0]=anthropic" },
+    { "criterionId": "sc-5-6", "met": true, "evidence": "summary {notesWritten,findingsWritten,disabled}: off->{true,0,0}; 1 approved->{false,1,1}; 2 approved+1 reject->{2,2}" },
+    { "criterionId": "sc-5-7", "met": true, "evidence": "research subcommand --marker (default ldl/hdl/a1c), clock at CLI boundary, prints disabled/ran+counts, catch->exitCode=1, exits 0" }
+  ],
+  "filesChanged": [
+    "src/medical/research/research-note.ts (created: PURE serializeResearchNote flatten Citation[] -> citationTitles/citationUrls + source medlineplus; researchNotePath date from injected now)",
+    "src/medical/research/research-note.test.ts (created: 10 tests)",
+    "src/medical/research/online-research.ts (created: runResearchJob axis-gate-first, early {disabled:true} before retriever/MedlineSource, buildMedicalInferenceClient fail-closed synthesis, per-marker retrieve->synthesizeGrounded->abstain?skip:write, deps-injectable)",
+    "src/medical/research/online-research.test.ts (created: 18 tests sc-5-2..sc-5-6)",
+    "src/cli/commands/medical.ts (modified: +research subcommand --marker)"
+  ],
+  "testsAdded": ["src/medical/research/research-note.test.ts", "src/medical/research/online-research.test.ts"],
+  "selfVerify": {
+    "tsc": "exit 0",
+    "eslint": "exit 0 on research/ + medical.ts",
+    "vitest-research": "2 files, 28 tests pass",
+    "vitest-full": "246 files, 3142 passed (baseline 3114 +28)",
+    "engine-untouched": "engine.ts byte-unchanged (not in commit 07b0fb9)"
+  },
+  "blockers": [],
+  "notes": "Three load-bearing invariants satisfied: (a) axis-OFF returns before constructing LiteratureRetriever/MedlineSource; (b) answer.abstained skips note+finding; (c) buildMedicalInferenceClient fail-closes to local when cloud-inference off. runResearchJob(projectRoot, config, {markers, now}, deps?) => Promise<ResearchSummary> stable for the downstream scheduler spec."
+}

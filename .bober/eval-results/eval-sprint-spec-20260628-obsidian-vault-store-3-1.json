@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-obsidian-vault-store-3-1",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-3",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:38:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "npx tsc --noEmit exit 0", "details": "zero type errors"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "npx tsc exit 0; dist CLI runs", "details": "clean build"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings in eval-persist.test.ts", "details": "vault.ts warning-free"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "vault.test.ts 3/3; full suite 226 files 2872 tests", "details": "zero regressions"},
+    {"strategy": "api-check", "required": false, "result": "skipped", "output": "N/A", "details": "CLI command, no HTTP endpoints"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "tsc + tsc --noEmit exit 0", "feedback": ""},
+    {"criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "registerVaultCommand imported index.ts:41, called :323; built CLI vault reindex --help lists --scope + --vault", "feedback": ""},
+    {"criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "fixture vault -> facts.db at namespace path has active facts (drug=metformin), counts>0. PATH PARITY CONFIRMED: vault.ts resolveDefaultNamespace byte-identical to facts.ts private impl", "feedback": ""},
+    {"criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "missing vault -> resolves undefined (no throw), exitCode=1, red stderr 'Failed to reindex vault', FactStore.close spy called (store constructed before stat guard); exitCode reset in afterEach", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 4 required criteria pass independently. Build/typecheck clean, 3 vault tests + full 2872-test suite green, zero regressions. resolveDefaultNamespace path parity with facts.ts confirmed; store always closed in finally; clock read once at boundary via deps.nowIso."
+}

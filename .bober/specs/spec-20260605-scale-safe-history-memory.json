@@ -1,0 +1,166 @@
+{
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "version": 1,
+  "createdAt": "2026-06-05T00:00:00Z",
+  "updatedAt": "2026-06-05T00:02:07Z",
+  "title": "Scale-Safe Sprint History + Self-Improvement Memory",
+  "description": "Hardens agent-bober's append-only event log against unbounded growth, then adds a deterministic, bounded lessons memory the planner reads at plan time to learn from past sprint outcomes. Layer 1 makes history reads scale via crash-safe rotation plus a new bounded reader while preserving loadHistory's full-read contract so resume-cursor and the conformance harness stay byte-equivalent. Layer 2 closes the feedback arc from evaluator outcomes back into planning without ever feeding raw history to a model: distillation is LLM-free and runs only via an explicit CLI command.",
+  "mode": "brownfield",
+  "status": "completed",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Deterministic-only. Distillation aggregates structured fields already present in HistoryEntry.details, EvalResult, and FeedbackResult into LessonEntry records with no LLM or network call. This gives zero reward-hacking surface and full auditability, matching the deterministic/inspectable constraint from the RSI research that motivated the feature.",
+      "resolvedAt": "2026-06-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Explicit CLI command only. Distillation runs via `bober memory distill` and is never invoked from the pipeline or any autopilot path, keeping it outside the in-context-reward-hacking loop. Auto-triggering is deferred behind a future flag.",
+      "resolvedAt": "2026-06-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Both layers as buildable sprint contracts in one PlanSpec, Layer 1 ordered first so the storage hardening ships and de-risks independently before Layer 2 builds on it.",
+      "resolvedAt": "2026-06-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "approve",
+      "resolvedAt": "2026-06-05T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "loadHistory keeps its full-read contract unchanged; a new loadRecentHistory provides bounded tail reads. (conformance.ts:102 deep-compares the full history; resume-cursor.ts:19 discards loadHistory's return value.)",
+    "Rotation keeps the active history.jsonl bounded by a history.maxActiveLines config and moves overflow to history.archive.jsonl; loadHistory reads archive+active concatenated so resume-cursor and conformance observe an unchanged full stream. (conformance.ts:34-51,131-137.)",
+    "Bounding history reads cannot change the reconstructed ResumeCursor because resume-cursor.ts derives it from durable contract status and discards loadHistory's result. (resume-cursor.ts:13-32.)",
+    "Lessons live in a new .bober/memory/ directory (none exists today), mirroring the MEMORY.md pattern: a bounded INDEX.md plus one markdown file per lesson.",
+    "Distillation aggregates structured fields already in HistoryEntry.details, EvalResult, and FeedbackResult and makes no LLM or network call. (history.ts:37-43; evaluator-agent.ts:187 appends eval outcomes to history.)",
+    "Distillation runs only via the explicit `bober memory distill` command and is never invoked from pipeline.ts or any autopilot path.",
+    "Planner retrieval is deterministic tag/keyword overlap over the bounded index, hard-capped at topK; no embeddings in this plan.",
+    "The planner reads the bounded lessons index, never history.jsonl; bober.plan Step 2 and agents/bober-planner.md gain a memory-index read step.",
+    "Every LessonEntry carries a non-empty sourceEntryRefs provenance array and is inspectable via `bober memory list`/`show`.",
+    "The project is TypeScript with zod schemas and Vitest; new code follows src/state/history.ts and src/cli/commands/sprint.ts conventions. (bober.config.json evaluator strategies require typecheck and build.)"
+  ],
+  "outOfScope": [
+    "LLM-summarized or LLM-ranked lessons (deferred \u2014 deterministic only).",
+    "Embeddings, vector, or SQLite-FTS retrieval (deferred until the markdown index outgrows itself).",
+    "Auto-triggered distillation inside the pipeline or after each sprint (explicit CLI only this plan).",
+    "Self-modification of skill prompts, sprint contracts, or evaluator criteria (separate, gated, future feature).",
+    "STOP-style auto-tuning of retries, budgets, agent counts, or model routing.",
+    "Feeding memory into the generator or evaluator at sprint time (this plan wires memory into the planner only).",
+    "Changing the exported signature of loadHistory or breaking the conformance equivalence contract.",
+    "Migrating the existing 272-line history.jsonl (rotation applies to new appends going forward)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Bounded history reads + crash-safe rotation",
+      "description": "Add a bounded loadRecentHistory reader and crash-safe rotation that moves old entries to history.archive.jsonl once the active log exceeds a configured line cap, while keeping loadHistory's full-read contract intact so resume-cursor and the conformance harness stay byte-equivalent.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the active history.jsonl exceeds history.maxActiveLines, the oldest entries are moved to history.archive.jsonl and the active file retains at most maxActiveLines entries.",
+        "AC2: When loadHistory is called after a rotation, it returns the full ordered entry set identical to the pre-rotation sequence by reading archive then active.",
+        "AC3: When loadRecentHistory is called with a limit, it returns at most that many newest entries and reads only the active file, not the archive.",
+        "AC4: When a rotation is interrupted between archiving and truncating, the union of active+archive still contains every original entry exactly once (no loss, no duplication)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Deterministic lessons memory store",
+      "description": "A new append-only .bober/memory/ store: a zod LessonEntry schema with a mandatory provenance array, one markdown file per lesson, and a bounded INDEX.md, plus a capped index reader. Mirrors the MEMORY.md curated-index pattern.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a lesson is appended, a .bober/memory/<lessonId>.md file is written and exactly one INDEX.md line is upserted for that lessonId.",
+        "AC2: When a LessonEntry is validated with an empty sourceEntryRefs array, schema validation rejects it (provenance is mandatory).",
+        "AC3: When loadLessonIndex is called with a limit, it returns at most that many records parsed from INDEX.md without opening any individual lesson file."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Deterministic distillation + bober memory CLI",
+      "description": "A pure, deterministic distill function that compresses history + eval outcomes into provenance-tagged lessons with no LLM or network call, plus a `bober memory distill|list|show` command. Idempotent: re-running adds no duplicate lessons.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When distill runs over a fixed history fixture, it returns the same deterministic LessonEntry set every time, derived only from structured fields.",
+        "AC2: When `bober memory distill` is run twice over identical input, the second run adds zero new INDEX.md lines (idempotent dedupe by content hash).",
+        "AC3: When distill executes, it constructs no LLM provider client and performs no network call.",
+        "AC4: When `bober memory list` and `bober memory show <lessonId>` run, they print the bounded index and a single lesson with its sourceEntryRefs."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Planner reads bounded memory (close the arc)",
+      "description": "Deterministic retrieveRelevantLessons (tag/keyword overlap, topK-capped, index-only) wired into bober.plan Step 2 and agents/bober-planner.md, so the planner learns from past outcomes without ever reading raw history.jsonl. Ships the demonstrably-improves measure.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When retrieveRelevantLessons is called with feature keywords and a topK, it returns at most topK lessons ranked by deterministic tag/keyword overlap, reading only INDEX.md.",
+        "AC2: When the planner gathers context, it loads the bounded lessons index and never issues a read against history.jsonl.",
+        "AC3: When more than topK lessons exist, the serialized lessons block passed to the planner is capped at topK entries and a configured character budget.",
+        "AC4: The bober.plan skill and bober-planner agent reference the memory index and the topK cap, and the close-the-arc flow plus its findPrecisionIssues A/B measure are documented."
+      ],
+      "dependencies": [
+        "feat-2",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "performance",
+      "requirement": "loadRecentHistory reads at most the active history.jsonl (kept bounded by maxActiveLines via rotation) and never parses the archive.",
+      "verificationMethod": "Unit test seeds entries spanning a rotation and asserts loadRecentHistory returns at most `limit` entries and issues no read against history.archive.jsonl."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Rotation is crash-safe: it neither drops nor duplicates an entry, even when interrupted mid-rotation.",
+      "verificationMethod": "Unit test counts entries before and after, and simulates an interrupted rotation, asserting the active+archive union equals the original set exactly once."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Distillation is deterministic and idempotent: identical input yields an identical lesson index and re-running adds no duplicates.",
+      "verificationMethod": "Unit test runs distill twice over a fixture and asserts an identical INDEX.md with zero added lines on the second run."
+    },
+    {
+      "category": "security",
+      "requirement": "The distillation path performs no LLM or network call, and planner retrieval returns at most topK lessons within a bounded character budget.",
+      "verificationMethod": "Unit test asserts no provider client is constructed in the distill path and that retrieveRelevantLessons truncates to topK and the character budget."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "Existing HistoryEntry (src/state/history.ts) split at a line threshold into active history.jsonl + history.archive.jsonl. New LessonEntry { lessonId, createdAt, category, tags: string[], summary, occurrences: positive int, severity: enum, sourceEntryRefs: non-empty string[] } persisted as .bober/memory/<lessonId>.md (front-matter + body) with a bounded .bober/memory/INDEX.md (one line per lesson). No external entities.",
+    "securityConsiderations": [
+      "Distillation is LLM-free and offline: no provider client, no network egress.",
+      "Every LessonEntry carries a non-empty sourceEntryRefs provenance array for human audit.",
+      "Planner-facing retrieval is hard-capped at topK and a character budget to bound context."
+    ],
+    "existingPatterns": "Mirror src/state/history.ts module style (path helpers, zod schema + safeParse, append-only file ops). Add the CLI under src/cli/commands/ mirroring sprint.ts and register it where existing commands register. Add config under a new history/memory section in src/config/schema.ts with zod defaults. Collocate *.test.ts with Vitest. ESM with .js import specifiers. Unicode box-drawing section headers in long files."
+  },
+  "sprints": [
+    "sprint-spec-20260605-scale-safe-history-memory-1",
+    "sprint-spec-20260605-scale-safe-history-memory-2",
+    "sprint-spec-20260605-scale-safe-history-memory-3",
+    "sprint-spec-20260605-scale-safe-history-memory-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "6-10 hours",
+    "riskLevel": "low-medium",
+    "riskNotes": "Only Sprint 1 touches a load-bearing read path (loadHistory); it is guarded by resume-cursor and conformance regression tests that assert byte-equivalence with rotation on and off. Layer 2 is additive, deterministic, LLM-free, and runs outside the autopilot loop, so its blast radius is contained. History is 272 lines today, so Sprint 1 is preventative at-scale hardening rather than an acute fix."
+  },
+  "completedAt": "2026-06-05T00:02:07Z"
+}

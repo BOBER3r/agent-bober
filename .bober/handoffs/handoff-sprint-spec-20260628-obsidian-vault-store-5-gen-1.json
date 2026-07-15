@@ -1,0 +1,56 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-obsidian-vault-store-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-5",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:56:01.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Obsidian vault storage layer \u2014 FINAL sprint (5 of 5). Sprints 1-4 DONE. This sprint adds (1) src/vault/conventions.ts: the CANONICAL home for ACTIVE_STATUS='active', SUPERSEDED_STATUS='superseded', ATTACHMENTS_DIR; (2) src/vault/profile.ts: resolveProfile(vaultDir) -> VaultProfile | {encrypted:true} | undefined, reusing the sprint-1 hand-rolled YAML parser, detecting SOPS via a top-level `sops:` key WITHOUT decrypting; and (3) a CONVERGENCE refactor centralizing SUPERSEDED_STATUS (currently duplicated in index-map.ts AND reindex.ts) into conventions.ts.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-1",
+        "title": "note model+I/O",
+        "summary": "frontmatter.ts has parseFrontmatter(raw) hand-rolled YAML subset"
+      },
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-2",
+        "title": "derived FactStore index",
+        "summary": "index-map.ts exports SUPERSEDED_STATUS='superseded' (literal); reindex.ts ALSO declares its own local SUPERSEDED_STATUS (NoteStatus-typed) used by reindexNotes status-skip"
+      },
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-3",
+        "title": "vault reindex CLI",
+        "summary": "src/cli/commands/vault.ts"
+      },
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+        "title": "Obsidian MCP adapter + config",
+        "summary": "src/vault/mcp-adapter.ts + config VaultSection"
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/vault/frontmatter.ts",
+      "src/vault/index-map.ts",
+      "src/vault/reindex.ts",
+      "src/vault/types.ts",
+      "src/medical/health-store.ts"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run",
+      "testSingle": "npx vitest run <path>"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true
+    }
+  },
+  "evaluatorFeedback": null,
+  "note": "CONVERGENCE BUILD-BREAKER (from curator): when removing reindex.ts's local SUPERSEDED_STATUS, its `NoteStatus` type import (around line 17) becomes orphaned and noUnusedLocals/no-unused-vars WILL break the build/lint \u2014 you MUST delete that orphaned import too. conventions.ts is the single source of truth; index-map.ts and reindex.ts should IMPORT SUPERSEDED_STATUS from conventions.ts. To keep all Sprint-2 tests green (they assert SUPERSEDED_STATUS is exported from index-map.ts AND reindex.ts), index-map.ts and reindex.ts must RE-EXPORT the constant (e.g. `export { SUPERSEDED_STATUS } from './conventions.js'`) so existing import sites still resolve and the literal value stays byte-identical ('superseded'). SOPS detection: feed standalone profile.yaml through parseFrontmatter by wrapping in '---' delimiters; the parser stores a bare `sops:` line as an empty string, so detect via `'sops' in parsedFrontmatter`. resolveProfile: absent file -> undefined (NOT throw); no clock; no crypto/network/sops shell-out; never surface encrypted values. RUN ESLINT (npx eslint src/) and the FULL suite before committing \u2014 lint is a HARD GATE. Stay on branch bober/medical-team."
+}

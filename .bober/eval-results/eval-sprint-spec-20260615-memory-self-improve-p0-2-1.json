@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-2-1",
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-2",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "timestamp": "2026-06-15T16:40:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0, zero errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing warnings in eval-persist.test.ts." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "reconcile 12/12, facts 5/5; full suite 181 files / 2156 pass / 3 skipped; zero regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "build + typecheck exit 0." },
+    { "criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "reconcileFact(store,incoming,{judge?,now}) + ReconcileAction exported; writeFact delegates; no Date.now/new Date/createClient in reconcile.ts (pure core)." },
+    { "criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "no-judge supersede: metformin→ozempic = 1 active (ozempic); old row tInvalidated=t2 AND tInvalid=t2 via supersedeFact; incoming confidence carried." },
+    { "criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "identical write twice → 'noop', 1 active, no second row, no judge." },
+    { "criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "FactJudge interface + createLLMFactJudge() via createClient (only import site); judge only on candidate!==undefined && judge!==undefined; no-judge ADD fallback; try/catch + parse-fail return 'add'." },
+    { "criterionId": "sc-2-6", "required": true, "result": "pass", "evidence": "stub 'update' supersedes (1 active); no-judge same input = 2 active (ADD fallback)." },
+    { "criterionId": "sc-2-7", "required": false, "result": "pass", "evidence": "lint 0 errors on sprint files." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 2 passes all 7 criteria. Pure reconcile core (no clock/network in reconcile.ts); LLM FactJudge isolated in fact-judge.ts with createClient + defensive 'add' fallback. CLI supersede confirmed end-to-end (changed value → 1 active; old row both bi-temporal fields). Full 181-file suite green, zero regressions."
+}

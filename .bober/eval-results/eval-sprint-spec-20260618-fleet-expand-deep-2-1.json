@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-expand-deep-2-1",
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-2",
+  "specId": "spec-20260618-fleet-expand-deep",
+  "timestamp": "2026-06-18T08:19:41Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 8,
+    "requiredFailed": 0,
+    "requiredTotal": 8
+  },
+  "summary": "All 8 required criteria pass (independent verify). build/typecheck/lint/full-suite(2294) clean, zero regressions. Spawn-safety: write precedes --yes gate, no-yes never calls runFleet, file exists before runFleet. Credential & decompose fail-fast write no file. Byte-lock: only index.ts+expand-deep.test.ts, zero deleted lines, cli/index.ts untouched, expand-deep exposes same 7 options."
+}

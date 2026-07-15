@@ -1,0 +1,31 @@
+{
+  "evalId": "eval-sprint-spec-20260616-medical-team-2-1",
+  "contractId": "sprint-spec-20260616-medical-team-2",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T22:15:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "zero errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "zero errors" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "189 files, 2258 passed, 3 skipped", "details": "48 medical tests pass" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "no new lint issues" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "description": "build clean", "required": true, "result": "pass", "evidence": "npm run build exit 0", "feedback": "" },
+    { "criterionId": "sc-2-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit exit 0", "feedback": "" },
+    { "criterionId": "sc-2-3", "description": "tests green incl. consent/audit/disclaimer", "required": true, "result": "pass", "evidence": "2258 passed; audit(7)+consent(8)+disclaimer(5)+engine(11)", "feedback": "" },
+    { "criterionId": "sc-2-4", "description": "fail-closed consent, 0 downstream calls", "required": true, "result": "pass", "evidence": "consentGate.hasConsent() is first call; refuse path returns before any LLM/numerics; no LLM/numerics imports in engine.ts", "feedback": "QUALITY: spy llmSpy/numericsSpy not injected into engine (MedicalSopDeps lacks slots) — assertion structurally hollow; behavior correct by code structure. MUST add real injection seam in S3 (AC1 requires spy-LLMClient-never-invoked)." },
+    { "criterionId": "sc-2-5", "description": "consent round-trip", "required": true, "result": "pass", "evidence": "fresh ConsentGate.current() returns all 4 fields verbatim; fail-closed on missing/corrupt/partial", "feedback": "" },
+    { "criterionId": "sc-2-6", "description": "audit mode 0600 + append-only", "required": true, "result": "pass", "evidence": "O_WRONLY|O_APPEND|O_CREAT + chmod(0o600); stat&0o777===0o600; secondRaw.startsWith(firstRaw); date from tIso", "feedback": "" },
+    { "criterionId": "sc-2-7", "description": "PHI-free audit", "required": true, "result": "pass", "evidence": "'SECRETBP'/'blood pressure' absent from bytes; keys subset of {tIso,event,rulesetVersion,patternsetVersion,ruleId}", "feedback": "" },
+    { "criterionId": "sc-2-8", "description": "disclaimer footer + injected timestamps", "required": true, "result": "pass", "evidence": "footer non-empty + version in refuse & consented answers; injected ISO asserted verbatim", "feedback": "LOW: engine.ts:63 opts.now ?? new Date() wall-clock fallback reachable in ad-hoc runs; acknowledged via bober: comment; ensure opts.now always passed when real SOP wires in S6." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "medium", "category": "quality", "file": "src/medical/engine.test.ts", "line": "121-149", "description": "sc-2-4 spies (llmSpy/numericsSpy) are not injected into the engine; MedicalSopDeps has no LLM/numerics slot, so the not.toHaveBeenCalled assertions are structurally hollow. When LLM/numerics wire in S3/S4/S6, this test won't catch a regression where they run before the consent check.", "expected": "Add llmClient + numerics slots to MedicalSopDeps and inject fakes; assert never-called. Do this in S3 (its AC1 requires a real spy-LLMClient-never-invoked proof on the red-flag short-circuit)." },
+    { "priority": "low", "category": "quality", "file": "src/medical/engine.ts", "line": "63", "description": "Wall-clock fallback opts?.now ?? new Date().toISOString() reachable on real SOP invocations when opts.now absent.", "expected": "S6: when wiring the real SOP into runPipeline, always pass opts.now (e.g. run start timestamp), or make it required and update callers." }
+  ],
+  "summary": "All 8 required criteria pass. Build/typecheck/full suite (2258 tests/189 files) clean. Consent gate fail-closed, audit O_APPEND+chmod(0600) PHI-free, versioned disclaimer footer present in both paths. Two non-blocking quality findings: hollow downstream spies (fix in S3) and an ad-hoc wall-clock fallback (fix in S6)."
+}

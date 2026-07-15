@@ -1,0 +1,24 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-ingest-4-1",
+  "contractId": "sprint-spec-20260628-medical-ingest-4",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T19:35:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors; 2 pre-existing any warnings unrelated", "details": "" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "232 files / 2962 tests passed; +15", "details": "supplements.test.ts 15 tests" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "runSupplementAdd writeFact -> getActiveFacts('medical') returns fact scope=medical subject=name predicate=dose" },
+    { "criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "genuine NOOP: reconcileFact exact-match returns 'noop' (reconcile.ts:67), 'Supplement unchanged' printed, active count stays exactly 1" },
+    { "criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "runSupplementList parses frontmatter file, stdout contains seeded name+dose entries" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 4 required criteria pass. Deterministic no-judge reconcile; new Date only at injected CLI boundary (pure path clean); supplements nested under medical. Suite 2962 green."
+}

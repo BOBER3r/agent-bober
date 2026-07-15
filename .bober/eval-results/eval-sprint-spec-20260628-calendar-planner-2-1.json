@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-calendar-planner-2-1",
+  "contractId": "sprint-spec-20260628-calendar-planner-2",
+  "specId": "spec-20260628-calendar-planner",
+  "timestamp": "2026-06-29T18:45:30.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "IcsConnector structurally satisfies CalendarConnector" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "zero errors; 2 pre-existing warnings unrelated" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "full suite 3438 pass; zero regressions" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "build green; connector.ts + ics-connector.ts compile" },
+    { "criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "typecheck green; connector satisfies interface" },
+    { "criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "2-item plan -> VCALENDAR with exactly 2 VEVENT, UTC Z timestamps, CRLF" },
+    { "criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "round-trip DTSTART/DTEND/SUMMARY equal source (escaping verified)" },
+    { "criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "no http/https/fetch/external-client/child_process; node:fs/promises only (grep-confirmed)" },
+    { "criterionId": "sc-2-6", "required": true, "result": "pass", "evidence": "live CLI --export-ics exit 0, valid VCALENDAR; Sprint-1 no-writeFile scan still passes; slotter.ts untouched" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 required criteria pass, zero regressions across 3438 tests. CalendarConnector interface + zero-egress .ics exporter; round-trip verified; --export-ics CLI valid RFC 5545; slotter.ts unchanged."
+}

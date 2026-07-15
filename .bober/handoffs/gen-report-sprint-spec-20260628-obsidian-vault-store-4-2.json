@@ -1,0 +1,16 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "status": "complete",
+  "iteration": 2,
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "met": true, "evidence": "tsc --noEmit exit 0; eslint src/ exit 0 (0 errors, 2 pre-existing warnings)"},
+    {"criterionId": "sc-4-2", "met": true, "evidence": "unchanged; schema tests pass in full suite"},
+    {"criterionId": "sc-4-3", "met": true, "evidence": "mcp-adapter.test.ts 25/25 pass"},
+    {"criterionId": "sc-4-4", "met": true, "evidence": "unchanged; guard tests pass in full suite"}
+  ],
+  "filesChanged": [{"path": "src/vault/mcp-adapter.test.ts", "action": "modified", "description": "removed unused beforeEach from line-8 vitest import; no other lines touched"}],
+  "testsAdded": [],
+  "commits": ["0185daf - bober(sprint-4): remove unused beforeEach import (lint fix)"],
+  "blockers": [],
+  "notes": "eslint src/vault/mcp-adapter.test.ts exit 0; eslint src/ exit 0 (0 errors, 2 pre-existing warnings in eval-persist.test.ts); tsc --noEmit exit 0; full suite 227 files 2907 tests pass. Only line 8 changed vs iter-1."
+}

@@ -1,0 +1,31 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-team-abstraction-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-team-abstraction-3",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T12:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober Phase 4 makes a 'team' a data object. Sprint 1 (DONE) added Team + loadTeam; the programming team's pipelineShape === resolveEngineName(config) by construction. Sprint 2 (DONE) namespaced the memory store. Sprint 3 resolves the pipeline engine from the active team's pipelineShape (reusing selector/eligibility/careful-downgrade), keeping the programming/no-team path byte-for-byte identical to today.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260615-team-abstraction-1", "title": "Team data model + registry", "summary": "src/teams/ Team + loadTeam; programming team pipelineShape = resolveEngineName(config), memoryNamespace ''. commit 274338b."},
+      {"contractId": "sprint-spec-20260615-team-abstraction-2", "title": "Per-team memory namespacing", "summary": "memoryDir centralizes ns->path; all persistence fns + callers thread namespace; distill.ts pure/untouched. commit 2d89d8c."}
+    ],
+    "currentBranch": "bober/team-abstraction",
+    "relevantFiles": [
+      "src/teams/registry.ts",
+      "src/orchestrator/workflow/selector.ts",
+      "src/orchestrator/workflow/engine.ts",
+      "src/orchestrator/workflow/eligibility.ts",
+      "src/orchestrator/pipeline.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-team-abstraction-3.json",
+  "specRef": ".bober/specs/spec-20260615-team-abstraction.json",
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test"},
+    "generator": {"model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic"}
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

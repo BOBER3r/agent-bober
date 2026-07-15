@@ -1,0 +1,39 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-blackboard-exchange-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "timestamp": "2026-06-18T18:49:57Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — multi-agent autonomous build harness (TS, ESM, Vitest, better-sqlite3 for state). Phase B of the heterogeneous multi-provider agent team: give fleet children a bounded inter-agent exchange via one shared WAL facts.db. This sprint builds ONLY the SharedBlackboard wrapper + an opt-in WAL option on FactStore — no coordinator/CLI/config wiring (those are Sprints 2-4).",
+    "completedSprints": [
+      {
+        "contractId": "spec-20260618-fleet-tier-provider-routing (Phase A, separate spec, all 3 sprints)",
+        "title": "Tier-by-difficulty provider routing + Grok/xAI provider + ToolRoleGuard",
+        "summary": "Phase A is complete and on this same branch (bober/medical-team). Phase B is additive to it: omitting --blackboard must keep fleet byte-identical to Phase A."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/state/facts.ts (READ IN FULL — constructor, insertFact, getActiveFacts, FactInput/FactRecord, factsDbPath/memoryDir)",
+      "src/state/facts.test.ts (existing FactStore test patterns)",
+      "src/fleet/ (where shared-blackboard.ts goes; observe existing fleet module conventions)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm run test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principlesRef": ".bober/principles.md — ESM with .js import extensions, import type, Zod for config, no SDK leak, node:fs/promises only (no sync fs), unicode section headers, conventional commits 'bober(sprint-1): ...', collocated *.test.ts, no fs mocks (use tmp dirs).",
+  "evaluatorFeedback": null
+}

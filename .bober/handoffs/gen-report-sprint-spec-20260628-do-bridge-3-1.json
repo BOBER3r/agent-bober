@@ -1,0 +1,10 @@
+{
+  "contractId": "sprint-spec-20260628-do-bridge-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": [
+    "f430fd1"
+  ],
+  "savedAt": "2026-06-29T17:15:36.824Z",
+  "summary": "reconcilePromotions (completed->done/aborted->open/running->unchanged, best-effort never-throws), --reconcile flag + start-of-command reconcile, second non-functional stub promoter (fail-closed), docs/do-bridge.md. hub schema byte-unchanged. 76 do-bridge tests, full suite 3400 green."
+}

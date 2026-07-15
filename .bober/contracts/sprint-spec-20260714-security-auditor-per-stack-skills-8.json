@@ -1,0 +1,95 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-8",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 8,
+  "title": "Adversarial finder->verifier stage (fresh, contract-free, downgrade-only, fail-closed)",
+  "description": "Add the false-positive control that makes higher recall safe: a second read-only bober-security-verifier stage. It runs sequentially after the finder inside the gate's single time-box, in a FRESH context fed ONLY the finder's critical+important findings (never the sprint contract \u2014 strips the sycophancy framing), is told to DISPROVE each finding, and may only downgrade critical->important or drop \u2014 never manufacture a clean pass. Fail-closed: any parse-failure/error/abort returns ran:false and the finder's criticals are KEPT. The verdict is derived on the VERIFIED review. Default-off (ADR-2/ADR-6).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-7"
+  ],
+  "features": [
+    "feat-verifier"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-8-1",
+      "description": "A new agents/bober-security-verifier.md agent prompt exists: read-only (Read/Grep/Glob only \u2014 no Bash/Write/Edit), instructed to attempt to DISPROVE each supplied finding using the diff/code evidence, output structured per-finding verdicts (confirmed | downgraded | disproved) with a confidence and a one-line reason, and told it is NEVER shown the sprint contract or 'already passed' framing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-2",
+      "description": "runSecurityVerifier.verify({findings (finder critical+important ONLY), diff, projectRoot, config, signal}) runs its own runAgenticLoop with the read-only curator toolset and the verifier prompt, and returns VerifierResult {verified[], downgraded[], dropped[], ran:true} on success; the sprint contract text is provably NOT included in the verifier's user message (test captures the prompt and asserts contract fields are absent).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-3",
+      "description": "Fail-closed: on verifier parse-failure, provider error, or abort, verify() returns {ran:false} and runSecurityAudit KEEPS the finder's criticals unchanged (verifier may only DOWNGRADE/drop, never promote a critical to a pass); a test with an unparseable verifier response asserts the finder's critical survives and the verdict stays blocked.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-4",
+      "description": "runSecurityAudit folds VerifierResult into the review (verified stay critical; downgraded move critical->important; dropped removed; minor + approvedAreas pass through untouched) and derives the verdict via the UNCHANGED deriveVerdict on the VERIFIED review; the verifier receives critical+important only and never approvedAreas (a test asserts an approvedArea can never be re-opened).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-5",
+      "description": "config.security.verifier is an OPTIONAL object {enabled: boolean (default false), model (default 'opus'), maxTurns (default 10)}; when absent the audit is single-stage byte-identical to sprint 7; the finder and verifier share ONE AbortController keyed to timeoutMs (a test shows an abort mid-verifier is handled as ran:false, criticals kept).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-6",
+      "description": "A demonstrative test shows the verifier REDUCING a false positive: given a finder critical that the verifier disproves against the diff, the downgraded/dropped finding no longer blocks (verdict flips blocked->pass for that case), while a genuine critical the verifier confirms still blocks; npm run build + typecheck + lint pass; full suite green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not give the verifier execution/PoC ability or any Bash/Write/Edit tool (LLM-only, read-only; a sandboxed PoC role is a separate future spec).",
+    "Do not run finder and verifier concurrently (data dependency \u2014 verifier input is finder output).",
+    "Do not add multi-model N-of-M voting (single-model verifier this build).",
+    "Do not let the verifier promote/add findings or re-open approvedAreas (downgrade-only)."
+  ],
+  "stopConditions": [
+    "Verifier is fail-closed (ran:false => finder criticals kept) and downgrade-only, proven by tests.",
+    "The sprint contract is provably absent from the verifier prompt; default-off is byte-identical."
+  ],
+  "definitionOfDone": "A fresh-context, contract-free, downgrade-only, fail-closed adversarial verifier stage runs sequentially after the finder inside the gate time-box, folds into the verdict via the unchanged deriveVerdict, measurably removes a false-positive block in a test, and is default-off/byte-identical when disabled, with the suite green.",
+  "assumptions": [
+    "runAgenticLoop + the 'curator' read-only toolset + assembleSystemPrompt are reused exactly as the finder uses them (security-auditor-agent.ts:62-135); no new AgentRole enum is needed since the verifier is read-only like the auditor.",
+    "The finder's critical+important findings carry enough evidence (path/line/snippet + optional signatureId/cwe) for the verifier to re-check against the shared AuditDiff.",
+    "The verifier's model/maxTurns default to opus/10 (lower than the finder's 20) and it shares the gate's Promise.race time-box + any budget.maxUsd."
+  ],
+  "outOfScope": [
+    "Benchmark corpus (sprint 9), dogfood (sprint 10)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "(1) agents/bober-security-verifier.md: mirror agents/bober-security-auditor.md structure (subagent context, read-only tools, structured JSON output) but the task is REFUTATION: for each supplied finding, look at the cited evidence in the diff/code and decide confirmed/downgraded/disproved with a reason; explicitly state it is NOT given the sprint contract and must not trust any framing. Output a JSON array of per-finding verdicts keyed by an index or signatureId+path+line. (2) src/orchestrator/security-verifier-agent.ts: runSecurityVerifier.verify \u2014 build a user message from findings + the relevant diff hunks ONLY (NO contract, NO evaluation summary); run runAgenticLoop (curator toolset); parse fail-closed (unparseable => ran:false). Return verified/downgraded/dropped. (3) security-auditor-agent.ts: after the finder parse (line ~141) and BEFORE deriveVerdict (line ~146), if config.security.verifier?.enabled, call the (injected or default) verifier with finderReview.critical+important and the diff; fold results; derive verdict on the folded review. Thread the SAME AbortController/signal used for the audit. deps.verifier injection for tests. (4) schema.ts: add security.verifier optional object. Keep deriveVerdict UNCHANGED. (5) The verifier must never see approvedAreas or minor. Source the refutation framing from .bober/research/research-20260714-...-research.md section E (adversarial verifier, disprove-not-confirm, fresh context, downgrade-only).",
+  "evaluatorNotes": "sc-8-2: capture the verifier user message and assert NO contract fields (title/description/successCriteria) appear; assert only findings + diff hunks. sc-8-3: stub the verifier loop to return garbage -> ran:false -> finder critical survives -> verdict blocked. sc-8-4: feed a finder review with an approvedArea and assert the verifier input excludes it and it stays approved; assert downgraded moves critical->important (non-blocking) and dropped is removed. sc-8-5: deep-equal config-omitting-verifier => single-stage identical; abort mid-verifier => ran:false, criticals kept. sc-8-6: two-case test \u2014 disproved critical => verdict pass; confirmed critical => verdict blocked. Verify NO Bash/Write/Edit in the verifier toolset. Build+typecheck+lint+full suite.",
+  "estimatedFiles": [
+    "agents/bober-security-verifier.md",
+    "src/orchestrator/security-verifier-agent.ts",
+    "src/orchestrator/security-verifier-agent.test.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts",
+    "src/orchestrator/security-auditor-agent.ts",
+    "src/orchestrator/security-auditor-agent.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-8-1",
+      "timestamp": "2026-07-14T16:36:10Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-8-1",
+  "updatedAt": "2026-07-14T16:36:10Z",
+  "completedAt": "2026-07-14T16:36:10Z"
+}

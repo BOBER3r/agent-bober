@@ -1,0 +1,95 @@
+{
+  "contractId": "sprint-spec-20260714-docs-metadata-0-18-refresh-2",
+  "specId": "spec-20260714-docs-metadata-0-18-refresh",
+  "sprintNumber": 2,
+  "title": "Sync README CLI quick-reference (fleet + 5 commands) and refresh package.json metadata",
+  "description": "The README CLI quick-reference (README.md:507-633) omits the fleet command family and the config/telemetry/worktree/memory/facts commands, and package.json's description/keywords (package.json:4,21-36) predate the 0.18.0 security-audit, fleet, and knowledge-platform surfaces. Add the missing README CLI entries (each deferring to COMMANDS.md) and refresh the npm metadata without touching version, name, bin, deps, or scripts.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-docs-metadata-0-18-refresh-1"
+  ],
+  "features": [
+    "feat-2",
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The README.md CLI reference lists the fleet family: an 'agent-bober fleet <manifest>' line plus 'fleet expand' and 'fleet expand-deep'. Verify: grep -cE \"agent-bober fleet (<manifest>|expand)\" README.md returns at least 2.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "The README.md CLI reference contains an 'agent-bober <cmd>' usage line for each of config, telemetry, worktree, memory, and facts, and each defers to COMMANDS.md for full detail. Verify each of the five command tokens appears in an agent-bober usage line within the CLI block.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "package.json keywords array includes the strings security-audit, fleet, incident-response, and knowledge-platform, and the description field mentions security auditing and fleet orchestration. Verify: node -e \"const p=require('./package.json'); ['security-audit','fleet','incident-response','knowledge-platform'].forEach(k=>{if(!p.keywords.includes(k))process.exit(1)}); if(!/security|audit/i.test(p.description)||!/fleet/i.test(p.description))process.exit(1)\" exits 0.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "package.json remains valid JSON with version still '0.18.0' and unchanged name, bin, dependencies, peerDependencies, and scripts. Verify: node -e \"const p=require('./package.json'); if(p.version!=='0.18.0'||p.name!=='agent-bober'||!p.bin['agent-bober'])process.exit(1)\" exits 0 and git diff for package.json touches only description and keywords.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "The new README fleet and config/telemetry/worktree/memory/facts entries describe only real behavior and flags present in src/fleet/index.ts and src/cli/commands/*.ts \u2014 no invented flags. Spot-check each against source.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "npm run build (tsc) exits 0 and git diff --name-only lists only README.md and package.json \u2014 confirming the change is docs/metadata only with no source or test edits.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not create, move, or push any git tags.",
+    "Do not modify any file under src/ or any *.test.ts file.",
+    "Do not change package.json version, name, bin, dependencies, peerDependencies, or scripts \u2014 edit only description and keywords.",
+    "Do not remove or reorder existing README CLI entries; only add the missing command lines.",
+    "Do not add keywords for features that are not first-class shipped CLI/MCP surfaces (limit to security-audit, fleet, incident-response, knowledge-platform)."
+  ],
+  "stopConditions": [
+    "grep -cE \"agent-bober fleet (<manifest>|expand)\" README.md returns at least 2 and all five of config/telemetry/worktree/memory/facts have an agent-bober usage line in the README CLI block.",
+    "node -e keyword+version check passes (four new keywords present, version 0.18.0, name/bin intact), npm run build exits 0, and git diff --name-only shows only README.md and package.json."
+  ],
+  "definitionOfDone": "A reader of README.md's CLI quick-reference can discover the fleet command family and config, telemetry, worktree, memory, and facts alongside the other commands, each deferring to COMMANDS.md for detail; and package.json's description and keywords advertise the 0.18.0 surface (multi-provider, security auditing, fleet orchestration, knowledge platform) while version stays 0.18.0 and name/bin/deps/scripts are unchanged. Only README.md and package.json changed and the project still builds.",
+  "assumptions": [
+    "fleet is a first-class documented feature (src/fleet/index.ts:477,525,571; docs/fleet.md; COMMANDS.md Fleet Commands section) missing from the README CLI block (spec assumption 3).",
+    "README's established pattern is a quick-reference that defers to COMMANDS.md ('Full reference in COMMANDS.md', README.md:548), so the five new entries are one-liners (Q4).",
+    "Defensible keyword additions map to shipped documented surfaces: security-audit (src/cli/commands/security-audit.ts + docs/security-audit.md), fleet (src/fleet/index.ts + docs/fleet.md), incident-response (src/cli/commands/incident.ts), knowledge-platform (docs/knowledge-platform.md) (Q5)."
+  ],
+  "outOfScope": [
+    "COMMANDS.md changes (handled in Sprint 1).",
+    "VISION.md, docs/providers.md, CHANGELOG.md edits.",
+    "package.json version bump or dependency changes.",
+    "Any git-tagging or release work."
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Add the fleet lines to the README CLI block (README.md:546-633 'New Commands' region) in the existing '# comment' + 'npx agent-bober <cmd>  # one-liner' style \u2014 model the wording on the fleet section of COMMANDS.md (fleet <manifest>: 'Run a fleet of agent-bober children from a manifest'; fleet expand <goal>: decompose a goal into a manifest and optionally run; fleet expand-deep <goal>: robust two-stage decomposer). Add one-line entries for config (config / config migrate), telemetry (status/purge/export), worktree (worktree run), memory (distill/list/show/prune), facts (add/list/show/invalidate), each ending with a note like 'full reference in COMMANDS.md'. For package.json, edit ONLY the description and keywords fields: append security-audit, fleet, incident-response, knowledge-platform to keywords (keep existing keywords), and extend the description to name security auditing and fleet orchestration (and knowledge-platform if it fits) while keeping it concise. Do NOT touch version/name/bin/dependencies/scripts. Do NOT modify any src/ file. This sprint depends on Sprint 1 so the 'see COMMANDS.md' pointers reference the sections it added.",
+  "evaluatorNotes": "Run the grep in sc-2-1 and confirm fleet <manifest>/expand/expand-deep appear in the README CLI block. Confirm the five command tokens appear as agent-bober usage lines (sc-2-2). Run the node -e checks in sc-2-3 and sc-2-4 to confirm keywords/description/version. Verify sc-2-5 by opening src/fleet/index.ts and the five command files and checking no documented flag is fabricated. Confirm docs/metadata-only via git diff --name-only (only README.md + package.json) and npm run build exit 0. Confirm no existing README entry was removed (git diff should be additions plus the description/keywords edit).",
+  "estimatedFiles": [
+    "README.md",
+    "package.json"
+  ],
+  "estimatedDuration": "small",
+  "updatedAt": "2026-07-14T22:45:00Z",
+  "completedAt": "2026-07-14T22:45:00Z",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-docs-metadata-0-18-refresh-2-1",
+      "timestamp": "2026-07-14T22:45:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-docs-metadata-0-18-refresh-2-1"
+}

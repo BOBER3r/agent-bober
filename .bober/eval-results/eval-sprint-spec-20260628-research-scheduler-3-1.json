@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260628-research-scheduler-3-1",
+  "contractId": "sprint-spec-20260628-research-scheduler-3",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-29T21:14:45.000Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0"},
+    {"strategy": "lint", "required": true, "result": "pass", "details": "0 errors; 2 pre-existing warnings (eval-persist.test.ts)"},
+    {"strategy": "unit-test", "required": true, "result": "pass", "details": "116 focused; full 3553/3553 (281 files); +13; zero regressions"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "ResearchSectionSchema egress.onlineResearch default false (schema.ts:481-490), registered optional at :532; fromConfig({}).isAllowed===false; 37 config tests pass"},
+    {"criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "assertAllowed throws exact `Egress axis 'online-research' not enabled` (egress.ts:41-44) line-for-line with medical egress.ts:54-57; 9 egress tests pass"},
+    {"criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "gate `deps.egress?.isAllowed('online-research')===true && deps.retrievalClient!==undefined` fail-closed for axis-off AND absent-deps; axis-on => 1 call + URL string in note; no [object Object]; 4 sc-3-3 tests pass"},
+    {"criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "build/typecheck exit 0; research key at schema.ts:532; runner imports ResearchEgressGuard type-only"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 4 required criteria pass. Online-research axis is fail-closed: default false, exact-mirror throw, runner gate unreachable with default/absent deps, URLs threaded as string[]. 3553/3553, zero regressions, zero lint errors, only config/schema + research changed."
+}

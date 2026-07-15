@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260621-codebase-health-remediation-3-1",
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-3",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "timestamp": "2026-06-21T23:09:30Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0 (noUnusedLocals enforced)", "details": "No orphaned imports." },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "Zero errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings", "details": "No new issues." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "219 files / 2815 passed", "details": "Full suite green; no importer broke." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "result": "pass", "evidence": "build + typecheck exit 0; noUnusedLocals confirms import prune correct." },
+    { "criterionId": "sc-3-2", "result": "pass", "evidence": "stashAndRestore + saveOutline removed from sources + both barrel lines; outline-state.ts kept (readOutline retained, still imported pipeline.ts:58, called :828); diff confined to 4 files." },
+    { "criterionId": "sc-3-3", "result": "pass", "evidence": "grep '(stashAndRestore|saveOutline)' src/ → zero matches." },
+    { "criterionId": "sc-3-4", "result": "pass", "evidence": "diff excludes plan.ts/context-handoff.ts/briefing-state.ts; readBriefing still at src/index.ts:153." },
+    { "criterionId": "sc-3-5", "result": "pass", "evidence": "lint 0 errors; full suite 2815/2815." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 5 required criteria pass. Both orphans + barrel lines removed, outline-state.ts kept with readOutline intact, orphaned writeFile/ensureDir imports pruned, 3 false positives untouched, 2815/2815 green."
+}

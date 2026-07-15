@@ -1,0 +1,281 @@
+{
+  "specId": "spec-20260628-obsidian-vault-store",
+  "version": 1,
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T15:13:23.000Z",
+  "title": "Obsidian vault storage layer (vault-canonical + derived FactStore index)",
+  "description": "Add a domain-agnostic vault storage layer to agent-bober where each per-domain repo is an Obsidian vault: markdown + YAML frontmatter is the canonical source of truth and FactStore (SQLite) is a derived, rebuildable index over note frontmatter. Provides generic note read/write/frontmatter helpers, a `bober vault reindex` command that parses frontmatter into FactStore reusing the existing reconcile-at-ingest path, an on-device-only Obsidian MCP read/write adapter, and a profile.yaml hook for later SOPS wiring.",
+  "status": "completed",
+  "mode": "brownfield",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "data-model",
+      "question": "How should generic note frontmatter map onto the FactStore (scope/subject/predicate/value) so the derived index is domain-agnostic?",
+      "options": [
+        {
+          "label": "A",
+          "description": "scope = caller-supplied domain; subject = frontmatter `id` if present else vault-relative note path; predicate = each frontmatter key; value = stringified frontmatter value"
+        },
+        {
+          "label": "B",
+          "description": "One fact per note with the whole frontmatter JSON-stringified into value (opaque blob)"
+        }
+      ],
+      "recommendation": "A \u2014 matches FactStore's (scope, subject, predicate, value) signature (src/state/facts.ts:22-31) and lets reconcileFact dedup/supersede per-field at ingest (src/orchestrator/memory/reconcile.ts:51-101). B defeats per-field trend math the research doc requires (\u00a73b line 151).",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q2",
+      "category": "tech-constraints",
+      "question": "Which Obsidian MCP server should the adapter target, given the layer must stay on-device only?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Server-agnostic: declare the MCP server in config (mcpCommand/mcpArgs/mcpEnv) mirroring ObservabilityProvider, with a configurable tool-name mapping and documented defaults for cyanheads/obsidian-mcp-server"
+        },
+        {
+          "label": "B",
+          "description": "Hardcode the Obsidian Local REST API plugin HTTP endpoint at 127.0.0.1:27124"
+        }
+      ],
+      "recommendation": "A \u2014 research \u00a72 (lines 49-50) lists multiple mature community servers; the ExternalMcpServer stdio pattern (src/mcp/external-client.ts) already spawns server-agnostic MCP subprocesses. Hardcoding one server couples the layer to one vendor and one transport.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "scope",
+      "question": "How should a note carrying frontmatter `status: superseded` affect the derived FactStore index during reindex?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Superseded notes contribute NO active facts; their frontmatter is skipped so only active notes' fields remain queryable (git history remains the bitemporal source)"
+        },
+        {
+          "label": "B",
+          "description": "Superseded notes are inserted then immediately invalidated via supersedeFact"
+        }
+      ],
+      "recommendation": "A \u2014 research \u00a73b (lines 152-156) locks git history as the bitemporal source and FactStore as a rebuildable active-state index; skipping superseded notes keeps reindex a pure rebuild of active state.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q4",
+      "category": "tech-constraints",
+      "question": "Should the YAML frontmatter parser be a new dependency or a dependency-free implementation?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Generator's choice between a vetted YAML dependency and a minimal dependency-free parser, provided the documented Dataview frontmatter conventions (string/number/ISO-date/list/status) round-trip losslessly under test"
+        },
+        {
+          "label": "B",
+          "description": "Planner mandates a specific library"
+        }
+      ],
+      "recommendation": "A \u2014 library selection is a generator-implementation decision per planner discipline; the round-trip success criteria pin the observable behavior regardless of approach. Repo currently has no YAML dep (package.json lines 64-75), only sax.",
+      "ambiguityWeight": 1
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Option A \u2014 scope = caller-supplied domain; subject = frontmatter `id` if present else vault-relative note path; predicate = frontmatter key; value = stringified frontmatter value. Cited: src/state/facts.ts:22-31 (FactSchema signature), src/orchestrator/memory/reconcile.ts:51-101 (per-key reconcile).",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Option A \u2014 server-agnostic config-declared MCP server with configurable tool-name mapping (defaults for cyanheads/obsidian-mcp-server). Cited: src/mcp/external-client.ts:42-103 (stdio spawn + listTools/callTool), src/config/schema.ts:298-309 (ObservabilityProvider declaration shape), research \u00a72 lines 49-50.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Option A \u2014 notes with frontmatter `status: superseded` contribute no active facts during reindex. Cited: research \u00a73b lines 152-156 (git history is the bitemporal source; FactStore is the rebuildable active-state index).",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Option A \u2014 frontmatter parser implementation (dependency or dependency-free) is the generator's call; round-trip success criteria pin behavior. Cited: package.json lines 64-75 (no YAML dep present, only sax).",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Every assumption cites evidence from the locked research doc (.bober/research/research-20260627-knowledge-platform-landscape.md \u00a73b/\u00a74) and existing substrate: FactStore src/state/facts.ts, reconcile src/orchestrator/memory/reconcile.ts, ExternalMcpServer src/mcp/external-client.ts, ObservabilityProvider config src/config/schema.ts:298-309, CLI pattern src/cli/commands/medical.ts + facts.ts, namespace resolver src/state/memory.ts:27 + src/teams/registry.ts loadTeam.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          ".bober/research/research-20260627-knowledge-platform-landscape.md#3b",
+          ".bober/research/research-20260627-knowledge-platform-landscape.md#4",
+          "src/state/facts.ts:136-306",
+          "src/orchestrator/memory/reconcile.ts:51-154",
+          "src/mcp/external-client.ts:30-140",
+          "src/config/schema.ts:298-372",
+          "src/cli/commands/medical.ts:130-189",
+          "src/cli/commands/facts.ts:54-301",
+          "src/state/memory.ts:27"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "The vault layer is domain-agnostic: medical is the first consumer but no medical-specific symbols, paths, or frontmatter keys are hardcoded. Evidence: brief SCOPE 'Keep this DOMAIN-AGNOSTIC'; medical store kept separate at src/medical/health-store.ts.",
+    "FactStore is the derived index; markdown+frontmatter is canonical. Reindex reuses writeFact/reconcileFact at ingest rather than introducing a new persistence path. Evidence: src/orchestrator/memory/reconcile.ts:148-154 (writeFact wrapper), research \u00a73b lines 150-152.",
+    "Generic frontmatter->fact mapping: scope=domain, subject=frontmatter `id` else vault-relative note path, predicate=frontmatter key, value=stringified value (Q1).",
+    "Notes with frontmatter `status: superseded` contribute no active facts during reindex; git history is the bitemporal source-of-truth (Q3, research \u00a73b lines 152-156).",
+    "The Obsidian MCP adapter is on-device only and server-agnostic: the MCP server is declared in config (mcpCommand/mcpArgs/mcpEnv) mirroring ObservabilityProvider, wrapped via ExternalMcpServer; tool names are configurable with documented cyanheads/obsidian-mcp-server defaults (Q2). Evidence: src/mcp/external-client.ts, src/config/schema.ts:298-309.",
+    "All wall-clock timestamps are injected at the CLI boundary, never read inside store/reindex/mapping code, matching the FactStore purity contract. Evidence: src/state/facts.ts:130-135, src/cli/commands/facts.ts:86.",
+    "CLI handlers never throw: on error they write a chalk.red message and set process.exitCode=1, and always close the store in a finally block. Evidence: src/cli/commands/facts.ts:135-142, src/cli/commands/medical.ts:111-120.",
+    "The derived FactStore lives at the team/namespace memory path resolved via loadTeam(config).memoryNamespace -> factsDbPath, not a new ad-hoc location. Evidence: src/cli/commands/facts.ts:41-50,99, src/state/memory.ts:27.",
+    "profile.yaml is a hook only: this spec leaves a recognized profile.yaml location and a resolver that detects (but never decrypts) a SOPS-encrypted profile. SOPS encryption policy is out of scope (owned by a sibling spec). Evidence: brief OUT clause + research \u00a73b lines 155-156.",
+    "Binary attachments (scan PDFs) stay OUT of git; the layer documents and scaffolds an attachments-dir convention rather than storing binaries. Evidence: research \u00a73b line 157."
+  ],
+  "outOfScope": [
+    "Medical-specific ingest (lab-PDF parsing, Apple Health, WHOOP) \u2014 owned by spec-20260628-medical-ingest",
+    "Medical analysis / proactive review / recommendation judge-loop \u2014 owned by spec-20260628-medical-analysis",
+    "The unified priority hub, task inbox, and cross-repo collector \u2014 owned by the hub spec",
+    "Implementing SOPS encryption/decryption policy or key management beyond leaving a profile.yaml hook",
+    "Calendar planner, Telegram frontend, scheduler",
+    "Semantic vault search (Nooscope) and FTS over note bodies",
+    "Migrating existing medical health.db rows into the vault format",
+    "Git commit/branch automation for the vault (humans/Obsidian/sibling tooling commit)"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Vault note model + frontmatter round-trip I/O",
+      "description": "A typed VaultNote model with pure functions to parse a markdown file's YAML frontmatter and body into a typed object and serialize back, plus filesystem read/write/list helpers over a vault directory. Domain-agnostic; documents Dataview-compatible frontmatter conventions.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: parseNote on a fixture note with string, number, ISO-date, list, and status frontmatter keys yields a VaultNote whose frontmatter object preserves each value's parsed type and whose body equals the markdown after the closing delimiter.",
+        "AC2: serializeNote(parseNote(x)) re-parses to a frontmatter object deep-equal to the original for the documented Dataview conventions (round-trip fidelity).",
+        "AC3: listNotes(dir) returns every .md file under the vault directory (recursively) and readNote/writeNote round-trip a note to disk."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Derived FactStore index over note frontmatter (reconcile-at-ingest)",
+      "description": "A pure mapping from a VaultNote's frontmatter to FactInput records and a reindex function that applies them to a FactStore via the existing writeFact/reconcileFact path, honoring status:superseded notes. The FactStore becomes a derived, rebuildable index over canonical note frontmatter.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: noteToFacts maps a note to one FactInput per frontmatter key with scope=domain, subject=frontmatter id else vault-relative path, predicate=key, value=stringified value.",
+        "AC2: reindexNotes run twice over identical notes reports the second pass as all-noop (no duplicate active facts), proving reconcile dedup at ingest.",
+        "AC3: a note whose frontmatter value changes between passes results in the prior fact superseded (t_invalidated set) and the new value active.",
+        "AC4: a note with frontmatter status:superseded contributes zero active facts to the store."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "`bober vault reindex` CLI command",
+      "description": "A domain-agnostic CLI command that walks a vault directory, parses every note's frontmatter, and rebuilds the derived FactStore at the resolved team/namespace memory path, printing per-run counts. Reuses note-io, the reindex mapping, factsDbPath/ensureFactsDir, and loadTeam namespace resolution.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober vault reindex --scope <domain> [--vault <dir>]` is registered and listed in `bober vault --help`.",
+        "AC2: running the command against a fixture vault populates facts.db at the namespace path with the expected active facts and exits 0 printing notesParsed/factsAdded/factsSuperseded counts.",
+        "AC3: on a missing/invalid vault directory the handler writes a red error to stderr and sets exit code 1 without throwing, and always closes the FactStore."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "On-device Obsidian MCP read/write adapter + config",
+      "description": "A config schema entry declaring an on-device Obsidian MCP server (mirroring ObservabilityProvider) and a thin VaultMcpAdapter that wraps ExternalMcpServer to read, write, and list notes through configurable tool names, with an on-device-only guard rejecting non-local server declarations.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: a VaultSection config with an obsidian MCP server (mcpCommand/mcpArgs/mcpEnv + optional tool-name overrides) parses and round-trips through the config schema.",
+        "AC2: VaultMcpAdapter.readNote/writeNote/listNotes invoke the configured (or default cyanheads) tool names on an injected ExternalMcpServer and return parsed VaultNote results.",
+        "AC3: the on-device guard rejects a server declaration whose transport implies a non-local network endpoint, surfacing a clear error and never spawning the server."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Vault profile.yaml hook + Dataview/attachments conventions",
+      "description": "A resolver that recognizes a profile.yaml at the vault root, parsing it when plaintext and detecting (without decrypting) a SOPS-encrypted profile, plus exported convention constants for Dataview frontmatter keys and the gitignored attachments directory. Leaves a hook for later SOPS wiring; implements no encryption.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: resolveProfile reads a plaintext vault/profile.yaml into a typed VaultProfile.",
+        "AC2: resolveProfile detects a SOPS-encrypted profile.yaml (sops markers present) and returns an opaque {encrypted:true} marker without decrypting or reading secret values.",
+        "AC3: exported convention constants document the canonical frontmatter status values and the attachments directory name, and a missing profile.yaml returns undefined rather than throwing."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "techStack": [
+    "TypeScript",
+    "Node.js",
+    "better-sqlite3",
+    "commander",
+    "zod",
+    "@modelcontextprotocol/sdk"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "FactStore + writeFact/reconcileFact (src/state/facts.ts, src/orchestrator/memory/reconcile.ts) \u2014 derived index + reconcile-at-ingest",
+      "ExternalMcpServer (src/mcp/external-client.ts) \u2014 on-device Obsidian MCP transport",
+      "TeamConfigSchema + memoryDir + loadTeam (src/config/schema.ts:361, src/state/memory.ts:27, src/teams/registry.ts) \u2014 namespace-scoped derived store path",
+      "CLI command tree (src/cli/index.ts + src/cli/commands/*.ts) \u2014 `bober vault` registration"
+    ],
+    "dataModel": "Canonical: markdown notes with YAML frontmatter inside an Obsidian vault directory. Derived: FactStore semantic_facts rows where scope=domain, subject=note identity, predicate=frontmatter key, value=stringified frontmatter value; active rows == active notes' fields. Git history is the bitemporal source-of-truth.",
+    "securityConsiderations": [
+      "Obsidian MCP adapter is on-device only \u2014 non-local server declarations are rejected before spawn.",
+      "MCP env (mcpEnv) may contain tokens \u2014 never log it; reuse ExternalMcpServer's sanitization (src/mcp/external-client.ts:66-77).",
+      "profile.yaml SOPS detection must never decrypt or surface encrypted values.",
+      "Binary attachments stay out of git (attachments dir convention + gitignore hint)."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "All new code lives under a new src/vault/ module plus one CLI command file and additive config-schema/CLI-index edits; no medical-specific symbols are introduced into the vault module.",
+      "verificationMethod": "Grep src/vault/ for medical-specific identifiers returns none; typecheck and build pass."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Mapping, reindex, and store code never read the wall clock; every timestamp is an injected parameter, matching the FactStore purity contract.",
+      "verificationMethod": "Grep src/vault/ for Date.now( and new Date( returns no occurrences outside the CLI handler boundary; unit tests inject now."
+    },
+    {
+      "category": "security",
+      "requirement": "The Obsidian MCP adapter refuses non-local server declarations and the profile resolver never decrypts SOPS-encrypted content.",
+      "verificationMethod": "Unit tests assert the on-device guard rejection and the SOPS-opaque return path."
+    }
+  ],
+  "constraints": [
+    "Reuse existing substrate (FactStore, writeFact/reconcileFact, ExternalMcpServer, TeamConfigSchema, memoryDir/loadTeam, CLI command pattern) \u2014 do not reimplement persistence, reconcile, or MCP transport.",
+    "Domain-agnostic: no hardcoded medical keys/paths in the vault module.",
+    "CLI handlers never throw (set process.exitCode=1) and always close stores in finally.",
+    "Each sprint must build (tsc) and pass the existing test suite plus its new tests."
+  ],
+  "dependsOn": [],
+  "metadata": {
+    "dependsOn": [],
+    "siblingSpecs": [
+      "spec-20260628-medical-ingest",
+      "spec-20260628-medical-analysis"
+    ],
+    "researchDoc": ".bober/research/research-20260627-knowledge-platform-landscape.md",
+    "plannedBy": "bober-planner (autonomous)"
+  },
+  "completedAt": "2026-06-28T15:13:23.000Z"
+}

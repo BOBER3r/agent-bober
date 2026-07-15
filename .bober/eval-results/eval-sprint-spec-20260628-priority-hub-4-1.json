@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260628-priority-hub-4-1",
+  "contractId": "sprint-spec-20260628-priority-hub-4",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-29T00:50:45.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0"},
+    {"strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "details": "0 errors in new files; 2 pre-existing warnings (eval-persist.test.ts)"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "details": "18 new tests (priority-md 11 + hub 7) + 25 regression (blackboard/medical/chat) green"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "renderPriorityMd pure (no fs/IO, no re-sort); hand-rolled frontmatter + exact 7-col table; rank=index+1; pipe-escaped; 11 tests"},
+    {"criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "runHubPriority writes <kb-hub>/priority.md (absolute, read back) + stdout ranks+titles; sibling stores mtime unchanged"},
+    {"criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "decide scope writes priority.md with only X/Y-relevant findings; 'neither' absent"},
+    {"criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "resolveOutVault absolute from raw-JSON config else <parent>/kb-hub; missing dir => stderr + exitCode=1 + no throw, no auto-create"},
+    {"criterionId": "sc-4-5", "required": true, "result": "pass", "evidence": "build green"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All five criteria pass; pure renderer, DI core, missing-vault gate; sibling sources unchanged; only 5 expected files changed; no new deps; no schema/finding/judge/scope edits."
+}

@@ -1,0 +1,50 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-obsidian-vault-store-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-3",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:20:40.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Obsidian vault storage layer. Sprints 1-2 DONE: src/vault/{types,frontmatter,note-io}.ts (note model + parse/serialize + read/write/listNotes) and src/vault/{index-map,reindex}.ts (noteToFacts + reindexNotes reconcile-at-ingest, exports SUPERSEDED_STATUS + ReindexSummary). This sprint adds the `bober vault reindex` CLI command: walk a vault dir, parse notes, rebuild the derived FactStore at the team/namespace memory path, print counts. CLI handler never throws (process.exitCode=1 on error), always closes the store.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-1",
+        "title": "Vault note model + frontmatter round-trip I/O",
+        "summary": "src/vault/types.ts, frontmatter.ts, note-io.ts (readNote/writeNote/listNotes)"
+      },
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-2",
+        "title": "Derived FactStore index",
+        "summary": "src/vault/index-map.ts (noteToFacts + SUPERSEDED_STATUS), reindex.ts (reindexNotes(store,notes,{scope,now,sourceRunId?}) -> ReindexSummary {notesParsed,factsAdded,factsSuperseded,factsNoop})"
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/cli/commands/facts.ts",
+      "src/cli/commands/medical.ts",
+      "src/cli/index.ts",
+      "src/vault/note-io.ts",
+      "src/vault/reindex.ts",
+      "src/state/facts.ts",
+      "src/teams/registry.ts",
+      "src/utils/fs.ts",
+      "src/config/loader.ts"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run",
+      "testSingle": "npx vitest run <path>"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true
+    }
+  },
+  "evaluatorFeedback": null,
+  "note": "Reuse sprint 1/2 modules + the facts.ts CLI pattern (findProjectRoot, loadConfig, loadTeam->namespace, factsDbPath, ensureFactsDir, store.close in finally, now stamped once at boundary). Extract a testable core (runVaultReindex(projectRoot, opts, deps?)) like runWhoopSync. Register registerVaultCommand in src/cli/index.ts next to registerMedicalCommand. Stay on branch bober/medical-team. Use 'npx vitest run'."
+}

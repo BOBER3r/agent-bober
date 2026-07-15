@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-2",
+  "status": "complete",
+  "iteration": 1,
+  "commits": ["708c799 - bober(sprint-2): cross-repo read-only collector + sibling resolver + FactStore readonly flag"],
+  "filesChanged": [
+    "src/state/facts.ts (modified — additive readonly?: boolean opt; default path byte-identical behaviour)",
+    "src/state/facts.test.ts (modified — readonly read-ok/write-throws + no-flag still creates table)",
+    "src/hub/repo-resolver.ts (created — resolveSiblingRepos(projectRoot, configuredRepos?))",
+    "src/hub/repo-resolver.test.ts (created, 6 tests)",
+    "src/hub/collector.ts (created — collectFindings, pure, readonly, dedup by id)",
+    "src/hub/collector.test.ts (created, 7 tests)",
+    "src/cli/commands/hub.ts (modified — list aggregates across siblings; resolveConfiguredRepos reads raw JSON, no schema.ts edit)"
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "met": true},
+    {"criterionId": "sc-2-2", "met": true},
+    {"criterionId": "sc-2-3", "met": true},
+    {"criterionId": "sc-2-4", "met": true},
+    {"criterionId": "sc-2-5", "met": true},
+    {"criterionId": "sc-2-6", "met": true}
+  ],
+  "notes": "Config trap solved without editing schema.ts: resolveConfiguredRepos reads the raw JSON config file directly (Zod strip-mode would drop hub.repos) with a narrow cast, falling through to kb-* discovery on any error. resolver/collector fully DI via configuredRepos param. 56 tests green (incl facts 9/9 regression). typecheck/build/lint clean. NOTE for evaluator: facts.ts constructor was restructured into readonly/default branches — must confirm the DEFAULT (no-flag) path still runs CREATE TABLE and behaves byte-identically for the existing 17 importers."
+}

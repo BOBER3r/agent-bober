@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-3",
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "sprintNumber": 3,
+  "title": "ToolRoleGuard (build-time, fail-fast)",
+  "description": "Reject at manifest-build time any child whose RESOLVED BoberConfig would place the claude-code provider on a TOOL_ROLE (curator/generator/evaluator/codeReview), throwing BEFORE any child is spawned. Add a new EXPORTED predicate isToolRole(role: RoleName): boolean to src/config/role-providers.ts derived from the authoritative TOOL_ROLES constant (role-providers.ts:25), and export the existing effectiveProvider. New file src/fleet/tool-role-guard.ts exports: type ToolRoleViolation = {childFolder: string; role: RoleName; provider: 'claude-code'}; check(child: FleetChild, resolved: BoberConfig): ToolRoleViolation|null (pure, never throws — for each TOOL_ROLE, if effectiveProvider(role, resolved)==='claude-code' return the violation); assertManifest(manifest: FleetManifest): void which builds each child config via buildChildConfig and THROWS a named Error identifying child.folder+role on the first violation. Wire assertManifest into the fail-fast credential phase in src/fleet/index.ts — call it alongside/just before validateManifestCredentials (BOTH run before coordinator.execute), so no child is spawned when it throws. The never-throw validateManifest is UNCHANGED; the guard is a separate throwing call. The no-flag fleet path stays byte-identical (a clean manifest passes with no throw, no side effects).",
+  "status": "completed",
+  "completedAt": "2026-06-18T19:10:00Z",
+  "dependsOn": ["sprint-spec-20260618-fleet-tier-provider-routing-2"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "The full test suite passes with zero new failures (npm run test); only the 6 known cockpit-integration MCP failures may fail; existing fleet index/role-providers tests pass unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "Exported isToolRole(role) returns true for 'curator','generator','evaluator','codeReview' and false for 'planner','researcher','chat', and is derived from the authoritative TOOL_ROLES (a test asserts isToolRole agrees with TOOL_ROLES membership — no independently re-declared literal).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "ToolRoleGuard.check(child, resolved) returns a ToolRoleViolation {childFolder, role, provider:'claude-code'} when claude-code resolves onto a tool role (e.g. child.config.generator.provider='claude-code'), and returns null for a clean config; check never throws.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "ToolRoleGuard.assertManifest(manifest) THROWS a named error whose message contains the offending child.folder and role when any child would place claude-code on a tool role, and does NOT throw for a clean manifest (including one whose children carry tiers from Sprint 2).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "assertManifest runs in the fail-fast phase BEFORE coordinator.execute in runFleet (src/fleet/index.ts): a test drives the fleet path (or runFleet with injected deps) with a claude-code-on-generator manifest and asserts it throws and that the coordinator/spawn was never invoked.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "The never-throw validateManifest is unchanged and the no-flag fleet path is byte-identical: a clean tier-less manifest passes assertManifest with no throw, and the existing fleet behavior (and ~203-test suite) is unaffected.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "lint passes (npm run lint, zero errors); change confined to role-providers.ts (new export), tool-role-guard.ts (new), index.ts (wire the call) + tests; no new SDK/network imports.",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT modify the never-throw validateManifest (the guard is a separate throwing call).",
+    "Do NOT re-declare the tool-role list — isToolRole must derive from the authoritative TOOL_ROLES.",
+    "Do NOT add blackboard / Phase B work.",
+    "Do NOT change tier mapping (Sprint 2) or Grok wiring (Sprint 1).",
+    "Do NOT spawn or run children to test the guard — it is a pure pre-spawn check."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "claude-code on a tool role throws at build time (before any spawn) naming the child+role, isToolRole derives from TOOL_ROLES, clean manifests pass, validateManifest unchanged, and build/typecheck/test/lint are green with no new failures"
+  ],
+  "definitionOfDone": "src/config/role-providers.ts exports isToolRole(role) (from TOOL_ROLES) and effectiveProvider. src/fleet/tool-role-guard.ts exports ToolRoleViolation, check (pure, never-throws), and assertManifest (throws naming child.folder+role). src/fleet/index.ts calls assertManifest in the fail-fast phase before coordinator.execute. Collocated tests cover isToolRole membership, check violation/null, assertManifest throw/clean, the pre-spawn ordering (coordinator not invoked on throw), and the byte-identical clean path. validateManifest unchanged. Build/typecheck/test/lint green.",
+  "assumptions": [
+    "role-providers.ts already has TOOL_ROLES = ['curator','generator','evaluator','codeReview'] (:25) and effectiveProvider(role, config) (:48); isToolRole is a thin `TOOL_ROLES.includes(role)` export and effectiveProvider is exported for the guard.",
+    "buildChildConfig(child) (from Sprint 2, tier-aware) yields the resolved BoberConfig the guard inspects via effectiveProvider; the guard calls buildChildConfig per child inside assertManifest.",
+    "runFleet (src/fleet/index.ts) has a fail-fast phase (validateManifestCredentials at ~:46) that runs before coordinator.execute; assertManifest is inserted there so a violation prevents any spawn.",
+    "Given the tier table never places claude-code (Sprint 2), the guard's real job is catching a hand-authored child.config that does — so tests must construct that case via child.config, not via a tier."
+  ],
+  "outOfScope": [
+    "Grok wiring (Sprint 1)",
+    "Tier mapping (Sprint 2)",
+    "Blackboard / Phase B"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/config/role-providers.ts (FULL — RoleName :10, TOOL_ROLES :25, effectiveProvider :48 and its claude-code/tool-role fallback logic ~:122-135 which already THROWS if a tool role lands on claude-code with no non-claude-code fallback — note that throw is per-process at config-load; the guard front-loads it at manifest-build time); src/fleet/index.ts (runFleet — find validateManifestCredentials ~:46 and the coordinator.execute call; insert assertManifest just before/after the credential loop, both BEFORE execute); src/fleet/child-config.ts (buildChildConfig, tier-aware after Sprint 2); src/fleet/manifest.ts (FleetChild/FleetManifest); arch ADRs in .bober/architecture/arch-20260618-heterogeneous-multi-provider-agent-team-architecture.md (ToolRoleGuard component + CP4 risk: claude-code-on-tool-role build-vs-runtime).\n\nrole-providers.ts: add `export function isToolRole(role: RoleName): boolean { return TOOL_ROLES.includes(role); }` and ensure effectiveProvider is exported.\n\nNew src/fleet/tool-role-guard.ts: import { isToolRole, effectiveProvider, type RoleName } from '../config/role-providers.js'; import { buildChildConfig } from './child-config.js'; types FleetChild/FleetManifest from './manifest.js'; BoberConfig from '../config/schema.js'. ToolRoleViolation type. `export function check(child, resolved): ToolRoleViolation | null` { for (const role of (['curator','generator','evaluator','codeReview'] as RoleName[])) if (effectiveProvider(role, resolved) === 'claude-code') return {childFolder: child.folder, role, provider:'claude-code'}; return null; } — or iterate all RoleName and gate on isToolRole(role). `export function assertManifest(manifest)` { for (const child of manifest.children) { const resolved = buildChildConfig(child); const v = check(child, resolved); if (v) throw new Error(`Fleet child \"${v.childFolder}\" places claude-code on tool role \"${v.role}\" — claude-code cannot drive tools. Use an api-key provider (anthropic/openai-compat) for builder roles.`); } }.\n\nindex.ts: in runFleet, BEFORE coordinator.execute (and ideally right next to validateManifestCredentials so both fail-fast checks are colocated), call assertManifest(effectiveManifest). Keep it inside the same pre-spawn region; do not move it after execute.\n\nTests: role-providers.test.ts additions (isToolRole true/false set, and that it equals TOOL_ROLES membership); tool-role-guard.test.ts (check returns violation for a child.config.generator.provider='claude-code'; check returns null for a clean/tiered child; assertManifest throws naming folder+role; assertManifest no-throw for a clean manifest); index.test.ts addition (runFleet with injected fake coordinator + a claude-code-on-generator manifest asserts throw AND fake coordinator.execute NOT called). Reuse the existing runFleet DI test pattern. Follow ESM .js imports, import type, unicode section headers.",
+  "evaluatorNotes": "sc-3-3: assert isToolRole for all 7 RoleName values and that the true-set equals TOOL_ROLES; grep tool-role-guard.ts/role-providers.ts to confirm no second hard-coded tool-role list. sc-3-4: check() with a resolved config whose generator.provider resolves to claude-code -> ToolRoleViolation; clean -> null; wrap in expect(()=>check()).not.toThrow(). sc-3-5: assertManifest on a manifest with a claude-code-on-generator child -> throws, message includes folder + 'generator'; on a clean manifest (incl. tiered children) -> no throw. sc-3-6: drive runFleet with an injected fake coordinator (or the existing DI seam) + the bad manifest -> expect throw and assert the fake coordinator.execute was never called (no spawn). sc-3-7: a clean tier-less manifest passes; confirm validateManifest source is unchanged (git diff) and the fleet suite is unaffected. sc-3-2: FULL suite, only 6 known cockpit failures allowed. Build/typecheck/lint clean.",
+  "estimatedFiles": [
+    "src/config/role-providers.ts",
+    "src/config/role-providers.test.ts",
+    "src/fleet/tool-role-guard.ts",
+    "src/fleet/tool-role-guard.test.ts",
+    "src/fleet/index.ts",
+    "src/fleet/index.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T18:30:00Z",
+  "updatedAt": "2026-06-18T18:30:00Z"
+}

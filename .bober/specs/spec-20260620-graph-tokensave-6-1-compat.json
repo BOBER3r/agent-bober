@@ -1,0 +1,104 @@
+{
+  "specId": "spec-20260620-graph-tokensave-6-1-compat",
+  "version": 1,
+  "createdAt": "2026-06-20T00:00:00Z",
+  "updatedAt": "2026-06-20T00:00:00Z",
+  "title": "Graph integration compatibility with tokensave serve 6.1.1",
+  "description": "Repair agent-bober's own code-graph integration so the CLI can talk to tokensave serve 6.1.1. The integration was written against an older tokensave wire protocol and tool catalog; two independent breaks (a passive JSON-RPC handshake and a stale tool-name catalog) leave `agent-bober onboard` and the graph features of `agent-bober run` non-functional. This restores a working graph layer over the real engine.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-20T00:00:00Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "User approved the approach interactively in two steps: (1) fix the integration via a tracked bober sprint (not a quick patch), (2) scope = 'Full transport + catalog remap' — fix the mcp-client.ts transport AND remap all 6 GraphClient methods to tokensave 6.1.1's tool catalog + result shapes + update tests, while leaving onboard.ts's existing semantic-search data path as-is (no onboard quality rework). Diagnosis is fully evidence-cited (see assumptions, every item carries a file:line). Root cause reproduced this session: piping an MCP `initialize` to `tokensave serve` returns a valid result; sending nothing leaves stdout empty for the process lifetime; a direct `{\"method\":\"status\"}` returns -32601 method-not-found.",
+      "resolvedAt": "2026-06-20T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "Root cause #1 (transport handshake deadlock): src/graph/mcp-client.ts spawnAndHandshake() (lines 199-278) spawns `tokensave serve` and passively waits for the child to emit a JSON-RPC line on stdout (resolves on the first parseable line, lines 244-269), sending nothing on stdin first. start() (lines 98-102) calls only spawnAndHandshake(). tokensave serve 6.1.1 is a standard MCP server (protocolVersion 2024-11-05) that emits NOTHING on stdout until it receives an `initialize` request; banners go to stderr. Verified: a 5s capture of a fresh `tokensave serve` produced zero stdout lines (only a stderr shutdown banner). The HANDSHAKE_TIMEOUT_MS=1000 timer (mcp-client.ts:23, fires at 219-224) therefore always elapses → 'tokensave serve handshake timed out'.",
+    "Root cause #2 (wrong call envelope): call() (mcp-client.ts:156-194) sends {jsonrpc,id,method: <toolName>,params} (lines 180-185). tokensave serve 6.1.1 only accepts the MCP {method:'tools/call', params:{name, arguments}} envelope and returns {result:{content:[{type:'text',text:'<json-or-prose>'}]}}. Verified: `{\"method\":\"status\"}` returns JSON-RPC error -32601 'method not found: status'. Current call() returns the JSON-RPC `result` field directly (tests/graph/mcp-client.test.ts:236-242), so the content-unwrap is the behavior that changes.",
+    "Root cause #3 (stale tool catalog): src/graph/client.ts:31-38 TOOL = { search:'semantic_search_nodes', query:'query_graph', impact:'get_impact_radius', reviewContext:'get_review_context', overview:'get_architecture_overview', changes:'detect_changes' }. None of these exist in tokensave 6.1.1, whose tools are `tokensave_*` (e.g. tokensave_search, tokensave_context, tokensave_impact, tokensave_module_api, tokensave_callers, tokensave_callees, tokensave_changelog). Even with the transport fixed, every GraphClient call would hit a non-existent tool.",
+    "onboard data path: src/cli/commands/onboard.ts gathers ALL its data through five graphClient.search() calls (lines 119-126) and maps SearchHit (h.node.symbol/file/line, h.score, h.snippet — lines 137-185) into OnboardingInputs. So onboard depends on (a) a working handshake, (b) GraphClient.search mapped to a real 6.1.1 tool, (c) the SearchHit shape matching that tool's output. onboard.ts keeps its current semantic-search approach (scope decision); only its dependencies are repaired.",
+    "GraphClient public contract is stable: callers (onboard, src/mcp/tools/graph.ts, the pipeline prefetch path) consume GraphResult<SearchHit[] | NodeRef[] | ImpactReport | string>. The remap adapts tool names + result narrowing INTERNALLY (client.ts runWithSandbox/runRaw, lines 187-227) so external types in src/graph/types.ts and callers stay byte-compatible where possible; any type change is additive/internal.",
+    "Test harness: tests/graph/mcp-client.test.ts already has a fake-subprocess factory (makeFakeSubprocess, lines 60-112) and gates real-binary integration tests with it.skipIf(!tokensaveAvailable) (lines 289-376). The fake currently simulates the OLD handshake by pushing {\"jsonrpc\":\"2.0\",\"method\":\"ready\"} (lines 137, 227) and the integration tests use the stale tool name 'semantic_search_nodes' (line 326) — both must be updated to the MCP initialize flow + real tool names.",
+    "Build/distribution: the `agent-bober` binary is a symlink to the dist build (npm run build); end-to-end verification of onboard must run the freshly built CLI. tokensave 6.1.1 is installed and on PATH here, so skipIf integration tests run.",
+    "tokensave 6.1.1 reference (verified this session): initialize returns serverInfo {name:'tokensave', version:'6.1.1'}, capabilities {logging, resources, tools}, protocolVersion '2024-11-05'."
+  ],
+  "outOfScope": [
+    "Reworking onboard.ts to use the dedicated structured tools (tokensave_hotspots/dead_code/circular/module_api) instead of semantic search — explicitly deferred by the scope decision; onboard keeps its current search()-based path.",
+    "Branch tracking / serving the active branch — already handled this session via `tokensave branch add bober/medical-team` + `tokensave sync`; the running MCP serve cache restart is operational, not code.",
+    "Killing or managing orphaned `tokensave serve` processes — not the cause and not a code change.",
+    "Changing GraphFallback semantics, the circuit-breaker rolling-window math, PID/orphan handling in pipeline-lifecycle.ts, or the sandbox post-filter — preserved as-is.",
+    "Adding new graph features, new tokensave tools, or new CLI surface.",
+    "tokensave version negotiation beyond targeting 6.1.x (protocolVersion 2024-11-05)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "MCP-compliant transport in TokensaveMcpClient",
+      "description": "Make TokensaveMcpClient drive a proper MCP handshake (client sends initialize, resolves on the response, then sends notifications/initialized) and issue tool calls via the tools/call envelope, unwrapping result.content[].text. Bump the cold-start handshake timeout.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When start() is called against a real tokensave serve 6.1.1, the client sends an MCP `initialize` request and resolves health='ready' on its response within the handshake timeout (no more 'handshake timed out').",
+        "AC2: After the handshake resolves, the client sends a `notifications/initialized` notification before any tools/call.",
+        "AC3: When call(tool, params) is invoked, the wire request is {jsonrpc:'2.0', id, method:'tools/call', params:{name: tool, arguments: params}} and the returned value is the parsed payload from result.content[].text (JSON.parse when the text is JSON; the raw string when it is plain prose).",
+        "AC4: When the server returns a JSON-RPC error or an MCP isError result, call() rejects with a makeGraphError-tagged error whose .reason maps to GRAPH_ERROR (existing toFailureResult contract in client.ts).",
+        "AC5: HANDSHAKE_TIMEOUT_MS is raised to a realistic cold-start value (>= 5000ms).",
+        "AC6: Existing behavior is preserved — circuit-breaker rolling-window math, health-state transitions, concurrent-call id correlation, and stop() shutdown — verified by the existing pure-logic tests passing unchanged."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Remap GraphClient to the tokensave 6.1.1 tool catalog",
+      "description": "Replace the stale TOOL map and result narrowing in GraphClient so all six methods (search, query, impact, reviewContext, overview, changes) call real tokensave 6.1.1 tools with correct params and result-shape adapters, while keeping GraphClient's external GraphResult contract stable. Verify end-to-end that `agent-bober onboard` produces the 5 files via the real engine.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: client.ts TOOL contains only real 6.1.1 tool names (no semantic_search_nodes / query_graph / get_impact_radius / get_review_context / get_architecture_overview / detect_changes).",
+        "AC2: Each GraphClient method maps to a tokensave 6.1.1 tool verified by probing the real serve (search→a real search/context tool; query's callers_of/callees_of/imports_of/tests_for → the corresponding tokensave_callers/callees/file_dependents/test_map; impact→tokensave_impact; overview→tokensave_module_api; changes→tokensave_changelog or equivalent), with a result-shape adapter so the method still returns its existing GraphResult<T> type.",
+        "AC3: When `agent-bober onboard` is run against the real engine (after npm run build), it starts the graph engine without timeout and writes all 5 markdown files to .bober/onboarding/ (README, architecture-overview, hotspots, knowledge-gaps, communities), updating in place below the generation marker.",
+        "AC4: GraphClient.search returns SearchHit[] whose entries carry node.symbol, node.file, node.line (and score/snippet where available) so onboard.ts's existing mapping (onboard.ts:137-185) produces non-empty content for at least the hotspots and module/files sections.",
+        "AC5: The sandbox post-filter, GraphFallback hints, and GRAPH_DISABLED/GRAPH_UNAVAILABLE short-circuits in runWithSandbox are preserved."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "high"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "The fix must degrade gracefully: on any handshake/tool failure GraphClient still returns GraphResult.ok=false (never throws to callers), exactly as today.",
+      "verificationMethod": "Unit tests assert GraphResult.ok=false with the right reason on simulated handshake failure and tool error; toFailureResult path unchanged."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Changes confined to the graph layer (src/graph/mcp-client.ts, src/graph/client.ts, optionally src/graph/types.ts) plus their tests; no changes to GraphClient's public method signatures.",
+      "verificationMethod": "git diff review: only graph-layer files + tests touched; GraphClient method signatures identical."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Deterministic regression coverage independent of the real binary: fake-MCP-serve unit tests prove the initialize handshake and tools/call round-trip; real-binary integration tests remain skipIf-gated.",
+      "verificationMethod": "Run the unit tests with execa mocked (no tokensave) and confirm handshake + call assertions pass; confirm integration tests skip when tokensave is absent."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": ["tokensave serve 6.1.1 (MCP over stdio, protocolVersion 2024-11-05, tools named tokensave_*)"],
+    "dataModel": "No persistent data model. Wire shapes: MCP initialize {protocolVersion, capabilities, clientInfo} → result{serverInfo,capabilities}; tools/call {name, arguments} → result{content:[{type:'text',text}], isError?}. GraphClient internal types: SearchHit{node:NodeRef,score,snippet}, NodeRef{symbol,file,line,kind}, ImpactReport{root,affected,testsAffected}.",
+    "securityConsiderations": ["No new egress; same local stdio subprocess. Sandbox post-filter on NodeRef.file is preserved (client.ts:249-260)."],
+    "existingPatterns": "Follow ESM .js import specifiers, `import type`, unicode section-header comments, no synchronous fs, execa argv-array spawn (no shell, ADR-10). Mirror the existing fake-subprocess test harness in tests/graph/mcp-client.test.ts."
+  },
+  "sprints": [
+    "sprint-spec-20260620-graph-tokensave-6-1-compat-1",
+    "sprint-spec-20260620-graph-tokensave-6-1-compat-2"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Transport rewrite is well-understood and deterministically testable (Sprint 1). The catalog remap (Sprint 2) carries the real risk: exact 6.1.1 tool params/result shapes must be confirmed by probing the live serve, and some GraphClient methods (overview, changes, query patterns) have no 1:1 6.1.1 equivalent and need an adapter choice. Mitigated by a concrete probe technique (pipe initialize+tools/call into `tokensave serve`) and by keeping GraphClient's external contract stable."
+  }
+}

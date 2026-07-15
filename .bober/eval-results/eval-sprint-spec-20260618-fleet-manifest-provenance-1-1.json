@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-manifest-provenance-1-1",
+  "contractId": "sprint-spec-20260618-fleet-manifest-provenance-1",
+  "specId": "spec-20260618-fleet-manifest-provenance",
+  "timestamp": "2026-06-18T12:26:56Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "summary": "All 8 criteria pass (independent verify). build/typecheck/lint clean; 15 new helper tests + all fleet suites green. .bak holds prior bytes (rename before atomic write); missing/corrupt sidecar no-throw\u2192generic notice; injected clock \u2192 deterministic relative-age; sidecar/.bak derived from outPath (--out isolation verified); manifest FleetManifestSchema-valid with NO provenance keys; --yes gate + write-and-stop unchanged; only 5 files changed (manifest.ts/decomposer*/critic-deep/runFleet untouched). 6 pre-existing cockpit E2E MCP failures unrelated."
+}

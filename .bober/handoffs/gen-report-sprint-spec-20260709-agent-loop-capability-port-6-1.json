@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-6",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-6-1", "met": true, "evidence": "3-turn scripted run with HookedLoopClient inspecting on-disk state via SessionStore.load BEFORE 2nd and 3rd chat() calls (race-free, sequenced by the loop's own await chain): turnsUsed 1/3 messages before call 2, 2/5 before call 3; final record has full metadata + Message[] INCLUDING completion turn's assistant text (which the in-loop array never receives)."},
+    {"criterionId": "sc-6-2", "met": true, "evidence": "Seeded file -> resumeSession -> initialMessages into fresh loop -> ScriptedLoopClient.lastParams.messages contains the 2 seeded messages ahead of the new user message; file afterward has old+new."},
+    {"criterionId": "sc-6-3", "met": true, "evidence": "forkSession copies; fork continues with a response the original never received; original bytes identical before/after (readFile byte-compare); fork diverges. + 3 SessionStore.fork unit tests + deterministic fork-id test."},
+    {"criterionId": "sc-6-4", "met": true, "evidence": "No-session run: .bober/sessions/ readdir rejects (never created); paired run with/without session deep-equal AgenticLoopResult. Full suite 301 files / 3832 tests green."},
+    {"criterionId": "sc-6-5", "met": true, "evidence": "Missing session -> typed {error}, no throw, no file created; corrupt JSON -> typed {error}, bytes unchanged (byte-compare); store.load('ghost') stays null after failed resume (never silently empty). SessionStore.load returns null for missing/corrupt/schema-invalid."},
+    {"criterionId": "sc-6-6", "met": true, "evidence": "build + typecheck exit 0, run fresh after all edits."}
+  ],
+  "filesChanged": [
+    {"path": "src/orchestrator/session-store.ts", "action": "created", "description": "Zod MessageSchema (union-ordering preserves AssistantMessage.toolCalls), SessionRecordSchema, SessionStore save/load/fork/path over .bober/sessions/<id>.json mirroring job-store.ts (ensureDir, safeParse both directions, injected clock), sessionForkId deterministic derivation."},
+    {"path": "src/orchestrator/session-store.test.ts", "action": "created", "description": "21 tests incl. the toolCalls union-ordering round-trip trap and no-directory-until-first-save."},
+    {"path": "src/orchestrator/agentic-loop.ts", "action": "modified", "description": "session?/initialMessages? params; initialMessages seeded ahead of user message; fail-soft persistSession() closure called at every turn-body completion point (tool turn, completion incl. final assistant text, budget_exceeded, API error, max-turns); exported resumeSession/forkSession."},
+    {"path": "src/orchestrator/agentic-loop.test.ts", "action": "modified", "description": "9 new tests (sprint-6 describe block) with HookedLoopClient for race-free mid-run assertions."},
+    {"path": "src/index.ts", "action": "modified", "description": "Barrel exports: resumeSession, forkSession, SessionStore, SessionRecord."}
+  ],
+  "testsAdded": ["src/orchestrator/session-store.test.ts", "agentic-loop.test.ts (9)"],
+  "commits": ["c51b28b - bober(sprint-6): loop session persistence, resume and fork (.bober/sessions/)"],
+  "blockers": [],
+  "notes": "No pipeline-role agent files touched (all 8 stay byte-identical automatically; git diff --stat shows only the 5 estimated files; package.json unchanged). types.ts untouched — Message union already JSON-serializable. Design notes: save() re-reads existing file per call to preserve createdAt (O(1) extra read, ceiling-commented); turnsUsed = current invocation's local counter, not cumulative across resume lineage (per generatorNotes). Suite 3802->3832 (+30)."
+}

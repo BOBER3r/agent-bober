@@ -1,0 +1,89 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-1",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 1,
+  "title": "Long-polling bot transport + user-id whitelist + outbound safe-summary funnel",
+  "description": "Create the src/telegram/ module and an `agent-bober telegram` CLI command that starts a locally-run long-polling getUpdates bot. Add a pure whitelist authorizer keyed on TELEGRAM_ALLOWED_USERS that denies non-listed senders (replying with a denial that echoes their numeric id) and admits listed senders, and a single sendSafe outbound funnel through which every reply is sent \u2014 establishing the control-plane boundary. This sprint adds no task, hub, calendar, or medical domain logic.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1",
+    "feat-2",
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "`npm run build` (tsc) compiles the new src/telegram/ module to dist/ with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "`npm run typecheck` reports zero type errors across the added src/telegram/*.ts and src/cli/commands/telegram.ts files.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A unit test for the whitelist authorizer returns deny for a sender id absent from TELEGRAM_ALLOWED_USERS and allow for a sender id present in the comma-separated list.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A unit test asserts the denial reply produced for a non-listed sender contains that sender's exact numeric id as a substring.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A unit test confirms outbound replies are produced only via the sendSafe funnel: handlers return content and the Telegram send transport is invoked solely inside the funnel (verified with an injected transport spy).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "Running `agent-bober telegram` with a valid TELEGRAM_BOT_TOKEN starts getUpdates long-polling; a non-whitelisted account receives the denial reply with its id, and a whitelisted account receives the /start help reply.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not implement any task, hub, calendar, or medical domain logic in this sprint \u2014 only transport, whitelist, and the outbound funnel.",
+    "Do not use webhooks, open an inbound listening port, or require a public HTTPS URL \u2014 long-polling getUpdates only.",
+    "Do not hardcode bot tokens or allowed user ids in source \u2014 read TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USERS from process.env.",
+    "Do not add more than one new npm dependency (the chosen Telegram Bot API library).",
+    "Do not let any handler call the Telegram send transport directly \u2014 all outbound text must go through the sendSafe funnel."
+  ],
+  "stopConditions": [
+    "`npm run build` and `npm run typecheck` both exit zero, and the whitelist, denial-echo, and funnel unit tests pass under `npm test`.",
+    "The `agent-bober telegram` command is registered in src/cli/index.ts and prints usage via `agent-bober telegram --help`.",
+    "Starting the command with an empty TELEGRAM_BOT_TOKEN exits non-zero with a message naming the missing variable."
+  ],
+  "definitionOfDone": "A whitelisted operator runs `agent-bober telegram`, which opens a local long-polling getUpdates loop using the bot token from the environment \u2014 no server, no public URL, no inbound port. Messages from Telegram accounts whose numeric id is in TELEGRAM_ALLOWED_USERS are admitted; every other account receives one denial reply that echoes its own numeric id and is otherwise ignored. All outbound text leaves through a single sendSafe funnel that later sprints extend, never by a handler calling the Telegram transport directly.",
+  "assumptions": [
+    "Credentials are read from process.env (TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS comma-separated), mirroring src/medical/whoop/whoop-token.ts:47-48.",
+    "Library choice is the generator's, constrained to a maintained lib supporting getUpdates long-polling; this is the only sprint that adds a dependency.",
+    "The Telegram transport is wrapped behind a small interface so handlers and the funnel are unit-testable without network access (provider-agnostic principle)."
+  ],
+  "outOfScope": [
+    "Task capture, prioritization, approvals, document upload, streaming, and digest delivery (Sprints 2-6).",
+    "Any inbound HTTP server or webhook receiver."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "New module src/telegram/. Suggested files: bot.ts (long-poll loop + a thin transport wrapper interface, e.g. TelegramTransport with sendMessage/editMessage/getFile/answerCallback), whitelist.ts (pure parseAllowedUsers(env) + isAllowed(id, allowed) + denialReply(id)), outbound.ts (sendSafe(transport, chatId, content) \u2014 the single chokepoint). CLI: src/cli/commands/telegram.ts exporting registerTelegramCommand(program), imported and called in src/cli/index.ts exactly like registerMedicalCommand (see src/cli/index.ts:1-41 and src/cli/commands/medical.ts). Read env like src/medical/whoop/whoop-token.ts:47-48 (process.env[\"TELEGRAM_BOT_TOKEN\"], process.env[\"TELEGRAM_ALLOWED_USERS\"]). Library: pick ONE maintained Node Telegram Bot API library that supports getUpdates long-polling (grammY, telegraf, or node-telegram-bot-api) and state which in a code comment + commit message; this is the only sprint permitted to add a dependency. Keep the chosen SDK behind the transport wrapper so the rest of src/telegram/ depends on the wrapper, not the SDK (mirrors the providers/ adapter discipline). ESM: relative imports end in .js; use `import type` for type-only imports; no `any`; node:fs/promises only.",
+  "evaluatorNotes": "Confirm getUpdates long-polling is used and NO server/listen/createServer/webhook call exists (grep src/telegram/). Confirm credentials come from process.env, not literals. Confirm exactly one new dependency was added to package.json. Confirm the single-funnel invariant: grep that no handler/module calls the SDK send method outside outbound.ts/the transport wrapper. Run `npm run build`, `npm run typecheck`, and the whitelist/denial/funnel unit tests.",
+  "estimatedFiles": [
+    "src/telegram/bot.ts",
+    "src/telegram/whitelist.ts",
+    "src/telegram/whitelist.test.ts",
+    "src/telegram/outbound.ts",
+    "src/telegram/outbound.test.ts",
+    "src/cli/commands/telegram.ts",
+    "src/cli/index.ts",
+    "package.json"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-29T23:00:19Z"
+}

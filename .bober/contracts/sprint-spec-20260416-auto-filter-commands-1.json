@@ -1,0 +1,87 @@
+{
+  "contractId": "sprint-spec-20260416-auto-filter-commands-1",
+  "specId": "spec-20260416-auto-filter-commands",
+  "sprintNumber": 1,
+  "title": "Add preset-aware command filtering to installClaudeCommands",
+  "description": "Modify installClaudeCommands to accept mode and preset parameters. Define a mapping that categorizes each slash command as universal or stack-specific. Filter the skillMap entries before installation so only relevant commands are copied. Pass mode and preset from writeConfig through to the function.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds successfully with zero TypeScript errors after the change.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "ESLint reports zero errors on all modified files.",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "The installClaudeCommands function signature accepts mode (ProjectMode) and optional preset (string) parameters.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A clearly defined data structure (constant object/map) exists that maps each stack-specific command to the presets/modes it belongs to. Universal commands are identified separately.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "writeConfig passes mode and preset to installClaudeCommands, and all call sites in the file are updated accordingly.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "All existing tests pass without modification, and the test suite reports zero failures.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change the agent file installation path — agents are always installed regardless of mode/preset",
+    "Do not detect the project's stack at runtime in this sprint — preset is the only signal used",
+    "Do not introduce new presets beyond those already defined in bober.config.json"
+  ],
+  "stopConditions": [
+    "All seven success criteria pass programmatic or manual verification",
+    "Running the bober init command in greenfield+nextjs mode installs only universal + nextjs commands, with no anchor or solidity commands present"
+  ],
+  "definitionOfDone": "installClaudeCommands accepts mode and optional preset, and uses a static map to filter the slash commands installed into .claude/commands/ so that only universal commands plus the commands relevant to the chosen preset (or brownfield mode) are written. writeConfig threads mode and preset through to every call site. All tests pass and the project builds with zero typecheck or lint errors.",
+  "assumptions": [
+    "Stack-specific commands are identifiable by name prefix (bober-react, bober-anchor, bober-solidity) and bober-brownfield is the only command tied specifically to brownfield mode",
+    "If preset is undefined in greenfield mode the user has not chosen a stack yet, so installing every command is the safest default"
+  ],
+  "outOfScope": [
+    "Stack auto-detection from package.json or filesystem",
+    "Adding a CLI flag to override the preset filter at install time",
+    "Removing already-installed commands when the user changes preset later"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "The change is entirely within src/cli/commands/init.ts.\n\n1. Define the mapping near the top of installClaudeCommands or as a module-level constant. Structure suggestion:\n   - A Set or array of universal command keys (always installed)\n   - A Record<string, string[]> mapping each stack-specific skill key to the presets that should include it\n   - A separate mode-based inclusion (brownfield -> bober.brownfield)\n\n2. The current skillMap at line 962 lists all 12 commands. Instead of filtering the map itself, filter which entries get iterated during installation.\n\n3. Update installClaudeCommands signature: add mode: string, preset?: string parameters.\n\n4. Update the call at line 1077 in writeConfig to pass mode and preset through.\n\n5. Logic:\n   - If greenfield + no preset: install everything (user hasn't chosen a stack)\n   - If greenfield + preset: install universal + commands matching that preset\n   - If brownfield: install universal + brownfield + playwright (skip react/solidity/anchor unless future detection added)\n\n6. Keep the agent file installation (lines 1006-1020) unchanged — agents are always installed.",
+  "evaluatorNotes": "For sc-1-4: Read installClaudeCommands and verify the signature includes mode and preset params.\nFor sc-1-5: Look for a clear constant defining the mapping — it should NOT be inline if/else chains.\nFor sc-1-6: Find every call to installClaudeCommands and verify mode/preset are passed.\nFor sc-1-7: Run npm run test and verify all tests pass.",
+  "estimatedFiles": [
+    "src/cli/commands/init.ts"
+  ],
+  "estimatedDuration": "small",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-04-16T12:00:00Z",
+  "updatedAt": "2026-04-16T15:33:00Z",
+  "completedAt": "2026-04-16T15:33:00Z"
+}

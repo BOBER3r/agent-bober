@@ -1,0 +1,32 @@
+{
+  "handoffId": "handoff-sprint-spec-20260529-opus-4-8-support-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-1",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T18:20:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-provider LLM harness. This sprint repoints the `opus` model shorthand to Claude Opus 4.8 (GA 2026-05-28, api id claude-opus-4-8) and adds a pinned `opus-4-7` alias. Pure model-resolver change; NO SDK or adapter work (those are later sprints in this spec).",
+    "completedSprints": [],
+    "currentBranch": "bober/opus-4-8-support",
+    "relevantFiles": [
+      "src/orchestrator/model-resolver.ts — SHORTHAND_MAP (lines ~22-33); change opus modelId to claude-opus-4-8, add opus-4-7 entry",
+      "src/orchestrator/model-resolver.test.ts — update the opus assertion to claude-opus-4-8, add an opus-4-7 alias test, keep the full-id passthrough tests"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260529-opus-4-8-support-1.json",
+  "specPath": ".bober/specs/spec-20260529-opus-4-8-support.json",
+  "config": {
+    "commands": { "build": "npm run build", "test": "npm run test", "lint": "npm run lint", "typecheck": "npm run typecheck" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "keyPrinciples": [
+    "ESM: relative imports end in .js. consistent-type-imports. Prefix unused with _.",
+    "claude-opus-4-8 is a dateless pinned snapshot — use the bare id, no date suffix.",
+    "Do NOT touch the Anthropic adapter or @anthropic-ai/sdk in this sprint.",
+    "Conventional commit: bober(sprint-1): <description>."
+  ],
+  "baselineNote": "Baseline on this branch (stacked on the prompt-caching work): typecheck/lint/build PASS; `npm run test` has 2 PRE-EXISTING flaky timeout failures in the 'registers exactly 37 tools' tests (tests/mcp/external-server-graph.test.ts and/or src/mcp/tools/tools.test.ts). Those 2 are the ONLY tolerated failures for C5; anything else is a regression.",
+  "evaluatorFeedback": null
+}

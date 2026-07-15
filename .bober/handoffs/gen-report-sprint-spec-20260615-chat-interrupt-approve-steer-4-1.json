@@ -1,0 +1,8 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+  "iteration": 1, "status": "complete", "commit": "b74dfcb",
+  "filesChanged": ["src/state/guidance.ts(+test)", "src/orchestrator/pipeline.ts", "src/orchestrator/pipeline.guidance.test.ts", "src/chat/turn-classifier.ts", "src/chat/slash-commands.ts(+test)", "src/chat/chat-session.ts", "src/chat/chat-session-steer.test.ts"],
+  "selfVerify": { "build": "exit 0", "typecheck": "exit 0", "test": "175 files, 2086 passed, 3 skipped; +38", "lint": "0 errors, 2 pre-existing warnings" },
+  "pipelineDiff": "+34/-1; single additive 'Phase 2 guidance injection (additive)' block inside runSprintCycle guarded on pipelineRunId, between compactedHandoff build and runGenerator; runGenerator now receives injectedHandoff. runTsPipeline + :571 invariant untouched (verified via git numstat + grep).",
+  "notes": "guidance.ts: safeSegment path-traversal guard (rejects empty,/,\\\\,..,leading dot,absolute); hasRunDir; appendGuidance (validate-first); drainGuidance (atomic temp+rename consume, missing file -> []). injectGuidanceIntoHandoff PURE: empty guidanceTexts -> returns SAME reference (=== no-op, sc-4-7 reference-identical); else appends 'Human guidance: <text>' to handoff.issues. /tell mirrors Sprint 3 handler pattern; NL 'tell' classifier action. PROTECTED FILES untouched: disk.ts/approval-state.ts/feedback-router.ts."
+}

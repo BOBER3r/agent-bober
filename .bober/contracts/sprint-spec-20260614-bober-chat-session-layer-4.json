@@ -1,0 +1,106 @@
+{
+  "contractId": "sprint-spec-20260614-bober-chat-session-layer-4",
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "sprintNumber": 4,
+  "title": "Steer: inspect + kill-by-PID stop with /stop command",
+  "description": "Implement the steer paths. Inspect summarizes the disk roster (already available via /runs and the classifier steer:inspect action). Stop performs a real hard-stop: RunSpawner.stop resolves the PID from the session pid sidecar, calls process.kill, and flips the run's disk state.json status to 'aborted' via writeRunState; when the PID is unknown it falls back to the disk 'aborted' flip only and reports fallbackFlagOnly. Add a deterministic `/stop <runId>` slash-command and wire the classifier steer:stop action. The target runId is resolved against the disk roster at stop-time (never from spawn-time memory).",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260614-bober-chat-session-layer-3"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "The project builds successfully with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "TypeScript compilation produces zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "All tests pass with zero failures, including new collocated tests for this sprint.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "RunSpawner.stop(runId) resolves the PID from the pid sidecar, calls the (injected) kill function with that PID, and flips state.json status to 'aborted' via writeRunState; a unit test asserts both the kill call with the recorded PID and the on-disk status change to 'aborted'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "When the PID is unknown (no sidecar entry), stop does NOT call kill on any pid, flips the disk status to 'aborted' only, and returns StopResult with fallbackFlagOnly:true; covered by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "A deterministic `/stop <runId>` slash-command invokes RunSpawner.stop without an LLM call; a unit test feeds '/stop run-x' to a session whose injected LLMClient throws if called and asserts stop ran.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "The classifier steer:stop action routes to RunSpawner.stop, and the target runId is resolved against the current disk roster at stop-time (a unit test asserts a runId not present in the roster yields a 'no such running run' reply rather than killing anything).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-8",
+      "description": "The classifier steer:inspect action and `/runs` both return a roster summary; a unit test asserts the steer:inspect path returns the same summary RosterReader.summarize produces.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-9",
+      "description": "process.kill is only ever called with a PID recorded by this session lifetime; a unit test confirms an unknown/stale runId never reaches the kill function (guards against killing arbitrary PIDs).",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement child-side cooperative abort polling (the child may not observe the disk flag in Phase 1)",
+    "Do not implement pause/resume or A2A input-required states (Phase 2)",
+    "Do not use RunManager.abortRun for cross-process stop (it no-ops; run-manager.ts:123)",
+    "Do not kill PIDs not recorded by this session"
+  ],
+  "stopConditions": [
+    "All nine success criteria pass",
+    "Spawning a detached run and then issuing /stop <runId> terminates the child process and the roster shows the run as 'aborted'"
+  ],
+  "definitionOfDone": "RunSpawner.stop(runId, reason) resolves the PID from the session pid sidecar, calls process.kill, and flips the disk state.json to 'aborted'; unknown PID falls back to the disk flip only with fallbackFlagOnly:true. A deterministic /stop <runId> command and the classifier steer:stop action both route here, resolving the runId against the disk roster at stop-time. steer:inspect and /runs return the roster summary. process.kill is restricted to session-recorded PIDs. Build, typecheck, and all tests pass.",
+  "assumptions": [
+    "process.kill is acceptable for a real hard-stop of the detached child in Phase 1; cooperative child shutdown is deferred",
+    "writeRunState is the primitive for the stop-time 'aborted' status flip (src/state/run-state.ts)",
+    "The pid sidecar from Sprint 2 (.bober/chat/<sessionId>.pids.json) is the authoritative source of session-recorded PIDs"
+  ],
+  "outOfScope": [
+    "Pause/resume (Phase 2)",
+    "Cooperative/graceful child shutdown handshakes",
+    "Killing runs not spawned by this session"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Extend src/chat/run-spawner.ts with stop(runId, reason): \n1. Resolve the entry from the PidSidecar (src/chat/pid-sidecar.ts). \n2. If found: call the injected kill fn (default process.kill) with entry.pid; then writeRunState(projectRoot, {...existing, status:'aborted'}) \u2014 read current state via readRunState (run-state.ts:61) first, then write the flip. Return {stopped:true, runId, killedPid:entry.pid}.\n3. If NOT found: do not call kill; read+writeRunState status 'aborted' if the run exists on disk; return {stopped:true, runId, fallbackFlagOnly:true} (or stopped:false if the run isn't on disk at all).\n\nDependency-inject the kill function so tests never kill real processes. Guard: only call kill when a sidecar entry exists (sc-4-9).\n\nChatSession: \n- /stop <runId> slash-command => RosterReader.read, confirm the runId is a running run, call RunSpawner.stop; reply with the StopResult. No LLM call.\n- classifier {action:'steer',op:'stop',runId} => same resolution path (resolve against disk roster at stop-time; if not running, reply 'no such running run' and do NOT kill).\n- classifier {action:'steer',op:'inspect'} and /runs => RosterReader.summarize(await RosterReader.read()).\n\nKeep NL stop and slash /stop sharing one internal stop handler so behavior is identical.",
+  "evaluatorNotes": "sc-4-4: spawn (or pre-seed a pid sidecar entry + a running state.json), call stop with an injected kill capturing the pid; assert kill got the recorded pid and state.json is now 'aborted'.\nsc-4-5: stop a runId with a state.json but no sidecar entry; assert kill NOT called, status 'aborted', fallbackFlagOnly true.\nsc-4-6: feed '/stop run-x' to a session whose LLMClient throws on call; assert the internal stop handler ran.\nsc-4-7: classifier returns steer:stop for a runId absent from the roster; assert reply indicates no such running run and kill not called.\nsc-4-8: steer:inspect reply equals RosterReader.summarize output for the same states.\nsc-4-9: unknown/stale runId path never reaches the injected kill fn.\nRun build, typecheck, test. Optionally an integration test spawning a trivial detached sleep-like child and killing it, if feasible without flakiness.",
+  "estimatedFiles": [
+    "src/chat/run-spawner.ts",
+    "src/chat/pid-sidecar.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/slash-commands.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-14T00:00:00Z",
+  "updatedAt": "2026-06-14T00:00:00Z",
+  "completedAt": "2026-06-14T17:37:45Z"
+}

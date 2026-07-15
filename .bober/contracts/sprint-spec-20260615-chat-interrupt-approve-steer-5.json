@@ -1,0 +1,97 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-5",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "sprintNumber": 5,
+  "title": "Soft pause / resume: /pause, /resume + paused RunState + cooperative gate",
+  "description": "Add a soft suspend that keeps the process alive — distinct from the already-built hard /stop (kill-by-PID). `/pause <runId>` (and NL) writes a runId-keyed pause marker (.bober/runs/<id>/paused.json) and flips the chat-owned RunState to 'paused'; an ADDITIVE cooperative-pause check at each checkpoint boundary blocks (polls) while the marker is present; `/resume <runId>` removes the marker and the run continues, RunState returning to 'running'. With no pause marker, the boundary is unchanged beyond a single existence check.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260615-chat-interrupt-approve-steer-1"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "All tests pass, including new pause-marker, cooperative-gate, and resume tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "`/pause <runId>` for a running run writes .bober/runs/<runId>/paused.json, flips the chat-owned RunState to 'paused' (with pausedAt), and acks that the process stays alive (distinct from /stop). A unit test asserts the marker, the RunState transition, and that no kill signal is sent. /pause on an unknown or non-running run returns a clear message and writes nothing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "The pipeline's additive cooperative-pause check blocks (polls) at a checkpoint boundary while paused.json exists and proceeds once it is removed. A unit/integration test with an injected clock/poll asserts the boundary does not advance while paused and advances after the marker is cleared.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "`/resume <runId>` removes paused.json and flips RunState back to 'running'. A unit test asserts the marker is gone and the status transition; the cooperative gate then advances. /help lists /pause and /resume.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "The cooperative-pause check is additive: with no pause marker, the boundary behaves as before (single existence check, no added blocking) and the existing pipeline suite stays green. Natural-language pause/resume intent is classified and routed to the handlers. A unit test asserts no-marker no-op and NL routing via a stubbed classifier.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not kill the process — that is the existing hard /stop (Phase 1)",
+    "Do not change phase order or the pipeline algorithm; the pause check is additive only",
+    "Do not pause mid-agent — the cooperative gate only acts at checkpoint boundaries",
+    "Do not add hygiene/docs/e2e (Sprint 6)"
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "A run can be soft-paused and resumed from chat, holding at the next boundary while paused; no-marker is a verified no-op; build + typecheck + full suite green"
+  ],
+  "definitionOfDone": "Soft pause/resume works: /pause (slash + NL) writes a runId-keyed pause marker and flips RunState to paused without killing the process; an additive cooperative-pause check blocks at the next boundary while the marker is present; /resume removes it and the run continues with RunState back to running. With no marker, the boundary is unchanged. /help updated. Build, typecheck, and the full suite pass.",
+  "assumptions": [
+    "The cooperative-pause check reuses the disk-poll pattern from DiskCheckpointMechanism (disk.ts) — a bounded setTimeout poll loop with an injected clock for deterministic tests; a sane upper bound (reuse approvalTimeoutMs or a dedicated cap) prevents an unbounded hang.",
+    "The pause check is placed at the same checkpoint boundaries used for guidance (Sprint 4) and approvals, so 'paused' behaves like 'held at the next gate' rather than an instantaneous freeze of in-flight work.",
+    "RunState 'paused' (added in Sprint 1) is owned/written by the chat process; the pipeline only reads the paused.json marker to decide whether to block. Resume is observed by the chat poll which flips RunState back to running."
+  ],
+  "outOfScope": [
+    "Hygiene/cleanup, docs, end-to-end (Sprint 6)",
+    "Pausing in the middle of an agent invocation"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Touches the PROTECTED pipeline.ts — additive only, no phase reordering (pipeline.ts:571 invariant). Verified touch points:\n- New src/state/pause.ts (peer of guidance.ts from Sprint 4): path helper .bober/runs/<runId>/paused.json under runDir (run-state.ts:23 shape). Functions: setPaused(projectRoot, runId) (write marker {pausedAt}), clearPaused(projectRoot, runId) (unlink, best-effort), isPaused(projectRoot, runId): Promise<boolean>. Validate runId safe-segment before any path build (reuse the Sprint 4 check).\n- Pipeline cooperative gate (additive): in src/orchestrator/pipeline.ts, at the checkpoint boundary (same site cluster as Sprint 4's guidance read, near the pre-curator/pre-generator/post-sprint sites), add an awaited helper waitWhilePaused(projectRoot, runId, {pollMs, timeoutMs, now}) that returns immediately if !isPaused, else polls until clearPaused or a cap. Model the poll loop on DiskCheckpointMechanism.request (disk.ts:104-169) with injected clock. Guard on opts.runId; with no runId or no marker, it is a single existence check then continue — provably additive.\n- Chat side: handlePause(runId)/handleResume(runId) in chat-session.ts (mirror handleStop at :201). handlePause: roster guard (run must exist + be running), setPaused, flip chat-owned RunState to 'paused' + pausedAt via writeRunState, ack 'process alive'. handleResume: clearPaused, flip RunState back to 'running', ack. src/chat/slash-commands.ts: add /pause and /resume (thread pause/resume handler callbacks; same optional-handler pattern). Update HELP_TEXT. turn-classifier.ts: add 'pause'/'resume' actions {runId}; loose JSON. Make sure /pause is clearly distinct from /stop in help text and acks.\n- Determinism: every poll loop MUST accept an injected now()/clock and pollMs so tests don't sleep. Reuse the disk.ts injection style.\nTests: temp dirs, injected clock, stubbed classifier, no network. Run build+typecheck+test before handoff.",
+  "evaluatorNotes": "sc-5-4: /pause on a running run -> assert paused.json exists, RunState status==='paused' with pausedAt, and (critically) no kill signal sent (inject killFn and assert not called — contrast with /stop); /pause on unknown/non-running -> clear message, no marker.\nsc-5-5: with paused.json present, drive waitWhilePaused with an injected clock and assert it keeps polling (does not resolve) across several ticks while the marker exists; remove the marker and assert it resolves and the boundary advances.\nsc-5-6: /resume -> assert paused.json removed and RunState back to 'running'; assert HELP_TEXT lists /pause and /resume.\nsc-5-7: no marker -> waitWhilePaused resolves immediately (single check, no extra ticks); the existing pipeline suite is green; stub classifier returns pause/resume and assert routing to the handlers.\nRegression: full suite green; diff review confirms additive-only pipeline changes (no phase reordering); confirm /stop (Phase 1 hard kill) is unchanged and clearly distinct. Run build, typecheck, test.",
+  "estimatedFiles": [
+    "src/state/pause.ts",
+    "src/state/pause.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/chat-session-steer.test.ts",
+    "src/chat/slash-commands.ts",
+    "src/chat/turn-classifier.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/pipeline.pause.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-5-1",
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T17:00:00Z",
+  "completedAt": "2026-06-15T15:05:19Z"
+}

@@ -1,0 +1,18 @@
+{
+  "evalId": "eval-sprint-spec-20260618-fleet-expand-deep-critique-1-1",
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-1",
+  "specId": "spec-20260618-fleet-expand-deep-critique",
+  "timestamp": "2026-06-18T10:33:14Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "summary": "All 8 criteria pass (independent verify). build/typecheck/lint clean; 42 new critic-deep tests + all 179 fleet tests green. Audit constant=8 asserted by test; responseSchema absent; both critic calls jsonObjectMode true; fail-open after 2 parse fails; \u22648 ceiling on all-reject + never throws; reject\u2192fresh runExpandStage(critiqueFeedback)\u2192accept-best; critique-absent byte-identical Phase 3 (2 calls); decomposer-deep.ts additive 0 deleted lines; decomposer.ts/manifest.ts/index.ts/providers untouched. NOTE: 6 pre-existing cockpit-integration E2E MCP failures unrelated to this sprint (not a regression)."
+}

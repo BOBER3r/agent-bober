@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["697eb20 - bober(sprint-4): fail→pass contrast extractor in distill"],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "met": true, "evidence": "build + typecheck exit 0; full suite 2180 pass / 182 files." },
+    { "criterionId": "sc-4-2", "met": true, "evidence": "[fail,fail,pass] → exactly one 'fix-contrast:flip-1' lesson; tags phase:fix-contrast + sprintId:flip-1; sourceEntryRefs cite iteration-1,2 (fail) + iteration-3 (pass)." },
+    { "criterionId": "sc-4-3", "met": true, "evidence": "[pass] and [fail,fail] → zero fix-contrast lessons; bonus [pass,fail] ordering test → no false positive." },
+    { "criterionId": "sc-4-4", "met": true, "evidence": "purity grep (providers|Date.now|new Date|readFile|fetch) only matches a comment; imports unchanged (node:crypto, history, sprint-contract, memory); determinism test byte-identical across two calls; output sorted by lessonId." },
+    { "criterionId": "sc-4-5", "met": true, "evidence": "temp dir: contract [fail,pass] → `memory distill` 'distilled 2 lessons (2 new)' → `memory list` shows fix-contrast:sprint-test-flip alongside sprint-rework. No CLI change needed (existing handler persists drafts)." },
+    { "criterionId": "sc-4-6", "met": true, "evidence": "lint 0 errors (2 pre-existing warnings in eval-persist.test.ts)." }
+  ],
+  "filesChanged": [
+    "src/orchestrator/memory/distill.ts (signal d fail→pass loop)", "src/orchestrator/memory/distill.test.ts (4 new tests + 2 updated assertions for regression trap)"
+  ],
+  "testsAdded": ["src/orchestrator/memory/distill.test.ts"],
+  "blockers": [],
+  "notes": "REGRESSION TRAP HANDLED: existing [fail,pass] contractsFixture now legitimately produces BOTH a sprint-rework (signal c) AND a fix-contrast (signal d) lesson; the two existing assertions were updated (four→five lessons + categories include fix-contrast:sprint-real-1). Signal (d) additive, reuses upsertGroup/lessonIdFromSignature. Optional strategy/criterion-flip enrichment intentionally omitted to keep minimal/deterministic (not required). Full suite 182 files / 2180 pass / 3 skipped, zero regressions."
+}

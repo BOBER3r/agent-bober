@@ -1,0 +1,24 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["2d89d8c - bober(sprint-2): per-team memory namespacing of the lessons store"],
+  "filesChanged": [
+    {"path": "src/state/memory.ts", "action": "modified", "description": "Exported memoryDir/lessonPath/indexPath with optional namespace?; centralized namespace->subdir rule in memoryDir (undefined/''/programming -> .bober/memory/, else -> .bober/memory/<ns>/); threaded namespace through appendLesson, loadLessonIndex, loadLesson."},
+    {"path": "src/orchestrator/memory/retrieve.ts", "action": "modified", "description": "Added namespace? to retrieveRelevantLessons opts; forwarded to loadLessonIndex."},
+    {"path": "src/cli/commands/memory.ts", "action": "modified", "description": "Added resolveDefaultNamespace (loadConfig+loadTeam, non-fatal); threaded ns through all 4 call sites; fixed show's hardcoded path to use memoryDir."},
+    {"path": "src/chat/chat-session.ts", "action": "modified", "description": "Added memoryNamespace? to ChatSessionOptions + instance field; buildMemoryDistill threads namespace to loadLessonIndex/loadLesson."},
+    {"path": "src/state/memory.test.ts", "action": "modified", "description": "+C5 (sc-2-4, 8 tests), C6 (sc-2-5, 3), C7 (sc-2-6, 3)."},
+    {"path": "src/orchestrator/memory/retrieve.test.ts", "action": "modified", "description": "+C5 (sc-2-7, 3 tests) namespace-scoped retrieval."},
+    {"path": "src/cli/commands/memory.test.ts", "action": "modified", "description": "+C5 (sc-2-8, 3 tests) CLI namespace resolution."}
+  ],
+  "testsAdded": ["src/state/memory.test.ts", "src/orchestrator/memory/retrieve.test.ts", "src/cli/commands/memory.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "test": "167 files / 1953 passed / 3 skipped (+20 new)",
+    "lint": "0 errors, 2 pre-existing warnings in eval-persist.test.ts"
+  },
+  "blockers": [],
+  "notes": "distill.ts NOT modified — curator finding confirmed: distill() is pure; the real appendLesson is in cli/commands/memory.ts. programming '' sentinel -> undefined via `|| undefined` -> existing .bober/memory/ path (no migration, no subdir)."
+}

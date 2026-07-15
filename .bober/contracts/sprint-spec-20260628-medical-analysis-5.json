@@ -1,0 +1,96 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-5",
+  "specId": "spec-20260628-medical-analysis",
+  "sprintNumber": 5,
+  "title": "Online research-latest-findings + vault notes, schedulable research-job (egress-gated)",
+  "description": "Add an egress-gated research job that, when the literature-retrieval axis is enabled, retrieves latest evidence for the user's markers via the existing MedlinePlus LiteratureRetriever, grounds notes through the fail-closed grounding-critic synthesis, writes research notes (markdown-with-frontmatter plus citations) into the vault research/ directory, and optionally emits a 'new evidence' watch Finding. Exposed as runResearchJob (importable by the scheduler) and `bober medical research`. With the axis off it performs zero egress.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-analysis-1"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "Running the project build (tsc) after the sprint produces zero type errors with the research job and CLI included.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "A Vitest test with literature-retrieval egress OFF asserts runResearchJob returns { disabled: true }, writes no research notes, and never invokes MedlineSource (zero-egress proof reusing the LiteratureRetriever disabled short-circuit).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "A Vitest test with literature-retrieval ON and an injected fake retriever plus LLM asserts runResearchJob writes a research note under the vault research directory containing citation frontmatter (title/url/source 'medlineplus') derived from the grounded passages.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "A Vitest test asserts that when the grounding critic rejects (fail-closed), runResearchJob writes no clinical-claim note for that topic and records an abstain outcome (no uncited synthesis is persisted).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "A Vitest test asserts cloud synthesis is fail-closed: with cloud-inference OFF the synthesis model resolves to the local Ollama default via buildMedicalInferenceClient.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "A Vitest test asserts runResearchJob returns a summary { notesWritten, findingsWritten, disabled } reflecting the number of notes and watch findings emitted.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "Running `bober medical research --marker ldl` prints whether research ran or was disabled by the egress axis and exits with code 0.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not perform any network call when literature-retrieval is disabled; reuse the synchronous LiteratureRetriever disabled short-circuit (src/medical/retrieval/literature.ts:34) as the zero-egress proof.",
+    "Do not persist an ungrounded or critic-rejected synthesis as a clinical note; abstain instead (grounding-critic fail-closed at src/medical/retrieval/grounding-critic.ts:206).",
+    "Do not construct a cloud client when cloud-inference is off; fail closed to the local model via buildMedicalInferenceClient.",
+    "Do not change the reactive engine's existing literature path in src/medical/engine.ts."
+  ],
+  "stopConditions": [
+    "All required success criteria sc-5-1 through sc-5-6 pass; with the axis off the job is a no-op with zero egress.",
+    "The full Vitest suite passes with no new failures."
+  ],
+  "definitionOfDone": "runResearchJob(projectRoot, config, {markers, now}) checks the literature-retrieval egress axis and returns { disabled: true } with zero egress when off. When on, for each marker it retrieves MedlinePlus passages via LiteratureRetriever, grounds a note through synthesizeGrounded (fail-closed grounding critic), and writes a research note with citation frontmatter under the vault research directory plus an optional 'new evidence' watch Finding; critic-rejected topics abstain and write no clinical note. Synthesis fail-closes to the local model unless cloud-inference is enabled. The job is importable by the scheduler and exposed as `bober medical research`.",
+  "assumptions": [
+    "Retrieval reuses LiteratureRetriever/MedlineSource and the disabled short-circuit (src/medical/retrieval/literature.ts:16-43); synthesis reuses synthesizeGrounded with its fail-closed grounding critic (src/medical/retrieval/literature.ts:277, grounding-critic.ts:206).",
+    "Synthesis model selection reuses buildMedicalInferenceClient gated by the cloud-inference axis (src/medical/inference.ts:31-49); only the literature-retrieval axis enables retrieval and only cloud-inference enables a cloud synthesis model — the axes are independent per src/medical/egress.ts:4-22.",
+    "Research notes and watch findings are written via the sprint-1 finding-writer and shared vault dir resolution; non-MedlinePlus sources (Quest/LabCorp/CSV) are out of scope because only MedlinePlus is evidenced (research §5:210).",
+    "runResearchJob is the schedulable entrypoint consumed by spec-20260628-research-scheduler; the scheduler owns the cron/cadence and passes the marker list and now."
+  ],
+  "outOfScope": [
+    "The scheduler/cron engine itself (spec-20260628-research-scheduler).",
+    "Non-MedlinePlus literature sources (unverified per research §5).",
+    "Cross-repo ranking of emitted watch findings (spec-20260628-priority-hub)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/medical/research/online-research.ts: runResearchJob(projectRoot, config, opts:{markers:string[]; now:string}, deps?) -> {notesWritten, findingsWritten, disabled}. Build EgressGuard.fromConfig; if !egress.isAllowed('literature-retrieval') return {disabled:true, notesWritten:0, findingsWritten:0} immediately (no retriever construction beyond the LiteratureRetriever sync disabled check — zero egress). Otherwise for each marker: new LiteratureRetriever(egress).retrieve(query) -> synthesizeGrounded(query, outcome, llm, footer, model) where the llm/model come from buildMedicalInferenceClient(config, egress) (fail-closed local unless cloud-inference on); when the GroundedResult.answer.abstained is true (critic rejected or no grounding) skip writing a clinical note and count it as abstained; otherwise write a research note via a new src/medical/research/research-note.ts serializer to <vault>/research/<dateFromNow>-<marker>.md with frontmatter including the citations (title/url/source) from answer.citations, and optionally emit a kind 'watch' 'new evidence on <marker>' Finding via the sprint-1 finding-writer. Read the clock only at the CLI boundary; opts.now is injected. Register `bober medical research [--marker <m>]` in src/cli/commands/medical.ts (default marker set when --marker omitted; print disabled vs ran; never throw, process.exitCode on error). Inject deps (retriever, llm, finding writer, now) for tests so no real network is used. Collocate *.test.ts.",
+  "evaluatorNotes": "Confirm with the axis OFF that runResearchJob returns disabled true, writes nothing, and MedlineSource is never constructed/invoked (assert via spy) — the zero-egress proof. Confirm a critic-rejected/abstained GroundedResult writes no research note for that topic. Confirm citation frontmatter (title/url/source 'medlineplus') is present in a written note. Confirm with cloud-inference OFF the synthesis client is the local openai-compat localhost default (no cloud provider constructed). Confirm the returned summary counts match the number of notes and watch findings written. Confirm src/medical/engine.ts and its literature path are unchanged.",
+  "estimatedFiles": [
+    "src/medical/research/online-research.ts",
+    "src/medical/research/online-research.test.ts",
+    "src/medical/research/research-note.ts",
+    "src/medical/research/research-note.test.ts",
+    "src/cli/commands/medical.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-28T00:00:00.000Z",
+  "completedAt": "2026-06-28T20:02:00.663Z"
+}

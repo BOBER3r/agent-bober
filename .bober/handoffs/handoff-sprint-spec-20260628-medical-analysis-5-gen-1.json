@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-analysis-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-analysis-5",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T19:42:53.692Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 5 (FINAL) of spec-20260628-medical-analysis: an EGRESS-GATED online research job. When the literature-retrieval axis is ON, retrieve latest MedlinePlus evidence for the user's markers via the EXISTING LiteratureRetriever/MedlineSource, ground notes through the EXISTING fail-closed grounding-critic synthesis (synthesizeGrounded), write research notes (markdown+frontmatter + citations) into the vault research/ dir, and optionally emit a 'new evidence' watch Finding. With the axis OFF it is a NO-OP with ZERO egress. Exposed as runResearchJob (importable by the scheduler spec) and `bober medical research`. Synthesis fail-closes to the local model unless cloud-inference is on.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260628-medical-analysis-1", "title": "Proactive trend Findings + vault writer + review pass", "summary": "src/medical/analysis/{finding,finding-writer,review-pass}.ts. writeFinding + serializeFindingToMarkdown + MedicalFinding + vault dir resolution (config.medical.vaultDir ?? <projectRoot>/.bober/medical/vault). Commit 307e5e7. REUSE the finding-writer + shared vault dir resolution to write the research notes + watch findings; do not rebuild." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/retrieval/literature.ts",
+      "src/medical/retrieval/medline-source.ts",
+      "src/medical/retrieval/grounding-critic.ts",
+      "src/medical/inference.ts",
+      "src/medical/egress.ts",
+      "src/medical/analysis/finding.ts",
+      "src/medical/analysis/finding-writer.ts",
+      "src/medical/analysis/review-pass.ts",
+      "src/cli/commands/medical.ts"
+    ]
+  },
+  "config": {
+    "commands": { "build": "npx tsc --noEmit", "typecheck": "npx tsc --noEmit", "lint": "npx eslint src/", "test": "npx vitest run" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "notes": "Full contract (sc-5-1..sc-5-7, nonGoals, stopConditions, assumptions, estimatedFiles) in .bober/contracts/sprint-spec-20260628-medical-analysis-5.json. Read the Sprint Briefing at .bober/briefings/sprint-spec-20260628-medical-analysis-5-briefing.md FIRST. CRITICAL: (1) with literature-retrieval OFF, runResearchJob returns {disabled:true}, writes nothing, and NEVER constructs/invokes MedlineSource (reuse the synchronous LiteratureRetriever disabled short-circuit at literature.ts:34 as the zero-egress proof). (2) Critic-rejected/abstained topics write NO clinical note (grounding-critic fail-closed) — abstain, do not persist uncited synthesis. (3) Synthesis fail-closes to the LOCAL model via buildMedicalInferenceClient unless cloud-inference is on (no cloud client when off). (4) Do NOT change the reactive engine's existing literature path in engine.ts. runResearchJob is the schedulable entrypoint; the scheduler owns cron/cadence."
+}

@@ -1,0 +1,45 @@
+{
+  "handoffId": "handoff-sprint-spec-20260529-opus-4-8-support-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-2",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T18:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 of Claude Opus 4.8 Support. Upgrade @anthropic-ai/sdk from 0.39.0 to 0.100.1 (latest) so the new API fields are typed, and fix any breaking changes in the Anthropic adapter while preserving ALL current behavior (especially the prompt-caching helpers added on this branch). NO new feature behavior in this sprint — effort and mid_conv_system are sprints 3 and 4.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260529-opus-4-8-support-1", "title": "Repoint opus shorthand to claude-opus-4-8", "summary": "model-resolver only; opus->claude-opus-4-8 + opus-4-7 pin. No adapter/SDK change." }
+    ],
+    "currentBranch": "bober/opus-4-8-support",
+    "relevantFiles": [
+      "src/providers/anthropic.ts — ONLY file importing @anthropic-ai/sdk; contains messages.create, content-block normalization, usage mapping, stop_reason mapping, and the prompt-caching helpers (buildCachedSystem, attachMessageBreakpoints) added on this branch",
+      "src/providers/anthropic.test.ts — top-level vi.mock('@anthropic-ai/sdk') tests that must keep passing",
+      "package.json / package-lock.json — the dependency bump"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260529-opus-4-8-support-2.json",
+  "specPath": ".bober/specs/spec-20260529-opus-4-8-support.json",
+  "config": {
+    "commands": { "install": "npm install", "build": "npm run build", "test": "npm run test", "lint": "npm run lint", "typecheck": "npm run typecheck" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}", "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "confirmedSdkFacts": {
+    "targetVersion": "0.100.1 (npm latest, published 2026-05-29)",
+    "currentVersion": "0.39.0",
+    "verifiedTypesPresentInTarget": [
+      "OutputConfig interface with effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null",
+      "MessageCreateParams.output_config?: OutputConfig",
+      "MidConversationSystemBlockParam with type: 'mid_conv_system' (member of the ContentBlockParam union)",
+      "CacheControlEphemeral, TextBlockParam, ThinkingConfigAdaptive, StopReason still exported"
+    ],
+    "note": "This sprint does NOT use output_config or mid_conv_system yet (sprints 3/4 do). Their presence is verified here only to satisfy contract C1/C2 and confirm the upgrade target is correct. This sprint's job is the bump + making the existing adapter compile and keep its tests green against 0.100.1."
+  },
+  "keyPrinciples": [
+    "@anthropic-ai/sdk must remain imported ONLY in src/providers/anthropic.ts.",
+    "ESM .js import extensions; consistent-type-imports; prefer correct typed code over `any` (no-explicit-any is a warning, avoid it).",
+    "Conventional commit: bober(sprint-2): <description>."
+  ],
+  "baselineNote": "Before this sprint (SDK still 0.39.0): typecheck/lint/build PASS; `npm run test` has 2 PRE-EXISTING flaky timeout failures in the 'registers exactly 37 tools' tests (tests/mcp/external-server-graph.test.ts and/or src/mcp/tools/tools.test.ts). Those 2 are the ONLY tolerated failures; any other failure (especially in src/providers/) is a regression.",
+  "evaluatorFeedback": null
+}

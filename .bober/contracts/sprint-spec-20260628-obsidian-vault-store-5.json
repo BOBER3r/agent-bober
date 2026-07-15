@@ -1,0 +1,77 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-5",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "sprintNumber": 5,
+  "title": "Vault profile.yaml hook + Dataview/attachments conventions",
+  "description": "Add a resolver that recognizes a profile.yaml at the vault root \u2014 parsing it when plaintext and detecting (without decrypting) a SOPS-encrypted profile \u2014 plus exported convention constants for canonical Dataview frontmatter status values and the gitignored attachments directory. This leaves a hook for later SOPS wiring while implementing no encryption.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-obsidian-vault-store-1"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "The project compiles: `npm run build` (tsc) completes with no errors after the profile resolver and convention constants are added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "A unit test asserts resolveProfile reads a plaintext vault/profile.yaml fixture into a typed VaultProfile with its declared fields populated.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "A unit test feeds a SOPS-encrypted profile.yaml fixture (containing sops metadata markers) and asserts resolveProfile returns an opaque marker { encrypted: true } and never exposes a decrypted value or throws.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "A unit test asserts a missing profile.yaml returns undefined and the exported convention constants expose the canonical status values (active/superseded) and the attachments directory name.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement SOPS encryption, decryption, or key management \u2014 only detect the encrypted state.",
+    "Do not read, log, or surface any value from an encrypted profile.yaml.",
+    "Do not call Date.now()/new Date() inside the resolver \u2014 keep it pure aside from the file read.",
+    "Do not couple the profile schema to medical fields \u2014 VaultProfile is a generic, mostly-open shape.",
+    "Do not auto-create profile.yaml or the attachments directory \u2014 only recognize and document them."
+  ],
+  "stopConditions": [
+    "All success criteria sc-5-1..sc-5-4 pass under the evaluator.",
+    "`npm test` passes including the new profile/conventions tests with no pre-existing test regressed.",
+    "The SOPS-encrypted fixture path returns the opaque marker and the plaintext path returns parsed fields."
+  ],
+  "definitionOfDone": "A vault directory may contain a profile.yaml at its root. resolveProfile loads it into a typed VaultProfile when plaintext, returns an opaque { encrypted: true } marker when the file carries SOPS encryption metadata (without decrypting anything), and returns undefined when absent. Exported convention constants document the canonical frontmatter status values (active/superseded) and the gitignored attachments directory name, giving downstream domains and the reindex path a single source for these conventions.",
+  "assumptions": [
+    "profile.yaml is the SOPS hook location named in the brief (OUT clause: 'leaving a profile.yaml hook') and research \u00a73b lines 155-156 (only a small structured profile.yaml is SOPS-encrypted).",
+    "SOPS detection keys on the presence of a top-level `sops:` metadata block in the YAML, which SOPS always adds to encrypted files; this is a structural check, not decryption.",
+    "VaultProfile is intentionally generic (e.g. an open record plus a few optional well-known keys) so financial/other domains reuse it without medical coupling.",
+    "The SUPERSEDED_STATUS constant introduced (or referenced) in sprint 2 is centralized here as part of the convention constants; sprint-2 code imports it if both are present, otherwise this sprint re-exports the agreed literal."
+  ],
+  "outOfScope": [
+    "Decrypting SOPS values or invoking the sops binary.",
+    "Defining the full medical profile field set (age/conditions/meds) \u2014 that is a medical-analysis concern.",
+    "Writing/initializing .gitignore for the vault repo (only the constant + doc-comment are in scope).",
+    "Enforcing the binary-attachments-out-of-git rule at runtime (documentation/convention only)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/vault/profile.ts: resolveProfile(vaultDir): VaultProfile | { encrypted: true } | undefined. Read <vaultDir>/profile.yaml; if absent return undefined; if the parsed YAML has a top-level `sops` key (SOPS encrypted-file marker) return { encrypted: true } WITHOUT exposing other values; otherwise return the parsed object as VaultProfile. Reuse the sprint-1 YAML parsing approach (parseFrontmatter or the same parser) so there is one YAML path. Create or extend src/vault/conventions.ts exporting constants: ACTIVE_STATUS='active', SUPERSEDED_STATUS='superseded', ATTACHMENTS_DIR (e.g. 'attachments') with a doc-comment that binary attachments stay out of git (research \u00a73b line 157). Keep resolveProfile free of clock reads. Follow the file-header doc-comment style of src/medical/health-store.ts. Add fixtures: a plaintext profile.yaml and a SOPS-encrypted profile.yaml (with a `sops:` block) under the test fixtures dir.",
+  "evaluatorNotes": "Confirm the encrypted-fixture test asserts that NO field other than the encrypted marker is returned (the resolver must not leak ciphertext or any value). Confirm the resolver does not shell out to sops or import any crypto/network module. Confirm undefined is returned (not an exception) for a missing file. Confirm conventions constants are exported and importable, and that SUPERSEDED_STATUS matches the literal sprint 2 used for the status:superseded check. Run the full suite.",
+  "estimatedFiles": [
+    "src/vault/profile.ts",
+    "src/vault/conventions.ts",
+    "src/vault/profile.test.ts"
+  ],
+  "estimatedDuration": "small",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T15:13:23.000Z",
+  "completedAt": "2026-06-28T15:13:23.000Z"
+}

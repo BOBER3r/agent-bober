@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260628-obsidian-vault-store-2-1",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-2",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:18:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": {"criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "npx tsc --noEmit exit 0", "details": "strict mode clean"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "npx tsc exit 0", "details": "clean build"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "eslint src/ exit 0; 2 pre-existing warnings in eval-persist.test.ts", "details": "no new lint errors"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "vitest run src/vault/ 38 tests; full suite 225 files 2869 tests pass", "details": "zero regressions"},
+    {"strategy": "api-check", "required": false, "result": "skipped", "output": "N/A", "details": "no endpoints"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "tsc + tsc --noEmit exit 0", "feedback": ""},
+    {"criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "one FactInput/key; subject=id-else-path; JSON.stringify arrays/String() scalars. 13 tests", "feedback": ""},
+    {"criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "2nd pass per-fact noop tally (factsNoop=5=1st factsAdded); active count unchanged", "feedback": ""},
+    {"criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "getFact(oldId).tInvalidated null->non-null after change; new value only active", "feedback": ""},
+    {"criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "status:superseded note -> 0 active facts; mixed-notes test confirms non-superseded indexed", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 5 required criteria pass independently. typecheck/build clean, 38 vault tests + full 2869-test suite green, zero regressions. writeFact path confirmed, facts.ts/reconcile.ts untouched (git show 01d17b4 --stat), no clock, no medical ids."
+}

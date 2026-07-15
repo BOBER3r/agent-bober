@@ -1,0 +1,8 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-5",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["3846c50 - bober(sprint-5): chat intent-detection capture-task"],
+  "filesChanged": ["src/chat/turn-classifier.ts (additive capture-task union+schema+parse branch + system-prompt: capture-task option & scope-statement->answer rule; FALLBACK unchanged)", "src/chat/turn-classifier.test.ts (+5 tests)", "src/chat/chat-session.ts (capture-task dispatch + handleCaptureTask: FactStore open->captureTask(now@boundary)->close->confirmation, no Answerer)", "src/chat/chat-session-capture.test.ts (created, sc-5-4)"],
+  "notes": "Additive only; FALLBACK={action:answer} byte-identical; existing classifier actions unchanged. handleCaptureTask mirrors handleResume/handleStop never-throw. sc-5-4 OnceClient proves Answerer not called (llm.calls===1) + 1 open action finding persisted. full suite 3309 (+6), lint 0 errors."
+}

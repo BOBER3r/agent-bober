@@ -1,0 +1,146 @@
+{
+  "specId": "spec-20260618-fleet-expand-deep",
+  "version": 1,
+  "createdAt": "2026-06-18T07:32:33Z",
+  "updatedAt": "2026-06-18T08:19:41Z",
+  "title": "Fleet Robust Decomposition (fleet expand-deep)",
+  "description": "Adds a robust two-stage goal decomposer for large/ambiguous goals, exposed as a new additive `fleet expand-deep <goal>` sibling subcommand. Its engine runs a bounded coarse PLAN (in-memory outline of named sub-project areas) then an EXPAND of that outline into a children-only FleetManifest validated by the reused validateManifest, all within a fixed total LLM-call budget. Purely additive: the Phase-2 single-shot `fleet expand` path, runFleet, FleetManifestSchema, and the --yes gate stay byte-unchanged.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "2 sprints: Sprint 1 = the robust engine in decomposer-deep.ts (PlanStage, ExpandStage, decomposeGoalDeep, validateOutline, all constants + unit tests, fully testable with a fake LLMClient, no CLI). Sprint 2 = the CLI seam (runFleetExpandDeep + expand-deep subcommand + wiring + byte-lock assertions). Mirrors Phase 2's proven engine-then-CLI split.",
+      "resolvedAt": "2026-06-18T07:32:33Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Approach A only \u2014 build the bounded two-call plan-then-expand engine (DEEP_MAX_TOTAL_CALLS=4, no self-judging EXPAND). A shape-valid-but-coarse manifest can pass; it is caught by the unchanged write-and-stop operator review. The bounded critique round (Approach B) stays a future phase, per the architecture's ADR-1.",
+      "resolvedAt": "2026-06-18T07:32:33Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Shared default output path <root>/.bober/fleet-expand.json \u2014 the same default as `fleet expand`. Last-write-wins with an overwrite notice; --out is the escape hatch. This is the architecture's ADR-4 choice.",
+      "resolvedAt": "2026-06-18T07:32:33Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve \u2014 write contracts. User explicitly approved the assumptions and out-of-scope sections via the planning gate.",
+      "resolvedAt": "2026-06-18T07:32:33Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The single-shot Phase-2 decomposer decomposeGoal and its constants (DECOMPOSE_SYSTEM_PROMPT, DECOMPOSE_COERCION_INSTRUCTION, DECOMPOSE_MAX_RETRIES) stay byte-unchanged in src/fleet/decomposer.ts:7-187; the robust engine is a NEW sibling file src/fleet/decomposer-deep.ts (evidence: decomposer.ts:159; architecture ADR-2).",
+    "validateManifest is already exported from src/fleet/decomposer.ts:95 and is reused verbatim by the EXPAND stage \u2014 it inherits JSON-extraction, FleetManifestSchema.safeParse, and the per-child config-key guard (decomposer.ts:95-155). No copy, no fork.",
+    "The Outline ({ areas: { name; intent }[] }) is transient and in-memory ONLY \u2014 passed directly PlanStage -> ExpandStage within one decomposeGoalDeep call; never serialized, no loader, no schema file, no CLI surface (architecture ADR-3 / Data Model).",
+    "The only on-disk artifact remains a FleetManifestSchema-valid children-only manifest ({folder, task}, no config, no concurrency emitted by the engine) at <root>/.bober/fleet-expand.json, written via the reused atomic tmp+rename block (index.ts:206-219).",
+    "Both deep LLM calls set jsonObjectMode:true and NEVER set responseSchema \u2014 DeepSeek rejects strict json_schema (providers/types.ts:174-183; decomposer.ts:87).",
+    "DEEP_PLAN_MAX_RETRIES = 1 and DEEP_EXPAND_MAX_RETRIES = 1, giving a fixed worst-case budget DEEP_MAX_TOTAL_CALLS = 4 = (1+1)+(1+1); each stage throws BEFORE any file is written, mirroring decomposeGoal's bounded maxAttempts loop (decomposer.ts:161-186).",
+    "runFleetExpandDeep mirrors runFleetExpand (index.ts:169-256) step-for-step and differs ONLY in calling decomposeGoalDeep instead of decomposeGoal; it reuses the same DI seam shape (decompose/runFleet/createClient), credential fail-fast, atomic write, and --yes gate.",
+    "registerFleetExpandDeepSubcommand(fleet) is called inside registerFleetCommand IMMEDIATELY AFTER registerFleetExpandSubcommand(fleet) (index.ts:345); it only ADDS .command(\"expand-deep <goal>\") and touches no existing line. The top-level CLI wiring registerFleetCommand(program) (cli/index.ts:317) needs NO change.",
+    "Tests use the existing ScriptedClient fake LLMClient pattern (decomposer.test.ts:17-35) that records every ChatParams and the makeFakeDecompose/makeFakeClientBuilder/runFleetSpy DI pattern (expand.test.ts) \u2014 zero network in all tests.",
+    "--count stays a SOFT target folded into the PLAN prompt (inherited from Phase 2 behavior, index.ts:188-192), not a hard child-count cap."
+  ],
+  "outOfScope": [
+    "A self-judging/critique round on the EXPAND output (the bounded generate->critique->revise 'Approach B'); deferred to a future phase per architecture ADR-1.",
+    "Any change to the single-shot decomposeGoal / `fleet expand` path, its prompts, or its retry constants (LOCKED byte-identical).",
+    "Any change to runFleet, FleetManifestSchema / FleetChildSchema, buildChildConfig, the `fleet <manifest>` command, or its --concurrency/--root options (LOCKED byte-identical).",
+    "Persisting the Outline to disk, adding an Outline loader/schema, or any new on-disk contract or CLI surface for the outline.",
+    "Introducing a second concurrency model or emitting a concurrency value from the engine (concurrency stays the FleetManifestSchema default of 3, applied at the CLI layer).",
+    "A hard --count cap with post-validation truncation (--count remains a soft prompt hint).",
+    "A distinct default output path for expand-deep (it shares fleet-expand.json; --out is the escape hatch).",
+    "Real DeepSeek network calls in tests, and any change to provider adapters in src/providers/."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Robust two-stage decomposition engine (decomposer-deep.ts)",
+      "description": "A new sibling module src/fleet/decomposer-deep.ts that orchestrates a bounded PLAN -> EXPAND flow within a fixed total LLM-call budget and returns a validated children-only FleetManifest. PLAN produces a transient in-memory Outline of named sub-project areas via one bounded LLM call; EXPAND turns that Outline into raw text via one bounded LLM call and validates it through the REUSED validateManifest.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Given a fake LLMClient scripted to return a valid Outline then a valid children-only manifest, decomposeGoalDeep resolves with a FleetManifest that FleetManifestSchema.parse accepts and whose children carry ONLY {folder, task} (no config).",
+        "AC2: Given a large/ambiguous goal class on which single-shot validateManifest would yield a degenerate single child, decomposeGoalDeep (PLAN -> EXPAND) returns a multi-child manifest \u2014 demonstrated with a scripted client, no network.",
+        "AC3: Both client.chat calls captured by the ScriptedClient have jsonObjectMode === true and responseSchema === undefined.",
+        "AC4: When every PLAN attempt fails validateOutline, runPlanStage throws after exactly (1 + DEEP_PLAN_MAX_RETRIES) = 2 attempts with an error carrying the accumulated lastError, and ExpandStage is never reached.",
+        "AC5: When every EXPAND attempt fails validateManifest (including a child carrying a config key, which the reused config-key guard rejects), runExpandStage throws after exactly (1 + DEEP_EXPAND_MAX_RETRIES) = 2 attempts; total client.chat calls across a fully-failing deep run never exceed DEEP_MAX_TOTAL_CALLS = 4.",
+        "AC6: validateOutline never throws \u2014 it returns { ok:false, error } for non-JSON or shape-invalid outline text, and { ok:true, outline } for a valid { areas: [{name, intent}] } object.",
+        "AC7: The coercion retry for each stage uses the 3-message [user, assistant, user] shape (mirroring decomposer.ts:66-81), re-stating the exact required JSON shape in the final user message.",
+        "AC8: DEEP_PLAN_MAX_RETRIES === 1, DEEP_EXPAND_MAX_RETRIES === 1, and DEEP_MAX_TOTAL_CALLS === 4 (asserted as a fixed audit constant)."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "fleet expand-deep CLI subcommand (additive, spawn-safe, byte-lock preserved)",
+      "description": "A new additive `fleet expand-deep <goal>` sibling subcommand and its action runFleetExpandDeep, which mirrors runFleetExpand step-for-step and differs only in calling decomposeGoalDeep. It preserves spawn-safety verbatim (write-before-spawn, write-and-stop default, --yes as the sole spawn gate) and leaves the byte-locked `fleet <manifest>` and `fleet expand` commands untouched.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `agent-bober fleet expand-deep <goal>` with no --yes writes a FleetManifestSchema-valid manifest to <root>/.bober/fleet-expand.json (or --out) and does NOT call runFleet (write-and-stop default) \u2014 verified with DI stubs (decomposeDeep/runFleet/createClient).",
+        "AC2: With --yes, runFleetExpandDeep calls runFleet exactly once with outPath, and the manifest file already exists on disk BEFORE runFleet is invoked (write precedes the spawn gate).",
+        "AC3: When createClient throws (missing DEEPSEEK_API_KEY), runFleetExpandDeep rejects with the credential error and writes NO manifest file and never calls decomposeGoalDeep or runFleet (credential fail-fast precedes all IO).",
+        "AC4: When decomposeGoalDeep throws (budget exhaustion), runFleetExpandDeep propagates the error, writes NO file, and never calls runFleet.",
+        "AC5: registerFleetCommand registers expand-deep as a child subcommand of fleet AND the byte-locked `fleet <manifest>` positional, its --concurrency/--root options, and the existing `expand` subcommand remain intact (asserted on the command tree).",
+        "AC6: The expand-deep subcommand exposes the same option set as expand (--count, --provider, --model, --root, --concurrency, --out, --yes).",
+        "AC7: --out redirects the write away from the shared default path, and an overwrite of a pre-existing file is atomic (tmp+rename) and logs an overwrite notice.",
+        "AC8: `npm run build` and the full `npm test` suite pass; the existing Phase-1/Phase-2 fleet tests (decomposer.test.ts, expand.test.ts, index.test.ts) remain green (no regression)."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Total LLMClient.chat calls for any robust run are bounded by DEEP_MAX_TOTAL_CALLS = 4; on budget exhaustion the path throws a single clear Error and writes/spawns nothing.",
+      "verificationMethod": "Unit test injects an always-invalid ScriptedClient and asserts the deep run rejects, the recorded calls length <= 4, NO manifest file exists, and runFleet was never invoked."
+    },
+    {
+      "category": "security",
+      "requirement": "No child run may spawn unless the operator could first inspect the manifest: the manifest is always written to outPath before any spawn; write-and-stop is the default; --yes is the sole spawn gate.",
+      "verificationMethod": "DI test asserts default (no --yes) never calls runFleet, and --yes calls runFleet exactly once AFTER the file exists on disk."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "All robust-mode LLM interaction uses jsonObjectMode:true (loose JSON-object mode), never responseSchema (strict json_schema); provider/SDK types never leak outside src/providers/.",
+      "verificationMethod": "Assert captured ChatParams on both deep calls has jsonObjectMode===true and responseSchema===undefined; confirm decomposer-deep.ts imports only LLMClient/Message types from providers/types.js."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The byte-locked surface (runFleet, FleetManifestSchema/FleetChildSchema, the `fleet <manifest>` and `fleet expand` commands, decomposeGoal and its constants) is unchanged.",
+      "verificationMethod": "git diff shows no edits to those spans; the existing decomposer.test.ts / expand.test.ts / index.test.ts suites stay green; new registration tests assert the locked command tree is intact."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "DeepSeek API via the provider-agnostic LLMClient built by createClient (openai-compat, https://api.deepseek.com), reused from the Phase-2 path (index.ts:178-185).",
+      "Reused validateManifest (decomposer.ts:95) consumed verbatim by the EXPAND stage.",
+      "Reused atomic tmp+rename write, --yes gate, and runFleet (index.ts:206-256, index.ts:94)."
+    ],
+    "dataModel": "Transient in-memory only: OutlineArea = { name: string; intent: string }; Outline = { areas: OutlineArea[] }. On-disk: unchanged FleetManifestSchema-valid children-only manifest { rootDir, concurrency, children: [{folder, task}] }.",
+    "securityConsiderations": [
+      "Credential fail-fast: createClient/validateApiKey throws synchronously when DEEPSEEK_API_KEY is missing, BEFORE any FS write or LLM IO.",
+      "Spawn-safety: write-before-spawn invariant; write-and-stop default; --yes is the sole gate into runFleet.",
+      "Budget bound: both stages throw before the write step, so exhaustion leaves no partial manifest and spawns nothing."
+    ],
+    "existingPatterns": "Mirror decomposeGoal's bounded maxAttempts loop and 3-message coercion (decomposer.ts:57-187); mirror runFleetExpand's six steps + DI seam (index.ts:169-256); reuse ScriptedClient (decomposer.test.ts:17-35) and the makeFakeDecompose/makeFakeClientBuilder/runFleetSpy DI helpers (expand.test.ts). ESM .js imports, Zod validation, provider-agnostic boundary, async fs, .bober/ state."
+  },
+  "sprints": [
+    "sprint-spec-20260618-fleet-expand-deep-1",
+    "sprint-spec-20260618-fleet-expand-deep-2"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Additive change against a byte-locked Phase-1/Phase-2 surface. Primary risks: (1) degenerate/coarse children slipping through (mitigated by unchanged write-and-stop review); (2) accidentally using responseSchema instead of jsonObjectMode (DeepSeek rejects \u2014 covered by an explicit ChatParams assertion); (3) perturbing the byte-locked command tree (mitigated by appending registerFleetExpandDeepSubcommand AFTER registerFleetExpandSubcommand and asserting the locked tree). The dominant irreversible cost (N detached child runs) is gated behind --yes and unchanged."
+  },
+  "completedAt": "2026-06-18T08:19:41Z"
+}

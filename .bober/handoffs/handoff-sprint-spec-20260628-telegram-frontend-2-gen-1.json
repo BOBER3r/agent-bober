@@ -1,0 +1,120 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-telegram-frontend-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-telegram-frontend-2",
+  "specId": "spec-20260628-telegram-frontend",
+  "timestamp": "2026-06-29T23:01:58Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober telegram adapter. Sprint 1 (DONE, commit eb680c2) built src/telegram/{whitelist,outbound,bot}.ts + cli/commands/telegram.ts: grammy long-poll behind TelegramTransport/BotTransport (grammy only in bot.ts), pure whitelist, sendSafe single funnel (outbound.ts), handlers return content strings. Sprint 2 adds a message router (command vs plain text) + a zero-friction capture handler routing plain text into the task inbox.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-telegram-frontend-1",
+        "title": "Long-polling bot transport + whitelist + sendSafe funnel",
+        "summary": "src/telegram/{whitelist,outbound,bot}.ts + cli/commands/telegram.ts; grammy behind transport wrapper; sendSafe is the sole outbound chokepoint; handlers return content strings (no transport access)."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/telegram/bot.ts (BotTransport, startPollLoop, helpReply \u2014 wire router here)",
+      "src/telegram/outbound.ts (sendSafe funnel \u2014 reply through this)",
+      "src/telegram/whitelist.ts (isAllowed/denialReply)",
+      "task-inbox capture surface: `agent-bober task add` CLI and/or an importable capture export (curator will pin the exact surface)",
+      "execa (already a dep) for shelling out"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260628-telegram-frontend-2",
+    "specId": "spec-20260628-telegram-frontend",
+    "sprintNumber": 2,
+    "title": "Plain text \u2192 zero-friction task inbox capture",
+    "description": "Add a message router that distinguishes slash-commands from plain text, and a capture handler that routes plain text from whitelisted users into the task inbox (spec-20260628-task-inbox) with the message text as the task title and no other required fields. The bot replies with a one-line confirmation summary through the sendSafe funnel.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260628-telegram-frontend-1"
+    ],
+    "features": [
+      "feat-4"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-2-1",
+        "description": "`npm run build` (tsc) compiles the router and capture handler additions with zero TypeScript errors.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-2",
+        "description": "A unit test for the router classifies a message starting with '/' as a command and a plain message (e.g. \"renew passport\") as text to capture.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-3",
+        "description": "A unit test shows the capture handler invokes the inbox capture path once with the raw message text as the task title and returns a confirmation summary containing that title (using an injected fake inbox sink, no real FactStore).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-4",
+        "description": "A unit test shows capture succeeds with the message text alone \u2014 the handler never requests a due date, domain, or any other field before capturing.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-5",
+        "description": "Sending plain text to the running bot creates a task visible via `agent-bober task list`, and the bot replies with a confirmation that includes the captured title.",
+        "verificationMethod": "manual",
+        "required": false
+      }
+    ],
+    "nonGoals": [
+      "Do not add prioritization, approval, upload, or scheduling behavior in this sprint.",
+      "Do not reimplement task storage, dedup, or FactStore logic \u2014 invoke the existing task inbox feature from spec-20260628-task-inbox.",
+      "Do not prompt the user for a due date, domain, or any field before capturing \u2014 capture must succeed with the message text alone.",
+      "Do not bypass the sendSafe outbound funnel from Sprint 1.",
+      "Do not capture messages that begin with '/' as tasks \u2014 those route to the command handler."
+    ],
+    "stopConditions": [
+      "The router and capture unit tests pass and `npm run build` exits zero.",
+      "Passing an arbitrary plain-text message through the handler results in exactly one inbox task whose title equals the message text.",
+      "A message beginning with '/' produces zero inbox tasks."
+    ],
+    "definitionOfDone": "A whitelisted operator types any free-text message to the bot and it lands as one new open task in the shared inbox pool with the message text as its title and no other required fields, then the bot replies with a one-line confirmation summary containing that title. Messages beginning with '/' are not captured; they fall through to the command router that later sprints populate.",
+    "assumptions": [
+      "The task inbox capture surface is `agent-bober task add \"...\"` (zero-required-field capture), per research \u00a73a lines 129-133.",
+      "Integration uses Q1's hybrid rule: import the task-inbox capture function if the sibling module exports one at generation time; otherwise shell out via execa to `agent-bober task add`.",
+      "Capture defaults to the hub pool (no domain tag), per research \u00a73a UX rule 2."
+    ],
+    "outOfScope": [
+      "Task mutation commands (done/snooze/drop) \u2014 surfaced later or via CLI directly.",
+      "AI enrichment/triage of captured tasks (owned by spec-20260628-task-inbox)."
+    ],
+    "ambiguityScore": 4,
+    "generatorNotes": "Add src/telegram/router.ts (pure classify(message): {kind:'command', name, args} | {kind:'text', text}) and src/telegram/handlers/capture.ts. Wire router into bot.ts so plain text \u2192 capture handler, commands \u2192 a command dispatch stub (filled by Sprints 3-4). Capture handler should accept an injected inbox-capture function (default: a thin wrapper that imports the task-inbox capture export if present, else runs `agent-bober task add <text>` via execa \u2014 execa is already in package.json deps) so the unit test passes a fake sink. Reply via sendSafe from Sprint 1. Keep the message text verbatim as the title; do not parse/enrich. ESM .js imports, `import type`, no `any`.",
+    "evaluatorNotes": "Verify router correctly separates '/cmd' from plain text. Verify capture is zero-friction (no field prompt before capture) and produces exactly one task. Verify the reply goes through sendSafe (no direct transport call). Run build + the router/capture unit tests; for the manual check, send text and confirm it appears in `agent-bober task list`.",
+    "estimatedFiles": [
+      "src/telegram/router.ts",
+      "src/telegram/router.test.ts",
+      "src/telegram/handlers/capture.ts",
+      "src/telegram/handlers/capture.test.ts",
+      "src/telegram/bot.ts"
+    ],
+    "estimatedDuration": "medium"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

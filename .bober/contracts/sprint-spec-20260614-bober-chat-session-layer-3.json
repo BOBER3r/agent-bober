@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260614-bober-chat-session-layer-3",
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "sprintNumber": 3,
+  "title": "Rotation-safe completion weaving (history.jsonl tailer)",
+  "description": "Implement CompletionTailer: tail .bober/history.jsonl from a persisted byte cursor, return new `pipeline-complete` events, and survive log rotation/shrink by detecting size-shrink, resetting the cursor to 0, re-scanning, and deduping completions by runId. Persist the cursor + last-observed-size + seenRunIds set to .bober/chat/<sessionId>.cursor.json so dedupe holds across a session restart. Wire the ChatSession prelude to poll each turn and fold new completions into the next reply (and append a system note). Use the .bober/runs/<id>.completed.json marker as a fallback correlation source when a completion line was rotated away.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260614-bober-chat-session-layer-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds successfully with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "TypeScript compilation produces zero type errors.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "All tests pass with zero failures, including new collocated tests for this sprint.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "CompletionTailer.poll(cursor) reads .bober/history.jsonl from the byte cursor, returns only new lines with event==='pipeline-complete' as CompletionEvent[], and advances the cursor to EOF; a unit test appends two history lines (one pipeline-complete, one other) and asserts exactly one CompletionEvent is returned.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "When the history file size is smaller than the stored cursor (rotation/truncation), poll resets the cursor to 0, re-scans the whole file, and returns the still-unseen completions without duplicating already-seen ones; a unit test simulates a shrink and asserts no dropped or duplicated completions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "Completions are deduped by runId across polls and across a session restart: the seenRunIds set persists in .bober/chat/<sessionId>.cursor.json; a unit test polls, persists, constructs a fresh tailer, and asserts an already-seen completion is not re-emitted.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "When a spawned run completes, the next ChatSession turn surfaces a completion notice referencing the runId in its reply; a unit test drives a turn after injecting a pipeline-complete line and asserts the reply/system-note mentions the run.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "poll handles a missing history file gracefully by returning {events:[], cursor:0} (no throw); covered by a unit test against a temp dir with no history.jsonl.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement stop / kill-by-PID (Sprint 4)",
+    "Do not add live between-turn push \u2014 completions surface on the next turn only",
+    "Do not modify EventStreamManager or the history/rotation modules",
+    "Do not read the rotated history.archive.jsonl; use the runId completion marker as the fallback instead"
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "Spawning a short run and then taking another chat turn after it finishes surfaces a 'run X finished' notice exactly once"
+  ],
+  "definitionOfDone": "CompletionTailer.poll(cursor) tails .bober/history.jsonl for pipeline-complete events, is rotation-safe (size-shrink => cursor reset + re-scan + runId dedupe), and persists byteCursor/lastSize/seenRunIds to .bober/chat/<sessionId>.cursor.json so dedupe survives restart. The ChatSession prelude polls each turn and weaves new completions into the reply and conversation. The .bober/runs/<id>.completed.json marker is used as a fallback correlation source. Build, typecheck, and all tests pass.",
+  "assumptions": [
+    "The terminal completion line is event:'pipeline-complete', phase:'complete'|'failed', details:{completed,failed,durationMs} (src/orchestrator/pipeline.ts:923-932); runId is correlated via the matching .completed.json marker since the line itself may omit runId",
+    "history.jsonl rotates via rotateIfNeeded(...,2000) on every append (src/state/history.ts:99, src/state/history-rotation.ts:89-100), so a byte offset can exceed the file size after rotation",
+    "Reading bytes [cursor,EOF) and parsing whole lines is acceptable; a partial trailing line (mid-write) is tolerated by skipping unparseable lines and not advancing past them"
+  ],
+  "outOfScope": [
+    "Stop semantics (Sprint 4)",
+    "Live push / file watching",
+    "Reading the rotated archive file"
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/chat/completion-tailer.ts and a cursor-store (src/chat/cursor-store.ts) for .bober/chat/<sessionId>.cursor.json (CursorFile {byteCursor, lastSize, seenRunIds}).\n\npoll(cursor): \n1. stat .bober/history.jsonl. If ENOENT => return {events:[], cursor:0}.\n2. If stat.size < cursor (shrink/rotation/truncation) => set readFrom=0; else readFrom=cursor.\n3. Read bytes [readFrom, EOF) via a fs read with a position (use a file handle + read, or readFile then slice \u2014 file is bounded to ~2000 lines so readFile is acceptable). Split into lines; keep complete lines only (last line without trailing newline may be partial \u2014 only consume up to the last newline; set new cursor to readFrom + bytesOfConsumedComplete).\n4. Parse each line as JSON (HistoryEntrySchema-shaped, src/state/history.ts:38-45); keep event==='pipeline-complete'. Map to CompletionEvent {runId?, phase, completed, failed, durationMs, timestamp}. Derive runId from the line if present (extractRunId logic, src/mcp/event-stream.ts:47-58) else by scanning for a fresh .bober/runs/<id>.completed.json marker.\n5. Filter out completions whose runId is already in seenRunIds; add newly-emitted runIds to seenRunIds.\n6. Persist {byteCursor:newCursor, lastSize:stat.size, seenRunIds} via cursor-store.\n\nDedupe by runId is the correctness keystone after a shrink reset \u2014 without it the re-scan re-emits everything. If a completion has no resolvable runId, fall back to a synthetic key (timestamp+durationMs) for dedupe.\n\nChatSession prelude: call tailer.poll(currentCursor) at the start of each turn; pass resulting events to the Answerer (completions input) and append a concise system ChatTurn noting the weave; update the in-memory cursor.\n\nTests: write history lines to a temp .bober/history.jsonl by hand; simulate rotation by truncating/rewriting the file to a shorter content; assert cursor reset + dedupe. Use real temp dirs.",
+  "evaluatorNotes": "sc-3-4: append a pipeline-complete line + a 'phase-start' line; poll(0) returns exactly one event with phase from the complete line.\nsc-3-5: poll once (cursor advances), rewrite the file shorter (simulate rotation) keeping one NEW unseen completion; poll(prevCursor) must reset, return only the unseen completion, not the previously-seen one.\nsc-3-6: poll, persist, build a new tailer from the persisted cursor file, append nothing, poll again => zero events for already-seen runIds.\nsc-3-7: inject a pipeline-complete line for a runId that was spawned; run a chat turn (fake classifier=answer) and assert the reply or an appended system turn references the runId.\nsc-3-8: poll against a temp dir lacking history.jsonl => {events:[],cursor:0}, no throw.\nRun build, typecheck, test.",
+  "estimatedFiles": [
+    "src/chat/completion-tailer.ts",
+    "src/chat/cursor-store.ts",
+    "src/chat/chat-session.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-14T00:00:00Z",
+  "updatedAt": "2026-06-14T00:00:00Z",
+  "completedAt": "2026-06-14T17:21:55Z"
+}

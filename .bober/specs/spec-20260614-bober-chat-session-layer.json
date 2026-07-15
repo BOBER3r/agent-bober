@@ -1,0 +1,163 @@
+{
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "version": 1,
+  "createdAt": "2026-06-14T00:00:00Z",
+  "updatedAt": "2026-06-14T00:00:00Z",
+  "title": "Bober Chat Session Layer (Chattable-Team Phase 1)",
+  "description": "A persistent `bober chat` CLI session above agent-bober's one-shot pipeline. Each turn is classified into answer/spawn/steer; spawn launches detached runPipeline workers that survive REPL exit and whose completions are woven into a later turn. The session resumes across launches and runs identically on Anthropic and OpenAI-compatible (DeepSeek) providers.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-session-resume",
+      "answer": "Resume last session: a stable per-project session id continues the same conversation JSONL + pid sidecar across launches; still-running runs re-attach via the disk roster.",
+      "resolvedAt": "2026-06-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-chat-lead-model",
+      "answer": "Dedicated `chat` role in BoberConfig (Zod), defaulting to opus/anthropic, overridable to DeepSeek; resolved via resolveRoleProviders/createClient.",
+      "resolvedAt": "2026-06-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-command-surface",
+      "answer": "Both: natural language routes through the LLM classifier; explicit slash-commands (/runs, /stop, /exit, /help) bypass the LLM deterministically.",
+      "resolvedAt": "2026-06-14T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve",
+      "resolvedAt": "2026-06-14T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The chat lead uses a new `chat` role in BoberConfig defaulting to opus/anthropic, overridable to DeepSeek, resolved via resolveRoleProviders/createClient (src/config/role-providers.ts:92, src/providers/factory.ts:172) \u2014 no LiteLLM.",
+    "The session is resumable: a stable per-project session id (default) continues the same .bober/chat/<sessionId>.jsonl conversation + pid sidecar across launches; a still-running run is re-attached via the disk roster (readRunStatesFromDisk).",
+    "`--run-id <id>` on `agent-bober run` is additive: existing invocations are unchanged; it threads into pipelineRunId (src/orchestrator/pipeline.ts:583) so the detached child honors the caller's id and keys .bober/runs/<id>.completed.json.",
+    "All new code lives under src/chat/ plus small additive touches to src/config/{schema,defaults}.ts, src/cli/commands/run.ts, and src/orchestrator/pipeline.ts (runId threading only). No public-API breakage to RunManager, EventStreamManager, memory, or providers.",
+    "Slash-commands (/runs, /stop, /exit, /help) bypass the LLM deterministically; all other input routes through the classifier.",
+    "Stop = process.kill(pid) from the session pid sidecar + a disk `aborted` flip via writeRunState; unknown pid falls back to the disk intent-flag only. No child-side abort-polling in Phase 1.",
+    "Per-turn roster is read via the non-reconciling readRunStatesFromDisk (src/state/run-state.ts:110), NEVER RunManager.load() (which reconciles running->failed at src/mcp/run-manager.ts:251-256).",
+    "The classifier uses loose JSON via jsonObjectMode:true (src/providers/types.ts:183), not strict json_schema (rejected by DeepSeek) and not native tool-calling; parse failure deterministically yields {action:\"answer\"}."
+  ],
+  "outOfScope": [
+    "A2A input-required/paused RunState states and mid-run pause/resume (Phase 2)",
+    "The data-driven Team abstraction \u2014 <team> is the fixed programming role set (Phase 4)",
+    "semantic_facts table, memory hygiene/decay, and self-improvement loops (Phase 3+)",
+    "Any UI; the medical team; multi-user or multi-terminal concurrency",
+    "Live between-turn push of completions (they surface on the next turn, by design)",
+    "Changing the public API of runPipeline, RunManager, EventStreamManager, memory, or the provider adapters"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Conversational chat session that answers",
+      "description": "A `bober chat` REPL that classifies each turn via one loose-JSON LLM call and answers using disk roster + memory distill context, resuming across launches, identical on Anthropic and DeepSeek.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a user runs `bober chat` and types a question, the session returns an answer composed from the disk roster summary and the .bober/memory/ distill.",
+        "AC2: When the classifier LLM returns malformed or non-JSON output, the turn deterministically falls back to the answer path (never a wrong spawn/stop).",
+        "AC3: When a user relaunches `bober chat`, the previous conversation history for the stable session id is loaded and continued.",
+        "AC4: The classifier and answerer run through LLMClient.chat with jsonObjectMode and behave identically whether the chat role resolves to Anthropic or DeepSeek."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Non-blocking detached spawn with session-generated runId",
+      "description": "A spawn turn launches a detached `agent-bober run <task> --run-id <id>` worker that survives REPL exit, returns an immediate ack, and is correlated by a session-generated runId.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When `agent-bober run <task> --run-id X` is invoked, the pipeline honors id X (its roster state.json and .bober/runs/X.completed.json key on X) instead of a self-generated run-<timestamp> id.",
+        "AC2: When a user asks the chat to build something, RunSpawner writes the roster state.json before detaching and returns an immediate ack without blocking the REPL.",
+        "AC3: After a spawn, the runId->pid mapping is recorded in the session pid sidecar, and `/runs` lists the run as running.",
+        "AC4: Existing `agent-bober run <task>` invocations without --run-id continue to work unchanged."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Rotation-safe completion weaving",
+      "description": "Worker completions are detected by tailing .bober/history.jsonl from a persisted byte cursor, surviving log rotation, and woven into the next conversational turn.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a spawned run finishes, the next chat turn surfaces a completion notice (e.g. 'run X finished').",
+        "AC2: When .bober/history.jsonl rotates/shrinks below the stored cursor, the tailer resets the cursor to 0, re-scans, and does not drop or duplicate completions.",
+        "AC3: A completion is woven at most once across turns and across a session restart (dedupe by runId via the persisted seenRunIds set)."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Steer: inspect and kill-by-PID stop",
+      "description": "Inspect reports the roster; stop hard-kills a detached worker by the recorded PID and flips its disk state to aborted, with a disk-flag-only fallback when the PID is unknown.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a user issues `/stop <runId>` or says 'stop run X', RunSpawner resolves the PID from the sidecar, calls process.kill, and flips state.json status to 'aborted'.",
+        "AC2: When the PID is unknown (sidecar lost), stop falls back to flipping the disk status to 'aborted' only and reports fallbackFlagOnly.",
+        "AC3: When a user issues `/runs` or asks to inspect, the current roster is summarized without an LLM call for the slash-command path.",
+        "AC4: A runId referenced by the user is resolved against the disk roster at stop-time, not from spawn-time memory."
+      ],
+      "dependencies": [
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "All new code is ESM/NodeNext with .js import extensions, strict TS, and provider-agnostic (no SDK types leak outside src/providers/).",
+      "verificationMethod": "Run typecheck and build; grep new src/chat files for @anthropic-ai/sdk or openai imports (must be none)."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The session is a pure reader of run roster (readRunStatesFromDisk) and never calls RunManager.load(); the only roster writes are the spawn state.json and the stop aborted flip.",
+      "verificationMethod": "Grep src/chat for RunManager.load (must be absent); unit test asserting a running state on disk is still reported running after a roster read."
+    },
+    {
+      "category": "reliability",
+      "requirement": "No in-memory global is the source of truth; conversation, roster, pid sidecar, and cursor all persist to disk under .bober/.",
+      "verificationMethod": "Unit tests for ConversationStore round-trip, pid sidecar persistence, and cursor persistence across new instances."
+    },
+    {
+      "category": "security",
+      "requirement": "stop only kills PIDs recorded by this session lifetime; stale/unknown PIDs fall through to the disk-flag path (no killing arbitrary PIDs).",
+      "verificationMethod": "Unit test: unknown runId/pid -> fallbackFlagOnly true and no process.kill on an unrecorded pid."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "New disk artifacts under .bober/chat/<sessionId>.{jsonl,pids.json,cursor.json}. Reuses existing RunState (run-manager.ts:35-55), .bober/runs/<id>/state.json, .bober/runs/<id>.completed.json, .bober/history.jsonl, and the .bober/memory/ distill unmodified.",
+    "securityConsiderations": [
+      "process.kill restricted to session-recorded PIDs",
+      "tolerant JSON parse with action-schema validation; parse-fail -> answer",
+      "spawn with cwd=projectRoot so the child writes into the same .bober/ the session tails"
+    ],
+    "existingPatterns": "Reuse readRunStatesFromDisk/readRunState/writeRunState (src/state/run-state.ts), LLMClient.chat + jsonObjectMode (src/providers/types.ts:216,183), createClient + resolveRoleProviders (src/providers/factory.ts:172, src/config/role-providers.ts:92), the detached execa spawn shape (src/fleet/runner.ts:91-100), appendHistory/rotation behavior (src/state/history.ts:99, src/state/history-rotation.ts:89-100), and the memory distill reader (src/state/memory.ts:196,242,272). Full design: .bober/architecture/arch-20260614-bober-chat-session-layer-architecture.md."
+  },
+  "sprints": [
+    "sprint-spec-20260614-bober-chat-session-layer-1",
+    "sprint-spec-20260614-bober-chat-session-layer-2",
+    "sprint-spec-20260614-bober-chat-session-layer-3",
+    "sprint-spec-20260614-bober-chat-session-layer-4"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "6-10 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Reuses ~80% existing infrastructure. Risk concentrated in: loose-JSON classifier parity across Anthropic/DeepSeek (S1), session-generated runId correlation through the additive --run-id flag (S2), rotation-safe history tailing (S3), and cross-process kill-by-PID (S4). Each is isolated to its own sprint and verified independently."
+  },
+  "completedAt": "2026-06-14T17:37:54Z"
+}

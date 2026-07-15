@@ -1,0 +1,151 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-7-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T23:17:36.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+        "title": "Refusal detection",
+        "summary": "35a2dbd."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+        "title": "Cost substrate",
+        "summary": "8d68248..73053c0: ChatResponse.costUsd."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+        "title": "Loop wiring",
+        "summary": "b9c936c: per-turn budget charging + costUsd accumulation in the loop."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+        "title": "Parallel read-only tools",
+        "summary": "4ab7040/59b4b23: executeToolBatch."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+        "title": "Loop events + hooks",
+        "summary": "d52f94c: loop-events.ts (compact-boundary RESERVED \u2014 this sprint implements it), safeEmit, single finish() exit helper."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-6",
+        "title": "Session persistence",
+        "summary": "c51b28b: session-store.ts, persistSession at every turn-body completion point, resumeSession/forkSession. NOTE for sprint 7: compaction mutates the in-loop messages array \u2014 consider interaction with persistSession (sessions capture per-turn state; contract says pre-compaction persistence is out of scope, but saves after compaction will reflect the compacted array \u2014 document behavior). agentic-loop.ts ~700 lines now; all anchors stale. Suite 3832."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/compaction.ts",
+      "src/orchestrator/compaction.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/loop-events.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-7",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 7,
+    "title": "In-context auto-compaction (threshold-triggered summarization + compact-boundary event)",
+    "description": "Keep long runs inside the context window without the coarse sprint-boundary reset. When AgenticLoopParams.compaction is set and the last response's cumulative input tokens cross the configured threshold, the loop makes one summarization call via the SAME client/model over the older messages, replaces them with a single summary message (keeping the most recent turns verbatim), emits a compact-boundary LoopEvent, and continues the run. Absent config \u2192 never compacts, byte-identical.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260709-agent-loop-capability-port-5"
+    ],
+    "features": [
+      "feat-7"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-7-1",
+        "description": "When cumulative input tokens exceed compaction.maxContextTokens, messages older than the configured keepRecentTurns are replaced by exactly one summary message produced via a client.chat summarization call, and the most recent turns survive verbatim (deep-equal).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-2",
+        "description": "A compact-boundary LoopEvent fires with { messagesBefore, messagesAfter, inputTokensAtTrigger } when onEvent is present, and compaction still works when onEvent is absent.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-3",
+        "description": "The summarization call's usage and costUsd are charged to the run's Budget (when present) and included in AgenticLoopResult.usage/costUsd totals.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-4",
+        "description": "A failed summarization call fails open: the loop logs, skips compaction for that turn, and continues uncompacted (never throws, never drops messages without a summary).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-5",
+        "description": "Without compaction config, no summarization call is ever made and behavior is byte-identical (full existing suite unchanged).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-7-6",
+        "description": "npm run build and npm run typecheck pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not replace or modify the existing sprint-boundary compaction (summarizeOlderSprints / contextReset) \u2014 this is a different, in-run layer.",
+      "Do not compact the system prompt or the pending tool-result exchange (only completed older turns).",
+      "Do not add per-provider token counting \u2014 the trigger uses the usage.inputTokens the adapters already report.",
+      "Do not enable compaction for any role by default."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: threshold-triggered replacement with recent turns preserved, event emission, budget/cost accounting of the extra call, fail-open on summarizer error, and the never-compacts absence path.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "A loop given compaction config survives past its token threshold by summarizing older turns in-run via one extra model call, preserving recent turns, accounting the extra call's cost, and emitting a compact-boundary event \u2014 while a loop without the config never changes behavior. Build and full suite green.",
+    "assumptions": [
+      "usage.inputTokens on each ChatResponse reflects the prompt size the provider saw and is the trigger signal (no independent tokenizer needed).",
+      "Sprint 5's LoopEvent union reserved 'compact-boundary'; this sprint implements it (hard dependsOn).",
+      "The summary message is a plain user-role text Message ('[Conversation summary] ...') in the own Message union so every provider accepts it.",
+      "keepRecentTurns defaults to 2 exchanges when unset; the pending turn currently being answered is never compacted away."
+    ],
+    "outOfScope": [
+      "CLAUDE.md-style summarization steering (could be a later compaction.instructions field).",
+      "Persisting pre-compaction transcripts (sprint 6 sessions already capture per-turn state when enabled)."
+    ],
+    "ambiguityScore": 5,
+    "generatorNotes": "Extend AgenticLoopParams with compaction?: { maxContextTokens: number; keepRecentTurns?: number; instructions?: string }. Implementation point: after each turn's usage accumulation (and budget charge if sprint 3 landed), if compaction is set and response.usage.inputTokens > maxContextTokens, split messages into [head ... | tail = last keepRecentTurns*2 messages + any in-flight tool exchange]; call client.chat once with a summarization system prompt ('Summarize this conversation preserving: task objective, file paths touched, decisions made, errors seen' + optional instructions) over the head; on success replace head with one summary Message, emit compact-boundary event, charge the call's usage/costUsd to the same accumulators/Budget; on failure log via existing logger and continue uncompacted. Guard against thrash: after a compaction, do not re-trigger until inputTokens again exceeds the threshold (the shrunken prompt naturally resets this). Keep ALL logic inside agentic-loop.ts or a sibling compaction.ts pure helper (summarizeMessages(client, model, messages, instructions) \u2192 Promise<Message | undefined>) for testability.",
+    "evaluatorNotes": "Script a fake client whose responses report escalating inputTokens crossing the threshold on turn 3, and whose summarization call (recognize by system prompt) returns a fixed summary. sc-7-1: after the run, inspect messages sent on turn 4 \u2014 exactly one summary message where the head was, tail turns deep-equal. sc-7-2: collect events with onEvent; assert payload fields; re-run without onEvent asserting compaction still happened (message inspection). sc-7-3: Budget spy \u2014 chargeTokens/chargeUsd called for the summarizer call; result totals include it. sc-7-4: summarizer call rejects \u2192 run completes, messages uncompacted, no throw. sc-7-5: no compaction config \u2192 assert client.chat call count has no extra summarizer call and FULL suite passes. Build + typecheck.",
+    "estimatedFiles": [
+      "src/orchestrator/compaction.ts",
+      "src/orchestrator/compaction.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/loop-events.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-09T23:17:36.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

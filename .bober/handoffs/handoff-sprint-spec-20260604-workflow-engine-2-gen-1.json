@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-workflow-engine-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-workflow-engine-2",
+  "specId": "spec-20260604-workflow-engine",
+  "timestamp": "2026-06-04T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 2 implements EvaluatorPanelReconciler — a PURE majority-vote reducer over EvalResult[] producing one canonical EvalResult (evaluator='panel'). This is the conformance-critical core (ADR-4). The caller injects the timestamp (no Date.now in the reducer). The JS port + drift gate come in sprint 3.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260604-workflow-engine-1", "title": "Engine-selection seam + pipeline.engine config", "summary": "Added pipeline.engine config, PipelineEngine interface + selector under src/orchestrator/workflow/, TS engine wraps the former runPipeline body (now runTsPipeline)." }
+    ],
+    "currentBranch": "bober/workflow-engine",
+    "relevantFiles": [
+      "src/contracts/eval-result.ts",
+      "src/orchestrator/workflow/selector.ts",
+      ".bober/architecture/arch-20260603-adopt-claude-code-dynamic-workflows-adr-4.md"
+    ]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true }
+  },
+  "principles": "See .bober/principles.md — TS strict, ESLint zero-error, ESM .js specifiers, consistent-type-imports, no synchronous fs, collocated *.test.ts, conventional commits.",
+  "evaluatorFeedback": null,
+  "notes": "EvalResultSchema is at src/contracts/eval-result.ts:60. Reuse the FROZEN EvalResult/EvalDetail types — do not redefine them. The reducer MUST be pure: no Date.now, no new Date(), no Math.random, no fs. Timestamp is a function argument. New files go under src/orchestrator/workflow/ (reconciler.ts + reconciler.test.ts). ADR-4: evaluator='panel', strict majority (passCount > failCount), fail-closed on tie, union failing details. Sprint 3 will hand-write a JS port that must match this exactly — keep the logic simple and explicit so it ports cleanly."
+}

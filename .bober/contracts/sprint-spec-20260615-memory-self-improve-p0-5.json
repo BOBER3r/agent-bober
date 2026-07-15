@@ -1,0 +1,76 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-5",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "sprintNumber": 5,
+  "title": "Auto-producer: deterministic project-fact detector + fact retrieval into context",
+  "description": "Make facts populate without manual CLI and feed planning. A deterministic detector reads manifests/config and writes project facts (testCommand, buildCommand, packageManager, framework) through reconcile at runPipeline and chat-session start. A retrieveRelevantFacts + bounded serializer inject scope-isolated active facts into planner/curator context, mirroring the lessons path. No LLM is used to produce facts \u2014 only reconcile's ambiguity branch may.",
+  "status": "completed",
+  "createdAt": "2026-06-15T12:00:00.000Z",
+  "updatedAt": "2026-06-15T17:45:14Z",
+  "completedAt": "2026-06-15T17:45:14Z",
+  "dependsOn": [
+    "sprint-spec-20260615-memory-self-improve-p0-1",
+    "sprint-spec-20260615-memory-self-improve-p0-2"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "The project builds (`npm run build`, exit 0) and typecheck passes (`npm run typecheck`, zero errors).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "src/orchestrator/memory/fact-detector.ts exports a pure detectProjectFacts(projectInputs) that maps a parsed package.json / bober.config.json into Fact drafts (e.g. project/testCommand, project/buildCommand, project/packageManager, project/framework) with NO fs read and NO LLM inside the pure fn (inputs are passed in).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "A unit test runs the detector against a fixture project (package.json with scripts) and asserts the expected facts are produced; a second test writes them through reconcile twice and asserts no duplication (unchanged \u2192 NOOP, changed \u2192 supersede).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "The detector is invoked (and its facts reconciled into .bober/memory/facts.db) near the start of runPipeline (src/orchestrator/pipeline.ts) and in the chat session startup path (src/chat/chat-session.ts), guarded so a facts failure never aborts the run.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "retrieveRelevantFacts(projectRoot, scope, keywords) returns scope-isolated ACTIVE facts ranked deterministically, and serializeFactsForContext(records, { charBudget }) returns a bounded, char-capped block; both covered by unit tests (including scope isolation: facts in scope A never surface for scope B).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "ESLint reports zero errors on new and modified files (`npm run lint`).",
+      "verificationMethod": "lint",
+      "required": false
+    }
+  ],
+  "generatorNotes": "DETECTOR: src/orchestrator/memory/fact-detector.ts must be PURE \u2014 detectProjectFacts takes already-parsed inputs (e.g. { packageJson, boberConfig }) and returns Fact drafts; the fs reads happen in a thin caller, not the pure fn (mirror how distill is pure and the CLI does IO). Map deterministically: scripts.test\u2192project/testCommand, scripts.build\u2192project/buildCommand, presence of package-lock.json/yarn.lock/pnpm-lock\u2192project/packageManager, deps for react/next/vue\u2192project/framework. Use scope='' (default/programming team) via the namespace convention. WIRING: at the start of runPipeline (src/orchestrator/pipeline.ts:1017) read package.json + bober.config.json, call detectProjectFacts, open the FactStore, and write each draft via writeFact/reconcileFact (Sprint 2) with now stamped here. Wrap the whole block in try/catch that logs a warning and continues \u2014 fact production must NEVER abort a pipeline run. Do the same in the chat session startup (src/chat/chat-session.ts, near where buildMemoryDistill is called around line 234). RETRIEVAL: add src/orchestrator/memory/fact-retrieve.ts with retrieveRelevantFacts(projectRoot, scope, keywords, {topK}) that opens the store, gets active facts for the scope, and ranks by deterministic token overlap (reuse the tokenize/scoreRecord pattern from retrieve.ts), plus serializeFactsForContext mirroring serializeLessonsForPlanner (header + one line per fact + hard charBudget slice). Inject the serialized facts block into the planner/curator context next to the lessons block (find where serializeLessonsForPlanner output is assembled and add the facts block alongside it, scope-keyed). Keep retrieval pure beyond the single store read. Tests: fixture project for the detector; in-memory store for retrieval + scope-isolation; reconcile-idempotency test reusing Sprint 2.",
+  "evaluatorNotes": "Run build, typecheck, and `npm test -- fact-detector fact-retrieve`. For sc-5-2: read fact-detector.ts and confirm detectProjectFacts takes parsed inputs (no readFile/fs, no createClient inside the pure fn). For sc-5-3: run the detector test and confirm the expected project facts; confirm the double-reconcile test shows one active fact per predicate after two runs (NOOP on unchanged, supersede on changed). For sc-5-4: read pipeline.ts and chat-session.ts and confirm the detector+reconcile block is present near startup AND wrapped in try/catch so a thrown facts error is swallowed with a warning (trace that the run continues). Best-effort: run a real `bober run`/chat in a temp project and confirm .bober/memory/facts.db contains project/testCommand and project/buildCommand active; if a full run is impractical, verify by code inspection + a focused integration test. For sc-5-5: confirm retrieveRelevantFacts only returns t_invalidated IS NULL rows for the requested scope and NEVER returns another scope's facts; confirm serializeFactsForContext respects charBudget (output length <= budget). Confirm no LLM is invoked anywhere in the production path (the only LLM is reconcile's ambiguity branch from Sprint 2).",
+  "estimatedFiles": [
+    "src/orchestrator/memory/fact-detector.ts",
+    "src/orchestrator/memory/fact-detector.test.ts",
+    "src/orchestrator/memory/fact-retrieve.ts",
+    "src/orchestrator/memory/fact-retrieve.test.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/chat/chat-session.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-5-1",
+      "timestamp": "2026-06-15T17:45:14Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260615-memory-self-improve-p0-5-1"
+}

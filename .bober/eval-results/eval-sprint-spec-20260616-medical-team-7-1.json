@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260616-medical-team-7-1",
+  "contractId": "sprint-spec-20260616-medical-team-7",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-17T00:08:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "zero errors" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "clean" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "198 files, 2393 passed, 3 skipped", "details": "+7 medline-source +15 literature; offline (injected FetchLike + committed fixture)" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "exit 0; 0 errors, 2 pre-existing warnings", "details": "network boundary holds; single medline-source.ts override" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-7-1", "description": "build clean", "required": true, "result": "pass", "evidence": "build exit 0", "feedback": "" },
+    { "criterionId": "sc-7-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit exit 0", "feedback": "" },
+    { "criterionId": "sc-7-3", "description": "lint passes; only network file is medline-source.ts", "required": true, "result": "pass", "evidence": "lint exit 0; grep confirms fetch only in medline-source.ts; ESLint override only there", "feedback": "" },
+    { "criterionId": "sc-7-4", "description": "tests via recorded fixtures, no live network", "required": true, "result": "pass", "evidence": "2393 passed; medline-source.test + literature.test inject FetchLike fakes + committed fixture; offline", "feedback": "" },
+    { "criterionId": "sc-7-5", "description": "literature ON -> grounded; OFF -> disabled", "required": true, "result": "pass", "evidence": "axis OFF -> {disabled}, source not called; axis ON + fixture -> grounded passages (metformin/diabetes)", "feedback": "" },
+    { "criterionId": "sc-7-6", "description": "abstain-unless-supported + citations>=1", "required": true, "result": "pass", "evidence": "supported LLM -> abstained=false, citations>=1 source='medlineplus'; ABSTAIN/empty -> abstained=true; traced: no uncited non-abstained path exists", "feedback": "" },
+    { "criterionId": "sc-7-7", "description": "fail-closed on source error", "required": true, "result": "pass", "evidence": "network throw/503/empty -> abstain{source-error}; abstain outcome -> LLM not called; 3 independent fail-closed layers; no uncited claim", "feedback": "" },
+    { "criterionId": "sc-7-8", "description": "cloud-inference independently off; local Ollama default", "required": true, "result": "pass", "evidence": "EgressGuard(false,true): cloud-inference stays false; synthesize uses openai-compat/Ollama (createClient('openai-compat',localhost:11434)) or injected llmClient, never cloud; model-unavailable -> abstained, no fallback; no raw SDK imports in medical", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 7 (final) passes all 8 criteria, independently verified. Network access isolated to the single ESLint-excepted medline-source.ts with assertAllowed first; CI fully offline via injected FetchLike + committed fixture; abstain-unless-supported and fail-closed guarantees structurally proven (no uncited-claim escape hatch, 3 fail-closed layers); literature-retrieval does not enable cloud-inference (local Ollama via provider-agnostic LLMClient, no cloud fallback). 2393 tests pass, no regressions, commit 553f087 touches only 8 src/medical files."
+}

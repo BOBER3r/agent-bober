@@ -1,0 +1,306 @@
+{
+  "specId": "spec-20260712-security-audit-agent-team",
+  "version": 1,
+  "createdAt": "2026-07-12T09:25:00.000Z",
+  "updatedAt": "2026-07-12T13:41:08.000Z",
+  "title": "Security Audit Agent Team (fail-closed gate + standalone audit)",
+  "description": "Adds a single stack-aware bober-security-auditor role driving one runSecurityAudit() core, consumed by an in-pipeline fail-closed gate that vetoes sprint-passed on critical findings/timeout/parse-failure and a standalone `bober security-audit` CLI with a configurable blocking threshold. Findings reuse the locked ReviewResult shape, persist to .bober/security/, and flow into the priority hub; an opt-in deterministic scanner pre-filter (with slither and semgrep parsers) grounds the LLM judgment. Implements arch-20260712-security-audit-agent-team (ADR-1..6) for users whose generated code manages real customer funds.",
+  "mode": "greenfield",
+  "status": "completed",
+  "architectureId": "arch-20260712-security-audit-agent-team",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "scope",
+      "question": "How deep should scanner pre-filter support go in this first build?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Generic command execution only; raw output as LLM priors"
+        },
+        {
+          "label": "B",
+          "description": "Include dedicated slither + semgrep JSON parsers"
+        },
+        {
+          "label": "C",
+          "description": "Defer the pre-filter entirely"
+        }
+      ],
+      "recommendation": "A \u2014 parsers as follow-up once real usage shows which scanners matter",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q2",
+      "category": "scope",
+      "question": "Should the standalone CLI get its own blocking threshold distinct from the gate's critical-only veto?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Critical-only, same as gate"
+        },
+        {
+          "label": "B",
+          "description": "Add security.standaloneBlockOn: 'critical' | 'important' now"
+        }
+      ],
+      "recommendation": "A \u2014 simplest first cut; standaloneBlockOn stays the documented extension point",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "integrations",
+      "question": "Should findings surface beyond the .bober/security/ markdown in this build?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Markdown + history events only"
+        },
+        {
+          "label": "B",
+          "description": "Also emit priority-hub Findings via the canonical FindingSchema"
+        },
+        {
+          "label": "C",
+          "description": "Hub Findings + Telegram warning"
+        }
+      ],
+      "recommendation": "A \u2014 hub/Telegram wiring as follow-up",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q4",
+      "category": "scope",
+      "question": "Should the plan include a bober.security-audit skill wrapper, and should agent-bober dogfood the gate in its own bober.config.json?",
+      "options": [
+        {
+          "label": "A",
+          "description": "CLI + skill, no dogfood config change"
+        },
+        {
+          "label": "B",
+          "description": "CLI only"
+        },
+        {
+          "label": "C",
+          "description": "CLI + skill + enable security in agent-bober's own config"
+        }
+      ],
+      "recommendation": "A \u2014 matches the earlier dogfooding-declined precedent for budget",
+      "ambiguityWeight": 2
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Include slither+semgrep parsers \u2014 ship dedicated JSON-output parsers mapping slither (Solidity) and semgrep (Node/TS) results to SecurityFinding[]; parsers are fixture-tested, binaries not required in CI.",
+      "resolvedAt": "2026-07-12T09:15:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Configurable threshold now \u2014 add security.standaloneBlockOn: 'critical' | 'important' (default 'critical'); affects ONLY the CLI exit code, never the pipeline gate veto (ADR-2 stays critical-only).",
+      "resolvedAt": "2026-07-12T09:15:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Also emit hub Findings \u2014 wire critical+important findings into the priority hub via the canonical FindingSchema imported from src/hub/finding.ts (never redefined), gated by security.hub (default true within the opt-in security section).",
+      "resolvedAt": "2026-07-12T09:15:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "CLI + skill + dogfood \u2014 ship the bober.security-audit skill wrapper AND set security.enabled=true (LLM-only, no scanners) in agent-bober's own bober.config.json.",
+      "resolvedAt": "2026-07-12T09:15:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "approve",
+      "resolvedAt": "2026-07-12T09:25:00.000Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The architecture document .bober/architecture/arch-20260712-security-audit-agent-team-architecture.md and ADR-1..6 are binding; sprints implement, not re-decide. All pipeline/schema anchors cited there (pipeline.ts:434-437/:466/:476-482, schema.ts:48-51/:74-88/:190, code-reviewer-agent.ts:17-37/:325-337, review-state.ts:12-15, eval-lenses.ts:7-8) were verified during the 5-checkpoint architecture flow.",
+    "Slither/semgrep parsers are pure functions tested against committed JSON output fixtures; scanner binaries are NOT required in CI (mirrors the MedlinePlus offline-fixtures convention in src/medical/). Live binaries run only when operators configure security.scanners.",
+    "Hub emission is local filesystem only (no egress) and default-on inside the already-opt-in security section: security.hub boolean default true, effective only when security.enabled=true. FindingSchema is imported from src/hub/finding.ts, never redefined (research-runner precedent, src/research/runner.ts).",
+    "standaloneBlockOn ('critical' | 'important', default 'critical') affects ONLY the bober security-audit exit code; the pipeline gate veto remains critical-only per ADR-2.",
+    "Dogfood config is LLM-only: security.enabled=true with scanners:[] in agent-bober's bober.config.json \u2014 avoids requiring slither/semgrep on dev machines; accepts ~1-5 min extra latency + LLM cost per sprint and the risk of false-positive blocks consuming retry iterations.",
+    "The auditor subagent runs with read-only tools; deterministic scanner execution stays in SecurityScannerPreFilter under the shared AbortSignal (architecture open question 5 resolved as assumed).",
+    "Stack\u2192skill map covers bober.solidity/bober.anchor/bober.react now; all other stacks resolve to {skillName:null, generic taxonomy} \u2014 weaker coverage is the accepted ADR-1 residual risk."
+  ],
+  "outOfScope": [
+    "Telegram warning surface for security findings (hub-only per Q3; Telegram is a follow-up spec)",
+    "Scanner parsers beyond slither + semgrep (no cargo-audit/mythril/npm-audit parsers; any binary still runs generically with raw-text priors)",
+    "Auto-reverting vulnerable auto-commits (per architecture risk table: retry regenerates; never fight the generator's commit)",
+    "Any mutation of code-reviewer/evaluator/documenter contracts or their advisory semantics (locked dependencies)",
+    "Auditing remote repositories (standalone target is a local path)",
+    "New egress axes (LLM calls use existing provider config; hub/store writes are local files)",
+    "Dedicated security skills for additional stacks (Move, Cairo, etc.)"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Security config section, audit types, and .bober/security store",
+      "description": "Opt-in default-off SecuritySectionSchema on BoberConfigSchema, SecurityAuditResult/SecurityFinding/VulnClass types wrapping the locked ReviewResult shape, and a security-audit-state store persisting markdown to .bober/security/.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When config.security is absent, BoberConfigSchema.parse output for every existing config fixture is deep-equal to the pre-change output (byte-identical default-off invariant).",
+        "AC2: SecurityAuditResult.verdict derives 'blocked' iff review.critical.length > 0, and 'pass' otherwise, via a pure exported function.",
+        "AC3: SecurityAuditStore round-trips: saveSecurityAudit writes .bober/security/<contractId>-security-audit.md, readSecurityAudit returns its content, listSecurityAudits lists saved ids; read of a missing id returns null without throwing."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Security auditor agent, runSecurityAudit core, and stack knowledge injection",
+      "description": "The bober-security-auditor agent definition and the provider-agnostic runSecurityAudit() core (mirroring runCodeReviewer) with StackKnowledgeInjector mapping config.project.stack to skill checklists and the security-lens taxonomy.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a mocked client returns a well-formed audit with a critical finding, runSecurityAudit returns SecurityAuditResult with that finding in review.critical, parsed:true, and verdict 'blocked'.",
+        "AC2: When the mocked client returns unparseable output, runSecurityAudit returns parsed:false and never a silent empty-critical 'pass' (inverts the code-reviewer's benign fallback).",
+        "AC3: StackKnowledgeInjector resolves solidity\u2192bober.solidity, anchor\u2192bober.anchor, react\u2192bober.react, and unknown/absent stack \u2192 {skillName:null} with the generic VulnClass taxonomy; the resolved promptFragment appears in the auditor prompt.",
+        "AC4: All LLM interaction goes through the provider-agnostic createClient path; no provider SDK import appears outside src/providers/ adapter files."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Fail-closed pipeline security gate",
+      "description": "SecurityAuditGate attached between the evaluation.passed check and the sprint-passed commit: time-boxed via Promise.race, blocking on critical finding/timeout/audit-error/parse-failure, feeding findings to the generator retry (ADR-5), skipping the documenter on block (ADR-6), byte-identical when disabled.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When security.enabled=true and the audit returns a critical finding, the sprint is NOT marked passed, a security-audit-blocked history event is appended, and the next generator iteration receives the finding evidence in its feedback parts.",
+        "AC2: When the audit times out or throws (provider/budget/parse error), the gate blocks with reason 'timeout' or 'audit-error' \u2014 an incomplete audit is never treated as clean.",
+        "AC3: When config.security is absent, a paired pipeline run produces deep-equal results and identical history events to the pre-change pipeline (no gate code executes).",
+        "AC4: On a blocked round the documenter stage does not run; on a clean round the pipeline proceeds to sprint-passed, code-review, and documenter exactly as before."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Standalone security-audit CLI with configurable threshold",
+      "description": "`bober security-audit [target]` running runSecurityAudit on demand with CI-friendly exit codes and a security.standaloneBlockOn threshold ('critical' | 'important', default 'critical').",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober security-audit` exits 2 when the configured threshold bucket is non-empty and 0 otherwise, printing a findings summary and the persisted artifact path.",
+        "AC2: With standaloneBlockOn:'important', important-bucket findings also produce exit 2; with the default 'critical', only critical findings do.",
+        "AC3: The pipeline gate's veto logic is unaffected by standaloneBlockOn (gate blocks on critical only, per ADR-2)."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Scanner pre-filter with slither and semgrep parsers",
+      "description": "SecurityScannerPreFilter running config.security.scanners under the shared audit AbortSignal with per-scanner isolation, plus dedicated slither-JSON and semgrep-JSON parsers producing SecurityFinding[] priors prepended to the auditor prompt.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: The slither parser maps a committed slither JSON fixture to the expected SecurityFinding[] (path, line, severity, vulnClass); the semgrep parser does the same for a committed semgrep JSON fixture.",
+        "AC2: A missing scanner binary or nonzero exit yields [] for that scanner without throwing; other configured scanners still run.",
+        "AC3: When the shared AbortSignal fires, scanner child processes are SIGKILLed and the pre-filter resolves with partial findings.",
+        "AC4: Scanner findings appear as priors in the auditor prompt when scanners are configured; with scanners:[] the audit is a pure LLM pass with no child process spawned."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Priority-hub Findings emission",
+      "description": "Critical and important audit findings emitted to the priority hub as canonical Findings (FindingSchema imported from src/hub/finding.ts), gated by security.hub (default true within the opt-in security section).",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When an audit completes with critical and/or important findings and security.hub is true, one hub Finding per audit finding is ingested via the existing finding-store ingest path with a severity mapping documented in code.",
+        "AC2: With security.hub:false, zero hub writes occur for an otherwise identical audit.",
+        "AC3: FindingSchema is imported from src/hub/finding.ts and never redefined; duplicate emission of the same finding is absorbed by the hub's existing content-hash dedup."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "bober.security-audit skill, dogfood enable, and docs",
+      "description": "A bober.security-audit skill mirroring skills/bober.code-review for Claude Code users, security.enabled=true (LLM-only) in agent-bober's own bober.config.json, and docs/security-audit.md.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: skills/bober.security-audit/SKILL.md exists with valid frontmatter and orchestrates the standalone audit (spawning the auditor / invoking the CLI) following the bober.code-review shape.",
+        "AC2: agent-bober's bober.config.json contains security.enabled=true with scanners:[] and parses cleanly under the extended schema.",
+        "AC3: docs/security-audit.md documents the config reference (every SecuritySectionSchema field), fail-closed gate semantics, CLI usage with exit codes, and the hub emission behavior."
+      ],
+      "dependencies": [
+        "feat-3",
+        "feat-4"
+      ],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "Fail-closed invariants: unparseable auditor output, audit timeout, provider/budget error, and parse failure all produce a blocked verdict \u2014 never a silent pass.",
+      "verificationMethod": "Unit tests exercising each failure path assert blocked:true with the correct reason; the evaluator traces that no code path converts a failure into reason:'clean'."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Byte-identical behavior when config.security is absent: no new statement executes in the pipeline, and existing config fixtures parse to deep-equal outputs.",
+      "verificationMethod": "Paired-run deep-equal pipeline test plus config fixture snapshot tests (repo's established byte-identical convention)."
+    },
+    {
+      "category": "performance",
+      "requirement": "The gate never hangs the pipeline: the audit resolves or is timed out within security.timeoutMs (default 300000 ms) via Promise.race, and scanner children die with the shared AbortSignal.",
+      "verificationMethod": "Unit test with a never-resolving audit asserts the timeout branch returns blocked reason:'timeout' within the configured window (fake timers)."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "TypeScript strict mode zero errors, ESLint flat config zero errors, collocated Vitest tests, ESM imports with .js extensions, no SDK types outside provider adapters.",
+      "verificationMethod": "npm run typecheck, npm run lint, npm run build, npm test all pass; evaluator greps for SDK imports outside src/providers/."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "LLM provider via src/providers/ createClient (any of Anthropic/OpenAI-compat/Google/Ollama/claude-code)",
+      "Optional scanner binaries (slither, semgrep) via config.security.scanners",
+      "Priority hub finding-store (src/hub/) for Finding ingestion"
+    ],
+    "dataModel": "SecurityAuditResult wraps the locked ReviewResult (critical[]/important[] buckets) adding stack, scannerRan, parsed, verdict; SecurityFinding extends ReviewFinding with optional VulnClass ('injection'|'authn-authz'|'secret-handling'|'input-validation'|'path-traversal'|'privilege-escalation'); SecuritySection config (enabled/failClosed/timeoutMs/model/maxTurns/provider/endpoint/providerConfig/budget/scanners/standaloneBlockOn/hub); two new history event kinds security-audit-clean and security-audit-blocked. Markdown artifacts under .bober/security/<contractId>-security-audit.md; verdict source of truth is in-memory + history events, never the markdown.",
+    "securityConsiderations": [
+      "Fail-closed everywhere: parse failure, timeout, provider error, budget exhaustion all block (ADR-2)",
+      "Gate veto is critical-bucket-only; standaloneBlockOn affects the CLI only",
+      "Auditor subagent gets read-only tools; scanners run only in the pre-filter under the shared AbortSignal",
+      "Store write failures must never alter the already-computed verdict",
+      "No new egress: hub and store are local filesystem; LLM calls use existing provider config"
+    ],
+    "existingPatterns": "Mirror src/orchestrator/code-reviewer-agent.ts (one core, pipeline attach + standalone entry, ReviewResult shape, Promise.race time-box at pipeline.ts:476-482); default-off Zod sections (evaluator panel, medical egress axes); src/state/review-state.ts for the store; src/research/runner.ts for canonical FindingSchema import + ingestFinding; src/cli/commands/research.ts for CLI command registration; MedlinePlus offline fixtures for parser tests; paired-run deep-equal byte-identity tests."
+  },
+  "sprints": [
+    "sprint-spec-20260712-security-audit-agent-team-1",
+    "sprint-spec-20260712-security-audit-agent-team-2",
+    "sprint-spec-20260712-security-audit-agent-team-3",
+    "sprint-spec-20260712-security-audit-agent-team-4",
+    "sprint-spec-20260712-security-audit-agent-team-5",
+    "sprint-spec-20260712-security-audit-agent-team-6",
+    "sprint-spec-20260712-security-audit-agent-team-7"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "10-18 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Sprint 3 touches the core pipeline.ts pass path \u2014 the only non-additive-module change; mitigated by the paired-run byte-identity test convention and the gate being unconstructed when disabled. All other sprints are additive modules. Dogfooding (sprint 7) accepts false-positive-block risk on this repo's own future sprints."
+  },
+  "completedAt": "2026-07-12T13:41:08.000Z"
+}

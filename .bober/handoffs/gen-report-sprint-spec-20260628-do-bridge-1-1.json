@@ -1,0 +1,10 @@
+{
+  "contractId": "sprint-spec-20260628-do-bridge-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": [
+    "8370612"
+  ],
+  "savedAt": "2026-06-29T16:23:42.273Z",
+  "summary": "do-bridge spine: registry, FindingStore port, coding-promoter, bober do --dry-run. 32 new tests, build+lint clean, no regressions."
+}

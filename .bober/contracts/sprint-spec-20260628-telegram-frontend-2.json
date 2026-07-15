@@ -1,0 +1,80 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-2",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 2,
+  "title": "Plain text \u2192 zero-friction task inbox capture",
+  "description": "Add a message router that distinguishes slash-commands from plain text, and a capture handler that routes plain text from whitelisted users into the task inbox (spec-20260628-task-inbox) with the message text as the task title and no other required fields. The bot replies with a one-line confirmation summary through the sendSafe funnel.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-telegram-frontend-1"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "`npm run build` (tsc) compiles the router and capture handler additions with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A unit test for the router classifies a message starting with '/' as a command and a plain message (e.g. \"renew passport\") as text to capture.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A unit test shows the capture handler invokes the inbox capture path once with the raw message text as the task title and returns a confirmation summary containing that title (using an injected fake inbox sink, no real FactStore).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A unit test shows capture succeeds with the message text alone \u2014 the handler never requests a due date, domain, or any other field before capturing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "Sending plain text to the running bot creates a task visible via `agent-bober task list`, and the bot replies with a confirmation that includes the captured title.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not add prioritization, approval, upload, or scheduling behavior in this sprint.",
+    "Do not reimplement task storage, dedup, or FactStore logic \u2014 invoke the existing task inbox feature from spec-20260628-task-inbox.",
+    "Do not prompt the user for a due date, domain, or any field before capturing \u2014 capture must succeed with the message text alone.",
+    "Do not bypass the sendSafe outbound funnel from Sprint 1.",
+    "Do not capture messages that begin with '/' as tasks \u2014 those route to the command handler."
+  ],
+  "stopConditions": [
+    "The router and capture unit tests pass and `npm run build` exits zero.",
+    "Passing an arbitrary plain-text message through the handler results in exactly one inbox task whose title equals the message text.",
+    "A message beginning with '/' produces zero inbox tasks."
+  ],
+  "definitionOfDone": "A whitelisted operator types any free-text message to the bot and it lands as one new open task in the shared inbox pool with the message text as its title and no other required fields, then the bot replies with a one-line confirmation summary containing that title. Messages beginning with '/' are not captured; they fall through to the command router that later sprints populate.",
+  "assumptions": [
+    "The task inbox capture surface is `agent-bober task add \"...\"` (zero-required-field capture), per research \u00a73a lines 129-133.",
+    "Integration uses Q1's hybrid rule: import the task-inbox capture function if the sibling module exports one at generation time; otherwise shell out via execa to `agent-bober task add`.",
+    "Capture defaults to the hub pool (no domain tag), per research \u00a73a UX rule 2."
+  ],
+  "outOfScope": [
+    "Task mutation commands (done/snooze/drop) \u2014 surfaced later or via CLI directly.",
+    "AI enrichment/triage of captured tasks (owned by spec-20260628-task-inbox)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add src/telegram/router.ts (pure classify(message): {kind:'command', name, args} | {kind:'text', text}) and src/telegram/handlers/capture.ts. Wire router into bot.ts so plain text \u2192 capture handler, commands \u2192 a command dispatch stub (filled by Sprints 3-4). Capture handler should accept an injected inbox-capture function (default: a thin wrapper that imports the task-inbox capture export if present, else runs `agent-bober task add <text>` via execa \u2014 execa is already in package.json deps) so the unit test passes a fake sink. Reply via sendSafe from Sprint 1. Keep the message text verbatim as the title; do not parse/enrich. ESM .js imports, `import type`, no `any`.",
+  "evaluatorNotes": "Verify router correctly separates '/cmd' from plain text. Verify capture is zero-friction (no field prompt before capture) and produces exactly one task. Verify the reply goes through sendSafe (no direct transport call). Run build + the router/capture unit tests; for the manual check, send text and confirm it appears in `agent-bober task list`.",
+  "estimatedFiles": [
+    "src/telegram/router.ts",
+    "src/telegram/router.test.ts",
+    "src/telegram/handlers/capture.ts",
+    "src/telegram/handlers/capture.test.ts",
+    "src/telegram/bot.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-29T23:23:17Z"
+}

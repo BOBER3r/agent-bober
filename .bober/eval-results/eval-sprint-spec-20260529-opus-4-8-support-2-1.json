@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260529-opus-4-8-support-2-1",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-2",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T18:50:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0." },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "eslint src/ exit 0." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc build exit 0." },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "1337 passed; 3 failures = the 2 flaky 37-tool-count tests + disk.test race (all pre-existing). All src/providers/ tests pass." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "C1", "required": true, "result": "pass", "evidence": "package.json ^0.100.1; installed 0.100.1; package-lock regenerated; diff only package.json + lock." },
+    { "criterionId": "C2", "required": true, "result": "pass", "evidence": "messages.d.ts:807 MidConversationSystemBlockParam (type 'mid_conv_system'); :825 OutputConfig.effort union low|medium|high|xhigh|max|null." },
+    { "criterionId": "C3", "required": true, "result": "pass", "evidence": "typecheck exit 0; adapter unchanged (empty diff)." },
+    { "criterionId": "C4", "required": true, "result": "pass", "evidence": "lint + build exit 0." },
+    { "criterionId": "C5", "required": true, "result": "pass", "evidence": "All provider suites pass (anthropic 7 caching tests incl.); only the 3 tolerated flakes fail." },
+    { "criterionId": "C6", "required": true, "result": "pass", "evidence": "@anthropic-ai/sdk imported only in anthropic.ts (+ test mock string)." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "6/6 pass. SDK bumped 0.39.0 -> 0.100.1 with zero adapter source changes; typecheck/lint/build clean; all provider tests pass; only pre-existing flakes remain; new Opus 4.8 types confirmed installed; SDK confined to the adapter."
+}

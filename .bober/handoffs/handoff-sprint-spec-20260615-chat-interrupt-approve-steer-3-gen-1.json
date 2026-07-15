@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-chat-interrupt-approve-steer-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T14:10:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Chat Interrupt / Approve / Steer (Phase 2). Sprint 3 = the WRITE path that closes the HITL loop. /approve <id> and /reject <id> [feedback] slash commands + NL approve/reject intent write .approved.json/.rejected.json markers by REUSING saveApproved/saveRejected + pendingExists guard + resolveApprover. The detached child's DiskCheckpointMechanism poll resumes automatically; reject feedback flows into the existing runCheckpointWithFeedback rework path. After resolve, the chat-owned RunState clears its pending fields and returns to 'running'.",
+    "completedSprints": [
+      { "contractId": "...-1", "commit": "14c2be6", "summary": "RunState grammar (input-required/paused + pending fields), CarefulSidecar, /careful, --approve-gates, RunSpawner careful spawn." },
+      { "contractId": "...-2", "commit": "67495fc", "summary": "ApprovalReader (read-only over listPending), ApprovalCursor announce-once (key=checkpointId@requestedAt), handleTurn poll-prelude weaving notices into both reply paths, idempotent running->input-required RunState reflection, roster waiting=<gate>. Sprint 3 INVERTS that reflection on resolve and uses ApprovalReader to resolve an absent checkpoint id." }
+    ],
+    "currentBranch": "bober/chat-interrupt-approve-steer",
+    "relevantFiles": [
+      "src/state/approval-state.ts (saveApproved/saveRejected/pendingExists — REUSE, do NOT add write fns; capture exact ApprovedMarker/RejectedMarker shapes)",
+      "src/cli/commands/approve.ts (resolveApprover + pendingExists-before-write guard — export resolveApprover or replicate; approve.ts/reject.ts CLI tests must stay green)",
+      "src/cli/commands/reject.ts (reject marker write parity)",
+      "src/orchestrator/checkpoints/mechanisms/disk.ts (poll/resume loop — reads <id>.approved.json/<id>.rejected.json -> {approved}/{approved:false,feedback}; do NOT modify; this is what proves chat markers integrate)",
+      "src/orchestrator/checkpoints/feedback-router.ts (the runCheckpointWithFeedback rework consumption path — verify, do NOT modify)",
+      "src/chat/chat-session.ts (handleStop pattern to mirror for handleApprove/handleReject; classify path routing; writeRunState to clear pending fields)",
+      "src/chat/slash-commands.ts (dispatch optional-handler threading + HELP_TEXT; /reject collects line remainder after checkpoint id as feedback)",
+      "src/chat/turn-classifier.ts (loose-JSON action union — extend with approve/reject {action,checkpointId?,feedback?}; jsonObjectMode)",
+      "src/chat/approval-reader.ts (resolve absent checkpoint id: single pending -> use it; multiple -> ASK)"
+    ]
+  },
+  "keyInvariants": [
+    "REUSE the approval store — do NOT reimplement the disk poll/resume (the detached child's DiskCheckpointMechanism already resumes when the marker appears). Chat only WRITES the marker + acks + clears RunState.",
+    "PENDINGEXISTS GUARD: mirror approve.ts — never write a dangling .approved.json/.rejected.json. /approve or /reject on a non-existent pending marker returns a clear 'no pending checkpoint' message and writes nothing.",
+    "NEVER GUESS A LOAD-BEARING TARGET: NL approve/reject with an absent checkpointId resolves via ApprovalReader — exactly ONE pending -> use it; MULTIPLE pending and none named -> return a clarifying question and write nothing.",
+    "RunState CLEAR ON RESOLVE: after writing the marker, clear pendingCheckpointId/pendingPrompt/pendingSince and set status back to 'running' on the correlated chat-owned RunState (inverse of Sprint 2's reflection). Idempotent; only act on input-required runs.",
+    "DO NOT MODIFY: approval-state.ts (except possibly EXPORTING resolveApprover), disk.ts, feedback-router.ts, or the existing approve.ts/reject.ts CLI behavior. Verify the feedback->rework path; don't change it.",
+    "CRITICAL TEST GOTCHA (curator): disk.ts DELETES stale markers at request()-start. The round-trip integration test (construct DiskCheckpointMechanism over the temp approvals dir, assert chat-written rejected marker resolves to {approved:false,feedback}) MUST write the marker via setTimeout AFTER mechanism.request() has begun polling — otherwise the start-of-request cleanup deletes it. Match the existing disk.test.ts timing pattern.",
+    "RejectedMarker.feedback exact field name must match what disk.ts returns in {approved:false, feedback} — verify the field name end-to-end."
+  ],
+  "successCriteriaSummary": "sc-3-1 build; sc-3-2 typecheck; sc-3-3 tests pass incl new; sc-3-4 /approve existing pending -> writes .approved.json (approverId from resolveApprover) + ack; non-existent -> clear message, writes nothing (pendingExists guard); sc-3-5 /reject <id> <feedback> -> .rejected.json with feedback + DiskCheckpointMechanism resolves to {approved:false,feedback}; sc-3-6 NL approve/reject classified + routed; single-pending shortcut; ambiguous -> ASK, write nothing; sc-3-7 RunState clears pending + back to running; /help lists /approve and /reject.",
+  "config": { "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" } },
+  "principlesRef": ".bober/principles.md (ESM/NodeNext, .js imports, no SDK types outside src/providers/, async fs, collocated *.test.ts, no fs mocks, loose-JSON classifier jsonObjectMode (DeepSeek-safe), conventional commit bober(sprint-3): ...)",
+  "notesForGenerator": "Baseline after Sprint 2 is 2021 tests passing. There is a known PRE-EXISTING flake in src/mcp/tools/list-active-runs.test.ts (intermittent ENOTEMPTY cleanup race; passes on re-run/isolation) — do NOT try to fix it here (Sprint 6), but if your full-suite run shows ONLY that failure, re-run once to confirm green before handoff.",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,135 @@
+{
+  "handoffId": "handoff-sprint-spec-20260712-security-audit-agent-team-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T11:17:14.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Adds a single stack-aware bober-security-auditor role driving one runSecurityAudit() core, consumed by an in-pipeline fail-closed gate that vetoes sprint-passed on critical findings/timeout/parse-failure and a standalone `bober security-audit` CLI with a configurable blocking threshold. Findings reuse the locked ReviewResult shape, persist to .bober/security/, and flow into the priority hub; an opt-in deterministic scanner pre-filter (with slither and semgrep parsers) grounds the LLM judgment. Implements arch-20260712-security-audit-agent-team (ADR-1..6) for users whose generated code manages real customer funds.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-1",
+        "title": "Security config section, audit types, .bober/security store",
+        "summary": "SecuritySectionSchema opt-in default-off on BoberConfigSchema (enabled/failClosed/timeoutMs/model/maxTurns/provider?/endpoint?/providerConfig?/budget?/scanners/standaloneBlockOn/hub). src/orchestrator/security-audit-types.ts: VulnClass/SecurityFinding/SecurityAuditResult/deriveVerdict (pure, 'blocked' iff review.critical.length>0). src/state/security-audit-state.ts: save/read/listSecurityAudits over .bober/security/<contractId>-security-audit.md via renderReviewMarkdown. Commits f76ee2e/fc20eae/4ae188f + docs 9e19a33."
+      },
+      {
+        "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+        "title": "bober-security-auditor agent + runSecurityAudit core + stack knowledge",
+        "summary": "src/orchestrator/security-auditor-agent.ts: runSecurityAudit(contract, evaluation|null, projectRoot, config, priors?) mirroring runCodeReviewer \u2014 createClient(config.security?...) + runAgenticLoop with CURATOR role tools (read_file/glob/grep, NO bash \u2014 nonGoal-enforced, regression-tested); parseSecurityAuditResult fail-closed: parsed:false (garbage/truncated/array JSON) FORCES verdict 'blocked', never silent pass; provider errors reject un-swallowed, nothing persisted on throw; persists via saveSecurityAudit. src/orchestrator/stack-knowledge.ts: resolveStackSecurityContext maps solidity->bober.solidity / anchor->bober.anchor / react->bober.react checklist excerpts, unknown/absent -> {skillName:null}+generic taxonomy from resolveLensFocus('security'); never throws. agents/bober-security-auditor.md: read-only frontmatter (Read/Grep/Glob), ReviewResult JSON contract matched field-for-field to the parser. Priors param is the sprint-5 seam; evaluation|null is the standalone (sprint-4) seam. Commits 0990156/ddf27bc/e5cf267/40c1488. Suite 3960."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/security-gate.ts",
+      "src/orchestrator/security-gate.test.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/pipeline.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+    "specId": "spec-20260712-security-audit-agent-team",
+    "sprintNumber": 3,
+    "title": "Wire the fail-closed SecurityAuditGate into the pipeline",
+    "description": "The veto: a SecurityAuditGate that wraps runSecurityAudit in a Promise.race time-box and blocks the sprint-passed commit on any critical finding, timeout, audit error, or parse failure (ADR-2). Attached between the evaluation.passed check and the sprint-passed history event \u2014 before the advisory code-reviewer's post-pass slot. On block: security-audit-blocked history event, findings rendered into the generator's retry feedback (ADR-5), deferral to the existing retry/maxIterations tail, documenter skipped (ADR-6). When config.security is absent the pipeline is byte-identical.",
+    "status": "in-progress",
+    "createdAt": "2026-07-12T09:30:00.000Z",
+    "updatedAt": "2026-07-12T11:17:14.000Z",
+    "completedAt": null,
+    "dependsOn": [
+      "sprint-spec-20260712-security-audit-agent-team-2"
+    ],
+    "features": [
+      "feat-3"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-3-1",
+        "description": "src/orchestrator/security-gate.ts exports evaluateSecurityGate returning SecurityGateVerdict {blocked, reason: 'critical-finding'|'timeout'|'audit-error'|'clean'|'disabled', result?}: it NEVER throws \u2014 audit rejection \u2192 audit-error block, Promise.race timeout (config.security.timeoutMs) \u2192 timeout block, result.parsed===false \u2192 audit-error block, config.security absent or enabled!==true \u2192 {blocked:false, reason:'disabled'} without invoking the audit.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-2",
+        "description": "In a pipeline run with security enabled and a fake audit returning a critical finding, the sprint is NOT marked passed, no sprint-passed history event is appended, a security-audit-blocked event (with reason, critical count, and per-finding path/line/vulnClass) IS appended, and the run defers to the existing retry path (retry when iterations remain, needs-rework at maxIterations).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-3",
+        "description": "On a blocked round, the next generator iteration's feedback parts contain the rendered security findings (e.g. '[CRITICAL] <vulnClass>: <description> at path:line') via the same channel evaluator feedback uses; renderSecurityFeedback is a pure exported function.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-4",
+        "description": "With config.security absent, a paired pipeline run (same fake inputs) produces deep-equal results and an identical history event sequence to the pre-change pipeline \u2014 the gate contributes no statement, no event, and no timing dependency.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-5",
+        "description": "On a CLEAN enabled round, a security-audit-clean history event is appended and the pipeline proceeds to sprint-passed, code-review, and documenter exactly as before; on a BLOCKED round the documenter and code-reviewer stages do not run (control never reaches the passed block).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-6",
+        "description": "A store persistence failure (saveSecurityAudit throwing) is caught and logged inside the gate and does NOT change the already-computed verdict in either direction.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-7",
+        "description": "npm run build and npm run typecheck pass; ESLint zero errors; FULL existing suite green (pipeline tests especially).",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not modify the advisory code-reviewer stage, its time-box, or its post-pass position (locked).",
+      "Do not auto-revert the generator's auto-commit on block (architecture risk decision: retry regenerates; never fight the commit).",
+      "Do not block on important-bucket findings (ADR-2 scopes the veto to critical only).",
+      "Do not add CLI/scanners/hub/skill (sprints 4-7)."
+    ],
+    "stopConditions": [
+      "All seven criteria verified, with sc-3-4 proven by deep-equal paired-run test (the repo's byte-identity convention), not by absence assertions.",
+      "Full suite green \u2014 any pipeline test regression is a hard stop."
+    ],
+    "definitionOfDone": "A critical security finding, a timeout, or an unparseable audit measurably prevents sprint-passed and routes actionable findings into the generator retry, while an unconfigured pipeline is provably byte-identical. Build, typecheck, lint, and the full suite are green.",
+    "assumptions": [
+      "The attachment point is inside the evaluation.passed branch BEFORE status='passed'/sprint-passed history append (architecture cites pipeline.ts:434-437 for the pass path, :444 sprint-passed, :465 code-review, :513 documenter, :588-597 the eval-failed retry tail, :250-274 evalFeedbackParts) \u2014 anchors may have drifted; re-locate by pattern.",
+      "The contract carries an evaluatorFeedback (or equivalent) field the retry loop reads into evalFeedbackParts; if the field is named differently, use whatever the evaluation-failed path uses and mirror it exactly.",
+      "History events are appended via appendHistory with free-form event kinds (z.record-style payloads), so 'security-audit-clean'/'security-audit-blocked' need no schema migration; verify against src/state/history usage.",
+      "The Promise.race timeout leaves the underlying LLM call running in background (same accepted behavior as the code-reviewer race at pipeline.ts:476-482); cost is bounded by security.budget.maxUsd when configured."
+    ],
+    "outOfScope": [
+      "Standalone CLI, scanner pre-filter, hub Findings, skill wrapper, dogfooding (sprints 4-7)."
+    ],
+    "ambiguityScore": 3,
+    "generatorNotes": "This is the only sprint that edits pipeline.ts \u2014 keep the diff surgical. Anchors may have drifted; re-locate by pattern. (1) READ pipeline.ts's evaluation.passed branch AND the evaluation-failed tail first; the blocked path must MIRROR the failed tail (same iteration/maxIterations handling, same retry event emission) rather than invent a new loop \u2014 extract-and-reuse if a small helper makes that clean, but do not restructure unrelated flow. (2) src/orchestrator/security-gate.ts: gate owns the Promise.race (reuse the code-reviewer's race/timeout helper pattern at pipeline.ts:476-482), the try/catch converting rejection\u2192audit-error, the parsed:false\u2192audit-error elevation, and the store try/catch (sc-3-6). Construct NOTHING when disabled: the pipeline call site must be `if (config.security?.enabled === true) { ... }` so the disabled path adds zero statements executed. (3) renderSecurityFeedback(verdict): pure, phrased for a FIXER ('[CRITICAL] injection: ... at src/x.ts:42 \u2014 remediate by...' style from finding fields), exported from security-gate.ts or the auditor module. (4) History: follow existing appendHistory call style; blocked payload {reason, critical: N, findings: [{path,line,vulnClass}]} \u2014 findings capped to a sane count (e.g. 20) to bound event size. (5) Paired-run test: follow the repo's established byte-identity convention (see parallelReadOnlyTools and Phase-B blackboard tests for prior art) \u2014 run the same scripted pipeline with and without the change/config and deep-equal results + history sequences. Use fake timers for the timeout test.",
+    "evaluatorNotes": "Trace the blocked path END-TO-END in the test: assert (a) no sprint-passed event, (b) security-audit-blocked event present with correct payload, (c) contract feedback populated, (d) retry occurred (or needs-rework at maxIterations), (e) documenter/code-reviewer spawn functions NOT called on the blocked round (spy/stub them). For sc-3-1: table-test all five reasons including the disabled short-circuit (audit function must not be invoked \u2014 assert the stub has zero calls). For sc-3-4: insist on deep-equal of BOTH the returned result object and the full history event array; reject a test that only checks a few fields. For sc-3-6: make saveSecurityAudit throw in both a clean and a blocked scenario; verdict unchanged in both. Verify the timeout test uses fake timers and asserts reason 'timeout' (not 'audit-error'). Run the FULL suite; pipeline.ts changes make regressions likely \u2014 scrutinize any newly-skipped or modified pre-existing test.",
+    "estimatedFiles": [
+      "src/orchestrator/security-gate.ts",
+      "src/orchestrator/security-gate.test.ts",
+      "src/orchestrator/pipeline.ts",
+      "src/orchestrator/pipeline.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "lastEvalId": null
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,56 @@
+{
+  "handoffId": "handoff-sprint-spec-20260617-medical-whoop-guardrails-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-3",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "timestamp": "2026-06-17T16:01:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical team, branch bober/medical-team. Sprint 3 is the end-to-end visible slice: pull WHOOP data and persist it. WhoopSyncAdapter pages WhoopClient across 4 collections (recovery/sleep/cycle/workout), maps records to HealthObservation[] (source='whoop'), writes via the EXISTING ObservationSink in bounded batches with idempotent resume + fail-closed partial-failure safety; plus `bober medical whoop sync [--since <iso>]` CLI mirroring `medical import`.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260617-medical-whoop-guardrails-2",
+        "title": "WHOOP egress axis + transport",
+        "summary": "Commit e442cc9. src/medical/whoop/whoop-client.ts exports WhoopClient { ensureAccessToken(); fetchPage(collection, window, cursor?): Promise<WhoopPage> } with WhoopCollection/SyncWindow/WhoopPage/WhoopRecord types, injectable FetchLike/waiter/nowIso, assertAllowed-first. src/medical/whoop/whoop-token.ts exports WhoopTokenStore { clientCredentials() (throws if env unset); readRefreshToken(): Promise<string|undefined>; writeTokens() 0600 }. EgressGuard has third 'device-connection' axis (default false); EgressGuard.fromConfig reads it. whoop-client.ts is the ONLY new ESLint-excepted network file — whoop-sync.ts and the CLI must NOT import network."
+      },
+      {
+        "contractId": "sprint-spec-20260617-medical-whoop-guardrails-1",
+        "title": "Refusal layer",
+        "summary": "Commit 2a8ff70. Refusal guardrail (unrelated to this sprint's surface)."
+      },
+      {
+        "contractId": "spec-20260616-medical-team",
+        "title": "Base medical team",
+        "summary": "Reuse UNCHANGED: src/medical/ingestion.ts (IngestionNormalizer, ObservationSink, StoreObservationSink, bounded-batch backpressure); src/medical/health-store.ts (HealthDataStore content-derived SHA-256 id + upsertObservations INSERT OR IGNORE returning new-row count); src/medical/adapters/apple-health.ts (bounded ~1000-row batch + writeBatch backpressure precedent); src/cli/commands/medical.ts ('medical import' command: action + print + store.close() in finally + process.exitCode on error + never throw — the CLI template); src/medical/types.ts (IngestionResult {recordsParsed,newRows}, HealthObservation, AuditEvent 'ingest'). Do NOT modify IngestionAdapter, ObservationSink, or the health_observations schema."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/whoop/whoop-client.ts",
+      "src/medical/whoop/whoop-token.ts",
+      "src/medical/ingestion.ts",
+      "src/medical/health-store.ts",
+      "src/medical/adapters/apple-health.ts",
+      "src/cli/commands/medical.ts",
+      "src/medical/types.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260617-medical-whoop-guardrails-3.json",
+  "specRef": ".bober/specs/spec-20260617-medical-whoop-guardrails.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/medical-team",
+      "commitFormat": "bober(sprint-3): <description>"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

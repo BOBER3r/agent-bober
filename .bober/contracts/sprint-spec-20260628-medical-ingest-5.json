@@ -1,0 +1,74 @@
+{
+  "contractId": "sprint-spec-20260628-medical-ingest-5",
+  "specId": "spec-20260628-medical-ingest",
+  "sprintNumber": 5,
+  "title": "Personalization profile.yaml (SOPS-encrypted, injectable cipher) + profile CLI",
+  "description": "Add a Zod-validated personalization profile (age/sex/conditions/medications/supplements/allergies/goals) persisted as a SOPS-encrypted <vaultDir>/profile.yaml, behind an injectable cipher seam (encrypt/decrypt) defaulting to a sops age shell-out. Tests inject a reversible fake cipher; when sops is unavailable the read/write paths refuse rather than writing plaintext PHI. Adds `bober medical profile show|set`.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-ingest-4"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "Running `npm run build` (tsc) compiles src/medical/profile.ts (ProfileSchema + read/write) and the extended medical CLI with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "A vitest with an injected reversible fake cipher asserts writeProfile serializes the profile to YAML, encrypts via the cipher, and writes <vaultDir>/profile.yaml; readProfile then decrypts and returns a ProfileSchema-validated object whose age, sex and goals round-trip to the original values.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "A vitest asserts that when the cipher seam signals sops is unavailable, writeProfile and readProfile reject with a clear message and leave no plaintext profile file on disk (assert the path does not exist or is encrypted).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "A vitest asserts ProfileSchema.parse rejects invalid input -- a negative age and an unrecognized sex value each raise a Zod validation error.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not shell out to a real sops binary inside tests -- inject a reversible fake cipher via a deps/seam parameter.",
+    "Do not encrypt free-text markdown bodies -- only the structured profile.yaml is encrypted (research section 3b).",
+    "Do not write any plaintext profile to disk when the cipher is unavailable.",
+    "Do not add a new top-level command -- profile is a subcommand of the existing `medical` command tree."
+  ],
+  "stopConditions": [
+    "npm run build exits 0 and the profile vitest suite passes.",
+    "The cipher-unavailable path leaves no plaintext profile file and surfaces a clear message."
+  ],
+  "definitionOfDone": "src/medical/profile.ts exports a Zod ProfileSchema { age:number>=0, sex: enum(male|female|other), conditions:string[], medications:string[], supplements:string[], allergies:string[], goals:string[] } and writeProfile/readProfile that persist to <vaultDir>/profile.yaml through an injectable cipher seam (encrypt/decrypt) whose default shells out to sops with an age key. Tests inject a reversible fake cipher so the round-trip is verified without the binary. When the cipher reports sops unavailable, both paths reject with a clear message and write no plaintext PHI. `bober medical profile show` decrypts and renders the profile; `bober medical profile set <key> <value>` updates one field after Zod validation.",
+  "assumptions": [
+    "Only the small structured profile.yaml is SOPS-encrypted (age backend, local, no egress); markdown bodies stay plaintext-in-private-repo -- evidence: research-20260627-knowledge-platform-landscape.md section 3b (lines 155-156).",
+    "The sops binary is abstracted behind an injectable cipher seam for testability -- evidence: injectable-factory pattern at src/medical/inference.ts:17 and WhoopSyncDeps at src/cli/commands/medical.ts:31-36.",
+    "Profile holds age/sex/conditions/medications/supplements/allergies/goals; goals feed downstream analysis -- evidence: research section 4a Personalization profile (line 199).",
+    "FactStore remains canonical for structured med/supplement facts; the profile lists are a denormalized personalization snapshot -- evidence: research section 4 (line 165) + Sprint 4 supplements path."
+  ],
+  "outOfScope": [
+    "Consuming goals in an analysis/proactive pass (sibling analysis spec).",
+    "True encrypted-at-rest non-browsable note vault (deliberately deferred, research section 3b line 156).",
+    "Key distribution / out-of-band SOPS key handoff (operational, not engineering)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Define ProfileSchema with Zod (age z.number().int().min(0); sex z.enum(['male','female','other']); the rest z.array(z.string()).default([])). Persist as YAML; reuse the YAML/frontmatter helper from Sprint 2 if it serializes plain objects, else a minimal YAML emit is acceptable (no new dependency unless already vendored). The cipher seam: interface ProfileCipher { available(): boolean; encrypt(plaintext:string):string|Promise<string>; decrypt(ciphertext:string):string|Promise<string> }. Default implementation runs `sops` via execa (already a dependency -- used by the fleet orchestrator) with an age recipient; available() probes for the binary. writeProfile(vaultDir, profile, { cipher }) and readProfile(vaultDir, { cipher }) take the seam; when cipher.available() is false, throw a clear Error and never write plaintext. Register `medical profile show|set` under the existing medical command tree; extract runProfileShow/runProfileSet cores for tests. Use a temp dir + reversible fake cipher (e.g. base64 or identity wrapper) in tests.",
+  "evaluatorNotes": "sc-5-3 is the safety test: with cipher.available() false, assert writeProfile rejects AND no plaintext profile.yaml is readable on disk. For sc-5-2 verify a true round-trip (write then read returns the same age/sex/goals) through the fake cipher. For sc-5-4 verify both invalid cases raise Zod errors. Confirm no real sops invocation in tests (the fake cipher is injected). Confirm profile is nested under `medical`. Verify build is green.",
+  "estimatedFiles": [
+    "src/medical/profile.ts",
+    "src/medical/profile.test.ts",
+    "src/cli/commands/medical.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T00:00:00Z",
+  "updatedAt": "2026-06-28T16:55:00Z",
+  "completedAt": "2026-06-28T16:55:00Z"
+}

@@ -1,0 +1,45 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-team-abstraction-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-team-abstraction-2",
+  "specId": "spec-20260615-team-abstraction",
+  "timestamp": "2026-06-15T12:05:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober — multi-agent harness. Phase 4 makes a 'team' a data object. Sprint 1 (DONE) added the Team data model + loadTeam(config, teamId?) in src/teams/ with a built-in 'programming' team whose memoryNamespace is '' (sentinel for the current .bober/memory/ path). Sprint 2 threads an optional per-team namespace through the lessons memory store and all callers so two teams' lessons are fully isolated, while the default/programming namespace keeps the existing .bober/memory/ path (no migration).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260615-team-abstraction-1",
+        "title": "Team data model + registry + programming team as instance #1",
+        "summary": "src/teams/types.ts (Team, Role), src/teams/registry.ts (loadTeam + built-in programming team, memoryNamespace '' sentinel), src/config/schema.ts (optional teams record + defaultTeam). Zero behavior change; commit 274338b."
+      }
+    ],
+    "currentBranch": "bober/team-abstraction",
+    "relevantFiles": [
+      "src/teams/registry.ts",
+      "src/state/memory.ts",
+      "src/orchestrator/memory/retrieve.ts",
+      "src/cli/commands/memory.ts",
+      "src/chat/chat-session.ts",
+      "src/orchestrator/memory/distill.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260615-team-abstraction-2.json",
+  "specRef": ".bober/specs/spec-20260615-team-abstraction.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm run test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

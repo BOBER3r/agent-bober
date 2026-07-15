@@ -1,0 +1,29 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-6",
+  "status": "complete",
+  "criteriaResults": [
+    { "criterionId": "sc-6-1", "met": true, "evidence": "npm run build exit 0" },
+    { "criterionId": "sc-6-2", "met": true, "evidence": "tsc --noEmit exit 0" },
+    { "criterionId": "sc-6-3", "met": true, "evidence": "lint 0 errors (2 pre-existing eval-persist warnings); NOTE generator reported npm-run-lint exitCode 1 — evaluator to confirm" },
+    { "criterionId": "sc-6-4", "met": true, "evidence": "vitest run 196 files, 2370 passed, 3 skipped; S1-S5 + programming unchanged" },
+    { "criterionId": "sc-6-5", "met": true, "evidence": "egress.test.ts 9 tests: both axes default false, assertAllowed throws when off, axis independence, fromConfig defaults" },
+    { "criterionId": "sc-6-6", "met": true, "evidence": "eslint src/medical/**/*.ts block forbids undici/got/axios/node-fetch + http/https/net/tls/dgram(+node:) + fetch global; single exception override for src/medical/retrieval/medline-source.ts (flat-config last-match-wins); lint passes; inert now, would fail if net import added elsewhere" },
+    { "criterionId": "sc-6-7", "met": true, "evidence": "engine reads FactStore.getActiveFacts('medical','patient','takes-medication'); answer body contains 'metformin 500mg'; no medication row written to HealthDataStore; HealthDataStore schema untouched (ADR-7)" },
+    { "criterionId": "sc-6-8", "met": true, "evidence": "zero-egress: numeric answered from compute (llmSpy.chat never called); literature both-axes-off -> retrieve {disabled}, MedlineSource.fetchPassages NOT called, abstained=true, abstain audit; axis independence (literature ON -> fetchPassages called)" }
+  ],
+  "filesChanged": [
+    { "path": "src/config/schema.ts", "action": "modified", "description": "MedicalSectionSchema (egress.cloudInference/literatureRetrieval default false), optional in BoberConfigSchema" },
+    { "path": "src/medical/egress.ts", "action": "created", "description": "EgressGuard: EgressAxis, isAllowed/assertAllowed (throws off), fromConfig defaults false; no network import" },
+    { "path": "src/medical/egress.test.ts", "action": "created", "description": "9 EgressGuard tests (sc-6-5)" },
+    { "path": "eslint.config.js", "action": "modified", "description": "src/medical/**/*.ts no-restricted-imports block + medline-source.ts exception override" },
+    { "path": "src/medical/retrieval/medline-source.ts", "action": "created", "description": "MedlineSource stub + RetrievalOutcome union; fetchPassages returns {kind:'abstain'}; ESLint-excepted file for S7 network call; no network import yet" },
+    { "path": "src/medical/retrieval/literature.ts", "action": "created", "description": "LiteratureRetriever: isAllowed('literature-retrieval') BEFORE source call -> {disabled} synchronously when off; delegates to MedlineSource when on" },
+    { "path": "src/medical/engine.ts", "action": "modified", "description": "MedicalSopDeps += egress/literature/facts/healthStore; full ordered SOP after gates: numerics -> meds(FactStore) -> egress -> retrieve(disabled=>abstain) -> footer -> audit -> PipelineResult; zero-arg ctor preserved" },
+    { "path": "src/medical/engine.test.ts", "action": "modified", "description": "Carry-forward A: inject llmSpy:LLMClient+numericsSpy into sc-2-4 ctor (real assertions); + sc-6-7 + sc-6-8 suites" },
+    { "path": "src/medical/numerics.test.ts", "action": "modified", "description": "Carry-forward B: readFileSync -> await readFile (node:fs/promises)" }
+  ],
+  "testsAdded": ["src/medical/egress.test.ts"],
+  "commits": ["4f3ba55 - bober(sprint-6): EgressGuard + medications-in-FactStore + full SOP wiring (zero-egress end-to-end)"],
+  "blockers": [],
+  "notes": "EVALUATOR FLAGS: (1) SOP ORDER (most critical): consent (Gate1) + red-flag (Gate2) remain FIRST/SECOND; numerics/meds/egress/retrieve/LLM all BELOW both gates — adversarially confirm NO downstream call is reachable on refuse/short-circuit. (2) lint exitCode: generator captured exitCode 1 for `npm run lint` despite 0 errors/2 warnings — confirm ground truth (likely warnings-cause-nonzero or capture artifact; prior sprints treated this as pass). (3) ESLint boundary: confirm it would FAIL if a network import were added to a non-excepted medical file, and that medline-source.ts currently has NO network import. (4) Both carry-forward cleanups done: sc-2-4 spies now injected; numerics.test.ts uses async readFile. (5) Confirm programming team + ts/skill/workflow byte-identical; selector zero-arg ctor intact. (6) Verify default outbound bytes = 0 with both axes off."
+}

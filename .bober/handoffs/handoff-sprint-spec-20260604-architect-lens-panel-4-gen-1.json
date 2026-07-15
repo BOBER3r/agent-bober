@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-architect-lens-panel-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-architect-lens-panel-4",
+  "specId": "spec-20260604-architect-lens-panel",
+  "timestamp": "2026-06-04T08:54:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Architect Decision Lens Panel — Sprint 4: native-surface foundation. Create a canonical skills/shared/arch-lens-panel.md (mirroring skills/shared/lens-panel.md) embedding the 6 arch-lens fragments + documenting the CP2 synthesize and CP5 reconcile protocols; add an additive lens/MODE section to agents/bober-architect.md; sync the .claude/agents copy byte-identical; add a vitest drift gate.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-1", "title": "synthesize() + arch-lenses + config", "summary": "src/orchestrator/arch-lenses.ts resolveArchLensFocus over 6 lenses; synthesize(); architect.panel config. Commit 7de08b5." },
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-2", "title": "TS CP2 synthesis panel", "summary": "Commits 6f82cea + 1d02543." },
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-3", "title": "TS CP5 review panel", "summary": "Commit 9163a56." }
+    ],
+    "currentBranch": "bober/architect-lens-panel",
+    "relevantFiles": [
+      "skills/shared/lens-panel.md",
+      "agents/bober-evaluator.md",
+      "agents/bober-architect.md",
+      ".claude/agents/bober-architect.md",
+      "src/orchestrator/arch-lenses.ts",
+      "src/orchestrator/lens-panel-parity.test.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-architect-lens-panel-4.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist. Stage ONLY: git add skills/shared/arch-lens-panel.md agents/bober-architect.md .claude/agents/bober-architect.md src/orchestrator/arch-lens-panel-parity.test.ts. NEVER `git add -A`. CRITICAL: agents/bober-architect.md and .claude/agents/bober-architect.md must end up BYTE-IDENTICAL (the .claude copy is a straight copy). The MODE section is ADDITIVE — do not change existing checkpoint prose. The arch fragments in the markdown must be VERBATIM from resolveArchLensFocus (the drift gate enforces this). Branch bober/architect-lens-panel — never main."
+}

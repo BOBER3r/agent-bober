@@ -1,0 +1,49 @@
+{
+  "contractId": "sprint-spec-20260604-evaluator-lens-panel-1",
+  "specId": "spec-20260604-evaluator-lens-panel",
+  "sprintNumber": 1,
+  "title": "Panel config, lens-aware evaluator, and reconcile wiring",
+  "description": "Add the opt-in evaluator.panel config (enabled/lenses/maxConcurrent, off by default) and make runAgentEvaluation lens-aware: when panel.enabled with >=2 lenses, fan out one judge call per lens (bounded by maxConcurrent) and reconcile() the per-lens EvalResults into a single canonical evaluator='panel' EvalResult; otherwise run the existing single judge call byte-identically. The combine logic, programmatic eval, retry loop, and EvaluationRunResult shape are untouched.",
+  "status": "completed",
+  "completedAt": "2026-06-04T04:06:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "evaluator.panel exists in EvaluatorSectionSchema as an object { enabled: boolean default false, lenses: z.array(z.string()) default [], maxConcurrent: z.number().int().min(1) default 4 }, mirrored in createDefaultConfig; a schema unit test asserts the defaults and that a config without a panel field still parses (panel resolves to the default).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C2", "description": "With panel unset OR enabled=false OR lenses.length<2, runAgentEvaluation makes EXACTLY ONE judge LLM call and returns an EvalResult equivalent to today's single-judge path. A unit test mocks createClient (no real LLM) and asserts the client is invoked exactly once on the off path.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "With panel.enabled=true and >=2 lenses, runAgentEvaluation issues one judge call per lens, never exceeding maxConcurrent concurrent calls, and returns reconcile(contractId, round, lensResults, timestamp) — a canonical EvalResult with evaluator='panel'. A unit test with a mocked client asserts call-count == lenses.length and peak concurrency <= maxConcurrent.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "A 2-pass / 2-fail lens panel reconciles to passed=false (fail-closed), and the reconciled agentResult flows unchanged into runEvaluatorAgent's combine (passed = programmaticEval.passed && agentResult.passed). A unit test drives the mocked client to return 2 pass + 2 fail lens verdicts and asserts the final EvaluationRunResult.passed is false.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C5", "description": "npx tsc --noEmit, npm run build, and npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented flaky tool-count baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do not add the built-in lens prompt catalog or per-lens telemetry — that is sprint 2 (a single inline lens-focus string is enough this sprint).",
+    "Do not change the programmatic evaluators, the combine logic, the retry loop, or the EvaluationRunResult shape.",
+    "Do not modify src/orchestrator/workflow/reconciler.ts — reuse reconcile() as-is.",
+    "Do not touch the workflow engine, .claude/workflows, agents/*.md, or providers/types.ts.",
+    "Do not invoke any real LLM in tests — mock createClient."
+  ],
+  "stopConditions": [
+    "Stop when the off path is a single judge call, the on path fans out + reconciles with bounded concurrency, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to src/config/schema.ts (+ defaults.ts if its literal needs the field), src/orchestrator/evaluator-agent.ts, and a new evaluator-agent.test.ts (plus schema.test.ts additions)."
+  ],
+  "definitionOfDone": "evaluator.panel is a validated opt-in config defaulting to off; runAgentEvaluation runs the existing single judge call when off (byte-identical, proven by a client-mocked single-call test) and fans out >=2 lenses bounded by maxConcurrent then reconcile()s into one evaluator='panel' EvalResult when on; a 2-2 tie fails closed and flows through the unchanged combine; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "runAgentEvaluation (src/orchestrator/evaluator-agent.ts:134) builds the judge prompt and calls createClient; a lens is injected as a focus block into that prompt.",
+    "reconcile's sprintId/round args do not affect output, so contract.contractId and an iteration/round number (or 1) are safe to pass.",
+    "createClient can be mocked via vi.mock to avoid real LLM calls; the handoff carries the contract + iteration."
+  ],
+  "outOfScope": ["lens catalog", "per-lens telemetry", "workflow path", "skill-path evaluator"],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read src/orchestrator/evaluator-agent.ts fully — especially runEvaluatorAgent (line 41) and runAgentEvaluation (line 134, currently returns one EvalResult from a single createClient call). Read src/orchestrator/workflow/reconciler.ts for reconcile(sprintId, round, lensVerdicts, timestamp): EvalResult (evaluator='panel', strict majority, fail-closed tie). Read src/config/schema.ts EvaluatorSectionSchema (line 104) + createDefaultConfig (line ~375). STEP 1 (config): add `panel: z.object({ enabled: z.boolean().default(false), lenses: z.array(z.string()).default([]), maxConcurrent: z.number().int().min(1).default(4) }).default({ enabled:false, lenses:[], maxConcurrent:4 })` to EvaluatorSectionSchema; mirror in createDefaultConfig's evaluator block. STEP 2 (lens-aware eval): refactor runAgentEvaluation so the prompt-building + single createClient call becomes an inner helper `runSingleLensEval(handoff, programmaticResults, projectRoot, config, lens?: string): Promise<EvalResult>` — when lens is provided, inject a focus block like `\\n\\n## Evaluation Lens: ${lens}\\nFocus your judgment specifically on the ${lens} dimension; ...` into the user/system prompt; when lens is undefined, the prompt is EXACTLY as today (byte-identical). STEP 3 (panel branch): in runAgentEvaluation, read config.evaluator.panel; if (!panel.enabled || panel.lenses.length < 2) return runSingleLensEval(...) with NO lens (the off path — single call). Else: run panel.lenses via a bounded-concurrency map (cap = panel.maxConcurrent) of runSingleLensEval(..., lens), collect EvalResult[], then `return reconcile(contract.contractId, iteration ?? 1, lensResults, new Date().toISOString())`. For bounded concurrency, write a tiny inline pool (or chunk lenses into groups of maxConcurrent and Promise.all each group). Pull the iteration/round from the handoff if available; reconcile ignores it for output so a fallback of 1 is fine. STEP 4 (tests): create src/orchestrator/evaluator-agent.test.ts. Use vi.mock to mock createClient (and any LLM client) so each lens returns a deterministic EvalResult — assert: (a) off path (panel undefined/disabled/<2 lenses) → client called exactly once; (b) on path with 3 lenses → client called 3 times, peak concurrency <= maxConcurrent (use a concurrency counter in the mock); (c) 2 pass + 2 fail → reconciled passed=false AND the full runEvaluatorAgent combine yields EvaluationRunResult.passed=false (mock programmaticEval to pass so the panel decides). Also add an EvaluatorSectionSchema panel test in src/config/schema.test.ts. Use import type, ESM .js specifiers, unicode section headers. Conventional commit: bober(sprint-1): add evaluator.panel config + lens-aware reconcile wiring.",
+  "evaluatorNotes": "Confirm EvaluatorSectionSchema.panel defaults (enabled false, lenses [], maxConcurrent 4) and that a config without panel parses. Read runAgentEvaluation: confirm the off path (panel off / <2 lenses) calls the judge exactly once and the lens-less prompt is unchanged from before (diff the prompt assembly — no lens text when lens is undefined). Confirm the on path maps lenses → runSingleLensEval and calls reconcile() from src/orchestrator/workflow/reconciler.ts (not a reimplementation). Run the new evaluator-agent.test.ts: verify the single-call off-path assertion, the call-count==lenses.length on-path assertion, the peak-concurrency<=maxConcurrent assertion (inspect how the mock counts concurrency), and the 2-2 tie → EvaluationRunResult.passed=false assertion. Confirm createClient is mocked (no real LLM/network). Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0), and the full npx vitest run (tolerate only the flaky tool-count baseline). Confirm git diff is confined to schema.ts/defaults.ts, evaluator-agent.ts, evaluator-agent.test.ts, schema.test.ts; reconciler.ts and the combine logic unchanged.",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/config/defaults.ts",
+    "src/config/schema.test.ts",
+    "src/orchestrator/evaluator-agent.ts",
+    "src/orchestrator/evaluator-agent.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T01:00:00Z",
+  "updatedAt": "2026-06-04T01:00:00Z"
+}

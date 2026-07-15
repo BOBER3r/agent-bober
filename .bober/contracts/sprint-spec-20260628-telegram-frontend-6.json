@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-6",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 6,
+  "title": "Streaming run progress (in-place edits) + silent scheduled digest delivery",
+  "description": "Add two outbound delivery modes over the sendSafe funnel: (a) streaming \u2014 a long-running operation reports progress by editing one status message in place as progress events arrive, ending with a final summary; (b) silent digest \u2014 a scheduler-handed digest payload is sent with notifications disabled. No run, fleet, or scheduler logic is added; this remains a presentation adapter.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-telegram-frontend-5"
+  ],
+  "features": [
+    "feat-8"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "`npm run build` (tsc) compiles the streaming and digest delivery additions with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "A unit test shows the streaming sender, given a sequence of N>=2 progress updates, issues one send call and at least two edit calls on the same message id (verified via an injected transport spy) rather than one new message per update.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "A unit test shows the digest sender sets the disable_notification flag on the outgoing message.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "A unit test shows both the streaming and digest senders route their content through the sendSafe funnel.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "Triggering a long do-bridge run shows a status message in Telegram that updates in place at least twice and ends with a final result; a delivered digest arrives without a notification sound.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the scheduler itself \u2014 this sprint only delivers a digest payload handed to it; scheduling cadence is owned elsewhere.",
+    "Do not add run or fleet execution logic \u2014 read existing run progress signals only; this stays a presentation adapter.",
+    "Do not send sensitive run detail \u2014 status updates and digests carry summaries only via sendSafe.",
+    "Do not post a new message per progress tick \u2014 edit a single status message in place.",
+    "Do not bypass the whitelist or the sendSafe funnel."
+  ],
+  "stopConditions": [
+    "The streaming (one send, multiple edits) and silent-flag unit tests pass and `npm run build` exits zero.",
+    "A digest send sets disable_notification and a streamed run produces in-place edits rather than repeated new messages.",
+    "Both senders emit through sendSafe."
+  ],
+  "definitionOfDone": "Long-running operations report progress by editing one Telegram status message in place as progress events arrive, ending with a final summary, instead of posting a new message per tick. Scheduled digests are delivered with notifications silenced (disable_notification). Both paths emit only non-sensitive summaries through the sendSafe funnel, and neither adds run, fleet, or scheduler logic.",
+  "assumptions": [
+    "Run progress is read from existing signals (e.g. history.jsonl events / telemetry) without adding run logic; the streaming sender consumes an async iterable / callback of progress updates supplied by the caller.",
+    "The Telegram transport wrapper from Sprint 1 exposes editMessage and a disable_notification option on sendMessage (libraries supporting getUpdates expose both).",
+    "A 'digest payload' is plain summary text handed in by the scheduler owner; this adapter only sends it silently."
+  ],
+  "outOfScope": [
+    "Deciding what goes into a digest or when it fires (scheduler, owned elsewhere).",
+    "Token-level streaming from the model \u2014 progress is event/step granularity, not per-token."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Add src/telegram/streaming.ts (streamProgress(transport, chatId, updates): send an initial status message, then call editMessage on that message id for each subsequent update, final edit = summary) and src/telegram/digest.ts (sendDigest(transport, chatId, text): send via sendSafe with disable_notification: true). Both go through the sendSafe funnel from Sprint 1 (extend the funnel to accept delivery options like silent/edit-target rather than calling the transport directly). Source progress generically: accept an injected async iterable or onUpdate callback so the unit test drives a fixed sequence; for the manual path, tail existing run progress (history.jsonl/telemetry) \u2014 do not add run logic. Wire so a do-bridge promotion run (resolved via Sprint 4's gate) reports via streamProgress. ESM .js imports, `import type`, no `any`, node:fs/promises only.",
+  "evaluatorNotes": "With an injected transport spy, drive >=2 progress updates and assert exactly one send + >=2 edits on the same message id. Assert sendDigest sets disable_notification true. Assert both paths call sendSafe (no direct transport send). Confirm no run/fleet/scheduler logic was added (diff stays within src/telegram/). Run build + the streaming/digest unit tests.",
+  "estimatedFiles": [
+    "src/telegram/streaming.ts",
+    "src/telegram/streaming.test.ts",
+    "src/telegram/digest.ts",
+    "src/telegram/digest.test.ts",
+    "src/telegram/outbound.ts",
+    "src/telegram/bot.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-30T01:15:55Z"
+}

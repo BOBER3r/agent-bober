@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260529-anthropic-prompt-caching-1-1",
+  "contractId": "sprint-spec-20260529-anthropic-prompt-caching-1",
+  "specId": "spec-20260529-anthropic-prompt-caching",
+  "timestamp": "2026-05-29T17:05:00Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 6, "criteriaFailed": 1, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 1, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "Zero TypeScript errors (exit 0)." },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "Zero lint errors/warnings (exit 0)." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "Clean tsc build (exit 0)." },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "2 failed | 1335 passed | 4 skipped — both failures are the documented flaky 37-tool-count baseline; all provider + factory tests pass." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "C1", "required": true, "result": "pass", "evidence": "buildCachedSystem returns [{type:'text',text,cache_control:{type:'ephemeral'}}]; test C1 + C1-default pass." },
+    { "criterionId": "C2", "required": true, "result": "pass", "evidence": "attachMessageBreakpoints caps maxMsgBreakpoints=3 (+1 system); test asserts count<=4 and latest block has ephemeral cache_control." },
+    { "criterionId": "C3", "required": true, "result": "pass", "evidence": "Disabled branch keeps system as plain string and messages unmodified; C3 + C3-multi assert zero 'cache_control' in stringified request." },
+    { "criterionId": "C4", "required": true, "result": "fail", "evidence": "factory.ts:161-165 correctly reads providerConfig.promptCaching (default true) and forwards { promptCaching } to AnthropicAdapter, BUT grep of factory.test.ts for 'promptCaching' returns zero results. No test passes providerConfig:{promptCaching:false} through createClient nor asserts default-true forwarding. Criterion requires 'asserted by a factory unit test'.", "feedback": "Add factory tests: (1) createClient('anthropic', null, { apiKey, promptCaching:false }) → AnthropicAdapter constructed with { promptCaching:false } (use vi.spyOn/vi.mock('./anthropic.js') to capture the opts arg); (2) omitting promptCaching → adapter constructed with { promptCaching:true }. Do not set BOBER_TEST_DETERMINISTIC." },
+    { "criterionId": "C5", "required": true, "result": "pass", "evidence": "constructor(apiKey?, opts?:{promptCaching?:boolean}); typecheck exit 0." },
+    { "criterionId": "C6", "required": true, "result": "pass", "evidence": "npm run build exit 0, clean." },
+    { "criterionId": "C7", "required": true, "result": "pass", "evidence": "Only the 2 flaky baseline 37-tool-count failures; all src/providers/ + factory tests green; 7 new anthropic tests pass." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "high", "category": "missing-test", "file": "src/providers/factory.test.ts", "description": "C4 requires the promptCaching flag resolution in createClient to be asserted by a factory unit test; none exists. Factory CODE is correct — only test coverage is missing.", "expected": "Two new factory tests: (1) providerConfig.promptCaching=false reaches the adapter as { promptCaching:false }; (2) omitted promptCaching defaults to { promptCaching:true }. Capture the constructor opts via vi.spyOn or vi.mock('./anthropic.js'). Must not set BOBER_TEST_DETERMINISTIC." }
+  ],
+  "summary": "Implementation is technically correct and well-isolated; all strategies pass. C4 fails solely on its verification requirement — factory.test.ts has no test exercising providerConfig.promptCaching through createClient. One focused factory test (false + default cases) closes the sprint."
+}

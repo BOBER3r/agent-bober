@@ -1,0 +1,770 @@
+{
+  "specId": "spec-20260628-medical-analysis",
+  "version": 1,
+  "title": "Medical analysis: proactive + reactive insights + recommendation judge-loop",
+  "description": "Adds the proactive medical intelligence layer to agent-bober's existing medical module: a deterministic on-ingest/schedulable review pass that emits Finding notes into a vault (trends, test-gaps, cross-marker dig-deeper offers, egress-gated online research), and a recommendation path that RECOMMENDS (no refer-out hedging) only after clearing a 4-lens fleet judge-loop (evidence-grader, contraindication-checker with VETO, conservative-clinician, optimization-lens) with a red-flag short-circuit that fires first and a fail-closed dissent path.",
+  "status": "completed",
+  "mode": "brownfield",
+  "dependsOn": [
+    "spec-20260628-medical-ingest"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Proactive trend Findings + vault writer + Dataview dashboard + review pass",
+      "description": "A deterministic, offline proactive review pass over the existing HealthDataStore lab series that detects reference-range crossings and slope trends and writes Finding notes (markdown-with-frontmatter) plus a Dataview dashboard into a medical vault, exposed via `bober medical review` and a runnable runProactiveReview entrypoint the scheduler can import.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: analyzeTrends, given a seeded HealthDataStore, returns MedicalFindings for biomarkers whose latest value crosses a reference edge or whose slope trends toward an edge, using only NumericsQueryLayer.getLabTrend (no LLM, no network).",
+        "AC2: runProactiveReview writes one Finding markdown note per detected condition into the vault findings/ directory plus a findings/dashboard.md Dataview note, and re-running over an unchanged store does not create duplicate files (deterministic ids).",
+        "AC3: Finding frontmatter carries the common Finding field set (id, domain, kind, urgency, severity, evidence, surfacedAt, status) with surfacedAt equal to the injected timestamp."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Recommendation judge-loop core (4-lens panel, contraindication VETO, fail-closed)",
+      "description": "A pure, injectable multi-lens judge loop that gates candidate recommendations through four lenses, reconciles by strict majority with an absolute contraindication veto, regenerates up to ~3 rounds on rejection, and fails closed (capturing dissent) when consensus is not reached. The red-flag short-circuit runs first.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: runJudgeLoop accepts a candidate only when a strict majority of lenses approve AND the contraindication-checker does not veto; a veto or a tie yields accepted=false.",
+        "AC2: A red-flag prompt short-circuits before any candidate is generated; lenses that throw or emit unparseable verdicts count as reject (fail-closed); the loop never throws and is bounded by a fixed call budget.",
+        "AC3: When no consensus is reached after the round cap, runJudgeLoop returns accepted=false with a machine-readable reason and the collected per-lens dissent."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Recommendation generation end-to-end + `bober medical recommend` CLI",
+      "description": "Wires the judge-loop into a real path: assembles profile context from FactStore + the medical profile, builds per-lens clients with tier-policy provider diversity (gated by cloud-inference, fail-closed to local), generates a candidate, gates it, and emits a kind=action Finding with LLM-assigned urgency/severity/confidence on acceptance, a kind=question 'flagged for review' Finding on no-consensus, or the canned escalation on a red-flag.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: An accepted recommendation is written as a kind=action Finding whose body states the recommendation directly with no refer-out hedging and carries LLM-assigned urgency/severity (1..5) and confidence.",
+        "AC2: A no-consensus outcome writes only a kind=question Finding titled 'flagged for your review' with the panel dissent, and a red-flag writes no recommendation Finding and appends a short-circuit audit entry.",
+        "AC3: With cloud-inference egress off, all lens clients and the generator resolve to the local model (no cloud client constructed); MedicalSopEngine and the reactive Q&A path are unchanged."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Test-gap (cadence) suggestions + cross-marker dig-deeper offers",
+      "description": "Extends the deterministic proactive pass with a closed recommended-cadence table that flags biomarkers overdue for re-testing and a deterministic cross-marker detector that OFFERS a 'want me to dig deeper?' Finding without auto-running analysis; an explicit --dig-deeper path reuses the sprint-3 recommendation loop.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: detectTestGaps flags a biomarker whose latest result is older than its closed-table cadence relative to injected now, and skips biomarkers absent from the table (no guessed cadence).",
+        "AC2: detectCrossMarkerPatterns emits an offer Finding (kind=question) for related markers both out of range without making any LLM call; runProactiveReview emits trend, gap, and offer findings in one offline pass.",
+        "AC3: `bober medical review --dig-deeper <id>` delegates the deeper analysis to the sprint-3 generateRecommendation rather than re-implementing it."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Online research-latest-findings + vault notes (egress-gated, schedulable)",
+      "description": "An egress-gated research job that, when the literature-retrieval axis is on, retrieves MedlinePlus evidence for the user's markers, grounds notes through the fail-closed grounding critic, writes research notes (with citations) into the vault research/ directory plus optional 'new evidence' watch Findings, and is a no-op with zero egress when the axis is off. Exposed as runResearchJob (for the scheduler) and `bober medical research`.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: With literature-retrieval off, runResearchJob returns { disabled: true }, writes nothing, and never invokes MedlineSource (zero-egress).",
+        "AC2: With the axis on, grounded topics produce research notes carrying MedlinePlus citation frontmatter; critic-rejected/abstained topics write no clinical note.",
+        "AC3: Synthesis fail-closes to the local model unless cloud-inference is enabled; the job returns a { notesWritten, findingsWritten, disabled } summary and is importable by the scheduler."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "assumptions": [
+    "Implementation is additive new logic under src/medical/ (analysis/, recommend/, research/) reusing the shipped substrate; the reactive MedicalSopEngine (src/medical/engine.ts) is left untouched as the reactive Q&A surface.",
+    "Lab time-series, trend math, and the deterministic-numerics boundary already exist: getLabSeries (src/medical/health-store.ts:196), LabTrend (src/medical/types.ts:176), NumericsQueryLayer.getLabTrend (src/medical/numerics.ts:212). Trend detection reuses these — no new numeric primitive (ADR-3 closed whitelist at src/medical/types.ts:142 is unchanged).",
+    "The recommendation judge-loop reuses the fleet critique pattern (runCritiqueLoop at src/fleet/critic-deep.ts:211-278) and the never-throwing verdict parser (validateGroundingVerdict at src/medical/retrieval/grounding-critic.ts:40-88), but inverts fail-open to FAIL-CLOSED (grounding-critic.ts:206 is the model, not critic-deep.ts:206); reconciliation mirrors lens-panel strict-majority/fail-closed-on-tie (skills/shared/lens-panel.md:80-84). The four lenses match research §4a:186-191.",
+    "Per-lens model diversity uses tierPolicy.resolveTier (src/fleet/tier-policy.ts:75), honoured only when egress.isAllowed('cloud-inference') (src/medical/egress.ts:35); otherwise model selection fail-closes to the local Ollama default via buildMedicalInferenceClient (src/medical/inference.ts:41-49).",
+    "Profile inputs: meds/supplements come from FactStore.getActiveFacts('medical','patient', predicate) (src/medical/engine.ts:370); conditions/allergies/goals come from the profile reader delivered by the dependency spec-20260628-medical-ingest, defaulting to empty (degraded but functional) when absent.",
+    "Findings are consumed-not-redefined: the canonical Finding Zod schema is owned by spec-20260628-priority-hub; this spec emits the common Finding field set (research §3a:121-126) as vault markdown frontmatter (the vault is canonical per research §3b:150). No competing canonical schema is created here, and cross-repo aggregation/ranking stays with the hub.",
+    "Online research reuses LiteratureRetriever/MedlineSource + synthesizeGrounded with the fail-closed grounding critic (src/medical/retrieval/literature.ts), gated by the independent literature-retrieval and cloud-inference egress axes (src/medical/egress.ts:4-22); only MedlinePlus is in scope (research §5:210).",
+    "runProactiveReview and runResearchJob are exposed as importable entrypoints for the scheduler (spec-20260628-research-scheduler), which owns the cron/cadence; this spec only provides the runnable passes and a research-job it can call.",
+    "All timestamps are injected (opts.now); the clock is read only at the CLI boundary, mirroring src/cli/commands/medical.ts:89. Audit entries remain IDs/enums only (no PHI), per the existing AuditLog discipline (src/medical/audit.ts)."
+  ],
+  "outOfScope": [
+    "Cross-repo finding aggregation, ranking, and the canonical Finding Zod schema (owned by spec-20260628-priority-hub).",
+    "Lab/data ingestion, lab-PDF parsing, supplements ingestion, and the SOPS-encrypted profile (owned by spec-20260628-medical-ingest).",
+    "The scheduler/cron engine itself (owned by spec-20260628-research-scheduler) — this spec exposes runnable passes for it to call.",
+    "Changes to the reactive MedicalSopEngine / `bober chat medical` Q&A path (kept as-is).",
+    "Non-MedlinePlus literature sources (Quest/LabCorp/CSV) — unverified in research §5.",
+    "New deterministic numeric primitives (ADR-3 closed whitelist unchanged).",
+    "FFDCA §201(h) / sharing-recommendations-with-a-second-person legal review (policy, not engineering — research §4a:201)."
+  ],
+  "ambiguityScore": 4,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "data-model",
+      "question": "Where are Finding notes written, and who owns the canonical Finding schema this spec must conform to?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Write Findings as vault markdown-with-frontmatter (findings/<id>.md) using the common Finding field set; the hub owns the canonical Zod and aggregation."
+        },
+        {
+          "label": "B",
+          "description": "Define a new canonical Finding Zod schema inside src/medical/ and have the hub import it."
+        }
+      ],
+      "recommendation": "A — research §3b:150 makes the vault canonical and §3a/spec scope assign the canonical schema + aggregation to spec-20260628-priority-hub; redefining it here would violate 'consume, do not redefine'.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q2",
+      "category": "tech-constraints",
+      "question": "Should the recommendation judge-loop reuse the fleet critique loop's fail-open accept-best behaviour or invert it?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Reuse fleet fail-open/accept-best (critic-deep.ts:206) for resilience."
+        },
+        {
+          "label": "B",
+          "description": "Invert to FAIL-CLOSED (grounding-critic.ts:206): no consensus -> not surfaced as a recommendation, dissent captured."
+        }
+      ],
+      "recommendation": "B — research §4a:194 mandates fail-closed for medical recommendations; the grounding-critic already established the inversion precedent in this module.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q3",
+      "category": "integrations",
+      "question": "How should per-lens model diversity and online research be gated against the existing egress axes?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Reuse the existing independent egress axes: cloud-inference for cloud models, literature-retrieval for MedlinePlus; fail-closed to local when off."
+        },
+        {
+          "label": "B",
+          "description": "Add a new dedicated 'recommendation' egress axis."
+        }
+      ],
+      "recommendation": "A — research §4a:197 says reuse the cloud-inference axis pattern; EgressGuard (src/medical/egress.ts:4-22) already exposes independent cloud-inference + literature-retrieval axes, both default false.",
+      "ambiguityWeight": 1
+    },
+    {
+      "questionId": "Q4",
+      "category": "regression-risk",
+      "question": "Is the new proactive/recommendation work additive, or does it modify the reactive MedicalSopEngine SOP?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Additive new modules under src/medical/{analysis,recommend,research}; engine.ts untouched."
+        },
+        {
+          "label": "B",
+          "description": "Fold proactive logic into MedicalSopEngine.run."
+        }
+      ],
+      "recommendation": "A — the team-lead scope says 'reactive Q&A stays (existing engine)'; the engine's ordered SOP (engine.ts:1-19) carries five code-enforced guarantees that must not regress, so new logic lands beside it.",
+      "ambiguityWeight": 1
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Every decision is grounded in the locked design (.bober/research/research-20260627-knowledge-platform-landscape.md §3a/§3b/§4/§4a) and verified substrate. No user-blocking ambiguity remains; ambiguityScore=4 (<7).",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          ".bober/research/research-20260627-knowledge-platform-landscape.md:107-203",
+          "src/medical/engine.ts:191-437",
+          "src/medical/numerics.ts:212-251",
+          "src/medical/health-store.ts:196-206",
+          "src/medical/retrieval/grounding-critic.ts:170-207",
+          "src/medical/retrieval/literature.ts:277-340",
+          "src/medical/egress.ts:1-59",
+          "src/medical/inference.ts:31-56",
+          "src/fleet/critic-deep.ts:211-278",
+          "src/fleet/tier-policy.ts:50-82",
+          "src/fleet/shared-blackboard.ts:38-111",
+          "skills/shared/lens-panel.md:80-84"
+        ]
+      }
+    },
+    {
+      "questionId": "Q1",
+      "answer": "A — vault markdown-with-frontmatter using the common Finding field set; canonical Zod + aggregation owned by spec-20260628-priority-hub (research §3b:150, §3a:121-126).",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "B — FAIL-CLOSED judge-loop, mirroring grounding-critic.ts:206; no consensus is surfaced as 'flagged for your review' with dissent (research §4a:194).",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "A — reuse the existing independent egress axes (cloud-inference + literature-retrieval) from EgressGuard; fail-closed to local via buildMedicalInferenceClient (research §4a:197).",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "A — additive new modules under src/medical/{analysis,recommend,research}; MedicalSopEngine and its five code-enforced guarantees are untouched.",
+      "resolvedAt": "2026-06-28T00:00:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "techStack": [
+    "TypeScript (ESM, NodeNext)",
+    "better-sqlite3 (HealthDataStore / FactStore)",
+    "Vitest",
+    "Zod",
+    "commander (CLI)",
+    "Ollama local inference (default) + provider factory for tiered cloud models"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "HealthDataStore.getLabSeries + NumericsQueryLayer.getLabTrend (deterministic trends)",
+      "FactStore.getActiveFacts (meds/supplements for the contraindication lens)",
+      "EgressGuard (cloud-inference + literature-retrieval axes) + buildMedicalInferenceClient (fail-closed local)",
+      "tierPolicy.resolveTier (per-lens provider diversity)",
+      "LiteratureRetriever + synthesizeGrounded + grounding critic (online research, fail-closed)",
+      "MedicalGuardrails.evaluate (red-flag short-circuit, runs first)",
+      "AuditLog (IDs/enums-only audit entries)"
+    ],
+    "dataModel": "Vault is canonical (markdown+frontmatter). Findings: findings/<id>.md with the common Finding field set (research §3a). Research notes: research/<date>-<marker>.md with citation frontmatter. Dashboard: findings/dashboard.md (Dataview query). HealthDataStore (SQLite) is the derived index for trend math; FactStore holds meds/supplements. No new canonical schema is defined here.",
+    "securityConsiderations": [
+      "Zero-egress default: cloud-inference and literature-retrieval axes default false; fail-closed to local model and no-op research when off.",
+      "Red-flag short-circuit fires FIRST and is non-negotiable; emergencies escalate and never become recommendations.",
+      "Contraindication-checker holds an absolute VETO over meds/supplements/conditions.",
+      "Judge-loop is FAIL-CLOSED: no consensus -> not surfaced as a recommendation.",
+      "Deterministic numerics stay deterministic (no LLM arithmetic); LLM only assigns urgency/severity/confidence (interpretation).",
+      "Audit entries remain IDs/enums only — no PHI, no prompt text, no health values."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "The proactive trend/gap/cross-marker-offer pass and all numerics make zero LLM and zero network calls.",
+      "verificationMethod": "Unit tests assert no provider/network import is reached and analyzers are pure; evaluator greps src/medical/analysis for fetch/http/providers imports."
+    },
+    {
+      "category": "security",
+      "requirement": "Online research performs zero egress when the literature-retrieval axis is off (no MedlineSource invocation).",
+      "verificationMethod": "Unit test with the axis off asserts runResearchJob returns disabled and MedlineSource is never constructed (spy)."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The recommendation judge-loop never throws, is bounded by a fixed call budget, and fails closed on veto/tie/no-consensus/parse-exhaustion/transport-error.",
+      "verificationMethod": "Unit tests for veto, tie, no-consensus, thrown-lens, and unparseable-verdict paths plus a MEDICAL_PANEL_MAX_TOTAL_CALLS bound assertion."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "All new code is additive under src/medical/{analysis,recommend,research}; MedicalSopEngine and its tests are unchanged.",
+      "verificationMethod": "Evaluator confirms git diff does not touch src/medical/engine.ts; full Vitest suite passes with no new failures."
+    }
+  ],
+  "constraints": [
+    "ESM with .js import extensions; node:fs/promises only (no sync fs); type imports via import type (project principles).",
+    "Reuse existing substrate; do not introduce a new state store or a new egress axis.",
+    "Stay within sprintSize=medium and maxSprints=10 (5 sprints planned).",
+    "Do not redefine the canonical Finding schema (owned by spec-20260628-priority-hub)."
+  ],
+  "metadata": {
+    "dependsOn": [
+      "spec-20260628-medical-ingest"
+    ],
+    "consumesFindingSchemaFrom": "spec-20260628-priority-hub",
+    "providesEntrypointsFor": "spec-20260628-research-scheduler",
+    "contractIds": [
+      "sprint-spec-20260628-medical-analysis-1",
+      "sprint-spec-20260628-medical-analysis-2",
+      "sprint-spec-20260628-medical-analysis-3",
+      "sprint-spec-20260628-medical-analysis-4",
+      "sprint-spec-20260628-medical-analysis-5"
+    ],
+    "autonomousMode": true
+  },
+  "sprints": [
+    {
+      "contractId": "sprint-spec-20260628-medical-analysis-1",
+      "specId": "spec-20260628-medical-analysis",
+      "sprintNumber": 1,
+      "title": "Proactive trend Findings + vault Finding writer + Dataview dashboard + review pass",
+      "description": "Add a deterministic proactive review pass that detects lab trends and reference-range crossings over the existing HealthDataStore lab series and emits Finding notes (markdown-with-frontmatter) into a medical vault findings/ directory plus a Dataview dashboard note, exposed via `bober medical review` and a runnable runProactiveReview entrypoint the scheduler can import.",
+      "status": "proposed",
+      "dependsOn": [],
+      "features": [
+        "feat-1"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-1-1",
+          "description": "Running the project build (tsc) after the sprint produces zero type errors with the new src/medical/analysis modules included.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-2",
+          "description": "A Vitest unit test seeds a HealthDataStore (:memory:) with an 'ldl' lab series whose latest value exceeds referenceHigh and asserts analyzeTrends returns at least one MedicalFinding with domain 'medical', kind 'watch' or 'risk', and 'ldl' present in its title.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-3",
+          "description": "A Vitest test asserts a flat in-range biomarker series produces zero trend findings, and a strictly rising series that crosses referenceHigh produces exactly one trend finding for that biomarker.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-4",
+          "description": "A Vitest test calls runProactiveReview twice against the same seeded store and injected now, asserting the count of files under the vault findings directory is identical after both runs (deterministic ids give idempotent overwrite, no duplicates).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-5",
+          "description": "A Vitest test asserts writeDashboard emits findings/dashboard.md containing a fenced dataview code block that references the frontmatter fields urgency and kind.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-6",
+          "description": "A Vitest test asserts serializeFindingToMarkdown emits YAML frontmatter containing keys id, domain, kind, urgency, severity, surfacedAt, status and that surfacedAt equals the injected ISO timestamp (no wall-clock read).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-1-7",
+          "description": "Running `bober medical review` against a project with a seeded .bober/medical/health.db prints the number of findings written and the dashboard path to stdout and exits with code 0.",
+          "verificationMethod": "manual",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do not call any LLM, network, or cloud service in the trend analyzer, finding-writer, or review pass — this sprint is fully deterministic and offline.",
+        "Do not define a new canonical Zod Finding schema; the canonical schema is owned by spec-20260628-priority-hub. This sprint emits the common Finding field set as vault markdown frontmatter only.",
+        "Do not modify MedicalSopEngine (src/medical/engine.ts) or the reactive Q&A path.",
+        "Do not write health values into the audit log; AuditLog entries remain IDs/enums only.",
+        "Do not hand-roll trend arithmetic — reuse NumericsQueryLayer.getLabTrend for slope and latest values."
+      ],
+      "stopConditions": [
+        "All required success criteria sc-1-1 through sc-1-6 pass evaluation and `bober medical review` exits 0 against a seeded store.",
+        "The new modules under src/medical/analysis/ have collocated *.test.ts files and the full Vitest suite passes with no new failures."
+      ],
+      "definitionOfDone": "Running `bober medical review` (or importing runProactiveReview) scans the existing lab series in HealthDataStore, applies deterministic reference-range and slope rules via NumericsQueryLayer.getLabTrend, and writes one Finding markdown note per detected condition into the vault findings/<id>.md with common-Finding frontmatter, plus a findings/dashboard.md Dataview note. Re-running over an unchanged store overwrites the same files without creating duplicates. No LLM or network is involved. The reactive medical Q&A engine is untouched.",
+      "assumptions": [
+        "Vault directory resolves to config.medical.vaultDir when set, otherwise <projectRoot>/.bober/medical/vault — mirrors the .bober/medical/health.db location used at src/cli/commands/medical.ts:95-98 and src/medical/engine.ts:350.",
+        "The common Finding field set is taken from research §3a (id, domain, title, kind(action|watch|risk|question), urgency 1-5, severity 1-5, evidence[], surfacedAt, dueBy?, tags[], status, promotesTo?); emitted as YAML frontmatter validated by the hub's canonical Zod when aggregating.",
+        "Deterministic trend findings assign deterministic urgency/severity from rule tiers; LLM-assigned urgency/severity is reserved for recommendations (sprint 3).",
+        "Lab trend math reuses NumericsQueryLayer.getLabTrend (src/medical/numerics.ts:212) and getLabSeries (src/medical/health-store.ts:196); no new numeric primitive is added.",
+        "All timestamps are injected via opts.now; the clock is read only at the CLI boundary.",
+        "Finding ids are derived deterministically (SHA-256 slice, mirroring observationId at src/medical/health-store.ts:32-42) so the same condition maps to the same note file across runs."
+      ],
+      "outOfScope": [
+        "Test-gap cadence suggestions and cross-marker dig-deeper (sprint 4).",
+        "Online research notes (sprint 5).",
+        "LLM recommendations and the judge-loop (sprints 2-3).",
+        "Persisting findings into FactStore for hub aggregation (owned by spec-20260628-priority-hub)."
+      ],
+      "ambiguityScore": 3,
+      "generatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-1.json for full generator notes.",
+      "evaluatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-1.json for full evaluator notes.",
+      "estimatedFiles": [
+        "src/medical/analysis/finding.ts",
+        "src/medical/analysis/finding.test.ts",
+        "src/medical/analysis/finding-writer.ts",
+        "src/medical/analysis/finding-writer.test.ts",
+        "src/medical/analysis/trends.ts",
+        "src/medical/analysis/trends.test.ts",
+        "src/medical/analysis/review-pass.ts",
+        "src/medical/analysis/review-pass.test.ts",
+        "src/config/schema.ts",
+        "src/cli/commands/medical.ts"
+      ],
+      "estimatedDuration": "medium"
+    },
+    {
+      "contractId": "sprint-spec-20260628-medical-analysis-2",
+      "specId": "spec-20260628-medical-analysis",
+      "sprintNumber": 2,
+      "title": "Recommendation judge-loop core — 4-lens panel, contraindication VETO, fail-closed dissent",
+      "description": "Add a pure, injectable multi-lens judge loop that gates candidate medical recommendations through four lenses (evidence-grader, contraindication-checker with VETO, conservative-clinician, optimization-lens), reconciles by strict majority with an absolute contraindication veto, regenerates on rejection up to a bounded number of rounds, and FAILS CLOSED (no recommendation surfaced, dissent captured) when consensus is not reached. The red-flag short-circuit runs first and bypasses recommendation generation entirely.",
+      "status": "proposed",
+      "dependsOn": [],
+      "features": [
+        "feat-2"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-2-1",
+          "description": "Running the project build (tsc) after the sprint produces zero type errors with the new src/medical/recommend modules included.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-2",
+          "description": "A Vitest test with four fake lens clients all returning approve and no veto asserts runJudgeLoop returns accepted true with the candidate from the first round and rounds equal to 1.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-3",
+          "description": "A Vitest test where the contraindication-checker returns veto true while the other three lenses approve asserts runJudgeLoop returns accepted false with reason 'contraindication-veto' (the veto overrides the vote majority).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-4",
+          "description": "A Vitest test with two approve and two reject lens verdicts asserts the panel reconciles to accepted false (strict majority, fail-closed on a tie).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-5",
+          "description": "A Vitest test where a red-flag prompt is supplied asserts runJudgeLoop returns a short-circuit outcome and the injected generateCandidate spy is never called (red-flag fires first).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-6",
+          "description": "A Vitest test where lenses reject across every round asserts the loop stops at the maxRounds cap, returns accepted false with reason 'no-consensus', and includes per-lens dissent feedback strings.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-2-7",
+          "description": "A Vitest test where one lens client throws on chat asserts that lens is counted as a reject (fail-closed) and runJudgeLoop resolves without throwing.",
+          "verificationMethod": "unit-test",
+          "required": true
+        }
+      ],
+      "nonGoals": [
+        "Do not call FactStore, the filesystem, the network, or any real LLM provider — all clients, the candidate generator, and the profile context are injected parameters.",
+        "Do not emit or write any Finding — recommendation emission and vault writing land in sprint 3.",
+        "Do not adopt the fleet critic fail-open behaviour; this panel must invert it to fail-closed (mirror grounding-critic.ts:206, not critic-deep.ts:206).",
+        "Do not allow the contraindication veto to be overridden by a vote majority under any code path."
+      ],
+      "stopConditions": [
+        "All required success criteria sc-2-1 through sc-2-7 pass evaluation.",
+        "A MEDICAL_PANEL_MAX_TOTAL_CALLS constant bounds the worst-case LLM call count and a test asserts the loop never exceeds it."
+      ],
+      "definitionOfDone": "runJudgeLoop, given an injected candidate generator and four injected lens clients, runs the red-flag guard first, then for each round generates a candidate, asks all four lenses for a JSON verdict (validated by a never-throwing parser that fails closed on unparseable output), and reconciles by strict majority with an absolute contraindication veto. On acceptance it returns the accepted candidate and the per-lens verdicts; on veto, tie, or exhausted rounds it returns accepted false with a machine-readable reason and the collected per-lens dissent. The loop never throws and never exceeds its bounded call budget.",
+      "assumptions": [
+        "Verdict parsing reuses the never-throwing validator pattern at src/medical/retrieval/grounding-critic.ts:40-88; on parse exhaustion a lens verdict is reject (fail-closed), inverting fleet's accept-on-exhaustion at src/fleet/critic-deep.ts:206.",
+        "The regenerate-on-reject loop reuses the structure of runCritiqueLoop (src/fleet/critic-deep.ts:211-278) but replaces accept-best / fail-open with fail-closed.",
+        "Reconciliation mirrors the strict-majority, fail-closed-on-tie semantics in skills/shared/lens-panel.md:80-84; lens names match research §4a:186-191.",
+        "Each lens is a separate LLMClient so sprint 3 can assign a different model per lens via tier-policy; this sprint injects fakes.",
+        "Three regeneration rounds (research §4a:192) is the default maxRounds; the budget constant derives from maxRounds and the per-lens parse-retry count."
+      ],
+      "outOfScope": [
+        "Provider/model assignment per lens (sprint 3 via tier-policy).",
+        "Assembling the real profile context from FactStore (sprint 3).",
+        "Finding emission, urgency/severity assignment, and the CLI (sprint 3)."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-2.json for full generator notes.",
+      "evaluatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-2.json for full evaluator notes.",
+      "estimatedFiles": [
+        "src/medical/recommend/lenses.ts",
+        "src/medical/recommend/lenses.test.ts",
+        "src/medical/recommend/judge-panel.ts",
+        "src/medical/recommend/judge-panel.test.ts",
+        "src/medical/recommend/types.ts"
+      ],
+      "estimatedDuration": "medium"
+    },
+    {
+      "contractId": "sprint-spec-20260628-medical-analysis-3",
+      "specId": "spec-20260628-medical-analysis",
+      "sprintNumber": 3,
+      "title": "Recommendation generation end-to-end + `bober medical recommend` CLI",
+      "description": "Wire the sprint-2 judge loop into a real recommendation path: assemble the profile context from FactStore and the medical profile, build per-lens clients with provider diversity via tier-policy (gated by the cloud-inference egress axis, fail-closed to the local model), generate a candidate recommendation, gate it through the panel, and on acceptance emit a Finding(kind=action) with an LLM-assigned urgency/severity/confidence; on no-consensus emit a Finding(kind=question) flagged for review with the panel dissent; on a red-flag emit the canned escalation and no recommendation. Exposed via `bober medical recommend`.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260628-medical-analysis-1",
+        "sprint-spec-20260628-medical-analysis-2"
+      ],
+      "features": [
+        "feat-3"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-3-1",
+          "description": "Running the project build (tsc) after the sprint produces zero type errors with the recommendation path and CLI included.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-2",
+          "description": "A Vitest test with injected fake lens clients all approving asserts generateRecommendation writes a Finding markdown note with kind 'action' into the vault findings directory and that the note body contains no refer-out hedging phrase such as 'consult a licensed healthcare professional'.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-3",
+          "description": "A Vitest test where the panel reaches no consensus asserts generateRecommendation writes a Finding with kind 'question' whose title contains 'flagged for your review' and whose evidence/body includes the per-lens dissent, and that no kind 'action' finding is written.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-4",
+          "description": "A Vitest test with a red-flag question asserts generateRecommendation returns the canned escalation outcome, writes no recommendation Finding, and appends a 'short-circuit' audit entry.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-5",
+          "description": "A Vitest test with cloud-inference egress OFF asserts all four lens clients and the candidate generator resolve to the local Ollama model via buildMedicalInferenceClient (no cloud provider constructed), proving fail-closed model selection.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-6",
+          "description": "A Vitest test asserts the accepted Finding carries urgency and severity integers within 1..5 assigned by the (faked) LLM call, plus a confidence value recorded in the finding frontmatter or tags.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-3-7",
+          "description": "Running `bober medical recommend --goal 'optimize energy' \"what should I do about my high LDL\"` prints whether the recommendation was accepted, flagged-for-review, or escalated, and exits with code 0.",
+          "verificationMethod": "manual",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do not modify MedicalSopEngine or the reactive `bober chat medical` path — they remain the reactive Q&A surface.",
+        "Do not construct a cloud model when egress.cloudInference is false; fail closed to the local model via buildMedicalInferenceClient (src/medical/inference.ts:31).",
+        "Do not write health values or recommendation text into the audit log; audit entries stay IDs/enums only.",
+        "Do not bypass the sprint-2 red-flag-first ordering or the contraindication veto.",
+        "Do not re-implement the judge loop; import runJudgeLoop from sprint 2."
+      ],
+      "stopConditions": [
+        "All required success criteria sc-3-1 through sc-3-6 pass and `bober medical recommend` exits 0.",
+        "The full Vitest suite passes with no new failures and MedicalSopEngine tests are unchanged."
+      ],
+      "definitionOfDone": "`bober medical recommend [--goal <g>] <question>` (and the importable generateRecommendation) runs the red-flag guard first, assembles meds/supplements from FactStore.getActiveFacts plus profile conditions/allergies/goals, builds four per-lens LLM clients (different tier providers when cloud-inference is enabled, otherwise the local model for all), generates a candidate, and gates it through the sprint-2 panel. Accepted recommendations are written as a kind 'action' Finding with LLM-assigned urgency/severity/confidence and no refer-out hedging; no-consensus produces a kind 'question' Finding flagged for review with dissent; a red-flag produces the canned escalation and no recommendation. Audit entries are appended for each outcome.",
+      "assumptions": [
+        "Active meds/supplements read via FactStore.getActiveFacts('medical','patient', predicate) (src/medical/engine.ts:370); conditions/allergies/goals come from the spec-20260628-medical-ingest profile reader, defaulting to empty when absent.",
+        "Per-lens model diversity uses tierPolicy.resolveTier (src/fleet/tier-policy.ts:75), honoured only when egress.isAllowed('cloud-inference'); otherwise buildMedicalInferenceClient fail-closes to the local Ollama default (src/medical/inference.ts:41-49).",
+        "LLM-assigned urgency/severity/confidence (research §4a:183,203) come from one bounded LLM call producing integers 1..5 — interpretation, outside the ADR-3 deterministic-numerics boundary by design.",
+        "Findings are emitted via the sprint-1 finding-writer; vault dir resolution is shared with sprint 1.",
+        "The red-flag short-circuit reuses MedicalGuardrails.evaluate (src/medical/guardrails.ts:84) and the canned escalation/audit pattern from src/medical/engine.ts:255-289."
+      ],
+      "outOfScope": [
+        "Cross-marker dig-deeper trigger (sprint 4) and online research (sprint 5).",
+        "Cross-repo ranking of the emitted action findings (spec-20260628-priority-hub).",
+        "Calendar/scheduling of accepted recommendations (priority-hub / scheduler specs)."
+      ],
+      "ambiguityScore": 5,
+      "generatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-3.json for full generator notes.",
+      "evaluatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-3.json for full evaluator notes.",
+      "estimatedFiles": [
+        "src/medical/recommend/context.ts",
+        "src/medical/recommend/context.test.ts",
+        "src/medical/recommend/urgency.ts",
+        "src/medical/recommend/urgency.test.ts",
+        "src/medical/recommend/recommend.ts",
+        "src/medical/recommend/recommend.test.ts",
+        "src/cli/commands/medical.ts"
+      ],
+      "estimatedDuration": "medium"
+    },
+    {
+      "contractId": "sprint-spec-20260628-medical-analysis-4",
+      "specId": "spec-20260628-medical-analysis",
+      "sprintNumber": 4,
+      "title": "Test-gap (cadence) suggestions + cross-marker dig-deeper offers in the proactive pass",
+      "description": "Extend the deterministic proactive review pass with two analyzers: a closed recommended-cadence table that flags biomarkers overdue for re-testing, and a deterministic cross-marker pattern detector that OFFERS a 'want me to dig deeper?' Finding without auto-running any analysis. A `--dig-deeper <findingId>` path explicitly runs the deeper cross-marker analysis by reusing the sprint-3 recommendation judge loop.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260628-medical-analysis-1",
+        "sprint-spec-20260628-medical-analysis-3"
+      ],
+      "features": [
+        "feat-4"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-4-1",
+          "description": "Running the project build (tsc) after the sprint produces zero type errors with the cadence and cross-marker analyzers included.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-2",
+          "description": "A Vitest test seeds a biomarker whose latest collectedAt is older than its recommended cadence relative to injected now and asserts detectTestGaps returns a Finding (kind 'question' or 'watch') naming the biomarker and the recommended interval; a biomarker tested within cadence yields no gap finding.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-3",
+          "description": "A Vitest test asserts a biomarker absent from the closed cadence table produces no gap finding (no guessed cadence).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-4",
+          "description": "A Vitest test seeds two related markers both out of reference range and asserts detectCrossMarkerPatterns emits a single offer Finding (kind 'question') referencing both marker names, and asserts via an injected LLM spy that no LLM call is made during the offer.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-5",
+          "description": "A Vitest test asserts runProactiveReview now writes trend, gap, and cross-marker-offer findings in one deterministic offline pass over a seeded store.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-6",
+          "description": "A Vitest test asserts that invoking the dig-deeper path for a cross-marker offer id delegates to the sprint-3 generateRecommendation (verified via an injected spy), confirming the deep analysis is gated and reused, not re-implemented.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-4-7",
+          "description": "Running `bober medical review --dig-deeper <id>` runs the deeper analysis for the given offer and exits 0; running plain `bober medical review` prints counts that include gap and offer findings.",
+          "verificationMethod": "manual",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do not run any LLM or network call during the proactive offer/gap detection — only the explicit --dig-deeper path may invoke the sprint-3 recommendation loop.",
+        "Do not infer a cadence for biomarkers missing from the closed table; skip them (mirror the closed-whitelist discipline of NumericPrimitive at src/medical/types.ts:142).",
+        "Do not auto-run cross-marker deep analysis; the proactive pass only offers it.",
+        "Do not duplicate the recommendation logic; reuse generateRecommendation from sprint 3."
+      ],
+      "stopConditions": [
+        "All required success criteria sc-4-1 through sc-4-6 pass and the proactive pass emits trend, gap, and offer findings deterministically.",
+        "The full Vitest suite passes with no new failures."
+      ],
+      "definitionOfDone": "runProactiveReview emits, in one deterministic offline pass, trend findings (sprint 1), test-gap findings from a closed recommended-cadence table (biomarkers overdue versus injected now; unknown biomarkers skipped), and cross-marker offer findings (kind 'question', referencing the related markers, with no LLM call). A separate `bober medical review --dig-deeper <findingId>` path runs the deeper cross-marker analysis by delegating to the sprint-3 generateRecommendation, keeping all LLM/egress behaviour behind the existing gates.",
+      "assumptions": [
+        "Recommended cadence is a closed code-reviewed table keyed by biomarker (extending it is a code change, like NumericPrimitive at src/medical/types.ts:142); gap = (now − latestCollectedAt) > cadenceDays using getLabSeries (src/medical/health-store.ts:196).",
+        "Cross-marker offers are deterministic (two configured related markers both out of reference range); the deep dive is the only LLM step and reuses sprint-3 generateRecommendation.",
+        "Dig-deeper maps an offer finding id back to its marker pair via the finding frontmatter written by the sprint-1 finding-writer.",
+        "The proactive pass remains offline and deterministic; only the explicit dig-deeper CLI flag crosses into the gated LLM path."
+      ],
+      "outOfScope": [
+        "Online research (sprint 5).",
+        "New deterministic numeric primitives (ADR-3 closed whitelist unchanged).",
+        "Cross-repo aggregation of gap/offer findings (spec-20260628-priority-hub)."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-4.json for full generator notes.",
+      "evaluatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-4.json for full evaluator notes.",
+      "estimatedFiles": [
+        "src/medical/analysis/cadence.ts",
+        "src/medical/analysis/cadence.test.ts",
+        "src/medical/analysis/cross-marker.ts",
+        "src/medical/analysis/cross-marker.test.ts",
+        "src/medical/analysis/review-pass.ts",
+        "src/medical/analysis/review-pass.test.ts",
+        "src/cli/commands/medical.ts"
+      ],
+      "estimatedDuration": "medium"
+    },
+    {
+      "contractId": "sprint-spec-20260628-medical-analysis-5",
+      "specId": "spec-20260628-medical-analysis",
+      "sprintNumber": 5,
+      "title": "Online research-latest-findings + vault notes, schedulable research-job (egress-gated)",
+      "description": "Add an egress-gated research job that, when the literature-retrieval axis is enabled, retrieves latest evidence for the user's markers via the existing MedlinePlus LiteratureRetriever, grounds notes through the fail-closed grounding-critic synthesis, writes research notes (markdown-with-frontmatter plus citations) into the vault research/ directory, and optionally emits a 'new evidence' watch Finding. Exposed as runResearchJob (importable by the scheduler) and `bober medical research`. With the axis off it performs zero egress.",
+      "status": "proposed",
+      "dependsOn": [
+        "sprint-spec-20260628-medical-analysis-1"
+      ],
+      "features": [
+        "feat-5"
+      ],
+      "successCriteria": [
+        {
+          "criterionId": "sc-5-1",
+          "description": "Running the project build (tsc) after the sprint produces zero type errors with the research job and CLI included.",
+          "verificationMethod": "build",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-2",
+          "description": "A Vitest test with literature-retrieval egress OFF asserts runResearchJob returns { disabled: true }, writes no research notes, and never invokes MedlineSource (zero-egress proof reusing the LiteratureRetriever disabled short-circuit).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-3",
+          "description": "A Vitest test with literature-retrieval ON and an injected fake retriever plus LLM asserts runResearchJob writes a research note under the vault research directory containing citation frontmatter (title/url/source 'medlineplus') derived from the grounded passages.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-4",
+          "description": "A Vitest test asserts that when the grounding critic rejects (fail-closed), runResearchJob writes no clinical-claim note for that topic and records an abstain outcome (no uncited synthesis is persisted).",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-5",
+          "description": "A Vitest test asserts cloud synthesis is fail-closed: with cloud-inference OFF the synthesis model resolves to the local Ollama default via buildMedicalInferenceClient.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-6",
+          "description": "A Vitest test asserts runResearchJob returns a summary { notesWritten, findingsWritten, disabled } reflecting the number of notes and watch findings emitted.",
+          "verificationMethod": "unit-test",
+          "required": true
+        },
+        {
+          "criterionId": "sc-5-7",
+          "description": "Running `bober medical research --marker ldl` prints whether research ran or was disabled by the egress axis and exits with code 0.",
+          "verificationMethod": "manual",
+          "required": false
+        }
+      ],
+      "nonGoals": [
+        "Do not perform any network call when literature-retrieval is disabled; reuse the synchronous LiteratureRetriever disabled short-circuit (src/medical/retrieval/literature.ts:34) as the zero-egress proof.",
+        "Do not persist an ungrounded or critic-rejected synthesis as a clinical note; abstain instead (grounding-critic fail-closed at src/medical/retrieval/grounding-critic.ts:206).",
+        "Do not construct a cloud client when cloud-inference is off; fail closed to the local model via buildMedicalInferenceClient.",
+        "Do not change the reactive engine's existing literature path in src/medical/engine.ts."
+      ],
+      "stopConditions": [
+        "All required success criteria sc-5-1 through sc-5-6 pass; with the axis off the job is a no-op with zero egress.",
+        "The full Vitest suite passes with no new failures."
+      ],
+      "definitionOfDone": "runResearchJob(projectRoot, config, {markers, now}) checks the literature-retrieval egress axis and returns { disabled: true } with zero egress when off. When on, for each marker it retrieves MedlinePlus passages via LiteratureRetriever, grounds a note through synthesizeGrounded (fail-closed grounding critic), and writes a research note with citation frontmatter under the vault research directory plus an optional 'new evidence' watch Finding; critic-rejected topics abstain and write no clinical note. Synthesis fail-closes to the local model unless cloud-inference is enabled. The job is importable by the scheduler and exposed as `bober medical research`.",
+      "assumptions": [
+        "Retrieval reuses LiteratureRetriever/MedlineSource and the disabled short-circuit (src/medical/retrieval/literature.ts:16-43); synthesis reuses synthesizeGrounded with its fail-closed grounding critic (src/medical/retrieval/literature.ts:277, grounding-critic.ts:206).",
+        "Synthesis model selection reuses buildMedicalInferenceClient gated by the cloud-inference axis (src/medical/inference.ts:31-49); the literature-retrieval and cloud-inference axes are independent (src/medical/egress.ts:4-22).",
+        "Research notes and watch findings are written via the sprint-1 finding-writer and shared vault dir resolution; non-MedlinePlus sources are out of scope (research §5:210).",
+        "runResearchJob is the schedulable entrypoint consumed by spec-20260628-research-scheduler; the scheduler owns cron/cadence and passes the marker list and now."
+      ],
+      "outOfScope": [
+        "The scheduler/cron engine itself (spec-20260628-research-scheduler).",
+        "Non-MedlinePlus literature sources (unverified per research §5).",
+        "Cross-repo ranking of emitted watch findings (spec-20260628-priority-hub)."
+      ],
+      "ambiguityScore": 4,
+      "generatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-5.json for full generator notes.",
+      "evaluatorNotes": "See .bober/contracts/sprint-spec-20260628-medical-analysis-5.json for full evaluator notes.",
+      "estimatedFiles": [
+        "src/medical/research/online-research.ts",
+        "src/medical/research/online-research.test.ts",
+        "src/medical/research/research-note.ts",
+        "src/medical/research/research-note.test.ts",
+        "src/cli/commands/medical.ts"
+      ],
+      "estimatedDuration": "medium"
+    }
+  ],
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-28T20:02:00.663Z",
+  "completedAt": "2026-06-28T20:02:00.663Z"
+}

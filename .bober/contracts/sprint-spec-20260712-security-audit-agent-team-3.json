@@ -1,0 +1,100 @@
+{
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-3",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "sprintNumber": 3,
+  "title": "Wire the fail-closed SecurityAuditGate into the pipeline",
+  "description": "The veto: a SecurityAuditGate that wraps runSecurityAudit in a Promise.race time-box and blocks the sprint-passed commit on any critical finding, timeout, audit error, or parse failure (ADR-2). Attached between the evaluation.passed check and the sprint-passed history event \u2014 before the advisory code-reviewer's post-pass slot. On block: security-audit-blocked history event, findings rendered into the generator's retry feedback (ADR-5), deferral to the existing retry/maxIterations tail, documenter skipped (ADR-6). When config.security is absent the pipeline is byte-identical.",
+  "status": "completed",
+  "createdAt": "2026-07-12T09:30:00.000Z",
+  "updatedAt": "2026-07-12T11:45:30.000Z",
+  "completedAt": "2026-07-12T11:45:30.000Z",
+  "dependsOn": [
+    "sprint-spec-20260712-security-audit-agent-team-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "src/orchestrator/security-gate.ts exports evaluateSecurityGate returning SecurityGateVerdict {blocked, reason: 'critical-finding'|'timeout'|'audit-error'|'clean'|'disabled', result?}: it NEVER throws \u2014 audit rejection \u2192 audit-error block, Promise.race timeout (config.security.timeoutMs) \u2192 timeout block, result.parsed===false \u2192 audit-error block, config.security absent or enabled!==true \u2192 {blocked:false, reason:'disabled'} without invoking the audit.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "In a pipeline run with security enabled and a fake audit returning a critical finding, the sprint is NOT marked passed, no sprint-passed history event is appended, a security-audit-blocked event (with reason, critical count, and per-finding path/line/vulnClass) IS appended, and the run defers to the existing retry path (retry when iterations remain, needs-rework at maxIterations).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "On a blocked round, the next generator iteration's feedback parts contain the rendered security findings (e.g. '[CRITICAL] <vulnClass>: <description> at path:line') via the same channel evaluator feedback uses; renderSecurityFeedback is a pure exported function.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "With config.security absent, a paired pipeline run (same fake inputs) produces deep-equal results and an identical history event sequence to the pre-change pipeline \u2014 the gate contributes no statement, no event, and no timing dependency.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "On a CLEAN enabled round, a security-audit-clean history event is appended and the pipeline proceeds to sprint-passed, code-review, and documenter exactly as before; on a BLOCKED round the documenter and code-reviewer stages do not run (control never reaches the passed block).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "A store persistence failure (saveSecurityAudit throwing) is caught and logged inside the gate and does NOT change the already-computed verdict in either direction.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "npm run build and npm run typecheck pass; ESLint zero errors; FULL existing suite green (pipeline tests especially).",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not modify the advisory code-reviewer stage, its time-box, or its post-pass position (locked).",
+    "Do not auto-revert the generator's auto-commit on block (architecture risk decision: retry regenerates; never fight the commit).",
+    "Do not block on important-bucket findings (ADR-2 scopes the veto to critical only).",
+    "Do not add CLI/scanners/hub/skill (sprints 4-7)."
+  ],
+  "stopConditions": [
+    "All seven criteria verified, with sc-3-4 proven by deep-equal paired-run test (the repo's byte-identity convention), not by absence assertions.",
+    "Full suite green \u2014 any pipeline test regression is a hard stop."
+  ],
+  "definitionOfDone": "A critical security finding, a timeout, or an unparseable audit measurably prevents sprint-passed and routes actionable findings into the generator retry, while an unconfigured pipeline is provably byte-identical. Build, typecheck, lint, and the full suite are green.",
+  "assumptions": [
+    "The attachment point is inside the evaluation.passed branch BEFORE status='passed'/sprint-passed history append (architecture cites pipeline.ts:434-437 for the pass path, :444 sprint-passed, :465 code-review, :513 documenter, :588-597 the eval-failed retry tail, :250-274 evalFeedbackParts) \u2014 anchors may have drifted; re-locate by pattern.",
+    "The contract carries an evaluatorFeedback (or equivalent) field the retry loop reads into evalFeedbackParts; if the field is named differently, use whatever the evaluation-failed path uses and mirror it exactly.",
+    "History events are appended via appendHistory with free-form event kinds (z.record-style payloads), so 'security-audit-clean'/'security-audit-blocked' need no schema migration; verify against src/state/history usage.",
+    "The Promise.race timeout leaves the underlying LLM call running in background (same accepted behavior as the code-reviewer race at pipeline.ts:476-482); cost is bounded by security.budget.maxUsd when configured."
+  ],
+  "outOfScope": [
+    "Standalone CLI, scanner pre-filter, hub Findings, skill wrapper, dogfooding (sprints 4-7)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "This is the only sprint that edits pipeline.ts \u2014 keep the diff surgical. Anchors may have drifted; re-locate by pattern. (1) READ pipeline.ts's evaluation.passed branch AND the evaluation-failed tail first; the blocked path must MIRROR the failed tail (same iteration/maxIterations handling, same retry event emission) rather than invent a new loop \u2014 extract-and-reuse if a small helper makes that clean, but do not restructure unrelated flow. (2) src/orchestrator/security-gate.ts: gate owns the Promise.race (reuse the code-reviewer's race/timeout helper pattern at pipeline.ts:476-482), the try/catch converting rejection\u2192audit-error, the parsed:false\u2192audit-error elevation, and the store try/catch (sc-3-6). Construct NOTHING when disabled: the pipeline call site must be `if (config.security?.enabled === true) { ... }` so the disabled path adds zero statements executed. (3) renderSecurityFeedback(verdict): pure, phrased for a FIXER ('[CRITICAL] injection: ... at src/x.ts:42 \u2014 remediate by...' style from finding fields), exported from security-gate.ts or the auditor module. (4) History: follow existing appendHistory call style; blocked payload {reason, critical: N, findings: [{path,line,vulnClass}]} \u2014 findings capped to a sane count (e.g. 20) to bound event size. (5) Paired-run test: follow the repo's established byte-identity convention (see parallelReadOnlyTools and Phase-B blackboard tests for prior art) \u2014 run the same scripted pipeline with and without the change/config and deep-equal results + history sequences. Use fake timers for the timeout test.",
+  "evaluatorNotes": "Trace the blocked path END-TO-END in the test: assert (a) no sprint-passed event, (b) security-audit-blocked event present with correct payload, (c) contract feedback populated, (d) retry occurred (or needs-rework at maxIterations), (e) documenter/code-reviewer spawn functions NOT called on the blocked round (spy/stub them). For sc-3-1: table-test all five reasons including the disabled short-circuit (audit function must not be invoked \u2014 assert the stub has zero calls). For sc-3-4: insist on deep-equal of BOTH the returned result object and the full history event array; reject a test that only checks a few fields. For sc-3-6: make saveSecurityAudit throw in both a clean and a blocked scenario; verdict unchanged in both. Verify the timeout test uses fake timers and asserts reason 'timeout' (not 'audit-error'). Run the FULL suite; pipeline.ts changes make regressions likely \u2014 scrutinize any newly-skipped or modified pre-existing test.",
+  "estimatedFiles": [
+    "src/orchestrator/security-gate.ts",
+    "src/orchestrator/security-gate.test.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/pipeline.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-3-1",
+      "timestamp": "2026-07-12T11:45:30.000Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260712-security-audit-agent-team-3-1"
+}

@@ -1,0 +1,17 @@
+{
+  "evalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-3-1",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T17:20:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "173 files, 2048 passed, 3 skipped; +27 (sc-3-4..7 + slash + classifier); zero regressions; known flake did not appear" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors, 2 pre-existing warnings" }
+  ],
+  "regressions": [],
+  "summary": "All 7 required criteria pass. /approve, /reject+feedback, and NL routing reuse saveApproved/saveRejected with pendingExists guard + resolveApprover; ambiguity rule asks-not-guesses; RunState clears pending fields back to running; /help updated. DiskCheckpointMechanism round-trip is a genuine end-to-end proof (real mechanism, correct setTimeout timing -> {approved:false, feedback}). Protected files (approval-state.ts/disk.ts/feedback-router.ts/approve.ts/reject.ts) untouched. 2048-test suite green, no Sprint 4-6 leak."
+}

@@ -1,0 +1,88 @@
+{
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-9",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "sprintNumber": 9,
+  "title": "Mid-turn interrupt: AbortSignal through the loop and streaming adapter",
+  "description": "Make a running loop cancellable. AgenticLoopParams gains an optional abortSignal (standard AbortSignal); the loop checks it at every turn boundary and threads it into ChatParams so the Anthropic adapter cancels an in-flight (streaming or non-streaming) request mid-turn. An aborted run resolves gracefully with stopReason 'aborted', preserving accumulated usage/costUsd/turnsUsed \u2014 never a throw. No signal \u2192 byte-identical.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260709-agent-loop-capability-port-3",
+    "sprint-spec-20260709-agent-loop-capability-port-8"
+  ],
+  "features": [
+    "feat-8"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-9-1",
+      "description": "A signal aborted between turns stops the loop before the next chat call and resolves with stopReason 'aborted' and a partial result (never a rejected promise).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-2",
+      "description": "A signal aborted during an in-flight Anthropic request (streaming and non-streaming mocks) cancels the request; the adapter's abort surfaces to the loop as the aborted outcome, not as a retryable transient error (chatWithRetry does not retry aborts).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-3",
+      "description": "The aborted result preserves usage, costUsd and turnsUsed accumulated before the abort, and fires the onStop hook / result LoopEvent exactly once.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-4",
+      "description": "Adapters without native cancellation (openai-family/google/claude-code) degrade documented: the request completes but the loop still returns 'aborted' at the next boundary without using the response for a further turn.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-5",
+      "description": "Without abortSignal, behavior is byte-identical (full existing suite unchanged).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-6",
+      "description": "npm run build and npm run typecheck pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not wire chat /pause or telegram to the signal (consumers integrate later; loop surface only).",
+    "Do not auto-abort on budget breach mid-turn (budget stays a turn-boundary check; a consumer MAY combine Budget + AbortController externally).",
+    "Do not implement pause/resume semantics \u2014 abort is terminal for the run (sprint 6 sessions enable continuing later from the transcript).",
+    "Do not add cancellation to the claude-code CLI path."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: boundary abort, mid-flight cancel without retry, accumulated partials + single onStop, degraded-adapter path, and byte-identical absence path.",
+    "Full existing suite green."
+  ],
+  "definitionOfDone": "An AbortSignal on AgenticLoopParams cleanly ends a run mid-flight on the Anthropic path and at the next boundary elsewhere, always resolving with stopReason 'aborted' plus accumulated partial telemetry, with no signal meaning no change. Build and full suite green.",
+  "assumptions": [
+    "The @anthropic-ai/sdk request options accept an abort signal (standard fetch-based SDK surface) \u2014 confirm the exact option name inside the adapter; SDK types stay in the adapter file.",
+    "ChatParams gains abortSignal?: AbortSignal \u2014 a web-standard type, acceptable in the provider-agnostic surface (not an SDK type).",
+    "chatWithRetry's transient classification must special-case abort errors (name 'AbortError' or the signal's aborted flag) so aborts are never retried.",
+    "Sprint 8's streaming branch and sprint 3's usage/cost accumulators exist (hard dependsOn both)."
+  ],
+  "outOfScope": [
+    "Graceful mid-turn tool-execution cancellation (running tool handlers finish; the loop aborts after the batch).",
+    "Timeout-based auto-abort helpers."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "types.ts: add abortSignal?: AbortSignal to ChatParams. Loop: add abortSignal to AgenticLoopParams; at the top of each turn iteration check params.abortSignal?.aborted \u2192 finish with stopReason 'aborted' (reuse the finish helper from sprint 5 so onStop/result events fire once); pass the signal into chat params. chatWithRetry: before classifying an error as transient, check signal.aborted (or err.name === 'AbortError') \u2192 rethrow a typed AbortedError immediately (no retry); the loop catches it and finishes with 'aborted' instead of 'error'. anthropic.ts: forward the signal into the SDK call options for both streaming and non-streaming branches. Other adapters: accept the field, ignore it (one-line comment); the loop's boundary check covers them. Tests: AbortController fired via setTimeout mid-mock-stream; assert resolved result. Also assert a tool batch in progress completes before the abort takes effect (document this in a test name).",
+  "evaluatorNotes": "sc-9-1: abort() after turn 1's completion in a 3-turn script \u2192 chat called exactly twice? No \u2014 abort between turns means chat NOT called again: assert call count stays at 1 completed turn + 0 further calls, stopReason 'aborted', turnsUsed 1. sc-9-2: mocked SDK whose create/stream rejects with AbortError when the passed signal fires; assert no retry attempts (call count 1) and 'aborted' result. sc-9-3: accumulate usage/cost over turn 1, abort during turn 2; assert totals equal turn-1 values and onStop fired once. sc-9-4: fake non-cancellable adapter \u2014 abort mid-request; response returns but loop result is 'aborted' and the response's tool calls were NOT executed. sc-9-5: FULL suite + paired run without signal deep-equal. Build + typecheck.",
+  "estimatedFiles": [
+    "src/providers/types.ts",
+    "src/providers/anthropic.ts",
+    "src/providers/anthropic.test.ts",
+    "src/orchestrator/agentic-loop.ts",
+    "src/orchestrator/agentic-loop.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-07-09T12:10:00.000Z",
+  "updatedAt": "2026-07-10T00:25:12.000Z",
+  "completedAt": "2026-07-10T00:25:12.000Z"
+}

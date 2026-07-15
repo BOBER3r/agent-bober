@@ -1,0 +1,22 @@
+{
+  "contractId": "sprint-spec-20260628-priority-hub-5",
+  "status": "complete",
+  "iteration": 1,
+  "commits": ["45d3c17 - bober(sprint-5): bober chat hub + scoped /priority and /decide slash commands"],
+  "filesChanged": [
+    "src/teams/registry.ts (modified — inline 'hub' team branch in loadTeam, memoryNamespace 'hub')",
+    "src/chat/slash-commands.ts (modified — priorityHandler/decideHandler as optional params 10/11 + /priority+/decide cases; HELP_TEXT unchanged)",
+    "src/chat/chat-session.ts (modified — handleHubPriority/handleHubDecide/rankAndRenderHub gated on memoryNamespace==='hub', uses this.llm)",
+    "src/teams/registry.test.ts (modified, +6 tests)",
+    "src/chat/slash-commands.test.ts (modified — dispatch + sc-5-4 regression)",
+    "src/chat/chat-session.test.ts (created — sc-5-1/2/3/4)"
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "met": true},
+    {"criterionId": "sc-5-2", "met": true},
+    {"criterionId": "sc-5-3", "met": true},
+    {"criterionId": "sc-5-4", "met": true},
+    {"criterionId": "sc-5-5", "met": true}
+  ],
+  "notes": "Hub team registered inline in loadTeam (mirrors medical branch), memoryNamespace 'hub', no guardrails, no new deps. /priority + /decide added as LAST two optional dispatch params (positions 10/11) — existing positional callers back-compatible. HELP_TEXT byte-identical (new commands intentionally NOT in /help to satisfy sc-5-4). Gate = this.memoryNamespace==='hub'; non-hub teams get informative no-op, ThrowingClient confirms no LLM call. Judge client = this.llm (injected via ChatSessionOptions, never a fresh createClient) so tests run offline. priority.md write best-effort try/catch (missing vault never breaks the turn). 293 tests green (chat 194 + teams + hub); typecheck/build/lint clean."
+}

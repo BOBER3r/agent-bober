@@ -1,0 +1,18 @@
+{
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["c7e721c - bober(sprint-2): runSprintCycle takes a single RunSprintCycleParams object"],
+  "filesChanged": [
+    { "path": "src/orchestrator/pipeline.ts", "action": "modified", "description": "Added export interface RunSprintCycleParams (7 fields, pipelineRunId optional); signature → (params: RunSprintCycleParams); destructure at top of body; prod call :936 → object form mapping completedSprints → completedContracts." },
+    { "path": "src/orchestrator/code-reviewer-agent.test.ts", "action": "modified", "description": "2 call sites (229, 333) → object literals (6-field, no pipelineRunId)." },
+    { "path": "src/orchestrator/documenter-agent.test.ts", "action": "modified", "description": "3 call sites (229, 265, 299) → object literals." }
+  ],
+  "selfVerify": {
+    "build": "exit 0", "typecheck": "exit 0", "lint": "exit 0 (2 pre-existing warnings)",
+    "test": "targeted: code-reviewer-agent + documenter-agent → 12/12 (FULL suite NOT run by generator — evaluator to run npx vitest run)",
+    "sc-2-3": "every runSprintCycle( call is object form (grep)",
+    "sc-2-5": "runSprintCycle absent from src/index.ts and src/mcp/"
+  },
+  "notes": "Pure mechanical refactor; body delta is one destructure line. No shadowing of the 7 names. Prod call maps completedSprints → completedContracts by position."
+}

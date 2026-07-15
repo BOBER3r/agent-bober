@@ -1,0 +1,14 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-5",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["1111e2a - bober(sprint-5): add role-aware provider fallback for claude-code"],
+  "filesChanged": [
+    {"path": "src/config/role-providers.ts", "action": "created", "description": "resolveRoleProviders(config) -> role->provider map; tool roles on claude-code redirect to first non-claude-code provider or throw naming the role; prompt roles always allowed; logs per role via logger.info"},
+    {"path": "src/config/role-providers.test.ts", "action": "created", "description": "11 tests: sc-5-1 override resolves, sc-5-2 throws naming role, sc-5-3 planner/researcher allowed, sc-5-4 logger per role"},
+    {"path": "src/config/loader.ts", "action": "modified", "description": "calls resolveRoleProviders(cfg) after parse before return; throw fails load"},
+    {"path": "src/config/loader.test.ts", "action": "created", "description": "4 tests: sc-5-5 stuck-on-claude-code load rejects (real temp dir), regression guards for normal + planner-only configs"}
+  ],
+  "selfVerification": {"newTests": "15 pass (role-providers 11, loader 4)", "build": "exit 0", "lint": "exit 0"},
+  "notes": "NON-GATING preflightOpenaiPeer loader wiring SKIPPED (test-mocking concern; explicitly non-gating). Advisory persists: wire preflightOpenaiPeer at config load via an injectable importer in a follow-up."
+}

@@ -1,0 +1,13 @@
+{
+  "handoffId": "handoff-sprint-spec-20260714-security-auditor-per-stack-skills-1-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-1",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "iteration": 2,
+  "evaluatorFeedback": {
+    "failedCriteria": ["sc-1-3"],
+    "critical": "inferVulnClass in src/orchestrator/security-scanners.ts (~lines 93-95): the FIRST ternary branch regex includes \\bxss\\b inside the injection alternation, so any check id containing 'xss' resolves to VulnClass 'injection' instead of the newly-added 'xss'. The 'xss' class is therefore unreachable from inferVulnClass. sc-1-3 explicitly requires 'xss'->xss.",
+    "fix": "1) Remove \\bxss\\b from the injection-branch regex alternation. 2) Add a dedicated branch, e.g. /\\bxss\\b|cross-site-scripting/.test(id) ? 'xss' : ... placed so it does not conflict with the injection branch. 3) Add the missing table-test row to security-scanners.test.ts: a check_id containing 'xss' (e.g. 'generic.xss.reflected-xss-rule') must yield vulnClass 'xss'. 4) Re-run tsc --noEmit, eslint src/, vitest run — keep all other criteria (sc-1-1/1-2/1-4/1-5) green.",
+    "reproduction": "parseSemgrepOutput({results:[{check_id:'generic.xss.reflected-xss-rule',path:'a.ts',start:{line:1},extra:{}}]})[0].vulnClass currently 'injection', must be 'xss'."
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-3",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 3,
+  "title": "Scoped prioritization commands (/today, /priority, /decide X vs Y)",
+  "description": "Handle /today, /priority, and /decide X vs Y by parsing an ephemeral per-question scope from the command text, invoking the priority hub (spec-20260628-priority-hub) with that scope, and replying with a numbered ranked summary through the sendSafe funnel. /decide X vs Y produces a decision-mode scope filtered to the two options.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-telegram-frontend-2"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "`npm run build` (tsc) compiles the command parser and prioritize handler with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "A unit test shows the parser extracts exactly the two options from \"/decide X vs Y\" into a decision-mode scope, and maps /today to a time-horizon scope and /priority to a general scope.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "A unit test shows the prioritize handler calls the hub query with the parsed scope and renders the returned findings as a numbered list in the same order the hub returned (using an injected fake hub returning fixture findings).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "A unit test confirms the rendered reply contains only finding titles/summaries and is produced through the sendSafe funnel (no raw domain detail beyond titles/summaries).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "Sending /priority to the running bot returns a numbered ranked list sourced from the agent-bober hub pool.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not implement ranking, relevance filtering, or lens-panel judging \u2014 invoke the hub query from spec-20260628-priority-hub.",
+    "Do not persist or store the per-question scope \u2014 it is ephemeral, derived from the command text only.",
+    "Do not include raw domain detail beyond titles/summaries in the reply; route all output through sendSafe.",
+    "Do not add task-mutation commands (done/snooze/drop) in this sprint.",
+    "Do not let the LLM be invoked from this adapter \u2014 the hub owns any model calls."
+  ],
+  "stopConditions": [
+    "The command-parser unit tests for /today, /priority, and /decide pass and `npm run build` exits zero.",
+    "Invoking the prioritize handler with a fixture hub returns a numbered list whose order matches the hub's returned ranking.",
+    "/decide A vs B yields a scope containing exactly options A and B."
+  ],
+  "definitionOfDone": "Sending /today, /priority, or /decide X vs Y causes the bot to call the priority hub with an ephemeral scope parsed from the command (decision mode filtered to X and Y; today and priority use a time-horizon or general scope) and reply with a numbered, ranked summary of findings. The scope is never stored; each command re-derives it from its own text, and the reply carries only titles and short summaries.",
+  "assumptions": [
+    "The hub exposes a scoped prioritization query (decision / general / filtered modes), per research \u00a73a lines 115-119; the adapter invokes it per Q1's hybrid rule (import if exported, else execa).",
+    "/decide options are split on the literal \" vs \" separator from the command text.",
+    "Findings carry a title/summary suitable for control-plane display (Finding schema, research \u00a73a lines 122-126)."
+  ],
+  "outOfScope": [
+    "Defining the Finding ranking algorithm or the lens-panel passes (owned by spec-20260628-priority-hub).",
+    "Time-zone handling for /today beyond passing a time-horizon scope to the hub."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Add src/telegram/handlers/prioritize.ts and extend the command dispatch from Sprint 2's router. Parser: /today -> {mode:'general', horizon:'today'}; /priority -> {mode:'general'}; /decide <rest> -> split rest on ' vs ' (case-insensitive, trim) -> {mode:'decision', options:[X,Y]}. Handler accepts an injected hub-query function (default imports the hub query export if present, else execa `agent-bober` hub command) returning ranked findings; render as a numbered list of `title` (+ optional one-line summary). All output via sendSafe. Keep titles/summaries only \u2014 do not expand evidence or domain payloads. ESM .js imports, `import type`, no `any`.",
+  "evaluatorNotes": "Verify /decide parsing yields exactly two trimmed options. Verify the rendered order equals the fixture hub's returned order (the adapter does not re-rank). Verify scope is not written to disk anywhere. Verify reply goes through sendSafe and contains only titles/summaries. Run build + the parser/handler unit tests.",
+  "estimatedFiles": [
+    "src/telegram/handlers/prioritize.ts",
+    "src/telegram/handlers/prioritize.test.ts",
+    "src/telegram/router.ts",
+    "src/telegram/bot.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-29T23:49:26Z"
+}

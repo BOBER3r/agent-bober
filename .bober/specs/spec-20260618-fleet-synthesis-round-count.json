@@ -1,0 +1,119 @@
+{
+  "specId": "spec-20260618-fleet-synthesis-round-count",
+  "version": 1,
+  "createdAt": "2026-06-18T20:05:00Z",
+  "updatedAt": "2026-06-18T20:05:00Z",
+  "title": "Real executed round count in fleet synthesis + report",
+  "description": "Plumb the ACTUAL number of rounds executed (which can be less than the configured maxRounds when the early-stop fires) out of FleetCoordinator.executeRounds and into both .bober/fleet-synthesis.json and .bober/fleet-report.json. Closes the Phase-B known limitation where bundle.rounds reported the configured maxRounds cap instead of the rounds that actually ran.",
+  "mode": "brownfield",
+  "status": "completed",
+  "completedAt": "2026-06-18T20:18:45Z",
+  "ambiguityScore": 2,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1-count-semantics",
+      "category": "scope",
+      "question": "On an early-stopped run, what should fleet-synthesis.json's rounds report?",
+      "options": [
+        { "label": "A", "description": "Rounds executed (the round at which the loop terminated) — natural 'how many rounds ran'." },
+        { "label": "B", "description": "Only productive rounds that added new findings (under-reports work done)." }
+      ],
+      "recommendation": "A — rounds executed; round 2's children DID run even if they added nothing."
+    },
+    {
+      "questionId": "Q2-scope",
+      "category": "scope",
+      "question": "How widely should the real round count be surfaced?",
+      "options": [
+        { "label": "A", "description": "Synthesis-only (fleet-synthesis.json)." },
+        { "label": "B", "description": "Also in fleet-report.json (PortfolioReport gains an optional rounds field)." }
+      ],
+      "recommendation": "A is smallest; user chose B."
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-count-semantics",
+      "answer": "Rounds executed (=2 in the maxRounds=3, stop-after-round-2 example). roundsRun = the round at which the loop terminated; on a full run with no early-stop it equals maxRounds.",
+      "resolvedAt": "2026-06-18T20:05:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-scope",
+      "answer": "Also in fleet-report.json. The real executed count is surfaced in BOTH .bober/fleet-synthesis.json and .bober/fleet-report.json. PortfolioReport gains an OPTIONAL rounds field, present only on blackboard runs so the no-blackboard report stays byte-identical.",
+      "resolvedAt": "2026-06-18T20:05:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval — every assumption is backed by cited file:line evidence read this session; the two load-bearing semantic/scope decisions were resolved by the user (Q1=rounds-executed, Q2=also-in-report).",
+      "resolvedAt": "2026-06-18T20:05:00Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          "src/fleet/coordinator.ts:55-82 (executeRounds returns ChildExecution[]; loop var r holds the terminating round; maxRounds>=1 per manifest schema so the loop always runs >=1)",
+          "src/fleet/index.ts:165-213 (runFleet hardcodes roundsRun=maxRounds at :184 with the bober: ceiling comment :181-183; single reporter.build(outcomes) at :199; collect(bb, report, roundsRun) at :205)",
+          "src/fleet/reporter.ts:17-62 (PortfolioReport shape + build(outcomes); add optional rounds via guarded second arg)",
+          "src/fleet/synthesis.ts:29-39 (collect already takes rounds:number — no change needed)",
+          "grep executeRounds: only caller is runFleet (index.ts:185) + the two test files; private coordinator method, not exported — signature change is safe and confined to src/fleet/"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "executeRounds is a private FleetCoordinator method called ONLY by runFleet (index.ts:185) + referenced in coordinator.test.ts/index.test.ts — not exported in the public API, so changing its return shape to { executions, roundsRun } is safe and fully confined to src/fleet/ (verified by grep).",
+    "'Rounds executed' = the round at which the loop terminated (the loop variable r at exit). Full run with no early-stop → roundsRun === maxRounds; early-stop after round 2 of a max-3 run → roundsRun === 2. manifest.blackboard.maxRounds is int min(1) max(3) (manifest.ts), so the loop runs >=1 round → roundsRun >= 1.",
+    "PortfolioReport.rounds is OPTIONAL and present ONLY on blackboard runs; build(outcomes) called with no rounds (the no-blackboard path) omits the key entirely (JSON.stringify drops undefined), keeping the no-blackboard fleet-report.json byte-identical to today. runFleet passes rounds only when bb is set: reporter.build(outcomes, bb ? { rounds: roundsRun } : undefined).",
+    "synthesis.ts collect(blackboard, childResults, rounds) already accepts rounds:number — no change to synthesis.ts; only the VALUE passed (the real roundsRun instead of the maxRounds cap) changes, plus removing the bober: ceiling comment at index.ts:181-183.",
+    "The no-blackboard path (coordinator.execute) is untouched — it never produces a rounds count and writes no synthesis file; roundsRun stays 0 and is never surfaced there."
+  ],
+  "outOfScope": [
+    "Changing the early-stop logic, the rounds cap (BLACKBOARD_MAX_ROUNDS / manifest maxRounds 1-3), or any Phase-B behavior other than the count value.",
+    "Adding rounds to the no-blackboard fleet-report.json (must stay byte-identical) or writing a synthesis file on no-blackboard runs.",
+    "Logging the round count to stdout/history, or any new CLI surface/flag.",
+    "Any change to the SharedBlackboard module, the config.fleet/manifest schema, or the agent-bober blackboard CLI.",
+    "Distinguishing 'productive' rounds (rejected Q1 option B) — the count is rounds executed, not rounds-that-added-findings."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Plumb real executed round count to synthesis + report",
+      "description": "Return the actual executed round count from executeRounds and thread it into both fleet-synthesis.json (replacing the maxRounds-cap value) and fleet-report.json (a new optional rounds field, blackboard runs only).",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When a blackboard fleet runs all maxRounds rounds (no early-stop), fleet-synthesis.json.rounds === maxRounds and fleet-report.json.rounds === maxRounds.",
+        "AC2: When a blackboard fleet early-stops after round 2 of a maxRounds=3 run, BOTH fleet-synthesis.json.rounds and fleet-report.json.rounds === 2 (the real executed count, NOT 3).",
+        "AC3: When no blackboard is configured, fleet-report.json has NO rounds key (byte-identical to today) and no fleet-synthesis.json is written.",
+        "AC4: executeRounds returns { executions, roundsRun }; runFleet threads roundsRun into reporter.build (only when a blackboard is used) and collect."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "maintainability",
+      "requirement": "The no-blackboard fleet path stays byte-identical (report shape unchanged, no synthesis file).",
+      "verificationMethod": "A no-blackboard runFleet test asserts the report has no rounds key and no fleet-synthesis.json; build(outcomes) with no opts omits rounds; existing fleet tests pass unchanged."
+    },
+    {
+      "category": "reliability",
+      "requirement": "collect remains pure (no LLM/network); the never-throw exit-0 fleet contract is preserved.",
+      "verificationMethod": "synthesis.ts has no provider/network import; per-child failure tests still pass; full suite green minus the 6 known cockpit failures."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "PortfolioReport gains optional rounds?: number. SynthesisBundle.rounds value becomes the real executed count.",
+    "securityConsiderations": [],
+    "existingPatterns": "Mirror Phase B's guarded-spread for optional fields (e.g. the critique flag / optional config sections) to keep absent-key output byte-identical. executeRounds object-return mirrors the codebase's object-spec style (e.g. runner.run({cwd, task}))."
+  },
+  "sprints": [
+    "sprint-spec-20260618-fleet-synthesis-round-count-1"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "1-2 hours",
+    "riskLevel": "low",
+    "riskNotes": "Small, confined change in src/fleet/ (4 source files + 2 test files). Only risk is the executeRounds return-shape change rippling into the Sprint-3 coordinator tests — handled by updating those call sites to destructure .executions."
+  }
+}

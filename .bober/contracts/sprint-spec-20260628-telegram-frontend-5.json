@@ -1,0 +1,85 @@
+{
+  "contractId": "sprint-spec-20260628-telegram-frontend-5",
+  "specId": "spec-20260628-telegram-frontend",
+  "sprintNumber": 5,
+  "title": "Document upload \u2192 medical ingest with mandatory per-upload opt-in",
+  "description": "Handle document uploads. Because Telegram is not end-to-end encrypted, the bot requires an explicit per-upload Yes/No opt-in before any processing. Only on explicit Yes does it download the file and hand it to the existing src/medical ingest path; on No or no confirmation the file is dropped and nothing is ingested. Post-ingest replies carry a non-sensitive count/summary only.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-telegram-frontend-4"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "`npm run build` (tsc) compiles the document-upload handler additions with zero TypeScript errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "A unit test shows an uploaded document with no opt-in confirmation never invokes the medical ingest path (injected ingest spy records zero calls).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "A unit test shows that after an explicit Yes confirmation the handler invokes the medical ingest path exactly once with the downloaded file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "A unit test shows that after a No confirmation the file is discarded and the ingest spy records zero calls.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "A unit test asserts the opt-in prompt text states the document will be sent to local medical ingest before the user confirms, and the post-ingest reply contains a count/summary with no raw marker values.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "Uploading a lab PDF to the running bot prompts an opt-in; confirming Yes runs medical ingestion and the bot replies with a non-sensitive completion summary.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not auto-ingest uploaded documents \u2014 ingestion happens only after an explicit per-upload Yes confirmation.",
+    "Do not reimplement medical parsing or storage \u2014 invoke the existing medical ingest feature in src/medical.",
+    "Do not echo extracted medical marker values, names, or other raw PHI back through Telegram \u2014 reply with a count/summary only via sendSafe.",
+    "Do not persist the uploaded file outside the medical module's own ingest path.",
+    "Do not weaken or bypass the existing medical egress/consent guardrails in src/medical."
+  ],
+  "stopConditions": [
+    "The opt-in gating unit tests (no-confirm and No \u2192 zero ingest calls; Yes \u2192 one ingest call) pass and `npm run build` exits zero.",
+    "An uploaded document reaches the medical ingest path only after a recorded explicit Yes confirmation.",
+    "Post-ingest replies contain no raw marker values."
+  ],
+  "definitionOfDone": "When a whitelisted user uploads a document, the bot first asks for an explicit per-upload confirmation naming the local medical ingest destination. Only on an explicit Yes does the bot download the file and pass it to the existing src/medical ingest path; on No, or absent a confirmation, the file is dropped and nothing is ingested. The reply after ingest contains only a non-sensitive summary (such as how many results were imported), never raw marker values or names.",
+  "assumptions": [
+    "The medical ingest path is the existing src/medical pipeline (IngestionNormalizer / StoreObservationSink and `agent-bober medical import`, see src/cli/commands/medical.ts); the adapter invokes it per Q1's hybrid rule.",
+    "Medical egress/consent guardrails in src/medical (egress.ts, consent.ts) remain authoritative and are not duplicated here.",
+    "Per-upload opt-in is mandatory because Telegram bot messages are not end-to-end encrypted (research \u00a73a line 141)."
+  ],
+  "outOfScope": [
+    "Lab-PDF parsing into structured JSON (owned by the medical module / its own importer).",
+    "Non-medical document routing (e.g. financial statements) \u2014 not in this spec."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Add src/telegram/handlers/upload.ts. On a document message: build an inline Yes/No keyboard (reuse src/telegram/keyboard.ts from Sprint 4) with a prompt that names the local medical ingest destination so consent is informed. Track the pending upload keyed by chat/message id; only on the Yes callback download the file via the transport wrapper's getFile and pass the local path to an injected ingest function (default invokes the existing src/medical ingest path \u2014 import the ingest entry if exported, else execa `agent-bober medical import <file>`). On No or timeout, discard the downloaded/temp file and ingest nothing. Reply via sendSafe with a count/summary (e.g. 'Imported N results') \u2014 never echo marker values/names. Respect existing medical egress/consent guards (do not bypass). ESM .js imports, `import type`, no `any`, node:fs/promises only.",
+  "evaluatorNotes": "Verify the no-confirm and No paths record zero ingest calls (injected spy). Verify the Yes path calls ingest exactly once with the downloaded file. Verify the prompt text discloses the destination before confirmation and the post-ingest reply leaks no marker values. Confirm no medical guardrail is duplicated or bypassed. Run build + the gating unit tests.",
+  "estimatedFiles": [
+    "src/telegram/handlers/upload.ts",
+    "src/telegram/handlers/upload.test.ts",
+    "src/telegram/keyboard.ts",
+    "src/telegram/bot.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-30T00:58:27Z"
+}

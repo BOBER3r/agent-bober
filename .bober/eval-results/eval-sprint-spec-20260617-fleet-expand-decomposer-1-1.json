@@ -1,0 +1,37 @@
+{
+  "evalId": "eval-sprint-spec-20260617-fleet-expand-decomposer-1-1",
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-1",
+  "specId": "spec-20260617-fleet-expand-decomposer",
+  "timestamp": "2026-06-17T20:01:30.000Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 8,
+    "requiredFailed": 0,
+    "requiredTotal": 8
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "(no output — zero errors)", "details": "npx tsc --noEmit produced no output. Zero type errors." },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc", "details": "npm run build exited 0 with no errors." },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "(no output — zero errors)", "details": "npx eslint src/fleet/decomposer.ts src/fleet/decomposer.test.ts produced no output." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "Tests 22 passed (22); full suite 2232 passed, 3 skipped, 0 failed", "details": "All 22 decomposer tests pass. Generator's claimed pre-existing failure in src/discovery/scanner.test.ts:341 is NOT reproducible (52/52 pass independently) — flaky." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-1-1", "description": "build clean", "required": true, "result": "pass", "evidence": "npm run build exited 0.", "feedback": "" },
+    { "criterionId": "sc-1-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit zero output.", "feedback": "" },
+    { "criterionId": "sc-1-3", "description": "lint clean + ESM/import-type/no-any", "required": true, "result": "pass", "evidence": "eslint zero errors; .js imports, import type, no explicit any.", "feedback": "" },
+    { "criterionId": "sc-1-4", "description": "valid first try resolves schema-valid manifest", "required": true, "result": "pass", "evidence": "FleetManifestSchema.safeParse valid; children carry only folder/task; 1 call.", "feedback": "" },
+    { "criterionId": "sc-1-5", "description": "exactly one coercion re-prompt on bad-then-good", "required": true, "result": "pass", "evidence": "2 total calls; 2nd call 3-message array includes priorText + formatted Zod error.", "feedback": "" },
+    { "criterionId": "sc-1-6", "description": "bad-then-bad throws with Zod issues", "required": true, "result": "pass", "evidence": "Rejects with 'Fleet decomposition failed after 2 attempts' + Zod issues; no manifest escapes.", "feedback": "" },
+    { "criterionId": "sc-1-7", "description": "config-key guard + JSON extraction + jsonObjectMode", "required": true, "result": "pass", "evidence": "FleetChildSchema.config is optional (manifest.ts:9); guard via Object.prototype.hasOwnProperty.call post-safeParse (decomposer.ts:144-152); fenced + first-brace extraction tested; jsonObjectMode:true & responseSchema undefined asserted.", "feedback": "" },
+    { "criterionId": "sc-1-8", "description": "no regressions", "required": true, "result": "pass", "evidence": "Full suite 2232 passed, 0 failed. Only the two decomposer files added; no Phase 1 file modified.", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 success criteria pass on independent verification. Build/typecheck/lint clean, 22 decomposer tests pass, full suite 2232 tests pass with zero failures. Generator's claimed scanner failure not reproducible (flaky). Only src/fleet/decomposer.ts + decomposer.test.ts added; no Phase 1 fleet files modified."
+}

@@ -1,0 +1,116 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-2-1",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-2",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T11:04:49.000Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": {
+    "criteriaTotal": 7,
+    "criteriaPassed": 7,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit exit 0",
+      "details": ""
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0",
+      "details": ""
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "output": "0 errors",
+      "details": "2 pre-existing warnings unrelated"
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "output": "308 files / 3958 tests pass",
+      "details": "+29 vs 3929 baseline, zero regressions"
+    },
+    {
+      "strategy": "api-check",
+      "required": false,
+      "result": "skipped",
+      "output": "",
+      "details": "no HTTP surface"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-2-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-2-7",
+      "required": true,
+      "result": "pass",
+      "evidence": "see evaluator transcript"
+    }
+  ],
+  "regressions": [
+    {
+      "description": "nonGoal violation: bober-security-auditor subagent granted unrestricted Bash tool (via resolveRoleTools('evaluator',...) whose set includes 'bash' = full sh -c execution). Contract nonGoals[3]: 'Do not give the auditor subagent write/edit/bash tools.'",
+      "evidence": "agents/bober-security-auditor.md:4-9 lists Bash; security-auditor-agent.ts:62 resolveRoleTools('evaluator',...); tools/index.ts:67 evaluator=['bash','read_file','glob','grep']; handlers.ts:87-121 unrestricted sh -c",
+      "severity": "critical"
+    }
+  ],
+  "generatorFeedback": [
+    {
+      "priority": "high",
+      "category": "regression",
+      "file": "agents/bober-security-auditor.md",
+      "line": "4-9",
+      "description": "Contract self-contradiction resolved the wrong way: generatorNotes said 'mirror code-reviewer tool set' but nonGoals[3] explicitly forbids bash. The nonGoal (backed by the spec assumption 'auditor subagent runs with read-only tools' and the architecture's securityConsiderations) must win.",
+      "expected": "Auditor gets only read_file/glob/grep \u2014 the exact shape of ROLE_TOOLS['researcher-phase2']/curator (src/orchestrator/tools/index.ts:62-64). Change security-auditor-agent.ts:62 to resolve a bash-less role tool set (reuse researcher-phase2/curator or add an explicit auditor role) and remove Bash from agents/bober-security-auditor.md frontmatter + any body text implying shell use. Add a test asserting the tools passed to runAgenticLoop contain no 'bash' ToolDef."
+    }
+  ],
+  "summary": "7/7 criteria pass, suite 3958 green, but FAIL on critical nonGoal violation: auditor wired with unrestricted bash tool. Fix: bash-less read-only tool set + frontmatter, test-proven."
+}

@@ -1,0 +1,52 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-blackboard-exchange-1",
+  "specId": "spec-20260618-fleet-blackboard-exchange",
+  "sprintNumber": 1,
+  "title": "SharedBlackboard module (WAL facts.db wrapper)",
+  "description": "Build the bounded inter-agent exchange wrapper over one shared facts.db opened with WAL + busy_timeout — the risk-first foundation (WAL concurrency is the highest unknown). New file src/fleet/shared-blackboard.ts exports: const BLACKBOARD_MAX_ROUNDS = 3; type BlackboardFinding = { childFolder: string; round: number; payload: string; confidence?: number }; class SharedBlackboard with a static/factory open(opts:{dbPath,namespace,busyTimeoutMs?,maxRounds}) that opens the shared db with PRAGMA journal_mode=WAL and PRAGMA busy_timeout, creating file+table if absent; publish(finding, now): writes a FactRecord via FactStore.insertFact (scope=namespace, subject=childFolder, predicate='finding', value=payload, confidence) and THROWS when finding.round > min(maxRounds, BLACKBOARD_MAX_ROUNDS); readSiblings(selfFolder): FactRecord[] = getActiveFacts(namespace, undefined, 'finding') filtered to subject !== selfFolder; readAll(): all active 'finding' facts in the namespace; close(). The WAL pragma must be enabled WITHOUT changing the behavior of existing FactStore callers — preferred mechanism: add an OPTIONAL second constructor arg to FactStore (e.g. `new FactStore(dbPath, { journalModeWal?: boolean; busyTimeoutMs?: number })`) that defaults to OFF (existing callers byte-identical), and SharedBlackboard constructs FactStore with { journalModeWal: true, busyTimeoutMs }. No engine/coordinator/CLI wiring this sprint.",
+  "status": "completed",
+  "completedAt": "2026-06-18T19:01:30Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "sc-1-1", "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors (npm run typecheck).", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-1-2", "description": "The full test suite passes with zero new failures (npm run test); only the 6 known cockpit-integration MCP failures may fail.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-3", "description": "SharedBlackboard.open(dbPath) opens the db in WAL mode (a test reads `PRAGMA journal_mode` and asserts 'wal') and creates the facts file+table if absent.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-4", "description": "publish(finding, now) writes a FactRecord with scope=namespace, subject=childFolder, predicate='finding', value=payload; and THROWS when finding.round exceeds min(maxRounds, BLACKBOARD_MAX_ROUNDS=3). A test asserts both the written record and the round-cap throw.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-5", "description": "readSiblings(selfFolder) returns active 'finding' facts in the namespace excluding subject===selfFolder; readAll() returns all; both return [] when empty (no throw). A test with 2 subjects asserts each sees only the other's findings via readSiblings and both via readAll.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-6", "description": "Concurrent writers do not deadlock: a test issues N (>=5) concurrent publish() calls to one shared db (e.g. Promise.all) and asserts all N findings are present in readAll(). WAL + busy_timeout are enabled.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-7", "description": "Existing FactStore callers are unaffected: constructing FactStore WITHOUT the WAL option behaves exactly as before (default journal mode); the existing FactStore tests and the medical FactStore usage pass unchanged. A test asserts a default FactStore's journal_mode is the prior default (not forced to wal).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-1-8", "description": "lint passes (npm run lint, zero errors); SharedBlackboard adds no network/SDK import (depends only on FactStore/better-sqlite3 via FactStore); change confined to shared-blackboard.ts (new), facts.ts (optional opts param), + tests.", "verificationMethod": "lint", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT wire SharedBlackboard into the coordinator, runFleet, or any CLI (Sprints 2-4).",
+    "Do NOT add config.fleet, manifest.blackboard, or the `agent-bober blackboard` command (Sprint 2).",
+    "Do NOT change FactStore's DEFAULT behavior — the WAL option must be opt-in and default off.",
+    "Do NOT implement the rounds loop or synthesis (Sprints 3-4).",
+    "Do NOT add an LLM/network dependency."
+  ],
+  "stopConditions": [
+    "All eight success criteria pass",
+    "SharedBlackboard opens WAL, publish/readSiblings/readAll work, the round cap throws, concurrent writers succeed, existing FactStore callers are byte-identical, and build/typecheck/test/lint are green"
+  ],
+  "definitionOfDone": "src/fleet/shared-blackboard.ts exports BLACKBOARD_MAX_ROUNDS, BlackboardFinding, and SharedBlackboard (open with WAL+busy_timeout, publish with round cap, readSiblings, readAll, close). FactStore gains an optional opts param enabling WAL+busy_timeout (default off). Collocated tests cover WAL-mode, publish+round-cap, readSiblings/readAll, concurrency, and the unchanged default-FactStore path. Build/typecheck/test/lint green.",
+  "assumptions": [
+    "FactStore.insertFact(input: FactInput) (facts.ts:164) is the write primitive and getActiveFacts(scope, subject?, predicate?) (facts.ts:213) the read; FactInput = {scope, subject, predicate, value(min1), confidence?(default 1)} (facts.ts:23-27).",
+    "FactStore currently opens `new Database(dbPath)` with no WAL (facts.ts:139-140); adding an optional opts param that, when set, runs db.pragma('journal_mode = WAL') + db.pragma('busy_timeout = ...') is the minimal way to give the blackboard WAL without affecting default callers.",
+    "better-sqlite3 is synchronous; 'concurrent' publish in a single process is interleaved async over one or more connections — the test exercises the WAL+busy_timeout path (multiple connections if needed to truly contend).",
+    "Findings live in the existing facts schema/table; no migration is needed — the shared db is just a facts.db opened in WAL mode."
+  ],
+  "outOfScope": [
+    "Coordinator rounds loop (Sprint 3)",
+    "config.fleet / manifest.blackboard / CLI (Sprint 2)",
+    "SynthesisStep (Sprint 4)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/state/facts.ts in FULL — the constructor (:139-157, where Database is opened and the table created), insertFact (:164), getActiveFacts (:213), FactInput/FactRecord (:23-46), factsDbPath/memoryDir (:74-90). Decide the WAL mechanism: the cleanest is an optional 2nd constructor arg `constructor(dbPath: string, opts?: { journalModeWal?: boolean; busyTimeoutMs?: number })` — when opts.journalModeWal, call this.db.pragma('journal_mode = WAL'); when opts.busyTimeoutMs, this.db.pragma(`busy_timeout = ${opts.busyTimeoutMs}`). Default (no opts) leaves the existing behavior byte-identical. Confirm existing callers (medical, memory) pass only dbPath.\n\nNew src/fleet/shared-blackboard.ts: export const BLACKBOARD_MAX_ROUNDS = 3; export interface BlackboardFinding { childFolder: string; round: number; payload: string; confidence?: number }. export class SharedBlackboard { private store: FactStore; private namespace: string; private maxRounds: number; constructor/open({dbPath, namespace, busyTimeoutMs = 5000, maxRounds}) { ensureDir(dirname(dbPath)); this.store = new FactStore(dbPath, { journalModeWal: true, busyTimeoutMs }); this.maxRounds = Math.min(maxRounds ?? BLACKBOARD_MAX_ROUNDS, BLACKBOARD_MAX_ROUNDS); } publish(finding, now) { if (finding.round > this.maxRounds) throw new Error(`blackboard round ${finding.round} exceeds cap ${this.maxRounds}`); return this.store.insertFact({ scope: this.namespace, subject: finding.childFolder, predicate: 'finding', value: finding.payload, confidence: finding.confidence ?? 1 }); } readSiblings(selfFolder) { return this.store.getActiveFacts(this.namespace, undefined, 'finding').filter(f => f.subject !== selfFolder); } readAll() { return this.store.getActiveFacts(this.namespace, undefined, 'finding'); } close() { this.store.close(); } }.\n\nTests (shared-blackboard.test.ts + facts.test.ts additions): use a tmp dir db path. Assert journal_mode is 'wal' after open (read via a raw better-sqlite3 or expose a tiny test seam). publish + round-cap throw. readSiblings/readAll with 2 subjects. Concurrency: Promise.all of N publish() (use distinct subjects/values so ids differ) then assert readAll().length===N. Default-FactStore unchanged: `new FactStore(tmp)` then assert its journal_mode is NOT 'wal' (the prior default), and the existing facts tests still pass. Follow ESM .js imports, import type, unicode section headers, no synchronous fs (use ensureDir).",
+  "evaluatorNotes": "sc-1-3: open a SharedBlackboard at a tmp path, then open a raw better-sqlite3 (or the store) and `PRAGMA journal_mode` → expect 'wal'; confirm the facts.db file exists. sc-1-4: publish a finding round=1 → assert a FactRecord with the right scope/subject/predicate/value; publish round=4 → expect throw. sc-1-5: two subjects A,B publish; readSiblings('A') returns only B's; readAll returns both; empty namespace → []. sc-1-6: Promise.all of >=5 publishes → readAll length matches. sc-1-7 (CRITICAL no-regression): `new FactStore(tmp)` (no opts) → journal_mode is the prior default (likely 'delete'/'memory', NOT 'wal'); run the existing facts + medical FactStore tests and confirm unchanged. sc-1-2: FULL suite, only 6 known cockpit failures. Build/typecheck/lint clean; grep shared-blackboard.ts for network/SDK imports (none).",
+  "estimatedFiles": ["src/fleet/shared-blackboard.ts", "src/fleet/shared-blackboard.test.ts", "src/state/facts.ts", "src/state/facts.test.ts"],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T19:30:00Z",
+  "updatedAt": "2026-06-18T19:30:00Z"
+}

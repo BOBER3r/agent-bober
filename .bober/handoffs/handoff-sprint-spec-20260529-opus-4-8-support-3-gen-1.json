@@ -1,0 +1,42 @@
+{
+  "handoffId": "handoff-sprint-spec-20260529-opus-4-8-support-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-3",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T18:55:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 3 of Claude Opus 4.8 Support. Add an optional provider-agnostic `effort` field to ChatParams and forward it as top-level output_config.effort in the Anthropic adapter. Unset => no output_config (API default 'high' applies on Opus 4.8). Non-anthropic adapters ignore it.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260529-opus-4-8-support-1", "title": "opus -> claude-opus-4-8", "summary": "model-resolver only." },
+      { "contractId": "sprint-spec-20260529-opus-4-8-support-2", "title": "SDK upgrade to 0.100.1", "summary": "@anthropic-ai/sdk now 0.100.1; OutputConfig.effort + MidConversationSystemBlockParam typed; adapter unchanged." }
+    ],
+    "currentBranch": "bober/opus-4-8-support",
+    "relevantFiles": [
+      "src/providers/types.ts — ChatParams interface (add optional effort); LLMClient",
+      "src/providers/anthropic.ts — chat() builds messages.create payload; add output_config only when effort set",
+      "src/providers/anthropic.test.ts — top-level vi.mock pattern to assert request payload",
+      "src/providers/openai.ts / openai.test.ts — prove a non-anthropic adapter ignores effort without error"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260529-opus-4-8-support-3.json",
+  "specPath": ".bober/specs/spec-20260529-opus-4-8-support.json",
+  "config": {
+    "commands": { "build": "npm run build", "test": "npm run test", "lint": "npm run lint", "typecheck": "npm run typecheck" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "confirmedSdkFacts": {
+    "sdkVersion": "0.100.1 (installed)",
+    "OutputConfig": "interface OutputConfig { effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null; ... } — at @anthropic-ai/sdk/resources/messages/messages.d.ts",
+    "messageCreateParams": "MessageCreateParams has `output_config?: OutputConfig` — so messages.create({ ..., output_config: { effort } }) is typed, no cast needed",
+    "default": "effort defaults to 'high' on Opus 4.8 server-side; OMIT output_config entirely when effort is unset to preserve current behavior."
+  },
+  "keyPrinciples": [
+    "Provider-agnostic field in types.ts; @anthropic-ai/sdk stays only in anthropic.ts.",
+    "ESM .js imports; import type; no stray any.",
+    "Conventional commit: bober(sprint-3): <description>."
+  ],
+  "baselineNote": "Tolerated test failures: the 2 flaky 37-tool-count tests + occasionally disk.test.ts (race, passes in isolation). Any other failure, or any src/providers/ failure, is a regression.",
+  "evaluatorFeedback": null
+}

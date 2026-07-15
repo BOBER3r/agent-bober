@@ -1,0 +1,121 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T20:11:57.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/providers/types.ts",
+      "src/providers/anthropic.ts",
+      "src/providers/openai.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/generator-agent.ts",
+      "src/orchestrator/generator-agent.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 1,
+    "title": "Refusal detection end-to-end (stopReason 'refusal' + fail-closed generator)",
+    "description": "Surface a model refusal as a first-class outcome instead of a silent success. Add an explicit 'refusal' StopReason mapping in the Anthropic and OpenAI-family adapters, detect it at the loop's completion branch, return refused:true on AgenticLoopResult (never throw), and make parseGeneratorResult fail closed: a refusal overrides the filesWritten-implies-success path. Advisory/read-only roles surface the refusal text without failing the run (ADR-5).",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "The Anthropic adapter's normalizeStopReason maps the raw 'refusal' stop reason to StopReason 'refusal' via an explicit case (not the default branch), and the open StopReason union documents 'refusal' as a known value.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "The OpenAI-family adapter maps its refusal surface (refusal content / content_filter finish reason) to StopReason 'refusal'.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "runAgenticLoop returns { refused: true, stopReason: 'refusal' } with a resolved (not rejected) promise when the client returns a refusal, including when tool results from earlier turns exist.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "parseGeneratorResult returns success:false with a refusal note when loopResult.refused === true, even when filesWritten.size > 0 (the refusal guard runs before the filesWritten check).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "When no refusal occurs, AgenticLoopResult carries no refused key and all pre-existing loop/generator tests pass unchanged (byte-identical non-refusal path).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-6",
+        "description": "npm run build and npm run typecheck pass with the extended types.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not add budget, effort, or parallel-tool behavior (later sprints).",
+      "Do not throw from the loop on refusal (ADR-5: return, never throw \u2014 no catcher exists around runGenerator in pipeline.ts).",
+      "Do not change advisory roles' success semantics \u2014 they surface refusal text as output.",
+      "Do not touch the claude-code adapter's text-only boundary."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: adapter refusal mapping (both families), loop refused flag without throwing, generator fail-closed override of filesWritten, and byte-identical non-refusal behavior.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "A provider refusal propagates as StopReason 'refusal' through the adapters, sets refused:true and stopReason 'refusal' on AgenticLoopResult without throwing, and a generator sprint that refuses after partial writes is reported success:false. Non-refusal runs are byte-identical. Build, typecheck, lint, and the full suite are green.",
+    "assumptions": [
+      "The Anthropic SDK's raw StopReason already includes 'refusal' (node_modules/@anthropic-ai/sdk .../messages.d.ts) and currently passes through normalizeStopReason's default branch as a raw string; the substantive bug is the loop's completion branch treating any non-tool_use stop as done. Evidence: src/providers/anthropic.ts:32-45, src/orchestrator/agentic-loop.ts:301.",
+      "StopReason (src/providers/types.ts:207) is an open union ('end' | 'tool_use' | 'max_tokens' | 'error' | string) so adding 'refusal' is additive.",
+      "No code outside providers/ and agentic-loop.ts reads AgenticLoopResult.stopReason (verified at architecture Checkpoint 4), so the new value cannot break existing consumers."
+    ],
+    "outOfScope": [
+      "USD budget, effort, parallel tools (sprints 2-4).",
+      "Refusal-triggered retries or automatic re-prompting."
+    ],
+    "ambiguityScore": 2,
+    "generatorNotes": "Anchors may have drifted \u2014 re-locate by pattern. (1) src/providers/anthropic.ts normalizeStopReason (~:32-45): add an explicit case mapping 'refusal' \u2192 'refusal' with a one-line comment that the value is part of the open union. (2) src/providers/openai.ts normalizeStopReason (~:164-175): map the OpenAI refusal surface (message.refusal content and/or finish_reason 'content_filter') \u2192 'refusal'; openai-compat shares this path. (3) src/providers/types.ts: document 'refusal' in the StopReason union comment; add optional refused?: boolean is NOT needed on ChatResponse \u2014 the loop derives it. (4) src/orchestrator/agentic-loop.ts completion branch (~:301, the stopReason !== 'tool_use' return): when response.stopReason === 'refusal', return the normal result shape plus refused: true (spread-conditional so the key is absent otherwise). (5) src/orchestrator/generator-agent.ts parseGeneratorResult (~:181-260): accept the loop result (it already receives it or thread it), and FIRST check refused === true \u2192 return success:false with a clear note ('model refused: <finalText excerpt>') before any filesWritten logic. Follow existing test file collocation (*.test.ts next to source) and use fake LLMClient objects returning scripted ChatResponses like existing agentic-loop tests do.",
+    "evaluatorNotes": "Use a fake client whose chat() returns stopReason 'refusal' (with and without prior tool_use turns) and assert the loop resolves with refused:true, stopReason 'refusal' (sc-1-3). Unit-test normalizeStopReason in both adapters directly (sc-1-1, sc-1-2). For sc-1-4 call parseGeneratorResult with a loop result where refused=true and a non-empty filesWritten set; assert success:false and the note mentions refusal. For sc-1-5 assert a normal completion result has no 'refused' key (use Object.hasOwn) and run the FULL existing suite. Confirm build + typecheck + lint all pass.",
+    "estimatedFiles": [
+      "src/providers/types.ts",
+      "src/providers/anthropic.ts",
+      "src/providers/openai.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/generator-agent.ts",
+      "src/orchestrator/generator-agent.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-09T20:11:57.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

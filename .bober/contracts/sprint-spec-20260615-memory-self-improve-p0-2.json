@@ -1,0 +1,80 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-2",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "sprintNumber": 2,
+  "title": "Reconcile-on-write \u2014 deterministic exact-match supersede + LLM-judged ambiguity",
+  "description": "Route fact writes through a reconcile step. The deterministic core handles the clean cases with NO LLM: an exact (scope,subject,predicate) active match with a changed value supersedes the old fact (invalidate + insert), an identical value is a NOOP, and a fresh subject+predicate is an ADD. Ambiguous near-matches (normalized-key collision without an exact match) consult an injected LLM FactJudge returning ADD/UPDATE/DELETE/NOOP, with a deterministic ADD fallback when the judge is unavailable.",
+  "status": "completed",
+  "createdAt": "2026-06-15T12:00:00.000Z",
+  "updatedAt": "2026-06-15T16:43:07Z",
+  "completedAt": "2026-06-15T16:43:07Z",
+  "dependsOn": [
+    "sprint-spec-20260615-memory-self-improve-p0-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The project builds successfully (`npm run build`, exit 0) and typecheck passes (`npm run typecheck`, zero errors).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "src/orchestrator/memory/reconcile.ts exports a reconcileFact(store, incoming, { judge?, now }) function and a ReconcileAction type ('add'|'update'|'delete'|'noop'); writeFact in the facts module delegates to it.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A unit test (no LLM injected) proves supersession: writing (programming, patient, medication, metformin) then (programming, patient, medication, ozempic) leaves exactly one active fact (ozempic), with the metformin row still present in the DB carrying t_invalid and t_invalidated set.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "A unit test (no LLM injected) proves NOOP: writing the identical (scope,subject,predicate,value) twice results in one active fact and creates no second row; reconcileFact returns action 'noop' the second time.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "src/orchestrator/memory/fact-judge.ts exports a FactJudge interface and a createLLMFactJudge() backed by createClient (src/providers/factory.ts); the ambiguity branch calls the judge only on a deterministic normalized-key collision, and falls back to 'add' when no judge is provided.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "A unit test injects a STUB FactJudge: an ambiguous near-match (same subject, normalized-equal predicate, different value) with a stub returning 'update' supersedes the prior fact; with no judge the same input inserts a new active fact (deterministic fallback).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "ESLint reports zero errors on new and modified files (`npm run lint`).",
+      "verificationMethod": "lint",
+      "required": false
+    }
+  ],
+  "generatorNotes": "Build reconcile as a PURE-CORE module src/orchestrator/memory/reconcile.ts that takes the FactStore (from Sprint 1) plus the incoming fact and an injected `now` ISO string \u2014 never read the clock inside. ALGORITHM: (1) query getActiveFacts(scope, subject, predicate); (2) if an exact match with the SAME value exists \u2192 NOOP; (3) if exact (scope,subject,predicate) active match with a DIFFERENT value \u2192 UPDATE: invalidateFact(old.id, now) AND set the old row's t_invalid to the incoming tValid, then insertFact(incoming) \u2192 return 'update'; (4) if NO exact match \u2192 check for AMBIGUITY deterministically: normalize subject/predicate (lowercase, strip non-alphanumerics \u2014 reuse the tokenize idea from src/orchestrator/memory/retrieve.ts) and look for an active fact whose normalized (subject,predicate) equals the incoming's; if found AND a judge is provided, call judge.resolve(incoming, candidate) \u2192 apply its ADD/UPDATE/DELETE/NOOP; if found but NO judge \u2192 deterministic fallback = ADD; if not found \u2192 ADD. DELETE = invalidate the candidate without inserting. JUDGE: src/orchestrator/memory/fact-judge.ts defines `interface FactJudge { resolve(incoming, candidate): Promise<ReconcileAction> }` and `createLLMFactJudge()` that builds a client via createClient(...) like src/orchestrator/architect-agent.ts:195 and honours BOBER_TEST_DETERMINISTIC=1. Keep the judge prompt tiny and return a strict enum; on any parse failure or thrown error, the judge impl returns 'add' (never let the LLM corrupt the store). WIRING: add writeFact(store, incoming, opts) to src/state/facts.ts (or a thin wrapper) that calls reconcileFact; the Sprint 1 `bober facts add` CLI should now go through writeFact so adds reconcile. Do NOT put the LLM on the exact-match path \u2014 sc-2-3 and sc-2-4 must pass with no judge. Mirror distill.ts determinism for the core and the existing Zod-validate-then-act style.",
+  "evaluatorNotes": "Run build, typecheck, and `npm test -- reconcile facts`. For sc-2-3/sc-2-4: read the tests and confirm NO judge/LLM is injected and assertions check active-count==1, the superseded row persists with both t_invalid and t_invalidated populated, and the second identical write returns 'noop' with no new row. For sc-2-2/sc-2-5: read reconcile.ts and fact-judge.ts \u2014 confirm the exact-match/NOOP/ADD branches contain no client/network calls, the judge is only consulted inside the ambiguity branch, and there is a no-judge ADD fallback plus a try/catch returning 'add' in the LLM impl. For sc-2-6: confirm the stub-judge test drives both the 'update' resolution and the no-judge fallback. Edge cases to verify by reading code: an incoming fact whose value equals an INACTIVE (already-invalidated) prior fact should still ADD (only active facts gate reconciliation); confidence on supersede should carry the incoming value's confidence. Confirm `bober facts add` of a changed value now supersedes rather than duplicating (exercise the CLI twice in a temp dir).",
+  "estimatedFiles": [
+    "src/orchestrator/memory/reconcile.ts",
+    "src/orchestrator/memory/reconcile.test.ts",
+    "src/orchestrator/memory/fact-judge.ts",
+    "src/state/facts.ts",
+    "src/cli/commands/facts.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-2-1",
+      "timestamp": "2026-06-15T16:43:07Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260615-memory-self-improve-p0-2-1"
+}

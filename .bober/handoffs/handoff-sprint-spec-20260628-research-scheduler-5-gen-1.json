@@ -1,0 +1,40 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-research-scheduler-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-research-scheduler-5",
+  "specId": "spec-20260628-research-scheduler",
+  "timestamp": "2026-06-30T01:00:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 5 of 5 (FINAL). Digest builder aggregating research runs in [since, now] into a markdown + JSON artifact under .bober/research/digests/<date>.{md,json} for the Telegram bot (sibling spec) to push later. `bober research digest --since <iso>`. Transport OUT of scope. Empty window => explicit no-new-research digest (both files). Non-sensitive summary content only.",
+    "completedSprints": [
+      {"contractId": "1", "summary": "0336e47 schema/store/CLI"},
+      {"contractId": "2", "summary": "20d42cb runner -> vault note + Finding (notes hold frontmatter {jobId,question,models,generatedAt})"},
+      {"contractId": "3", "summary": "0150737 egress axis"},
+      {"contractId": "4", "summary": "c8c4b53 cadence + tick"}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/research/note-writer.ts + runner.ts (what a produced run/note looks like; vaultRoot)",
+      "src/vault/note-io.ts + frontmatter.ts (listNotes/readNote, parse frontmatter.generatedAt)",
+      "src/hub/priority-md.ts (PURE markdown render pattern)",
+      "src/fleet/index.ts (JSON.stringify(x,null,2)+newline write pattern)",
+      "src/state/helpers.ts (ensureDir)",
+      "src/cli/commands/research.ts (subcommand + deps-injection pattern)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run"},
+    "generator": {"model": "sonnet", "autoCommit": true, "commitFormat": "bober(sprint-N): description"}
+  },
+  "principles": "Read .bober/principles.md. Hard gates: strict TS zero errors; ZERO lint errors; ESM .js imports; Zod; async fs; CLOCK INJECTION (now injected into buildDigest; new Date() only at CLI .action boundary). NON-SENSITIVE content only — titles/summaries, NOT raw PHI/financial values.",
+  "evaluatorFeedback": null,
+  "curatorFindings": {
+    "collectRunsSource": "The REAL collectRuns(since, now) reads VAULT RESEARCH NOTES (listNotes + readNote under <vaultRoot>/research/, filter by frontmatter.generatedAt in [since, now]) — NOT hub Findings. Reason: Findings are content-deduped by sha256(domain|title|kind) (finding-store.ts:121-126) so re-runs supersede prior and UNDERCOUNT the window; and Findings carry no source-link path whereas each note is a 1:1 dated artifact whose PATH is the source link. buildDigest itself takes an INJECTED collectRuns dep so unit tests use fake runs with NO vault/FactStore.",
+    "dualArtifact": "Mirror src/hub/priority-md.ts for the PURE markdown render (build lines[] then join('\\n')). Mirror src/fleet/index.ts:69 for the JSON write (JSON.stringify(obj, null, 2) + '\\n'). JSON shape: {since, now, generatedAt, runs:[{title, topFinding, generatedAt, source}]}. Markdown: heading + one bullet per run (title, top finding, source link).",
+    "filename": "<date> = now.slice(0,10) => YYYY-MM-DD (matches note-writer.ts:24 / medical/audit.ts:31). Write both .bober/research/digests/<date>.md and <date>.json.",
+    "ensureDir": "Use ensureDir from src/state/helpers.ts — NOT src/utils/fs.ts (the CLI test whole-module-mocks utils/fs.js; keep real fs in digest.ts). Keep the CLI digest action thin: delegate fs to digest.ts.",
+    "emptyWindow": "When collectRuns returns [], render a markdown body that EXPLICITLY states no new research was produced in the window, and STILL write BOTH files (never throw, never empty file)."
+  },
+  "notes": "Contract: .bober/contracts/sprint-spec-20260628-research-scheduler-5.json. Briefing: .bober/briefings/sprint-spec-20260628-research-scheduler-5-briefing.md. CLI: `digest --since <iso>` with default = last 24h computed at the .action boundary only. NON-GOALS: no Telegram bot/transport/rendering; no sensitive raw detail; do NOT change runner/cadence/egress; tick<->digest integration optional/additive. Do NOT modify src/medical/, src/fleet/, src/orchestrator/pipeline.ts, src/state/research-state.ts. This is the LAST sprint — make the whole feature cohere."
+}

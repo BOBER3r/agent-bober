@@ -1,0 +1,21 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "status": "complete",
+  "iteration": 1,
+  "criteriaResults": [
+    {"criterionId": "sc-4-1", "met": true, "evidence": "npx tsc --noEmit exit 0; npx tsc exit 0"},
+    {"criterionId": "sc-4-2", "met": true, "evidence": "schema.test.ts 37 tests (11 new): vault.obsidian round-trips incl mcpEnv OBSIDIAN_API_KEY=secret-token; toolNames overrides preserved; vault-less config parses (undefined)"},
+    {"criterionId": "sc-4-3", "met": true, "evidence": "mcp-adapter.test.ts 25 tests: default cyanheads tool names + overrides take effect; readNote parseNote; writeNote serializeNote; listNotes JSON + newline fallback"},
+    {"criterionId": "sc-4-4", "met": true, "evidence": "https://, wss://, --url=https in mcpArgs -> throws /on-device|local/ + startSpy.not.toHaveBeenCalled for read/write/list; error includes server name but never mcpEnv value"}
+  ],
+  "filesChanged": [
+    {"path": "src/config/schema.ts", "action": "modified", "description": "VaultObsidianSchema + VaultSectionSchema + optional vault field on BoberConfigSchema (additive)"},
+    {"path": "src/config/schema.test.ts", "action": "modified", "description": "11 new vault schema tests (sc-4-2)"},
+    {"path": "src/vault/mcp-adapter.ts", "action": "created", "description": "McpServerLike interface, DEFAULT_VAULT_TOOL_NAMES (cyanheads), isOnDevice guard (rejects https?/wss?/ftp/tcp + non-loopback hosts, never inspects mcpEnv), VaultMcpAdapter read/write/list w/ guard-before-start + envelope parse"},
+    {"path": "src/vault/mcp-adapter.test.ts", "action": "created", "description": "25 tests: isOnDevice (8), read/write/list default+override (sc-4-3), guard refusal start()-never-called + mcpEnv-not-in-error (sc-4-4)"}
+  ],
+  "testsAdded": ["src/vault/mcp-adapter.test.ts", "src/config/schema.test.ts"],
+  "commits": ["4f5288d - bober(sprint-4): add VaultSectionSchema + VaultMcpAdapter with on-device guard"],
+  "blockers": [],
+  "notes": "vitest run mcp-adapter+schema -> 62 tests; full suite 227 files 2907 tests pass (up from 2872). isOnDevice rejects /^(https?|wss?|ftp|tcp):\\/\\//i + non-loopback scheme://host in mcpArgs (localhost/127.0.0.1/::1/0.0.0.0 ok). mcpEnv only in JSDoc/comments (lines 12,15,78,155) — no stringify path. external-client.ts NOT modified (git show 4f5288d --stat: 4 files, no external-client). Vault-less config parses undefined."
+}

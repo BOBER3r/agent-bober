@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260531-multi-provider-deepseek-claude-code-5-1",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-5",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T15:04:45.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit EXIT 0"},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "eslint src/ EXIT 0"},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "111 files, 1412 pass, 0 fail"},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc EXIT 0"}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "result": "pass", "required": true, "evidence": "generator override anthropic resolves to anthropic, not claude-code"},
+    {"criterionId": "sc-5-2", "result": "pass", "required": true, "evidence": "throws naming role + 'claude-code cannot drive tools' when sole option"},
+    {"criterionId": "sc-5-3", "result": "pass", "required": true, "evidence": "planner+researcher stay on claude-code, no throw"},
+    {"criterionId": "sc-5-4", "result": "pass", "required": true, "evidence": "logger.info called 6x with role + finally-resolved provider"},
+    {"criterionId": "sc-5-5", "result": "pass", "required": true, "evidence": "loadConfig rejects (real temp dir) when tool role stuck on claude-code; resolveRoleProviders invoked at loader.ts:262"},
+    {"criterionId": "sc-5-6", "result": "pass", "required": true, "evidence": "build + lint EXIT 0"}
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {"priority": "low", "category": "missing-feature", "file": "src/config/loader.ts", "description": "Optional preflightOpenaiPeer loader wiring skipped (explicitly non-gating; not a success criterion). Advisory only."}
+  ],
+  "summary": "All 6 required criteria pass. resolveRoleProviders wired into loadConfig (line 262); tool roles redirect or hard-throw; planner/researcher allowed on claude-code; per-role logging. nonGoals respected; no adapter/createClient changes. Full suite green."
+}

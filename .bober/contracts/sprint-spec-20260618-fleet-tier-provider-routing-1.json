@@ -1,0 +1,91 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-1",
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "sprintNumber": 1,
+  "title": "Grok/xAI provider wiring",
+  "description": "Add Grok/xAI as the EXISTING openai-compat provider pointed at https://api.x.ai/v1, mirroring the DeepSeek wiring at its three resolution sites, plus a single shared isXaiEndpoint() predicate. NO new ProviderName value, NO new adapter class. Touch-points: (1) src/orchestrator/model-resolver.ts SHORTHAND_MAP — add grok shorthands {provider:'openai-compat', modelId} and make the openai-compat endpoint-attach branch select https://api.x.ai/v1 for grok* (vs https://api.deepseek.com for deepseek*); (2) src/providers/factory.ts validateApiKey openai-compat case — add an isXaiEndpoint(endpoint) arm requiring apiKey ?? process.env.XAI_API_KEY and throwing a clear 'configured to use Grok/xAI but XAI_API_KEY is not set' error; (3) src/providers/factory.ts createClient openai-compat case key-injection — add a parallel isXaiEndpoint arm injecting XAI_API_KEY (the OpenAICompatAdapter constructor call is UNCHANGED). Add isXaiEndpoint(endpoint?:string):boolean as the SOLE place the 'api.x.ai' host string is matched, reused by both factory sites (mirror however DeepSeek's host is matched today). src/fleet/index.ts validateManifestCredentials already calls validateApiKey(provider, role, apiKey, endpoint) per child section, so adding the xAI arm makes the fleet pre-spawn credential check recognize Grok with ZERO edits to index.ts. This sprint changes NO fleet behavior and NO tier logic (that is Sprint 2).",
+  "status": "completed",
+  "completedAt": "2026-06-18T18:45:00Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and zero typecheck errors in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "The full test suite passes with zero new failures (npm run test); the 6 pre-existing tests/e2e/cockpit-integration.test.ts MCP 'Connection closed' failures are the only allowed failures and are confirmed unrelated.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "resolveProviderModel('grok') and the other added grok shorthands return { provider:'openai-compat', modelId:<the grok model id>, endpoint:'https://api.x.ai/v1' }, exactly mirroring the deepseek shorthand shape; a collocated test asserts the provider, modelId, and endpoint.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "validateApiKey('openai-compat', role, undefined, 'https://api.x.ai/v1') THROWS a message naming Grok/xAI and XAI_API_KEY when neither providerConfig.apiKey nor process.env.XAI_API_KEY is set, and does NOT throw when XAI_API_KEY is present; the existing api.deepseek.com and no-key (Ollama) behaviors are unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "createClient for an openai-compat provider at an api.x.ai endpoint injects XAI_API_KEY into the OpenAICompatAdapter (parallel to the DEEPSEEK_API_KEY arm), verified by a test that asserts the adapter is constructed with the xAI key (and that Ollama/other openai-compat endpoints keep the no-key behavior).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "isXaiEndpoint(endpoint) is the ONLY place 'api.x.ai' is matched; a grep/test confirms 'api.x.ai' appears solely inside isXaiEndpoint, and both validateApiKey and createClient call it. ProviderName is unchanged (still anthropic|openai|google|openai-compat|claude-code).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "lint passes (npm run lint, zero errors); no new disallowed imports; the change is confined to model-resolver.ts + factory.ts (+ their tests).",
+      "verificationMethod": "lint",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT add a new ProviderName value or a GrokAdapter class — Grok is openai-compat.",
+    "Do NOT add tier logic, FleetChild.tier, or any buildChildConfig change (Sprint 2).",
+    "Do NOT edit validateManifestCredentials' loop body — the xAI arm in validateApiKey must make it work for free.",
+    "Do NOT change the DeepSeek or Ollama openai-compat behavior.",
+    "Do NOT hardcode an XAI_API_KEY or commit any secret."
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "grok* resolves to openai-compat @ api.x.ai/v1, XAI_API_KEY is validated+injected only via the single isXaiEndpoint predicate, ProviderName unchanged, and build/typecheck/test/lint green with no new failures"
+  ],
+  "definitionOfDone": "src/orchestrator/model-resolver.ts SHORTHAND_MAP has grok shorthands resolving to openai-compat with endpoint https://api.x.ai/v1. src/providers/factory.ts exports/uses isXaiEndpoint(endpoint) and has parallel xAI arms in validateApiKey (require XAI_API_KEY) and createClient (inject XAI_API_KEY), leaving OpenAICompatAdapter and ProviderName unchanged. validateManifestCredentials recognizes xAI with no edit. Collocated tests cover shorthand resolution, key-required/throw, key-injection, the single-predicate invariant, and DeepSeek/Ollama non-regression. Build/typecheck/test/lint green.",
+  "assumptions": [
+    "xAI exposes an OpenAI-wire-compatible API at https://api.x.ai/v1, so OpenAICompatAdapter handles it unchanged (research:50).",
+    "The DeepSeek wiring (SHORTHAND_MAP deepseek entry + endpoint attach at model-resolver.ts; validateApiKey + createClient api.deepseek.com arms in factory.ts:251-255) is the exact template to mirror.",
+    "The grok model id default(s) can be a placeholder shorthand (e.g. 'grok-4' / 'grok-4-fast'); the actual id is overridable via child.config.model and is not asserted to be a live model — tests assert routing/endpoint/key, not a live API call.",
+    "validateManifestCredentials (src/fleet/index.ts) already passes section.endpoint into validateApiKey, so the xAI arm is sufficient for the fleet pre-check."
+  ],
+  "outOfScope": [
+    "Tier mapping / FleetChild.tier (Sprint 2)",
+    "ToolRoleGuard (Sprint 3)",
+    "Any blackboard / Phase B work"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Read FIRST: src/orchestrator/model-resolver.ts (SHORTHAND_MAP ~:11-22 and the resolveProviderModel openai-compat endpoint-attach branch ~:79-85 where deepseek gets endpoint 'https://api.deepseek.com' — you add a selector so grok* gets 'https://api.x.ai/v1'); src/providers/factory.ts (validateApiKey openai-compat case ~:128 with the `endpoint?.includes('api.deepseek.com')` check ~:130, and createClient openai-compat case ~:244-261 with the DEEPSEEK_API_KEY injection ~:251-255). Mirror BOTH deepseek arms for xAI.\n\nAdd `export function isXaiEndpoint(endpoint?: string): boolean { return !!endpoint && endpoint.includes('api.x.ai'); }` in factory.ts (or a small shared spot factory imports) and use it in BOTH the validateApiKey arm and the createClient arm — do not inline the substring twice. Optionally refactor the existing deepseek match into an isDeepseekEndpoint() for symmetry, but that is not required.\n\nSHORTHAND_MAP: add `grok: { provider: 'openai-compat', modelId: 'grok-4' }` and a fast variant (e.g. `'grok-4-fast'`); ensure the openai-compat endpoint-attach branch returns endpoint 'https://api.x.ai/v1' when the modelId is a grok id, else keeps 'https://api.deepseek.com'. Keep it a small branch keyed on the modelId/shorthand.\n\nvalidateApiKey: in the openai-compat case, BEFORE/alongside the deepseek check add: `if (isXaiEndpoint(endpoint)) { const key = apiKey ?? process.env['XAI_API_KEY']; if (!key) throw new Error(`${roleLabel} is configured to use Grok/xAI but XAI_API_KEY is not set. Set the XAI_API_KEY environment variable and try again.`); }`. createClient: in the openai-compat case, extend the key resolution to `apiKey ?? (isXaiEndpoint(resolvedEndpoint) ? process.env['XAI_API_KEY'] : resolvedEndpoint.includes('api.deepseek.com') ? process.env['DEEPSEEK_API_KEY'] : undefined)`; pass to the UNCHANGED OpenAICompatAdapter ctor.\n\nTests (collocated *.test.ts next to each file): model-resolver grok resolution; factory validateApiKey xAI throw/no-throw (set/unset XAI_API_KEY via vi.stubEnv or by passing apiKey) + deepseek+ollama unchanged; createClient xAI key injection (you may need to assert via a spy on the adapter constructor or via the resolved key — follow how the existing deepseek createClient test asserts, if any; otherwise assert validateApiKey behavior + that createClient does not throw with XAI_API_KEY set). isXaiEndpoint single-source: a test importing isXaiEndpoint + a grep-style assertion. Follow ESM .js imports, import type, unicode section headers.",
+  "evaluatorNotes": "sc-1-3: call resolveProviderModel('grok') and any other added ids; assert {provider:'openai-compat', endpoint:'https://api.x.ai/v1', modelId set}. sc-1-4: call validateApiKey('openai-compat','generator',undefined,'https://api.x.ai/v1') with XAI_API_KEY unset (vi.stubEnv) → expect throw naming XAI_API_KEY; with it set → no throw; confirm api.deepseek.com still requires DEEPSEEK_API_KEY and a bare Ollama endpoint still needs no key. sc-1-5: assert createClient injects the xAI key (spy/adapter-arg or no-throw-with-key) and Ollama keeps no-key. sc-1-6: grep the repo for 'api.x.ai' and confirm it appears ONLY in isXaiEndpoint; confirm ProviderName union literal is unchanged. sc-1-2: run the FULL suite; only the 6 known cockpit-integration MCP failures may fail; assert no model-resolver/factory/fleet test regressed. Build+typecheck+lint clean.",
+  "estimatedFiles": [
+    "src/orchestrator/model-resolver.ts",
+    "src/orchestrator/model-resolver.test.ts",
+    "src/providers/factory.ts",
+    "src/providers/factory.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-18T18:30:00Z",
+  "updatedAt": "2026-06-18T18:30:00Z"
+}

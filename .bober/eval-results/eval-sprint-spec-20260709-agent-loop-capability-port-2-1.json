@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260709-agent-loop-capability-port-2-1",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T20:55:22Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6},
+  "strategyResults": [
+    {"strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit clean exit 0", "details": "Independently re-run."},
+    {"strategy": "build", "required": true, "result": "pass", "output": "tsc clean exit 0", "details": "Independently re-run."},
+    {"strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings (eval-persist.test.ts)", "details": "No new warnings from sprint files."},
+    {"strategy": "unit-test", "required": false, "result": "pass", "output": "298 files / 3731 tests passed (28.67s)", "details": "Full suite green, matches generator claim."}
+  ],
+  "criteriaResults": [
+    {"criterionId": "sc-2-1", "description": "estimateCostUsd longest-prefix + dated all-provider table", "required": true, "result": "pass", "evidence": "PRICE_TABLE dated 2026-07 with anthropic/openai/openai-compat(deepseek,grok)/google rows; every prefix cross-checked against model-resolver SHORTHAND_MAP; 14 tests green incl. longer-prefix-wins both directions, unknown->undefined, claude-code->undefined.", "feedback": ""},
+    {"criterionId": "sc-2-2", "description": "claude-code real total_cost_usd passthrough, never estimate", "required": true, "result": "pass", "evidence": "Conditional spread typeof-guarded at :182-196; grep confirms no cost-meter import; passthrough + Object.hasOwn omission tests green.", "feedback": ""},
+    {"criterionId": "sc-2-3", "description": "anthropic/openai/openai-compat estimate-or-omit", "required": true, "result": "pass", "evidence": "costUsd on structured+normal (anthropic), refusal+normal (openai) returns; costProvider discriminator proven: openai has no deepseek row while compat estimate matches result. 9 adapter tests green.", "feedback": ""},
+    {"criterionId": "sc-2-4", "description": "Budget maxUsd axis with kind 'usd' and NaN/negative->0", "required": true, "result": "pass", "evidence": "chargeUsd guards !Number.isFinite||<0; remainingUsd Infinity uncapped; BudgetExceededError kind union extended; 7 tests green incl. cross-axis independence.", "feedback": ""},
+    {"criterionId": "sc-2-5", "description": "Pre-existing Budget/adapter tests unchanged", "required": true, "result": "pass", "evidence": "Full suite 3731/3731; git diff --stat shows zero deletions of pre-existing test code.", "feedback": ""},
+    {"criterionId": "sc-2-6", "description": "build + typecheck pass", "required": true, "result": "pass", "evidence": "Both independently re-run, clean exit.", "feedback": ""}
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 6 criteria independently verified: pure static CostMeter with correct longest-prefix resolution, claude-code vendor-cost passthrough with no CostMeter coupling, correct compat-vs-openai cost-provider discrimination, additive Budget USD axis. 3731 tests green; only the 13 estimatedFiles touched; package.json/src/config/agentic loop untouched (all nonGoals satisfied)."
+}

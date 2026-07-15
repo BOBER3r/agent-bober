@@ -1,0 +1,81 @@
+{
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-1",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "sprintNumber": 1,
+  "title": "Vault note model + frontmatter round-trip I/O",
+  "description": "Create a new src/vault/ module with a typed VaultNote model, pure parse/serialize functions for YAML frontmatter + markdown body, and filesystem read/write/list helpers over a vault directory. Document the Dataview-compatible frontmatter conventions inline. Everything domain-agnostic \u2014 no medical-specific keys.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project compiles: `npm run build` (tsc) completes with no errors after the src/vault/ module is added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "`npm run typecheck` reports no type errors for the new VaultNote types and parse/serialize/io function signatures.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A unit test parses a fixture note containing string, number, ISO-8601 date, list, and a status key and asserts each frontmatter value is parsed to its documented type and the body equals the text after the closing frontmatter delimiter.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A round-trip unit test asserts serializeNote(parseNote(input)) re-parses to a frontmatter object deep-equal to the original for the documented Dataview conventions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A unit test writes a VaultNote to a temp dir via writeNote, reads it back via readNote, and asserts equality; listNotes returns every .md file recursively under the vault dir.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write any FactStore / SQLite code in this sprint (deferred to sprint 2).",
+    "Do not add a CLI command in this sprint (deferred to sprint 3).",
+    "Do not import any module from src/medical/ or hardcode medical frontmatter keys (marker/biomarker/etc.).",
+    "Do not call Date.now() or new Date() inside parse/serialize/mapping helpers \u2014 these are pure functions.",
+    "Do not implement MCP, networking, or SOPS handling in this sprint."
+  ],
+  "stopConditions": [
+    "All five success criteria sc-1-1..sc-1-5 pass under the evaluator.",
+    "`npm test` passes with the new src/vault/ tests included and no pre-existing tests regressed.",
+    "src/vault/ contains the note model, frontmatter parse/serialize, and note-io helpers with no TODO stubs left in the exported functions."
+  ],
+  "definitionOfDone": "A developer can import from src/vault/, read a markdown note from an Obsidian vault into a typed VaultNote { frontmatter, body, path }, edit it, and write it back to disk with the YAML frontmatter and body preserved for the documented Dataview field types. listNotes enumerates every markdown file under a vault directory. The module is domain-agnostic and the new unit tests plus the existing suite are green.",
+  "assumptions": [
+    "Frontmatter is YAML delimited by leading and trailing '---' lines, matching Obsidian/Dataview convention (research \u00a73b lines 148-151).",
+    "Parser implementation (a vetted YAML dependency or a dependency-free parser covering the documented scalar/list/date/status conventions) is the generator's choice provided the round-trip tests pass (spec Q4); repo currently has no YAML dependency (package.json lines 64-75).",
+    "Documented Dataview conventions cover: string, number, ISO-8601 date, list/array, and a status enum field (active|superseded)."
+  ],
+  "outOfScope": [
+    "Mapping frontmatter into FactStore (sprint 2).",
+    "Parsing arbitrarily complex nested YAML beyond the documented Dataview conventions.",
+    "Note body markdown parsing/AST (only frontmatter is structured; body is opaque text)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/vault/types.ts (VaultNote interface: frontmatter: Record<string, unknown>; body: string; path: string), src/vault/frontmatter.ts (parseFrontmatter/serializeFrontmatter \u2014 PURE, no clock, no fs), and src/vault/note-io.ts (readNote/writeNote/listNotes \u2014 fs + glob). Reuse the existing glob dependency (package.json) for listNotes, the same way other modules enumerate files. Follow the file-header doc-comment style of src/medical/health-store.ts and the import style (node: prefixes, .js extensions on relative imports). Keep parse/serialize PURE (mirror the purity note in src/state/facts.ts:130-135). If hand-rolling YAML, restrict to the documented Dataview conventions and document the restriction; if adding a dependency, pick a small well-maintained YAML parser. Do NOT import anything network-related (src/vault/ is not under the medical ESLint egress fence, but keep it clean). Place fixtures under a test fixtures dir.",
+  "evaluatorNotes": "Verify round-trip fidelity specifically for a number (e.g. 5.4) staying numeric, an ISO date string staying a parseable date, and a YAML list becoming an array. Confirm the body text after '---' is preserved byte-for-byte including blank lines. Confirm no medical-specific identifiers were introduced (grep src/vault for 'biomarker'|'marker'|'whoop'|'medical'). Confirm parse/serialize do not reference Date.now/new Date. Run the full suite to confirm no regressions.",
+  "estimatedFiles": [
+    "src/vault/types.ts",
+    "src/vault/frontmatter.ts",
+    "src/vault/note-io.ts",
+    "src/vault/frontmatter.test.ts",
+    "src/vault/note-io.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T14:07:12.000Z",
+  "completedAt": "2026-06-28T14:07:12.000Z"
+}

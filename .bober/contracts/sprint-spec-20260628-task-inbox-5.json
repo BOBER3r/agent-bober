@@ -1,0 +1,78 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-5",
+  "specId": "spec-20260628-task-inbox",
+  "sprintNumber": 5,
+  "title": "Chat intent-detection capture",
+  "description": "Extend the chat turn classifier with a capture-task action and wire the chat session to act on it. A new-task statement (\"renew passport\") captures a task via captureTask instead of being answered; a question still routes to answer; a scope-statement (\"I'm deciding between X and Y\") does NOT capture a task.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-task-inbox-1"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "`npm run build` exits 0 with the capture-task classifier action and the chat-session handler branch added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "A unit test feeds the classifier (with a stubbed LLM returning the capture-task JSON) an imperative task phrase and asserts it parses to {action:'capture-task', task:<text>}.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "A unit test asserts a question input yields {action:'answer'} and a scope-statement input does NOT yield capture-task (it maps to answer), so prioritization phrasing is not mistaken for a task.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "A unit test drives the chat-session handler with a capture-task action and an in-memory FactStore, asserting one open action-Finding is persisted and the user-facing turn is a capture confirmation rather than an LLM answer.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "A unit test confirms a malformed classifier response falls back to {action:'answer'} (no throw), preserving the existing FALLBACK contract.",
+      "verificationMethod": "unit-test",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do NOT change any existing classifier action (answer/spawn/steer/approve/reject/tell/pause/resume) behavior — only ADD the capture-task variant.",
+    "Do NOT remove the parse-failure FALLBACK to {action:'answer'} (turn-classifier.ts:46,118).",
+    "Do NOT make capture depend on an LLM round-trip for the actual write — the handler calls captureTask directly once the intent is known.",
+    "Do NOT add new dependencies.",
+    "Do NOT alter the approval/steer/pause subsystems."
+  ],
+  "stopConditions": [
+    "`npm run build` exits 0 and the classifier + chat-session capture unit tests pass.",
+    "A capture-task turn persists a Finding and returns a confirmation, while question and scope-statement turns do not capture a task."
+  ],
+  "definitionOfDone": "Typing a plain task into chat (e.g. \"renew passport\") is recognized as a new-task intent and captured into the hub pool as an open action-Finding, with the chat reply being a short capture confirmation. Questions still route to the answerer and scope-statements (decision framing) are not captured as tasks. The classifier keeps its never-throw fallback to answer on any parse failure.",
+  "assumptions": [
+    "The capture-task action is added to the ClassifierAction discriminated union and schema in src/chat/turn-classifier.ts as {action:'capture-task', task:string}, with the system prompt extended to describe it and to explicitly distinguish a decision/scope-statement (route to answer) from a new task.",
+    "The chat session (src/chat/chat-session.ts) gains a branch that, on capture-task, opens the FactStore, calls captureTask with now stamped at the boundary, and emits a confirmation turn instead of invoking the Answerer.",
+    "captureTask from sprint 1 is the single write path reused here."
+  ],
+  "outOfScope": [
+    "Gmail bridge (sprint 6).",
+    "Scoped prioritization commands like /today,/decide (priority-hub + telegram scope)."
+  ],
+  "generatorNotes": "In src/chat/turn-classifier.ts: add z.object({action:z.literal('capture-task'), task:z.string()}) to ClassifierActionSchema (turn-classifier.ts:24-44), add the matching union member to ClassifierAction (lines 11-20), handle it in parseClassifierAction (after the spawn branch ~line 90), and extend the system prompt option list (lines 141-156) to include capture-task AND a note that 'I'm deciding between X and Y' / scope statements route to answer, not capture-task. Keep FALLBACK={action:'answer'} unchanged. In src/chat/chat-session.ts: where classifier actions are dispatched, add a capture-task case that resolves the project root + namespace, opens FactStore(factsDbPath(root,ns)) after ensureFactsDir, calls captureTask(store, action.task, {now:new Date().toISOString()}), closes the store, and records a confirmation turn (e.g. 'Captured task: <text>') via the existing conversation/turn mechanism rather than calling the Answerer. Mirror the existing dispatch/try-catch style already in chat-session.ts.",
+  "evaluatorNotes": "Confirm only an ADDITIVE union member was introduced and every existing action still parses (run/inspect the existing turn-classifier tests — they must stay green). Verify the scope-statement test does NOT classify as capture-task. Verify the chat-session capture branch writes via captureTask (reused, not a new write path) and emits a confirmation turn, not an Answerer call. Confirm the malformed-response FALLBACK still returns answer.",
+  "estimatedFiles": [
+    "src/chat/turn-classifier.ts",
+    "src/chat/turn-classifier.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/chat-session-capture.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "ambiguityScore": 6,
+  "completedAt": "2026-06-29T11:07:01.694Z"
+}

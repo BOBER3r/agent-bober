@@ -1,0 +1,71 @@
+{
+  "contractId": "sprint-spec-20260618-fleet-expand-deep-critique-2",
+  "specId": "spec-20260618-fleet-expand-deep-critique",
+  "sprintNumber": 2,
+  "version": 1,
+  "createdAt": "2026-06-18T10:07:20Z",
+  "title": "fleet expand-deep --critique CLI flag (additive, byte-lock preserved)",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260618-fleet-expand-deep-critique-1"
+  ],
+  "description": "Add a --critique boolean flag to the existing `fleet expand-deep <goal>` subcommand and thread it through runFleetExpandDeep into the decomposeGoalDeep call via a guarded spread, leaving the default no-flag path byte-identical to Phase 3 and the byte-locked command tree intact.",
+  "estimatedFiles": [
+    "src/fleet/index.ts (additive: FleetExpandDeepOptions.critique?, registerFleetExpandDeepSubcommand .option('--critique'), runFleetExpandDeep guarded spread on the decompose call)",
+    "src/fleet/expand-deep.test.ts (edit) or src/fleet/expand-deep-critique.test.ts (new) \u2014 DI + command-tree + byte-identity tests"
+  ],
+  "successCriteria": [
+    {
+      "id": "sc-2-1",
+      "description": "npm run build (tsc) is clean after the additive index.ts edits.",
+      "required": true,
+      "verify": "build"
+    },
+    {
+      "id": "sc-2-2",
+      "description": "Strict typecheck passes; no explicit any; ESM .js imports; import type for type-only.",
+      "required": true,
+      "verify": "typecheck"
+    },
+    {
+      "id": "sc-2-3",
+      "description": "ESLint clean on the changed/new files.",
+      "required": false,
+      "verify": "lint"
+    },
+    {
+      "id": "sc-2-4",
+      "description": "runFleetExpandDeep(goal,{critique:true},deps) with no --yes writes a FleetManifestSchema-valid manifest to the resolved outPath and does NOT call the injected runFleet (write-and-stop preserved) \u2014 DI test.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-2-5",
+      "description": "Guarded-spread threading: with --critique the injected decompose receives critique:true; WITHOUT --critique the decompose arg object is byte-identical to Phase 3 (no critique key) and zero extra chat calls are emitted \u2014 asserted on the recorded arg object / call record.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-2-6",
+      "description": "--critique is exposed on the expand-deep subcommand alongside the existing 7 options; the byte-locked command tree is intact: `fleet <manifest>` positional + --concurrency/--root, the `fleet expand` subcommand, and the existing expand-deep options \u2014 asserted on the Commander tree.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-2-7",
+      "description": "On the --critique path: credential fail-fast (createClient first; missing key => no file, decompose never called), write-before-spawn (manifest exists on disk before runFleet), and --yes as the sole spawn gate are unchanged; with --yes runFleet is called exactly once with outPath AFTER the critic-reviewed manifest is written.",
+      "required": true,
+      "verify": "test"
+    },
+    {
+      "id": "sc-2-8",
+      "description": "npm run build + full npm test pass; existing fleet suites (decomposer.test.ts, decomposer-deep.test.ts, expand.test.ts, expand-deep.test.ts, index.test.ts) remain green \u2014 no regression; git diff on index.ts shows zero deleted existing lines (purely additive).",
+      "required": true,
+      "verify": "test"
+    }
+  ],
+  "generatorNotes": "Read the architecture doc + ADR-2 (opt-in field / guarded spread) and ADR-5 (gate ordering) first. The ONLY behavioral change in runFleetExpandDeep is the decompose call (index.ts:324-325): `const decomposed = await decomposeDeepFn({ goal: goalWithHint, client, model, ...(opts.critique ? { critique: true } : {}) });` \u2014 the spread makes the arg object byte-identical when --critique is absent. Steps 1,3,4,5,6 (client build, assemble, atomic write, print, --yes gate; index.ts:304-386) are UNTOUCHED. Add `critique?: boolean` to FleetExpandDeepOptions (index.ts:261-276). In registerFleetExpandDeepSubcommand (index.ts:396-432) add exactly one `.option('--critique', 'Run a fresh-context critic gate that re-expands degenerate manifests')` beside the existing options and pass opts.critique into the action call \u2014 touch no existing option line. Do NOT add a sibling subcommand (LOCK2). decomposeGoalDeep already supports critique from Sprint 1; this sprint only wires the flag. Mirror the expand-deep.test.ts DI helpers (makeFakeDecompose/makeFakeClientBuilder/runFleetSpy). Commit only index.ts + the test file with 'bober(sprint-2): fleet expand-deep --critique flag, byte-lock preserved'.",
+  "evaluatorNotes": "Independently verify: (1) `git diff HEAD~1 HEAD --name-only` lists ONLY src/fleet/index.ts and the test file; `git diff -- src/fleet/index.ts | grep '^-[^-]'` must be EMPTY (zero deleted lines \u2014 purely additive); decomposer-deep.ts, critic-deep.ts, decomposer.ts, manifest.ts, cli/index.ts NOT in the diff. (2) Byte-identity: a DI test must assert that WITHOUT --critique the decompose arg object has NO critique key and the recorded chat call count equals the Phase-3 baseline (zero extra). (3) Command-tree test asserts expand-deep now has a --critique flag AND `fleet <manifest>` positional + --concurrency/--root + the `expand` subcommand are still intact. (4) Spawn-safety unchanged: no --yes never calls runFleet; --yes calls it exactly once after the file exists; credential fail-fast writes no file. (5) Full npm test green, all five pre-existing fleet suites pass. Required strategies: build + typecheck (required), lint + unit-test.",
+  "startedAt": "2026-06-18T10:33:59Z",
+  "completedAt": "2026-06-18T10:45:14Z"
+}

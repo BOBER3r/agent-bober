@@ -1,0 +1,118 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-task-inbox-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-task-inbox-3",
+  "specId": "spec-20260628-task-inbox",
+  "timestamp": "2026-06-29T10:21:28.783Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Task inbox sprint 3: `bober task snooze <id> --until <when>` sets status=snoozed + a snooze-until:<ISO> tag (NO new schema field); the default list hides a snoozed task while wake time is future (vs injected now) and shows it once past. Lazy wake at list time, no timer.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-task-inbox-1",
+        "title": "Capture",
+        "summary": "finding-store.ts writeFinding/readFindings (HUB_SCOPE); task-inbox.ts captureTask; cli task add."
+      },
+      {
+        "contractId": "sprint-spec-20260628-task-inbox-2",
+        "title": "List + lifecycle",
+        "summary": "finding-store.ts transitionFinding(store,id,newStatus,{now,mutate?}) routes through writeFinding->writeFact UPDATE (supersede+insert); cli task list (default filter ACTIVE_STATUSES=[open,in-progress], --all/--status) + start/done/drop. runTaskList/runTaskTransition DI cores. now stamped at handler boundary only."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/hub/finding-store.ts",
+      "src/cli/commands/task.ts",
+      "src/cli/commands/task.test.ts",
+      "src/hub/finding.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260628-task-inbox-3",
+    "specId": "spec-20260628-task-inbox",
+    "sprintNumber": 3,
+    "title": "Snooze with wake semantics",
+    "description": "Add `bober task snooze <id> --until <when>` which sets status=snoozed and records a 'snooze-until:<ISO>' tag on the Finding. Update the default list so a snoozed task is hidden while its wake time is in the future (relative to the injected now) and reappears once the wake time has passed.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260628-task-inbox-2"
+    ],
+    "features": [
+      "feat-3"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-3-1",
+        "description": "`npm run build` exits 0 with the snooze subcommand and the wake-aware list filter added.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-2",
+        "description": "A unit test snoozes a task until a fixed future ISO date and asserts the active Finding has status='snoozed' and a tag exactly equal to 'snooze-until:<that ISO>'.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-3",
+        "description": "A unit test lists with an injected now BEFORE the wake time and asserts the snoozed task is absent, then lists with an injected now AFTER the wake time and asserts the same task is present again.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-4",
+        "description": "A unit test marks a snoozed task done and asserts the transition succeeds and the task leaves the default list.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-5",
+        "description": "A unit test passes an unparseable --until value and asserts the handler reports the error, sets exitCode=1, and does not throw.",
+        "verificationMethod": "unit-test",
+        "required": false
+      }
+    ],
+    "nonGoals": [
+      "Do NOT add a new schema field to the Finding for the wake time — reuse the existing tags[] with a 'snooze-until:<ISO>' entry.",
+      "Do NOT auto-wake tasks via a background timer — waking is computed lazily at list time against the injected now.",
+      "Do NOT alter the done/drop/start transitions from sprint 2 beyond letting them clear a snoozed task.",
+      "Do NOT read the clock inside the list filter — the comparison now is injected.",
+      "Do NOT add new dependencies."
+    ],
+    "stopConditions": [
+      "`npm run build` exits 0 and the snooze + wake-filter unit tests pass.",
+      "`bober task snooze <id> --until <future>` then `bober task list` omits the task, and listing again after the wake time shows it."
+    ],
+    "definitionOfDone": "A user can defer a task with `bober task snooze <id> --until <when>`; the task gets status=snoozed plus a 'snooze-until:<ISO>' tag, disappears from the default `bober task list` until its wake time passes (compared against an injected now), then returns to the list. A snoozed task can still be completed or dropped, and an invalid --until is reported on stderr with exitCode=1 without throwing.",
+    "assumptions": [
+      "Wake time is parsed from --until into an ISO string at the handler boundary and stored as the tag 'snooze-until:<ISO>'; the list filter parses it back and compares to the injected now.",
+      "A snoozed task whose wake time has passed is treated as visible (status displayed as snoozed-due/woken) so the user re-triages it."
+    ],
+    "outOfScope": [
+      "Reminders/notifications when a task wakes (telegram/scheduler scope).",
+      "Domain finding ingest (sprint 4)."
+    ],
+    "generatorNotes": "Add a `snooze <id>` subcommand to src/cli/commands/task.ts with a required option --until <when>; parse <when> to an ISO string at the boundary (accept an ISO date/datetime; on parse failure, chalk.red + exitCode=1 + return). Reuse transitionFinding from sprint 2 with newStatus='snoozed' and a mutate that appends 'snooze-until:'+iso to tags (strip any prior snooze-until tag first so re-snoozing replaces it). Extend the default list filter in finding-store.ts/task.ts: a finding is visible when status in {open,in-progress} OR (status='snoozed' AND its snooze-until tag parses to a time <= now). Keep now injectable so tests can pass a fixed clock. Do not change snooze for already-terminal tasks.",
+    "evaluatorNotes": "Confirm no new field was added to the Finding schema — the wake time must live in tags[] as 'snooze-until:<ISO>'. Verify the list filter takes now as a parameter and that the before/after-wake tests flip visibility purely from the injected now (no real clock). Confirm re-snoozing replaces rather than stacks the snooze-until tag. Verify done on a snoozed task still works.",
+    "estimatedFiles": [
+      "src/hub/finding-store.ts",
+      "src/hub/finding-store.test.ts",
+      "src/cli/commands/task.ts",
+      "src/cli/commands/task.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "ambiguityScore": 5
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

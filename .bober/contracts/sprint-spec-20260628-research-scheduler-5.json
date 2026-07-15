@@ -1,0 +1,69 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-5",
+  "specId": "spec-20260628-research-scheduler",
+  "sprintNumber": 5,
+  "title": "Morning digest artifact for the Telegram bot",
+  "description": "Add a digest builder that aggregates research notes/Findings produced within a time window into a digest artifact (markdown + JSON) that the Telegram bot can later push as a silent scheduled message, plus `bober research digest --since <iso>`. Transport, polling, and message rendering are out of scope; this sprint produces only the content artifact.",
+  "status": "completed",
+  "completedAt": "2026-06-30T00:50:30.000Z",
+  "dependsOn": ["sprint-spec-20260628-research-scheduler-2"],
+  "features": ["feat-5"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "buildDigest(since, now, deps) collects research runs whose generatedAt falls in [since, now] and returns a structure listing each run's job title and its top finding.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "`bober research digest --since <iso>` writes both .bober/research/digests/<date>.md and <date>.json, where the markdown lists each in-window run by title and the JSON is machine-readable for the bot.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "An empty window produces a digest whose body states that no new research was produced in the window, written to both files rather than throwing or leaving an empty file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "The project compiles with the digest module and the `digest` subcommand registered on the research command.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the Telegram bot, long-polling, user whitelist, inline buttons, or message sending (owned by the telegram sibling spec).",
+    "Do not embed sensitive/raw domain detail in the digest — non-sensitive summary content only (Telegram is not E2E-encrypted).",
+    "Do not change the runner, cadence, or egress behavior of earlier sprints.",
+    "Do not schedule the digest itself; it is produced on demand via the CLI (tick integration is optional and additive)."
+  ],
+  "stopConditions": [
+    "npm run build passes and tests assert: in-window runs aggregated with titles + top finding, both .md and .json digest files written, and an empty-window digest stating no new research.",
+    "`bober research digest --since <iso>` produces the two artifact files under .bober/research/digests/."
+  ],
+  "definitionOfDone": "Running `bober research digest --since <iso>` collects every research run produced between since and now, writes a human-readable markdown digest and a machine-readable JSON digest under .bober/research/digests/<date>.{md,json}, listing each run's job title and top finding, and emits an explicit no-new-research digest when the window is empty. The digest holds only non-sensitive summary content. Build is green and earlier sprint tests still pass.",
+  "assumptions": [
+    "The digest is the content artifact only; the Telegram bot (sibling spec) consumes the JSON and pushes it as a silent scheduled message (resolved per scope split). Evidence: research doc L140 (silent scheduled messages), L137-L141 (telegram is a presentation adapter sequenced after the hub).",
+    "Digest source data is the set of research notes/Findings produced by the Sprint 2 runner; the builder takes an injected collector so it is testable without real runs.",
+    "Non-sensitive summary only — no raw PHI/financial detail in the digest. Evidence: research doc L141 (telegram non-E2E privacy boundary)."
+  ],
+  "outOfScope": [
+    "Telegram transport and rendering (sibling spec).",
+    "Calendar/scheduling of the digest send.",
+    "Cross-repo hub aggregation (spec-20260628-priority-hub)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/research/digest.ts with buildDigest(since, now, deps) where deps = {collectRuns(since, now)} returning the in-window runs (each carrying job title, generatedAt, and top finding). Render two outputs: a markdown body (heading + bullet per run: title, top finding, source link) and a JSON object {since, now, generatedAt, runs:[...]} for the bot. Write them to .bober/research/digests/<date>.md and <date>.json (ensureDir from src/state/helpers.ts). When deps.collectRuns returns an empty array, render a body that explicitly states no new research was produced in the window and still write both files. Add a `digest` subcommand with `--since <iso>` (default: last 24h computed at the CLI boundary) to src/cli/commands/research.ts. Keep the digest content non-sensitive (titles + summaries, not raw values) per research doc L141.",
+  "evaluatorNotes": "Inject collectRuns returning two fake runs and assert the markdown lists both titles and each top finding, and the JSON parses with a 2-element runs array (sc-5-1, sc-5-2). Assert both .md and .json files are written under a temp .bober/research/digests/ (sc-5-2). Inject collectRuns returning [] and assert the written body contains the no-new-research statement and both files exist (sc-5-3). Confirm the `digest` subcommand is registered and npm run build passes.",
+  "estimatedFiles": [
+    "src/research/digest.ts",
+    "src/research/digest.test.ts",
+    "src/cli/commands/research.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z"
+}

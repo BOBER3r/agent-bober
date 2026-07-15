@@ -1,0 +1,10 @@
+{
+  "evalId": "eval-sprint-spec-20260416-auto-filter-commands-1-2",
+  "contractId": "sprint-spec-20260416-auto-filter-commands-1",
+  "specId": "spec-20260416-auto-filter-commands",
+  "timestamp": "2026-04-16T15:32:30Z",
+  "iteration": 2,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "summary": "All 7 criteria passed. installClaudeCommands now uses mode: ProjectMode, two clean constants define the command mapping, all 206 tests pass."
+}

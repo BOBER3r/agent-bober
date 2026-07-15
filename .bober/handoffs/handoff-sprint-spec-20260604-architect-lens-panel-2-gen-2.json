@@ -1,0 +1,40 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-architect-lens-panel-2-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-architect-lens-panel-2",
+  "specId": "spec-20260604-architect-lens-panel",
+  "timestamp": "2026-06-04T08:39:00Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "RETRY (iteration 2) of Sprint 2 — TS architect Checkpoint 2 synthesis panel. Iteration 1 (commit 6f82cea) PASSED C1/C3/C4 but FAILED C2 on a single missing test assertion. The implementation is correct; only a test is missing. Do the MINIMUM to satisfy C2 without breaking the passing criteria.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-1", "title": "synthesize() + arch-lenses + config", "summary": "Foundation. Commit 7de08b5." }
+    ],
+    "currentBranch": "bober/architect-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/architect-agent.ts",
+      "src/orchestrator/architect-agent.test.ts",
+      "src/orchestrator/workflow/synthesizer.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-architect-lens-panel-2.json",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": {
+    "failedCriteria": ["C2"],
+    "rootCause": "The C2 on-path tests assert call-count (N+2) and peak concurrency <= maxConcurrent, but NO test asserts that the selected approach equals synthesize(approaches, lensScores).winner. The implementation at architect-agent.ts:620 calls synthesize() correctly and threads synthesisResult.winner into the continuation prompt, but this winner-threading is untested. C2's contract text explicitly requires this assertion.",
+    "fixOptions": [
+      "Option A (PREFERRED): add an additive OPTIONAL `selectedApproach?: string` field to the ArchitectResult interface; populate it in runArchitectPanel with synthesisResult.winner (leave it undefined on the off path); then add a C2 test that calls synthesize(sameApproaches, sameLensScores) directly with the SAME mock data the panel saw and asserts result.selectedApproach === synthesize(...).winner. This makes the winner observable and keeps the off path lensScores/selectedApproach both undefined.",
+      "Option B: in the on-path test, capture the continuation runAgenticLoop call args (loopSpy.mock.calls[N+1]) and assert its userMessage contains the synthesize() winner string."
+    ],
+    "constraints": [
+      "Do NOT break the passing C1 (off-path single-call), C3 (lensScores additive optional, CP1/3/4/5 run), or C4 (tsc/build/lint/full suite green) tests.",
+      "If you add selectedApproach to ArchitectResult, it MUST be additive optional (off path leaves it undefined) — re-verify the C3 'result without lensScores/selectedApproach validates' expectation still holds.",
+      "Keep the change minimal — this is a one-assertion (and optionally one-field) fix."
+    ]
+  },
+  "gitNote": "Pre-existing unrelated uncommitted changes exist. Stage ONLY: git add src/orchestrator/architect-agent.ts src/orchestrator/architect-agent.test.ts. NEVER `git add -A`. Branch bober/architect-lens-panel — never main. Commit message: bober(sprint-2): assert CP2 selected approach == synthesize().winner (iter 2)."
+}

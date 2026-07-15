@@ -1,0 +1,83 @@
+{
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-3",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "sprintNumber": 3,
+  "title": "Deterministic distillation + bober memory CLI (distill | list | show)",
+  "description": "Add a pure, deterministic distill function that compresses sprint history plus eval outcomes into provenance-tagged LessonEntry records using only structured fields (recurring failed-criterion categories, repeated failing eval strategies, sprints exceeding an iteration threshold) \u2014 no LLM, no network call. Expose it through a new `bober memory distill | list | show` command. Distillation is idempotent: re-running adds no duplicate lessons. The command is the only entry point; nothing in pipeline.ts triggers it.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260605-scale-safe-history-memory-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "A pure distill(historyEntries, contracts) in src/orchestrator/memory/distill.ts returns a deterministic LessonEntry[] derived only from structured fields; a test over a fixed fixture asserts an exact expected lesson set, stable across repeated calls.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "distill plus appendLesson is idempotent: running twice over identical input yields an INDEX.md with no duplicate lessonId, deduped by a content hash of category+tags+sourceEntryRefs; a test asserts the second run adds zero new index lines.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "The distill path constructs no LLM provider client and performs no network call; a test asserts via a guard or spy that no provider is instantiated during distill().",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "`bober memory distill` reads full history via loadHistory plus contracts, writes lessons, and prints a count summary; `bober memory list` prints the bounded index; `bober memory show <lessonId>` prints one lesson with its sourceEntryRefs. A test invokes the handlers against a temp project and asserts the printed counts and that show renders provenance.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck and npm run build exit 0 and the memory/distill and CLI tests pass with no new failures beyond the documented flaky baseline.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not use an LLM, embeddings, or any network call to produce or rank lessons.",
+    "Do not trigger distillation from pipeline.ts or any autopilot path \u2014 the CLI command is the only entry point.",
+    "Do not wire the planner to read lessons yet \u2014 that is sprint 4.",
+    "Do not change loadHistory or the LessonEntry schema from sprint 2."
+  ],
+  "stopConditions": [
+    "Stop when distill is deterministic and idempotent, asserts zero LLM and network usage, and the three bober memory subcommands run against a temp project with passing tests.",
+    "Stop when changes are confined to src/orchestrator/memory/, src/cli/commands/memory.ts, the CLI command registration site, and collocated tests."
+  ],
+  "definitionOfDone": "Running `bober memory distill` compresses sprint history into deterministic, provenance-tagged lessons with no LLM or network call, idempotently so a re-run adds no duplicates. `bober memory list` and `bober memory show` let a human inspect the store. The distill function is pure and unit-tested against a fixture, and typecheck, build, and tests pass.",
+  "assumptions": [
+    "distill can read the full history via the existing loadHistory and the contracts via listContracts; sprint 1 hardening is not a prerequisite for correctness, only for scale.",
+    "A content hash over category+tags+sourceEntryRefs is a stable dedupe key for idempotency."
+  ],
+  "outOfScope": [
+    "planner retrieval and wiring",
+    "embeddings",
+    "auto-distillation",
+    "generator-facing memory"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/orchestrator/memory/distill.ts exporting a pure `distill(history: HistoryEntry[], contracts: SprintContract[]): LessonEntry[]`. Derive lessons only from structured data: group eval failures by criterion category / verificationMethod, count recurrences, flag sprints whose iterationHistory length exceeds a threshold (e.g. >= evaluator.maxIterations). Each LessonEntry: deterministic lessonId from the content hash (no Date.now in the pure function \u2014 the CLI stamps createdAt when persisting, or pass a clock in), category, tags from the failure signature, summary from a fixed template, occurrences = count, severity by count band, sourceEntryRefs = the history entry identifiers / sprintIds the lesson aggregates. Keep distill side-effect-free; persistence happens in the command. Create src/cli/commands/memory.ts with subcommands distill|list|show mirroring sprint.ts structure; distill calls loadHistory + listContracts, runs distill(), persists via appendLesson (dedupe by hash), prints `distilled N lessons (M new)`. Register the command where other CLI commands register (mirror sprint registration). Add a test guard ensuring no provider import is exercised in distill(). Use import type; ESM .js specifiers. Conventional commit: bober(sprint-3): deterministic distillation + bober memory CLI.",
+  "evaluatorNotes": "Verify distill() returns the same LessonEntry set across repeated calls on a fixed fixture and that lessons reference only structured fields. Verify idempotency: distill+persist twice, assert INDEX.md unchanged on the second run. Verify the no-LLM/no-network guard fires (assert no provider client constructed). Invoke the three subcommands against a temp project seeded with a history fixture: distill prints the count summary and writes lessons; list prints the bounded index; show <id> renders one lesson including sourceEntryRefs. Run npm run typecheck (exit 0), npm run build (exit 0), and the new tests. Confirm git diff is confined to src/orchestrator/memory/, src/cli/commands/memory.ts, the registration site, and tests; confirm pipeline.ts has no new call into distill.",
+  "estimatedFiles": [
+    "src/orchestrator/memory/distill.ts",
+    "src/orchestrator/memory/distill.test.ts",
+    "src/cli/commands/memory.ts",
+    "src/cli/commands/memory.test.ts",
+    "src/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260605-scale-safe-history-memory-3-1",
+  "createdAt": "2026-06-05T00:00:00Z",
+  "updatedAt": "2026-06-04T23:47:43Z",
+  "completedAt": "2026-06-04T23:47:43Z"
+}

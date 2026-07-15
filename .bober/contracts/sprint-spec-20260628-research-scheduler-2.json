@@ -1,0 +1,74 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-2",
+  "specId": "spec-20260628-research-scheduler",
+  "sprintNumber": 2,
+  "title": "Single-shot multi-model research run -> vault note + hub Finding",
+  "description": "Implement a deterministic runner that executes one stored research job by querying at least two distinct provider/model blocks resolved from fleet tier-policy (model diversity), synthesizes their answers into a markdown research note written to the target vault, and emits one Finding to the priority hub. Add `bober research run <jobId>` to invoke it.",
+  "status": "completed",
+  "completedAt": "2026-06-29T21:00:00.000Z",
+  "dependsOn": ["sprint-spec-20260628-research-scheduler-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "Running a job resolves at least two distinct provider/model blocks from src/fleet/tier-policy.ts (e.g. two of deepseek/grok/sonnet/opus) and the produced note records, per contribution, which model label produced it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A run writes a markdown research note to the target vault with frontmatter containing jobId, question, the list of models queried, and a generatedAt timestamp passed in from the caller.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "A run emits exactly one Finding carrying the fields domain, title, kind, evidence (the model contributions/citations), and surfacedAt, through a pluggable hub Finding sink injected into the runner.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "`bober research run <jobId>` loads the stored job, executes the run with an injected provider client, and prints the path of the written note; the project compiles.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not perform any web/online retrieval or add an egress axis (that is Sprint 3) — Sprint 2 uses only the injected provider clients.",
+    "Do not use src/fleet/coordinator.ts FleetCoordinator to spawn child agent-bober runs — use a lightweight loop over tier-policy blocks.",
+    "Do not implement cadence/scheduling or the tick runner (Sprint 4).",
+    "Do not modify src/fleet/ or src/medical/ source files."
+  ],
+  "stopConditions": [
+    "npm run build passes and unit tests assert >=2 distinct model labels in the note, a note file written with the required frontmatter, and exactly one Finding emitted to the injected sink.",
+    "`bober research run <jobId>` executes a stored job end-to-end against injected provider/sink deps in a passing test."
+  ],
+  "definitionOfDone": "Given a stored job, `bober research run <jobId>` queries two or more distinct provider/model blocks from tier-policy, synthesizes their answers into a markdown note (frontmatter: jobId, question, models, generatedAt) saved in the target vault, and emits one Finding to the hub via an injected sink. Model diversity, the note, and the Finding are each asserted by unit tests with injected provider clients and a fake sink. No web egress occurs. Build is green.",
+  "assumptions": [
+    "Model diversity uses a lightweight loop over distinct blocks from src/fleet/tier-policy.ts:50-71, not FleetCoordinator (resolved Q4). Evidence: tier-policy.ts:50-71, src/fleet/coordinator.ts.",
+    "Results bubble up via the hub Finding write surface from spec-20260628-priority-hub (declared dependsOn); the runner takes a Finding sink as an injected dependency so it is testable in isolation and binds to the real hub API at the call site (resolved Q3). Finding fields per research doc L121-L126.",
+    "The runner accepts an injected provider client and clock/timestamp so runs are deterministic and offline in tests (mirrors src/state/facts.ts clock-free convention).",
+    "The runner exposes a pluggable domain-analyzer with a generic multi-model default so the medical analysis pass can register later (resolved Q5). Evidence: research doc L181-L183."
+  ],
+  "outOfScope": [
+    "Online/web retrieval and the egress axis (Sprint 3).",
+    "Cadence computation and `bober research tick` (Sprint 4).",
+    "Digest aggregation (Sprint 5).",
+    "The hub's ranking of the emitted Finding (spec-20260628-priority-hub)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Create src/research/model-diversity.ts that imports tierPolicy from src/fleet/tier-policy.ts and returns >=2 distinct RoleProviderBlock entries (e.g. resolve a job's tier set or default to a fixed diverse pair). Create src/research/runner.ts: runResearchJob(job, deps) where deps = {queryModel(block, prompt), findingSink(finding), now, vaultRoot}. Loop over the blocks, collect labelled contributions, synthesize a note body, write via src/research/note-writer.ts (markdown + YAML frontmatter; mirror the markdown-frontmatter style described in research doc L150-L153). Emit one Finding shaped per research doc L121-L126 {id, domain, title, kind, evidence[], surfacedAt} to deps.findingSink. The real CLI wiring binds findingSink to the hub's emit API from spec-20260628-priority-hub (import its writer; if the symbol name differs, the integration point is the single deps.findingSink). Add a `run <jobId>` subcommand to src/cli/commands/research.ts. Keep a generic default domain analyzer; expose a registry hook for domain-specific analyzers but do not import src/medical/.",
+  "evaluatorNotes": "Inject a fake queryModel that returns a distinct string per block and assert the note contains >=2 distinct model labels (sc-2-1). Assert the written note file (temp vaultRoot) has frontmatter with jobId/question/models/generatedAt (sc-2-2). Inject a recording findingSink and assert it is called exactly once with the required Finding fields (sc-2-3). Run the CLI `run` action with injected deps and assert it prints the note path and exits without spawning a real provider or network call. Confirm tier-policy is the diversity source (import assertion) and npm run build passes.",
+  "estimatedFiles": [
+    "src/research/runner.ts",
+    "src/research/runner.test.ts",
+    "src/research/model-diversity.ts",
+    "src/research/note-writer.ts",
+    "src/research/note-writer.test.ts",
+    "src/cli/commands/research.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T12:00:00.000Z"
+}

@@ -1,0 +1,82 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-5",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "sprintNumber": 5,
+  "title": "Role-aware provider fallback for claude-code",
+  "description": "Add a resolveRoleProviders helper invoked at config load: when a tool-using role (curator, generator, evaluator, code-reviewer) resolves to claude-code and another provider is configured, that role uses the other provider; when claude-code is the sole option for a tool role, config load fails with an explicit message naming the role; planner and researcher on claude-code are always allowed; each role's resolved provider is logged.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260531-multi-provider-deepseek-claude-code-4"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "Given a config whose default provider is claude-code and whose generator role has a per-role provider override of anthropic, resolveRoleProviders resolves generator to anthropic (not claude-code); asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "Given a config where a tool-using role (e.g. generator) resolves to claude-code and no other provider is configured for it (no per-role override and a claude-code default), resolveRoleProviders throws an error whose message names the role and states claude-code cannot drive tools; asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "Given a config where planner and researcher resolve to claude-code, resolveRoleProviders returns successfully with those roles still on claude-code (no error); asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "resolveRoleProviders emits one log line per role naming the role and its finally-resolved provider; a unit test asserts the logger was called with each role name and its resolved provider (logger spied/mocked).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "Config load (loader.ts) invokes resolveRoleProviders so a config with a tool role stuck on claude-code fails at load time; a unit test loads such a config and asserts the load rejects with the role-naming message.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "npm run build exits 0 and npm run lint exits 0 after the changes.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change which roles are considered tool-using beyond curator, generator, evaluator, code-reviewer.",
+    "Do not silently downgrade a tool role to claude-code — if it would land on claude-code with no alternative, hard-error.",
+    "Do not block planner or researcher from using claude-code.",
+    "Do not modify the createClient signature or adapter implementations in this sprint."
+  ],
+  "stopConditions": [
+    "Fallback is applied for tool roles with an alternative, a hard error names the role when claude-code is the sole tool-role option, planner/researcher on claude-code are unaffected, resolution is logged, config load invokes the helper, and build plus lint exit 0."
+  ],
+  "definitionOfDone": "A user who sets claude-code as the global/default provider gets tool-using roles automatically routed to another configured provider, and is told at config-load time (never mid-sprint) if no alternative exists, with the offending role named. Prompt-only roles keep using claude-code. The orchestrator logs which provider each role ended up on so the routing decision is auditable.",
+  "assumptions": [
+    "Tool-using roles are curator, generator, evaluator, code-reviewer; prompt-only roles are planner and researcher — evidence: PRD Provider Capability Matrix rows.",
+    "Each role's configured provider is read from config.<role>.provider with the global/default falling back to anthropic, resolved through resolveProviderModel for shorthands — evidence: schema.ts per-role provider fields and resolveProviderModel.",
+    "An 'other provider configured' means a non-claude-code per-role override OR a non-claude-code default/global provider — evidence: PRD US-006 AC wording."
+  ],
+  "outOfScope": [
+    "Documentation of the fallback behavior (Sprint 6).",
+    "Runtime smoke scripts (Sprint 6)."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Create src/config/role-providers.ts exporting resolveRoleProviders(config) that returns a map role -> resolved provider (and throws on the sole-claude-code-for-tool-role case). Tool roles: curator, generator, evaluator, codeReview. Prompt roles: planner, researcher (research uses planner-style config; if there is no dedicated research section, treat researcher as planner). For each role, resolve provider = config.<role>.provider ?? resolveProviderModel(config.<role>.model).provider; if a role lands on 'claude-code' and is a tool role: if another configured provider exists (a per-role override on that role that is non-claude-code, or the default/another role's provider is non-claude-code — follow PRD US-006 wording: prefer the other configured provider), use it; else throw naming the role. Log each decision via logger from src/utils/logger.ts. Wire the call into src/config/loader.ts after schema parse so it runs at load. Spy on logger in tests; do not mock the filesystem (use real temp config objects/parsed configs).",
+  "evaluatorNotes": "Run npm test. Confirm role-providers.test.ts covers: (a) tool role falls back to a configured alternative; (b) hard error naming the role when claude-code is the sole option for a tool role; (c) planner/researcher on claude-code allowed; (d) logger called per role with resolved provider. Confirm loader.test (or a new test) asserts config load rejects when a tool role is stuck on claude-code. Run npm run build and npm run lint, assert exit 0.",
+  "estimatedFiles": [
+    "src/config/role-providers.ts",
+    "src/config/role-providers.test.ts",
+    "src/config/loader.ts",
+    "src/config/loader.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-31T15:05:00Z"
+}

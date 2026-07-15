@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-3",
+  "specId": "spec-20260615-memory-self-improve-p0",
+  "sprintNumber": 3,
+  "title": "Lesson hygiene \u2014 occurrence-weighted ranking, decay & conflict-quarantine",
+  "description": "Close the monotonic-growth gap in the lessons store. Make retrieveRelevantLessons factor occurrences (and a recency proxy) into ranking instead of pure token overlap, add a deterministic hygiene pass that quarantines below-threshold/stale lessons and deterministically-detected contradictory pairs into a QUARANTINE.md (never deleting), and expose it as `bober memory prune`.",
+  "status": "completed",
+  "createdAt": "2026-06-15T12:00:00.000Z",
+  "updatedAt": "2026-06-15T17:06:24Z",
+  "completedAt": "2026-06-15T17:06:24Z",
+  "dependsOn": [],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds (`npm run build`, exit 0) and typecheck passes (`npm run typecheck`, zero errors).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "retrieveRelevantLessons ranks a higher-occurrence lesson above an equal-token-overlap lower-occurrence lesson; the change is covered by a test asserting the ordering, and the existing retrieve tests still pass.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "src/orchestrator/memory/hygiene.ts exports a pure pruneLessons(records, { now, ... }) that returns { kept, quarantined } partitioning by a deterministic decay score (occurrences + recency), with no Date.now() inside (now is injected).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "`bober memory prune` removes quarantined lessons from INDEX.md and appends them to .bober/memory/<ns>/QUARANTINE.md with provenance, retains the per-lesson .md files, prints a summary of kept/quarantined counts, and never throws (process.exitCode=1 on error).",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "Two deterministically-detected contradictory lessons (same signature key, opposing tag) are BOTH moved to QUARANTINE.md by the hygiene pass rather than either being dropped; covered by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "ESLint reports zero errors on new and modified files (`npm run lint`).",
+      "verificationMethod": "lint",
+      "required": false
+    }
+  ],
+  "generatorNotes": "RANKING: edit src/orchestrator/memory/retrieve.ts scoreRecord so the final score combines token-overlap (primary) with a bounded occurrences contribution as a tiebreaker/booster \u2014 keep token-overlap dominant so existing C1 (non-matching keyword \u2192 empty) still holds, but a higher occurrences must win when overlap ties. Keep the function PURE and the sort stable (overlap desc, then occurrence-weighted, then lessonId asc). Update/extend src/orchestrator/memory/retrieve.test.ts. HYGIENE: new pure module src/orchestrator/memory/hygiene.ts. pruneLessons takes LessonIndexRecord[] (from loadLessonIndex) plus an injected `now` and thresholds; compute a decay score from occurrences and a recency proxy. NOTE: LessonIndexRecord today has no timestamp \u2014 derive recency from createdAt by loading the per-lesson file ONLY in the CLI handler (not in the pure fn), OR add a lightweight lastSeen to the index line; prefer keeping the pure fn operating on whatever fields it is given and let the CLI assemble inputs. CONFLICT DETECTION: deterministic \u2014 define a contradiction as two lessons sharing the same signature key (e.g., same category root + same sprintId/strategy tag) but carrying opposing markers; move BOTH to quarantine. QUARANTINE: add quarantinePath(projectRoot, namespace?) to src/state/memory.ts next to indexPath; write moved lessons as INDEX-style lines into QUARANTINE.md, and REWRITE INDEX.md without them. Do NOT delete the <lessonId>.md files. CLI: add a `prune` subcommand to the existing memCmd in src/cli/commands/memory.ts, resolving the namespace via the existing resolveDefaultNamespace; stamp `now` at the handler boundary. Follow the no-throw/exitCode=1 pattern already in that file. Keep everything deterministic and byte-stable.",
+  "evaluatorNotes": "Run build, typecheck, and `npm test -- retrieve hygiene memory`. For sc-3-2: read the new retrieve test and confirm two records with equal token overlap but different occurrences sort by occurrences; confirm the pre-existing retrieve tests (empty-on-no-match, tiebreak by lessonId) still pass. For sc-3-3/sc-3-5: read hygiene.ts and grep for Date.now/new Date( \u2014 there must be none; confirm pruneLessons returns a {kept, quarantined} partition and that the contradiction test moves BOTH records. For sc-3-4: exercise the CLI in a temp dir \u2014 seed a few lessons via appendLesson, run `node dist/cli/index.js memory prune`, then confirm INDEX.md shrank, QUARANTINE.md gained the moved lines with provenance, and the <lessonId>.md files still exist. Confirm the summary prints kept/quarantined counts. Edge: prune on an empty/absent INDEX.md prints a friendly message and does not throw.",
+  "estimatedFiles": [
+    "src/orchestrator/memory/retrieve.ts",
+    "src/orchestrator/memory/retrieve.test.ts",
+    "src/orchestrator/memory/hygiene.ts",
+    "src/orchestrator/memory/hygiene.test.ts",
+    "src/state/memory.ts",
+    "src/cli/commands/memory.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260615-memory-self-improve-p0-3-1",
+      "timestamp": "2026-06-15T17:06:24Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260615-memory-self-improve-p0-3-1"
+}

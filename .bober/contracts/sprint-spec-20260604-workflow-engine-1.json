@@ -1,0 +1,93 @@
+{
+  "contractId": "sprint-spec-20260604-workflow-engine-1",
+  "specId": "spec-20260604-workflow-engine",
+  "sprintNumber": 1,
+  "title": "Engine-selection seam, pipeline.engine config, and eligibility probe",
+  "description": "Introduce the engine-selection seam at the frozen runPipeline boundary. Add pipeline.engine to the Zod config (enum ts|skill|workflow, default 'ts'). Extract the current runPipeline body into a TS engine that implements a new PipelineEngine interface, and make the exported runPipeline a thin seam that resolves config.pipeline.engine via a PipelineEngineSelector and dispatches. Add a WorkflowEligibilityCheck probe that reports ineligible by default; selecting 'workflow' when ineligible (or mode='careful') resolves the TS engine and logs exactly one downgrade line. No behavior change on the default path.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "pipeline.engine exists in PipelineSectionSchema as z.enum(['ts','skill','workflow']) defaulting to 'ts', mirrored in createDefaultConfig; a schema unit test asserts the default and rejects an unknown engine string.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "A PipelineEngine interface { name; run(userPrompt, projectRoot, config): Promise<PipelineResult> } and PipelineEngineName type exist; a TsPipelineEngine wraps the extracted runPipeline body and a PipelineEngineSelector with pure resolveEngineName + select resolves config.pipeline.engine.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "resolveEngineName returns 'ts' when engine is unset; returns 'ts' (downgrade) when engine='workflow' and the eligibility probe is ineligible OR mode='careful'; returns 'skill'/'workflow' verbatim only when eligible. A unit test covers each branch and asserts exactly one downgrade log line on the workflow→ts case.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "The exported async runPipeline(userPrompt, projectRoot, config): Promise<PipelineResult> signature is unchanged and now delegates to selector.select(config).run(...); the TS engine path is the unchanged former body.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "npm run typecheck and npm run build exit 0, and the existing orchestrator/pipeline test suite stays green with no new failures beyond the documented flaky tool-count baseline.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement the real WorkflowEngine.run or any agent dispatch — that is sprint 6.",
+    "Do not change the runPipeline algorithm, phase order, or any .bober/ write behavior on the TS path.",
+    "Do not make the eligibility probe actually contact the runtime; a conservative default-ineligible probe is sufficient this sprint.",
+    "Do not touch agents/*.md, the contracts protocol, or providers/types.ts."
+  ],
+  "stopConditions": [
+    "Stop when engine selection resolves correctly for all branches, the TS path is unchanged, and typecheck/build/tests are green.",
+    "Stop when changes are confined to src/config/schema.ts, src/config/defaults.ts (if present), src/orchestrator/pipeline.ts, and new files under src/orchestrator/workflow/."
+  ],
+  "definitionOfDone": "pipeline.engine is a validated config field defaulting to 'ts'; runPipeline is a thin seam over a PipelineEngineSelector that resolves to a TsPipelineEngine (former body, unchanged) or downgrades workflow→ts when ineligible/careful with one log line; new engine types and selector live under src/orchestrator/workflow/; typecheck, build, and existing tests are green.",
+  "assumptions": [
+    "The seam can be added by extracting the existing runPipeline body into TsPipelineEngine.run without altering its logic.",
+    "A default-ineligible eligibility probe is acceptable for this sprint; the real probe heuristic is refined in sprint 6."
+  ],
+  "outOfScope": [
+    "Real workflow invoke",
+    "reconciler",
+    "args builder",
+    "flusher",
+    "conformance harness"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Add to src/config/schema.ts PipelineSectionSchema: `engine: z.enum(['ts','skill','workflow']).default('ts')` and export type PipelineEngineName = z.infer accordingly (or define the union in the workflow module and reference it). Mirror the default in createDefaultConfig's pipeline block and in bober.config.json is NOT required (config files rely on defaults). Create src/orchestrator/workflow/engine.ts with: `export type PipelineEngineName = 'ts'|'skill'|'workflow'`; `export interface PipelineEngine { readonly name: PipelineEngineName; run(userPrompt: string, projectRoot: string, config: BoberConfig): Promise<PipelineResult>; }`. Create src/orchestrator/workflow/eligibility.ts exporting `isWorkflowEligible(config): boolean` returning false for now (default-ineligible; leave a TODO referencing CC>=2.1.154 probe). Create src/orchestrator/workflow/selector.ts with pure `resolveEngineName(config): PipelineEngineName` mirroring registry.ts:65 style (unset→'ts'; 'workflow' && (!eligible || mode==='careful')→'ts' with a single logger.info downgrade line; else verbatim) and `select(config): PipelineEngine`. In src/orchestrator/pipeline.ts: rename the current `runPipeline` body to a TsPipelineEngine.run (or keep the function as `runTsPipeline` and have TsPipelineEngine delegate to it), then redefine exported `runPipeline` to `return selectPipelineEngine(config).select(config).run(userPrompt, projectRoot, config)` — keep the signature identical. Import PipelineResult from pipeline.ts into the engine module (avoid a cycle: define PipelineEngine in workflow/engine.ts importing the PipelineResult type only). Use `import type` for type-only imports (consistent-type-imports). ESM .js specifiers. Conventional commit: bober(sprint-1): add engine-selection seam + pipeline.engine config.",
+  "evaluatorNotes": "Confirm PipelineSectionSchema.engine default 'ts' and that PartialBoberConfigSchema still parses a config with no engine field (default applies). Run a schema test: parse {} pipeline → engine==='ts'; parse {engine:'bogus'} → throws. Confirm resolveEngineName branches: unset→ts, workflow+ineligible→ts (one downgrade log), careful+workflow→ts, ts→ts, skill→skill. Verify runPipeline exported signature unchanged (grep the export). Run npm run typecheck (exit 0), npm run build (exit 0), and the existing pipeline/selector tests; tolerate only the documented flaky tool-count baseline. Confirm git diff is confined to config schema/defaults, pipeline.ts, and new src/orchestrator/workflow/ files; no agents/*.md, contracts/, or providers/types.ts changes.",
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/config/defaults.ts",
+    "src/orchestrator/pipeline.ts",
+    "src/orchestrator/workflow/engine.ts",
+    "src/orchestrator/workflow/eligibility.ts",
+    "src/orchestrator/workflow/selector.ts",
+    "src/orchestrator/workflow/selector.test.ts",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "createdAt": "2026-06-04T00:00:00Z",
+  "updatedAt": "2026-06-03T23:17:03.897Z",
+  "startedAt": "2026-06-03T23:04:36.829Z",
+  "completedAt": "2026-06-03T23:17:03.897Z",
+  "lastEvalId": "eval-sprint-spec-20260604-workflow-engine-1-1",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260604-workflow-engine-1-1",
+      "result": "pass",
+      "timestamp": "2026-06-03T23:17:03.897Z"
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T22:23:17.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+        "title": "Refusal detection",
+        "summary": "35a2dbd: StopReason 'refusal', refused:true on completion branch, fail-closed parseGeneratorResult."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+        "title": "Cost substrate",
+        "summary": "8d68248..73053c0: cost-meter.ts, ChatResponse.costUsd, Budget maxUsd axis."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+        "title": "Loop wiring",
+        "summary": "b9c936c: AgenticLoopParams {effort?, budget?}, per-turn charging, graceful budget_exceeded return, AgenticLoopResult.costUsd on all 4 return sites, budgetFromMaxUsd."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+        "title": "Parallel read-only tools",
+        "summary": "4ab7040+59b4b23: ToolDef.readOnly, tools/executor.ts executeToolBatch (contiguous read-only runs parallel, serial otherwise, byte-identical error shapes, never rejects), loop delegates tool execution to it, parallelReadOnlyTools flag. IMPORTANT for sprint 5: the loop's tool execution now lives in executeToolBatch \u2014 tool-start/tool-end events + preToolUse veto must coordinate with the executor (contract generatorNotes anticipate this: pass an emit callback into executeToolBatch or emit around it). The loop now has FIVE return paths: error, budget_exceeded, completion(/refusal), max-turns \u2014 plus refusal is a flag on completion. Suite 3787."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/loop-events.ts",
+      "src/orchestrator/loop-events.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/tools/executor.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-5",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 5,
+    "title": "Structured loop event stream + host-style hooks (preToolUse veto, postToolUse, onStop)",
+    "description": "Give the own loop the SDK's observability and interception surface without consuming model context. A single optional onEvent callback emits a typed LoopEvent union (init, turn-start, tool-start, tool-end, turn-end, result; compact-boundary reserved for sprint 7). Optional hooks run host-side: preToolUse can veto a tool call (the model receives a rejection tool result and the loop continues), postToolUse observes results, onStop observes the final result. All absent \u2192 byte-identical.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-5"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-5-1",
+        "description": "With onEvent set, a two-turn run (one tool turn + one completion turn) emits ordered typed events: init, then per turn turn-start / tool-start / tool-end / turn-end, then result \u2014 each carrying its documented payload (turn number, tool name/input, result summary, final stopReason).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-2",
+        "description": "A preToolUse hook returning {allow:false, reason} prevents the handler from executing; the model receives an isError rejection ToolResult containing the reason, and the loop proceeds to the next turn rather than stopping.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-3",
+        "description": "postToolUse receives (name, input, result) after each execution and onStop receives the final AgenticLoopResult exactly once, for every stop path (completion, max-turns, and \u2014 when present from sprint 1/3 \u2014 refusal and budget_exceeded).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-4",
+        "description": "A throwing observe hook (onEvent/postToolUse/onStop) is caught and logged without crashing the loop; a throwing preToolUse counts as a deny (fail-closed veto).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-5",
+        "description": "With no onEvent and no hooks, loop behavior and results are byte-identical (full existing suite passes unchanged; existing onToolUse/onTurnComplete callbacks keep working as-is).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-6",
+        "description": "npm run build and npm run typecheck pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not migrate careful-mode checkpoint gates or ToolRoleGuard onto the new hooks (existing safety machinery untouched; migration is a possible follow-up).",
+      "Do not remove or deprecate onToolUse/onTurnComplete (additive coexistence).",
+      "Do not emit text deltas (sprint 8) or compact-boundary events (sprint 7) \u2014 only reserve the type names.",
+      "Do not let hooks mutate tool inputs (veto-only this sprint; transformation is out of scope)."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: ordered typed event emission, veto semantics with in-loop continuation, per-stop-path onStop, fail-closed veto on hook throw, and byte-identical absence path.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "AgenticLoopParams accepts optional onEvent and hooks; a run emits a complete ordered typed event trace, preToolUse can block any tool call without stopping the run, observe hooks can never crash the loop, and omitting everything is byte-identical. Build and full suite green.",
+    "assumptions": [
+      "LoopEvent is an own discriminated union in src/orchestrator/agentic-loop.ts (or a sibling loop-events.ts) \u2014 no SDK types involved.",
+      "The rejection ToolResult shape reuses the loop's existing error-result shape (~:362-369 unknown-tool path) so the model-visible surface is consistent.",
+      "Hooks run host-side (plain callbacks in the orchestrating process) and add zero tokens to the conversation.",
+      "Sprints 1/3 may or may not have landed when this builds; onStop coverage for refusal/budget_exceeded applies only to stop paths that exist at build time (dependsOn is intentionally empty)."
+    ],
+    "outOfScope": [
+      "Wiring chat /careful gates or the IDE monitor onto onEvent (consumers integrate later).",
+      "Hook-based input transformation or output redaction."
+    ],
+    "ambiguityScore": 4,
+    "generatorNotes": "Define in src/orchestrator/loop-events.ts: type LoopEvent = { type:'init', model, maxTurns } | { type:'turn-start', turn } | { type:'tool-start', turn, name, input, toolUseId } | { type:'tool-end', turn, name, toolUseId, isError } | { type:'turn-end', turn, toolsCalled } | { type:'result', stopReason, turnsUsed } (compact-boundary and text-delta reserved via comment). Define LoopHooks { preToolUse?: (call: {name, input, toolUseId}) => HookDecision | Promise<HookDecision>; postToolUse?: (call, result) => void | Promise<void>; onStop?: (result: AgenticLoopResult) => void | Promise<void> } with HookDecision = { allow: boolean; reason?: string }. Add onEvent?: (e: LoopEvent) => void and hooks?: LoopHooks to AgenticLoopParams. Emit events at the natural loop points (init before first chat, turn-start each iteration, tool events inside tool execution \u2014 coordinate with sprint 4's executor if landed: pass an emit callback into executeToolBatch or emit around it, result just before each return). Wrap ALL observe callbacks in try/catch (log via existing logger util, continue); wrap preToolUse so a throw \u2192 {allow:false, reason:'hook error (fail-closed)'}. Veto path: skip handler, push the standard isError ToolResult with the reason text. Ensure EVERY return path (completion ~:328, max-turns ~:406, error, and any sprint-1/3 paths present) fires onStop + result event exactly once \u2014 extract a single finish(result) helper to guarantee it.",
+    "evaluatorNotes": "sc-5-1: scripted 2-turn fake client; collect events; assert exact type sequence and payload fields. sc-5-2: preToolUse denying one named tool \u2192 handler spy not called for it, the ToolResult fed back is isError containing the reason (inspect the messages passed to the next chat call), loop continues to completion. sc-5-3: spies for postToolUse/onStop across completion and max-turns runs (plus refusal/budget if those paths exist in the tree) \u2014 onStop called exactly once each. sc-5-4: throwing onEvent/postToolUse \u2192 run completes normally; throwing preToolUse \u2192 tool skipped with fail-closed rejection. sc-5-5: run FULL suite; also a paired run with/without hooks asserting deep-equal AgenticLoopResult. Build + typecheck.",
+    "estimatedFiles": [
+      "src/orchestrator/loop-events.ts",
+      "src/orchestrator/loop-events.test.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/orchestrator/tools/executor.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-09T22:23:17.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,99 @@
+{
+  "contractId": "sprint-spec-20260628-medical-analysis-4",
+  "specId": "spec-20260628-medical-analysis",
+  "sprintNumber": 4,
+  "title": "Test-gap (cadence) suggestions + cross-marker dig-deeper offers in the proactive pass",
+  "description": "Extend the deterministic proactive review pass with two analyzers: a closed recommended-cadence table that flags biomarkers overdue for re-testing, and a deterministic cross-marker pattern detector that OFFERS a 'want me to dig deeper?' Finding without auto-running any analysis. A `--dig-deeper <findingId>` path explicitly runs the deeper cross-marker analysis by reusing the sprint-3 recommendation judge loop.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-medical-analysis-1",
+    "sprint-spec-20260628-medical-analysis-3"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "Running the project build (tsc) after the sprint produces zero type errors with the cadence and cross-marker analyzers included.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "A Vitest test seeds a biomarker whose latest collectedAt is older than its recommended cadence relative to injected now and asserts detectTestGaps returns a Finding (kind 'question' or 'watch') naming the biomarker and the recommended interval; a biomarker tested within cadence yields no gap finding.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "A Vitest test asserts a biomarker absent from the closed cadence table produces no gap finding (no guessed cadence).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "A Vitest test seeds two related markers both out of reference range and asserts detectCrossMarkerPatterns emits a single offer Finding (kind 'question') referencing both marker names, and asserts via an injected LLM spy that no LLM call is made during the offer.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "A Vitest test asserts runProactiveReview now writes trend, gap, and cross-marker-offer findings in one deterministic offline pass over a seeded store.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "A Vitest test asserts that invoking the dig-deeper path for a cross-marker offer id delegates to the sprint-3 generateRecommendation (verified via an injected spy), confirming the deep analysis is gated and reused, not re-implemented.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-7",
+      "description": "Running `bober medical review --dig-deeper <id>` runs the deeper analysis for the given offer and exits 0; running plain `bober medical review` prints counts that include gap and offer findings.",
+      "verificationMethod": "manual",
+      "required": false
+    }
+  ],
+  "nonGoals": [
+    "Do not run any LLM or network call during the proactive offer/gap detection — only the explicit --dig-deeper path may invoke the sprint-3 recommendation loop.",
+    "Do not infer a cadence for biomarkers missing from the closed table; skip them (mirror the closed-whitelist discipline of NumericPrimitive at src/medical/types.ts:142).",
+    "Do not auto-run cross-marker deep analysis; the proactive pass only offers it.",
+    "Do not duplicate the recommendation logic; reuse generateRecommendation from sprint 3."
+  ],
+  "stopConditions": [
+    "All required success criteria sc-4-1 through sc-4-6 pass and the proactive pass emits trend, gap, and offer findings deterministically.",
+    "The full Vitest suite passes with no new failures."
+  ],
+  "definitionOfDone": "runProactiveReview emits, in one deterministic offline pass, trend findings (sprint 1), test-gap findings from a closed recommended-cadence table (biomarkers overdue versus injected now; unknown biomarkers skipped), and cross-marker offer findings (kind 'question', referencing the related markers, with no LLM call). A separate `bober medical review --dig-deeper <findingId>` path runs the deeper cross-marker analysis by delegating to the sprint-3 generateRecommendation, keeping all LLM/egress behaviour behind the existing gates.",
+  "assumptions": [
+    "Recommended cadence is a closed code-reviewed table keyed by biomarker (extending it is a code change, like NumericPrimitive at src/medical/types.ts:142); gap = (now − latestCollectedAt) > cadenceDays using getLabSeries (src/medical/health-store.ts:196).",
+    "Cross-marker offers are deterministic (for example two configured related markers both out of reference range); the deep dive is the only LLM step and reuses sprint-3 generateRecommendation.",
+    "Dig-deeper maps an offer finding id back to its marker pair via the finding frontmatter written by the sprint-1 finding-writer.",
+    "The proactive pass remains offline and deterministic; only the explicit dig-deeper CLI flag crosses into the gated LLM path."
+  ],
+  "outOfScope": [
+    "Online research (sprint 5).",
+    "New deterministic numeric primitives (ADR-3 closed whitelist unchanged).",
+    "Cross-repo aggregation of gap/offer findings (spec-20260628-priority-hub)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Create src/medical/analysis/cadence.ts: a RECOMMENDED_CADENCE_DAYS closed record keyed by biomarker (e.g. ldl, hba1c, tsh, vitamin_d, ferritin — extend only via code review like NumericPrimitive); detectTestGaps(store, biomarkers, opts:{now}) -> MedicalFinding[] using getLabSeries to find the latest collectedAt; when (Date.parse(now) − Date.parse(latest)) / 86400000 > cadenceDays emit a kind 'question' (or 'watch') finding naming the biomarker and interval; biomarkers absent from the table are skipped. Create src/medical/analysis/cross-marker.ts: a CROSS_MARKER_PAIRS closed list of related-marker pairs; detectCrossMarkerPatterns(store, opts:{now}) -> MedicalFinding[] emitting a kind 'question' offer finding when both markers of a pair are out of reference range; the offer finding frontmatter records the marker pair (used later by dig-deeper). NO LLM call here. Extend src/medical/analysis/review-pass.ts so runProactiveReview also runs detectTestGaps and detectCrossMarkerPatterns and writes their findings alongside trends. Add a digDeeper(projectRoot, config, findingId, {now}, deps?) helper that loads the offer finding, extracts its marker pair, and calls generateRecommendation (sprint 3) with a question framed around the pair. Extend src/cli/commands/medical.ts: add a `--dig-deeper <id>` option to the `medical review` command that routes to digDeeper; plain review prints counts including gaps and offers. Collocate *.test.ts with :memory: stores, injected now, and an injected generateRecommendation spy for the dig-deeper test.",
+  "evaluatorNotes": "Confirm cadence.ts and cross-marker.ts import no provider/network and are deterministic. Confirm a biomarker absent from the cadence table yields no gap finding (no default/guessed cadence). Confirm the cross-marker offer test asserts the injected LLM spy is never called during detection. Confirm runProactiveReview output includes all three finding kinds in one pass. Confirm the dig-deeper path delegates to generateRecommendation (assert spy called with the marker pair) and does not re-implement the judge loop. Confirm src/medical/engine.ts is unchanged.",
+  "estimatedFiles": [
+    "src/medical/analysis/cadence.ts",
+    "src/medical/analysis/cadence.test.ts",
+    "src/medical/analysis/cross-marker.ts",
+    "src/medical/analysis/cross-marker.test.ts",
+    "src/medical/analysis/review-pass.ts",
+    "src/medical/analysis/review-pass.test.ts",
+    "src/cli/commands/medical.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-28T00:00:00.000Z",
+  "updatedAt": "2026-06-28T00:00:00.000Z",
+  "completedAt": "2026-06-28T19:42:37.917Z"
+}

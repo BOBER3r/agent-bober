@@ -1,0 +1,24 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-ingest-5-1",
+  "contractId": "sprint-spec-20260628-medical-ingest-5",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T19:52:30Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 4, "criteriaPassed": 4, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 4, "requiredFailed": 0, "requiredTotal": 4 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0", "details": "" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0", "details": "" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors; 2 pre-existing any warnings unrelated", "details": "" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "233 files / 2975 tests passed; +13", "details": "profile.test.ts 13 tests" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0; profile.ts + CLI compile" },
+    { "criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "round-trip via reversible fake cipher: age/sex/goals + arrays survive; on-disk file is encrypted ('SOPS:' prefix), not plaintext" },
+    { "criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "fail-closed: cipher.available() checked at profile.ts:212 BEFORE emitYaml(218)/writeFile(222) and at :237 before readFile(242); 4 tests confirm reject + no plaintext profile.yaml on disk" },
+    { "criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "ProfileSchema.parse rejects negative age (int().min(0)) and unknown sex (enum)" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 4 required criteria pass. Fail-closed cipher trace confirms plaintext PHI never reaches disk when sops unavailable; no real sops binary in tests (pure JS fake cipher); profile nested under medical. Suite 2975 green, no new deps."
+}

@@ -1,0 +1,29 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-priority-hub-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-priority-hub-5",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-29T00:52:00.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober priority-hub spec — FINAL sprint. Register a hub team (data) so `bober chat hub` routes to the hub memory namespace, and add ADDITIVE /priority and /decide slash commands to the chat session that delegate to the Sprint 2-4 hub functions (collectFindings -> rankFindings -> renderPriorityMd) and return a ranked summary while writing priority.md. ALL pre-existing slash commands must remain byte-identical in behaviour.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260628-priority-hub-1..4", "title": "hub module", "summary": "src/hub/: finding.ts, finding-source.ts (HUB_SCOPE), collector.ts (collectFindings), repo-resolver.ts (resolveSiblingRepos), scope.ts (parseScope), judge.ts (rankFindings(findings,scope,llm,now)), priority-md.ts (renderPriorityMd), hub-config.ts (resolveOutVault/priorityMdPath). src/cli/commands/hub.ts has runHubList + runHubPriority DI cores + list/priority/decide subcommands. DELEGATE to these — do NOT add new collector/judge/renderer logic."}
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/cli/commands/chat.ts:19-56 (loadTeam + memoryNamespace threading; createClient at 33-39)",
+      "src/teams/registry.ts (team-as-data registry; add a hub team with memoryNamespace 'hub' + default pipelineShape; mirror the example team)",
+      "src/chat/slash-commands.ts (the dispatch — extend ADDITIVELY with /priority + /decide; keep all existing branches byte-identical)",
+      "src/chat/chat-session.ts:200-230 (slash-command dispatch from ChatSession; add handleHubPriority/handleHubDecide that delegate to hub functions)",
+      "src/cli/commands/hub.ts (runHubPriority DI core + collectFindings/resolveSiblingRepos/rankFindings/renderPriorityMd to delegate to)",
+      "src/providers/factory.ts (createClient for the judge LLMClient)"
+    ]
+  },
+  "config": {
+    "commands": {"build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm test"},
+    "generator": {"model": "sonnet", "autoCommit": true, "provider": "anthropic"}
+  },
+  "principlesRef": ".bober/principles.md (ESM .js extensions, import type, provider-agnostic createClient, teams-are-data, async fs, vitest collocated, conventional commits). CRITICAL: existing slash-command dispatch branches MUST stay byte-identical; new commands additive only; gate /priority and /decide so they are meaningful only in the hub namespace (informative no-op otherwise) — do NOT change default chat team behaviour. Make the new handlers testable with an injected/fake LLMClient + temp sibling stores (offline).",
+  "evaluatorFeedback": null
+}

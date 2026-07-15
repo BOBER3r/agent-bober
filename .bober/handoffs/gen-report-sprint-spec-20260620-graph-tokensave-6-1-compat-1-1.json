@@ -1,0 +1,19 @@
+{
+  "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["1441890 - bober(sprint-1): MCP initialize handshake + tools/call envelope in TokensaveMcpClient"],
+  "filesChanged": [
+    { "path": "src/graph/mcp-client.ts", "action": "modified", "description": "HANDSHAKE_TIMEOUT_MS=5000; private handshakeId; unwrapMcpContent() scans content[] for first JSON-parseable text + handles isError:true; spawnAndHandshake() writes initialize + resolves on correlated response + emits notifications/initialized; call() uses tools/call envelope + returns unwrapMcpContent(result)" },
+    { "path": "tests/graph/mcp-client.test.ts", "action": "modified", "description": "hasTokensave() via node:child_process spawnSync; fakes reply to initialize by id; PendingMap tool responses wrapped as content[]; integration tests use process.cwd() root + tokensave_status; +8 unit tests (handshake-by-id, notifications ordering, tools/call envelope, content-unwrap incl. WARNING-then-JSON, plain-text string, isError/JSON-RPC error -> GRAPH_ERROR); +1 round-trip integration test" }
+  ],
+  "selfVerification": {
+    "typecheck": "exit 0",
+    "build": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings in eval-persist.test.ts, not in changed files)",
+    "fileTests": "tests/graph/mcp-client.test.ts 20/20 pass (incl. 4 real-binary integration tests)",
+    "fullSuite": "219 files / 2809 tests pass (up from 2789)"
+  },
+  "notes": "unwrapMcpContent scans ALL content[] text entries and returns the first JSON-parseable one (live tokensave_status has content[0]='WARNING: ...' plain text, content[1]=JSON). Diverges from the literal 'first text entry' in the contract assumptions but matches the briefing §9 and is required for sc-1-7. Per-test 2s handshake-timeout waits make the file ~28s.",
+  "blockers": []
+}

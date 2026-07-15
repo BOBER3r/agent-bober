@@ -1,0 +1,84 @@
+{
+  "evalId": "eval-sprint-spec-20260712-security-audit-agent-team-4-1",
+  "contractId": "sprint-spec-20260712-security-audit-agent-team-4",
+  "specId": "spec-20260712-security-audit-agent-team",
+  "timestamp": "2026-07-12T12:02:25.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc exit 0"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings"
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "output": "311 files / 4004 tests; security-audit 24/24 + gate 16/16 re-run individually"
+    },
+    {
+      "strategy": "api-check",
+      "required": false,
+      "result": "skipped",
+      "output": "CLI smoke instead: node dist/cli/index.js security-audit --help lists+runs"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-4-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-4-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-4-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-4-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    },
+    {
+      "criterionId": "sc-4-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "independently verified; see evaluator transcript"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "CLI registered per pattern, collision-safe descriptor + evaluation=null, 10-cell exit-code matrix proven (fail-closed on parse failure/throw), gate/pipeline byte-identical, built-dist smoke green. PASS."
+}

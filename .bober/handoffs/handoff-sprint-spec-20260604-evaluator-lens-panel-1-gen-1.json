@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-evaluator-lens-panel-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-evaluator-lens-panel-1",
+  "specId": "spec-20260604-evaluator-lens-panel",
+  "timestamp": "2026-06-04T04:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober is a multi-agent harness that builds applications autonomously using any LLM. This sprint adds an opt-in multi-lens evaluator panel: the qualitative judge step in runAgentEvaluation can fan out into narrow-lens judges (correctness, security, regression, quality) reconciled by majority vote (fail-closed) via the already-built reconcile() reducer. Off by default it must be byte-identical to today's single-judge behavior.",
+    "completedSprints": [],
+    "currentBranch": "bober/evaluator-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/evaluator-agent.ts",
+      "src/orchestrator/workflow/reconciler.ts",
+      "src/config/schema.ts",
+      "src/config/defaults.ts",
+      "src/telemetry/emit.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-evaluator-lens-panel-1.json (read it fully)",
+  "config": {
+    "commands": {
+      "build": "tsc",
+      "typecheck": "tsc --noEmit",
+      "lint": "eslint src/",
+      "test": "vitest"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "The working tree has pre-existing uncommitted changes UNRELATED to this sprint (graph CLI, agent .md files, .bober artifacts). When committing, stage ONLY the files you create/modify for THIS sprint (the contract's estimatedFiles plus any new test files). NEVER run `git add -A` or `git add .`. Use explicit paths: git add src/config/schema.ts src/config/defaults.ts src/config/schema.test.ts src/orchestrator/evaluator-agent.ts src/orchestrator/evaluator-agent.test.ts"
+}

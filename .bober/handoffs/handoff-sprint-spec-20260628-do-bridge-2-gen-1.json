@@ -1,0 +1,52 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-do-bridge-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-do-bridge-2",
+  "specId": "spec-20260628-do-bridge",
+  "timestamp": "2026-06-29T16:35:35.332Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "do-bridge Sprint 2: implement real (non-dry-run) bober do <id>. Write a promote-<id> pending approval marker (reusing src/state/approval-state.ts), gate (TTY confirm / non-TTY poll for external approve|reject / --yes), and on approval launch detached work via an INJECTED Launcher port wrapping the chat RunSpawner. On launch set Finding.promotesTo + status open->in-progress via the FindingStore port; on reject delete the marker and leave the Finding unchanged.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-do-bridge-1",
+        "title": "do-bridge spine",
+        "summary": "commit 8370612. src/do-bridge/{types,registry,finding-port,coding-promoter} + src/cli/commands/do.ts (dry-run only). PromotionRef type ALREADY EXISTS in types.ts {kind:bober-run,runId,launchedAt,status}. FindingStore port has readFinding(id) + FactStoreFindingStore adapter + InMemoryFindingStore fake (with a writes tracker). runDo DI core takes injected FindingStore + PromoterRegistry."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      ".bober/briefings/sprint-spec-20260628-do-bridge-2-briefing.md (READ FIRST — has the approval-state API, disk.ts poll loop, RunSpawner construct+spawn, runDo skeleton to extend, fake-Launcher test pattern)",
+      "src/do-bridge/* (extend finding-port.ts with an update/setPromotion method; extend do.ts with the real path)",
+      "src/state/approval-state.ts (savePending/readPending/saveApproved/saveRejected/deletePending — REUSE, no new format)",
+      "src/orchestrator/checkpoints/mechanisms/disk.ts (non-TTY poll loop pattern)",
+      "src/chat/run-spawner.ts (RunSpawner construct + spawn(task,runId) — the default Launcher adapter wraps this)",
+      "src/hub/finding.ts (promotesTo is z.string().optional(); status enum includes in-progress — DO NOT MODIFY this file)"
+    ]
+  },
+  "contract": "see .bober/contracts/sprint-spec-20260628-do-bridge-2.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "lint": "npm run lint",
+      "test": "npm test",
+      "typecheck": "npm run typecheck"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "criticalDirectives": [
+    "SCHEMA TENSION RESOLVED BY ORCHESTRATOR — DO NOT MODIFY src/hub/finding.ts. The hub FindingSchema types promotesTo as z.string().optional() and explicitly forbids redefining Finding. The do-bridge spec constraint is additive-only (outOfScope: the Finding schema is owned by priority-hub). Therefore: SERIALIZE the PromotionRef object {kind,runId,launchedAt,status} to a JSON string and store it in the EXISTING promotesTo string field. Own the serialize/deserialize helpers inside do-bridge (e.g. serializePromotionRef/parsePromotionRef in src/do-bridge/types.ts), and have the FindingStore port read/update methods (de)serialize so callers + tests operate on the PromotionRef OBJECT while what FindingSchema validates on disk stays a string. This satisfies sc-2-3 (promotesTo.runId / promotesTo.status assert on the parsed object) without widening the shared schema. Do NOT widen, union, or edit the hub schema even though every current promotesTo value is undefined.",
+    "The open->in-progress status transition uses the existing status enum value in-progress (already valid) — no schema change needed.",
+    "The Launcher MUST be an injected port so unit tests use a fake and NEVER spawn a real process. The default adapter wraps src/chat/run-spawner.ts RunSpawner; reference it but inject it.",
+    "Reuse src/state/approval-state.ts markers ONLY (checkpointId promote-<findingId>). Do NOT invent a new approval file format.",
+    "Do NOT mark the finding done and do NOT reconcile run outcomes — that is Sprint 3. Do NOT run the pipeline in-process."
+  ],
+  "evaluatorFeedback": null
+}

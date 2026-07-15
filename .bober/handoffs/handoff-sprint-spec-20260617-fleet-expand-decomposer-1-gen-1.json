@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260617-fleet-expand-decomposer-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-1",
+  "specId": "spec-20260617-fleet-expand-decomposer",
+  "timestamp": "2026-06-17T19:55:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Fleet Expand — Phase 2 of the fleet orchestrator. A `fleet expand <goal>` subcommand turns one high-level goal into a Zod-valid FleetManifest via a single DeepSeek LLMClient call plus one bounded coercion re-prompt, then writes-and-stops. This sprint (1 of 2) builds ONLY the pure src/fleet/decomposer.ts module + collocated tests — no CLI, no spawn, no real network. Additive on top of the already-merged Phase 1 fleet runner.",
+    "completedSprints": [],
+    "currentBranch": "bober/fleet-expand-decomposer",
+    "relevantFiles": [
+      "src/providers/types.ts (LLMClient, ChatParams: jsonObjectMode vs responseSchema, ChatResponse.text)",
+      "src/orchestrator/planner-agent.ts (parsePlanSpec JSON-extraction + PLAN_SPEC_COERCION_INSTRUCTION + coercion-retry loop)",
+      "src/fleet/manifest.ts (FleetManifestSchema, FleetChildSchema — reuse verbatim; config optional so extra guard needed)",
+      "src/fleet/child-config.ts (DeepSeek provider/endpoint/model constants ~lines 7-9)",
+      "src/providers/structured.test.ts (ScriptedClient fake-LLMClient test pattern)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "See .bober/principles.md — ESM everywhere with .js import extensions (NodeNext); provider-agnostic interfaces (never import an SDK outside providers/); Zod for validation; contract-based JSON state in .bober/; async fs only (node:fs/promises, no *Sync); use `import type` (consistent-type-imports); no explicit any (use unknown + narrowing); prefix unused params with _; unicode box-drawing section comments `// -- Name ------`; conventional commits, sprint commits use `bober(sprint-N): description`.",
+  "evaluatorFeedback": null,
+  "notes": "Read the Sprint Briefing FIRST: .bober/briefings/sprint-spec-20260617-fleet-expand-decomposer-1-briefing.md. It contains real code snippets for all reuse targets. CRITICAL gotchas: (1) use jsonObjectMode:true NOT responseSchema (DeepSeek rejects strict json_schema); (2) the per-child config-key guard must run IN ADDITION to FleetManifestSchema.safeParse (FleetChildSchema.config is optional so safeParse alone accepts it); (3) decomposeGoal must NEVER resolve with an invalid/partial manifest — throw with formatted Zod issues on exhaustion; (4) at most 2 client.chat calls total (DECOMPOSE_MAX_RETRIES=1); (5) tests use a fake LLMClient only — no real network, no fs."
+}

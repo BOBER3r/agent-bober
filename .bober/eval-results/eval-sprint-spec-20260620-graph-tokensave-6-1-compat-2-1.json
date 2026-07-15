@@ -1,0 +1,21 @@
+{
+  "evalId": "eval-sprint-spec-20260620-graph-tokensave-6-1-compat-2-1",
+  "contractId": "sprint-spec-20260620-graph-tokensave-6-1-compat-2",
+  "specId": "spec-20260620-graph-tokensave-6-1-compat",
+  "timestamp": "2026-06-20T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "npm run build exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "0 errors; 2 pre-existing unrelated warnings" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "full suite 219 files / 2814 tests pass (up from 2809); client.test.ts 30/30; tests/mcp green" },
+    { "strategy": "api-check", "required": true, "result": "pass", "details": "node dist/cli/index.js onboard exit 0, no 'handshake timed out', 5 files written (10952 bytes)" }
+  ],
+  "criteriaSummary": "All 7 required criteria pass. TOOL map is tokensave_* only (zero stale names); 6 methods remapped with raw-6.1.1->stable-type adapters; client.test.ts feeds raw 6.1.1 payloads (30 tests); onboard E2E runs the real engine with no handshake timeout and writes 5 files with real symbol rows; sandbox filter + GRAPH_DISABLED/UNAVAILABLE short-circuits intact; diff confined to client.ts + its test; onboard.ts untouched; GraphClient signatures unchanged.",
+  "regressions": [],
+  "generatorFeedback": [],
+  "qualityNote": "onboard output is functional but NOISY because onboard.ts keeps its semantic-search data path (scope: option B). Test fixtures surface as hotspots; dist/+docs entries in architecture-overview; communities='default'/'uncategorized'; README indexedFileCount=0 (manifest not populated). Meets the contract; the deferred 'option C' onboard rework (use tokensave_hotspots/dead_code/circular/module_api directly) would make the docs accurate.",
+  "summary": "PASS. GraphClient catalog remap verified independently incl. the real onboard E2E; zero regressions across 2814 tests. The handshake-timeout bug is fixed end-to-end."
+}

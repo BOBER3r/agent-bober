@@ -1,0 +1,33 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-architect-lens-panel-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-architect-lens-panel-5",
+  "specId": "spec-20260604-architect-lens-panel",
+  "timestamp": "2026-06-04T09:06:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Architect Decision Lens Panel — FINAL sprint: wire the native architect skill's CP2 + CP5 spawn steps with gated panel branches, copy the canonical arch-lens-panel.md into the skill's references/, regenerate the inlined .claude/commands/bober-architect.md, and extend the drift gate (reference-copy equality + command recomputation). Off by default => the existing single-checkpoint architect flow, byte-identical.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-1", "title": "foundation", "summary": "synthesize() + arch-lenses + architect.panel config (optional)." },
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-2", "title": "TS CP2", "summary": "synthesis panel." },
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-3", "title": "TS CP5", "summary": "reconcile review panel." },
+      { "contractId": "sprint-spec-20260604-architect-lens-panel-4", "title": "native foundation", "summary": "skills/shared/arch-lens-panel.md + agents/bober-architect.md MODE + drift gate src/orchestrator/arch-lens-panel-parity.test.ts. Commit a77625a." }
+    ],
+    "currentBranch": "bober/architect-lens-panel",
+    "relevantFiles": [
+      "skills/bober.architect/SKILL.md",
+      "skills/shared/arch-lens-panel.md",
+      "scripts/update-all.mjs",
+      "src/orchestrator/arch-lens-panel-parity.test.ts",
+      "src/orchestrator/lens-panel-parity.test.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-architect-lens-panel-5.json (read it fully — especially generatorNotes and the C3/C5 gate note)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist. Stage ONLY: git add skills/bober.architect/SKILL.md skills/bober.architect/references/arch-lens-panel.md .claude/commands/bober-architect.md src/orchestrator/arch-lens-panel-parity.test.ts. NEVER `git add -A`. CRITICAL: the CP2/CP5 panel branches are ADDITIVE + GATED (existing single-checkpoint prose = untouched else-path). Regenerate .claude/commands/bober-architect.md via the EXACT scripts/update-all.mjs inlineSkill format (SKILL.md + sorted references). The AUTHORITATIVE gate is the in-repo vitest recomputation in the drift test — NOT `npm run update-all:check` (it targets EXTERNAL sync projects and already shows pre-existing drift). Branch bober/architect-lens-panel — never main."
+}

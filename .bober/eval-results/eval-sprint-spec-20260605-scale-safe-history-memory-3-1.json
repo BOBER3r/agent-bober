@@ -1,0 +1,80 @@
+{
+  "evalId": "eval-sprint-spec-20260605-scale-safe-history-memory-3-1",
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-3",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "timestamp": "2026-06-04T23:47:43Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "details": "exit 0"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "details": "exit 0"
+    },
+    {
+      "strategy": "unit-test",
+      "required": false,
+      "result": "pass",
+      "details": "80 tests across 6 files green (12 distill + 8 CLI + 60 state)"
+    },
+    {
+      "strategy": "lint",
+      "required": false,
+      "result": "pass",
+      "details": "eslint exit 0"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "C1",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C2",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C3",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C4",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "C5",
+      "required": true,
+      "result": "pass"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/orchestrator/memory/distill.test.ts",
+      "description": "C1 fixture test asserts length>0 rather than an exact toHaveLength(N); a future distill() change dropping/adding a lesson group would not be caught. Add exact-count assertion. Non-blocking; evaluator passed C1 on substance (cross-call stability + category correctness proven). DOCUMENTED FOLLOW-UP."
+    }
+  ],
+  "summary": "All 5 required criteria pass. Evaluator built+ran the real CLI end-to-end (distill/list/show) confirming count summaries, on-disk idempotency (2nd run 0 new), bounded list, and show provenance. distill() pure: sha256 hash over category+tags+refs excluding createdAt, no providers import, no clock. typecheck/build/lint exit 0; 80 tests green; pipeline.ts clean; history.ts/memory.ts unchanged. Low-priority: C1 test lacks exact-count assertion (documented follow-up)."
+}

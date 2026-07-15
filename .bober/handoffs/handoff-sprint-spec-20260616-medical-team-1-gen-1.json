@@ -1,0 +1,152 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-1",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T17:55:33.872Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Add a second domain Team instance to agent-bober: a local-first, conversational health/wellness team that validates the domain-agnostic Team abstraction on a high-stakes domain. Introduces a new additive `medical-sop` pipelineShape with a dedicated engine running a fixed SOP (consent -> red-flag-gate -> numerics -> retrieve -> answer-with-abstention), a concrete GuardrailSet filling the existing Team.guardrails slot, an in-process whitelisted numerics layer (no Python sandbox), and two independently opt-in egress axes. Regulatory refusals, the emergency short-circuit, numerical reasoning, and the zero-egress default are CODE-ENFORCED, never prompt-only — the highest-stakes decisions never pass through an LLM. Built from arch-20260616-medical-team. Engineering-complete on a feature branch; shipping/enabling remains gated on an external S6.5 counsel/regulatory review which is NOT a buildable sprint.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/workflow/engine.ts",
+      "src/orchestrator/workflow/selector.ts",
+      "src/config/schema.ts",
+      "src/teams/registry.ts",
+      "src/medical/types.ts",
+      "src/medical/engine.ts",
+      "src/medical/team.ts",
+      "src/medical/engine.test.ts",
+      "src/medical/team.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260616-medical-team-1",
+    "specId": "spec-20260616-medical-team",
+    "sprintNumber": 1,
+    "title": "Additive pipeline plumbing + medical team registration",
+    "description": "Risk-first integration linchpin. Add `medical-sop` as a new additive PipelineEngineName member (src/orchestrator/workflow/engine.ts) and widen every Zod enum that mirrors it (team pipelineShape at src/config/schema.ts:366 + the PipelineSectionSchema engine enum) in lockstep. Extend BOTH exhaustive switches in src/orchestrator/workflow/selector.ts: selectPipelineEngineForTeam returns a new MedicalSopEngine for a `medical-sop` team; selectPipelineEngine (the config/programming path that reads config.pipeline.engine and can never legitimately be medical-sop) handles the member defensively (fall through to TsPipelineEngine) so the switch stays exhaustive without changing programming behavior. Create a new src/medical/ module with a MINIMAL MedicalSopEngine stub (implements PipelineEngine; run returns a trivial PipelineResult for now), the GuardrailSet type filling Team.guardrails, and buildMedicalTeam(config) + registry wiring so loadTeam(config, 'medical') resolves to a Team with pipelineShape 'medical-sop'. Byte-zero impact on ts|skill|workflow and the programming team is a HARD requirement. This sprint is plumbing + skeleton only — gates, store, numerics, ingestion, egress, and retrieval are later sprints.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+        "verificationMethod": "typecheck",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "All tests pass with zero failures, including new collocated tests under src/medical (npm run test), and the FULL pre-existing suite remains green (no regression).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "PipelineEngineName (src/orchestrator/workflow/engine.ts) includes 'medical-sop' and every Zod enum mirroring it is widened in lockstep: the team pipelineShape enum (src/config/schema.ts:366) and the PipelineSectionSchema engine enum. A unit test parses a config/team declaring pipelineShape 'medical-sop' successfully and asserts the TS union and the Zod enum agree.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "Both switches in src/orchestrator/workflow/selector.ts are exhaustive over the widened PipelineEngineName with the compile-time `never` guard intact. selectPipelineEngineForTeam(medicalTeam, config) returns a MedicalSopEngine instance (instanceof / name === 'medical-sop'); selectPipelineEngine(config) is unchanged for ts/skill/workflow.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-6",
+        "description": "loadTeam(config, 'medical') returns a Team with id 'medical', pipelineShape === 'medical-sop', and a concrete GuardrailSet object in its guardrails slot (not undefined). A unit test asserts these fields.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-7",
+        "description": "Regression: loadTeam(config) with no id still returns the byte-identical programming team (providers deep-equal resolveRoleProviders(config), pipelineShape === resolveEngineName(config), memoryNamespace unchanged); a test asserts the programming team and existing engine selection are unchanged.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-8",
+        "description": "No @anthropic-ai/sdk or openai SDK import appears anywhere under src/medical (grep returns nothing); the module is ESM/NodeNext with .js import extensions and strict TS.",
+        "verificationMethod": "manual",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not implement the consent gate, audit log, or disclaimer — that is Sprint 2 (the MedicalSopEngine stub may have placeholder hooks but no enforcement).",
+      "Do not implement the red-flag detector / GuardrailSet.evaluate logic — that is Sprint 3 (define the GuardrailSet TYPE only this sprint).",
+      "Do not implement HealthDataStore or NumericsQueryLayer — that is Sprint 4.",
+      "Do not implement ingestion or the CLI import command — that is Sprint 5.",
+      "Do not implement EgressGuard, the ESLint medical boundary, medications wiring, or the full SOP — that is Sprint 6.",
+      "Do not implement LiteratureRetriever networking — that is Sprint 7.",
+      "Do not change the behavior of ts|skill|workflow engines, selectPipelineEngine for those names, resolveRoleProviders, runPipeline, or the programming team."
+    ],
+    "stopConditions": [
+      "All eight success criteria pass",
+      "medical-sop is wired through PipelineEngineName + both Zod enums + both selector switches with the never guard intact, loadTeam(config,'medical') resolves to a medical-sop team with a GuardrailSet, and the programming team + ts/skill/workflow are byte-identical"
+    ],
+    "definitionOfDone": "A new src/medical/ module exposes a minimal MedicalSopEngine (implements PipelineEngine; readonly name = 'medical-sop'; run returns a trivial PipelineResult), a GuardrailSet type, and buildMedicalTeam(config): Team. PipelineEngineName gains the additive 'medical-sop' member; the team pipelineShape Zod enum (schema.ts:366) and the PipelineSectionSchema engine enum are widened to match. Both selector switches handle medical-sop exhaustively (team switch -> MedicalSopEngine; config switch -> defensive TsPipelineEngine fall-through). loadTeam registers a built-in 'medical' team. Build, typecheck, and the full test suite pass; the programming team and ts|skill|workflow behavior are byte-identical; no SDK types leak into src/medical.",
+    "assumptions": [
+      "PipelineEngine is an INTERFACE (src/orchestrator/workflow/engine.ts:9) — MedicalSopEngine implements it (the architecture's `extends` is shorthand). run signature: run(userPrompt, projectRoot, config, opts?: { runId?: string }): Promise<PipelineResult>.",
+      "resolveEngineNameForTeam (selector.ts:75) returns team.pipelineShape verbatim for any value except 'workflow' (only workflow is downgraded), so 'medical-sop' flows through unchanged — verified.",
+      "selectPipelineEngine (selector.ts:51) reads config.pipeline.engine and will never legitimately be 'medical-sop'; the added case is a defensive exhaustiveness branch (fall through to TsPipelineEngine) and changes no real programming path.",
+      "Team.guardrails is `?: unknown` today (types.ts:29); a concrete GuardrailSet type is assigned only for the medical team and leaves other teams' undefined guardrails valid.",
+      "The 'medical' team is registered in code in src/teams/registry.ts (like the built-in 'programming' team), not via a .bober/teams/*.json file."
+    ],
+    "outOfScope": [
+      "Consent/audit/disclaimer enforcement (Sprint 2)",
+      "Red-flag detection logic (Sprint 3)",
+      "Health store + numerics (Sprint 4)",
+      "Ingestion + CLI (Sprint 5)",
+      "Egress guard + full SOP + medications (Sprint 6)",
+      "Literature retrieval networking (Sprint 7)",
+      "Any change to existing engine/team public behavior"
+    ],
+    "ambiguityScore": 2,
+    "generatorNotes": "Create src/medical/ with small single-purpose files + unicode box-header section comments (project principles). Suggested files: src/medical/types.ts (GuardrailSet, GuardrailVerdict, GuardrailContext, MedicalAnswer, and shared medical types), src/medical/engine.ts (MedicalSopEngine stub), src/medical/team.ts (buildMedicalTeam), with collocated *.test.ts.\n\nVERIFIED integration anchors (read these before editing):\n- src/orchestrator/workflow/engine.ts:6  export type PipelineEngineName = 'ts' | 'skill' | 'workflow';  -> add '| \"medical-sop\"'. The doc comment says it 'Mirrors the z.enum in PipelineSectionSchema' — find and widen that enum too.\n- src/orchestrator/workflow/engine.ts:9  export interface PipelineEngine { readonly name: PipelineEngineName; run(userPrompt, projectRoot, config, opts?: {runId?: string}): Promise<PipelineResult>; }  -> MedicalSopEngine implements this.\n- src/orchestrator/workflow/selector.ts:51 selectPipelineEngine(config) switch (resolveEngineName(config)) — has cases ts/skill/workflow and NO default; adding the union member breaks exhaustiveness, so ADD `case 'medical-sop': return new TsPipelineEngine();` (defensive — config.pipeline.engine is never medical-sop) OR a `never`-typed default; keep ts/skill/workflow byte-identical.\n- src/orchestrator/workflow/selector.ts:103 selectPipelineEngineForTeam(team, config) switch (resolveEngineNameForTeam(team, config)) — ADD `case 'medical-sop': return new MedicalSopEngine();` (import from ../../medical/engine.js).\n- src/orchestrator/workflow/selector.ts:75 resolveEngineNameForTeam returns `requested` verbatim unless 'workflow' — medical-sop passes through; no change needed there.\n- src/config/schema.ts:366 pipelineShape: z.enum(['ts','skill','workflow']).optional() -> add 'medical-sop'. Also widen the PipelineSectionSchema engine enum (search schema.ts for the other z.enum(['ts','skill','workflow'])).\n- src/teams/types.ts:27,29 pipelineShape: PipelineEngineName; guardrails?: unknown.\n- src/teams/registry.ts:34 loadTeam(config, teamId?) — register a built-in 'medical' team. Mirror how the 'programming' team is built. buildMedicalTeam(config) returns { id:'medical', displayName:'Medical team', memoryNamespace:'medical', providers: resolveRoleProviders(config), pipelineShape:'medical-sop', roles: <descriptors>, guardrails: <a concrete GuardrailSet instance with rulesetVersion> }.\n\nMedicalSopEngine stub: readonly name = 'medical-sop' as const; async run(...) returns a minimal PipelineResult (look at PipelineResult shape at src/orchestrator/pipeline.ts:66 and what TsPipelineEngine.run returns for the required fields — return a stub success/placeholder result; the real SOP lands in S2/S3/S6). Do NOT call any LLM in the stub.\n\nGuardrailSet TYPE this sprint: define `interface GuardrailSet { evaluate(prompt: string, ctx: GuardrailContext): GuardrailVerdict; readonly rulesetVersion: string }` and a trivial implementation that returns { kind: 'allow' } (real logic in S3) so buildMedicalTeam can fill the slot. GuardrailVerdict union per the data model.\n\nKeep createDefaultConfig emitting NO teams (back-compat). Tests: loadTeam(config,'medical') field assertions; selectPipelineEngineForTeam(medicalTeam) instanceof MedicalSopEngine; programming-team regression (deep-equal providers + engine unchanged); Zod parse of pipelineShape:'medical-sop'. Use no network, no fs (pure).",
+    "evaluatorNotes": "sc-1-4: grep engine.ts for the widened union; parse via the team schema a config with a team whose pipelineShape is 'medical-sop' (expect success) and one with 'bogus' (expect Zod failure); confirm the PipelineSectionSchema engine enum was also widened (search for the second z.enum).\nsc-1-5: assert both switches compile with the never guard (typecheck) and that removing a case would fail; runtime: selectPipelineEngineForTeam(buildMedicalTeam(config), config).name === 'medical-sop'; selectPipelineEngine(config) for engine 'ts'/'workflow' returns the same engine type as before.\nsc-1-6: loadTeam(config,'medical') -> id==='medical', pipelineShape==='medical-sop', guardrails is a non-undefined object exposing rulesetVersion + evaluate.\nsc-1-7: REGRESSION — loadTeam(config) (no id) deep-equals the programming team (providers === resolveRoleProviders(config), pipelineShape === resolveEngineName(config)); run the FULL suite and confirm nothing else changed.\nsc-1-8: grep -r '@anthropic-ai/sdk\\|from \"openai\"' src/medical — expect none.\nBuild + typecheck must be clean. Confirm the MedicalSopEngine stub makes zero LLM calls (no provider import used in engine.ts beyond types).",
+    "estimatedFiles": [
+      "src/orchestrator/workflow/engine.ts",
+      "src/orchestrator/workflow/selector.ts",
+      "src/config/schema.ts",
+      "src/teams/registry.ts",
+      "src/medical/types.ts",
+      "src/medical/engine.ts",
+      "src/medical/team.ts",
+      "src/medical/engine.test.ts",
+      "src/medical/team.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "lastEvalId": null,
+    "createdAt": "2026-06-16T00:00:00Z",
+    "updatedAt": "2026-06-16T00:00:00Z",
+    "startedAt": "2026-06-16T17:55:33.818Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

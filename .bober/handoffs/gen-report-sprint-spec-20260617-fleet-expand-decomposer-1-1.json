@@ -1,0 +1,13 @@
+{
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-1",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["4c1dc09 - bober(sprint-1): FleetDecomposer module — goal → validated FleetManifest"],
+  "filesChanged": [
+    { "path": "src/fleet/decomposer.ts", "action": "created", "description": "FleetDecomposer module: decomposeGoal, validateManifest, callDecomposer, DECOMPOSE_SYSTEM_PROMPT, DECOMPOSE_COERCION_INSTRUCTION, DECOMPOSE_MAX_RETRIES=1. JSON extraction mirrors parsePlanSpec (direct→fence→first-brace). Config-key guard runs after FleetManifestSchema.safeParse via Object.prototype.hasOwnProperty.call. Always passes jsonObjectMode:true, never sets responseSchema." },
+    { "path": "src/fleet/decomposer.test.ts", "action": "created", "description": "22 tests using ScriptedClient fake LLMClient. Covers valid-first-try (1 call), invalid-then-coerce-success (2 calls), invalid-twice-throws (Zod path), child-with-config rejected, fenced-json + first-brace extraction, jsonObjectMode:true on all calls, responseSchema absent, maxRetries=0 boundary." }
+  ],
+  "testsAdded": ["src/fleet/decomposer.test.ts"],
+  "blockers": [],
+  "notes": "Call counts: valid-first-try=1, invalid-then-coerce=2, invalid-twice=2-then-throw, child-with-config=2 (guard routes to retry). Config-key guard runs inside validateManifest AFTER safeParse. Generator claims the single failing test (src/discovery/scanner.test.ts:341) is PRE-EXISTING (confirmed via git stash + retest on clean branch head) — EVALUATOR MUST independently verify this regression claim. Full suite: 1 failed | 2231 passed | 3 skipped."
+}

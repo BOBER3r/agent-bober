@@ -1,0 +1,87 @@
+{
+  "contractId": "sprint-spec-20260605-scale-safe-history-memory-1",
+  "specId": "spec-20260605-scale-safe-history-memory",
+  "sprintNumber": 1,
+  "title": "Bounded history reads + crash-safe rotation (loadRecentHistory + archive)",
+  "description": "Make agent-bober's append-only event log scale without breaking its existing programmatic consumers. Add a loadRecentHistory(projectRoot, { limit }) bounded tail reader and crash-safe rotation that moves the oldest entries to .bober/history.archive.jsonl once active history.jsonl exceeds a new history.maxActiveLines config field. loadHistory keeps its full-read contract by reading archive then active concatenated, so resume-cursor reconstruction and the EngineConformanceHarness observe an unchanged full stream. This is storage-layer only: no lessons store, no distillation, no CLI.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "C1",
+      "description": "loadRecentHistory(projectRoot, { limit }) reads only active history.jsonl and returns at most `limit` entries newest-last; a unit test asserts the count cap and that no read is issued against history.archive.jsonl.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C2",
+      "description": "Rotation moves the oldest entries to .bober/history.archive.jsonl once active history.jsonl exceeds history.maxActiveLines, leaving at most maxActiveLines entries active; a unit test seeds maxActiveLines+50 entries and asserts active holds at most maxActiveLines and the archive holds the overflow.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C3",
+      "description": "loadHistory still returns every entry by reading archive then active concatenated; a unit test writes entries spanning a rotation and asserts loadHistory returns the full ordered set identical to the pre-rotation sequence.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C4",
+      "description": "Rotation neither drops nor duplicates entries when interrupted: a unit test simulating a crash between archive-append and active-truncate asserts the active+archive union contains every original entry exactly once.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C5",
+      "description": "history.maxActiveLines is a validated zod config field (positive integer, default 2000) in src/config/schema.ts; a schema test asserts the default applies on an empty config and a non-positive value is rejected.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "C6",
+      "description": "npm run typecheck and npm run build exit 0 and the existing src/state and conformance suites stay green with no new failures beyond the documented flaky tool-count baseline.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change the exported signatures of loadHistory or appendHistory.",
+    "Do not alter resume-cursor or conformance logic beyond what regression tests need; their observable output must stay identical.",
+    "Do not migrate or rewrite the existing 272-line history.jsonl; rotation applies to new appends going forward.",
+    "Do not add any LLM, network, lessons-store, or CLI code \u2014 this sprint is the storage layer only."
+  ],
+  "stopConditions": [
+    "Stop when loadRecentHistory, crash-safe rotation, and the maxActiveLines config exist, loadHistory still returns the full active+archive stream, and typecheck, build, and tests are green.",
+    "Stop when changes are confined to src/state/history.ts (and an optional src/state/history-rotation.ts), src/config/schema.ts, and their collocated tests."
+  ],
+  "definitionOfDone": "History reads scale without breaking existing consumers: rotation keeps the active file bounded by history.maxActiveLines, loadRecentHistory offers a bounded tail read, and loadHistory still returns every entry by concatenating archive+active so resume-cursor and the conformance harness observe an unchanged full history. Rotation is crash-safe with no lost or duplicated entries, and typecheck, build, and the state/conformance tests pass.",
+  "assumptions": [
+    "resume-cursor.ts already discards loadHistory's return value (resume-cursor.ts:19), so bounding reads cannot alter the reconstructed ResumeCursor.",
+    "conformance.ts deep-compares the full normalized history (conformance.ts:102,131), so loadHistory must keep returning the complete active+archive stream."
+  ],
+  "outOfScope": [
+    "lessons memory store",
+    "distillation",
+    "CLI commands",
+    "planner integration"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Edit src/state/history.ts (or add src/state/history-rotation.ts and import it). Add archivePath(projectRoot) = .bober/history.archive.jsonl alongside historyPath. Implement rotation inside appendHistory (or a rotateIfNeeded helper called after append): count active lines; when > maxActiveLines, take the oldest (count - maxActiveLines) lines, append them to the archive file, then atomically rewrite active with the remaining tail using a temp-file + rename so an interruption never loses entries (append-to-archive first, then rename-new-active; on crash before rename, the worst case is duplicate-in-archive which the union test tolerates if you de-dup, OR keep archive-append idempotent by writing the new-active temp first then appending archive then renaming \u2014 pick one and document the ordering so C4 holds). Add loadRecentHistory(projectRoot, { limit }) that reads ONLY active history.jsonl, parses with the existing HistoryEntrySchema.safeParse, and returns the last `limit` entries. Update loadHistory to read archivePath (if present) then historyPath, concatenating archive-then-active, preserving existing skip-malformed-line behavior. Add `maxActiveLines: z.number().int().positive().default(2000)` to a history section in src/config/schema.ts (mirror PipelineSectionSchema style) and thread it to rotation (read from config, fall back to default 2000). Use import type for type-only imports; ESM .js specifiers; Unicode box-drawing section headers. Conventional commit: bober(sprint-1): bounded history reads + crash-safe rotation.",
+  "evaluatorNotes": "Verify loadRecentHistory returns at most `limit` and does not touch the archive (spy on readFile path or assert via a temp project with a populated archive). Verify rotation leaves active <= maxActiveLines and the archive holds the overflow. Verify loadHistory over a rotated store equals the pre-rotation ordered sequence (write N entries, force rotation, assert loadHistory deep-equals the original ordered list ignoring nothing). Verify the crash-safety test: simulate interruption and assert the active+archive union has every entry exactly once. Verify the zod default (parse {} history -> maxActiveLines === 2000) and rejection of 0/-1. Run npm run typecheck (exit 0), npm run build (exit 0), and the existing src/state + conformance tests; tolerate only the documented flaky tool-count baseline. Confirm git diff is confined to history.ts/history-rotation.ts, config schema, and collocated tests \u2014 no changes to resume-cursor.ts or conformance.ts logic.",
+  "estimatedFiles": [
+    "src/state/history.ts",
+    "src/state/history-rotation.ts",
+    "src/state/history.test.ts",
+    "src/config/schema.ts",
+    "src/config/schema.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260605-scale-safe-history-memory-1-1",
+  "createdAt": "2026-06-05T00:00:00Z",
+  "updatedAt": "2026-06-04T23:19:02Z",
+  "completedAt": "2026-06-04T23:19:02Z"
+}

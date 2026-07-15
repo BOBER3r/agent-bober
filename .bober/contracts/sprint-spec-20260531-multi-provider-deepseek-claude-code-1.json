@@ -1,0 +1,72 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-1",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "sprintNumber": 1,
+  "title": "Fix eslint peer-dependency conflict (unblocks install)",
+  "description": "Upgrade the eslint devDependency from ^9 to ^10 so it satisfies the existing @eslint/js@^10 peer, regenerate the lockfile, and apply any eslint-10 flat-config shims required by eslint.config.js without changing any lint rules.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "package.json devDependencies.eslint is set to a ^10 range and package-lock.json resolves eslint to a 10.x version.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "Running `rm -rf node_modules && npm install` completes with exit code 0 and produces no ERESOLVE error in stdout or stderr.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "Running `npm run lint` (eslint src/) exits 0 against eslint 10 with the eslint.config.js flat config loading successfully.",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "Running `npm run build` (tsc) exits 0 with zero type errors after the upgrade.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "Running `npm test` (vitest) exits 0 with no newly failing tests after the upgrade.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add, remove, or modify any ESLint rule in eslint.config.js — only version bump plus shims required for eslint 10 to load.",
+    "Do not change @typescript-eslint/typescript-eslint versions unless eslint 10 forces an incompatibility, and only to the minimum compatible version.",
+    "Do not install the openai package in this sprint.",
+    "Do not touch any file under src/providers/ or src/orchestrator/."
+  ],
+  "stopConditions": [
+    "A clean `rm -rf node_modules && npm install` exits 0 with no ERESOLVE, and `npm run lint`, `npm run build`, and `npm test` all exit 0."
+  ],
+  "definitionOfDone": "A developer cloning the repo can run npm install on a clean tree and it completes with exit 0 and no ERESOLVE message, without passing --legacy-peer-deps. The lint, build, and test commands all still exit 0 with eslint resolved at version 10.x and no lint rules altered.",
+  "assumptions": [
+    "Q5: eslint upgrades to ^10 with only flat-config shims, no rule changes — evidence: package.json already pins @eslint/js@^10.0.1 and eslint@^9.19.0 (the conflict), eslint.config.js is flat config, PRD US-001 forbids rule changes.",
+    "typescript-eslint@^8.22.0 is compatible with eslint 10 or upgrades to its nearest compatible minor — evidence: devDependencies show typescript-eslint@^8.22.0."
+  ],
+  "outOfScope": [
+    "DeepSeek and claude-code provider wiring (later sprints).",
+    "Documentation changes (Sprint 6)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Edit package.json devDependencies.eslint to \"^10.0.0\" (or the latest 10.x compatible with typescript-eslint@^8). Run a clean install to regenerate package-lock.json. Run `npm run lint`; if eslint 10 reports flat-config load errors, apply the minimal eslint.config.js shim (e.g. config object shape changes) without altering rule definitions. Do NOT touch src/providers/. Verify with lint, build, test.",
+  "evaluatorNotes": "Confirm package.json eslint range starts with ^10 and package-lock resolves a 10.x version. Run a clean `rm -rf node_modules && npm install` and assert exit 0 and no 'ERESOLVE' in output. Run npm run lint, npm run build, npm test and assert all exit 0. Diff eslint.config.js to confirm no rule additions/removals/severity changes — only structural shims if any.",
+  "estimatedFiles": [
+    "package.json",
+    "package-lock.json",
+    "eslint.config.js"
+  ],
+  "estimatedDuration": "small",
+  "completedAt": "2026-05-31T14:19:00Z"
+}

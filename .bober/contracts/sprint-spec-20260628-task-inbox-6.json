@@ -1,0 +1,80 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-6",
+  "specId": "spec-20260628-task-inbox",
+  "sprintNumber": 6,
+  "title": "Gmail thread to task (egress-gated bonus)",
+  "description": "Add `bober task from-gmail <thread>` which, only when an opt-in gmail egress axis is enabled, reads a Gmail thread through the MCP connector, parses it locally into an action-Finding (title from the thread subject), and captures it via captureTask. With the axis off (default) the command refuses with a clear opt-in message and makes no network call.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-task-inbox-1"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "`npm run build` exits 0 with the from-gmail subcommand and the opt-in gmail egress gate added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "A unit test runs from-gmail with the gmail axis disabled (default) and asserts the command returns an opt-in refusal, sets exitCode=1, and never constructs/starts an MCP client (no network).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "A unit test runs from-gmail with the axis enabled and a stubbed MCP client returning a thread payload, asserting one open action-Finding is captured with title derived from the thread subject.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "A unit test simulates an MCP/connector error and asserts the handler catches it, sets exitCode=1, and the error message contains no connector env/token contents.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "`npm run typecheck` exits 0 — the Gmail-thread parser returns a typed Finding accepted by captureTask.",
+      "verificationMethod": "typecheck",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do NOT enable Gmail egress by default — the axis must default false and gate every network call.",
+    "Do NOT build a general Gmail integration/sync — read one thread on demand and parse it locally.",
+    "Do NOT include connector env vars or tokens in any error/log message (mirror src/mcp/external-client.ts:66-77).",
+    "Do NOT bypass captureTask — the parsed thread is captured through the sprint-1 write path.",
+    "Do NOT add new runtime dependencies beyond the already-present MCP SDK."
+  ],
+  "stopConditions": [
+    "`npm run build` and `npm run typecheck` exit 0 and the gated/enabled/error from-gmail unit tests pass.",
+    "from-gmail refuses with no network when the axis is off and captures a task when the axis is on with a stubbed connector."
+  ],
+  "definitionOfDone": "A user who has explicitly enabled the gmail egress axis can run `bober task from-gmail <thread>` to pull a Gmail thread through the MCP connector, have it parsed locally into an open action-Finding (title from the subject), and captured into the hub pool. With the axis off (the default), the command refuses with an opt-in message and performs zero Gmail egress. Connector failures are caught, reported on stderr with exitCode=1, and never leak env/token contents.",
+  "assumptions": [
+    "A gmail egress axis follows the EgressGuard opt-in pattern (default false, assertAllowed throws if not enabled) — src/medical/egress.ts:1-59.",
+    "The Gmail MCP connector is invoked via the ExternalMcpServer.callTool surface (src/mcp/external-client.ts:95-103); the tool name and arg shape are read from listTools at runtime, and the connector is injectable so tests can stub it.",
+    "Thread parsing is a pure local function: payload -> {title:<subject>, kind:'action', status:'open'}; it does not call the network itself."
+  ],
+  "outOfScope": [
+    "Telegram document upload / mobile capture (telegram scope).",
+    "Calendar event creation from threads (calendar scope).",
+    "Ongoing Gmail polling or label automation."
+  ],
+  "generatorNotes": "Create src/hub/gmail-to-task.ts with: (1) a pure parseGmailThread(payload) -> Finding-shaped object (title from subject, kind='action', status='open', tags maybe ['source:gmail']); (2) fromGmailTask({egressAllowed, mcp, threadRef, store, now}) that returns/throws an opt-in error when egressAllowed is false BEFORE touching mcp, else mcp.callTool(<gmail-read-tool>, {thread:threadRef}), parse, and captureTask. Add a `from-gmail <thread>` subcommand to src/cli/commands/task.ts that resolves the gmail axis from config (default false), and on disabled prints a chalk.yellow opt-in message + exitCode=1 + return (no MCP construction). Reuse ExternalMcpServer (src/mcp/external-client.ts); inject it so tests stub callTool. Wrap MCP calls in try/catch; sanitize errors (strip KEY=VALUE patterns as external-client.ts:69 does) and never print env/tokens. Keep now injected.",
+  "evaluatorNotes": "Verify the default (axis off) path makes NO MCP construction or network call — the test must assert the stub's callTool was never invoked. Verify enabling the axis + a stubbed thread payload captures one open action-Finding via captureTask (reused). Verify error sanitization: feed an error string containing a fake TOKEN=secret and assert it does not appear in the surfaced message. Confirm parseGmailThread is pure (no network/clock) and captureTask is the only write path.",
+  "estimatedFiles": [
+    "src/hub/gmail-to-task.ts",
+    "src/hub/gmail-to-task.test.ts",
+    "src/cli/commands/task.ts",
+    "src/cli/commands/task.test.ts",
+    "src/config/schema.ts"
+  ],
+  "estimatedDuration": "medium",
+  "ambiguityScore": 6,
+  "completedAt": "2026-06-29T11:26:28.909Z"
+}

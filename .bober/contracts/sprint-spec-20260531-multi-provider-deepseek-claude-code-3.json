@@ -1,0 +1,77 @@
+{
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-3",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "sprintNumber": 3,
+  "title": "openai optional-peer preflight warning and missing-package error",
+  "description": "Verify the existing OpenAI missing-package error fires when the openai package is absent, and add a preflight check that prints an actionable hint (npm install openai) when a DeepSeek or OpenAI provider is configured in bober.config.json but the openai package is not installed, before the first model call.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260531-multi-provider-deepseek-claude-code-2"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "A unit test asserts that OpenAIAdapter.chat (or getClient) throws an error whose message contains 'npm install openai' when import(\"openai\") is mocked to reject.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "A preflight function, given a config whose any role resolves to provider openai, openai-compat, or a deepseek shorthand, and with the openai package mocked as not-installed, returns or emits a hint string that contains 'npm install openai'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "The same preflight function, when the openai package is mocked as installed (import resolves), returns no hint / emits nothing for the same config — asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "The preflight function, given a config that uses only anthropic across all roles, returns no hint even when openai is absent — asserted by a unit test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "npm run build exits 0 and npm run lint exits 0 after the changes.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not make the missing-openai preflight a hard error that aborts startup — it must be a warning/hint (users may install openai later).",
+    "Do not auto-install the openai package on the user's behalf.",
+    "Do not change the existing call-time hard error wording in openai.ts beyond verifying it.",
+    "Do not add openai to package.json dependencies."
+  ],
+  "stopConditions": [
+    "The missing-package error is asserted by a test, the preflight emits the install hint only when an openai-family provider is configured and openai is absent, and build plus lint exit 0."
+  ],
+  "definitionOfDone": "A user who sets a DeepSeek or OpenAI provider in bober.config.json without having run npm install openai sees an actionable hint naming 'npm install openai' before the first model call, instead of a deep stack trace. A user on anthropic-only config sees nothing. If the package is present, the preflight is silent. The pre-existing call-time error in the openai adapter remains as the backstop.",
+  "assumptions": [
+    "Q3: the openai-absent preflight is a warning/hint, not a hard error — evidence: PRD US-004 says 'prints an actionable hint', Open Questions leans warning.",
+    "Detecting openai presence is done by attempting a dynamic import and catching rejection, mirroring openai.ts:280-287 — evidence: that file's getClient pattern.",
+    "Roles that resolve to an openai-family provider are detected via resolveProviderModel over each role's model/provider in config — evidence: resolveProviderModel in model-resolver.ts and per-role provider fields in schema.ts."
+  ],
+  "outOfScope": [
+    "claude-code provider wiring (Sprint 4).",
+    "Role-aware fallback logic (Sprint 5)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "The missing-package throw already exists in src/providers/openai.ts (line ~284-286: 'OpenAI provider requires the \"openai\" package. Run: npm install openai'). Add a test that mocks import(\"openai\") to reject and asserts the throw. For the preflight, add a function (e.g. preflightOpenaiPeer(config) in a new src/providers/preflight.ts or in factory.ts) that: (1) scans config roles (planner/curator/generator/evaluator/codeReview and researcher) resolving each via resolveProviderModel(model, provider) to see if any is openai/openai-compat (including deepseek shorthands which resolve to openai-compat), (2) attempts import(\"openai\") and on rejection returns/logs a hint containing 'npm install openai'. Use logger from src/utils/logger.ts for emission if logging. Mock the dynamic import in tests.",
+  "evaluatorNotes": "Run npm test. Confirm one test asserts the openai adapter's missing-package error contains 'npm install openai' (import mocked to reject). Confirm preflight tests cover: openai-family provider configured + openai absent => hint with 'npm install openai'; openai present => no hint; anthropic-only => no hint. Run npm run build and npm run lint, assert exit 0.",
+  "estimatedFiles": [
+    "src/providers/preflight.ts",
+    "src/providers/preflight.test.ts",
+    "src/providers/openai.ts",
+    "src/providers/openai.test.ts",
+    "src/providers/factory.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-05-31T14:39:00Z"
+}

@@ -1,0 +1,79 @@
+{
+  "contractId": "sprint-spec-20260628-do-bridge-2",
+  "specId": "spec-20260628-do-bridge",
+  "sprintNumber": 2,
+  "title": "Gate the promotion through the approve marker and launch real work",
+  "description": "Implement `bober do <findingId>` (without --dry-run): resolve the promoter and build the PromotionPlan, write a .bober/approvals/promote-<findingId>.pending.json marker summarizing the plan, gate on it (interactive prompts confirm in a TTY; wait for an external `bober approve`/`bober reject` in non-TTY; `--yes` auto-approves), and on approval launch the work through an injected Launcher port whose default adapter wraps the chat RunSpawner to spawn a detached `agent-bober run <task> --run-id <id>`. On launch, set Finding.promotesTo = {kind:'bober-run', runId, launchedAt, status:'launched'} and transition the Finding status open->in-progress via the FindingStore port. On rejection, delete the pending marker and leave the Finding unchanged.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260628-do-bridge-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "`npm run build` (tsc) finishes with zero type errors after the Launcher port, the RunSpawner-backed adapter, and the approve-gate wiring are added.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "With a fake Launcher and a confirm stub returning approve, `bober do <id>` writes promote-<id>.pending.json, invokes launcher.launch exactly once with the promoter's task, then writes the .approved marker and deletes the pending marker.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "After an approved promotion the FindingStore fake shows the finding status equals 'in-progress' and promotesTo.runId equals the runId returned by the fake Launcher with promotesTo.status equals 'launched'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "When the gate resolves to reject, launcher.launch is invoked zero times, the finding status stays at 'open', and the promote-<id>.pending.json marker is removed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "In non-TTY mode `bober do <id>` writes the pending marker and waits; an external `bober approve promote-<id>` (reusing src/state/approval-state.ts) resolves it and the launch then proceeds.",
+      "verificationMethod": "manual",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not invent a new approval storage format - reuse savePending/readPending/saveApproved/saveRejected/deletePending from src/state/approval-state.ts.",
+    "Do not run the pipeline in-process (no blocking runPipeline await) - launch detached via the Launcher port.",
+    "Do not mark the finding 'done' here - terminal reconciliation is Sprint 3.",
+    "Do not add a fleet Launcher implementation - ship only the RunSpawner-backed default adapter and keep the port open."
+  ],
+  "stopConditions": [
+    "`npm run build` passes and `npm test -- src/do-bridge` shows the approve path launches once and links the runId while the reject path launches zero times and leaves the finding at status 'open'."
+  ],
+  "definitionOfDone": "Running `bober do <findingId>` surfaces the planned launch, waits for an explicit approve/reject through the same .bober/approvals markers the run pipeline uses, and only on approval spawns a detached `agent-bober run` for the coding task. The promoted Finding then carries a promotesTo ref linking the new runId with status 'launched' and its status is 'in-progress'; a rejected promotion spawns nothing and leaves the Finding untouched.",
+  "assumptions": [
+    "The detached launcher reuses src/chat/run-spawner.ts RunSpawner.spawn (line 97), which shells `agent-bober run <task> --run-id <id>` (run-spawner.ts:113) -> runRunCommand (src/cli/commands/run.ts:181) -> runPipeline (src/orchestrator/pipeline.ts:970).",
+    "The approve gate reuses src/state/approval-state.ts markers (savePending:49, saveApproved:106, saveRejected:122, deletePending:138); non-TTY waiting mirrors the poll loop in src/orchestrator/checkpoints/mechanisms/disk.ts.",
+    "FindingStore from Sprint 1 is extended with an update method (e.g. setPromotion/updateFinding) to persist promotesTo and the status transition."
+  ],
+  "outOfScope": [
+    "Terminal outcome reconciliation in-progress->done (Sprint 3).",
+    "Medical/financial promoters and a fleet Launcher."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Launcher port: interface { launch(plan: PromotionPlan): Promise<{ runId: string; pid?: number }> }; the default adapter constructs RunSpawner({ projectRoot, sessionId }) and calls spawn(plan.task, runId) (src/chat/run-spawner.ts:97). Generate runId like `do-<findingId>-<timestamp>`. Gate: write the pending marker via savePending (src/state/approval-state.ts:49) with checkpointId `promote-<findingId>` and a prompt summarizing plan.task; if process.stdout.isTTY and not --yes, use prompts() to confirm then write saveApproved/saveRejected; otherwise poll readPending->approved/rejected (mirror src/orchestrator/checkpoints/mechanisms/disk.ts request loop) until resolved or a timeout; --yes short-circuits to approved. After approval call launcher.launch, then update the finding via the FindingStore port (extend it this sprint). On reject, deletePending and return without mutation. Handler never throws -> set process.exitCode (memory.ts pattern). Inject the Launcher and the confirm function so unit tests use fakes and never spawn a real process.",
+  "evaluatorNotes": "Verify approve -> launch-once -> link (runId + status 'in-progress' + promotesTo.status 'launched'); reject -> no launch -> no mutation -> pending marker removed; `--yes` bypasses the prompt but still writes and clears the marker. Confirm only src/state/approval-state.ts is used for approvals (no new format) and that the Launcher is injected (no real execa in unit tests).",
+  "estimatedFiles": [
+    "src/do-bridge/launcher.ts",
+    "src/do-bridge/launcher.test.ts",
+    "src/do-bridge/promote.ts",
+    "src/do-bridge/promote.test.ts",
+    "src/do-bridge/finding-port.ts",
+    "src/cli/commands/do.ts",
+    "src/cli/commands/do.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "completedAt": "2026-06-29T16:56:10.014Z"
+}

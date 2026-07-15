@@ -1,0 +1,8 @@
+{
+  "contractId": "sprint-spec-20260628-task-inbox-6",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["55d6878 - bober(sprint-6): gmail thread to task (egress-gated)"],
+  "filesChanged": ["src/config/schema.ts (TaskInboxSectionSchema {gmailEgress: z.boolean().default(false)}, taskInbox optional; NO hub Zod section)", "src/hub/gmail-to-task.ts (created: GmailMcpLike, pure parseGmailThread, sanitizeConnectorError mirrors external-client.ts:69, fromGmailTask refuses-before-mcp when egressAllowed=false)", "src/hub/gmail-to-task.test.ts (created, 12 tests)", "src/cli/commands/task.ts (runTaskFromGmail DI core never-throws+sanitizes, from-gmail subcommand fail-closed gate no-MCP-when-off)", "src/cli/commands/task.test.ts (+3 CLI tests)"],
+  "notes": "axis off (default) => opt-in refusal + exitCode=1 + ZERO mcp construction (spy not.toHaveBeenCalled). axis on + stub => 1 open action finding title from subject. sanitizeConnectorError strips KEY=VALUE (sc-6-4 no token leak). captureTask only write path (domain=gmail). additive optional config (no .strict, existing configs parse). full suite 3324 (+15), lint 0 errors."
+}

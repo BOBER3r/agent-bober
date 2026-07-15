@@ -1,0 +1,9 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-1-1",
+  "contractId": "sprint-spec-20260628-task-inbox-1",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {"criteriaTotal":5,"criteriaPassed":5,"criteriaFailed":0,"requiredPassed":4,"requiredFailed":0,"requiredTotal":4},
+  "summary": "All 5 criteria pass. build+typecheck exit 0; 17 new tests; full suite 3264->3281, zero regressions. Invariants confirmed: FindingSchema imported not redefined, writeFinding routes through writeFact, no Date.now/new Date in src/hub, registerTaskCommand wired, :memory: tests, handler never throws."
+}

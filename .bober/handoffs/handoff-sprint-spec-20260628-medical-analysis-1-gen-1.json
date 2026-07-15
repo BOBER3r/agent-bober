@@ -1,0 +1,40 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-analysis-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-analysis-1",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T18:11:12.113Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent autonomous build harness (TypeScript ESM, NodeNext). This spec adds the proactive medical intelligence layer to the existing src/medical/ module. Sprint 1: a deterministic, offline proactive review pass over the existing HealthDataStore lab series that detects reference-range crossings and slope trends and writes Finding notes (markdown-with-frontmatter) plus a Dataview dashboard into a medical vault, exposed via `bober medical review` and a runnable runProactiveReview entrypoint the scheduler can import.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/medical/health-store.ts",
+      "src/medical/numerics.ts",
+      "src/medical/types.ts",
+      "src/medical/engine.ts",
+      "src/medical/audit.ts",
+      "src/config/schema.ts",
+      "src/cli/commands/medical.ts"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc --noEmit",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "notes": "All contract details (success criteria, nonGoals, stopConditions, assumptions, estimatedFiles) are in .bober/contracts/sprint-spec-20260628-medical-analysis-1.json. The full spec context (features, NFRs, dataModel, security) is in .bober/specs/spec-20260628-medical-analysis.json. Read the Sprint Briefing at .bober/briefings/sprint-spec-20260628-medical-analysis-1-briefing.md FIRST."
+}

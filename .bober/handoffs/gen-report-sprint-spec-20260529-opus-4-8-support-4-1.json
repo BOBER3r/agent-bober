@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260529-opus-4-8-support-4",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["4d78031 - bober(sprint-4): add mid-conversation system blocks (mid_conv_system)"],
+  "filesChanged": [
+    {"path": "src/providers/types.ts", "action": "modified", "description": "SystemUpdateMessage { role:'user'; systemUpdate:string; cacheTtl?:'5m'|'1h' } added to Message union."},
+    {"path": "src/providers/index.ts", "action": "modified", "description": "export SystemUpdateMessage."},
+    {"path": "src/providers/anthropic.ts", "action": "modified", "description": "toAnthropicMessage(): 'systemUpdate' in message branch -> mid_conv_system block, content:[{type:'text',text}], conditional cache_control ephemeral ttl."},
+    {"path": "src/providers/openai.ts", "action": "modified", "description": "best-effort branch -> {role:'system', content: systemUpdate}."},
+    {"path": "src/providers/google.ts", "action": "modified", "description": "best-effort branch -> {role:'user', parts:[{text: systemUpdate}]}."},
+    {"path": "src/providers/anthropic.test.ts", "action": "modified", "description": "ttl + no-ttl block-shape assertions."},
+    {"path": "src/providers/openai.test.ts", "action": "modified", "description": "C4: OpenAI adapter handles SystemUpdateMessage without throwing."}
+  ],
+  "testsAdded": ["src/providers/anthropic.test.ts", "src/providers/openai.test.ts"],
+  "notes": "All 3 adapters have explicit systemUpdate branches (anthropic real mid_conv_system block; openai role:'system'; google user text). openai-compat inherits OpenAIAdapter (no edit). MidConversationSystemBlockParam content is a TextBlockParam[] (typed from SDK, no any). No role:'system' in the agnostic union. typecheck/lint/build exit 0; full suite 1344 passed, 2 flaky baseline failures only; 79/79 provider tests pass."
+}

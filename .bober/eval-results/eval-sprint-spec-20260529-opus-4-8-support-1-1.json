@@ -1,0 +1,25 @@
+{
+  "evalId": "eval-sprint-spec-20260529-opus-4-8-support-1-1",
+  "contractId": "sprint-spec-20260529-opus-4-8-support-1",
+  "specId": "spec-20260529-opus-4-8-support",
+  "timestamp": "2026-05-29T18:30:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0." },
+    { "strategy": "lint", "required": true, "result": "pass", "details": "eslint src/ exit 0." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc build exit 0; dist updated." },
+    { "strategy": "unit-test", "required": true, "result": "pass", "details": "model-resolver 20/20; full suite only the 2 documented flaky 37-tool-count baseline failures (disk.test flaky, passed on re-run)." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "C1", "required": true, "result": "pass", "evidence": "model-resolver.ts:24 opus -> claude-opus-4-8; test asserts it; 20/20 pass." },
+    { "criterionId": "C2", "required": true, "result": "pass", "evidence": "model-resolver.ts:26 opus-4-7 -> claude-opus-4-7; new alias test passes." },
+    { "criterionId": "C3", "required": true, "result": "pass", "evidence": "sonnet/haiku unchanged; full-id passthrough tests for claude-opus-4-7 remain green." },
+    { "criterionId": "C4", "required": true, "result": "pass", "evidence": "typecheck/lint/build all exit 0." },
+    { "criterionId": "C5", "required": true, "result": "pass", "evidence": "Only the 2 flaky baseline failures on consistent runs; no new failures." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 5 criteria pass on iteration 1. opus resolves to claude-opus-4-8, opus-4-7 pinned alias added, no SDK/adapter changes, only the documented flaky baseline failures remain."
+}

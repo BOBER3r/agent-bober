@@ -1,0 +1,84 @@
+{
+  "contractId": "sprint-spec-20260714-security-auditor-per-stack-skills-4",
+  "specId": "spec-20260714-security-auditor-per-stack-skills",
+  "sprintNumber": 4,
+  "title": "Author the web/backend security skill files: node, payments, react",
+  "description": "Complete the set of eight per-stack security skill files by authoring the general web/backend stacks in the sprint-2 format: node (Express/Node backend: injection, BOLA/BFLA/mass-assignment, SSRF, path traversal, command injection, insecure deserialization/vm, JWT/session, secret handling), payments (PSP webhook HMAC/replay, idempotency keys, refund/chargeback abuse, amount/currency integrity, withdrawal approval thresholds), and react (XSS via dangerouslySetInnerHTML/innerHTML, client-trust/secret-in-bundle, unsafe redirect, postMessage origin). After this sprint all 7 stacks + generic have real signature files.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260714-security-auditor-per-stack-skills-3"
+  ],
+  "features": [
+    "feat-signatures"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "skills/bober.security-node/SKILL.md exists with >= 10 signature blocks covering at least: SQL/NoSQL injection + ORM escape hatches (.raw/.literal/$queryRawUnsafe/$where), command injection (exec/shell:true), path traversal (path.join/resolve no boundary), SSRF (unvalidated fetch/axios + metadata/RFC1918), BOLA (id->DB lookup no ownerId check), BOPLA/mass-assignment (Model.update(req.body)), BFLA (no role gate on admin route), insecure deserialization / vm-as-sandbox, hardcoded/logged secrets, JWT alg:none/weak-secret / session fixation.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "skills/bober.security-payments/SKILL.md exists with >= 8 signature blocks covering at least: missing/weak webhook HMAC signature (non-constant-time compare, no timestamp), missing idempotency key on money endpoints (+ the atomic check-then-insert requirement), duplicate-credit on PSP webhook replay, refund/chargeback abuse, float money / currency-conversion mismatch, withdraw-to-different-method-than-deposit, missing withdrawal approval threshold / dual control.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "skills/bober.security-react/SKILL.md exists with >= 6 signature blocks covering at least: XSS via dangerouslySetInnerHTML / innerHTML / document.write with variable input, secret/API-key committed into the client bundle, client-side trust of security decisions that must be server-side, unsafe href/redirect (javascript: / open-redirect), postMessage without origin check, prototype-pollution via client deep-merge of untrusted input.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "All three new skill files parse via SecuritySignatureParser (reading the REAL files) to their claimed block counts with zero dropped blocks; every signature's vulnClass is a VulnClass union member with a non-empty unsafe/safe example.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "A single test enumerates skills/bober.security-*/SKILL.md and asserts EXACTLY the 8 expected stack files exist (solidity, anchor, react, node, payments, igaming, dex-backend, generic) and each parses to >= 6 signatures; npm run build + typecheck + lint pass; full suite green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not build the index/selector/registry or wire retrieval into the finder (sprint 5).",
+    "Do not change TypeScript runtime behavior.",
+    "Do not modify the existing skills/bober.react/SKILL.md (that is the framework skill; this is the separate bober.security-react security skill)."
+  ],
+  "stopConditions": [
+    "All 8 stack security skill files exist and parse with zero dropped blocks.",
+    "The enumeration test locks the exact expected file set."
+  ],
+  "definitionOfDone": "The three web/backend security skill files exist and parse cleanly, completing all 8 per-stack security skill files, verified by an enumeration test; the suite stays green.",
+  "assumptions": [
+    "The sprint-2 format/parser and sprint-3 authoring precedent are the contract.",
+    "Signature content is sourced from research-20260714 section A (OWASP/injection) + supply-chain-adjacent items for payments; the node file overlaps generic but is stack-scoped and independently parseable."
+  ],
+  "outOfScope": [
+    "Index/selector/registry, finder wiring, supply-chain, verifier, benchmark, dogfood (later)."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Author in the sprint-2/3 format. node: emphasize the BOLA/BOPLA/BFLA family (the research names BOLA ~40% of API attacks) and the raw-SQL escape hatches. payments: emphasize webhook HMAC (raw-body, crypto.timingSafeEqual, signed timestamp) and idempotency (atomic check-then-insert). react: emphasize dangerouslySetInnerHTML/innerHTML and secret-in-bundle. Keep examples minimal. Source from .bober/research/research-20260714-...-research.md section A and the iGaming/payments webhook items in section B. Verify each parses.",
+  "evaluatorNotes": "sc-4-1..4-3: read each REAL file, parse, assert min block count with ZERO dropped and union-member vulnClasses. sc-4-5: glob skills/bober.security-*/SKILL.md, assert the set equals exactly the 8 expected names, each parsing to >=6 signatures. Build+typecheck+lint+full suite.",
+  "estimatedFiles": [
+    "skills/bober.security-node/SKILL.md",
+    "skills/bober.security-payments/SKILL.md",
+    "skills/bober.security-react/SKILL.md",
+    "src/orchestrator/security-knowledge/skill-files.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "result": "pass",
+      "evalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-4-1",
+      "timestamp": "2026-07-14T17:55:00Z"
+    }
+  ],
+  "lastEvalId": "eval-sprint-spec-20260714-security-auditor-per-stack-skills-4-1",
+  "updatedAt": "2026-07-14T17:55:00Z",
+  "completedAt": "2026-07-14T17:55:00Z"
+}

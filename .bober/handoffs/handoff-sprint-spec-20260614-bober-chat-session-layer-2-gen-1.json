@@ -1,0 +1,18 @@
+{
+  "handoffId": "handoff-sprint-spec-20260614-bober-chat-session-layer-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260614-bober-chat-session-layer-2",
+  "specId": "spec-20260614-bober-chat-session-layer",
+  "timestamp": "2026-06-14T13:40:06Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober chat session layer. Sprint 2 adds non-blocking DETACHED spawn: a chat turn classified as 'spawn' launches a runPipeline worker that survives REPL exit, using a session-generated runId via a new --run-id flag on the run command.",
+    "completedSprints": [
+      {"contractId":"sprint-spec-20260614-bober-chat-session-layer-1","title":"Chat REPL that answers","summary":"Added src/chat/ module (ChatSession, TurnClassifier with jsonObjectMode, ConversationStore JSONL resume, RosterReader over readRunStatesFromDisk, answerer, slash-commands), a 'chat' PROMPT role in config (schema/defaults/role-providers), and the 'bober chat' CLI command. No SDK imports in src/chat."}
+    ],
+    "currentBranch": "bober/chat-session-layer",
+    "relevantFiles": ["src/chat/chat-session.ts","src/chat/turn-classifier.ts","src/chat/roster-reader.ts","src/cli/commands/run.ts","src/state/run-state.ts"]
+  },
+  "principles": "see .bober/principles.md",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260615-chat-interrupt-approve-steer-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-5",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T14:50:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Chat Interrupt / Approve / Steer (Phase 2). Sprint 5 = soft pause/resume, DISTINCT from the hard /stop (kill-by-PID). /pause <runId> (and NL) writes .bober/runs/<id>/paused.json + flips chat-owned RunState to 'paused' (with pausedAt) WITHOUT killing the process; an ADDITIVE cooperative-pause check at the checkpoint boundary blocks (polls with an INJECTED clock) while the marker is present; /resume <runId> removes it and the run continues, RunState back to 'running'. No marker -> single existence check then continue.",
+    "completedSprints": [
+      { "contractId": "...-1", "commit": "14c2be6", "summary": "RunState grammar — 'paused' status + pausedAt field ALREADY EXIST (Sprint 5 sets them)." },
+      { "contractId": "...-2", "commit": "67495fc", "summary": "ApprovalReader/Cursor, handleTurn prelude, RunState reflection." },
+      { "contractId": "...-3", "commit": "fb4b787", "summary": "/approve, /reject, NL classifier, handler pattern." },
+      { "contractId": "...-4", "commit": "b74dfcb", "summary": "src/state/guidance.ts (THE PEER MODEL for pause.ts — exported safeSegment guard, runDir path, atomic writes, never-throw reads) + additive pipeline.ts read point at runSprintCycle :290-298 guarded on pipelineRunId. The cooperative-pause gate goes IMMEDIATELY AFTER :298." }
+    ],
+    "currentBranch": "bober/chat-interrupt-approve-steer",
+    "relevantFiles": [
+      "src/state/guidance.ts (Sprint 4) — CLONE this for src/state/pause.ts; reuse its EXPORTED safeSegment (do not reinvent the path guard). Mirror runDir path + atomic write + never-throw reads.",
+      "src/orchestrator/checkpoints/mechanisms/disk.ts (~:104-176) — the INJECTED-CLOCK bounded poll loop (now()/pollMs/timeoutMs). MODEL for waitWhilePaused so tests never sleep.",
+      "src/orchestrator/pipeline.ts — Sprint 4 guidance block is at :290-298 inside runSprintCycle (import ~:62). Add the cooperative-pause gate IMMEDIATELY AFTER :298, guarded on pipelineRunId. Leave runTsPipeline/runPipeline AND the invariant block (~:562-585) UNTOUCHED.",
+      "src/chat/chat-session.ts — handleStop (~:201, shifted) to MIRROR but CONTRAST (pause must NOT kill); writeRunState flip to 'paused'+pausedAt and back to 'running'; classify-path routing; RosterReader run-running guard.",
+      "src/chat/slash-commands.ts — optional-handler threading (now careful/approve/reject/tell); add /pause + /resume; HELP_TEXT must make /pause clearly DISTINCT from /stop.",
+      "src/chat/turn-classifier.ts — loose-JSON action union (now approve/reject/tell); add 'pause'/'resume' {runId}.",
+      "src/orchestrator/pipeline.guidance.test.ts (Sprint 4) — the closest MODEL for pipeline.pause.test.ts (injected-clock boundary harness)."
+    ]
+  },
+  "keyInvariants": [
+    "PROTECTED pipeline.ts — ADDITIVE ONLY: add a SINGLE awaited waitWhilePaused(projectRoot, runId, {pollMs, timeoutMs, now}) gate immediately after Sprint 4's guidance block (~:298) inside runSprintCycle, guarded on pipelineRunId. With no runId or no marker -> single existence check then continue (no extra ticks). Do NOT reorder phases; do NOT touch runTsPipeline/runPipeline or the :562-585 invariant block.",
+    "INJECTED CLOCK (sc-5-5 determinism): waitWhilePaused MUST accept an injected now()/clock + pollMs so tests don't sleep — model exactly on disk.ts:104-176. A bounded timeoutMs cap (reuse approvalTimeoutMs or a dedicated cap) prevents an unbounded hang.",
+    "NO-KILL DISTINCTION (sc-5-4): /pause must NOT send any kill signal — it writes the marker + flips RunState only. The test injects a killFn and asserts killCalls.length === 0 (contrast with /stop). HELP_TEXT + acks must make /pause clearly distinct from /stop ('process stays alive').",
+    "RunState OWNERSHIP: chat process writes RunState 'paused'+pausedAt on /pause and back to 'running' on /resume (via writeRunState). The pipeline only READS paused.json to decide whether to block.",
+    "pause.ts: setPaused(projectRoot, runId) writes {pausedAt}; clearPaused unlinks best-effort; isPaused -> boolean. Validate runId via exported safeSegment BEFORE any path build (reuse from guidance.ts).",
+    "UNKNOWN/NON-RUNNING guard: /pause on an unknown or non-running run returns a clear message and writes nothing.",
+    "Cooperative gate acts only at checkpoint boundaries — never pauses mid-agent."
+  ],
+  "successCriteriaSummary": "sc-5-1 build; sc-5-2 typecheck; sc-5-3 tests; sc-5-4 /pause running run -> paused.json + RunState paused+pausedAt + NO kill (killFn not called); unknown/non-running -> clear msg, no marker; sc-5-5 waitWhilePaused blocks (polls, injected clock) while marker present, advances after clear; sc-5-6 /resume removes marker + RunState running, gate advances, /help lists /pause+/resume; sc-5-7 no-marker single-check no-op + existing pipeline suite green + NL pause/resume routed via stubbed classifier.",
+  "config": { "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run" } },
+  "principlesRef": ".bober/principles.md (ESM/NodeNext, .js imports, no SDK types outside src/providers/, async fs only, atomic temp+rename, injected clock for poll loops, collocated *.test.ts, no fs mocks, loose-JSON classifier, conventional commit bober(sprint-5): ...)",
+  "notesForGenerator": "Baseline after Sprint 4 is 2086 tests passing. Known PRE-EXISTING flake in src/mcp/tools/list-active-runs.test.ts (intermittent ENOTEMPTY cleanup race; passes on re-run/isolation) — do NOT fix here (Sprint 6); if it's the ONLY failure, re-run once. CRITICAL: the injected-clock poll loop is what makes sc-5-5 deterministic — copy disk.ts's injection style exactly; a test that uses real setTimeout sleeps is a red flag. Diff-review pipeline.ts: confirm a single additive guarded gate, no phase reordering, runTsPipeline + :562-585 untouched.",
+  "evaluatorFeedback": null
+}

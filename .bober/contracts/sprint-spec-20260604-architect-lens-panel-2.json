@@ -1,0 +1,45 @@
+{
+  "contractId": "sprint-spec-20260604-architect-lens-panel-2",
+  "specId": "spec-20260604-architect-lens-panel",
+  "sprintNumber": 2,
+  "title": "TS Checkpoint 2 synthesis panel",
+  "description": "Refactor the monolithic runArchitect so Checkpoint 2 (approach selection) becomes a discrete seam: when architect.panel is on, generate candidate approaches, fan out one lens scorer per lens (bounded by maxConcurrent), synthesize() a ranked winner, and select it. When the panel is off, runArchitect runs the existing single monolithic agentic loop byte-identically.",
+  "status": "completed",
+  "completedAt": "2026-06-04T08:44:30Z",
+  "dependsOn": ["sprint-spec-20260604-architect-lens-panel-1"],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "C1", "description": "When architect.panel is unset/disabled OR lenses.length<2, runArchitect runs the existing single monolithic runAgenticLoop and returns an ArchitectResult equivalent to today. A unit test mocks createClient/runAgenticLoop and asserts the off path takes the single-loop branch (one runAgenticLoop call, no lens fan-out).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C2", "description": "When architect.panel.enabled with >=2 lenses, CP2 generates candidate approaches then issues one judge call per lens scoring those approaches through resolveArchLensFocus(lens), never exceeding maxConcurrent concurrent calls, and synthesize() produces the ranked winner which becomes the selected approach. A mocked-client test asserts call-count == lenses.length, peak concurrency <= maxConcurrent, and that the selected approach equals synthesize().winner.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C3", "description": "The selected approach and per-lens scores flow into the architecture document / ADR-1, and CP1/CP3/CP4/CP5 still run to produce the full ArchitectResult. The ArchitectResult shape is unchanged except an additive optional lensScores field; a result without it still validates.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "C4", "description": "npx tsc --noEmit, npm run build, npx eslint src/ exit 0; the full vitest suite stays green with no new failures beyond the documented pre-existing skipped baseline.", "verificationMethod": "build", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT add the CP5 review panel — that is sprint 3 (CP5 stays as today this sprint).",
+    "Do NOT touch the native surface (skills/agents/commands) — sprints 4-5.",
+    "Do NOT modify synthesize()/arch-lenses.ts (built in sprint 1) or reconcile().",
+    "Do NOT change CP1/CP3/CP4 behavior, the ArchitectResult shape (beyond additive optional lensScores), or the architecture-doc save path.",
+    "Do NOT invoke a real LLM in tests — mock createClient and runAgenticLoop."
+  ],
+  "stopConditions": [
+    "Stop when the off path is the unchanged single monolithic loop, the on path generates approaches + fans out lens scorers bounded by maxConcurrent + synthesize()s the winner, and typecheck/build/lint/tests are green.",
+    "Stop when changes are confined to src/orchestrator/architect-agent.ts and its test (plus the additive optional lensScores on the ArchitectResult interface)."
+  ],
+  "definitionOfDone": "runArchitect CP2 is a discrete seam: off (panel disabled/<2 lenses) runs today's single monolithic loop byte-identically; on, it generates approaches, fans out one lens scorer per lens bounded by maxConcurrent, synthesize()s a ranked winner, and selects it, threading lensScores (additive optional) into the result and ADR-1; CP1/3/4/5 still run; typecheck/build/lint and the full suite are green.",
+  "assumptions": [
+    "runArchitect (src/orchestrator/architect-agent.ts:142) builds one autonomousMessage and calls runAgenticLoop once for all 5 checkpoints. The CP2 seam means: keep the single-loop path verbatim for the off branch; for the on branch, run an explicit generate-approaches LLM call, then per-lens scoring calls, then synthesize(), then continue the remaining checkpoints (CP3/4/5) — choose the lowest-disruption structure that keeps the off path byte-identical.",
+    "createClient and runAgenticLoop are mockable via vi.mock (the evaluator-agent.test.ts harness is the model). Bounded concurrency uses the same chunk/pool pattern as the evaluator panel (mapBounded).",
+    "synthesize() and resolveArchLensFocus are imported from sprint-1 modules; reconcile() is not used in CP2 (CP2 is ranking, not pass/fail)."
+  ],
+  "outOfScope": ["CP5 panel", "native surface", "sprint-1 module changes", "real LLM in tests"],
+  "ambiguityScore": 4,
+  "generatorNotes": "Read src/orchestrator/architect-agent.ts FULLY — especially runArchitect (line 142) and how the single runAgenticLoop + autonomousMessage drive all 5 checkpoints, and parseArchitectResponse / ArchitectResult. Read src/orchestrator/evaluator-agent.ts for the panel pattern (off-path guard, mapBounded bounded concurrency, per-lens fan-out) and src/orchestrator/evaluator-agent.test.ts for the vi.mock(createClient/runAgenticLoop) harness to mirror. Read sprint-1's synthesizer.ts (synthesize signature/SynthesisResult) and arch-lenses.ts (resolveArchLensFocus). DESIGN: introduce a CP2 seam without disturbing the off path. Recommended shape: at the top of runArchitect read config.architect.panel; if (!panel.enabled || panel.lenses.length < 2) -> run the EXISTING single-loop path unchanged (byte-identical) and return as today. Else -> run the panel-driven flow: (1) an explicit generate-approaches step (a focused agentic call asking only for 2-3 candidate approaches in the structured CP2 format), (2) mapBounded(panel.lenses, panel.maxConcurrent, lens => score the approaches through resolveArchLensFocus(lens)) collecting per-lens scores, (3) synthesize(approaches, lensScores) -> winner + ranking, (4) feed the selected winner (and lensScores) into the continuation that produces CP3/CP4/CP5 + the architecture doc + ADR-1. Keep the continuation reusing as much of the existing prompt/flow as possible. Add an additive optional `lensScores?` field to the ArchitectResult interface. TESTS: create/extend src/orchestrator/architect-agent.test.ts with vi.mock for createClient + runAgenticLoop: (a) off path (panel undefined/disabled/<2 lenses) -> single-loop branch taken (assert the monolithic path, e.g. one runAgenticLoop call, no per-lens calls); (b) on path with 3 lenses + maxConcurrent 2 -> 3 scoring calls, peak concurrency <=2 (concurrency counter in the mock), selected approach == synthesize().winner; (c) ArchitectResult parses with and without lensScores. Use import type, ESM .js specifiers, unicode headers. Conventional commit: bober(sprint-2): add TS architect Checkpoint 2 synthesis panel. GIT HYGIENE: stage only your files with explicit paths; never `git add -A`. Branch: the feature branch — never main.",
+  "evaluatorNotes": "Read src/orchestrator/architect-agent.ts: confirm the off path (panel disabled/<2 lenses) runs the EXISTING single monolithic runAgenticLoop unchanged — diff the off-path prompt/flow against the prior version and confirm byte-identical behavior (the panel branch must be purely additive/gated). Confirm the on path: generates approaches, maps panel.lenses -> per-lens scoring via resolveArchLensFocus (imported, not reimplemented), bounds concurrency at maxConcurrent, calls synthesize() from sprint 1, and selects synthesize().winner. Run architect-agent.test.ts: verify the off-path single-loop assertion, the on-path call-count==lenses.length + peak<=maxConcurrent assertions (inspect how the mock counts concurrency), and that the selected approach == synthesize().winner. Confirm createClient/runAgenticLoop are mocked (no real LLM). Confirm lensScores is additive/optional and CP1/3/4/5 still run. Confirm synthesizer.ts/arch-lenses.ts/reconciler.ts unchanged. Run npx tsc --noEmit, npm run build, npx eslint src/ (exit 0) and the full npx vitest run (tolerate only the pre-existing skipped baseline).",
+  "estimatedFiles": [
+    "src/orchestrator/architect-agent.ts",
+    "src/orchestrator/architect-agent.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "createdAt": "2026-06-04T06:30:00Z",
+  "updatedAt": "2026-06-04T06:30:00Z"
+}

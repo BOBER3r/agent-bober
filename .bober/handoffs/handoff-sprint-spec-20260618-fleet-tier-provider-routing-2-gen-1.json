@@ -1,0 +1,26 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-tier-provider-routing-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-2",
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "timestamp": "2026-06-18T18:45:30Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase A Sprint 2: add a closed difficulty-tier enum on FleetChild + a TierProviderPolicy mapping each tier to a planner/generator/evaluator provider block, overlaid in buildChildConfig BEFORE the existing shallow-merge so output is byte-identical when tier is absent.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-1", "title": "Grok/xAI provider wiring", "summary": "grok/grok-4/grok-4-fast shorthands -> openai-compat + https://api.x.ai/v1 (model-resolver.ts); isXaiEndpoint() + XAI_API_KEY arms in factory.ts. So the 'standard' tier block can use provider 'openai-compat' + endpoint 'https://api.x.ai/v1' + a grok model. Commit b739ef1." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/child-config.ts",
+      "src/fleet/manifest.ts",
+      "src/config/schema.ts",
+      "src/providers/factory.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-fleet-tier-provider-routing-2.json",
+  "specRef": ".bober/specs/spec-20260618-fleet-tier-provider-routing.json",
+  "config": { "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" }, "generator": { "model": "sonnet", "autoCommit": true } },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

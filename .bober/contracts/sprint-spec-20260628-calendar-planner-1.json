@@ -1,0 +1,86 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-1",
+  "specId": "spec-20260628-calendar-planner",
+  "sprintNumber": 1,
+  "title": "Deterministic slot-fill engine + dry-run plan CLI",
+  "description": "Build the heart of the calendar planner: a pure synchronous TypeScript slot-fill engine that consumes pre-ranked Findings plus a free/busy model and places each finding into an open slot in priority (input) order, respecting dueBy and estDurationMin, emitting scheduled items and an unscheduled list with reasons. Add a Finding consume-interface (matching the priority-hub schema), a finding source that reads ranked findings from a JSON file, and a `bober calendar plan --dry-run` command that prints the proposed plan and writes nothing to any calendar.",
+  "status": "completed",
+  "completedAt": "2026-06-29T18:22:50.000Z",
+  "dependsOn": [],
+  "features": ["feat-1"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "`npm run build` (tsc) completes with zero errors after adding src/calendar/ modules and registering the calendar command in src/cli/index.ts.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "`npm run typecheck` reports zero type errors across the new src/calendar/types.ts, slotter.ts, and finding-source.ts modules.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "A vitest in src/calendar/slotter.test.ts asserts that given three ranked findings (durations 30/60/90 min) and a free window with room for only two, the slotter schedules the two highest-priority that fit (start/end inside a free interval, no busy overlap) and returns the third in the unscheduled list with reason 'does-not-fit' or 'no-free-slot-before-dueBy'.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "A vitest asserts the slotter is deterministic: invoking it twice with identical input returns deep-equal output (no Date.now/Math.random inside the algorithm).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "A source-scan vitest reads src/calendar/slotter.ts and asserts it contains no `await`, no import of node:fs, and no provider/LLM-client import — mirroring the medical NumericsQueryLayer purity boundary.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "A vitest invokes the extracted runCalendarPlan core with injected findings + free/busy fixtures and asserts the returned ProposedPlan lists each scheduled item's ISO start, ISO end, and title, and that no file is written to any calendar in --dry-run mode.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not write any events to a real calendar or to an .ics file in this sprint (Sprints 2 and 3 own connectors).",
+    "Do not call any LLM to order, rank, pack, or place findings — placement order is the pre-ranked input order from the hub.",
+    "Do not implement the .ics exporter, the Google MCP connector, or the approval gate.",
+    "Do not introduce async, node:fs, or network into slotter.ts.",
+    "Do not re-define the Finding ranking logic — only consume the ranked findings."
+  ],
+  "stopConditions": [
+    "`npm run build` is green and the new src/calendar/slotter.test.ts + finding-source.test.ts pass under `npm test`.",
+    "`bober calendar plan --dry-run --findings <fixture.json> --freebusy <fixture.json>` exits 0, prints a proposed plan, and writes nothing to any calendar."
+  ],
+  "definitionOfDone": "A developer can run `bober calendar plan --dry-run` against a ranked-findings JSON file and a free/busy JSON file and see a printed proposed schedule (each scheduled item with ISO start/end inside a free interval, no busy overlap, plus an unscheduled list with per-item reasons). The placement is produced entirely by deterministic synchronous TypeScript with no LLM, async, fs, or network in the algorithm, and identical input produces deep-equal output. Nothing is written to any calendar in this sprint.",
+  "assumptions": [
+    "Finding consume-type matches research §3a lines 121-126; defined locally as a forward dependency on spec-20260628-priority-hub which is not yet built. Evidence: .bober/research/research-20260627-knowledge-platform-landscape.md lines 121-126.",
+    "Priority order = input array order (hub already ranked via lens-panel). Evidence: research §3a lines 115-119 and line 135 ('do NOT let the LLM pack slots').",
+    "Slotter purity contract copied from src/medical/numerics.ts:9 (NO async/fs/network/LLM; identical input => identical output).",
+    "CLI extracted-core + injectable-deps + chalk + process.exitCode pattern from src/cli/commands/medical.ts (runWhoopSync); registration mirrors registerMedicalCommand at src/cli/index.ts:319."
+  ],
+  "outOfScope": [
+    "Reading free/busy from a live calendar (Sprint 3) — this sprint reads a free/busy JSON fixture/file.",
+    "Working-hours/timezone UI; only a SlotConstraints input type is introduced.",
+    "Persisting the proposed plan for approval (Sprint 4)."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Create src/calendar/types.ts (Finding consume-type per research §3a lines 121-126; BusyInterval { startIso, endIso }; FreeInterval; SlotConstraints { windowStartIso, windowEndIso, workingHours?, timezone? }; PlanItem { findingId, title, startIso, endIso }; ProposedPlan { scheduled: PlanItem[], unscheduled: { findingId, reason }[] }). Create src/calendar/slotter.ts following src/medical/numerics.ts EXACTLY for purity: pure synchronous, no async/fs/network/LLM import, identical input => identical output; use a closed reason enum with an exhaustive switch + never guard. Algorithm: derive free intervals from the window minus busy intervals (clamped to working hours if provided); iterate findings in input order; place each into the earliest free interval that fits estDurationMin before dueBy; on placement, split the free interval; if none fits, push to unscheduled with a reason. Create src/calendar/finding-source.ts to read ranked findings from a JSON file (node:fs/promises) into Finding[]. Create src/cli/commands/calendar.ts with an extracted runCalendarPlan(projectRoot, opts, deps) core (model: runWhoopSync in src/cli/commands/medical.ts) and register it in src/cli/index.ts next to registerMedicalCommand (line 319). Add fixtures under src/calendar/__fixtures__/. Honor .bober/principles.md: ESM .js imports, node:fs/promises, type-only imports, unicode section headers.",
+  "evaluatorNotes": "Confirm slotter.ts has no async/await, no node:fs import, no provider/LLM import (read the file). Run the determinism test (deep-equal on repeated calls). Verify the does-not-fit/no-free-slot scenario returns the right finding in unscheduled with a reason. Confirm --dry-run writes nothing to any calendar (only stdout). Confirm the Finding type fields match research §3a (dueBy, estDurationMin, calendarSafeTitle present).",
+  "estimatedFiles": [
+    "src/calendar/types.ts",
+    "src/calendar/slotter.ts",
+    "src/calendar/slotter.test.ts",
+    "src/calendar/finding-source.ts",
+    "src/calendar/finding-source.test.ts",
+    "src/cli/commands/calendar.ts",
+    "src/cli/index.ts",
+    "src/calendar/__fixtures__/findings.json"
+  ],
+  "estimatedDuration": "medium"
+}

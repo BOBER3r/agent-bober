@@ -1,0 +1,154 @@
+{
+  "specId": "spec-20260618-medical-grounding-critic",
+  "version": 1,
+  "createdAt": "2026-06-18T16:00:00Z",
+  "updatedAt": "2026-06-18T16:00:00Z",
+  "title": "Fail-closed grounding-critic gate for medical synthesis",
+  "description": "Add a second LLM call that audits every synthesized medical answer against its cited MedlinePlus passages for faithfulness and completeness. On reject it re-synthesizes once with the critic's feedback, then abstains if still unsupported. Unlike the fleet decomposer's fail-open critic, every uncertain path resolves to ABSTAIN — the safety-correct inversion that preserves the medical team's abstain-unless-cited guarantee.",
+  "mode": "greenfield",
+  "status": "completed",
+  "completedAt": "2026-06-18T16:55:30Z",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1-critic-scope",
+      "answer": "Faithfulness + completeness — the critic verifies every claim is supported by a cited passage AND that the answer addresses the core of the question.",
+      "resolvedAt": "2026-06-18T16:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-gate-behavior",
+      "answer": "One re-synthesis, then abstain — on reject, re-run synthesize once with the critic's feedback, re-critique, and abstain if still rejected.",
+      "resolvedAt": "2026-06-18T16:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-egress",
+      "answer": "Be able to use any model, cloud or local, for any LLM call. Reconciled safely: synthesis/critic model+provider become configurable, but a cloud provider is only actually used when medical.egress.cloudInference=true (default false); otherwise local-only and a configured cloud provider fail-closes to abstain. Zero-egress default preserved.",
+      "resolvedAt": "2026-06-18T16:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-audit",
+      "answer": "Yes — add an IDs/enums-only criticVerdict enum to AuditEntry (approve | reject-abstained | error-abstained). No prompt text or health values; mode 0600 preserved.",
+      "resolvedAt": "2026-06-18T16:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Approve — write contracts. (User approved assumptions + out-of-scope via the plan approval gate; selected 'Approve — write contracts'.)",
+      "resolvedAt": "2026-06-18T16:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The grounding critic is a SECOND LLM call placed ONLY on the existing grounded-synthesis branch (src/medical/engine.ts:396-403). All upstream gates remain byte-unchanged and 0-LLM: consent fail-closed (engine.ts:214-248), red-flag short-circuit (engine.ts:250-289), Gate 2b refusal (engine.ts:291-327), deterministic numerics (engine.ts:333-363), FactStore meds (engine.ts:365-381), literature egress (engine.ts:383-386).",
+    "Critic verifies faithfulness (every claim supported by a cited passage) AND completeness (answer addresses the core question). On reject -> one re-synthesis with feedback -> re-critique -> abstain if still rejected.",
+    "Fail-CLOSED: parse-exhaustion, transport failure, and model-unavailable ALL resolve to ABSTAIN — inverting the fleet critic's fail-open approve at src/fleet/critic-deep.ts:199-201.",
+    "Synthesis + critic model/provider become configurable via config.medical. A cloud provider is used ONLY when medical.egress.cloudInference=true (EgressGuard.isAllowed('cloud-inference'), src/medical/egress.ts:35; default false at src/config/schema.ts:381); otherwise local-only (openai-compat localhost / Ollama) and a configured cloud provider fail-closes to abstain.",
+    "AuditEntry (src/medical/types.ts:77-87) gains an optional IDs/enums-only criticVerdict field with values approve | reject-abstained | error-abstained — never prompt text or health values; AuditLog.append's 0600 mode (src/medical/audit.ts:44-58) is preserved.",
+    "Every non-abstained answer still carries >=1 citation (src/medical/retrieval/literature.ts:75,168); abstained answers carry citations:[]; the DisclaimerComposer footer is always present.",
+    "The new critic reuses the fleet never-throw JSON validator + bounded retry-with-coercion SHAPE (src/fleet/critic-deep.ts:67 validateVerdict, :166 getCriticVerdict) but inverts the exhaustion default to fail-closed.",
+    "The current local default stays openai-compat http://localhost:11434/v1 model llama3 (engine.ts:402); jsonObjectMode-style structured prompting matches the fleet critic (critic-deep.ts:154-159)."
+  ],
+  "outOfScope": [
+    "Fan-out decomposition of a medical question into parallel sub-questions (fleet expand / expand-deep) — research found it fits poorly for single-question grounded answers.",
+    "Reusing src/fleet/manifest-write.ts writeManifestWithProvenance verbatim for medical outputs (PHI trap: it records raw goal text to a default-mode sidecar). Medical provenance stays in the 0600 audit log.",
+    "Any change to numerics, red-flag, consent, refusal, FactStore, or WHOOP logic.",
+    "Adding a new egress axis — the existing cloud-inference axis is reused.",
+    "Multi-round critique beyond a single re-synthesis; streaming responses; response caching; cloud fallback chains.",
+    "Changing the MedicalSopEngine.run signature or its zero-arg constructor."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Grounding-critic module (fail-closed core)",
+      "description": "A pure, injectable module that judges a synthesized medical answer against its cited passages for faithfulness + completeness, returning {verdict, feedback}. Reuses the fleet critic's never-throw validator and bounded retry-with-coercion shape, but degrades to a REJECT/abstain signal on exhaustion rather than approve.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: getGroundingVerdict returns {verdict:'approve'} only when the model explicitly approves; on parse-exhaustion it returns a non-approve outcome (fail-closed), proven by a fake LLMClient that returns unparseable text across all attempts.",
+        "AC2: The critic call uses a FRESH message array built from (question, answer body, cited passages) and never extends the synthesis conversation (mirrors critic-deep.ts:130 LOCK1).",
+        "AC3: validateGroundingVerdict never throws on any input string (direct parse -> fence -> first-brace -> Zod safeParse), returning {ok:false,error} on failure.",
+        "AC4: The module imports no SDK and no node:net/http/fetch; it depends only on the injected LLMClient (providers/types.ts) and zod."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Gated synthesis flow + engine wiring",
+      "description": "An orchestrator that runs synthesize -> critic -> (on reject) one re-synthesis with feedback -> critic -> approve ? answer : ABSTAIN, with a bounded call budget. Wired into the engine's grounded-synthesis branch, preserving every existing zero-LLM negative assertion on the consent/red-flag/numeric/disabled paths.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When the critic approves the first synthesis, the original grounded MedicalAnswer (with its >=1 citations) is returned unchanged.",
+        "AC2: When the critic rejects then approves the re-synthesis, the re-synthesized grounded answer is returned; when it rejects both, the result is an abstained MedicalAnswer (abstained:true, citations:[], footer present).",
+        "AC3: On the consent-refuse, red-flag short-circuit, content-policy refuse, numeric-only, and literature-disabled paths, NO grounding critic LLM call is made — asserted with a spy that fails if called (preserves engine.ts sc-7-8).",
+        "AC4: The total number of LLM calls on the grounded path is bounded by a named constant (synthesize + critic + at most one re-synth + one re-critique), asserted by counting calls on a fake client."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Configurable model + cloud-inference egress gating + audit verdict",
+      "description": "Make the synthesis/critic model+provider configurable via config.medical; permit a cloud provider ONLY when cloud-inference egress is enabled, else fail-closed to local/abstain. Record the critic outcome as an IDs/enums-only criticVerdict in the audit log.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: When config.medical specifies a cloud provider but medical.egress.cloudInference is false (default), the grounded path does NOT egress to the cloud — it either uses the local default or abstains, asserted with an EgressGuard and a spy that fails on cloud use.",
+        "AC2: When medical.egress.cloudInference is true and a cloud provider is configured, the configured cloud client is used for synthesis/critic (asserted via injected client selection), proving the 'any model' capability is reachable behind the opt-in.",
+        "AC3: After a grounded turn, exactly one criticVerdict value (approve | reject-abstained | error-abstained) is appended in the audit entry alongside the answer/abstain event, with NO prompt text or health value, and the audit file mode remains 0600.",
+        "AC4: Absent any medical model config, behavior is identical to the local default (openai-compat localhost llama3) — back-compat proven by an unchanged-config test."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "Zero outbound bytes on any non-cloud-inference configuration: the grounded critic must not reach the network unless cloud-inference is explicitly enabled, and never on the consent/red-flag/numeric/disabled paths.",
+      "verificationMethod": "Inject an EgressGuard with cloud-inference=false and a network/cloud spy that throws if invoked; run grounded + non-grounded turns and assert zero invocations. Grep the new modules for @anthropic-ai/sdk, openai, node:net, node:http, fetch."
+    },
+    {
+      "category": "security",
+      "requirement": "Audit entries remain IDs/enums-only (no PHI). The criticVerdict field carries an enum value only; no prompt text, answer body, or health values are serialized. File mode stays 0600.",
+      "verificationMethod": "Read the audit-<date>.jsonl after a grounded turn; assert criticVerdict is one of the three enum values and that the line contains no substring of the prompt or answer; stat the file and assert mode 0600."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Fail-closed under all failure modes: malformed critic output, transport failure, and model-unavailable each result in ABSTAIN, never in an ungrounded answer being returned.",
+      "verificationMethod": "Drive the gated flow with fakes that throw / return garbage / return empty and assert the resulting MedicalAnswer has abstained:true and citations:[] in every case."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "LLM-call budget is a single named constant; the critic prompt and verdict schema live in one module reused by the orchestrator.",
+      "verificationMethod": "Inspect the module for an exported budget constant; assert the orchestrator references it rather than a literal."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "MedlinePlus literature retrieval (existing, behind literature-retrieval egress axis)",
+      "Local Ollama via openai-compat http://localhost:11434/v1 (existing synthesis default)",
+      "Optional cloud provider via providers/factory.ts, gated by cloud-inference egress axis"
+    ],
+    "dataModel": "No new persistent entities. AuditEntry (src/medical/types.ts:77-87) gains an optional criticVerdict enum field. MedicalAnswer shape is unchanged. A new in-memory GroundingVerdict {verdict:'approve'|'reject'; feedback:string} mirrors fleet CritiqueVerdict.",
+    "securityConsiderations": [
+      "Cloud egress for synthesis/critic strictly gated by EgressGuard.isAllowed('cloud-inference') (default false).",
+      "Fail-closed on every critic uncertainty path (abstain, never approve-by-default).",
+      "Audit remains IDs/enums-only; criticVerdict is an enum, never free text.",
+      "All timestamps injected via opts.now; no Date.now() on audited paths."
+    ],
+    "existingPatterns": "Reuse src/fleet/critic-deep.ts shapes (validateVerdict never-throws; getCriticVerdict bounded retry-with-coercion; fresh-context critic message array) — inverted to fail-closed. Reuse src/medical/retrieval/literature.ts synthesize abstain semantics and passagesToCitations. Follow ESM .js import extensions, type-only imports, and unicode section headers per principles.md."
+  },
+  "sprints": [
+    "sprint-spec-20260618-medical-grounding-critic-1",
+    "sprint-spec-20260618-medical-grounding-critic-2",
+    "sprint-spec-20260618-medical-grounding-critic-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "4-7 hours",
+    "riskLevel": "medium",
+    "riskNotes": "The crux risk is the fail-open -> fail-closed inversion: the fleet critic must NOT be reused verbatim (it approves on exhaustion). Secondary risk is preserving the engine's existing zero-LLM negative assertions while inserting a second model call, and keeping cloud egress strictly behind the cloud-inference opt-in. All changes are additive on the grounded branch; no existing safety gate is modified."
+  }
+}

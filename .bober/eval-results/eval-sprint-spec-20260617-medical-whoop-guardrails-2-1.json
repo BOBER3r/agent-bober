@@ -1,0 +1,28 @@
+{
+  "evalId": "eval-sprint-spec-20260617-medical-whoop-guardrails-2-1",
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-2",
+  "specId": "spec-20260617-medical-whoop-guardrails",
+  "timestamp": "2026-06-17T16:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "evaluator": "full",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "tsc --noEmit exit 0; exhaustive never-guard compiles." },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0." },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors; 2 pre-existing eval-persist warnings. Scoped medical no-restricted-imports fires 0 errors." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "201 files, 2473 pass / 3 skipped. New: egress(20), whoop-token(11), whoop-client(13)." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "typecheck+build clean; never-guard at egress.ts:44 `const _exhaustive: never = axis;` in switch default." },
+    { "criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "EgressAxis 3-value union; schema.ts:385 deviceConnection z.boolean().default(false); fromConfig reads med?.egress?.deviceConnection ?? false; absent=>false test passes." },
+    { "criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "Independence matrix: only-device=>others false; only-cloud/only-lit=>device false; all-three=>all true. Independence by construction (no cross-field logic)." },
+    { "criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "assertAllowed('device-connection') is first executable line of ensureAccessToken (whoop-client.ts:182) and fetchPage (:271); axis-off=>both throw + FetchLike spy 0 calls." },
+    { "criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "grep src/medical (excl whoop-client.ts + tests) => 0 network matches; eslint exception list = [medline-source.ts, whoop-client.ts] only; whoop-token.ts imports node:fs/promises,node:path,utils/fs only; lint 0 errors." },
+    { "criterionId": "sc-2-6", "required": true, "result": "pass", "evidence": "clientCredentials throws clear WHOOP_CLIENT_ID/SECRET message when unset; writeFile called with {mode:0o600} directly (not chmod-after); fs.stat test (mode&0o777)===0o600; read absent/corrupt/missing-field=>undefined." },
+    { "criterionId": "sc-2-7", "required": true, "result": "pass", "evidence": "Injected FetchLike: cursor pagination walks 2 pages; 401=>2 POST+2 GET (refresh+retry once) then success, 2nd 401=>re-authorize throw; 429=>recordingWaiter got 2000ms (header*1000), default 60000ms; no real sleep/network/Date.now." }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 7 required criteria pass. Build/typecheck clean (never-guard intact). Zero-egress boundary structurally enforced: whoop-client.ts sole ESLint-excepted network file, whoop-token.ts network-free, grep confirms no stray network usage. 0600 token mode passed directly to writeFile. Axis independence by construction. Full suite 2473 pass/0 fail, no regressions."
+}

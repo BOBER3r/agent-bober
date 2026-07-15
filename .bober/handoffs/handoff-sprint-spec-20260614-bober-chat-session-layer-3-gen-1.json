@@ -1,0 +1,15 @@
+{
+  "handoffId":"handoff-sprint-spec-20260614-bober-chat-session-layer-3-gen-1",
+  "type":"to-generator","contractId":"sprint-spec-20260614-bober-chat-session-layer-3",
+  "specId":"spec-20260614-bober-chat-session-layer","timestamp":"2026-06-14T13:58:26Z","iteration":1,
+  "context":{
+    "projectOverview":"agent-bober chat session layer. Sprint 3 adds rotation-safe completion weaving: the chat session tails .bober/history.jsonl to detect when a spawned run completes and weaves that completion into a later chat turn, surviving log rotation/truncation.",
+    "completedSprints":[
+      {"contractId":"...-1","title":"Chat REPL that answers","summary":"src/chat/ module + chat role + bober chat command. ConversationStore JSONL resume, RosterReader over readRunStatesFromDisk."},
+      {"contractId":"...-2","title":"Detached spawn + --run-id","summary":"RunSpawner launches detached bober run with session-generated runId via --run-id; PidSidecar at .bober/chat/<sessionId>.pids.json; spawn branch wired into ChatSession."}
+    ],
+    "currentBranch":"bober/chat-session-layer",
+    "relevantFiles":["src/chat/chat-session.ts","src/chat/roster-reader.ts","src/state/run-state.ts","src/state/history.ts"]
+  },
+  "principles":"see .bober/principles.md","evaluatorFeedback":null
+}

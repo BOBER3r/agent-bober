@@ -1,0 +1,26 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-architect-lens-panel-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-architect-lens-panel-1",
+  "specId": "spec-20260604-architect-lens-panel",
+  "timestamp": "2026-06-04T06:40:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Architect Decision Lens Panel — opt-in multi-lens panel for the architect's CP2/CP5, on both surfaces. Sprint 1 is the reusable foundation (zero behavior change): a pure synthesize() ranking reducer alongside the existing reconcile(), an arch-lens prompt catalog (src/orchestrator/arch-lenses.ts), and the opt-in architect.panel config. Mirrors the just-shipped evaluator panel (eval-lenses.ts, reconcile, evaluator.panel).",
+    "completedSprints": [],
+    "currentBranch": "bober/architect-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/eval-lenses.ts",
+      "src/orchestrator/workflow/reconciler.ts",
+      "src/config/schema.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-architect-lens-panel-1.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist in the working tree (graph CLI, agent .md, .bober artifacts). Stage ONLY this sprint's files with explicit paths: git add src/orchestrator/workflow/synthesizer.ts src/orchestrator/workflow/synthesizer.test.ts src/orchestrator/arch-lenses.ts src/orchestrator/arch-lenses.test.ts src/config/schema.ts src/config/schema.test.ts (plus any defaults.ts/init.ts/loader.ts/mcp literal you must touch to keep tsc green). NEVER `git add -A`/`git add .`. Branch bober/architect-lens-panel — never main."
+}

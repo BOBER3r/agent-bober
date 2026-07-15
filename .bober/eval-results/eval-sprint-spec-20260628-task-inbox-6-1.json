@@ -1,0 +1,16 @@
+{
+  "evalId": "eval-sprint-spec-20260628-task-inbox-6-1",
+  "contractId": "sprint-spec-20260628-task-inbox-6",
+  "specId": "spec-20260628-task-inbox",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "summary": "All 5 required criteria pass. build/typecheck/lint clean (0 errors). Full suite 3324, zero regressions. Security source-verified: gmailEgress defaults false + gate fires BEFORE any MCP construction (callTool spy never called when off); sanitizeConnectorError identical regex to external-client.ts:69 (no token leak); captureTask sole write path; parseGmailThread pure (no clock/network); additive optional config (existing configs parse); no medical-EgressGuard change; no new deps."
+}

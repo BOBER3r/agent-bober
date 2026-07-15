@@ -1,0 +1,19 @@
+{
+  "evalId": "eval-sprint-spec-20260416-auto-filter-commands-1-1",
+  "contractId": "sprint-spec-20260416-auto-filter-commands-1",
+  "specId": "spec-20260416-auto-filter-commands",
+  "timestamp": "2026-04-16T15:20:30Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 6, "criteriaFailed": 1, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 1, "requiredTotal": 7 },
+  "generatorFeedback": [
+    {
+      "priority": "medium",
+      "category": "quality",
+      "file": "src/cli/commands/init.ts",
+      "line": "981",
+      "description": "installClaudeCommands uses mode: string instead of mode: ProjectMode. The ProjectMode type is already imported and used in writeConfig. Change string to ProjectMode on line 981."
+    }
+  ],
+  "summary": "6/7 criteria passed. sc-1-4 failed: mode parameter typed as string instead of ProjectMode. One-word fix needed."
+}

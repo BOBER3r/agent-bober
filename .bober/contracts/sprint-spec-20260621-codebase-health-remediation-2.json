@@ -1,0 +1,51 @@
+{
+  "contractId": "sprint-spec-20260621-codebase-health-remediation-2",
+  "specId": "spec-20260621-codebase-health-remediation",
+  "sprintNumber": 2,
+  "title": "Collapse runSprintCycle's 7 positional params into a single typed options object",
+  "description": "Refactor runSprintCycle (src/orchestrator/pipeline.ts:158) from 7 positional parameters — (contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId?) — to a single typed params object (e.g. RunSprintCycleParams). Update the SOLE production call site (pipeline.ts:931) and the 5 test call sites (code-reviewer-agent.test.ts:229,333; documenter-agent.test.ts:229,265,299). The function body changes only by destructuring the object — no logic edits. runSprintCycle is internal (absent from src/index.ts and MCP), so this has no public-API impact and zero behavior change.",
+  "status": "completed",
+  "completedAt": "2026-06-21T20:02:30Z",
+  "dependsOn": [],
+  "features": ["feat-2"],
+  "successCriteria": [
+    { "criterionId": "sc-2-1", "description": "Build + typecheck pass with zero errors (npm run build, npm run typecheck).", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-2-2", "description": "runSprintCycle takes a single object argument typed by a named, exported type (e.g. `RunSprintCycleParams`) declared adjacent to the function, carrying the same 7 fields with pipelineRunId optional. No positional parameters remain in the signature.", "verificationMethod": "manual", "required": true },
+    { "criterionId": "sc-2-3", "description": "The production call site (pipeline.ts:931) and ALL 5 test call sites pass a single object literal with the named fields. `grep -rnE 'runSprintCycle\\(' src/ | grep -v 'export async function'` shows every invocation using object form.", "verificationMethod": "command", "required": true },
+    { "criterionId": "sc-2-4", "description": "Behavior-identical: the only change inside runSprintCycle is param access (a destructure of the object at the top, or params.x reads). No control-flow, ordering, or logic changes. The full vitest suite passes (only the 6 known cockpit-integration failures may remain).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-5", "description": "runSprintCycle stays internal: `grep -rnE 'runSprintCycle' src/index.ts src/mcp/` returns ZERO matches (not promoted to public API).", "verificationMethod": "command", "required": true },
+    { "criterionId": "sc-2-6", "description": "lint passes (zero errors); `import type` used for RunSprintCycleParams at call sites where applicable; the diff is confined to pipeline.ts, code-reviewer-agent.test.ts, and documenter-agent.test.ts.", "verificationMethod": "lint", "required": true }
+  ],
+  "nonGoals": [
+    "Do NOT change any logic inside runSprintCycle (retry loop, evaluator iteration, contract status updates, code-reviewer/documenter spawning).",
+    "Do NOT refactor runTsPipeline or other functions in pipeline.ts.",
+    "Do NOT add runSprintCycle to src/index.ts or any MCP tool.",
+    "Do NOT reorder or rename the underlying fields' semantics — keep field names matching the current param names (contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId).",
+    "Do NOT add new params or remove the optional-ness of pipelineRunId."
+  ],
+  "stopConditions": [
+    "All six success criteria pass",
+    "runSprintCycle takes one typed object, all 6 call sites (1 prod + 5 test) updated, behavior unchanged, build/typecheck/test/lint green"
+  ],
+  "definitionOfDone": "runSprintCycle(params: RunSprintCycleParams) replaces the 7 positional params; RunSprintCycleParams is a named exported type with the same fields (pipelineRunId optional). The body destructures params at the top; no logic changes. pipeline.ts:931 and the 5 test call sites pass object literals. runSprintCycle remains internal. Build/typecheck/test/lint green.",
+  "assumptions": [
+    "runSprintCycle is defined at pipeline.ts:158 with params (contract: SprintContract, spec: PlanSpec, completedContracts: SprintContract[], projectRoot: string, config: BoberConfig, projectContext: ProjectContext, pipelineRunId?: string) returning Promise<SprintCycleResult>.",
+    "The SOLE production caller is pipeline.ts:931 (`const result = await runSprintCycle(`).",
+    "The 5 test call sites are code-reviewer-agent.test.ts (~:229, ~:333 — both via dynamic `const { runSprintCycle } = await import('./pipeline.js')`) and documenter-agent.test.ts (~:229, ~:265, ~:299). They pass positional args today and must switch to an object.",
+    "runSprintCycle is NOT exported from src/index.ts nor referenced by src/mcp/ (grep-verified) — purely internal, so the refactor is safe.",
+    "Field names in RunSprintCycleParams should mirror the current parameter identifiers so the body destructure (`const { contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId } = params;`) is a drop-in."
+  ],
+  "outOfScope": [
+    "Any logic change inside runSprintCycle",
+    "runTsPipeline and other pipeline.ts functions",
+    "Public-API / MCP exposure"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Read FIRST: src/orchestrator/pipeline.ts around :158 (the full runSprintCycle signature + the first ~15 lines of the body to see how each param is used) and around :931 (the call site — note exactly which arguments are passed and in what order). Then read src/orchestrator/code-reviewer-agent.test.ts (calls at ~:229 and ~:333) and src/orchestrator/documenter-agent.test.ts (~:229, ~:265, ~:299) to see the positional arg lists.\n\nSTEP 1 — define the type next to runSprintCycle: `export interface RunSprintCycleParams { contract: SprintContract; spec: PlanSpec; completedContracts: SprintContract[]; projectRoot: string; config: BoberConfig; projectContext: ProjectContext; pipelineRunId?: string; }` (confirm each type by reading the current signature — do not guess; reuse the exact imported types already in pipeline.ts).\n\nSTEP 2 — change the signature to `export async function runSprintCycle(params: RunSprintCycleParams): Promise<SprintCycleResult> {` and add as the FIRST body line `const { contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId } = params;`. Leave the rest of the body byte-identical (it already references these names). Double-check nothing else in the body shadows these names.\n\nSTEP 3 — update pipeline.ts:931 to pass an object: `const result = await runSprintCycle({ contract: <currentArg1>, spec: <arg2>, completedContracts: <arg3>, projectRoot: <arg4>, config: <arg5>, projectContext: <arg6>, pipelineRunId: <arg7-if-present> });` mapping each former positional arg by position. Read the existing call carefully — the local variable names at the call site may differ from the field names.\n\nSTEP 4 — update the 5 test call sites the same way (object literal). These tests use `await import('./pipeline.js')` then call positionally; convert each to the object form with matching fields.\n\nVerify with grep that no positional `runSprintCycle(` invocation remains and that runSprintCycle is still absent from src/index.ts and src/mcp/. Follow ESM `.js` imports, `import type` for RunSprintCycleParams where it's used as a type-only import. Commit: `bober(sprint-2): runSprintCycle takes a single RunSprintCycleParams object`.",
+  "evaluatorNotes": "sc-2-2: read pipeline.ts — confirm the signature is `runSprintCycle(params: RunSprintCycleParams)` and RunSprintCycleParams is a named exported type with all 7 fields (pipelineRunId optional). sc-2-3: `grep -rnE 'runSprintCycle\\(' src/` — every call (prod :931 + 5 test) uses `{ ... }` object form; none positional. sc-2-4 (CRITICAL no-behavior-change): diff the runSprintCycle body — the ONLY added line should be the destructure; everything else identical. Run the FULL vitest suite; the code-reviewer-agent and documenter-agent tests must pass (they directly exercise runSprintCycle). Only the 6 known cockpit failures allowed. sc-2-5: `grep -rnE 'runSprintCycle' src/index.ts src/mcp/` empty. Build/typecheck/lint clean. git diff --stat should show ONLY pipeline.ts, code-reviewer-agent.test.ts, documenter-agent.test.ts.",
+  "estimatedFiles": ["src/orchestrator/pipeline.ts", "src/orchestrator/code-reviewer-agent.test.ts", "src/orchestrator/documenter-agent.test.ts"],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-06-21T18:45:00Z",
+  "updatedAt": "2026-06-21T18:45:00Z"
+}

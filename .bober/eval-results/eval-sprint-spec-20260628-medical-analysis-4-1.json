@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-analysis-4-1",
+  "contractId": "sprint-spec-20260628-medical-analysis-4",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T19:38:50.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "244 files, 3114 passed; analysis 6 files 60 tests (sprint-1 idempotency green); +17 vs 3097" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "eslint analysis/ + medical.ts exit 0" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-4-1", "required": true, "result": "pass", "evidence": "tsc --noEmit zero errors" },
+    { "criterionId": "sc-4-2", "required": true, "result": "pass", "evidence": "ldl >365d old -> gap finding naming biomarker + interval; ldl ~178d within cadence -> 0; cadence.ts:84-88 ageDays>cadenceDays" },
+    { "criterionId": "sc-4-3", "required": true, "result": "pass", "evidence": "absent biomarker -> 0 gap (cadence.ts:77-78 cadenceDays undefined -> continue; closed table ldl/hba1c/tsh/vitamin_d/ferritin)" },
+    { "criterionId": "sc-4-4", "required": true, "result": "pass", "evidence": "ldl+triglycerides both OOR -> single kind=question offer, evidence has both names, tags carry pair; zero-LLM confirmed by grep (empty). NOTE: llmSpy disconnected/tautological — see generatorFeedback" },
+    { "criterionId": "sc-4-5", "required": true, "result": "pass", "evidence": "review-pass.ts:104-113 single-pass merge [trends, gaps, offers]; test writes >=3 incl kind=question cross-marker; sc-1-4 idempotency still green" },
+    { "criterionId": "sc-4-6", "required": true, "result": "pass", "evidence": "digDeeper(DigDeeperDeps.generateRecommendation injection) calls genSpy once with question containing ldl+triglycerides; review-pass.ts:151-167 gen = deps.generateRecommendation ?? generateRecommendation (delegation)" },
+    { "criterionId": "sc-4-7", "required": false, "result": "pass", "evidence": "medical.ts:357 --dig-deeper <id> option; routes to digDeeper; plain review prints counts incl gap+offer; never throws" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "medium", "category": "quality", "file": "src/medical/analysis/cross-marker.test.ts", "line": "37", "description": "sc-4-4 llmSpy is a free-floating vi.fn() never passed to detectCrossMarkerPatterns (no LLM injection point), so expect(llmSpy).not.toHaveBeenCalled() is tautologically true. Zero-LLM guarantee is real but enforced by source/grep inspection, not by this test. Non-blocking; consider documenting the spy as illustrative or removing it." }
+  ],
+  "summary": "Sprint 4 passes all 6 required criteria. Zero-LLM-detection invariant independently confirmed (grep of cadence.ts + cross-marker.ts empty; generateRecommendation confined to digDeeper). Sprint-1 idempotency (sc-1-4) tests remain green; full suite 3114/3114, no regressions. One medium non-blocking quality note: sc-4-4's llmSpy is disconnected (tautological assertion) — guarantee holds by source inspection."
+}

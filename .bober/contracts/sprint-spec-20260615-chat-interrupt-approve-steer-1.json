@@ -1,0 +1,101 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-1",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "sprintNumber": 1,
+  "title": "RunState grammar + careful-mode chat spawn + /careful toggle",
+  "description": "Lay the spine for chat-driven approval. Extend the RunState status grammar additively with 'input-required' and 'paused' plus optional pending/pause fields. Add an additive `bober run --approve-gates <comma-list>` flag that merges {gate -> 'disk'} into config.pipeline.checkpointOverrides for that run only. Add a session-persisted `/careful on|off` toggle (chat sidecar) and make RunSpawner pass the curated `--approve-gates post-research,post-plan,post-sprint` to the detached child when careful is on. After this sprint a chat user can launch an approval-gated run whose curated gates actually fire pending markers, while autopilot spawns are unchanged.",
+  "status": "completed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "The project builds with zero TypeScript errors (npm run build) and typecheck is clean in strict mode (npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "All tests pass with zero failures, including new tests for the grammar extension, --approve-gates parsing, and the /careful toggle (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "RunState.status accepts 'input-required' and 'paused' and the optional fields pendingCheckpointId/pendingPrompt/pendingSince/pausedAt round-trip through writeRunState/readRunState. A unit test writes a RunState with status 'input-required' + pending fields and reads it back unchanged; an existing-status RunState (running/completed/failed/aborted) still round-trips.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "`bober run --approve-gates post-research,post-plan,post-sprint` merges {post-research:'disk', post-plan:'disk', post-sprint:'disk'} into config.pipeline.checkpointOverrides for that run; without the flag, checkpointOverrides is left as-is (today's behavior). A unit test asserts the merge and asserts an unknown gate name (not a declared checkpoint id) is rejected with a clear error.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "`/careful on` / `/careful off` persists the careful flag in a chat-scoped sidecar across turns; `/careful` with no arg reports the current state. A unit test toggles and re-reads the sidecar via a fresh instance.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "When careful is on, RunSpawner.spawn launches the detached child with `--approve-gates post-research,post-plan,post-sprint` appended to the args; when off (default), no --approve-gates is present and the args equal Phase 1's exactly. A unit test inspects the injected spawnFn args in both states.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not surface pending approvals in chat yet (read path is Sprint 2)",
+    "Do not write approve/reject markers from chat yet (write path is Sprint 3)",
+    "Do not add guidance injection or pause/resume (Sprints 4 and 5)",
+    "Do not modify the DiskCheckpointMechanism, approval-state.ts, or the existing approve/reject CLI",
+    "Do not change autopilot spawn behavior or the pipeline algorithm"
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "A careful chat spawn launches with the curated --approve-gates; an autopilot spawn is byte-for-byte unchanged from Phase 1; the RunState grammar extension round-trips; build + typecheck + full suite green"
+  ],
+  "definitionOfDone": "RunState gains 'input-required'/'paused' and the optional pending/pause fields (additive, round-tripping). `bober run` gains an additive --approve-gates flag that merges disk overrides for the named gates only, rejecting unknown gate names. A session-persisted /careful on|off toggle exists, and RunSpawner passes the curated approve-gates to the detached child when careful is on while leaving autopilot spawns identical to Phase 1. Build, typecheck, and the full suite pass.",
+  "assumptions": [
+    "The set of valid checkpoint ids is the pipeline's declared sites (post-research, post-plan, post-sprint-contract, post-sprint, pre-curator, pre-generator, pre-evaluator, pre-code-reviewer, end-of-pipeline). The validator for --approve-gates checks membership in this set.",
+    "The careful sidecar is keyed by sessionId and lives under .bober/chat/ (mirrors src/chat/pid-sidecar.ts). Default state is off (autopilot), preserving Phase 1.",
+    "Merging into checkpointOverrides (override wins over mode) is sufficient to activate only the curated gates without setting --mode careful."
+  ],
+  "outOfScope": [
+    "Read/surface path (Sprint 2)",
+    "Write/resolve path (Sprint 3)",
+    "Guidance injection (Sprint 4), pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)"
+  ],
+  "ambiguityScore": 2,
+  "generatorNotes": "Additive, low-risk plumbing. Verified touch points:\n- src/mcp/run-manager.ts:34 (interface RunState): extend the status union to add 'input-required' | 'paused'; add optional fields pendingCheckpointId?: string; pendingPrompt?: string; pendingSince?: string; pausedAt?: string. Keep dist/.d.ts in sync only via build (do not hand-edit dist). Check no exhaustive switch on status breaks (search for status === and switch(status)).\n- src/state/run-state.ts: writeRunState/readRunState already serialize the whole object — no change needed beyond the type. Add a round-trip test in src/state/run-state.test.ts (or a new test) for the new status + fields.\n- src/cli/commands/run.ts: the --mode override at :104-107 is the pattern to mirror. Add a `--approve-gates <gates>` commander option (registered in src/cli/index.ts under the `run` command alongside --mode/--run-id/--team) and a RunCommandOptions field approveGates?: string. Parse comma-separated, trim, validate each against the known checkpoint-id set, and merge { [gate]: 'disk' } into config.pipeline.checkpointOverrides (spread the existing record). Reject unknown gates with a clear thrown error / process.exitCode=1 + stderr message (mirror existing error style). Do NOT also force --mode; the override is enough.\n- Known checkpoint-id set: define a small exported const (e.g. KNOWN_CHECKPOINT_IDS) — source it from the checkpoint sites if a list already exists (src/orchestrator/checkpoints/sites.ts has post-research/post-plan; the full set is enumerated in pipeline.ts). A literal tuple is acceptable; add a comment pointing at the pipeline sites.\n- New src/chat/careful-sidecar.ts: mirror src/chat/pid-sidecar.ts (read/write a small JSON under .bober/chat/<sessionId>.careful.json). API: isCareful(): Promise<boolean>, setCareful(on: boolean): Promise<void>. Tolerate missing file => false.\n- src/chat/slash-commands.ts: add a `/careful` case. It needs access to the careful sidecar — thread a carefulHandler callback the way stopHandler was threaded (dispatch already takes optional handlers; mirror that to stay back-compat with 2-arg callers). `/careful on` -> set true + 'Careful mode ON — new runs will pause at curated gates.'; `/careful off` -> set false; `/careful` (no arg) -> report current.\n- src/chat/chat-session.ts: construct the CarefulSidecar; pass its state into RunSpawner.spawn (add an options arg or a per-call careful boolean). When spawning (action.action === 'spawn' at :162), read careful state and pass it so RunSpawner appends --approve-gates.\n- src/chat/run-spawner.ts: spawn() at :93 builds args ['run', task, '--run-id', runId]; when careful, append ['--approve-gates', 'post-research,post-plan,post-sprint']. Keep the careful arg optional with default off so existing run-spawner tests pass unchanged.\nKeep everything additive and default-off. Tests: temp dirs, inject spawnFn to capture args, no network. Run npm run build && npm run typecheck && npm run test before handoff.",
+  "evaluatorNotes": "sc-1-4: write+read a RunState with status 'input-required' and all four optional fields; assert deep-equal round-trip; also round-trip a 'paused' and a legacy 'running' state.\nsc-1-5: call the run-command option parsing/merge with --approve-gates post-research,post-plan,post-sprint and assert checkpointOverrides has the three 'disk' entries and nothing else changed; call with an unknown gate ('bogus') and assert a clear error and no partial merge applied (or that valid gates still apply per the AC wording — match the generator's chosen semantics but require the error to be surfaced).\nsc-1-6: toggle /careful on, construct a fresh CarefulSidecar for the same sessionId, assert isCareful() true; toggle off, assert false; /careful with no arg returns a state report string.\nsc-1-7: with careful on, capture RunSpawner.spawn's injected spawnFn args and assert they include '--approve-gates' and the curated list; with careful off, assert the args exactly equal the Phase 1 arg vector (no --approve-gates).\nRegression: existing run-spawner, chat-session, slash-commands, run-state, run-manager tests stay green. Confirm no exhaustive status switch broke. Run npm run build, npm run typecheck, npm run test.",
+  "estimatedFiles": [
+    "src/mcp/run-manager.ts",
+    "src/state/run-state.test.ts",
+    "src/cli/commands/run.ts",
+    "src/cli/index.ts",
+    "src/cli/commands/run.test.ts",
+    "src/chat/careful-sidecar.ts",
+    "src/chat/careful-sidecar.test.ts",
+    "src/chat/slash-commands.ts",
+    "src/chat/slash-commands.test.ts",
+    "src/chat/chat-session.ts",
+    "src/chat/run-spawner.ts",
+    "src/chat/run-spawner.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T17:00:00Z",
+  "completedAt": "2026-06-15T13:46:26Z"
+}

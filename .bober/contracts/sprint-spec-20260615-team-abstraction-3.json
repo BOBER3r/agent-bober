@@ -1,0 +1,83 @@
+{
+  "contractId": "sprint-spec-20260615-team-abstraction-3",
+  "specId": "spec-20260615-team-abstraction",
+  "sprintNumber": 3,
+  "title": "Team-aware pipeline-shape selection",
+  "description": "Resolve the pipeline engine / encoded SOP from the active team's pipelineShape instead of solely from global config. The programming team continues to select exactly what selectPipelineEngine(config) selects today; a team declaring a different pipelineShape selects the corresponding engine. The existing eligibility and 'careful'-mode downgrade rules still apply. runPipeline resolves the active team and uses its shape; with no team specified it resolves to 'programming' and behaves identically to today.",
+  "status": "completed",
+  "completedAt": "2026-06-15T15:35:00Z",
+  "dependsOn": ["sprint-spec-20260615-team-abstraction-1"],
+  "features": ["feat-3"],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds successfully with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "All tests pass with zero failures, including new team-aware selection tests and the existing selector/eligibility/workflow-engine tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "For the programming team, the selected engine is identical to selectPipelineEngine(config) today. A unit test asserts the programming team with engine 'ts' selects a TsPipelineEngine (same instance type as the legacy path).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "A team declaring a different pipelineShape selects the corresponding engine. A unit test builds a team with pipelineShape 'workflow' (eligible config) and asserts a WorkflowEngine is selected, and that an ineligible/'careful' config still downgrades to TS (eligibility rules preserved).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "runPipeline resolves the active team (loadTeam) and uses its pipelineShape; called with no team it resolves to 'programming' and behaves as before. A unit/integration test (with a stubbed engine) asserts the team's shape drives engine selection and the no-team path is unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement a new pipeline engine or a medical SOP — only resolve the EXISTING engines ('ts'|'skill'|'workflow') from the team's shape",
+    "Do not change memory namespacing — that was Sprint 2",
+    "Do not add CLI --team flags or the example team — that is Sprint 4",
+    "Do not change eligibility or 'careful'-mode downgrade semantics"
+  ],
+  "stopConditions": [
+    "All six success criteria pass",
+    "Programming team selects today's engine; a team declaring a different shape selects the corresponding engine with eligibility rules intact"
+  ],
+  "definitionOfDone": "A team-aware shape resolver selects the PipelineEngine from the active team's pipelineShape, reusing resolveEngineName/selectPipelineEngine semantics (eligibility + careful downgrade preserved). runPipeline resolves the active team via loadTeam and uses its shape; the no-team/programming path is byte-for-byte today's behavior. Build, typecheck, and all tests (new + existing selector/eligibility/workflow tests) pass.",
+  "assumptions": [
+    "pipelineShape uses the existing PipelineEngineName union ('ts'|'skill'|'workflow'); 'skill' still falls through to TS as it does today.",
+    "Eligibility (isWorkflowEligible) and 'careful'-mode downgrade are evaluated against config as today; the team's shape only chooses the REQUESTED engine name, then the existing downgrade logic applies.",
+    "How the active team id reaches runPipeline (an opts field or config.defaultTeam) is a generator decision; the no-team default must be 'programming'."
+  ],
+  "outOfScope": [
+    "New engines / medical SOP (Phase 6)",
+    "Memory namespacing (Sprint 2)",
+    "CLI wiring + example team + docs (Sprint 4)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Reuse, do not rewrite, the selector.\n\nVerified touch points:\n- src/orchestrator/workflow/selector.ts: resolveEngineName(config):PipelineEngineName at :22 and selectPipelineEngine(config):PipelineEngine at :50. Add a team-aware variant — e.g. selectPipelineEngineForTeam(team, config) or extend resolveEngineName to take an optional requested-engine override from team.pipelineShape — that uses team.pipelineShape as the REQUESTED engine name, then applies the SAME downgrade pipeline (isWorkflowEligible + config.pipeline.mode==='careful' => 'ts'). Keep selectPipelineEngine(config) working for back-compat (it can delegate to the team-aware path with the programming team).\n- src/orchestrator/pipeline.ts: runPipeline at :970 calls selectPipelineEngine(config) at :977. Resolve the active team (loadTeam(config, teamId)) and pass team.pipelineShape into the team-aware selector. Determine teamId from opts (preferred, additive) or config.defaultTeam; default 'programming'.\n- src/orchestrator/workflow/engine.ts: PipelineEngine / PipelineEngineName.\n- Eligibility: src/orchestrator/workflow/eligibility.ts (isWorkflowEligible).\n\nProgramming team: team.pipelineShape === resolveEngineName(config) (set in Sprint 1), so the programming path is identical to today by construction. Verify this equivalence explicitly in a test.\n\nKeep the change minimal and additive; do not alter the downgrade log lines or eligibility semantics. Collocate tests in selector.test.ts (extend) and a runPipeline-level test using a stubbed/injected engine factory so no real LLM calls happen.",
+  "evaluatorNotes": "sc-3-4: build the programming team (loadTeam(config)); team-aware selector returns the same engine class as selectPipelineEngine(config) for engine 'ts' (TsPipelineEngine).\nsc-3-5: team with pipelineShape 'workflow' + an eligible config -> WorkflowEngine; same shape with an ineligible config OR mode 'careful' -> TsPipelineEngine (downgrade preserved, one log line as before).\nsc-3-6: with a stubbed engine factory, assert runPipeline picks the engine matching the active team's shape; no-team call uses programming and matches the legacy selection.\nRegression: run existing selector/eligibility/workflow-engine tests (must stay green). Run npm run build, npm run typecheck, npm run test.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/selector.ts",
+    "src/orchestrator/workflow/selector.test.ts",
+    "src/orchestrator/pipeline.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": null,
+  "createdAt": "2026-06-15T00:00:00Z",
+  "updatedAt": "2026-06-15T00:00:00Z"
+}

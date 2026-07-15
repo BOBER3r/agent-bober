@@ -1,0 +1,17 @@
+{
+  "evalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-5-1",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-5",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T18:05:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "177 files, 2130 passed, 3 skipped; +44; zero regressions; suite ~38s (no hung poll loops)" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors, 2 pre-existing warnings" }
+  ],
+  "regressions": [],
+  "summary": "All 7 required criteria pass. NO-KILL verified: /pause asserts killCalls.length===0, directly contrasted with /stop ===1. INJECTED-CLOCK determinism verified: waitWhilePaused accepts now()+pollMs with bounded timeout (MAX 7d cap); poll-loop tests use injected clocks, zero wall sleep. ADDITIVE pipeline invariant verified: +8/-0 (one import + one guarded if(pipelineRunId) gate after Sprint 4 guidance block, before Generate phase); runTsPipeline/runPipeline/:570-587 untouched, no phase reorder. pause.ts reuses exported safeSegment (guidance.ts untouched). 2130-test suite green, +44."
+}

@@ -1,0 +1,138 @@
+{
+  "handoffId": "handoff-sprint-spec-20260709-agent-loop-capability-port-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+  "specId": "spec-20260709-agent-loop-capability-port",
+  "timestamp": "2026-07-09T21:28:39.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Ports the Claude Agent SDK agent-loop capabilities into agent-bober's own provider-agnostic loop as additive, default-off changes. Sprints 1-4 implement the four architecture-backed high-value gaps (refusal detection, cost substrate + USD budget ceiling, per-role effort, parallel read-only tools); sprints 5-10 implement the remaining capability areas (loop events + hooks, sessions/resume/fork, in-context compaction, streaming deltas, mid-turn interrupt, in-process subagents + opt-in MCP bridge) in the own-loop idiom per explicit user direction, bound by the same hard constraints.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-1",
+        "title": "Refusal detection end-to-end",
+        "summary": "35a2dbd: 'refusal' StopReason in adapters, refused:true on AgenticLoopResult, fail-closed parseGeneratorResult."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-2",
+        "title": "Cost substrate",
+        "summary": "8d68248..73053c0: cost-meter.ts PRICE_TABLE, ChatResponse.costUsd all adapters, Budget maxUsd axis."
+      },
+      {
+        "contractId": "sprint-spec-20260709-agent-loop-capability-port-3",
+        "title": "Loop wiring: effort, USD ceiling, config, cost persistence",
+        "summary": "b9c936c: EffortSchema+BudgetSectionSchema on 4 role sections; AgenticLoopParams {effort?, budget?}; per-turn charging + graceful budget_exceeded return; AgenticLoopResult.costUsd on all 4 return sites; sprint-passed history event carries optional costUsd; generator wired via budgetFromMaxUsd. NOTE: agentic-loop.ts line numbers have shifted again \u2014 the serial tool-execution block and per-tool catch must be re-located by pattern. Suite 3770."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/tools/executor.ts",
+      "src/orchestrator/tools/executor.test.ts",
+      "src/orchestrator/tools/schemas.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/config/schema.ts",
+      "src/orchestrator/generator-agent.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260709-agent-loop-capability-port-4",
+    "specId": "spec-20260709-agent-loop-capability-port",
+    "sprintNumber": 4,
+    "title": "Parallel read-only tool execution (ToolDef.readOnly + executeToolBatch + per-role flag)",
+    "description": "Replace the loop's strictly serial tool execution with a delegating executor that runs contiguous runs of read-only-annotated tool calls concurrently while everything else stays serial. Classification is a ToolDef.readOnly annotation (ADR-2, conservative allow-list: read_file/glob/grep only \u2014 bash never). Results preserve original order, per-tool failures become in-slot error results, and the batch never rejects. Enabled by a per-role parallelReadOnlyTools config flag, default false \u2192 byte-identical serial semantics.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-4"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-4-1",
+        "description": "ToolDef supports optional readOnly?: boolean; exactly read_file, glob and grep are annotated readOnly:true in the tool schemas; bash, write_file and edit_file are unmarked.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-2",
+        "description": "With parallel enabled, a turn requesting multiple read-only tools executes them concurrently \u2014 proven by delayed fake handlers where total elapsed is less than the sum of individual delays \u2014 and the returned ToolResult[] preserves the original tool-call order by toolUseId.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-3",
+        "description": "A throwing handler or unknown tool inside a parallel batch produces an isError ToolResult in its original slot with the same shape as the serial path's error results, and executeToolBatch resolves (never rejects).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-4",
+        "description": "With the flag off, or for any unmarked tool, execution order and results are byte-identical to the pre-change serial for-await loop (all existing loop/tool tests pass unchanged).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-5",
+        "description": "A per-role parallelReadOnlyTools boolean config field (optional, default false) reaches AgenticLoopParams; existing configs parse unchanged.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-4-6",
+        "description": "npm run build and npm run typecheck pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Do not annotate bash as read-only under any circumstance (a shell command can mutate state).",
+      "Do not parallelize write tools or mixed batches beyond contiguous read-only runs.",
+      "Do not hard-code a tool-name allow-list inside the loop (ADR-2: classification travels with the ToolDef).",
+      "Do not enable the flag by default anywhere."
+    ],
+    "stopConditions": [
+      "npm run build passes and tests assert: annotation coverage, proven concurrency with order preservation, in-slot error containment without batch rejection, byte-identical serial fallback, and the config flag path.",
+      "Full existing suite green."
+    ],
+    "definitionOfDone": "Tool execution is delegated to executeToolBatch; with the per-role flag on, independent read-only calls overlap in time while results keep their original order and failures stay in-slot; with the flag off or annotations absent, behavior is byte-identical to the serial loop. Build and full suite green.",
+    "assumptions": [
+      "The serial loop lives at src/orchestrator/agentic-loop.ts ~:353-388 with the unknown-tool error path (~:362-369) and per-tool catch (~:379-387) whose result shapes the executor must mirror exactly.",
+      "Tool schemas live in src/orchestrator/tools/schemas.ts (~:9-162) and handlers in src/orchestrator/tools/handlers.ts (ToolHandler ~:21-23).",
+      "graph_* tools (src/graph/prompts.ts context) are NOT annotated this sprint \u2014 they can opt in later per ADR-2's self-declaration model.",
+      "onToolUse callback timing may shift for parallel batches (fired at dispatch); existing tests observe presence/args, not strict wall-clock interleaving."
+    ],
+    "outOfScope": [
+      "Parallelizing MCP-bridged tools (sprint 10 tools default to serial via absent annotation).",
+      "Cross-turn pipelining or speculative tool execution."
+    ],
+    "ambiguityScore": 3,
+    "generatorNotes": "Create src/orchestrator/tools/executor.ts exporting executeToolBatch(batch: { toolCalls, toolHandlers, readOnlyTools: Set<string>, parallel: boolean, onToolUse? }): Promise<ToolResult[]>. Algorithm: walk toolCalls grouping maximal contiguous runs where parallel && readOnlyTools.has(name); execute such runs with Promise.all over wrapped handlers (each wrapper try/catches into the exact isError ToolResult shape used by the serial catch), everything else strictly sequential; assemble results indexed by position so order is preserved. Add readOnly?: boolean to the ToolDef type (schemas.ts) and annotate read_file/glob/grep only. In agentic-loop.ts, derive readOnlyTools once from params.tools and replace the ~:353-388 block with a call to executeToolBatch (parallel = params.parallelReadOnlyTools === true); keep the ToolResultMessage append (~:392) unchanged. Add the per-role Zod flag next to sprint 3's effort/budget fields (coordinate: if sprint 3 already landed, extend the same section; if building independently, add just this flag additively) and thread it from the generator entry point. Use fake handlers with setTimeout delays in tests; measure elapsed with performance.now().",
+    "evaluatorNotes": "sc-4-1: assert schemas' readOnly flags exactly (three true, bash/write_file/edit_file undefined). sc-4-2: three fake read-only handlers each delayed ~50ms, parallel=true \u2192 elapsed < 120ms (vs ~150ms serial) AND results array matches input order with correct toolUseIds; also verify a serial run of the same batch takes >= 140ms to prove the fixture is meaningful. sc-4-3: middle handler throws / middle tool unknown \u2192 its slot isError with message shape matching the serial path (compare against a serial-path fixture), other slots normal, promise resolves. sc-4-4: parallel=false and unmarked-tool batches \u2192 assert handler invocation order equals input order (record call order); run FULL existing suite. sc-4-5: config fixture without the flag parses unchanged; with flag, spy on runAgenticLoop params. Build + typecheck.",
+    "estimatedFiles": [
+      "src/orchestrator/tools/executor.ts",
+      "src/orchestrator/tools/executor.test.ts",
+      "src/orchestrator/tools/schemas.ts",
+      "src/orchestrator/agentic-loop.ts",
+      "src/orchestrator/agentic-loop.test.ts",
+      "src/config/schema.ts",
+      "src/orchestrator/generator-agent.ts"
+    ],
+    "estimatedDuration": "medium",
+    "createdAt": "2026-07-09T12:10:00.000Z",
+    "updatedAt": "2026-07-09T21:28:39.000Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,27 @@
+{
+  "evalId": "eval-sprint-spec-20260628-medical-analysis-2-1",
+  "contractId": "sprint-spec-20260628-medical-analysis-2",
+  "specId": "spec-20260628-medical-analysis",
+  "timestamp": "2026-06-28T19:51:20.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 0, "requiredTotal": 7 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "recommend 2 files 43 tests pass; full 239 files 3072 pass (baseline 3029 +43)" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "eslint src/medical/recommend/ exit 0" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "required": true, "result": "pass", "evidence": "tsc --noEmit zero errors" },
+    { "criterionId": "sc-2-2", "required": true, "result": "pass", "evidence": "all-approve no-veto -> accepted, recommendation from round 1, rounds===1, generateCandidate called once" },
+    { "criterionId": "sc-2-3", "required": true, "result": "pass", "evidence": "veto + 3 approve -> rejected reason contraindication-veto; reconcilePanel:45-47 veto checked first, no path yields accepted:true on veto" },
+    { "criterionId": "sc-2-4", "required": true, "result": "pass", "evidence": "2-2 tie -> rejected; approveCount>rejectCount required, tie falls through to no-consensus" },
+    { "criterionId": "sc-2-5", "required": true, "result": "pass", "evidence": "short-circuit + refuse guards return before loop; generateCandidate (line 135) never reached" },
+    { "criterionId": "sc-2-6", "required": true, "result": "pass", "evidence": "all-reject maxRounds=2 -> rejected no-consensus rounds===2 + 4 dissent strings; worst-case <= MEDICAL_PANEL_MAX_TOTAL_CALLS=27 (=3*(1+4*2))" },
+    { "criterionId": "sc-2-7", "required": true, "result": "pass", "evidence": "throwing lens caught (lines 169-183) -> {verdict:reject,veto:false}; runJudgeLoop resolves; all-throw -> rejected" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 2 passes all 7 required criteria. Both safety invariants confirmed in SOURCE: (1) fail-closed inversion in lenses.ts:getLensVerdict (reject-on-exhaustion, mirrors grounding-critic.ts:203-206, inverts critic-deep.ts approve-on-exhaustion); (2) absolute contraindication veto in judge-panel.ts:reconcilePanel (veto check is first statement, early return — structurally impossible for vote majority to override). Full suite 3072 green, no regressions, purely additive (5 new files, no existing file modified, engine.ts untouched)."
+}

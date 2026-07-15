@@ -1,0 +1,36 @@
+{
+  "evalId": "eval-sprint-spec-20260616-medical-team-1-1",
+  "contractId": "sprint-spec-20260616-medical-team-1",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T21:57:55.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 8,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 8,
+    "requiredFailed": 0,
+    "requiredTotal": 8
+  },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0, zero errors", "details": "Strict mode with noImplicitReturns and noFallthroughCasesInSwitch active." },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0, zero errors", "details": "Full emit succeeded." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "Test Files 186 passed (186); Tests 2232 passed | 3 skipped (2235)", "details": "Full vitest run; new medical tests (engine.test.ts 5, team.test.ts 17) pass; 0 failures." },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings in eval-persist.test.ts", "details": "No new lint issues from sprint-1 code." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-1-1", "description": "build clean", "required": true, "result": "pass", "evidence": "npm run build exit 0", "feedback": "" },
+    { "criterionId": "sc-1-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit exit 0", "feedback": "" },
+    { "criterionId": "sc-1-3", "description": "tests green incl. medical", "required": true, "result": "pass", "evidence": "2232 passed, 0 failures", "feedback": "" },
+    { "criterionId": "sc-1-4", "description": "PipelineEngineName + both Zod enums widened", "required": true, "result": "pass", "evidence": "engine.ts:7 union; schema.ts:220 + :366 z.enum both include medical-sop; parse tests pass", "feedback": "" },
+    { "criterionId": "sc-1-5", "description": "both selector switches exhaustive", "required": true, "result": "pass", "evidence": "selectPipelineEngineForTeam -> MedicalSopEngine; selectPipelineEngine ts/workflow unchanged; never-guard via noImplicitReturns", "feedback": "" },
+    { "criterionId": "sc-1-6", "description": "loadTeam('medical') -> medical-sop + GuardrailSet", "required": true, "result": "pass", "evidence": "registry.ts wires buildMedicalTeam; guardrails has rulesetVersion + evaluate", "feedback": "" },
+    { "criterionId": "sc-1-7", "description": "programming team regression", "required": true, "result": "pass", "evidence": "loadTeam(config) deep-equals programming team; full suite green", "feedback": "" },
+    { "criterionId": "sc-1-8", "description": "no SDK imports in src/medical", "required": true, "result": "pass", "evidence": "grep empty; .js extensions; strict TS", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 1 passes all 8 required success criteria. Build, typecheck, and the full 2232-test suite all pass cleanly; 22 new medical tests included. PipelineEngineName and both Zod enums widened in lockstep; both selector switches exhaustive; loadTeam(config,'medical') returns a medical-sop team with a concrete GuardrailSet; programming team regression confirms zero behavioral change."
+}

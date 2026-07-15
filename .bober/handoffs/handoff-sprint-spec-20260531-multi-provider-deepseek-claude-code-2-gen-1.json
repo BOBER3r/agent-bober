@@ -1,0 +1,26 @@
+{
+  "handoffId": "handoff-sprint-spec-20260531-multi-provider-deepseek-claude-code-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-2",
+  "specId": "spec-20260531-multi-provider-deepseek-claude-code",
+  "timestamp": "2026-05-31T14:20:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober multi-provider harness. This sprint makes DeepSeek a first-class shorthand: model 'deepseek'/'deepseek-v4-pro'/'deepseek-v4-flash' resolves to the openai-compat adapter pointed at https://api.deepseek.com, reads the key from providerConfig.apiKey or DEEPSEEK_API_KEY, and fails with a DeepSeek-specific error when the key is missing for that endpoint. DeepSeek already works through the existing openai-compat adapter (proven in a spike) — no new adapter code needed, just resolution + key wiring.",
+    "completedSprints": [
+      {"contractId": "sprint-spec-20260531-multi-provider-deepseek-claude-code-1", "title": "Fix eslint peer-dependency conflict", "summary": "eslint upgraded ^9->^10.0.0 (resolves 10.4.1); npm install clean with no ERESOLVE; the openai optional peer can now be installed. lint/build/test all green."}
+    ],
+    "currentBranch": "spike/claude-code-provider",
+    "relevantFiles": ["src/orchestrator/model-resolver.ts", "src/orchestrator/model-resolver.test.ts", "src/providers/factory.ts", "src/providers/factory.test.ts", "src/providers/openai-compat.ts", "src/providers/openai-compat.test.ts", "src/providers/openai.ts"]
+  },
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true }
+  },
+  "principles": "ESM (.js import extensions, NodeNext). consistent-type-imports enforced (use `import type`). no-explicit-any warned (use unknown+narrowing). unused vars errored (_ prefix escape). Zero type + lint errors are hard gates. No SDK lock-in: NEVER import the openai package outside src/providers/ adapter files; both OpenAIAdapter and OpenAICompatAdapter dynamically import('openai') so it stays an optional peer. Tests mock the openai client (vi.mock) — no real network/keys. Conventional commit: bober(sprint-2): description.",
+  "evaluatorFeedback": null,
+  "baseline": {
+    "note": "On this branch there are 2 pre-existing, environmental vitest TIMEOUT flakes ('registers exactly 37 tools' in src/mcp/tools/tools.test.ts and tests/mcp/external-server-graph.test.ts). They are NOT caused by your changes and pass in isolation / on reruns. Do not chase them. Focus your test runs on the provider + resolver tests you add/change."
+  },
+  "notesForGenerator": "Stay on branch spike/claude-code-provider. Implement per the contract's generatorNotes. Key points: (1) SHORTHAND_MAP entries currently carry only {provider, modelId}; the deepseek entries need an endpoint, so extend the resolver to attach endpoint 'https://api.deepseek.com' for deepseek shorthands (mirror the existing ollama/ endpoint branch). (2) Add DEEPSEEK_API_KEY env fallback to the openai-compat key chain, scoped ONLY to the api.deepseek.com endpoint — Ollama and other openai-compat endpoints must keep their no-key behavior. (3) In validateApiKey, the openai-compat case must throw a DeepSeek-specific error mentioning DEEPSEEK_API_KEY when endpoint is api.deepseek.com and no key is found. (4) Never hardcode a key. (5) Read the actual current code in those files first — line numbers in generatorNotes are approximate. Add unit tests covering all 3 shorthands, the ollama/sonnet no-regression, key-missing throw, and key-present pass (openai client mocked). Verify build + lint exit 0 before committing."
+}

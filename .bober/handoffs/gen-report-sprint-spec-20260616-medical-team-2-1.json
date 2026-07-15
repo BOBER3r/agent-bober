@@ -1,0 +1,29 @@
+{
+  "contractId": "sprint-spec-20260616-medical-team-2",
+  "status": "complete",
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "met": true, "evidence": "npm run build exits 0" },
+    { "criterionId": "sc-2-2", "met": true, "evidence": "tsc --noEmit exits 0" },
+    { "criterionId": "sc-2-3", "met": true, "evidence": "vitest run 2258 passed, 3 skipped, 189 files; new disclaimer/audit/consent tests + extended engine tests" },
+    { "criterionId": "sc-2-4", "met": true, "evidence": "fail-closed: spy LLMClient + numericsSpy not.toHaveBeenCalled() when no consent; run() returns success:false + shortCircuit" },
+    { "criterionId": "sc-2-5", "met": true, "evidence": "consent round-trips via recordConsent -> fresh ConsentGate.current(); all 4 fields verbatim" },
+    { "criterionId": "sc-2-6", "met": true, "evidence": "audit file mode 0600 (stat & 0o777); append-only (secondRaw.startsWith(firstRaw)); O_WRONLY|O_APPEND|O_CREAT + chmod" },
+    { "criterionId": "sc-2-7", "met": true, "evidence": "PHI-free: 'SECRETBP'/'blood pressure' absent from audit bytes; keys subset of {tIso,event,rulesetVersion,patternsetVersion,ruleId}" },
+    { "criterionId": "sc-2-8", "met": true, "evidence": "DisclaimerComposer.footer() non-empty + disclaimerVersion; deterministic injected ISO asserted verbatim (no wall-clock in tests)" }
+  ],
+  "filesChanged": [
+    { "path": "src/medical/types.ts", "action": "modified", "description": "Added ConsentRecord, AuditEvent, AuditEntry" },
+    { "path": "src/medical/disclaimer.ts", "action": "created", "description": "DisclaimerComposer pure class, versioned footer" },
+    { "path": "src/medical/audit.ts", "action": "created", "description": "AuditLog append-only mode-0600 JSONL, IDs/enums only, date from injected tIso" },
+    { "path": "src/medical/consent.ts", "action": "created", "description": "ConsentGate fail-closed read; recordConsent writes mode-0600 + audit entry" },
+    { "path": "src/medical/engine.ts", "action": "modified", "description": "Wired Gate 1 consent into run(); optional MedicalSopDeps preserves zero-arg constructor" },
+    { "path": "src/medical/disclaimer.test.ts", "action": "created", "description": "DisclaimerComposer tests" },
+    { "path": "src/medical/audit.test.ts", "action": "created", "description": "AuditLog tests" },
+    { "path": "src/medical/consent.test.ts", "action": "created", "description": "ConsentGate tests" },
+    { "path": "src/medical/engine.test.ts", "action": "modified", "description": "Updated S1 stub test; added S2 suites (fail-closed, PHI-free, footer, deterministic ts)" }
+  ],
+  "testsAdded": ["src/medical/disclaimer.test.ts", "src/medical/audit.test.ts", "src/medical/consent.test.ts", "src/medical/engine.test.ts"],
+  "commits": ["4e0286d - bober(sprint-2): consent gate, append-only audit log, and disclaimer footer (Gate 1 + audit substrate)"],
+  "blockers": [],
+  "notes": "Zero-arg MedicalSopEngine() preserved (selector.ts:126 unchanged). FLAG FOR EVALUATOR: engine.ts uses new Date().toISOString() as a fallback ONLY when opts.now is absent (ad-hoc manual invocations); all tests inject opts.now. medicalAnswer attached to PipelineResult via a type cast (PipelineResult & { medicalAnswer }) since PipelineResult has no medicalAnswer field yet — typed extension deferred to S6. AuditEntry.patternsetVersion optional, ready for S3."
+}

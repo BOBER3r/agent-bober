@@ -1,0 +1,44 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-obsidian-vault-store-4-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:49:20.000Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Sprint 4 (Obsidian MCP adapter + config) iteration 1 PASSED all 4 success criteria but FAILED the lint hard-gate. This is a RETRY to fix ONLY the lint error. Do NOT re-architect \u2014 the implementation is correct.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/vault/mcp-adapter.test.ts"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run",
+      "testSingle": "npx vitest run <path>"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true
+    }
+  },
+  "evaluatorFeedback": {
+    "overallResult": "fail",
+    "onlyIssue": "lint hard-gate",
+    "items": [
+      {
+        "priority": "high",
+        "category": "quality",
+        "file": "src/vault/mcp-adapter.test.ts",
+        "line": 8,
+        "description": "Unused import 'beforeEach' from vitest. Line 8 is `import { describe, it, expect, vi, beforeEach } from \"vitest\";` but beforeEach is never referenced -> @typescript-eslint/no-unused-vars error, eslint exit 1, violating principles 'Zero lint errors is a hard gate'.",
+        "fix": "Remove ONLY 'beforeEach' from the line-8 import so it reads `import { describe, it, expect, vi } from \"vitest\";`. Change nothing else."
+      }
+    ],
+    "note": "All 4 success criteria (sc-4-1..sc-4-4) already PASS and the full suite is green (2907 tests). Make the single one-line edit, then re-verify lint + full suite, and commit."
+  }
+}

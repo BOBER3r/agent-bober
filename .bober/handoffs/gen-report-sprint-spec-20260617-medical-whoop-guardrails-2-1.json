@@ -1,0 +1,26 @@
+{
+  "contractId": "sprint-spec-20260617-medical-whoop-guardrails-2",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["e442cc9 - bober(sprint-2): WHOOP egress axis + authenticated transport"],
+  "filesChanged": [
+    { "path": "src/medical/egress.ts", "action": "modified", "description": "Added 'device-connection' to EgressAxis; optional 3rd ctor param (=false) keeps 2-arg call sites byte-identical; fromConfig reads med?.egress?.deviceConnection ?? false; ternary -> exhaustive switch with never-guard default." },
+    { "path": "src/medical/egress.test.ts", "action": "modified", "description": "sc-2-2 (three-axis union + deviceConnection flag + fromConfig default false) and sc-2-3 (independence matrix) describe blocks; existing sc-6-5 suite unchanged." },
+    { "path": "src/config/schema.ts", "action": "modified", "description": "deviceConnection: z.boolean().default(false) added to MedicalSectionSchema.egress." },
+    { "path": "src/medical/whoop/whoop-token.ts", "action": "created", "description": "WhoopTokenStore: clientCredentials() env read + clear throw; readRefreshToken()->string|undefined; writeTokens() 0600 sidecar. NO network imports." },
+    { "path": "src/medical/whoop/whoop-token.test.ts", "action": "created", "description": "env save/restore throw tests; mkdtemp+fs.stat 0600; read absent/present/corrupt/missing-field." },
+    { "path": "src/medical/whoop/whoop-client.ts", "action": "created", "description": "WhoopClient (2nd ESLint-excepted net file): assertAllowed-first ensureAccessToken (refresh_token grant + rotate persist) + fetchPage (cursor pagination, 401->refresh+retry-once, 429->injected waiter(reset*1000)+retry); injectable FetchLike/waiter/nowIso; v2 endpoint routing." },
+    { "path": "src/medical/whoop/whoop-client.test.ts", "action": "created", "description": "Fixture FetchLike + recording waiter: axis-off throw + 0 calls; pagination cursor walk; 401-refresh-retry-once + second-401-throws; 429 Reset->waiter->retry; all 4 collection paths." },
+    { "path": "eslint.config.js", "action": "modified", "description": "Added src/medical/whoop/whoop-client.ts to network-exception files array (ONLY that file)." }
+  ],
+  "testsAdded": ["src/medical/whoop/whoop-token.test.ts", "src/medical/whoop/whoop-client.test.ts"],
+  "selfVerification": {
+    "typecheck": "exit 0 (exhaustive never-guard compiles)",
+    "build": "exit 0",
+    "lint": "exit 0 (2 pre-existing eval-persist warnings)",
+    "test_medical": "263 passed (17 files)",
+    "test_full": "2473 passed | 3 skipped (201 files)"
+  },
+  "blockers": [],
+  "notes": "All 7 criteria met. 2438->2473 (+35). 3rd EgressGuard ctor param OPTIONAL so 2-arg sites source-compatible. URLSearchParams not in ESLint globals -> manual query strings w/ encodeURIComponent (matches medline-source.ts). nowIso() injector defaults to () => new Date().toISOString() (no Date.now() inside impl). whoop-token.ts has NO network import; only whoop-client.ts is ESLint-excepted."
+}

@@ -1,0 +1,40 @@
+{
+  "handoffId": "handoff-sprint-spec-20260616-medical-team-7-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260616-medical-team-7",
+  "specId": "spec-20260616-medical-team",
+  "timestamp": "2026-06-16T20:52:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase 6 — The Medical Team. FINAL buildable sprint (S7): real MedlinePlus/NIH (no-auth) grounded retrieval behind the literature-retrieval egress axis, confined to the SINGLE ESLint-excepted network file, plus cited synthesis (single local-Ollama LLM call) that ABSTAINS unless a retrieved passage supports the claim. Source failure => abstain, NEVER fail-open. cloud-inference stays independently off. CI uses recorded fixtures (no live network).",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260616-medical-team-1", "title": "Plumbing + team", "summary": "60215d2" },
+      { "contractId": "sprint-spec-20260616-medical-team-2", "title": "Consent/audit/disclaimer (Gate 1)", "summary": "4e0286d" },
+      { "contractId": "sprint-spec-20260616-medical-team-3", "title": "Red-flag (Gate 2)", "summary": "6fc7c97 — deps.llmClient seam" },
+      { "contractId": "sprint-spec-20260616-medical-team-4", "title": "HealthDataStore + NumericsQueryLayer", "summary": "907bae4" },
+      { "contractId": "sprint-spec-20260616-medical-team-5", "title": "Apple Health ingestion + CLI", "summary": "aa7f9be" },
+      { "contractId": "sprint-spec-20260616-medical-team-6", "title": "EgressGuard + full SOP wiring", "summary": "4f3ba55 — EgressGuard.assertAllowed; ESLint exception at src/medical/retrieval/medline-source.ts (stub, no net import yet); LiteratureRetriever returns {disabled} when off; RetrievalOutcome union; SOP wired in engine.run retrieval branch" }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": ["src/medical/retrieval/medline-source.ts", "src/medical/retrieval/literature.ts", "src/medical/egress.ts", "src/medical/engine.ts", "src/medical/types.ts", "src/providers/types.ts", "src/providers/factory.ts", "src/providers/openai-compat.ts", "eslint.config.js", "src/medical/engine.test.ts"]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260616-medical-team-7.json",
+  "briefingRef": ".bober/briefings/sprint-spec-20260616-medical-team-7-briefing.md",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "test": "npx vitest run", "lint": "npm run lint" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesRef": ".bober/principles.md",
+  "criticalConstraints": [
+    "The REAL network call (fetch/undici) goes ONLY in src/medical/retrieval/medline-source.ts — the ONE ESLint-excepted file (eslint.config.js exception block). A network import in ANY other src/medical file FAILS lint. Confirm the exact excepted path before adding the import.",
+    "assertAllowed('literature-retrieval') MUST be called at the network call site (runtime defense-in-depth) BEFORE any fetch attempt. With the axis OFF, retrieve returns {disabled} synchronously and NO network module is touched (already true from S6; keep it).",
+    "Inject the HTTP transport (a FetchLike function) so CI uses COMMITTED recorded fixtures — NO live network in tests. The briefing names the exact seam. Tests must pass offline.",
+    "LiteratureRetriever.retrieve returns disabled | abstain{reason} | grounded{passages}. On the ON path, call MedlineSource and map to grounded (passages found) or abstain{reason} (none / source error). Source unreachable or error => abstain{reason}, NEVER fail-open.",
+    "synthesize: a SINGLE LLM call via the provider-agnostic LLMClient (src/providers/types.ts; local Ollama default via src/providers/factory.ts). It ABSTAINS (abstained=true) unless a retrieved passage supports the claim; every non-abstained clinical claim carries >=1 citation. The LLMClient must be INJECTABLE via deps.llmClient (the S3 seam) so tests spy/fake it. No uncited claim is ever emitted.",
+    "cloud-inference axis stays independently OFF: enabling literature-retrieval must NOT enable cloud inference (test it).",
+    "Wire synthesize into MedicalSopEngine.run's retrieval branch (literature-retrieval ON + grounded passages => synthesize with citations; otherwise abstain). Keep the gate ordering (consent -> red-flag) FIRST; no LLM/network before the gates.",
+    "ESM/NodeNext .js extensions; strict TS; no SDK types outside src/providers/. Add citation/passage types additively to src/medical/types.ts (MedicalAnswer.citations[]). Tests use recorded fixtures + injected LLM spy + injected transport (no live network, no fs mocks). Keep MedicalSopEngine zero-arg constructor (selector.ts:126).",
+    "Self-verify: typecheck + build + `npx vitest run` + lint ALL pass (lint 0 errors); FULL suite green; programming team + ts/skill/workflow byte-identical."
+  ],
+  "evaluatorFeedback": null
+}

@@ -1,0 +1,36 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-medical-ingest-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-medical-ingest-4",
+  "specId": "spec-20260628-medical-ingest",
+  "timestamp": "2026-06-28T16:18:08Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober medical knowledge template. Sprint 4 (should-have): a markdown-frontmatter supplements list flattened into FactStore via reconcile (deterministic, dedup-aware, NO judge/LLM), plus `bober medical supplements add|list` subcommands. Re-adding the same supplement+dose is a NOOP via reconcileFact exact-match. Supplements are FactStore facts (scope 'medical'), NOT HealthDataStore lab_results rows.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260628-medical-ingest-1", "title": "Lab-PDF parser", "summary": "parseLabPdf + ChatParams.documents." },
+      { "contractId": "sprint-spec-20260628-medical-ingest-2", "title": "Lab-note writer + reindex", "summary": "src/medical/lab-note.ts hand-rolled frontmatter serializer/parser — REUSE that frontmatter parse helper here rather than adding a YAML dep." },
+      { "contractId": "sprint-spec-20260628-medical-ingest-3", "title": "import-labs CLI", "summary": "runImportLabs + import-labs subcommand under `medical` in src/cli/commands/medical.ts. Mirror the extracted-core + injected-deps pattern for supplements." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/orchestrator/memory/reconcile.ts (writeFact / reconcileFact exact-match NOOP-UPDATE ~lines 49-101, 148-154)",
+      "src/state/facts.ts (FactStore ~line 136; getActiveFacts; FactSchema/FactInput — note value min(1))",
+      "src/medical/lab-note.ts (reuse the frontmatter parse helper — but it is unexported; replicate or export carefully without breaking sprint 2)",
+      "src/cli/commands/medical.ts (extend with supplements add|list subcommands under `medical`; mirror runImportLabs deps pattern)",
+      "src/medical/supplements.ts (NEW)",
+      "src/medical/supplements.test.ts (NEW)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

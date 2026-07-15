@@ -1,0 +1,17 @@
+{
+  "evalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-4-1",
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-4",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "timestamp": "2026-06-15T17:42:00.000Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "details": "exit 0" },
+    { "strategy": "build", "required": true, "result": "pass", "details": "tsc exit 0" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "details": "175 files, 2086 passed, 3 skipped; +38; zero regressions" },
+    { "strategy": "lint", "required": false, "result": "pass", "details": "0 errors, 2 pre-existing warnings" }
+  ],
+  "regressions": [],
+  "summary": "All 8 required criteria pass. ADDITIVE pipeline.ts invariant fully verified: diff +34/-1 (single compactedHandoff->injectedHandoff substitution at runGenerator call), runTsPipeline + :571 block untouched, no phase reordering, no-guidance no-op asserted via reference identity (toBe). guidance.ts: safeSegment path-traversal guard (validate-before-write), atomic drain-consume, unknown-run guard. /tell slash + NL classifier 'tell' action + HELP_TEXT. Protected files untouched. 2086-test suite green, +38 new tests."
+}

@@ -1,0 +1,20 @@
+{
+  "contractId": "sprint-spec-20260615-memory-self-improve-p0-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["9d17da4 - bober(sprint-3): lesson hygiene — occurrence-weighted ranking, decay & conflict-quarantine"],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "met": true, "evidence": "build + typecheck exit 0; full suite 2176 pass / 182 files." },
+    { "criterionId": "sc-3-2", "met": true, "evidence": "retrieve.ts three-key sort overlap DESC → occurrences DESC → lessonId ASC; scoreRecord still integer overlap so C1 holds; new test asserts higher-occurrence wins on equal overlap; existing tiebreak test passes." },
+    { "criterionId": "sc-3-3", "met": true, "evidence": "hygiene.ts pruneLessons(records,{now,minOccurrences?,maxAgeMs?}) → {kept,quarantined}; Date.parse(now/createdAt) only, no Date.now/new Date (grep exit 1)." },
+    { "criterionId": "sc-3-4", "met": true, "evidence": "`memory prune` subcommand: enrich createdAt via per-lesson loadLesson, stamp now at boundary, rewriteIndexForQuarantine moves INDEX→QUARANTINE with provenance, retains .md files, prints kept/quarantined, empty-INDEX friendly no-throw. Manual: 4→1 INDEX, 3 quarantined." },
+    { "criterionId": "sc-3-5", "met": true, "evidence": "contradictionKey=categoryRoot+discriminatorTag with keep/avoid polarity buckets; key with both → BOTH quarantined; test seeds keep+avoid sprintId:s1 (high occurrences so no decay) and asserts both quarantined." },
+    { "criterionId": "sc-3-6", "met": true, "evidence": "lint 0 errors (2 pre-existing warnings in eval-persist.test.ts)." }
+  ],
+  "filesChanged": [
+    "src/orchestrator/memory/retrieve.ts", "src/orchestrator/memory/retrieve.test.ts", "src/orchestrator/memory/hygiene.ts", "src/orchestrator/memory/hygiene.test.ts", "src/state/memory.ts (quarantinePath + rewriteIndexForQuarantine)", "src/cli/commands/memory.ts (prune subcommand)", "src/cli/commands/memory.test.ts"
+  ],
+  "testsAdded": ["src/orchestrator/memory/hygiene.test.ts", "src/orchestrator/memory/retrieve.test.ts (extended)", "src/cli/commands/memory.test.ts (extended)"],
+  "blockers": [],
+  "notes": "hygiene.ts strictly pure (injected now + createdAt). rewriteIndexForQuarantine moves LITERAL INDEX.md lines (byte-exact round-trip), never deletes per-lesson .md. Conflict uses KEEP_MARKERS/AVOID_MARKERS polarity convention. Manual integration: 4-lesson seed → 1 kept + 3 quarantined (1 decay, 2 conflict); test state cleaned up. Full suite 182 files / 2176 pass / 3 skipped, zero regressions."
+}

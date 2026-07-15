@@ -1,0 +1,490 @@
+{
+  "specId": "spec-20260628-telegram-frontend",
+  "version": 2,
+  "title": "Telegram frontend: long-polling bot + whitelist + command\u2192hub mapping",
+  "description": "A thin presentation adapter (new src/telegram/ module) that exposes the existing agent-bober hub, task inbox, approve/steer gate, calendar plans, and medical ingest over a locally-run, long-polling (getUpdates) Telegram bot. It adds no new domain logic: plain text routes to task capture, slash commands route to scoped prioritization, inline buttons route to the existing approval markers, and document uploads route (per-upload opt-in) to medical ingest. A single outbound funnel enforces the control-plane privacy boundary so the non-end-to-end bot carries only summaries and notifications, never raw PHI or financial detail.",
+  "status": "completed",
+  "mode": "brownfield",
+  "ambiguityScore": 4,
+  "dependsOn": [
+    "spec-20260628-priority-hub",
+    "spec-20260628-task-inbox",
+    "spec-20260628-calendar-planner"
+  ],
+  "metadata": {
+    "dependsOn": [
+      "spec-20260628-priority-hub",
+      "spec-20260628-task-inbox",
+      "spec-20260628-calendar-planner"
+    ],
+    "approvalEvidence": [
+      ".bober/research/research-20260627-knowledge-platform-landscape.md (\u00a73a Telegram frontend, lines 137-142)",
+      "src/state/approval-state.ts:24-43 (PendingMarker/ApprovedMarker/RejectedMarker disk-marker gate)",
+      "src/cli/commands/medical.ts (registerMedicalCommand + egress-gated ingest pattern)",
+      "src/cli/index.ts:1-41 (register<X>Command CLI registration pattern)",
+      "src/medical/whoop/whoop-token.ts:47-48 (env-credential pattern)",
+      "package.json deps (execa present; no Telegram library present)",
+      ".bober/research/research-20260628-telegram-features-and-topology.md (validated Tier-1 topology; Bot API 10.0 bot-to-bot + Secretary Mode; 13/25 claims confirmed by 3-vote verification)",
+      ".bober/research/research-20260628-telegram-multi-llm-coordination-research.md (codebase: blackboard already coordinates the LLMs)",
+      "src/fleet/synthesis.ts:15-39 (SynthesisBundle { rounds, childResults, findings } \u2014 the artifact feat-9 reads)",
+      "src/fleet/shared-blackboard.ts:13-18,74-105 (BlackboardFinding + readAll + per-agent subject grouping)",
+      "src/state/facts.ts:36 (FactRecord \u2014 subject/value/confidence fields feat-9 renders)"
+    ],
+    "plannerMode": "autonomous-subagent"
+  },
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Local long-polling Telegram bot process + CLI command",
+      "description": "A new `agent-bober telegram` CLI command starts a locally-run bot that polls Telegram via getUpdates. No web server, no public URL, no open inbound port. Each person runs their own bot against their own agent-bober checkout.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `agent-bober telegram` is registered in src/cli/index.ts and reachable via `agent-bober telegram --help`.",
+        "AC2: The bot reads its token from TELEGRAM_BOT_TOKEN and connects using long-polling getUpdates (no webhook, no listening socket).",
+        "AC3: Starting with a missing/empty TELEGRAM_BOT_TOKEN exits non-zero with a message naming the missing variable."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "User-ID whitelist authorization",
+      "description": "Only Telegram accounts whose numeric id appears in TELEGRAM_ALLOWED_USERS (comma-separated) may interact. Any other account receives an access-denied reply that echoes its own numeric id, and its message is otherwise ignored.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A sender id present in TELEGRAM_ALLOWED_USERS is admitted; a sender id absent from it is denied.",
+        "AC2: The denial reply string contains the exact numeric id of the denied sender.",
+        "AC3: A denied sender's message triggers no capture, command, approval, upload, or ingest side effect."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Control-plane outbound privacy funnel",
+      "description": "Every outbound bot message passes through a single sendSafe funnel that enforces the control-plane boundary: the bot carries summaries, titles, and notifications only \u2014 never raw PHI or financial detail. Handlers produce content; only the funnel calls the Telegram send transport.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: All bot replies in the codebase are emitted via the sendSafe funnel; no handler calls the Telegram send transport directly.",
+        "AC2: The funnel is the single chokepoint later sprints extend for streaming and silent delivery."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Plain-text \u2192 task inbox capture",
+      "description": "Any non-command text from a whitelisted user is captured as a new open task in the shared inbox pool (spec-20260628-task-inbox) with the message text as its title and no other required fields. The bot replies with a one-line confirmation summary.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Sending arbitrary free text creates exactly one inbox task whose title equals the message text.",
+        "AC2: Capture never blocks on a missing field (no due date / domain prompt); unknowns are left for a later triage pass.",
+        "AC3: Messages beginning with '/' are not captured as tasks \u2014 they fall through to the command router."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Scoped prioritization commands (/today, /priority, /decide X vs Y)",
+      "description": "Slash commands invoke the priority hub (spec-20260628-priority-hub) with an ephemeral, per-question scope parsed from the command text, and reply with a numbered ranked summary. /decide X vs Y produces decision-mode scope filtered to X and Y; /today and /priority produce a time-horizon or general scope.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: /decide X vs Y parses to a decision-mode scope containing exactly the two options X and Y.",
+        "AC2: /priority and /today invoke the hub query and render the returned findings as a numbered list in the hub's ranked order.",
+        "AC3: The per-question scope is derived from the command text only and is never persisted."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Inline-keyboard approve/adjust/reject gate",
+      "description": "Pending approval checkpoints surface in Telegram with an inline keyboard [Approve][Adjust][Reject]. Button taps write the same .approved.json / .rejected.json disk markers used by the existing approve/reject CLI, routing calendar plans and do-bridge promotions through the one existing gate. Adjust writes an approved marker carrying editDelta (steer).",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Approve writes .bober/approvals/<id>.approved.json matching the ApprovedMarker shape with an approverId.",
+        "AC2: Reject writes .bober/approvals/<id>.rejected.json with the supplied feedback; Adjust writes an approved marker whose editDelta carries the supplied text.",
+        "AC3: A tap for a checkpoint with no matching .pending.json marker writes no marker file.",
+        "AC4: Only whitelisted users' button callbacks are honored."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "Document upload \u2192 medical ingest with per-upload opt-in",
+      "description": "Document uploads require an explicit per-upload Yes/No confirmation before anything is processed, because Telegram is not end-to-end encrypted. Only on explicit Yes does the bot download the file and hand it to the existing src/medical ingest path; otherwise the file is discarded. Replies carry a non-sensitive summary only.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: An uploaded document with no confirmation never reaches the medical ingest path.",
+        "AC2: After an explicit Yes, the medical ingest path is invoked exactly once with the downloaded file.",
+        "AC3: After No (or no confirmation), the file is dropped and nothing is ingested.",
+        "AC4: Post-ingest replies contain only a count/summary, never raw marker values or names."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-8",
+      "title": "Streaming run progress + silent scheduled digest delivery",
+      "description": "Two outbound delivery modes over the funnel: (a) streaming \u2014 a long-running operation edits one status message in place as progress events arrive, ending with a final summary; (b) silent digest \u2014 a scheduler-handed digest payload is sent with notifications disabled. No run/fleet/scheduler logic is added here.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: A sequence of progress updates edits a single message id multiple times rather than posting a new message per tick.",
+        "AC2: A digest send sets the disable_notification flag.",
+        "AC3: Both modes route through the sendSafe funnel and carry summaries only."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-9",
+      "title": "Multi-LLM \"secretary\" fleet view (/fleet command + per-agent streaming sections)",
+      "description": "A read-only presentation view that surfaces what each LLM/agent produced in the most recent fleet run. It reads the head's collected bundle .bober/fleet-synthesis.json (the SynthesisBundle { rounds, childResults, findings } from src/fleet/synthesis.ts:29), groups findings by FactRecord.subject (the per-agent childFolder label, src/fleet/shared-blackboard.ts:74-89), and renders one labeled section per agent showing a one-line finding summary, round, confidence, and that agent's finding count. Two surfaces share one renderer: an on-demand /fleet command and the feat-8 streaming/digest path. All output passes through sendSafe \u2014 raw findings[].value payloads are never emitted verbatim. No run/fleet/scheduler logic is added; this stays a thin read+render adapter. Validated by research-20260628-telegram-features-and-topology.md (Tier 1) and research-20260628-telegram-multi-llm-coordination-research.md.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: /fleet from a whitelisted user reads .bober/fleet-synthesis.json and replies with one section per distinct findings[].subject, each showing the agent label, a one-line summary, the round, the confidence, and that agent's finding count.",
+        "AC2: When .bober/fleet-synthesis.json is missing or has zero findings, /fleet replies with a non-error 'no recent fleet run' message and throws nothing.",
+        "AC3: The reply header shows the run's round count (SynthesisBundle.rounds).",
+        "AC4: All /fleet and fleet-streaming/digest output passes through sendSafe; a finding's raw value is summarized/truncated to one line and never sent verbatim.",
+        "AC5: A non-whitelisted user's /fleet is denied with the numeric-id echo (per feat-2) and triggers no file-read side effect."
+      ],
+      "dependencies": [
+        "feat-1",
+        "feat-2",
+        "feat-3",
+        "feat-8"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "assumptions": [
+    "Integration mechanism: where a sibling module exports a stable function (e.g. the disk-marker helpers in src/state/approval-state.ts:24-80 \u2014 savePending/listPending/readPending), the adapter imports it directly; where the surface is a CLI still being finalized by a sibling spec (task inbox, priority hub), the adapter shells out via execa (already a dependency per package.json). Evidence: approval-state.ts exports typed marker helpers; execa is in package.json deps.",
+    "Telegram library is a generator decision (per the orchestrator brief): a maintained Node Telegram Bot API library supporting long-polling getUpdates (grammY / telegraf / node-telegram-bot-api). None is present in package.json today, so exactly one new dependency is introduced \u2014 only in Sprint 1. Evidence: package.json deps list contains no Telegram library.",
+    "Credentials come from the environment, mirroring the existing pattern at src/medical/whoop/whoop-token.ts:47-48: TELEGRAM_BOT_TOKEN (bot token) and TELEGRAM_ALLOWED_USERS (comma-separated numeric ids). No tokens or ids are hardcoded.",
+    "Inline approve/adjust/reject resolves into the existing gate by writing the identical disk markers the approve/reject CLI writes (.approved.json / .rejected.json), per src/state/approval-state.ts:24-43 and src/cli/commands/approve.ts. No new approval mechanism is created.",
+    "The control-plane privacy rule is enforced in code via a single outbound sendSafe funnel that handlers cannot bypass, plus a mandatory per-upload opt-in before any document reaches medical ingest. Evidence: research \u00a73a lines 140-141 (bot is control-plane + non-sensitive summaries only; lab-PDF-via-Telegram = explicit per-upload opt-in).",
+    "The task inbox command surface is `agent-bober task add \"...\"` (zero-required-field capture) per research \u00a73a line 129-133.",
+    "The bot is a thin adapter over the hub/inbox/calendar/scheduler/medical features; their ranking, storage, dedup, slot-filling, parsing, and scheduling logic stays in the sibling modules and is out of scope here.",
+    "The multi-LLM 'secretary' view (feat-9) reads the existing head-written artifact .bober/fleet-synthesis.json (the SynthesisBundle shaped by src/fleet/synthesis.ts:29-39: { rounds, childResults, findings }) and groups findings by FactRecord.subject (the per-agent childFolder set in src/fleet/shared-blackboard.ts:74-89). It imports SynthesisBundle/FactRecord as TYPE-ONLY (no runtime coupling to better-sqlite3), adds NO npm dependency, and is the validated Tier-1 topology: coordination already lives in the fleet blackboard, so Telegram only presents it. Evidence: research-20260628-telegram-features-and-topology.md \u00a72-\u00a74; research-20260628-telegram-multi-llm-coordination-research.md (Architecture Overview, Integration Points)."
+  ],
+  "outOfScope": [
+    "The priority hub ranking / relevance-filter / lens-panel judging logic (owned by spec-20260628-priority-hub).",
+    "The task inbox storage, dedup, reconcile, triage, and lifecycle logic (owned by spec-20260628-task-inbox).",
+    "The calendar planner slot-filling and free/busy logic (owned by spec-20260628-calendar-planner).",
+    "The scheduler / cron that decides digest cadence (this adapter only delivers a handed digest payload silently).",
+    "Medical PDF parsing, FactStore writes, and medical guardrails (owned by src/medical).",
+    "Webhooks, hosting a public HTTPS endpoint, or any inbound port.",
+    "Bot-to-bot autonomous chaining and multi-user fan-out beyond the static whitelist.",
+    "DEFERRED (Tier 2, sibling spec): per-LLM Telegram bot identities + a dispatcher/secretary bot messaging worker bots via Bot API 10.0 (May 8 2026) bot-to-bot communication. The capability is real but gated by mutual per-bot opt-in, costs N tokens, and duplicates the existing fleet blackboard bus; pursue only if each LLM must be a distinct addressable Telegram identity. Evidence: research-20260628-telegram-features-and-topology.md \u00a71 (Bot-to-bot), \u00a73 Tier 2.",
+    "DEFERRED (Tier 3, own consent-design spec): Telegram Secretary Mode (a bot acting on the user's OWN account to ingest real incoming DMs). It turns the bot into a reader of the user's human chats \u2014 a large egress/privacy expansion that tensions this spec's control-plane boundary \u2014 and is capped at one business bot per account. Evidence: research-20260628-telegram-features-and-topology.md \u00a71 (Secretary Mode), \u00a73 Tier 3.",
+    "Carrying raw PHI or financial detail over Telegram in either direction beyond an explicitly opted-in document upload."
+  ],
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "tech-constraints",
+      "question": "Should the adapter invoke sibling features (hub/inbox/medical) by importing their modules directly or by shelling out to the agent-bober CLI?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Import sibling modules directly for typed, in-process calls."
+        },
+        {
+          "label": "B",
+          "description": "Shell out to `agent-bober <subcommand>` via execa for loose coupling."
+        },
+        {
+          "label": "C",
+          "description": "Hybrid: import where a stable export exists, shell out otherwise."
+        }
+      ],
+      "recommendation": "C \u2014 import src/state/approval-state.ts helpers directly (stable, typed); shell out via execa for task/hub CLIs still being finalized by sibling specs.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q2",
+      "category": "integrations",
+      "question": "Which Node Telegram Bot API library should the long-polling bot use?",
+      "options": [
+        {
+          "label": "A",
+          "description": "grammY \u2014 modern, TypeScript-first, long-polling support."
+        },
+        {
+          "label": "B",
+          "description": "telegraf \u2014 widely used, mature."
+        },
+        {
+          "label": "C",
+          "description": "node-telegram-bot-api \u2014 minimal, getUpdates built in."
+        }
+      ],
+      "recommendation": "Generator's choice among maintained libraries that support getUpdates long-polling; document the pick in generatorNotes. This is the only new dependency, added in Sprint 1.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "error-handling",
+      "question": "How does the whitelist behave for non-listed users, and where do credentials come from?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Silently ignore non-listed users."
+        },
+        {
+          "label": "B",
+          "description": "Deny with an access-denied reply that echoes the sender's numeric id; credentials from env."
+        }
+      ],
+      "recommendation": "B \u2014 deny + echo id (so the operator can add the id to the whitelist); TELEGRAM_BOT_TOKEN + TELEGRAM_ALLOWED_USERS from process.env, mirroring src/medical/whoop/whoop-token.ts:47-48.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q4",
+      "category": "pattern-conflict",
+      "question": "How should the inline approve/adjust/reject buttons resolve into the existing approve/steer gate?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Add a new Telegram-specific approval store."
+        },
+        {
+          "label": "B",
+          "description": "Write the same .approved.json / .rejected.json disk markers the existing CLI writes."
+        }
+      ],
+      "recommendation": "B \u2014 reuse src/state/approval-state.ts markers (PendingMarker/ApprovedMarker/RejectedMarker), with Adjust writing an approved marker carrying editDelta. No new mechanism.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q5",
+      "category": "non-functional",
+      "question": "How is the control-plane privacy rule enforced in code rather than by convention, given Telegram bot messages are not end-to-end encrypted?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Document the rule and trust handlers to follow it."
+        },
+        {
+          "label": "B",
+          "description": "A single outbound sendSafe funnel all replies pass through, plus a mandatory per-upload opt-in before any document reaches medical ingest."
+        }
+      ],
+      "recommendation": "B \u2014 code-enforced chokepoint (summaries/titles only) plus explicit per-upload opt-in for documents, per research \u00a73a lines 140-141.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q6",
+      "category": "integrations",
+      "question": "How should the multi-LLM secretary view surface in Telegram?",
+      "options": [
+        {
+          "label": "A",
+          "description": "On-demand /fleet command only."
+        },
+        {
+          "label": "B",
+          "description": "Both: a /fleet command AND the feat-8 streaming/digest path reuse the per-agent renderer."
+        },
+        {
+          "label": "C",
+          "description": "Auto-stream/digest only, no command."
+        }
+      ],
+      "recommendation": "B \u2014 one shared per-agent renderer behind both an on-demand /fleet command and the feat-8 streaming/digest path.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q7",
+      "category": "tech-constraints",
+      "question": "Where should the secretary view read fleet state from?",
+      "options": [
+        {
+          "label": "A",
+          "description": "The .bober/fleet-synthesis.json artifact (head's collected SynthesisBundle) \u2014 file read, no DB coupling."
+        },
+        {
+          "label": "B",
+          "description": "Both: live `agent-bober blackboard read` (execa) mid-run, JSON artifact after."
+        },
+        {
+          "label": "C",
+          "description": "Live blackboard CLI only."
+        }
+      ],
+      "recommendation": "A \u2014 read .bober/fleet-synthesis.json; keeps the adapter thin and avoids coupling src/telegram to better-sqlite3.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q8",
+      "category": "non-functional",
+      "question": "What should each agent's section show, given sendSafe means summaries only?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Agent label + one-line summary + round."
+        },
+        {
+          "label": "B",
+          "description": "Above + confidence score + finding count."
+        },
+        {
+          "label": "C",
+          "description": "Head's merged synthesis first, then per-agent breakdown."
+        }
+      ],
+      "recommendation": "B \u2014 label + one-line summary + round + confidence + count, all truncated/summarized through sendSafe.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "gate-design-approval",
+      "category": "other",
+      "question": "Is the design approved to proceed to sprint decomposition autonomously?",
+      "recommendation": "Autonomous self-approval \u2014 all blocking questions self-answered from research doc + substrate evidence; ambiguityScore 4 < 7.",
+      "ambiguityWeight": 0
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "Hybrid (Option C): import src/state/approval-state.ts disk-marker helpers directly (stable typed exports, src/state/approval-state.ts:24-80); shell out via execa (already in package.json deps) to `agent-bober task ...` / hub commands whose surface is finalized by sibling specs spec-20260628-task-inbox and spec-20260628-priority-hub.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "Deferred to the generator (per orchestrator brief): pick one maintained library that supports getUpdates long-polling (grammY / telegraf / node-telegram-bot-api) and record the choice in generatorNotes. package.json currently has no Telegram library, so exactly one new dependency is added, only in Sprint 1.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "Option B: non-listed senders get an access-denied reply that echoes their exact numeric id and trigger no side effects; listed senders are admitted. Credentials read from process.env TELEGRAM_BOT_TOKEN and TELEGRAM_ALLOWED_USERS (comma-separated), mirroring src/medical/whoop/whoop-token.ts:47-48. Matches research \u00a73a line 139.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "Option B: button taps write the identical .approved.json / .rejected.json markers the existing approve/reject CLI writes (src/state/approval-state.ts:24-43; src/cli/commands/approve.ts). Adjust writes an approved marker whose editDelta carries the replacement text (steer). No Telegram-specific approval store.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q5",
+      "answer": "Option B: a single sendSafe outbound funnel is the only path to the Telegram send transport (handlers return content, the funnel sends), and document uploads require an explicit per-upload Yes/No opt-in before any file reaches medical ingest. Enforces research \u00a73a lines 140-141 (control plane + summaries only; per-upload opt-in for lab PDFs).",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval. Evidence: research-20260627-knowledge-platform-landscape.md \u00a73a (lines 137-142); src/state/approval-state.ts:24-43; src/cli/commands/medical.ts; src/cli/index.ts:1-41; src/medical/whoop/whoop-token.ts:47-48; package.json deps. Final ambiguityScore 4 < 7, no open questions remain.",
+      "resolvedAt": "2026-06-28T12:00:00.000Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q6",
+      "answer": "Option B: one shared per-agent renderer behind BOTH an on-demand /fleet command and the feat-8 streaming/digest path.",
+      "resolvedAt": "2026-06-28T15:05:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q7",
+      "answer": "Option A: read the .bober/fleet-synthesis.json artifact (the head's collected SynthesisBundle); no live blackboard CLI, no better-sqlite3 coupling in src/telegram.",
+      "resolvedAt": "2026-06-28T15:05:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q8",
+      "answer": "Option B: each agent section shows label + one-line summary + round + confidence + finding count, all truncated/summarized through sendSafe.",
+      "resolvedAt": "2026-06-28T15:05:00.000Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "gate-design-approval-v2",
+      "answer": "Autonomous self-approval for the feat-9 enrichment (spec version 2). Every feat-9 assumption is backed by cited evidence: research-20260628-telegram-features-and-topology.md (validated Tier-1 topology, Bot API 10.0 bot-to-bot + Secretary Mode constraints, 13/25 claims confirmed by 3-vote verification); research-20260628-telegram-multi-llm-coordination-research.md; src/fleet/synthesis.ts:15-39 (SynthesisBundle shape); src/fleet/shared-blackboard.ts:13-18,74-105 (BlackboardFinding/readAll/subject grouping); src/state/facts.ts:36 (FactRecord). The three load-bearing UX/integration choices were answered by the user (Q6/Q7/Q8). ambiguityScore 4 < 7; Tier 2/3 explicitly deferred to sibling specs in outOfScope.",
+      "resolvedAt": "2026-06-28T15:05:00.000Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "techStack": [
+    "TypeScript (ESM, NodeNext, .js import extensions)",
+    "Node.js",
+    "commander (CLI registration)",
+    "Telegram Bot API \u2014 long-polling getUpdates (library chosen by generator)",
+    "execa (invoking sibling agent-bober commands)"
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "spec-20260628-priority-hub (scoped prioritization queries)",
+      "spec-20260628-task-inbox (zero-friction task capture: `agent-bober task add`)",
+      "spec-20260628-calendar-planner (calendar plan checkpoints surfaced via the approve gate)",
+      "src/state/approval-state.ts (disk-marker approve/steer gate)",
+      "src/medical (document ingest, egress/consent guardrails)",
+      "Telegram Bot API getUpdates (no server, no public URL, no inbound port)",
+      ".bober/fleet-synthesis.json (read-only by feat-9; the head-written SynthesisBundle from src/fleet/synthesis.ts:29) \u2014 grouped per-agent by FactRecord.subject for the multi-LLM secretary view"
+    ],
+    "dataModel": "No new persistent data model. The adapter reads existing .bober/approvals/*.pending.json markers and writes .approved.json/.rejected.json; it forwards task text and document files to sibling features. Ephemeral per-question prioritization scope is parsed from command text and not stored.",
+    "securityConsiderations": [
+      "User-id whitelist (TELEGRAM_ALLOWED_USERS) gates every update and callback; non-listed senders are denied and cause no side effects.",
+      "Control-plane outbound funnel: summaries/titles/notifications only \u2014 never raw PHI or financial detail.",
+      "Mandatory explicit per-upload opt-in before any document reaches medical ingest (Telegram is not end-to-end encrypted).",
+      "Credentials from environment only; no tokens/ids in source."
+    ]
+  },
+  "nonFunctionalRequirements": [
+    {
+      "category": "security",
+      "requirement": "The bot uses long-polling getUpdates exclusively \u2014 no webhook, no inbound listening port, no public HTTPS URL.",
+      "verificationMethod": "Code review + grep confirms no server/listen/createServer/webhook call; manual run shows getUpdates polling."
+    },
+    {
+      "category": "security",
+      "requirement": "Every update and inline-button callback is gated by the TELEGRAM_ALLOWED_USERS whitelist before any side effect.",
+      "verificationMethod": "Unit test: non-listed sender id is denied and produces zero side effects."
+    },
+    {
+      "category": "security",
+      "requirement": "Outbound messages carry only non-sensitive summaries; all replies pass through the single sendSafe funnel.",
+      "verificationMethod": "Unit test + code review: handlers never call the Telegram send transport directly."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The module is a thin adapter: no ranking, storage, slot-filling, parsing, or scheduling logic is reimplemented here.",
+      "verificationMethod": "Code review against the outOfScope list; sibling features are invoked, not reimplemented."
+    }
+  ],
+  "constraints": [
+    "ESM only; all relative imports use .js extensions for NodeNext resolution.",
+    "TypeScript strict mode; zero type errors and clean tsc build are hard gates.",
+    "consistent-type-imports: use `import type` for type-only imports; no `any` without justification.",
+    "No synchronous filesystem ops \u2014 use node:fs/promises.",
+    "At most one new npm dependency (the Telegram Bot API library), added in Sprint 1 only.",
+    "No more than maxSprints (10) sprints; sprintSize medium."
+  ],
+  "createdAt": "2026-06-28T12:00:00.000Z",
+  "updatedAt": "2026-06-28T15:05:00.000Z",
+  "completedAt": "2026-06-30T01:38:55Z"
+}

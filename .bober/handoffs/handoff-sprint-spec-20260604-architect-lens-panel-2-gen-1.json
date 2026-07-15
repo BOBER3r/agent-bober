@@ -1,0 +1,34 @@
+{
+  "handoffId": "handoff-sprint-spec-20260604-architect-lens-panel-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260604-architect-lens-panel-2",
+  "specId": "spec-20260604-architect-lens-panel",
+  "timestamp": "2026-06-04T08:23:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Architect Decision Lens Panel — Sprint 2 (the riskiest): refactor the monolithic runArchitect so Checkpoint 2 (approach selection) becomes a discrete seam. Panel ON (architect.panel.enabled && lenses>=2): generate candidate approaches, fan out one lens scorer per lens bounded by maxConcurrent, synthesize() a ranked winner, select it. Panel OFF: today's single monolithic runAgenticLoop, byte-identical.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260604-architect-lens-panel-1",
+        "title": "synthesize() + arch-lenses + architect.panel config",
+        "summary": "src/orchestrator/workflow/synthesizer.ts (pure synthesize(approaches, lensScores) -> SynthesisResult {winner, ranking, graftedIdeas, dissent}); src/orchestrator/arch-lenses.ts (resolveArchLensFocus over 6 lenses + fallback); architect.panel config via architect: ArchitectSectionSchema.optional() in schema.ts. IMPORTANT: architect is OPTIONAL — read the gate as config.architect?.panel and treat undefined as off. Commit 7de08b5."
+      }
+    ],
+    "currentBranch": "bober/architect-lens-panel",
+    "relevantFiles": [
+      "src/orchestrator/architect-agent.ts",
+      "src/orchestrator/workflow/synthesizer.ts",
+      "src/orchestrator/arch-lenses.ts",
+      "src/orchestrator/evaluator-agent.ts",
+      "src/orchestrator/evaluator-agent.test.ts"
+    ]
+  },
+  "contract": "See .bober/contracts/sprint-spec-20260604-architect-lens-panel-2.json (read it fully — especially generatorNotes)",
+  "config": {
+    "commands": { "build": "tsc", "typecheck": "tsc --noEmit", "lint": "eslint src/", "test": "vitest" },
+    "generator": { "model": "sonnet", "autoCommit": true, "branchPattern": "bober/{feature-name}" }
+  },
+  "principlesPath": ".bober/principles.md",
+  "evaluatorFeedback": null,
+  "gitNote": "Pre-existing unrelated uncommitted changes exist. Stage ONLY: git add src/orchestrator/architect-agent.ts src/orchestrator/architect-agent.test.ts. NEVER `git add -A`/`git add .`. CRITICAL: the OFF path (config.architect?.panel undefined/disabled OR lenses<2) must run the EXISTING single monolithic runAgenticLoop byte-identically — the panel branch is purely additive and gated. Mock createClient AND runAgenticLoop in tests (the evaluator-agent.test.ts harness is the model). Branch bober/architect-lens-panel — never main."
+}

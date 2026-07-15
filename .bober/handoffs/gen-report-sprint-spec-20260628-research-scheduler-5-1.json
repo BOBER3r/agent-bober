@@ -1,0 +1,17 @@
+{
+  "contractId": "sprint-spec-20260628-research-scheduler-5",
+  "iteration": 1,
+  "status": "complete",
+  "commit": "bebe2f5",
+  "criteriaResults": [
+    {"criterionId": "sc-5-1", "met": true, "evidence": "buildDigest(since,now,deps) calls deps.collectRuns, returns Digest with runs[{title,topFinding,generatedAt,source}]; test 2 fake runs => runs.length 2 + both titles/findings in md"},
+    {"criterionId": "sc-5-2", "met": true, "evidence": "writes .bober/research/digests/<YYYY-MM-DD>.md + .json (date=now.slice(0,10)); md bullets per run; json JSON.stringify+newline; both paths returned/asserted"},
+    {"criterionId": "sc-5-3", "met": true, "evidence": "empty collectRuns => md '_No new research was produced in this window._' + both files still written (never throws); test reads both files + asserts runs []"},
+    {"criterionId": "sc-5-4", "met": true, "evidence": "build/typecheck/lint exit 0; digest --since <iso> registered after tick; full suite 3583 (+8)"}
+  ],
+  "filesChanged": ["src/research/digest.ts", "src/research/digest.test.ts", "src/cli/commands/research.ts"],
+  "testsAdded": ["src/research/digest.test.ts"],
+  "commits": ["bebe2f5 - bober(sprint-5): digest builder + CLI subcommand for research scheduler"],
+  "blockers": [],
+  "notes": "Real collectRunsFromVault reads vault notes <vaultRoot>/research/ (listNotes+readNote, frontmatter.generatedAt ISO-lexicographic in [since,now]); hub Findings rejected (deduped/no path). topFinding from frontmatter.question (non-sensitive). ensureDir from state/helpers.ts (keeps research.test.ts utils/fs vi.mock stable). Full suite 3583."
+}

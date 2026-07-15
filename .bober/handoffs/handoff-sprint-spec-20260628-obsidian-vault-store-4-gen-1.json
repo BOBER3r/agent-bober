@@ -1,0 +1,51 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-obsidian-vault-store-4-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-obsidian-vault-store-4",
+  "specId": "spec-20260628-obsidian-vault-store",
+  "timestamp": "2026-06-28T14:37:39.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Obsidian vault storage layer. Sprints 1-3 DONE (note model+I/O, derived FactStore index, `bober vault reindex` CLI). This sprint (depends only on Sprint 1) adds (1) a config schema VaultSection declaring an on-device Obsidian MCP server mirroring ObservabilityProviderSchema, and (2) a thin VaultMcpAdapter wrapping the EXISTING ExternalMcpServer (src/mcp/external-client.ts) for read/write/list via CONFIGURABLE tool names (default cyanheads/obsidian-mcp-server), with an on-device-only guard that rejects non-local declarations BEFORE any spawn. Independent of the reindex CLI.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-1",
+        "title": "Vault note model + I/O",
+        "summary": "src/vault/{types,frontmatter,note-io}.ts; parseNote(raw,path)->VaultNote, serializeNote(note)->raw"
+      },
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-2",
+        "title": "Derived FactStore index",
+        "summary": "src/vault/{index-map,reindex}.ts"
+      },
+      {
+        "contractId": "sprint-spec-20260628-obsidian-vault-store-3",
+        "title": "vault reindex CLI",
+        "summary": "src/cli/commands/vault.ts + index.ts registration"
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/config/schema.test.ts",
+      "src/mcp/external-client.ts",
+      "src/vault/frontmatter.ts",
+      "src/vault/types.ts"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npx tsc",
+      "typecheck": "npx tsc --noEmit",
+      "lint": "npx eslint src/",
+      "test": "npx vitest run",
+      "testSingle": "npx vitest run <path>"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true
+    }
+  },
+  "evaluatorFeedback": null,
+  "note": "Do NOT modify src/mcp/external-client.ts \u2014 WRAP ExternalMcpServer (inject a minimal { start, listTools, callTool, stop } interface so tests fake it). NEVER log/stringify mcpEnv (mirror external-client.ts:66-77 sanitization). on-device guard MUST run BEFORE start(); on a non-local declaration throw a clear Error and never call start(). Default tool-names target cyanheads/obsidian-mcp-server, overridable in config. Reuse sprint-1 parseNote/serializeNote for VaultNote (de)serialization. Stay on branch bober/medical-team. Use 'npx vitest run'."
+}

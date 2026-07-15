@@ -1,0 +1,56 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-do-bridge-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-do-bridge-3",
+  "specId": "spec-20260628-do-bridge",
+  "timestamp": "2026-06-29T17:02:31.320Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "do-bridge Sprint 3 (FINAL): reconcilePromotions reads each launched run's run-state.json snapshot and advances the linked Finding (completed->done via supersede + promotesTo.status=completed; aborted/failed->open + promotesTo.status=aborted; running->unchanged). Expose via  and run best-effort at the start of every . Register a second non-functional stub promoter to prove registry extensibility (unsupported (domain,kind) fails closed). Add docs/do-bridge.md.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260628-do-bridge-1",
+        "title": "spine",
+        "summary": "8370612. registry/finding-port/coding-promoter/types + bober do --dry-run. PromoterRegistry.resolve precedence domain+kind>domain-only>undefined."
+      },
+      {
+        "contractId": "sprint-spec-20260628-do-bridge-2",
+        "title": "gate+launch",
+        "summary": "cf33acb. launcher.ts (Launcher port + RunSpawnerLauncher), promote.ts (runPromotionGate). STRUCTURED PromotionRef {kind,runId,launchedAt,status} + serializePromotionRef/parsePromotionRef. finding-port.ts has DoFinding view + setPromotion(id,ref,status) on interface + both adapters. hub/finding.ts BYTE-UNCHANGED (promotesTo serialized as JSON string into the existing z.string().optional() field)."
+      }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      ".bober/briefings/sprint-spec-20260628-do-bridge-3-briefing.md (READ FIRST — reconcilePromotions DI+wrapper template, the additive FindingStore methods to iterate launched findings + apply done/open via transitionFinding supersede, readRunState + RunState.status union, seedProjectFacts best-effort try/catch at pipeline.ts:981, --reconcile flag wiring at do.ts:204, run-state-fake test template, second stub promoter + fail-closed registry test, docs/do-bridge.md template on chat-steer.md naming register() call site at do.ts:220-222)",
+      "src/do-bridge/* (extend finding-port.ts with a list/scan of launched findings + a done/open update path through the port; add reconcile.ts; wire do.ts)",
+      "src/state/run-state.ts (readRunState — null-safe; RunState.status union completed/aborted/failed/running)",
+      "src/state/facts.ts (supersedeFact ~291 — done = supersede via the port update method)",
+      "src/hub/finding.ts (DO NOT MODIFY — byte-unchanged invariant continues)"
+    ]
+  },
+  "contract": "see .bober/contracts/sprint-spec-20260628-do-bridge-3.json",
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "lint": "npm run lint",
+      "test": "npm test",
+      "typecheck": "npm run typecheck"
+    },
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "criticalDirectives": [
+    "KEEP src/hub/finding.ts BYTE-UNCHANGED (same invariant as Sprint 2). The done transition and the open/aborted transition persist via the existing FindingStore port update path (setPromotion / a new update method) that serializes PromotionRef to the string field. Do NOT widen or edit the hub schema. Marking done = supersede via the port (transitionFinding/supersedeFact), NOT a schema change.",
+    "reconcile reads the CURRENT run-state.json snapshot and returns immediately — NO poll, NO block waiting for an in-flight run to finish (running -> leave unchanged).",
+    "reconcile MUST be best-effort and NEVER throw / NEVER abort the 'bober do' command: wrap the start-of-command reconcile in try/catch mirroring seedProjectFacts (pipeline.ts:981); a missing or corrupt run-state file returns without throwing.",
+    "The second promoter is NON-FUNCTIONAL — it exists only to prove PromoterRegistry.register accepts a new PromoterKey {domain:'projects', kind:'action'}; mark it non-functional in code comments. An unregistered (domain,kind) must fail closed (resolve undefined -> the 'bober do' handler exits non-zero naming the (domain,kind)).",
+    "docs/do-bridge.md must name the EXACT register() call site and the Promoter interface so a maintainer can add future medical/financial promoters; mirror the structure/length of docs/chat-steer.md or docs/teams.md. Do NOT delete/rewrite history.jsonl or progress.md. Do NOT change Sprint 1/2 public types or the approval-marker format."
+  ],
+  "evaluatorFeedback": null
+}

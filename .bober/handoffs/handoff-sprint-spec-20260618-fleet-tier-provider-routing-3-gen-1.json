@@ -1,0 +1,27 @@
+{
+  "handoffId": "handoff-sprint-spec-20260618-fleet-tier-provider-routing-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-3",
+  "specId": "spec-20260618-fleet-tier-provider-routing",
+  "timestamp": "2026-06-18T18:58:30Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Phase A Sprint 3 (final): build-time ToolRoleGuard that rejects any child whose resolved config would place claude-code on a TOOL_ROLE, throwing BEFORE any spawn. Wired into runFleet's fail-fast credential phase.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-1", "title": "Grok/xAI provider wiring", "summary": "grok* -> openai-compat api.x.ai/v1; isXaiEndpoint(). Commit b739ef1." },
+      { "contractId": "sprint-spec-20260618-fleet-tier-provider-routing-2", "title": "TierProviderPolicy + buildChildConfig overlay", "summary": "tier-policy.ts + FleetChild.tier; buildChildConfig overlays the tier block before the shallow-merge; byte-identical when tier absent; no claude-code in any tier. Commit 6e25a5f." }
+    ],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/config/role-providers.ts",
+      "src/fleet/index.ts",
+      "src/fleet/child-config.ts",
+      "src/fleet/manifest.ts"
+    ]
+  },
+  "contractRef": ".bober/contracts/sprint-spec-20260618-fleet-tier-provider-routing-3.json",
+  "specRef": ".bober/specs/spec-20260618-fleet-tier-provider-routing.json",
+  "config": { "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npm run test" }, "generator": { "model": "sonnet", "autoCommit": true } },
+  "principlesRef": ".bober/principles.md",
+  "evaluatorFeedback": null
+}

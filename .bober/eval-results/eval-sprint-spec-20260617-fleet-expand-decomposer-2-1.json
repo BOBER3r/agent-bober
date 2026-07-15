@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260617-fleet-expand-decomposer-2-1",
+  "contractId": "sprint-spec-20260617-fleet-expand-decomposer-2",
+  "specId": "spec-20260617-fleet-expand-decomposer",
+  "timestamp": "2026-06-17T20:17:00Z",
+  "iteration": 1,
+  "evaluator": "full",
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 8, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 8, "requiredFailed": 0, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0, no output", "details": "Zero type errors." },
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0, no output", "details": "Clean build." },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "eslint src/fleet/index.ts src/fleet/expand.test.ts exit 0", "details": "Zero lint errors; 13 .js imports; import type; no explicit any; no sync fs." },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "186 files, 2246 passed | 3 skipped; 14 expand tests + 8 index tests pass", "details": "Full suite green, no regressions." }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-2-1", "description": "build clean", "required": true, "result": "pass", "evidence": "npm run build exit 0.", "feedback": "" },
+    { "criterionId": "sc-2-2", "description": "typecheck clean", "required": true, "result": "pass", "evidence": "tsc --noEmit exit 0.", "feedback": "" },
+    { "criterionId": "sc-2-3", "description": "lint clean + ESM/import-type/no-any/no-sync-fs", "required": true, "result": "pass", "evidence": "eslint zero errors; 13 .js imports; import type; no explicit any (2 hits in comments); no sync fs.", "feedback": "" },
+    { "criterionId": "sc-2-4", "description": "default write-and-stop, runFleet never called", "required": true, "result": "pass", "evidence": "3 tests pass; manifest written to outPath (default <root>/.bober/fleet-expand.json); runFleet spy never called. Structural: only runFleet call site (index.ts:239) is inside `if (opts.yes)` (line 237).", "feedback": "" },
+    { "criterionId": "sc-2-5", "description": "--yes calls runFleet once with outPath after write", "required": true, "result": "pass", "evidence": "3 tests pass; runFleet called exactly once with outPath; file exists before runFleet runs; without --yes not called.", "feedback": "" },
+    { "criterionId": "sc-2-6", "description": "credential fail-fast before any write", "required": true, "result": "pass", "evidence": "2 tests pass; rejects /DEEPSEEK_API_KEY/, out file absent, decomposeGoal not reached. Structural: clientBuilder() at index.ts:179-185 runs before ensureDir/writeFile/rename (208/218/219); real factory.ts validateApiKey (line 216→131-138) throws for openai-compat+deepseek endpoint w/o key.", "feedback": "" },
+    { "criterionId": "sc-2-7", "description": "fleet <manifest> byte-identical + expand registered", "required": true, "result": "pass", "evidence": "git diff main: only change to registerFleetCommand is `program`→`const fleet = program` + trailing registerFleetExpandSubcommand(fleet); .command/.description/.option/.action body byte-identical. 4 registration tests + 8 existing index tests pass.", "feedback": "" },
+    { "criterionId": "sc-2-8", "description": "atomic overwrite + notice + --out redirect", "required": true, "result": "pass", "evidence": "2 tests pass; overwrite prints '[fleet expand] Overwritten existing manifest at: <path>'; --out redirects, default absent. Atomic temp(randomBytes)+rename at index.ts:216-219.", "feedback": "" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 8 required criteria pass on independent verification. The three load-bearing safety invariants confirmed structurally (code + git diff) and via tests: createClient first before any IO; runFleet only inside `if (opts.yes)`; fleet <manifest> registration byte-identical. Full suite 2246 tests pass, zero failures, no regressions."
+}

@@ -1,0 +1,34 @@
+{
+  "contractId": "sprint-spec-20260628-calendar-planner-3",
+  "iteration": 1,
+  "status": "complete",
+  "commits": ["123c7c4 - bober(sprint-3): Google Calendar MCP connector (egress-gated) + safe-title privacy"],
+  "filesChanged": [
+    "src/config/schema.ts (modified — additive CalendarSectionSchema, calendar: ...optional(); createDefaultConfig untouched)",
+    "src/calendar/calendar-egress.ts (created — CalendarEgressGuard, assert throws naming calendar.egress.cloudCalendar)",
+    "src/calendar/calendar-token.ts (created — 0600 sidecar reader, fail-closed undefined)",
+    "src/calendar/types.ts (modified — additive optional calendarSafeTitle?: string on PlanItem)",
+    "src/calendar/slotter.ts (modified — populate calendarSafeTitle from finding; existing behavior unchanged)",
+    "src/calendar/google-connector.ts (created — GoogleCalendarToolAdapter + createGoogleConnector + sanitizeCalendarError)",
+    "docs/calendar.md (created — unattended-OAuth caveat + .ics fallback)",
+    "src/calendar/calendar-egress.test.ts (created)",
+    "src/calendar/calendar-token.test.ts (created)",
+    "src/calendar/google-connector.test.ts (created)"
+  ],
+  "criteriaResults": {
+    "sc-3-1": "build green; additive optional calendar schema section",
+    "sc-3-2": "typecheck green; createGoogleConnector structurally satisfies CalendarConnector",
+    "sc-3-3": "axis-off: writeEvents/readFreeBusy throw naming calendar.egress.cloudCalendar; ZERO adapter listTools/callTool calls (guard is first action)",
+    "sc-3-4": "summary = safeTitleById.get(findingId) ?? item.calendarSafeTitle ?? 'Focus block'; payload excludes full title, evidence, tags; NEVER item.title",
+    "sc-3-5": "readFreeBusy -> BusyInterval[] feeds planSlots end-to-end -> ProposedPlan",
+    "sc-3-6": "sanitizeCalendarError redacts KEY=VALUE/token; docs + module state OAuth unfit for unattended/cron + .ics fallback; token sidecar 0600"
+  },
+  "selfVerification": {
+    "build": "exit 0",
+    "typecheck": "exit 0",
+    "lint": "exit 0 (2 pre-existing warnings unrelated)",
+    "fullSuite": "3482 passed (274 files), +82 new tests, zero regressions"
+  },
+  "blockers": [],
+  "notes": "Safe-title PRIMARY source = findings map built at factory time (safeTitleById by finding.id); PlanItem.calendarSafeTitle additive optional is belt-and-suspenders. Guard() is first action in both connector methods -> refuses before adapter construction. Stub GoogleCalendarToolAdapter injected; no live OAuth/network in tests."
+}

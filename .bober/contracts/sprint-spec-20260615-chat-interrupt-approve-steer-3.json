@@ -1,0 +1,96 @@
+{
+  "contractId": "sprint-spec-20260615-chat-interrupt-approve-steer-3",
+  "specId": "spec-20260615-chat-interrupt-approve-steer",
+  "sprintNumber": 3,
+  "title": "Resolve approvals from chat: /approve, /reject + feedback, NL",
+  "description": "Close the human-in-the-loop. Add `/approve <checkpointId>` and `/reject <checkpointId> [feedback]` slash commands plus natural-language approve/reject intent (via the existing loose-JSON classifier) that write .approved.json / .rejected.json markers by reusing saveApproved/saveRejected with the pendingExists guard and resolveApprover. The detached child's DiskCheckpointMechanism poll then resumes automatically; rejection feedback flows into the pipeline's runCheckpointWithFeedback rework round. After resolution the chat-owned RunState clears its pending fields and returns the run to running on the next poll.",
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260615-chat-interrupt-approve-steer-2"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "The project builds with zero TypeScript errors (npm run build).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "TypeScript compilation produces zero type errors in strict mode (npm run typecheck).",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "All tests pass, including new approve/reject slash, NL-classify, and marker-write tests (npm run test).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "`/approve <checkpointId>` for an existing pending marker writes .bober/approvals/<id>.approved.json with approverId from resolveApprover() and acks resumption; for a non-existent pending marker it returns a clear 'no pending checkpoint' message and writes nothing. A unit test asserts both (file written / not written) using the pendingExists guard.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "`/reject <checkpointId> <feedback>` writes <id>.rejected.json carrying the feedback string (and rejecterId). A unit test asserts the rejected marker contents; a separate test confirms the DiskCheckpointMechanism reads that marker and resolves to {approved:false, feedback:<feedback>} (reusing the existing mechanism, not a reimplementation).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "Natural-language approval/rejection is classified to an approve/reject action carrying the target checkpoint id (resolved from the single outstanding pending marker, or the one named in the message) and routed to the same handlers. A unit test drives a stubbed classifier returning approve/reject and asserts the correct marker is written; when the target is ambiguous (multiple pending, none named) the turn asks which checkpoint instead of writing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "After a marker is resolved, the chat-owned RunState clears pendingCheckpointId/pendingPrompt/pendingSince and reflects the run back to 'running' on the next poll. `/help` lists /approve and /reject. A unit test asserts the RunState transition and the updated help text.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not reimplement the disk poll/resume — the detached child's DiskCheckpointMechanism already resumes when the marker appears",
+    "Do not change the existing approve.ts/reject.ts CLI commands",
+    "Do not add guidance injection or pause/resume (Sprints 4 and 5)",
+    "Do not change how the pipeline consumes rejection feedback (verify the existing runCheckpointWithFeedback path; do not modify it)"
+  ],
+  "stopConditions": [
+    "All seven success criteria pass",
+    "Approving/rejecting from chat writes the correct marker, a blocked run resumes via the existing disk poll, reject feedback reaches the rework path, and RunState clears its pending fields; build + typecheck + full suite green"
+  ],
+  "definitionOfDone": "Chat can resolve a pending checkpoint: /approve and /reject slash commands plus NL intent write the .approved.json/.rejected.json markers (reusing saveApproved/saveRejected, pendingExists guard, resolveApprover); the detached child resumes via its existing disk poll; reject feedback reaches runCheckpointWithFeedback; RunState clears pending fields and returns to running. /help updated. Build, typecheck, and the full suite pass.",
+  "assumptions": [
+    "saveApproved/saveRejected (approval-state.ts:106,122) and resolveApprover (cli/commands/approve.ts:29) are reused directly; resolveApprover may be lifted/exported so the chat handler shares it (or duplicated as a tiny env read if importing the CLI module is undesirable).",
+    "When a single pending marker is outstanding, NL approve/reject targets it implicitly; when several are outstanding, the handler requires the checkpoint id (asks the user) rather than guessing — consistent with the 'never guess a load-bearing target' discipline.",
+    "Resume is the existing DiskCheckpointMechanism poll in the detached child (disk.ts:104-169); chat only writes the marker and acks. The RunState running-flip is observed by the chat poll on a later turn (it is fine if the ack says 'resuming' before the child's next poll tick)."
+  ],
+  "outOfScope": [
+    "Guidance injection (Sprint 4), pause/resume (Sprint 5), hygiene+docs+e2e (Sprint 6)",
+    "runId-scoped marker filenames (deferred)"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Reuse the approval store; do not rebuild it. Verified touch points:\n- src/state/approval-state.ts: saveApproved(projectRoot, id, ApprovedMarker) at :106, saveRejected(projectRoot, id, RejectedMarker) at :122, pendingExists(projectRoot, id) at :145. ApprovedMarker={approvedAt,approverId,editDelta?}; RejectedMarker={rejectedAt,rejecterId,feedback}.\n- src/cli/commands/approve.ts: resolveApprover() at :29 (process.env USER/USERNAME -> 'unknown'). Either export+import it, or replicate the one-liner in a shared helper. The CLI's guard pattern (pendingExists before writing) at :44 is the model — mirror it so chat never writes a dangling .approved.json.\n- New chat handlers (in chat-session.ts, mirroring handleStop at :201): handleApprove(checkpointId) and handleReject(checkpointId, feedback). Both: resolve projectRoot, pendingExists guard, write marker via saveApproved/saveRejected, then clear the pending fields on the correlated chat-owned RunState (status back to 'running', drop pendingCheckpointId/pendingPrompt/pendingSince) and writeRunState. Return an ack string.\n- src/chat/slash-commands.ts: add /approve and /reject cases. Thread approveHandler/rejectHandler callbacks the way stopHandler is threaded (dispatch already supports optional handlers; keep 2-arg callers working). /reject collects the remainder of the line as feedback (everything after the checkpoint id). Update HELP_TEXT to list /approve and /reject.\n- src/chat/turn-classifier.ts: extend the action union and the loose-JSON schema/prompt to recognize approve/reject intents, returning { action:'approve'|'reject', checkpointId?, feedback? }. Keep jsonObjectMode (DeepSeek-safe). When checkpointId is absent, the chat layer resolves it from the outstanding pending markers (single -> use it; multiple -> ask). Add classifier tests with stubbed LLM responses.\n- chat-session.ts classify path (:155-178): route the new actions to handleApprove/handleReject; resolve an absent checkpointId via ApprovalReader (single-pending shortcut; ambiguous -> return a clarifying message, write nothing).\n- Verify (do not modify) the feedback->rework path: runCheckpointWithFeedback in the orchestrator consumes {approved:false, feedback}. Add a test that constructs a DiskCheckpointMechanism pointed at the temp approvals dir, writes a rejected marker via the chat handler, and asserts mechanism.request(...) resolves to {approved:false, feedback}. This proves the chat write integrates with the existing resume+feedback path end-to-end at the unit level.\nTests: temp dirs, stubbed classifier, no network. Run build+typecheck+test before handoff.",
+  "evaluatorNotes": "sc-3-4: pre-create a post-plan.pending.json; call handleApprove('post-plan'); assert post-plan.approved.json exists with approverId; call handleApprove('does-not-exist'); assert no file written and a clear message returned.\nsc-3-5: pre-create a pending marker; handleReject('post-plan','split sprint 2'); assert rejected.json has feedback==='split sprint 2'; then construct DiskCheckpointMechanism(tempApprovalsDir) and assert request('post-plan', artifact) resolves to {approved:false, feedback:'split sprint 2'} (the pending file should be pre-seeded for the mechanism's own poll, or assert against the marker the handler wrote — match the generator's test design but prove the feedback is the one the mechanism returns).\nsc-3-6: stub the classifier to return approve with no checkpointId while exactly one pending marker exists -> assert that marker approved; stub reject while two pending markers exist and none named -> assert nothing written and a clarifying question returned.\nsc-3-7: after handleApprove, read the correlated RunState and assert pending fields cleared and status back to 'running'; assert HELP_TEXT contains /approve and /reject.\nRegression: existing approve.ts/reject.ts CLI tests and chat tests stay green; approval-state.ts unchanged except possibly exporting resolveApprover. Run build, typecheck, test.",
+  "estimatedFiles": [
+    "src/chat/chat-session.ts",
+    "src/chat/chat-session-approval.test.ts",
+    "src/chat/slash-commands.ts",
+    "src/chat/slash-commands.test.ts",
+    "src/chat/turn-classifier.ts",
+    "src/chat/turn-classifier.test.ts",
+    "src/cli/commands/approve.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "lastEvalId": "eval-sprint-spec-20260615-chat-interrupt-approve-steer-3-1",
+  "createdAt": "2026-06-15T17:00:00Z",
+  "updatedAt": "2026-06-15T17:00:00Z",
+  "completedAt": "2026-06-15T14:21:31Z"
+}

@@ -1,0 +1,37 @@
+{
+  "handoffId": "handoff-sprint-spec-20260628-priority-hub-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260628-priority-hub-1",
+  "specId": "spec-20260628-priority-hub",
+  "timestamp": "2026-06-28T20:11:56.000Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent autonomous build harness (TypeScript ESM, NodeNext). This spec adds a new src/hub/ module: the canonical cross-domain Finding schema (owned here), a cross-repo read-only collector, a query-scoped two-pass prioritization judge, a priority.md renderer, and bober hub / bober chat hub CLI surfaces. Sprint 1 is the foundational vertical slice: Finding Zod schema -> FactStoreFindingSource -> `bober hub list`.",
+    "completedSprints": [],
+    "currentBranch": "bober/medical-team",
+    "relevantFiles": [
+      "src/fleet/shared-blackboard.ts (findings stored as FactStore rows at predicate 'finding', publish at lines 84-105)",
+      "src/state/facts.ts (FactStore.getActiveFacts read surface ~line 222)",
+      "src/cli/commands/blackboard.ts (publish|read handler discipline to mirror)",
+      "src/cli/commands/memory.ts (list handler + process.exitCode discipline to mirror)",
+      "src/cli/index.ts (command registration entrypoint)",
+      ".bober/research/research-20260627-knowledge-platform-landscape.md:121-126 (locked Finding field set)"
+    ]
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test"
+    },
+    "generator": {
+      "model": "sonnet",
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principlesRef": ".bober/principles.md (read from disk: ESM with .js import extensions, type imports, Zod for validation, vitest collocated tests, no SDK leakage, async fs only, conventional commits bober(sprint-N): ...)",
+  "evaluatorFeedback": null
+}
