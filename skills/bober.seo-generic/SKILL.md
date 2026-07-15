@@ -75,7 +75,7 @@ never reach an analyzer prompt.
 - **Workflows:** ai-visibility, rank-track
 - **Tactic:** Prioritise AIO-visibility work on commercial and transactional queries, not only informational content — the trigger mix has moved decisively toward money queries.
 - **Invariant:** AIO intent mix shifted Jan-Oct 2025: informational share fell 91.3%->57.1% of triggers while commercial rose to 18.57% and transactional to 13.94%, per a Semrush 10M+ keyword panel.
-- **PrimarySourceUrl:** https://www.semrush.com/blog/ai-overviews-study/
+- **PrimarySourceUrl:** https://www.semrush.com/blog/semrush-ai-overviews-study/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** verified
 - **Keywords:** aio, commercial-intent, transactional, rank-track
@@ -85,7 +85,7 @@ never reach an analyzer prompt.
 - **Workflows:** ai-visibility
 - **Tactic:** Re-measure AIO prevalence for target queries on a recurring cadence rather than assuming a one-time audit is durable; build monitoring, not a static report.
 - **Invariant:** AIO prevalence fluctuated hard through 2025: 6.49% of queries (Jan) -> 24.61% (Jul) -> 15.69% (Nov), per the same Semrush 10M+ keyword panel.
-- **PrimarySourceUrl:** https://www.semrush.com/blog/ai-overviews-study/
+- **PrimarySourceUrl:** https://www.semrush.com/blog/semrush-ai-overviews-study/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** verified
 - **Keywords:** aio, volatility, monitoring, rank-track
@@ -95,7 +95,7 @@ never reach an analyzer prompt.
 - **Workflows:** ai-visibility
 - **Tactic:** Do not justify SEO/GEO investment primarily on a claimed AIO-driven zero-click collapse; the measured effect is small, so frame AI-visibility work around brand exposure and citation share instead.
 - **Invariant:** Zero-click rate slightly DECREASED (33.75%->31.53%) on keywords after AIOs appeared, in a 200K+ keyword before/after study validated against Datos clickstream data.
-- **PrimarySourceUrl:** https://www.semrush.com/blog/ai-overviews-study/
+- **PrimarySourceUrl:** https://www.semrush.com/blog/semrush-ai-overviews-study/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** verified
 - **Keywords:** zero-click, aio, clickstream, datos
@@ -105,7 +105,7 @@ never reach an analyzer prompt.
 - **Workflows:** ai-visibility, technical-audit
 - **Tactic:** Do not assume organic top-10 ranking is required for AIO citation; audit AIO citation coverage separately from rank-tracking, since a majority of cited pages now rank outside the top 10.
 - **Invariant:** Only 38% of AIO-cited pages ranked in the organic top-10 as of Jan 2026 (down from ~76% in Jul 2025); 31.2% of cited pages ranked 11-100 and 31.0% ranked beyond top-100, per an Ahrefs analysis of 863K SERPs / 4M AIO URLs.
-- **PrimarySourceUrl:** https://ahrefs.com/blog/ai-overviews-study/
+- **PrimarySourceUrl:** https://ahrefs.com/blog/ai-overview-citations-top-10/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** verified
 - **Keywords:** aio, citations, top10, technical-audit
@@ -115,7 +115,7 @@ never reach an analyzer prompt.
 - **Workflows:** ai-visibility
 - **Tactic:** Track citation rate and brand-mention rate as two distinct AI-visibility metrics; a page being cited as a source link does not mean the brand is actually named in the answer.
 - **Invariant:** 61.7% of AI citations are "ghost citations" — the source page is linked but the brand is never named in the answer, across 3,981 domain appearances / 115 prompts / 4 platforms / 14 countries (Semrush/Kevin Indig study).
-- **PrimarySourceUrl:** https://www.semrush.com/blog/ai-citations-study/
+- **PrimarySourceUrl:** https://www.semrush.com/blog/the-ghost-citations-study/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** verified
 - **Keywords:** ghost-citation, citation-rate, mention-rate, ai-visibility
@@ -125,7 +125,7 @@ never reach an analyzer prompt.
 - **Workflows:** topical-map, ai-visibility
 - **Tactic:** Build topical-map content that comprehensively covers the fan-out query set around a topic (related sub-questions, comparisons, specifications) rather than optimizing a single page for one head keyword.
 - **Invariant:** AI Overviews retrieve results via query fan-out (generating and retrieving against a broadened set of related sub-queries), so single-keyword-optimized pages under-cover what AIO actually retrieves against.
-- **PrimarySourceUrl:** https://ahrefs.com/blog/ai-overviews-study/
+- **PrimarySourceUrl:** https://ahrefs.com/blog/ai-overview-citations-top-10/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
 - **Keywords:** fan-out, topical-map, query-expansion, aio
@@ -135,7 +135,7 @@ never reach an analyzer prompt.
 - **Workflows:** ai-visibility
 - **Tactic:** For Perplexity-specific AI-visibility work, prioritise genuine community presence and discussion (Reddit and similar forums) over traditional publisher-style content placement.
 - **Invariant:** Perplexity is the most community-weighted platform in a 680M-citation study: Reddit accounts for 6.6% of ALL Perplexity citations and 46.7% of its top-source citations.
-- **PrimarySourceUrl:** https://www.tryprofound.com/
+- **PrimarySourceUrl:** https://www.tryprofound.com/blog/ai-platform-citation-patterns
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** verified
 - **Keywords:** perplexity, reddit, community, platform-specific
@@ -145,7 +145,7 @@ never reach an analyzer prompt.
 - **Workflows:** topical-map
 - **Tactic:** Keep new content aligned to the site's established topical focus; treat high-deviation off-topic pages as ranking-risk outliers rather than easy incremental traffic.
 - **Invariant:** The leaked Google Content Warehouse API documents a siteFocusScore (site dedication to one topic) and siteRadius (page deviation from the site's central theme) that operationalize topical authority; high-deviation pages are documented ranking outliers.
-- **PrimarySourceUrl:** https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-should-see-them/
+- **PrimarySourceUrl:** https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-in-seo-should-see-them/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
 - **Keywords:** topical-authority, sitefocus, site-radius, leak
@@ -155,7 +155,7 @@ never reach an analyzer prompt.
 - **Workflows:** schema-audit, ai-visibility
 - **Tactic:** Implement and validate entity-linking schema markup (Organization, Product, FAQ, and related structured data) as a standard part of every technical/schema audit, not an optional add-on.
 - **Invariant:** A documented Schema App case study measured +19.72% AI Overview visibility from entity-linking / schema-markup work — one of the few quantified schema-to-GEO results.
-- **PrimarySourceUrl:** https://www.schemaapp.com/
+- **PrimarySourceUrl:** https://www.schemaapp.com/schema-markup/case-study-entity-linking-increases-aio-visibility/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
 - **Keywords:** schema, entity, structured-data, aio-lift
@@ -165,7 +165,7 @@ never reach an analyzer prompt.
 - **Workflows:** parasite-watch
 - **Tactic:** NEVER encode as an actionable tactic — placing brand content on a high-authority third-party domain (forum, subreddit, unrelated news site) specifically to borrow its ranking signal is a Google site-reputation-abuse policy violation. The Nov 2024 policy update closed the first-party-involvement loophole: no amount of oversight, white-labeling, or licensing exempts this.
 - **Invariant:** This tactic must never be recommended, even as a human-approval-gated option — it is a named policy violation, not a judgment call the suite should surface as an option.
-- **PrimarySourceUrl:** https://developers.google.com/search/blog/2024/03/core-and-spam-updates-rolling-out
+- **PrimarySourceUrl:** https://developers.google.com/search/blog/2024/03/core-update-spam-policies
 - **PolicyClass:** never-encode
 - **EvidenceGrade:** primary-unverified
 - **Keywords:** parasite-seo, site-reputation-abuse, never-encode, policy-violation
