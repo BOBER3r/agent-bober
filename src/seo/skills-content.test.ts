@@ -84,3 +84,79 @@ describe("SeoPlaybookParser — real bober.seo-schema-audit skill file", () => {
     expect(massGen?.policyClass).toBe("human-approve");
   });
 });
+
+// ── Sprint 4 (spec-20260715-ultimate-seo-suite) -- sc-4-1 (>=6 valid blocks
+// each), sc-4-2 (decay mechanism / siteFocusScore-siteRadius / fan-out /
+// AIO-decouple present & cited), sc-4-3 (every block cited + policyClass, no
+// REFUTED claim) ────────────────────────────────────────────────────────
+
+describe("SeoPlaybookParser — real bober.seo-content-decay skill file", () => {
+  it("parses skills/bober.seo-content-decay/SKILL.md into >=6 valid, cited signatures", async () => {
+    const relPath = "skills/bober.seo-content-decay/SKILL.md";
+    const signatures = await loadSkill(relPath);
+    assertBaseline(signatures, relPath);
+
+    for (const s of signatures) {
+      expect(s.workflows).toContain("content-decay");
+    }
+    // sc-4-2: the NavBoost decay mechanism + the 64%-decayed baseline are present & cited.
+    const ids = signatures.map((s) => s.playbookId);
+    expect(ids).toContain("navboost-decay-expected-clicks");
+    expect(ids).toContain("content-decay-hcu-baseline");
+
+    const decayMechanism = signatures.find((s) => s.playbookId === "navboost-decay-expected-clicks");
+    expect(decayMechanism?.primarySourceUrl).toBe("https://ipullrank.com/google-algo-leak");
+    const hcuBaseline = signatures.find((s) => s.playbookId === "content-decay-hcu-baseline");
+    expect(hcuBaseline?.primarySourceUrl).toBe("https://detailed.com/q3/");
+
+    // sc-4-1 policy: a live-site rewrite/consolidation tactic must be human-approve.
+    const consolidate = signatures.find((s) => s.playbookId === "large-scale-rewrite-consolidation-approval");
+    expect(consolidate?.policyClass).toBe("human-approve");
+  });
+});
+
+describe("SeoPlaybookParser — real bober.seo-topical-map skill file", () => {
+  it("parses skills/bober.seo-topical-map/SKILL.md into >=6 valid, cited signatures", async () => {
+    const relPath = "skills/bober.seo-topical-map/SKILL.md";
+    const signatures = await loadSkill(relPath);
+    assertBaseline(signatures, relPath);
+    for (const s of signatures) {
+      expect(s.workflows).toContain("topical-map");
+    }
+    // sc-4-2: siteFocusScore/siteRadius + fan-out coverage present & cited.
+    const ids = signatures.map((s) => s.playbookId);
+    expect(ids).toContain("sitefocusscore-topical-dedication");
+    expect(ids).toContain("siteradius-deviation-outlier-map");
+    expect(ids).toContain("query-fan-out-coverage-map");
+
+    const fanOut = signatures.find((s) => s.playbookId === "query-fan-out-coverage-map");
+    expect(fanOut?.primarySourceUrl).toBe("https://ahrefs.com/blog/ai-overview-citations-top-10/");
+
+    // sc-4-1 policy: publishing the full map at scale must be human-approve.
+    const buildout = signatures.find((s) => s.playbookId === "map-buildout-at-scale-approval");
+    expect(buildout?.policyClass).toBe("human-approve");
+  });
+});
+
+describe("SeoPlaybookParser — real bober.seo-rank-track skill file", () => {
+  it("parses skills/bober.seo-rank-track/SKILL.md into >=6 valid, cited signatures", async () => {
+    const relPath = "skills/bober.seo-rank-track/SKILL.md";
+    const signatures = await loadSkill(relPath);
+    assertBaseline(signatures, relPath);
+    for (const s of signatures) {
+      expect(s.workflows).toContain("rank-track");
+    }
+    // sc-4-2: AIO-citation-vs-rank decoupling cited to the Ahrefs 38% study.
+    const decouple = signatures.find((s) => s.playbookId === "aio-citation-rank-decouple");
+    expect(decouple?.primarySourceUrl).toBe("https://ahrefs.com/blog/ai-overview-citations-top-10/");
+
+    // zero-click reality check cited to the Semrush study.
+    const zeroClick = signatures.find((s) => s.playbookId === "zero-click-reality-check");
+    expect(zeroClick?.primarySourceUrl).toBe("https://www.semrush.com/blog/semrush-ai-overviews-study/");
+
+    // rank-track is pure monitoring/analysis -- every block should be auto-safe.
+    for (const s of signatures) {
+      expect(s.policyClass).toBe("auto-safe");
+    }
+  });
+});
