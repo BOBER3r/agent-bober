@@ -54,6 +54,8 @@ import { SeoCitationGate } from "./citation-gate.js";
 import { SeoReportStore, deriveReportId } from "./report-store.js";
 import { SeoHubEmitter } from "./hub-emitter.js";
 import type { SeoFindingSink } from "./hub-emitter.js";
+import { SeoRecommendationVerifier } from "./verifier.js";
+import type { SeoVerifier } from "./verifier.js";
 
 // ── Public types (arch lines 61-89) ─────────────────────────────────────
 
@@ -76,6 +78,13 @@ export type SeoRunInput = {
    * calls `llm.chat`). Default = a real `SeoAnalyzer` via `createClient`.
    */
   analyzer?: SeoAnalyzer;
+  /**
+   * TEST injection for the opt-in adversarial verifier stage (Sprint 12).
+   * Default = a real `SeoRecommendationVerifier`, constructed and invoked
+   * ONLY when `config.seo?.verifier?.enabled === true` (byte-identical to
+   * the no-verifier run otherwise — sc-12-2).
+   */
+  verifier?: SeoVerifier;
 };
 
 export type SeoRunOutcome = { report?: SeoReport; exitCode: 0 | 2 };
@@ -279,18 +288,34 @@ export class SeoWorkflowRunner {
       const threshold = input.config.seo?.blockThreshold ?? "critical-uncited";
       const gate = new SeoCitationGate().apply(analysis.findings, threshold);
 
-      // bober: the adversarial downgrade-only verifier stage (Sprint 12,
-      // contract nonGoal) slots HERE — between the citation gate and
-      // persistence — consuming `gate.cited` and possibly further
-      // downgrading findings before they are persisted/emitted. Not
-      // implemented this sprint.
+      // Opt-in, downgrade-only adversarial verifier stage (Sprint 12),
+      // between the citation gate and persistence. The `enabled` check
+      // lives HERE (not just inside `verify()`) so the disabled path never
+      // even constructs a `SeoRecommendationVerifier` or makes a provider
+      // call — byte-identical to the no-verifier run (sc-12-2). The
+      // verifier consumes ONLY `gate.cited` and can only shrink/downgrade
+      // it; `gate.blocked` (used below) is derived from `gate.dropped` and
+      // is NEVER recomputed from the verifier's output, so a verifier
+      // failure structurally cannot change the exit code or block decision
+      // (sc-12-4).
+      let cited = gate.cited;
+      if (input.config.seo?.verifier?.enabled === true) {
+        const verifier = input.verifier ?? new SeoRecommendationVerifier();
+        const verifyResult = await verifier.verify({
+          findings: gate.cited,
+          config: input.config,
+          projectRoot: input.projectRoot,
+          now: input.now,
+        });
+        cited = verifyResult.findings;
+      }
 
       const report: SeoReport = {
         reportId: deriveReportId(input.now, input.workflow, target),
         workflow: input.workflow,
         target,
         generatedAt: input.now,
-        findings: gate.cited,
+        findings: cited,
         droppedUncited: gate.dropped.length,
         dataProvenance: analysis.dataProvenance,
         verdict: gate.blocked ? "blocked" : "pass",
@@ -298,9 +323,10 @@ export class SeoWorkflowRunner {
 
       await new SeoReportStore().save(input.projectRoot, report);
 
-      // Best-effort hub emit of gate.cited ONLY, AFTER persist. A hub
-      // failure never changes the exit code.
-      const citedAnalysis: SeoAnalysis = { ...analysis, findings: gate.cited };
+      // Best-effort hub emit of the (possibly verifier-folded) cited
+      // findings ONLY, AFTER persist. A hub failure never changes the exit
+      // code.
+      const citedAnalysis: SeoAnalysis = { ...analysis, findings: cited };
       await emitFindingsToHub(citedAnalysis, input.projectRoot, input.now, input.findingSink);
 
       return { report, exitCode: gate.blocked ? 2 : 0 };

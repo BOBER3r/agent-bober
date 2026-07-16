@@ -24,6 +24,8 @@ import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig } from "../config/schema.js";
 import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
 import type * as ProviderFactory from "../providers/factory.js";
+import type { SeoVerifier } from "./verifier.js";
+import type { SeoFinding } from "./types.js";
 
 // ── createClient mock — MUST NEVER be invoked in this file ──────────────
 
@@ -322,5 +324,109 @@ describe("SeoWorkflowRunner.run — never throws", () => {
     // NEVER change the exit code computed from the citation gate.
     expect(outcome.exitCode).toBe(0);
     expect(outcome.report).toBeDefined();
+  });
+});
+
+// ── Sprint 12: opt-in adversarial verifier stage (sc-12-2, sc-12-4) ─────
+
+function verifierEnabledConfig(): BoberConfig {
+  return createDefaultConfig("test-project", "brownfield", undefined, {
+    seo: { verifier: { enabled: true }, blockThreshold: "critical-uncited" },
+  });
+}
+
+describe("SeoWorkflowRunner.run — opt-in verifier stage (sc-12-2, sc-12-4)", () => {
+  it("verifier disabled -> byte-identical to the no-verifier run: verifier NEVER invoked, findings unchanged", async () => {
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink, calls } = makeRecordingSink();
+    const spyVerifier: SeoVerifier = { verify: vi.fn(async ({ findings }) => ({ ran: true, findings })) };
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(), // `seo` omitted entirely -> verifier.enabled defaults false
+      workflow: "technical-audit",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: new LocalExportSource(fixtureImportDir),
+      analyzer,
+      findingSink: sink,
+      verifier: spyVerifier,
+    });
+
+    // The runner must not even CALL the injected verifier when disabled
+    // (Pattern E) — this is the "no provider call" half of sc-12-2.
+    expect(spyVerifier.verify).not.toHaveBeenCalled();
+
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.report).toBeDefined();
+    expect(outcome.report?.verdict).toBe("pass");
+    expect(outcome.report?.findings).toHaveLength(1);
+    expect(outcome.report!.findings[0].severity).toBe(3); // byte-identical to CITED_FINDING_JSON, untouched
+    expect(calls).toHaveLength(1);
+  });
+
+  it("verifier enabled + stub downgrades -> report.findings severity lowered; exit code still derives from the citation gate alone", async () => {
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink, calls } = makeRecordingSink();
+    const stubVerifier: SeoVerifier = {
+      verify: vi.fn(async ({ findings }) => ({
+        ran: true,
+        findings: findings.map((f) => ({
+          ...f,
+          severity: Math.max(1, f.severity - 1) as SeoFinding["severity"],
+        })),
+      })),
+    };
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: verifierEnabledConfig(),
+      workflow: "technical-audit",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: new LocalExportSource(fixtureImportDir),
+      analyzer,
+      findingSink: sink,
+      verifier: stubVerifier,
+    });
+
+    expect(stubVerifier.verify).toHaveBeenCalledTimes(1);
+    expect(outcome.report?.findings).toHaveLength(1);
+    expect(outcome.report!.findings[0].severity).toBe(2); // 3 -> 2, downgraded by the stub
+    // gate.blocked (and therefore exitCode) is derived from the citation
+    // gate ALONE and is unaffected by the verifier's downgrade.
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.report?.verdict).toBe("pass");
+    // Hub emit received the verifier-folded (downgraded) finding.
+    expect(calls).toHaveLength(1);
+  });
+
+  it("verifier enabled but returns ran:false (fail-closed) -> findings/exitCode/hub emit unaffected (sc-12-4)", async () => {
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink, calls } = makeRecordingSink();
+    const failClosedVerifier: SeoVerifier = {
+      verify: vi.fn(async ({ findings }) => ({ ran: false, findings })),
+    };
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: verifierEnabledConfig(),
+      workflow: "technical-audit",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: new LocalExportSource(fixtureImportDir),
+      analyzer,
+      findingSink: sink,
+      verifier: failClosedVerifier,
+    });
+
+    expect(failClosedVerifier.verify).toHaveBeenCalledTimes(1);
+    expect(outcome.exitCode).toBe(0);
+    expect(outcome.report?.findings).toHaveLength(1);
+    expect(outcome.report!.findings[0].severity).toBe(3); // unchanged — fail-closed
+    expect(calls).toHaveLength(1);
   });
 });

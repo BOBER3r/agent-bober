@@ -61,5 +61,8 @@ export type { SeoFindingSink } from "./hub-emitter.js";
 export { SeoWorkflowRunner, selectSource } from "./runner.js";
 export type { SeoRunInput, SeoRunOutcome } from "./runner.js";
 
+export { SeoRecommendationVerifier } from "./verifier.js";
+export type { SeoVerifier, SeoVerifyParams, SeoVerifyResult } from "./verifier.js";
+
 export { registerSeoCommand } from "./command.js";
 export type { SeoCommandOverrides } from "./command.js";
