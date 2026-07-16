@@ -678,6 +678,10 @@ export const SeoConfigSchema = z.object({
       "search-console": z.boolean().default(false),
       /** When true, DataForSEO SERP/keywords/backlinks egress is permitted. Default false. */
       "serp-provider": z.boolean().default(false),
+      /** When true, live AI-visibility/GEO provider egress is permitted. Default false. */
+      "ai-visibility": z.boolean().default(false),
+      /** When true, damcrawler-backed site crawling (crawl/url-coverage/link-graph/SERP-scrape) is permitted. Default false. */
+      "site-crawl": z.boolean().default(false),
     })
     .optional(),
   /**
@@ -695,6 +699,17 @@ export const SeoConfigSchema = z.object({
   defaultTarget: z.string().optional(),
   /** Citation-gate blocking threshold for the CI exit code. Default 'critical-uncited'. */
   blockThreshold: z.enum(["never", "any-uncited", "critical-uncited"]).default("critical-uncited"),
+  /**
+   * Which SERP provider implementation serves the `serp` capability. OPTIONAL
+   * with an INNER default on `provider` (not an outer default on the whole
+   * object) — a config omitting `serp` entirely stays byte-identical
+   * (`SeoConfigSchema.parse({})` leaks only `blockThreshold`, schema.test.ts:978-985).
+   */
+  serp: z
+    .object({
+      provider: z.enum(["dataforseo", "damcrawler"]).default("dataforseo"),
+    })
+    .optional(),
 });
 export type SeoConfig = z.infer<typeof SeoConfigSchema>;
 

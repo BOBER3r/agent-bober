@@ -975,19 +975,22 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
 // ── SeoConfigSchema tests (spec-20260715-ultimate-seo-suite sprint 1 — sc-1-1) ──
 
 describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
-  it("parse({}) leaks NO axis/verifier/budget/defaultTarget defaults — only blockThreshold", () => {
+  it("parse({}) leaks NO axis/verifier/budget/defaultTarget/serp defaults — only blockThreshold", () => {
     const parsed = SeoConfigSchema.parse({});
     expect(parsed).toEqual({ blockThreshold: "critical-uncited" });
     expect(Object.hasOwn(parsed, "egress")).toBe(false);
     expect(Object.hasOwn(parsed, "verifier")).toBe(false);
     expect(Object.hasOwn(parsed, "budget")).toBe(false);
     expect(Object.hasOwn(parsed, "defaultTarget")).toBe(false);
+    expect(Object.hasOwn(parsed, "serp")).toBe(false);
   });
 
   it("egress axes default false when egress object present", () => {
     expect(SeoConfigSchema.parse({ egress: {} }).egress).toEqual({
       "search-console": false,
       "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": false,
     });
   });
 
@@ -995,7 +998,39 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
     const parsed = SeoConfigSchema.parse({
       egress: { "search-console": true, "serp-provider": false },
     });
-    expect(parsed.egress).toEqual({ "search-console": true, "serp-provider": false });
+    expect(parsed.egress).toEqual({
+      "search-console": true,
+      "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": false,
+    });
+  });
+
+  it("ai-visibility and site-crawl axes default false and round-trip independently (sc-1-1)", () => {
+    expect(SeoConfigSchema.parse({ egress: { "ai-visibility": true } }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+      "ai-visibility": true,
+      "site-crawl": false,
+    });
+    expect(SeoConfigSchema.parse({ egress: { "site-crawl": true } }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": true,
+    });
+  });
+
+  it("serp.provider defaults to 'dataforseo' when serp object present, is optional otherwise (sc-1-1)", () => {
+    expect(Object.hasOwn(SeoConfigSchema.parse({}), "serp")).toBe(false);
+    expect(SeoConfigSchema.parse({ serp: {} }).serp).toEqual({ provider: "dataforseo" });
+    expect(SeoConfigSchema.parse({ serp: { provider: "damcrawler" } }).serp).toEqual({
+      provider: "damcrawler",
+    });
+  });
+
+  it("rejects a bogus serp.provider value", () => {
+    expect(() => SeoConfigSchema.parse({ serp: { provider: "bing" } })).toThrow();
   });
 
   it("verifier.enabled defaults false when verifier object present", () => {
@@ -1111,6 +1146,8 @@ describe("BoberConfigSchema — seo section is optional, default-off (sc-1-1/sc-
       expect(result.data.seo?.egress).toEqual({
         "search-console": true,
         "serp-provider": false,
+        "ai-visibility": false,
+        "site-crawl": false,
       });
       expect(result.data.seo?.blockThreshold).toBe("critical-uncited");
     }

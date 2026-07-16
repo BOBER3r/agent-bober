@@ -28,13 +28,33 @@ import type {
   KeywordRow,
   BacklinkQuery,
   BacklinkRow,
+  AiVisibilityQuery,
+  AiVisibilityRow,
+  LinkGraphQuery,
+  LinkGraphRow,
 } from "../data-source.js";
 import type { DataOutcome, DataProvenance } from "../types.js";
 
 /** Relative to cwd; tests pass an absolute fixture directory instead. */
 const DEFAULT_EXPORT_DIR = ".bober/seo/imports";
 
-const CAPABILITIES: SeoCapability[] = [
+/**
+ * The subset of `SeoCapability` this sprint's `LocalExportSource` serves from
+ * a local file. `ai-visibility`/`link-graph` are NOT in this alias yet — they
+ * have no local file/mapper this sprint (Sprint 1 is pure disabled-arms;
+ * F5/F7 wire the offline arms). Narrowing here keeps `CAPABILITIES` and
+ * `FILE_BASENAME` from being an exhaustive `Record<SeoCapability, ...>`,
+ * which would otherwise fail to compile the moment `SeoCapability` widened
+ * to 7 members.
+ */
+type FileBackedCapability =
+  | "search-analytics"
+  | "url-inspection"
+  | "serp"
+  | "keywords"
+  | "backlinks";
+
+const CAPABILITIES: FileBackedCapability[] = [
   "search-analytics",
   "url-inspection",
   "serp",
@@ -43,7 +63,7 @@ const CAPABILITIES: SeoCapability[] = [
 ];
 
 /** `<capability>` file basename — see the briefing's import-convention table. */
-const FILE_BASENAME: Record<SeoCapability, string> = {
+const FILE_BASENAME: Record<FileBackedCapability, string> = {
   "search-analytics": "search-analytics",
   "url-inspection": "url-inspection",
   serp: "serp",
@@ -263,6 +283,18 @@ export class LocalExportSource implements SeoDataSource {
 
   async backlinks(_q: BacklinkQuery): Promise<DataOutcome<BacklinkRow[]>> {
     return this.readCapability("backlinks", mapBacklinkRow);
+  }
+
+  // -- Capabilities this sprint's LocalExportSource does not yet serve;
+  //    F5/F7 wire the offline ai-visibility/link-graph arms in a later
+  //    sprint (nonGoal this sprint) --------------------------------------
+
+  async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return { kind: "disabled" };
+  }
+
+  async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
+    return { kind: "disabled" };
   }
 
   /**

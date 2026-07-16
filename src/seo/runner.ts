@@ -31,7 +31,7 @@ import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
 import { ingestFinding } from "../hub/finding-store.js";
 import { logger } from "../utils/logger.js";
 
-import type { SeoWorkflow, SeoReport } from "./types.js";
+import type { SeoWorkflow, SeoReport, DataOutcome } from "./types.js";
 import { SeoPlaybookIndex } from "./playbook-index.js";
 import { SeoPlaybookRetriever } from "./retriever.js";
 import { SeoEgressGuard } from "./egress.js";
@@ -47,6 +47,10 @@ import type {
   SerpQuery,
   KeywordQuery,
   BacklinkQuery,
+  AiVisibilityQuery,
+  AiVisibilityRow,
+  LinkGraphQuery,
+  LinkGraphRow,
 } from "./data-source.js";
 import { SeoAnalyzer } from "./analyzer.js";
 import type { SeoAnalysis, SeoDataBundle } from "./analyzer.js";
@@ -143,6 +147,15 @@ class CompositeSeoSource implements SeoDataSource {
   }
   backlinks(q: BacklinkQuery) {
     return this.dataForSeo.backlinks(q);
+  }
+  // Neither GSC nor DataForSEO serves ai-visibility/link-graph this sprint
+  // (spec-20260717-seo-improver-builder, Sprint 1) — disabled unconditionally,
+  // mirroring each adapter's own not-served arms.
+  async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return { kind: "disabled" };
+  }
+  async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
+    return { kind: "disabled" };
   }
 }
 
@@ -317,6 +330,10 @@ export class SeoWorkflowRunner {
         generatedAt: input.now,
         findings: cited,
         droppedUncited: gate.dropped.length,
+        // Placeholder until NeverEncodeFilter ships (F2) — every run reports
+        // zero dropped-by-filter this sprint; the filter wires this counter
+        // for real in a later sprint.
+        droppedNeverEncode: 0,
         dataProvenance: analysis.dataProvenance,
         verdict: gate.blocked ? "blocked" : "pass",
       };

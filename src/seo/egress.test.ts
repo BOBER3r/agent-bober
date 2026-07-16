@@ -79,3 +79,75 @@ describe("SeoEgressGuard — two axes default false (sc-1-4)", () => {
     expect(g.isAllowed("search-console")).toBe(false);
   });
 });
+
+// ── sc-1-1 / sc-1-2: the two new axes (ai-visibility, site-crawl) ──────────
+
+describe("SeoEgressGuard — ai-visibility and site-crawl axes default false (sc-1-1/sc-1-2)", () => {
+  it("both new axes default false when omitted from the 2-arg ctor form", () => {
+    const g = new SeoEgressGuard(false, false);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+  });
+
+  it("assertAllowed throws for ai-visibility when off", () => {
+    const g = new SeoEgressGuard(false, false);
+    expect(() => g.assertAllowed("ai-visibility")).toThrow(
+      "Egress axis 'ai-visibility' not enabled",
+    );
+  });
+
+  it("assertAllowed throws for site-crawl when off", () => {
+    const g = new SeoEgressGuard(false, false);
+    expect(() => g.assertAllowed("site-crawl")).toThrow("Egress axis 'site-crawl' not enabled");
+  });
+
+  it("4-arg ctor: ai-visibility on does not enable any other axis", () => {
+    const g = new SeoEgressGuard(false, false, true, false);
+    expect(g.isAllowed("ai-visibility")).toBe(true);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+    expect(g.isAllowed("search-console")).toBe(false);
+    expect(g.isAllowed("serp-provider")).toBe(false);
+    expect(() => g.assertAllowed("ai-visibility")).not.toThrow();
+  });
+
+  it("4-arg ctor: site-crawl on does not enable any other axis", () => {
+    const g = new SeoEgressGuard(false, false, false, true);
+    expect(g.isAllowed("site-crawl")).toBe(true);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("search-console")).toBe(false);
+    expect(g.isAllowed("serp-provider")).toBe(false);
+    expect(() => g.assertAllowed("site-crawl")).not.toThrow();
+  });
+
+  it("fromConfig defaults both new axes false when seo section absent", () => {
+    const g = SeoEgressGuard.fromConfig({} as BoberConfig);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+  });
+
+  it("fromConfig defaults both new axes false when seo.egress absent", () => {
+    const g = SeoEgressGuard.fromConfig({ seo: {} } as BoberConfig);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+  });
+
+  it("fromConfig reads ai-visibility opted in independently of the other three axes", () => {
+    const g = SeoEgressGuard.fromConfig({
+      seo: { egress: { "ai-visibility": true } },
+    } as BoberConfig);
+    expect(g.isAllowed("ai-visibility")).toBe(true);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+    expect(g.isAllowed("search-console")).toBe(false);
+    expect(g.isAllowed("serp-provider")).toBe(false);
+  });
+
+  it("fromConfig reads site-crawl opted in independently of the other three axes", () => {
+    const g = SeoEgressGuard.fromConfig({
+      seo: { egress: { "site-crawl": true } },
+    } as BoberConfig);
+    expect(g.isAllowed("site-crawl")).toBe(true);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("search-console")).toBe(false);
+    expect(g.isAllowed("serp-provider")).toBe(false);
+  });
+});

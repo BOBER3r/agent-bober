@@ -32,9 +32,13 @@ export type SeoWorkflow =
  * `path`/`mtimeMs` are set only by file-backed sources (LocalExportSource,
  * Sprint 6) for freshness auditing — optional so `gsc`/`dataforseo`
  * provenance stays byte-compatible (same optional idiom as `costUsd`).
+ *
+ * Widened (spec-20260717-seo-improver-builder, Sprint 1) with `"ai-visibility"`
+ * and `"damcrawler"` — additive only; no consumer exhaustively switches on
+ * `source` (`analyzer.ts` switches on `DataOutcome.kind`, not `source`).
  */
 export type DataProvenance = {
-  source: "local-export" | "gsc" | "dataforseo";
+  source: "local-export" | "gsc" | "dataforseo" | "ai-visibility" | "damcrawler";
   retrievedAt: string;
   costUsd?: number;
   path?: string;
@@ -92,6 +96,11 @@ export type SeoFinding = {
 /**
  * Persisted at `.bober/seo/reports/<safeId>-seo-report.json` (architecture
  * lines 363-372).
+ *
+ * `droppedNeverEncode` (spec-20260717-seo-improver-builder, Sprint 1) mirrors
+ * `droppedUncited` exactly — a required plain `number` counter. The
+ * `NeverEncodeFilter` that populates it ships in a LATER sprint (F2); every
+ * `SeoReport` literal built this sprint sets it to `0` as a placeholder.
  */
 export type SeoReport = {
   reportId: string;
@@ -100,6 +109,7 @@ export type SeoReport = {
   generatedAt: string;
   findings: SeoFinding[];
   droppedUncited: number;
+  droppedNeverEncode: number;
   dataProvenance: DataProvenance[];
   verdict: "pass" | "blocked";
 };
