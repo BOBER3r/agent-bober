@@ -52,3 +52,14 @@ export type { SeoAnalyzeInput, SeoAnalysis, SeoDataBundle } from "./analyzer.js"
 
 export { SeoCitationGate } from "./citation-gate.js";
 export type { SeoBlockThreshold, CitationGateResult } from "./citation-gate.js";
+
+export { SeoReportStore, deriveReportId } from "./report-store.js";
+
+export { SeoHubEmitter } from "./hub-emitter.js";
+export type { SeoFindingSink } from "./hub-emitter.js";
+
+export { SeoWorkflowRunner, selectSource } from "./runner.js";
+export type { SeoRunInput, SeoRunOutcome } from "./runner.js";
+
+export { registerSeoCommand } from "./command.js";
+export type { SeoCommandOverrides } from "./command.js";
