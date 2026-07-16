@@ -8,7 +8,7 @@ over your site. One CLI (`bober seo <workflow> [target]`, `src/seo/command.ts:47
 (`src/seo/runner.ts`). The whole feature is **opt-in and offline by construction**: a
 project's `bober.config.json` that omits the `seo` key runs byte-identically to a
 project with no SEO suite at all, and even with `seo` present, the default data source
-reads local files — no network call happens unless one of the two egress axes below is
+reads local files — no network call happens unless one of the egress axes below is
 explicitly opted in.
 
 ---
@@ -71,22 +71,32 @@ Source of truth: `SEO_WORKFLOWS`, `src/seo/command.ts:27-36`.
 
 ---
 
-## Two egress axes (both default `false`)
+## Egress axes (all default `false`)
 
-The suite reads two independent live-data adapters, each gated behind its own
-default-off axis (`SeoEgressGuard`, `src/seo/egress.ts`). Opting into one does **not**
-opt into the other.
+The suite's live-data adapters are each gated behind their own default-off axis
+(`SeoEgressGuard`, `src/seo/egress.ts`). Opting into one does **not** opt into any
+other. Two axes are wired to a live adapter today; two more (`ai-visibility`,
+`site-crawl`) were registered by the SEO improver+builder foundation and are reserved
+for adapters that land in later sprints — enabling them today is inert (no network path
+exists yet).
 
 | Axis | Config key | Gates |
 |---|---|---|
 | Google Search Console | `seo.egress.search-console` | Live search-analytics / URL-inspection API calls |
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
+| AI-visibility (GEO) | `seo.egress.ai-visibility` | Live AI-answer / GEO provider egress — **reserved; no adapter wired yet** |
+| Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **reserved; no adapter wired yet** |
 
-The whole `seo.egress` object is `.optional()` — a config that omits it keeps both axes
-off, and the offline `LocalExportSource` needs neither (`src/config/schema.ts:675-682`).
+The whole `seo.egress` object is `.optional()` — a config that omits it keeps all four
+axes off, and the offline `LocalExportSource` needs none (`src/config/schema.ts:675-686`).
 `SeoEgressGuard.assertAllowed` throws if a live adapter method is called against a
 not-opted-in axis — a hard, code-enforced barrier every network-opening adapter must
 call first.
+
+A companion `seo.serp.provider` key (`'dataforseo' | 'damcrawler'`, default
+`'dataforseo'`; `src/config/schema.ts:708-711`) selects which implementation serves the
+`serp` capability. It is likewise inert until the provider it names is wired in a later
+sprint.
 
 ---
 
@@ -123,7 +133,8 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 | Field | Type | Default | Effect |
 |---|---|---|---|
-| `egress` | `{ "search-console", "serp-provider" }` (optional) | unset | The two live-data axes above. Omit entirely ⇒ byte-identical, both stay off. |
+| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (last two reserved). Omit entirely ⇒ byte-identical, all stay off. |
+| `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Omitting `serp` stays byte-identical. |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -133,10 +144,13 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 ```jsonc
 "seo": {                              // Optional. Omit entirely => byte-identical (no key, no defaults).
-  "egress": {                         // Optional. Omit => byte-identical; both axes stay off.
+  "egress": {                         // Optional. Omit => byte-identical; all axes stay off.
     "search-console": false,          // Google Search Console API egress. Default false.
-    "serp-provider": false            // DataForSEO SERP/keywords/backlinks egress. Default false.
+    "serp-provider": false,           // DataForSEO SERP/keywords/backlinks egress. Default false.
+    "ai-visibility": false,           // AI-answer/GEO provider egress. Default false. Reserved (no adapter yet).
+    "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Reserved (no adapter yet).
   },
+  "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`. Omit => byte-identical.
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
   "budget": { "maxUsd": 5 },          // Per-run USD ceiling for PAYG DataForSEO calls. Absent = uncapped.
   "defaultTarget": "https://example.com", // Used when the CLI omits [target].
