@@ -1,0 +1,21 @@
+{
+  "tasks": [
+    {
+      "status_code": 20000,
+      "result": [
+        {
+          "items": [
+            {
+              "keyword": "best online casino",
+              "keyword_info": { "search_volume": 40500, "cpc": 3.21, "competition": 0.89 }
+            },
+            {
+              "keyword": "crypto casino no kyc",
+              "keyword_info": { "search_volume": 2900, "cpc": 1.75, "competition": 0.62 }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

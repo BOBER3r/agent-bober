@@ -1,0 +1,16 @@
+{
+  "tasks": [
+    {
+      "status_code": 20000,
+      "result": [
+        {
+          "items": [
+            { "url_from": "https://ref1.example/article", "url_to": "https://target.example/page", "anchor": "best casino guide", "dofollow": true },
+            { "url_from": "https://ref2.example/post", "url_to": "https://target.example/page", "anchor": "click here", "dofollow": false },
+            { "url_from": "https://ref3.example/review", "url_to": "https://target.example/page", "anchor": "top rated site", "dofollow": true }
+          ]
+        }
+      ]
+    }
+  ]
+}

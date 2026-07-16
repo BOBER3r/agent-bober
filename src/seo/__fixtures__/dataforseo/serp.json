@@ -1,0 +1,15 @@
+{
+  "tasks": [
+    {
+      "status_code": 20000,
+      "result": [
+        {
+          "items": [
+            { "rank_absolute": 1, "url": "https://a.example/best-casino", "title": "Best Casino" },
+            { "rank_absolute": 2, "url": "https://b.example/top-slots", "title": "Top Slots" }
+          ]
+        }
+      ]
+    }
+  ]
+}
