@@ -3,7 +3,8 @@
  * (spec-20260715-ultimate-seo-suite, Sprint 11). Mirrors
  * `runStandaloneSecurityAudit` (`src/cli/commands/security-audit.ts:141-180`):
  * resolve playbook context -> select a data source -> gather data -> analyze
- * -> citation gate -> persist -> best-effort hub emit -> exit code.
+ * -> never-encode filter -> citation gate -> persist -> best-effort hub emit
+ * -> exit code.
  *
  * Clock discipline: `now` is injected by the caller (`SeoCommand`) and NEVER
  * re-stamped here — this file never constructs a `Date` for wall-clock
@@ -16,7 +17,13 @@
  * from `analyzer.analyze` (which does NOT catch `llm.chat` errors itself,
  * `analyzer.ts:16-18`) is caught here. A `parsed: false` analysis result is
  * ALSO fail-closed -> `exitCode: 2` with ZERO hub emits (sc-11-5) — checked
- * BEFORE the citation gate runs.
+ * BEFORE the never-encode filter and citation gate run.
+ *
+ * Never-encode belt (spec-20260717-seo-improver-builder, Sprint 2; ADR-3):
+ * `NeverEncodeFilter` runs between the `parsed` check and the citation gate,
+ * dropping any LLM-synthesized banned tactic — even one carrying a
+ * well-formed `citationUrl` that would otherwise pass the gate. Only its
+ * `kept` findings ever reach `SeoCitationGate.apply`.
  *
  * Hub emission is best-effort and happens strictly AFTER the report has
  * been persisted; a hub failure never changes the exit code (mirrors
@@ -55,6 +62,7 @@ import type {
 import { SeoAnalyzer } from "./analyzer.js";
 import type { SeoAnalysis, SeoDataBundle } from "./analyzer.js";
 import { SeoCitationGate } from "./citation-gate.js";
+import { NeverEncodeFilter } from "./never-encode-filter.js";
 import { SeoReportStore, deriveReportId } from "./report-store.js";
 import { SeoHubEmitter } from "./hub-emitter.js";
 import type { SeoFindingSink } from "./hub-emitter.js";
@@ -298,8 +306,14 @@ export class SeoWorkflowRunner {
         return { exitCode: 2 };
       }
 
+      // Third never-encode belt (spec-20260717-seo-improver-builder, Sprint 2;
+      // ADR-3): drops an LLM-synthesized banned tactic BEFORE the citation
+      // gate, even when it carries a well-formed citationUrl that would
+      // otherwise sail through `SeoCitationGate` untouched.
+      const scrubbed = new NeverEncodeFilter().apply(analysis.findings);
+
       const threshold = input.config.seo?.blockThreshold ?? "critical-uncited";
-      const gate = new SeoCitationGate().apply(analysis.findings, threshold);
+      const gate = new SeoCitationGate().apply(scrubbed.kept, threshold);
 
       // Opt-in, downgrade-only adversarial verifier stage (Sprint 12),
       // between the citation gate and persistence. The `enabled` check
@@ -330,10 +344,7 @@ export class SeoWorkflowRunner {
         generatedAt: input.now,
         findings: cited,
         droppedUncited: gate.dropped.length,
-        // Placeholder until NeverEncodeFilter ships (F2) — every run reports
-        // zero dropped-by-filter this sprint; the filter wires this counter
-        // for real in a later sprint.
-        droppedNeverEncode: 0,
+        droppedNeverEncode: scrubbed.dropped.length,
         dataProvenance: analysis.dataProvenance,
         verdict: gate.blocked ? "blocked" : "pass",
       };

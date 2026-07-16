@@ -97,10 +97,11 @@ export type SeoFinding = {
  * Persisted at `.bober/seo/reports/<safeId>-seo-report.json` (architecture
  * lines 363-372).
  *
- * `droppedNeverEncode` (spec-20260717-seo-improver-builder, Sprint 1) mirrors
- * `droppedUncited` exactly — a required plain `number` counter. The
- * `NeverEncodeFilter` that populates it ships in a LATER sprint (F2); every
- * `SeoReport` literal built this sprint sets it to `0` as a placeholder.
+ * `droppedNeverEncode` (spec-20260717-seo-improver-builder, Sprint 1 field /
+ * Sprint 2 wiring) mirrors `droppedUncited` exactly — a required plain
+ * `number` counter. Populated by `NeverEncodeFilter` (`never-encode-filter.ts`,
+ * Sprint 2), which runs in `SeoWorkflowRunner.run` between the
+ * `analysis.parsed` check and `SeoCitationGate.apply`.
  */
 export type SeoReport = {
   reportId: string;

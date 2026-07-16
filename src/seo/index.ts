@@ -53,6 +53,9 @@ export type { SeoAnalyzeInput, SeoAnalysis, SeoDataBundle } from "./analyzer.js"
 export { SeoCitationGate } from "./citation-gate.js";
 export type { SeoBlockThreshold, CitationGateResult } from "./citation-gate.js";
 
+export { NeverEncodeFilter, NEVER_ENCODE_PATTERNS } from "./never-encode-filter.js";
+export type { NeverEncodeResult } from "./never-encode-filter.js";
+
 export { SeoReportStore, deriveReportId } from "./report-store.js";
 
 export { SeoHubEmitter } from "./hub-emitter.js";

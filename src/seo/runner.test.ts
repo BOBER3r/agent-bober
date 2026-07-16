@@ -224,6 +224,49 @@ describe("selectSource — opted-in axes (sc-11-2)", () => {
   });
 });
 
+// ── spec-20260717-seo-improver-builder, Sprint 2: NeverEncodeFilter wired
+// ── ahead of the citation gate (sc-2-3) ─────────────────────────────────
+
+const NEVER_ENCODE_CITED_JSON = JSON.stringify({
+  findings: [
+    {
+      recommendation: "Place a parasite page on a high-authority host to rank for our terms.",
+      playbookRef: "seo.parasite-watch.parasite-placement",
+      citationUrl: "https://developers.google.com/search/docs/essentials/spam-policies", // well-formed
+      evidence: [],
+      severity: 4,
+      humanApprovalRequired: false,
+      confidence: "tentative",
+    },
+  ],
+});
+
+describe("SeoWorkflowRunner.run — NeverEncodeFilter runs before the citation gate (sc-2-3)", () => {
+  it("drops a never-encode tactic that carries a valid citation BEFORE the gate", async () => {
+    const analyzer = new SeoAnalyzer(new ScriptedClient([NEVER_ENCODE_CITED_JSON]), "test-model");
+    const { sink, calls } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "parasite-watch",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: new LocalExportSource(fixtureImportDir),
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(outcome.report?.droppedNeverEncode).toBe(1);
+    expect(outcome.report?.findings).toHaveLength(0);
+    // Never reached the citation gate at all — droppedUncited stays 0.
+    expect(outcome.report?.droppedUncited).toBe(0);
+    // Never reached the hub.
+    expect(calls).toHaveLength(0);
+  });
+});
+
 // ── sc-11-5: uncited findings never reach the hub ────────────────────────
 
 describe("SeoWorkflowRunner.run — uncited findings never reach the hub (sc-11-5)", () => {
