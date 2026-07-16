@@ -25,9 +25,10 @@ async function loadSkillWithDiagnostics(relPath: string) {
 // the violation under an auto-safe/human-approve label.
 const FORBIDDEN_ACTION_PATTERNS = [
   /\bplace\b[^.]*\b(parasite|high-?authority host|third-?party host)/i,
-  /\bbuy(ing)?\b[^.]*\blinks?\b/i,
+  /\b(?:buy(?:ing)?|purchas(?:e|ing))\b[^.]*\blinks?\b/i,
   /\bregister(ing)?\b[^.]*\bexpired domain/i,
   /\bgenerate\b[^.]*\bmass\b[^.]*\bpages\b/i,
+  /\b(?:mass[-\s]?generat(?:e|ing)|generat(?:e|ing)[-\s]?mass)\b/i,
   /\bpoison/i,
 ];
 

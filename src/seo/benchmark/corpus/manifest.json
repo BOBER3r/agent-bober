@@ -1,0 +1,98 @@
+[
+  {
+    "id": "kg-technical-audit-cited",
+    "label": "known-good",
+    "workflow": "technical-audit",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"De-duplicate the title tag shared by /a and /b.\",\"playbookRef\":\"seo.technical-audit.title-tags\",\"citationUrl\":\"https://developers.google.com/search/docs/appearance/title-link\",\"evidence\":[{\"metric\":\"coverageState\",\"value\":\"Indexed\",\"source\":\"url-inspection\",\"url\":\"https://example.com/a\"}],\"severity\":3,\"humanApprovalRequired\":false,\"confidence\":\"firm\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "seo.technical-audit.title-tags", "cited": true }],
+      "droppedUncited": 0,
+      "verdict": "pass"
+    }
+  },
+  {
+    "id": "kg-mixed-cited-and-uncited",
+    "label": "known-good",
+    "workflow": "technical-audit",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Add a self-referencing canonical tag to /pricing.\",\"playbookRef\":\"seo.technical-audit.canonical-consistency\",\"citationUrl\":\"https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls\",\"evidence\":[],\"severity\":2,\"humanApprovalRequired\":false,\"confidence\":\"firm\"},{\"recommendation\":\"Rewrite the meta description on /features to be more compelling.\",\"playbookRef\":\"seo.technical-audit.uncited-claim\",\"citationUrl\":\"\",\"evidence\":[],\"severity\":3,\"humanApprovalRequired\":false,\"confidence\":\"tentative\"}]}",
+    "expected": {
+      "findings": [
+        { "playbookRef": "seo.technical-audit.canonical-consistency", "cited": true },
+        { "playbookRef": "seo.technical-audit.uncited-claim", "cited": false }
+      ],
+      "droppedUncited": 1,
+      "verdict": "pass"
+    }
+  },
+  {
+    "id": "kg-rank-track-auto-safe",
+    "label": "known-good",
+    "workflow": "rank-track",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Track AI Overview citation rate separately from blue-link rank for the top 20 tracked queries.\",\"playbookRef\":\"seo.rank-track.aio-citation-decouple\",\"citationUrl\":\"https://ahrefs.com/blog/ai-overview-citations-top-10/\",\"evidence\":[{\"metric\":\"aioCitationRate\",\"value\":\"0.38\",\"source\":\"serp\",\"url\":\"https://example.com\"}],\"severity\":2,\"humanApprovalRequired\":false,\"confidence\":\"tentative\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "seo.rank-track.aio-citation-decouple", "cited": true }],
+      "droppedUncited": 0,
+      "verdict": "pass"
+    }
+  },
+  {
+    "id": "kb-uncited-drop",
+    "label": "known-bad",
+    "workflow": "technical-audit",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Immediately deindex the duplicate content cluster.\",\"playbookRef\":\"seo.technical-audit.severity-5-uncited\",\"citationUrl\":\"\",\"evidence\":[],\"severity\":5,\"humanApprovalRequired\":false,\"confidence\":\"tentative\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "seo.technical-audit.severity-5-uncited", "cited": false }],
+      "droppedUncited": 1,
+      "verdict": "blocked"
+    }
+  },
+  {
+    "id": "kb-never-encode-uncited",
+    "label": "known-bad",
+    "workflow": "parasite-watch",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Mass-generate 500 thin AI-written pages targeting long-tail variants.\",\"playbookRef\":\"seo.parasite-watch.mass-generate-thin-pages\",\"citationUrl\":\"\",\"evidence\":[],\"severity\":5,\"humanApprovalRequired\":false,\"confidence\":\"tentative\"},{\"recommendation\":\"Purchase links from DR90 hosts to accelerate authority growth.\",\"playbookRef\":\"seo.parasite-watch.purchase-links\",\"citationUrl\":\"\",\"evidence\":[],\"severity\":5,\"humanApprovalRequired\":false,\"confidence\":\"tentative\"}]}",
+    "expected": {
+      "findings": [
+        { "playbookRef": "seo.parasite-watch.mass-generate-thin-pages", "cited": false },
+        { "playbookRef": "seo.parasite-watch.purchase-links", "cited": false }
+      ],
+      "droppedUncited": 2,
+      "verdict": "blocked"
+    }
+  },
+  {
+    "id": "kb-parse-failure",
+    "label": "known-bad",
+    "workflow": "technical-audit",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "this is not json at all, no braces here",
+    "expected": {
+      "findings": [],
+      "droppedUncited": 0,
+      "verdict": "blocked"
+    }
+  }
+]

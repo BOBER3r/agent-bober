@@ -66,3 +66,6 @@ export type { SeoVerifier, SeoVerifyParams, SeoVerifyResult } from "./verifier.j
 
 export { registerSeoCommand } from "./command.js";
 export type { SeoCommandOverrides } from "./command.js";
+
+export { runBenchmark } from "./benchmark/harness.js";
+export type { SeoBenchmarkCase, CorpusMetrics } from "./benchmark/harness.js";
