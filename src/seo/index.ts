@@ -43,5 +43,6 @@ export type {
 } from "./data-source.js";
 export { LocalExportSource } from "./sources/local-export.js";
 export { GscAdapter } from "./sources/gsc-adapter.js";
+export { DataForSeoAdapter } from "./sources/dataforseo-adapter.js";
 
 export type { HttpClient, HttpResponse, HttpRequestInit } from "./adapters/http.js";
