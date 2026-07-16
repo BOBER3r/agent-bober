@@ -1,0 +1,26 @@
+{
+  "rows": [
+    {
+      "keys": ["best online casino"],
+      "clicks": 142,
+      "impressions": 3800,
+      "ctr": 0.0374,
+      "position": 4.2
+    },
+    {
+      "keys": ["crypto casino no kyc"],
+      "clicks": 87,
+      "impressions": 2100,
+      "ctr": 0.0414,
+      "position": 6.8
+    },
+    {
+      "keys": ["live dealer blackjack"],
+      "clicks": 53,
+      "impressions": 1590,
+      "ctr": 0.0333,
+      "position": 8.1
+    }
+  ],
+  "responseAggregationType": "byPage"
+}
