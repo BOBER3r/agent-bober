@@ -162,14 +162,29 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 ## Guardrails
 
-- **Never-encode tactics are dropped at parse.** Every playbook signature block
-  (`skills/bober.seo-*/SKILL.md`) requires a `PrimarySourceUrl`; a block missing one, or
-  tagged `PolicyClass: never-encode`, is dropped by `SeoPlaybookParser` before it can
-  ever reach an analysis prompt (`skills/bober.seo-generic/SKILL.md:31-40`). The shipped
-  `parasite-seo-placement` signature (`skills/bober.seo-generic/SKILL.md:163-171`) is
-  the concrete example: it documents the policy violation for human readers but is
-  `never-encode`, so `parasite-watch` can only ever detect exposure, never recommend the
-  tactic.
+- **Never-encode tactics are dropped by three independent belts.** A banned tactic
+  (parasite SEO, expired-domain plays, paid/bought links, PBN/link schemes, mass AI
+  pages, cloaking, doorway pages, AI-recommendation poisoning) is stopped at any of three
+  layers, so no single failure can let one through:
+  1. **Parse-time drop.** Every playbook signature block (`skills/bober.seo-*/SKILL.md`)
+     requires a `PrimarySourceUrl`; a block missing one, or tagged
+     `PolicyClass: never-encode`, is dropped by `SeoPlaybookParser` before it can ever
+     reach an analysis prompt (`skills/bober.seo-generic/SKILL.md:31-40`). The shipped
+     `parasite-seo-placement` signature (`skills/bober.seo-generic/SKILL.md:163-171`) is
+     the concrete example: it documents the policy violation for human readers but is
+     `never-encode`, so `parasite-watch` can only ever detect exposure, never recommend
+     the tactic.
+  2. **Skill-content lint.** A `FORBIDDEN_ACTION_PATTERNS` guard
+     (`skills-content.test.ts`) empirically asserts that no *surviving* authored block
+     instructs a banned tactic — a build-time backstop on the skill libraries.
+  3. **Runtime `NeverEncodeFilter`.** A pure, total, DROP-only filter
+     (`src/seo/never-encode-filter.ts`, 9 regexes covering all 8 classes) runs inside
+     `SeoWorkflowRunner.run` *after* the analysis parse-check and *before* the citation
+     gate. Belts 1 and 2 only see tactics authored into a skill file; this belt catches a
+     banned tactic the LLM analyzer **synthesized at runtime** — even one carrying a
+     well-formed `citationUrl` that would otherwise pass the citation gate. It is
+     DROP-only (it removes the offending finding without failing the run) and never
+     throws; its drop count surfaces on the report as `droppedNeverEncode`.
 - **`humanApprovalRequired` findings.** Any recommendation touching policy compliance
   (paid links, cloaking, structured-data misuse) or spend (ad budget, paid placements,
   a metered live-API call) is flagged `humanApprovalRequired: true` by the strategist
