@@ -46,3 +46,9 @@ export { GscAdapter } from "./sources/gsc-adapter.js";
 export { DataForSeoAdapter } from "./sources/dataforseo-adapter.js";
 
 export type { HttpClient, HttpResponse, HttpRequestInit } from "./adapters/http.js";
+
+export { SeoAnalyzer } from "./analyzer.js";
+export type { SeoAnalyzeInput, SeoAnalysis, SeoDataBundle } from "./analyzer.js";
+
+export { SeoCitationGate } from "./citation-gate.js";
+export type { SeoBlockThreshold, CitationGateResult } from "./citation-gate.js";
