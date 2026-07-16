@@ -916,7 +916,7 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
         provider: "anthropic",
         panel: { enabled: false, lenses: [], maxConcurrent: 4 },
       },
-      sprint: { maxSprints: 14, requireContracts: true, sprintSize: "medium" },
+      sprint: { maxSprints: 16, requireContracts: true, sprintSize: "medium" },
       pipeline: {
         maxIterations: 20,
         maxCheckpointIterations: 3,
