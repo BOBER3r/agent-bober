@@ -75,16 +75,20 @@ Source of truth: `SEO_WORKFLOWS`, `src/seo/command.ts:27-36`.
 
 The suite's live-data adapters are each gated behind their own default-off axis
 (`SeoEgressGuard`, `src/seo/egress.ts`). Opting into one does **not** opt into any
-other. Two axes are wired to a live adapter today; two more (`ai-visibility`,
-`site-crawl`) were registered by the SEO improver+builder foundation and are reserved
-for adapters that land in later sprints — enabling them today is inert (no network path
-exists yet).
+other. Three axes now have a live adapter behind them (`search-console`,
+`serp-provider`, `ai-visibility`); one more (`site-crawl`) was registered by the SEO
+improver+builder foundation and is reserved for an adapter that lands in a later
+sprint — enabling it today is inert (no network path exists yet). The
+`ai-visibility` adapter (`AiVisibilityAdapter`) exists but is **not yet selected by
+the runner's `selectSource`** (Sprint 9 wires it), so enabling that axis alone does
+not change a `bober seo` run today; the adapter is usable only when constructed
+directly with an injected provider.
 
 | Axis | Config key | Gates |
 |---|---|---|
 | Google Search Console | `seo.egress.search-console` | Live search-analytics / URL-inspection API calls |
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
-| AI-visibility (GEO) | `seo.egress.ai-visibility` | Live AI-answer / GEO provider egress — **reserved; no adapter wired yet** |
+| AI-visibility (GEO) | `seo.egress.ai-visibility` | Live AI-answer / GEO provider probe (`AiVisibilityAdapter`) — **provider-agnostic, no vendor pinned; adapter exists but not yet router-wired (Sprint 9)** |
 | Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **reserved; no adapter wired yet** |
 
 The whole `seo.egress` object is `.optional()` — a config that omits it keeps all four
@@ -97,6 +101,18 @@ A companion `seo.serp.provider` key (`'dataforseo' | 'damcrawler'`, default
 `'dataforseo'`; `src/config/schema.ts:708-711`) selects which implementation serves the
 `serp` capability. It is likewise inert until the provider it names is wired in a later
 sprint.
+
+The live `ai-visibility` adapter (`AiVisibilityAdapter`,
+`src/seo/sources/ai-visibility-adapter.ts`) is **provider-agnostic by design (ADR-5)**:
+no concrete AI-visibility vendor (Perplexity, Profound, etc.) is pinned or imported
+anywhere under `src/seo/`. It depends on an injected `AiVisibilityProvider` port
+(`{ name; estCostUsdPerPrompt; probe(target, prompts, locale) }`) whose concrete
+implementation lives outside `src/seo/`; swapping providers means writing a new port
+implementation, with no change to the adapter, the seam, or the egress model. The
+adapter is egress-gated (`ai-visibility`) and USD-metered through the quota governor
+(cost = `estCostUsdPerPrompt × prompts.length`, booked only after a successful probe;
+a provider error abstains and books nothing). A single `ai-visibility` axis gates
+every provider — there is no per-vendor axis.
 
 ---
 
@@ -113,6 +129,12 @@ reads **one file per capability** from `.bober/seo/imports/`, either a `.csv` or
 | SERP positions | `serp.csv` / `.json` |
 | Keyword data | `keywords.csv` / `.json` |
 | Backlinks | `backlinks.csv` / `.json` |
+| AI-visibility (GEO) | `ai-visibility.csv` / `.json` |
+
+The `ai-visibility.csv` header is
+`prompt,provider,mentioned,rank,citationPresent,sourceUrls`, where `sourceUrls` is a
+single space-delimited cell (URLs never contain spaces). `link-graph` is the only
+capability the offline source does **not** yet serve.
 
 A missing file for a capability resolves that capability to `disabled` — it does not
 block the other capabilities or the run as a whole. An empty file (header only, or `[]`)
@@ -133,7 +155,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 | Field | Type | Default | Effect |
 |---|---|---|---|
-| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (last two reserved). Omit entirely ⇒ byte-identical, all stay off. |
+| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (`ai-visibility` has an adapter but is not yet router-wired; `site-crawl` is reserved). Omit entirely ⇒ byte-identical, all stay off. |
 | `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Omitting `serp` stays byte-identical. |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
@@ -147,7 +169,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   "egress": {                         // Optional. Omit => byte-identical; all axes stay off.
     "search-console": false,          // Google Search Console API egress. Default false.
     "serp-provider": false,           // DataForSEO SERP/keywords/backlinks egress. Default false.
-    "ai-visibility": false,           // AI-answer/GEO provider egress. Default false. Reserved (no adapter yet).
+    "ai-visibility": false,           // AI-answer/GEO provider egress. Default false. Adapter exists (provider-agnostic); not yet router-wired (Sprint 9).
     "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Reserved (no adapter yet).
   },
   "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`. Omit => byte-identical.
