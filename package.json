@@ -81,13 +81,21 @@
   },
   "peerDependencies": {
     "@google/generative-ai": ">=0.21.0",
-    "openai": "^6.42.0"
+    "openai": "^6.42.0",
+    "damcrawler": ">=0.3.0",
+    "playwright": ">=1.40.0"
   },
   "peerDependenciesMeta": {
     "openai": {
       "optional": true
     },
     "@google/generative-ai": {
+      "optional": true
+    },
+    "damcrawler": {
+      "optional": true
+    },
+    "playwright": {
       "optional": true
     }
   },
