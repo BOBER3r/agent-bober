@@ -105,8 +105,25 @@ call first.
 
 A companion `seo.serp.provider` key (`'dataforseo' | 'damcrawler'`, default
 `'dataforseo'`; `src/config/schema.ts:708-711`) selects which implementation serves the
-`serp` capability. It is likewise inert until the provider it names is wired in a later
-sprint.
+`serp` capability. Both implementations of the provider-agnostic `SerpProvider` port
+(`src/seo/serp-provider.ts`, Sprint 8; `resolveSerpProvider` is the selection factory)
+now exist, but the key is still inert end-to-end until Sprint 9 wires provider selection
+into the runner's `selectSource`:
+
+- **`dataforseo`** (default, `src/seo/sources/dataforseo-serp-provider.ts`) — a thin
+  delegate over the existing `DataForSeoAdapter.serp` path; **byte-identical to today**.
+  Gated by the **`serp-provider`** axis, and its per-SERP USD (`0.0006/result`) is booked
+  **inside** the wrapped adapter — the wrapper never re-books, so there is no
+  double-charge.
+- **`damcrawler`** (`src/seo/sources/damcrawler-serp-provider.ts`) — a **zero-USD** scrape
+  via damcrawler's `search()`, gated by the **`site-crawl`** axis (**ADR-10** — the same
+  Playwright/anti-bot/ToS risk surface as the crawler, deliberately **not** the
+  `serp-provider` axis, which means "licensed, USD-metered DataForSEO egress"). It books
+  nothing (no quota governor), needs the optional `damcrawler`/`playwright` peer deps, and
+  per **ADR-11** sanitizes each result's `title` **and** `url` through `ContentSanitizer`
+  before any row can reach the analyzer prompt. Axis-off ⇒ `abstain{egress-site-crawl-disabled}`
+  (zero sockets); dep absent ⇒ `abstain{damcrawler-not-installed}`; any anti-bot/search/parse
+  error ⇒ `abstain{serp-scrape-error}`. It never throws.
 
 The live `ai-visibility` adapter (`AiVisibilityAdapter`,
 `src/seo/sources/ai-visibility-adapter.ts`) is **provider-agnostic by design (ADR-5)**:
@@ -194,7 +211,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 | Field | Type | Default | Effect |
 |---|---|---|---|
 | `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (both `ai-visibility` and `site-crawl` have an engine/adapter — `site-crawl`'s `CrawlSource` adapter landed in Sprint 7 — but neither is router-wired yet; Sprint 9 wires both; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
-| `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Omitting `serp` stays byte-identical. |
+| `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — but selection is not yet router-wired (Sprint 9). Omitting `serp` stays byte-identical. |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -210,7 +227,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
     "ai-visibility": false,           // AI-answer/GEO provider egress. Default false. Adapter exists (provider-agnostic); not yet router-wired (Sprint 9).
     "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine (DamcrawlerCrawlEngine) + CrawlSource adapter exist; not yet router-wired (Sprint 9); needs optional damcrawler/playwright peer deps.
   },
-  "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`. Omit => byte-identical.
+  "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`: dataforseo (metered, serp-provider axis) | damcrawler (zero-USD scrape, gated by site-crawl axis — ADR-10). Both exist (Sprint 8); not yet router-wired (Sprint 9). Omit => byte-identical.
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
   "budget": { "maxUsd": 5 },          // Per-run USD ceiling for PAYG DataForSEO calls. Absent = uncapped.
   "defaultTarget": "https://example.com", // Used when the CLI omits [target].
