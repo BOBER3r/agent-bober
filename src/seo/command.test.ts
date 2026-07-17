@@ -12,6 +12,7 @@ import { Command } from "commander";
 
 import { registerSeoCommand } from "./command.js";
 import type { SeoRunInput, SeoRunOutcome } from "./runner.js";
+import type { SeoBuildRunInput, SeoBuildRunOutcome } from "./builder/build-runner.js";
 import { createDefaultConfig } from "../config/schema.js";
 
 let tmpRoot: string;
@@ -44,10 +45,16 @@ afterEach(async () => {
   process.exitCode = originalExitCode as number | undefined;
 });
 
-function makeProgram(runWorkflow?: (input: SeoRunInput) => Promise<SeoRunOutcome>): Command {
+function makeProgram(
+  runWorkflow?: (input: SeoRunInput) => Promise<SeoRunOutcome>,
+  runBuild?: (input: SeoBuildRunInput) => Promise<SeoBuildRunOutcome>,
+): Command {
   const program = new Command();
   program.exitOverride(); // prevent commander from calling process.exit()
-  registerSeoCommand(program, runWorkflow ? { runWorkflow } : undefined);
+  registerSeoCommand(
+    program,
+    runWorkflow || runBuild ? { runWorkflow, runBuild } : undefined,
+  );
   return program;
 }
 
@@ -144,5 +151,92 @@ describe("registerSeoCommand — Commander wiring (sc-11-1)", () => {
 
     expect(seen).toHaveLength(1);
     expect(() => new Date(seen[0]).toISOString()).not.toThrow();
+  });
+});
+
+// ── sc-13-1/sc-13-3: `seo build <reportId>` Commander wiring ────────────
+
+describe("registerSeoCommand — `build` subcommand wiring (sc-13-1, sc-13-3)", () => {
+  it("invokes the injected runBuild and sets exitCode from it (never throws)", async () => {
+    const runBuild = vi.fn(async (): Promise<SeoBuildRunOutcome> => ({ exitCode: 0 }));
+    const program = makeProgram(undefined, runBuild);
+
+    await expect(
+      program.parseAsync(["node", "bober", "seo", "build", "rep-1"], { from: "node" }),
+    ).resolves.not.toThrow();
+
+    expect(runBuild).toHaveBeenCalledTimes(1);
+    const call = runBuild.mock.calls[0][0];
+    expect(call.reportId).toBe("rep-1");
+    expect(call.projectRoot).toBe(tmpRoot);
+    expect(typeof call.now).toBe("string");
+    expect(() => new Date(call.now).toISOString()).not.toThrow();
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("sets process.exitCode=2 when the injected build runner returns exitCode 2", async () => {
+    const runBuild = vi.fn(async (): Promise<SeoBuildRunOutcome> => ({ exitCode: 2 }));
+    const program = makeProgram(undefined, runBuild);
+
+    await program.parseAsync(["node", "bober", "seo", "build", "rep-1"], { from: "node" });
+
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("never throws when the injected build runner itself throws — sets exitCode=2 instead", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const runBuild = vi.fn(async (): Promise<SeoBuildRunOutcome> => {
+      throw new Error("boom");
+    });
+    const program = makeProgram(undefined, runBuild);
+
+    await expect(
+      program.parseAsync(["node", "bober", "seo", "build", "rep-1"], { from: "node" }),
+    ).resolves.not.toThrow();
+
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("sets process.exitCode=2 (fail-closed) when loadConfig throws (no config file present)", async () => {
+    await rm(tmpRoot, { recursive: true, force: true });
+    tmpRoot = await mkdtemp(join(tmpdir(), "bober-seo-cli-build-noconfig-"));
+    const { findProjectRoot } = await import("../utils/fs.js");
+    vi.mocked(findProjectRoot).mockResolvedValue(tmpRoot);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const runBuild = vi.fn(async (): Promise<SeoBuildRunOutcome> => ({ exitCode: 0 }));
+    const program = makeProgram(undefined, runBuild);
+
+    await expect(
+      program.parseAsync(["node", "bober", "seo", "build", "rep-1"], { from: "node" }),
+    ).resolves.not.toThrow();
+
+    expect(process.exitCode).toBe(2);
+    expect(runBuild).not.toHaveBeenCalled();
+  });
+
+  it("does not invoke runBuild when the analyze workflow command is used instead (additive, no cross-talk)", async () => {
+    const runWorkflow = vi.fn(async (): Promise<SeoRunOutcome> => ({ exitCode: 0 }));
+    const runBuild = vi.fn(async (): Promise<SeoBuildRunOutcome> => ({ exitCode: 0 }));
+    const program = makeProgram(runWorkflow, runBuild);
+
+    await program.parseAsync(["node", "bober", "seo", "technical-audit", "example.com"], {
+      from: "node",
+    });
+
+    expect(runWorkflow).toHaveBeenCalledTimes(1);
+    expect(runBuild).not.toHaveBeenCalled();
+  });
+
+  it("still routes an unrecognized workflow name to the analyze action, not build (sc-13-3)", async () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const runWorkflow = vi.fn(async (): Promise<SeoRunOutcome> => ({ exitCode: 0 }));
+    const runBuild = vi.fn(async (): Promise<SeoBuildRunOutcome> => ({ exitCode: 0 }));
+    const program = makeProgram(runWorkflow, runBuild);
+
+    await program.parseAsync(["node", "bober", "seo", "not-a-real-workflow"], { from: "node" });
+
+    expect(process.exitCode).toBe(2); // unknown-workflow guard in the analyze action
+    expect(runBuild).not.toHaveBeenCalled();
   });
 });
