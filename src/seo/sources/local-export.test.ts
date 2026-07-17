@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 import { LocalExportSource, parseCsv } from "./local-export.js";
 
@@ -135,6 +137,54 @@ describe("LocalExportSource — offline data arms (sc-6-2..6-4)", () => {
       dimensions: ["query"],
     });
     expect(out).toEqual({ kind: "disabled" });
+  });
+});
+
+// ── LocalExportSource — offline link-graph arm (sc-7-4) ─────────────────
+
+describe("LocalExportSource — offline link-graph arm (sc-7-4)", () => {
+  it("present populated link-graph.csv => data + typed LinkGraphRow[] + provenance", async () => {
+    const src = new LocalExportSource(IMPORTS_DIR);
+    await src.load();
+
+    const out = await src.linkGraph({ rootUrl: "https://example.com" });
+    expect(out.kind).toBe("data");
+    if (out.kind !== "data") return;
+    expect(out.rows).toEqual([
+      { fromUrl: "https://example.com/", toUrl: "https://example.com/about", anchor: "About us", internal: true },
+      { fromUrl: "https://example.com/", toUrl: "https://external.example/partner", anchor: "Partner", internal: false },
+    ]);
+    expect(out.provenance.source).toBe("local-export");
+    expect(out.provenance.path?.endsWith("link-graph.csv")).toBe(true);
+    expect(typeof out.provenance.mtimeMs).toBe("number");
+  });
+
+  it("missing link-graph file => disabled (never throws)", async () => {
+    const missing = new LocalExportSource(join(IMPORTS_DIR, "does-not-exist-dir"));
+    await missing.load();
+    await expect(missing.linkGraph({ rootUrl: "https://example.com" })).resolves.toEqual({ kind: "disabled" });
+  });
+
+  it("header-only link-graph.csv => abstain with a reason (empty export)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "local-export-link-graph-"));
+    try {
+      await writeFile(join(dir, "link-graph.csv"), "fromUrl,toUrl,anchor,internal\n");
+      const src = new LocalExportSource(dir);
+      await src.load();
+      const out = await src.linkGraph({ rootUrl: "https://example.com" });
+      expect(out.kind).toBe("abstain");
+      if (out.kind !== "abstain") return;
+      expect(typeof out.reason).toBe("string");
+      expect(out.reason.length).toBeGreaterThan(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("capabilities() now includes link-graph alongside the other present-file arms", async () => {
+    const src = new LocalExportSource(IMPORTS_DIR);
+    const caps = await src.load();
+    expect(caps).toContain("link-graph");
   });
 });
 

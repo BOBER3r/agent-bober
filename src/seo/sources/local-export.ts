@@ -39,13 +39,13 @@ import type { DataOutcome, DataProvenance } from "../types.js";
 const DEFAULT_EXPORT_DIR = ".bober/seo/imports";
 
 /**
- * The subset of `SeoCapability` this sprint's `LocalExportSource` serves from
- * a local file. `link-graph` is NOT in this alias yet — it has no local
- * file/mapper this sprint (F7 wires the offline link-graph arm in a later
- * sprint). `ai-visibility` was added in spec-20260717-seo-improver-builder,
- * Sprint 5. Narrowing here keeps `CAPABILITIES` and `FILE_BASENAME` from
- * being an exhaustive `Record<SeoCapability, ...>`, which would otherwise
- * fail to compile the moment `SeoCapability` widens to include `link-graph`.
+ * The subset of `SeoCapability` this `LocalExportSource` serves from a local
+ * file. `ai-visibility` was added in spec-20260717-seo-improver-builder,
+ * Sprint 5; `link-graph` was added in Sprint 7 (the offline arm mirroring
+ * `CrawlSource`'s live link-graph capability, sc-7-4). Narrowing here keeps
+ * `CAPABILITIES` and `FILE_BASENAME` from being an exhaustive
+ * `Record<SeoCapability, ...>`, which would otherwise fail to compile the
+ * moment `SeoCapability` widens further.
  */
 type FileBackedCapability =
   | "search-analytics"
@@ -53,7 +53,8 @@ type FileBackedCapability =
   | "serp"
   | "keywords"
   | "backlinks"
-  | "ai-visibility";
+  | "ai-visibility"
+  | "link-graph";
 
 const CAPABILITIES: FileBackedCapability[] = [
   "search-analytics",
@@ -62,6 +63,7 @@ const CAPABILITIES: FileBackedCapability[] = [
   "keywords",
   "backlinks",
   "ai-visibility",
+  "link-graph",
 ];
 
 /** `<capability>` file basename — see the briefing's import-convention table. */
@@ -72,6 +74,7 @@ const FILE_BASENAME: Record<FileBackedCapability, string> = {
   keywords: "keywords",
   backlinks: "backlinks",
   "ai-visibility": "ai-visibility",
+  "link-graph": "link-graph",
 };
 
 type FileEntry = { path: string; ext: "csv" | "json" };
@@ -226,6 +229,15 @@ function mapAiVisibilityRow(r: Record<string, string>): AiVisibilityRow {
   };
 }
 
+function mapLinkGraphRow(r: Record<string, string>): LinkGraphRow {
+  return {
+    fromUrl: r.fromUrl ?? "",
+    toUrl: r.toUrl ?? "",
+    anchor: toOptionalString(r.anchor),
+    internal: toOptionalBoolean(r.internal) ?? false,
+  };
+}
+
 // -- LocalExportSource ------------------------------------------------------
 
 /**
@@ -304,11 +316,8 @@ export class LocalExportSource implements SeoDataSource {
     return this.readCapability("ai-visibility", mapAiVisibilityRow);
   }
 
-  // -- link-graph is NOT yet served; F7 wires the offline link-graph arm in
-  //    a later sprint (nonGoal this sprint) --------------------------------
-
   async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
-    return { kind: "disabled" };
+    return this.readCapability("link-graph", mapLinkGraphRow);
   }
 
   /**

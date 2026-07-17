@@ -1,0 +1,3 @@
+fromUrl,toUrl,anchor,internal
+https://example.com/,https://example.com/about,About us,true
+https://example.com/,https://external.example/partner,Partner,false
