@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 
 import { createDefaultConfig } from "../../config/schema.js";
-import { NeverEncodeFilter } from "../never-encode-filter.js";
+import { NeverEncodeFilter, NEVER_ENCODE_PATTERNS } from "../never-encode-filter.js";
 import type { SeoFinding } from "../types.js";
 
 import { ApprovedFinding } from "./approved-finding.js";
@@ -187,5 +187,125 @@ describe("SeoBuilder.build — never throws (sc-12-5)", () => {
 
     expect(result?.skipped).toBe(2);
     expect(result?.drafts).toHaveLength(0);
+  });
+});
+
+// ── sc-14-1: adversarial safety benchmark (Sprint 14, FINAL) ──────────
+//
+// Proves, in one place, the three structural safety guarantees the whole
+// Phase 2 build (Sprints 11-13) claims: (a) an un-approved / uncited hub
+// finding can never be resurrected into a draft, (b) no draft — across all
+// four `SeoDraftKind`s — ever carries a never-encode tactic, and (c) every
+// produced draft is `humanApprovalRequired === true`. Additive only: does
+// not modify the five describes above or their shared fixtures.
+
+const CLEAN_KIND_TAGS: ReadonlyArray<{ kind: string; tags: string[] }> = [
+  { kind: "schema-jsonld", tags: ["seo", "workflow:schema-audit", "playbook:seo.schema.article", "confidence:firm"] },
+  {
+    kind: "internal-link",
+    tags: ["seo", "workflow:internal-linking", "playbook:seo.internal-linking.hub-spoke", "confidence:firm"],
+  },
+  {
+    kind: "content-refresh",
+    tags: ["seo", "workflow:content-decay", "playbook:seo.content-decay.refresh", "confidence:firm"],
+  },
+  { kind: "title-meta", tags: ["seo", "workflow:technical-audit", "playbook:seo.unmapped.rule", "confidence:firm"] },
+];
+
+/** One `ApprovedFinding` per `SeoDraftKind`, all clean (no banned tactic). */
+function makeCleanApprovedBatch(): ApprovedFinding[] {
+  return CLEAN_KIND_TAGS.map(({ kind, tags }, i) => ApprovedFinding.from(makeApprovedRow({ id: `clean-${kind}-${i}`, tags }))).filter(
+    (a): a is ApprovedFinding => a !== null,
+  );
+}
+
+describe("SeoBuilder — adversarial safety benchmark (sc-14-1)", () => {
+  describe("(a) no resurrection of a dropped/downgraded/uncited finding", () => {
+    it.each(["open", "in-progress", "snoozed", "done", "dropped"] as const)(
+      "ApprovedFinding.from returns null for a hub row with status=%s (never-approved => structurally never a draft)",
+      (status) => {
+        expect(ApprovedFinding.from(makeApprovedRow({ status }))).toBeNull();
+      },
+    );
+
+    it("returns null for an approved row with no cite: evidence entry (uncited / never-encode-dropped surrogate)", () => {
+      expect(ApprovedFinding.from(makeApprovedRow({ evidence: ["Fix title"] }))).toBeNull();
+    });
+
+    it("returns null for an approved row whose cite: URL is malformed (verifier-downgraded-to-uncited surrogate)", () => {
+      expect(ApprovedFinding.from(makeApprovedRow({ evidence: ["Fix title", "cite:not-a-url"] }))).toBeNull();
+    });
+
+    it("a mixed batch of one approved+cited row and several dropped/un-approved/uncited rows only ever builds a draft for the approved+cited one", () => {
+      const rawRows: ApprovedHubFinding[] = [
+        makeApprovedRow({ id: "kept-1" }),
+        makeApprovedRow({ id: "dropped-1", status: "dropped" }),
+        makeApprovedRow({ id: "open-1", status: "open" }),
+        makeApprovedRow({ id: "in-progress-1", status: "in-progress" }),
+        makeApprovedRow({ id: "uncited-1", evidence: ["Fix title"] }),
+      ];
+
+      // This is exactly what the hub adapter (`readApprovedSeoFindings`) does:
+      // every non-approved/uncited row resolves to `null` here and never
+      // reaches `SeoBuilder.build` at all — resurrection is impossible
+      // because the gate runs BEFORE `build`, not inside it.
+      const approved = rawRows.map((r) => ApprovedFinding.from(r)).filter((a): a is ApprovedFinding => a !== null);
+      expect(approved).toHaveLength(1);
+      expect(approved[0]?.sourceFindingId).toBe("kept-1");
+
+      const { drafts, skipped } = new SeoBuilder(new NeverEncodeFilter()).build(baseInput(approved));
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0]?.sourceFindingId).toBe("kept-1");
+      expect(skipped).toBe(0);
+    });
+  });
+
+  describe("(b) no never-encode tactic is ever emitted in a draft, across all 4 draft kinds", () => {
+    const bannedTitles = [
+      "Place a parasite page on a high-authority host to rank fast.",
+      "Buy links from a private blog network to boost authority.",
+      "Register an expired domain to inherit its links.",
+      "Mass-generate AI pages targeting every long-tail query.",
+      "Use cloaking to show search engines different content than users.",
+      "Deploy doorway pages that funnel every query to one landing page.",
+    ];
+
+    it.each(CLEAN_KIND_TAGS)(
+      "drops every banned-title draft of kind $kind — none ever reach `drafts`",
+      ({ tags }) => {
+        const approvedBanned = bannedTitles
+          .map((title, i) => ApprovedFinding.from(makeApprovedRow({ id: `banned-${i}`, title, tags })))
+          .filter((a): a is ApprovedFinding => a !== null);
+        expect(approvedBanned).toHaveLength(bannedTitles.length);
+
+        const { drafts, skipped } = new SeoBuilder(new NeverEncodeFilter()).build(baseInput(approvedBanned));
+
+        expect(drafts).toHaveLength(0);
+        expect(skipped).toBe(bannedTitles.length);
+      },
+    );
+
+    it("corpus-wide invariant: no draft produced from a clean batch spanning all 4 kinds has an artifact matching any NEVER_ENCODE_PATTERNS regex", () => {
+      const clean = makeCleanApprovedBatch();
+      expect(clean).toHaveLength(4);
+
+      const { drafts, skipped } = new SeoBuilder(new NeverEncodeFilter()).build(baseInput(clean));
+      expect(skipped).toBe(0);
+      expect(drafts).toHaveLength(4);
+      for (const draft of drafts) {
+        expect(NEVER_ENCODE_PATTERNS.some((pattern) => pattern.test(draft.artifact))).toBe(false);
+      }
+    });
+  });
+
+  describe("(c) every draft carries humanApprovalRequired === true", () => {
+    it("holds across a batch of clean approved findings spanning all 4 draft kinds", () => {
+      const clean = makeCleanApprovedBatch();
+      expect(clean).toHaveLength(4);
+
+      const { drafts } = new SeoBuilder(new NeverEncodeFilter()).build(baseInput(clean));
+      expect(drafts).toHaveLength(4);
+      expect(drafts.every((d) => d.humanApprovalRequired === true)).toBe(true);
+    });
   });
 });

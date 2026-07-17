@@ -267,6 +267,103 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 ---
 
+## Phase 2 — the builder (gated generation)
+
+Phase 1 (above) only ever *analyzes and recommends* — `bober seo <workflow>` emits cited
+findings and stops. Phase 2 adds a second, separately-gated stage that turns a **human-
+approved** finding into a concrete draft artifact. Nothing Phase 2 produces is ever
+auto-applied to a live property; every artifact is a proposal a human reviews and applies
+by hand.
+
+### The `SeoBuilder` gated-generation model
+
+`SeoBuilder.build(input)` (`src/seo/builder/seo-builder.ts:68`) is the only place a draft
+artifact is generated, and its input type is gated at compile time:
+`SeoBuildInput.approvedFindings` accepts `ApprovedFinding[]` **only** — a raw `SeoFinding[]`
+does not type-check (see `seo-builder.test.ts`'s `@ts-expect-error` compile-proof, and the
+now-enforced `typecheck:tests` script below). For each approved finding it:
+
+1. Selects a deterministic, pure template per `SeoDraftKind` (`schema-jsonld` /
+   `internal-link` / `content-refresh` / `title-meta`, `draft-generators.ts:30`) — no LLM,
+   no network, no clock, no randomness.
+2. Re-runs the **mandatory** `NeverEncodeFilter` (`src/seo/never-encode-filter.ts`) over the
+   generated artifact text before it can be returned (`seo-builder.ts:77`). This is a second,
+   independent pass of the same runtime filter the analyze pipeline uses — belt-and-braces:
+   even a clean, approved, cited finding cannot produce a banned-tactic artifact, because the
+   generated *text itself* is re-scanned. A match increments `skipped`; the draft is dropped,
+   never returned, and the run never throws.
+3. Stamps every returned `SeoDraft` with the literal `humanApprovalRequired: true`
+   (`draft-types.ts:30` — a type literal, not a plain `boolean`, so it cannot be forged to
+   `false`) and a `sourceCitationUrl` copied verbatim from the `ApprovedFinding` that produced
+   it (`seo-builder.ts:83-91`) — never invented, never re-derived.
+
+`SeoBuilder.build` never throws: a per-finding generation error increments `skipped` and the
+loop continues rather than bricking the whole batch (mirrors `SeoAnalyzer`'s fail-closed
+discipline).
+
+### The `ApprovedFinding` boundary — resurrection is structurally impossible
+
+`ApprovedFinding` (`src/seo/builder/approved-finding.ts`) is the sole gate between the hub
+and the builder. It is constructible **only** via `ApprovedFinding.from(finding)`, which
+returns `null` — never throws — unless **both**:
+
+- `finding.status === "approved"` (a human, not the strategist or the verifier, moved the
+  hub finding into this state), **and**
+- the finding carries a well-formed `cite:<url>` evidence entry (an absolute `http(s)` URL).
+
+Any hub finding the citation gate dropped for lacking a citation, any finding the
+`NeverEncodeFilter` already dropped upstream, any finding the opt-in verifier downgraded to
+`disproved` (so it never reached the hub as `approved` in the first place), and any finding
+still sitting at `open`/`in-progress`/`snoozed`/`done`/`dropped` all resolve to `null` here —
+there is no code path from a dropped/un-approved finding into a `SeoDraft`. The reverse
+adapter `readApprovedSeoFindings` (`hub-approved-source.ts:30`) reads only `domain: "seo"`,
+`status: "approved"` hub rows and maps each through this same gate, so a malformed or
+ineligible row is silently skipped rather than crashing the build. `src/seo/builder/seo-
+builder.test.ts`'s `sc-14-1` safety benchmark exercises this boundary directly.
+
+### The human-approval loop and `bober seo build <reportId>`
+
+```
+bober seo <workflow>            # analyze: cited findings -> hub, kind "action"/"risk"
+  |
+  v  (a human reviews the hub finding and marks it `approved`)
+  |
+bober seo build <reportId>      # build: drafts artifacts from ONLY the approved findings
+  |
+  v
+.bober/seo/drafts/<reportId>-seo-drafts.json   (persisted bundle)
+  + best-effort hub `action` findings, one per draft
+  |
+  v  (a human reviews each draft and applies it manually)
+```
+
+`registerSeoCommand`'s `seo build <reportId>` subcommand (`src/seo/command.ts:102-125`) —
+run via `SeoBuildRunner.run` (`build-runner.ts:161`) — reads the named `SeoReport`, narrows
+the approved hub findings to that report's workflow (the only available report↔finding
+linkage today), calls `SeoBuilder.build`, persists the resulting bundle via `SeoDraftStore`
+(atomic temp-file + rename, `draft-store.ts:22-23`), and best-effort re-emits each draft as a
+hub `kind: "action"` finding (`build-runner.ts:85-101`) so it surfaces in the same review
+queue as any other finding. **Nothing in this loop ever writes to the target site** — the
+draft is text/content a human copies in, reviews, and applies themselves. An unknown
+`reportId` or a report with zero approved findings exits `0` cleanly with an informational
+message and zero hub emits; an unexpected failure (a report/finding-store read error, or a
+build/persist exception) fails closed to `exitCode 2` (`build-runner.ts:158-159`; `1` stays
+Commander-reserved).
+
+### Enforcing the compile-time gate: `typecheck:tests`
+
+The `@ts-expect-error` compile-proofs above (the `ApprovedFinding` nominal-type guard and the
+`SeoBuilder.build` type gate) are true today, but the base `tsconfig.json` excludes
+`*.test.ts` from `tsc`, and Vitest does not type-check by default — so a proof could silently
+rot without either check noticing. `npm run typecheck:tests` (`tsc --noEmit -p
+tsconfig.test.json`) closes that gap: `tsconfig.test.json` extends the base config but scopes
+`include` to `src/seo/builder/**/*.ts` **without** excluding test files, so the builder's
+`*.test.ts` files are genuinely compiled. If a compile-proof ever stops erroring (e.g. the
+nominal-type guard is accidentally removed), this command fails with `TS2578: Unused
+'@ts-expect-error' directive` instead of silently passing.
+
+---
+
 ## Guardrails
 
 - **Never-encode tactics are dropped by three independent belts.** A banned tactic
@@ -318,6 +415,15 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   strategist's findings. It is strictly downgrade-only (confirm / downgrade-by-one /
   drop — never promote or add) and fail-closed (an unparseable/aborted verification
   keeps the findings unchanged).
+- **The builder's `ApprovedFinding` boundary + mandatory re-filter (Phase 2).**
+  `SeoBuilder.build` only ever accepts `ApprovedFinding[]` (type-gated, `sc-12-1`), and
+  `ApprovedFinding.from` returns `null` for any hub finding that is not human-`"approved"`
+  or lacks a well-formed `cite:` URL — a dropped, uncited, or verifier-downgraded finding
+  has no path into a draft (resurrection structurally impossible, see **Phase 2 — the
+  builder** above). Every generated artifact is additionally re-scanned by a second,
+  independent `NeverEncodeFilter` pass before it can be returned, and every draft carries
+  the literal `humanApprovalRequired: true` — nothing Phase 2 produces is ever
+  auto-applied.
 
 ---
 
@@ -349,3 +455,15 @@ Because that tactic is a named Google site-reputation-abuse policy violation, it
 playbook signature is tagged `PolicyClass: never-encode` and is dropped by the parser
 before any analysis prompt sees it — the workflow can only ever flag exposure risk, not
 recommend the tactic. See Guardrails above.
+
+**How do I turn an approved finding into an artifact?**
+First mark the hub finding `approved` (a human decision — nothing does this automatically).
+Then run `bober seo build <reportId>` for the report that finding came from. `SeoBuilder`
+reads only findings the `ApprovedFinding` boundary lets through (human-`"approved"` +
+well-formed `cite:` URL — see **Phase 2 — the builder** above), drafts a `SeoDraft` per
+approved finding, persists the bundle to `.bober/seo/drafts/<reportId>-seo-drafts.json`, and
+best-effort re-emits each draft as a hub `action` finding for review. Every draft carries
+`humanApprovalRequired: true` and is never applied to the target site automatically — you
+review and apply it yourself. A finding that was never approved, or was dropped/uncited
+upstream, cannot be resurrected into a draft: `ApprovedFinding.from` returns `null` for it,
+so it never reaches `SeoBuilder.build` in the first place.
