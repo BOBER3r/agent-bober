@@ -281,12 +281,18 @@ export async function selectSource(config: BoberConfig, projectRoot: string): Pr
     const crawlSource = new CrawlSource(
       governor,
       new DamcrawlerCrawlEngine(egress),
-      // bober: identity sanitizer (mirrors the test double in
-      // crawl-source.test.ts:40) — `DamcrawlerCrawlEngine` already
-      // sanitizes at the network->in-process boundary (ADR-11); this
-      // sanitizer is defense-in-depth only, softened until a real
-      // `dam.sanitize` is threaded through here. Follow-up: wire the loaded
-      // module's sanitize export once CrawlSource accepts one directly.
+      // bober: identity sanitizer for CrawlSource's OWN (defense-in-depth,
+      // sc-7-3) layer only. As of the Sprint 9 fix, `DamcrawlerCrawlEngine`
+      // sanitizes EVERY method (crawl/urlVisibility/linkGraph) at the
+      // network->in-process boundary via the real `dam.sanitize`
+      // (damcrawler-crawl-engine.ts F1) — that is now the genuine, load-
+      // bearing sanitization layer for every row this source returns.
+      // Leaving this second layer as identity is safe (it is redundant, not
+      // sole) — wiring the loaded module's `sanitize` export through here
+      // too would require exposing the engine's already-loaded damcrawler
+      // module, which `selectSource` cannot reach without duplicating the
+      // engine's own guard/load sequence. Follow-up: thread a real
+      // `dam.sanitize` here if CrawlSource is ever given its own loader.
       new ContentSanitizer((raw) => ({ content: raw, hadThreats: false })),
     );
     routes["link-graph"] = crawlSource;

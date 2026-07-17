@@ -46,8 +46,19 @@
  * Sprint 6: `crawl()` yields page bodies as Markdown with no link data, so
  * this method uses damcrawler's `scrape(urls, { formats: ["links"] })`
  * instead, which internally fetches HTML and extracts real
- * `LinkGraphRow` edges. Row free-text (`anchor`) is re-sanitized by
- * `CrawlSource` (sc-7-3, defense-in-depth) — this engine may leave it raw.
+ * `LinkGraphRow` edges.
+ *
+ * Sprint 9 fix (F1 REOPENED — iteration 2): `linkGraph()`'s `fromUrl`/
+ * `toUrl`/`anchor` and `urlVisibility()`'s `url` are EQUALLY
+ * attacker-controlled free-text (the anchor text and link targets on a
+ * crawled page are written by whoever controls that page) and are now
+ * sanitized HERE too, via the SAME `ContentSanitizer(dam.sanitize)` pattern
+ * `crawl()` already uses — every engine method sanitizes at the
+ * network->in-process boundary before its rows can reach `SeoAnalyzer`'s
+ * `JSON.stringify` prompt serialization. `CrawlSource`'s own sanitizer
+ * (sc-7-3) remains a genuine defense-in-depth SECOND layer now that this
+ * layer is real, not the sole layer standing between an attacker-controlled
+ * anchor and the LLM prompt.
  */
 import type { SeoEgressGuard } from "../egress.js";
 import type { DataOutcome } from "../types.js";
@@ -185,8 +196,9 @@ export class DamcrawlerCrawlEngine implements CrawlEngine {
 
     try {
       const visibility = await dam.probeVisibility(q.inspectionUrl, q.siteUrl);
+      const sanitizer = new ContentSanitizer(dam.sanitize); // Sprint 9 fix: sanitize at the boundary, mirrors crawl()
       const row: UrlInspectionRow = {
-        url: q.inspectionUrl,
+        url: sanitizer.clean(q.inspectionUrl, q.inspectionUrl).content,
         indexingState: visibility === "visible" ? "indexed" : "not-indexed",
       };
       return { kind: "data", rows: [row], provenance: { source: "damcrawler", retrievedAt: this.now() } };
@@ -219,16 +231,21 @@ export class DamcrawlerCrawlEngine implements CrawlEngine {
 
     try {
       const results = await dam.scrape([q.rootUrl], { formats: ["links"], limit: q.limit });
+      const sanitizer = new ContentSanitizer(dam.sanitize); // Sprint 9 fix (F1): sanitize at the boundary, mirrors crawl()
       const rootOrigin = safeOrigin(q.rootUrl);
       const rows: LinkGraphRow[] = [];
       for (const page of results) {
         if (page.error) continue; // a failed fetch for this page yields no reliable link data
         for (const link of page.links ?? []) {
+          // F1: fromUrl/toUrl/anchor are attacker-controlled free text (the
+          // page being linked FROM controls all three) — sanitize every
+          // field BEFORE it can reach SeoAnalyzer's prompt serialization.
+          const internal = safeOrigin(link.url) === rootOrigin; // same-origin computed on the RAW url, before sanitizing
           rows.push({
-            fromUrl: page.url,
-            toUrl: link.url,
-            anchor: link.text ? link.text : undefined,
-            internal: safeOrigin(link.url) === rootOrigin, // same-origin => internal edge
+            fromUrl: sanitizer.clean(page.url, page.url).content,
+            toUrl: sanitizer.clean(link.url, page.url).content,
+            anchor: link.text ? sanitizer.clean(link.text, page.url).content : undefined,
+            internal,
           });
         }
       }
