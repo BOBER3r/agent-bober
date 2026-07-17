@@ -76,20 +76,23 @@ Source of truth: `SEO_WORKFLOWS`, `src/seo/command.ts:27-36`.
 The suite's live-data adapters are each gated behind their own default-off axis
 (`SeoEgressGuard`, `src/seo/egress.ts`). Opting into one does **not** opt into any
 other. Three axes now have a live adapter behind them (`search-console`,
-`serp-provider`, `ai-visibility`); one more (`site-crawl`) was registered by the SEO
-improver+builder foundation and is reserved for an adapter that lands in a later
-sprint — enabling it today is inert (no network path exists yet). The
-`ai-visibility` adapter (`AiVisibilityAdapter`) exists but is **not yet selected by
-the runner's `selectSource`** (Sprint 9 wires it), so enabling that axis alone does
-not change a `bober seo` run today; the adapter is usable only when constructed
-directly with an injected provider.
+`serp-provider`, `ai-visibility`); the fourth (`site-crawl`) now has a backing engine
+too — `DamcrawlerCrawlEngine` (`src/seo/sources/damcrawler-crawl-engine.ts`) landed in
+Sprint 6 — but it is **not yet selected by the runner's `selectSource`** (Sprint 7
+wires `CrawlSource`), so enabling `site-crawl` alone still does not change a `bober seo`
+run today, and it additionally requires the optional `damcrawler`/`playwright` peer
+deps to be installed (see **Optional site-crawl deps** below). The `ai-visibility`
+adapter (`AiVisibilityAdapter`) likewise exists but is **not yet selected by the
+runner's `selectSource`** (Sprint 9 wires it), so enabling that axis alone does not
+change a `bober seo` run today; the adapter is usable only when constructed directly
+with an injected provider.
 
 | Axis | Config key | Gates |
 |---|---|---|
 | Google Search Console | `seo.egress.search-console` | Live search-analytics / URL-inspection API calls |
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
 | AI-visibility (GEO) | `seo.egress.ai-visibility` | Live AI-answer / GEO provider probe (`AiVisibilityAdapter`) — **provider-agnostic, no vendor pinned; adapter exists but not yet router-wired (Sprint 9)** |
-| Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **reserved; no adapter wired yet** |
+| Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **`DamcrawlerCrawlEngine` engine exists (Sprint 6) but not yet router-wired (Sprint 7 wires `CrawlSource`); needs the optional `damcrawler`/`playwright` peer deps** |
 
 The whole `seo.egress` object is `.optional()` — a config that omits it keeps all four
 axes off, and the offline `LocalExportSource` needs none (`src/config/schema.ts:675-686`).
@@ -113,6 +116,29 @@ adapter is egress-gated (`ai-visibility`) and USD-metered through the quota gove
 (cost = `estCostUsdPerPrompt × prompts.length`, booked only after a successful probe;
 a provider error abstains and books nothing). A single `ai-visibility` axis gates
 every provider — there is no per-vendor axis.
+
+### Optional site-crawl deps (`damcrawler` + `playwright`)
+
+The `site-crawl` axis is backed by `DamcrawlerCrawlEngine`
+(`src/seo/sources/damcrawler-crawl-engine.ts`; **ADR-9**), which loads the
+[`damcrawler`](https://www.npmjs.com/package/damcrawler) scraper and its `playwright`
+peer through a **lazy `import()`** — both are declared as **optional peer dependencies**
+(`peerDependenciesMeta … optional: true`), **never** as `dependencies`, so they are
+absent from a default install and `npm ci` still resolves cleanly. With the deps
+absent every engine method returns `abstain{damcrawler-not-installed}` and never
+throws; with the `site-crawl` axis off the engine never loads them at all, keeping the
+all-axes-off path byte-identical. To opt in, install them and provision the browser:
+
+```bash
+npm i damcrawler playwright   # optional peers — absent by default
+damcrawler setup              # installs Playwright Chromium + patchright stealth (runs `npx playwright install chromium --with-deps`)
+```
+
+Even with the deps installed and the axis on, no `bober seo` run reaches the engine
+until Sprint 7 wires `CrawlSource` into the runner's `selectSource`. Crawled page
+bodies pass through the fail-closed `ContentSanitizer`
+(`src/seo/content-sanitizer.ts`; **ADR-11**) at the network→in-process boundary before
+any row can reach the analyzer prompt.
 
 ---
 
@@ -155,7 +181,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 | Field | Type | Default | Effect |
 |---|---|---|---|
-| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (`ai-visibility` has an adapter but is not yet router-wired; `site-crawl` is reserved). Omit entirely ⇒ byte-identical, all stay off. |
+| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (both `ai-visibility` and `site-crawl` have an engine/adapter but are not yet router-wired — Sprint 9 / Sprint 7; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
 | `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Omitting `serp` stays byte-identical. |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
@@ -170,7 +196,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
     "search-console": false,          // Google Search Console API egress. Default false.
     "serp-provider": false,           // DataForSEO SERP/keywords/backlinks egress. Default false.
     "ai-visibility": false,           // AI-answer/GEO provider egress. Default false. Adapter exists (provider-agnostic); not yet router-wired (Sprint 9).
-    "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Reserved (no adapter yet).
+    "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine exists (DamcrawlerCrawlEngine); not yet router-wired (Sprint 7); needs optional damcrawler/playwright peer deps.
   },
   "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`. Omit => byte-identical.
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
