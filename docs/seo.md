@@ -193,6 +193,14 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   primary source. The deterministic `SeoCitationGate` drops any finding with a missing
   or malformed citation before it reaches a report or the hub — the LLM's own judgment
   never bypasses this gate (`skills/bober.seo-generic/SKILL.md:31`).
+- **Documented ≠ live-weight (confidence downgrade).** Each playbook signature carries a
+  soft `LiveWeightStatus: live-corroborated|documented-only|unknown` field
+  (`skills/bober.seo-generic/SKILL.md:34`; defaults to `unknown` if absent/invalid). A
+  finding the analyzer grounds in a `documented-only` signature can never be emitted as
+  `firm` — `analyzer.toSeoFinding` downgrades it to `tentative`, because guidance that is
+  merely documented is not (yet) corroborated by a live ranking signal. The rule is
+  **downgrade-only** (`live-corroborated`/`unknown` change nothing; nothing is ever
+  upgraded) and the field lives on the signature only, not on `SeoFinding` (ADR-2).
 - **Finder → verifier (opt-in).** When `seo.verifier.enabled` is `true`, a second,
   fresh-context read-only pass (`bober-seo-verifier`) tries to disprove each of the
   strategist's findings. It is strictly downgrade-only (confirm / downgrade-by-one /
