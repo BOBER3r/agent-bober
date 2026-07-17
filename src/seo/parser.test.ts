@@ -163,6 +163,59 @@ describe("SeoPlaybookParser — total, pure", () => {
     for (const s of sigs) expect(s.evidenceGrade).toBe("single-source");
   });
 
+  // sc-3-1 (spec-20260717-seo-improver-builder): LiveWeightStatus is a soft
+  // field mirroring EvidenceGrade exactly -- absent or garbage defaults to
+  // "unknown", never throws; a valid value round-trips.
+  it("defaults liveWeightStatus to unknown when absent or invalid (soft field)", () => {
+    const md = [
+      "### absent-live-weight",
+      "- **Title:** t",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** auto-safe",
+      "",
+      "### invalid-live-weight",
+      "- **Title:** t2",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** auto-safe",
+      "- **LiveWeightStatus:** bogus-garbage-value",
+    ].join("\n");
+
+    const sigs = SeoPlaybookParser.parse(md, "x");
+    expect(sigs).toHaveLength(2);
+    for (const s of sigs) expect(s.liveWeightStatus).toBe("unknown");
+  });
+
+  it("round-trips a valid liveWeightStatus value (documented-only, live-corroborated)", () => {
+    const md = [
+      "### documented-only-sig",
+      "- **Title:** t",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** auto-safe",
+      "- **LiveWeightStatus:** documented-only",
+      "",
+      "### live-corroborated-sig",
+      "- **Title:** t2",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** auto-safe",
+      "- **LiveWeightStatus:** live-corroborated",
+    ].join("\n");
+
+    const sigs = SeoPlaybookParser.parse(md, "x");
+    expect(sigs).toHaveLength(2);
+    expect(sigs.find((s) => s.playbookId === "documented-only-sig")?.liveWeightStatus).toBe("documented-only");
+    expect(sigs.find((s) => s.playbookId === "live-corroborated-sig")?.liveWeightStatus).toBe("live-corroborated");
+  });
+
+  it("never throws on a malformed LiveWeightStatus label value", () => {
+    const malformedInputs = [
+      "### garbage-live-weight\n- **Title:** t\n- **PrimarySourceUrl:** https://x\n- **PolicyClass:** auto-safe\n- **LiveWeightStatus:** \n",
+      "### numeric-live-weight\n- **Title:** t\n- **PrimarySourceUrl:** https://x\n- **PolicyClass:** auto-safe\n- **LiveWeightStatus:** 12345",
+    ];
+    for (const input of malformedInputs) {
+      expect(() => SeoPlaybookParser.parse(input, "x")).not.toThrow();
+    }
+  });
+
   it("defaults Tactic/Invariant/Keywords to empty when absent (soft fields)", () => {
     const md = ["### minimal", "- **Title:** t", "- **PrimarySourceUrl:** https://x", "- **PolicyClass:** auto-safe"].join(
       "\n",

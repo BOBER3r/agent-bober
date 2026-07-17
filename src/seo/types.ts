@@ -59,6 +59,13 @@ export type DataOutcome<T> =
 /**
  * Parsed from each `skills/bober.seo-*` directory's `SKILL.md`, strong/
  * read-only, memoised per process (architecture lines 349-360).
+ *
+ * `liveWeightStatus` (spec-20260717-seo-improver-builder, Sprint 3) is a
+ * soft field encoding the documented-vs-live-weight caveat: whether the
+ * signature's invariant is corroborated by a LIVE ranking signal
+ * (`live-corroborated`), is documented-only guidance not (yet) confirmed
+ * live (`documented-only`), or unknown/unstated (`unknown`, the default).
+ * It lives ONLY on the signature — `SeoFinding` is unchanged (ADR-2).
  */
 export type SeoSignature = {
   playbookId: string;
@@ -69,6 +76,7 @@ export type SeoSignature = {
   primarySourceUrl: string;
   policyClass: "auto-safe" | "human-approve";
   evidenceGrade: "verified" | "primary-unverified" | "single-source";
+  liveWeightStatus: "live-corroborated" | "documented-only" | "unknown";
   keywords: string[];
   skillRef: string;
 };

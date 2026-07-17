@@ -22,6 +22,10 @@ class ScriptedClient implements LLMClient {
 
 // ── Fixtures ─────────────────────────────────────────────────────────
 
+// `liveWeightStatus` is set to a NON-downgrading value ("live-corroborated")
+// on both base fixtures so the existing confidence:"firm" assertions below
+// (e.g. line ~117) are unaffected. The downgrade-only tests (sc-3-3) clone
+// these via `{ ...SAMPLE_SIGNATURE, liveWeightStatus: "documented-only" }`.
 const SAMPLE_SIGNATURE: SeoSignature = {
   playbookId: "seo.technical-audit.title-tags",
   workflows: ["technical-audit"],
@@ -31,6 +35,7 @@ const SAMPLE_SIGNATURE: SeoSignature = {
   primarySourceUrl: "https://developers.google.com/search/docs/appearance/title-link",
   policyClass: "auto-safe",
   evidenceGrade: "verified",
+  liveWeightStatus: "live-corroborated",
   keywords: ["title", "duplicate"],
   skillRef: "bober.seo-technical-audit",
 };
@@ -44,6 +49,7 @@ const SAMPLE_HUMAN_APPROVE_SIGNATURE: SeoSignature = {
   primarySourceUrl: "https://developers.google.com/search/docs/essentials/spam-policies",
   policyClass: "human-approve",
   evidenceGrade: "verified",
+  liveWeightStatus: "live-corroborated",
   keywords: ["paid", "sponsored"],
   skillRef: "bober.seo-technical-audit",
 };
@@ -162,6 +168,92 @@ describe("SeoAnalyzer.analyze — well-formed model output (sc-10-1)", () => {
 
     expect(analysis.dataProvenance).toHaveLength(1);
     expect(analysis.dataProvenance[0]).toEqual({ source: "local-export", retrievedAt: "2026-07-16T00:00:00Z" });
+  });
+});
+
+// ── sc-3-3 (spec-20260717-seo-improver-builder): liveWeightStatus drives a
+// downgrade-only confidence rule -- documented-only + firm -> tentative;
+// live-corroborated/unknown leave confidence unchanged; never upgrades ────
+
+describe("SeoAnalyzer.analyze — liveWeightStatus downgrade-only confidence rule (sc-3-3)", () => {
+  it("downgrades a firm finding to tentative when grounded in a documented-only signature", async () => {
+    const documentedOnlySignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "documented-only" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [documentedOnlySignature],
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings).toHaveLength(1);
+    expect(analysis.findings[0].confidence).toBe("tentative");
+  });
+
+  it("leaves confidence unchanged (firm) when grounded in a live-corroborated signature", async () => {
+    const liveCorroboratedSignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "live-corroborated" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [liveCorroboratedSignature],
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings[0].confidence).toBe("firm");
+  });
+
+  it("leaves confidence unchanged (firm) when grounded in an unknown-liveWeightStatus signature", async () => {
+    const unknownSignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "unknown" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [unknownSignature],
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings[0].confidence).toBe("firm");
+  });
+
+  it("never upgrades: a tentative finding grounded in documented-only stays tentative", async () => {
+    const documentedOnlySignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "documented-only" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [documentedOnlySignature],
+    };
+    const tentativeFindingJson = JSON.stringify({
+      findings: [
+        {
+          recommendation: "De-duplicate the title tag shared by /a and /b.",
+          playbookRef: "seo.technical-audit.title-tags",
+          citationUrl: "https://developers.google.com/search/docs/appearance/title-link",
+          evidence: [],
+          severity: 3,
+          humanApprovalRequired: false,
+          confidence: "tentative",
+        },
+      ],
+    });
+    const client = new ScriptedClient([tentativeFindingJson]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings[0].confidence).toBe("tentative");
+  });
+
+  it("leaves confidence unchanged when no matching signature is found for the playbookRef", async () => {
+    const emptyContext: SeoRetrieveResult = { promptFragment: SAMPLE_CONTEXT.promptFragment, signatures: [] };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context: emptyContext }));
+
+    expect(analysis.findings[0].confidence).toBe("firm");
   });
 });
 

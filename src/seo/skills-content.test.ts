@@ -58,6 +58,103 @@ function assertBaseline(signatures: ReturnType<typeof SeoPlaybookParser.parse>, 
   }
 }
 
+// ── sc-3-4 (spec-20260717-seo-improver-builder): skills-lint over
+// `liveWeightStatus` -- a high-severity playbook (policyClass:
+// "human-approve", the only high-stakes signal ON a SeoSignature; ADR-2)
+// that OMITS **LiveWeightStatus:** resolves to "unknown" and must be
+// flagged. Uses SYNTHETIC parsed signatures, NOT real skill files -- Sprint
+// 4 is responsible for authoring `LiveWeightStatus` into the real
+// bober.seo-* skill files (nonGoal of this sprint). ────────────────────
+
+/**
+ * "High-severity" is undefined directly on `SeoSignature` (severity is
+ * model-emitted, on `SeoFinding`). `policyClass === "human-approve"` is the
+ * only high-stakes signal a signature carries, so it is the lint's proxy
+ * for "high-severity playbook" (per the sprint briefing/ADR-2 risk note).
+ */
+function findHighSeverityOmissions(signatures: ReturnType<typeof SeoPlaybookParser.parse>) {
+  return signatures.filter((s) => s.policyClass === "human-approve" && s.liveWeightStatus === "unknown");
+}
+
+describe("SeoPlaybookParser — skills-lint: LiveWeightStatus omission on high-severity playbooks (sc-3-4)", () => {
+  it("flags a human-approve signature that omits LiveWeightStatus (resolves to unknown)", () => {
+    const md = [
+      "### risky-live-site-rewrite",
+      "- **Title:** Large-scale rewrite",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      // No LiveWeightStatus label -- soft-field default applies.
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures).toHaveLength(1);
+    expect(signatures[0].liveWeightStatus).toBe("unknown");
+    expect(omissions).toHaveLength(1);
+    expect(omissions[0].playbookId).toBe("risky-live-site-rewrite");
+  });
+
+  it("does NOT flag a human-approve signature that declares LiveWeightStatus", () => {
+    const md = [
+      "### risky-live-site-rewrite-declared",
+      "- **Title:** Large-scale rewrite",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      "- **LiveWeightStatus:** documented-only",
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures[0].liveWeightStatus).toBe("documented-only");
+    expect(omissions).toHaveLength(0);
+  });
+
+  it("does NOT flag an auto-safe signature that omits LiveWeightStatus (not high-severity)", () => {
+    const md = [
+      "### low-severity-tactic",
+      "- **Title:** Low-risk tactic",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** auto-safe",
+      // No LiveWeightStatus label -- defaults to unknown, but not high-severity.
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures[0].policyClass).toBe("auto-safe");
+    expect(signatures[0].liveWeightStatus).toBe("unknown");
+    expect(omissions).toHaveLength(0);
+  });
+
+  it("flags each omitting human-approve signature independently across a mixed batch", () => {
+    const md = [
+      "### mixed-flagged-1",
+      "- **Title:** A",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      "",
+      "### mixed-declared",
+      "- **Title:** B",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      "- **LiveWeightStatus:** live-corroborated",
+      "",
+      "### mixed-flagged-2",
+      "- **Title:** C",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures).toHaveLength(3);
+    expect(omissions.map((s) => s.playbookId).sort()).toEqual(["mixed-flagged-1", "mixed-flagged-2"]);
+  });
+});
+
 describe("SeoPlaybookParser — real bober.seo-technical-audit skill file", () => {
   it("parses skills/bober.seo-technical-audit/SKILL.md into >=6 valid, cited signatures", async () => {
     const relPath = "skills/bober.seo-technical-audit/SKILL.md";

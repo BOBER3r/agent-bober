@@ -31,6 +31,7 @@ Fields per block:
 - `- **PrimarySourceUrl:** <REQUIRED citation URL>` — **a block missing or with an empty value here is DROPPED** (no-uncited-claim rule; the whole point of this format)
 - `- **PolicyClass:** auto-safe|human-approve|never-encode` — **`never-encode` is DROPPED**; any other invalid value is also DROPPED
 - `- **EvidenceGrade:** verified|primary-unverified|single-source` (soft field, defaults to `single-source` if absent/invalid)
+- `- **LiveWeightStatus:** live-corroborated|documented-only|unknown` (soft field, defaults to `unknown` if absent/invalid — encodes whether the invariant is corroborated by a live ranking signal or is documented-only guidance; `documented-only` + a `firm` model finding is downgraded to `tentative` by the analyzer)
 - `- **Keywords:** comma, separated, keywords` (soft field, defaults to `[]`)
 
 A block missing `Title`, `PrimarySourceUrl`, or a valid `PolicyClass` is dropped by the

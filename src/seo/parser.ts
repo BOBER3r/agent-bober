@@ -14,6 +14,7 @@
  *   - **PrimarySourceUrl:** <REQUIRED citation URL>
  *   - **PolicyClass:** auto-safe|human-approve|never-encode
  *   - **EvidenceGrade:** verified|primary-unverified|single-source
+ *   - **LiveWeightStatus:** live-corroborated|documented-only|unknown (soft field, defaults to unknown)
  *   - **Keywords:** comma, separated, keywords
  *
  * A block is split on a `### ` heading (heading text, trimmed, is the
@@ -62,6 +63,13 @@ function isEvidenceGrade(value: string): value is EvidenceGrade {
   return (EVIDENCE_GRADES as readonly string[]).includes(value);
 }
 
+const LIVE_WEIGHT_STATUSES = ["live-corroborated", "documented-only", "unknown"] as const;
+type LiveWeightStatus = (typeof LIVE_WEIGHT_STATUSES)[number];
+
+function isLiveWeightStatus(value: string): value is LiveWeightStatus {
+  return (LIVE_WEIGHT_STATUSES as readonly string[]).includes(value);
+}
+
 // ── Field extraction ───────────────────────────────────────────────
 
 type FieldName =
@@ -72,10 +80,11 @@ type FieldName =
   | "PrimarySourceUrl"
   | "PolicyClass"
   | "EvidenceGrade"
+  | "LiveWeightStatus"
   | "Keywords";
 
 const LABEL_RE =
-  /^-\s+\*\*(Title|Workflows|Tactic|Invariant|PrimarySourceUrl|PolicyClass|EvidenceGrade|Keywords):\*\*\s*(.*)$/;
+  /^-\s+\*\*(Title|Workflows|Tactic|Invariant|PrimarySourceUrl|PolicyClass|EvidenceGrade|LiveWeightStatus|Keywords):\*\*\s*(.*)$/;
 
 function extractLabelledFields(block: string): Partial<Record<FieldName, string>> {
   const fields: Partial<Record<FieldName, string>> = {};
@@ -120,6 +129,9 @@ function parseBlock(block: string, skillRelPath: string): SeoSignature | null {
   const evidenceGrade =
     fields.EvidenceGrade && isEvidenceGrade(fields.EvidenceGrade) ? fields.EvidenceGrade : "single-source";
 
+  const liveWeightStatus =
+    fields.LiveWeightStatus && isLiveWeightStatus(fields.LiveWeightStatus) ? fields.LiveWeightStatus : "unknown";
+
   const keywords = fields.Keywords
     ? fields.Keywords.split(",")
         .map((k) => k.trim())
@@ -135,6 +147,7 @@ function parseBlock(block: string, skillRelPath: string): SeoSignature | null {
     primarySourceUrl,
     policyClass: policyClassRaw,
     evidenceGrade,
+    liveWeightStatus,
     keywords,
     skillRef: skillRelPath,
   };

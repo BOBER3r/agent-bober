@@ -234,6 +234,15 @@ function parseFindingsContainer(rawText: string): ParseFindingsResult {
  * grounded in a `playbookRef` whose matching `SeoSignature.policyClass` is
  * `"human-approve"` is always flagged for human approval, even if the model
  * forgot to set the flag itself.
+ *
+ * Applies the same signature-driven-override idiom to `confidence`
+ * (spec-20260717-seo-improver-builder, Sprint 3, ADR-2): a finding grounded
+ * in a signature whose `liveWeightStatus` is `"documented-only"` cannot be
+ * emitted as `"firm"` — it is downgraded to `"tentative"`, because
+ * "documented" guidance is not (yet) corroborated by a live ranking signal.
+ * This is DOWNGRADE-ONLY: `"live-corroborated"`/`"unknown"` never change
+ * `confidence`, and there is no branch that upgrades `"tentative"` ->
+ * `"firm"`.
  */
 function toSeoFinding(
   modelFinding: SeoModelFinding,
@@ -244,6 +253,11 @@ function toSeoFinding(
   const humanApprovalRequired =
     modelFinding.humanApprovalRequired || signature?.policyClass === "human-approve";
 
+  const confidence =
+    signature?.liveWeightStatus === "documented-only" && modelFinding.confidence === "firm"
+      ? "tentative"
+      : modelFinding.confidence;
+
   return {
     recommendation: modelFinding.recommendation,
     workflow,
@@ -252,7 +266,7 @@ function toSeoFinding(
     evidence: modelFinding.evidence,
     severity: modelFinding.severity,
     humanApprovalRequired,
-    confidence: modelFinding.confidence,
+    confidence,
   };
 }
 
