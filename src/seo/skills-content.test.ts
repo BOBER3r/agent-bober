@@ -171,6 +171,29 @@ describe("SeoPlaybookParser — real bober.seo-technical-audit skill file", () =
       expect(s.workflows).toContain("technical-audit");
     }
   });
+
+  // sc-4-1 (spec-20260717-seo-improver-builder): the three leak-derived
+  // attributes hard-required by the sprint (siteAuthority, NavBoost/click
+  // signals, contentEffort) are re-graded liveWeightStatus="documented-only"
+  // -- the leak proves the attribute EXISTS, not that it is a live-weighted
+  // ranking factor (research LOAD-BEARING CAVEAT).
+  it("re-grades the leak-derived siteAuthority/NavBoost/contentEffort signatures to documented-only (sc-4-1)", async () => {
+    const relPath = "skills/bober.seo-technical-audit/SKILL.md";
+    const signatures = await loadSkill(relPath);
+
+    const siteAuth = signatures.find((s) => s.playbookId === "siteauthority-domain-quality");
+    expect(siteAuth?.liveWeightStatus).toBe("documented-only");
+
+    const navboost = signatures.find((s) => s.playbookId === "navboost-click-quality-audit");
+    expect(navboost?.liveWeightStatus).toBe("documented-only");
+
+    const contentEffort = signatures.find((s) => s.playbookId === "contenteffort-low-effort-flag");
+    expect(contentEffort?.liveWeightStatus).toBe("documented-only");
+
+    // live-API-doc signatures (not leak-derived) must NOT be re-graded.
+    const gscHealth = signatures.find((s) => s.playbookId === "gsc-url-inspection-health");
+    expect(gscHealth?.liveWeightStatus).toBe("unknown");
+  });
 });
 
 describe("SeoPlaybookParser — real bober.seo-internal-linking skill file", () => {
@@ -386,5 +409,40 @@ describe("SeoPlaybookParser — real bober.seo-verticals skill file", () => {
     // sc-5-3: regulatory disclosure is human-approve, never auto-published.
     const disclosure = signatures.find((s) => s.playbookId === "igaming-regulatory-disclosure");
     expect(disclosure?.policyClass).toBe("human-approve");
+  });
+
+  // sc-4-1/sc-4-2 (spec-20260717-seo-improver-builder): the two leak-derived
+  // vertical signatures (scamness) are re-graded documented-only, and a
+  // focused set of new SaaS/crypto/iGaming signatures is added, each cited
+  // to a curl-verified primary source (research-20260716 VERIFIED findings).
+  it("re-grades leak-derived vertical signatures and adds focused new SaaS/crypto/iGaming signatures (sc-4-1, sc-4-2)", async () => {
+    const relPath = "skills/bober.seo-verticals/SKILL.md";
+    const { signatures, dropped } = await loadSkillWithDiagnostics(relPath);
+    assertBaseline(signatures, relPath);
+    assertNoForbiddenActions(signatures);
+    expect(dropped).toBeGreaterThan(0);
+
+    const scamness = signatures.find((s) => s.playbookId === "igaming-scamness-demotion-awareness");
+    expect(scamness?.liveWeightStatus).toBe("documented-only");
+
+    const cryptoYmyl = signatures.find((s) => s.playbookId === "crypto-ymyl-editorial-override");
+    expect(cryptoYmyl?.liveWeightStatus).toBe("documented-only");
+
+    const ids = signatures.map((s) => s.playbookId);
+    expect(ids).toContain("igaming-ads-certification-compliance");
+    expect(ids).toContain("crypto-igaming-site-reputation-abuse-audit");
+    expect(ids).toContain("saas-scaled-content-intent-audit");
+
+    const igamingAds = signatures.find((s) => s.playbookId === "igaming-ads-certification-compliance");
+    expect(igamingAds?.primarySourceUrl).toBe("https://support.google.com/adspolicy/answer/15132179");
+    expect(igamingAds?.policyClass).toBe("human-approve");
+
+    const reputationAbuse = signatures.find((s) => s.playbookId === "crypto-igaming-site-reputation-abuse-audit");
+    expect(reputationAbuse?.primarySourceUrl).toBe("https://developers.google.com/search/blog/2024/11/site-reputation-abuse");
+    expect(reputationAbuse?.policyClass).toBe("human-approve");
+
+    const saasIntent = signatures.find((s) => s.playbookId === "saas-scaled-content-intent-audit");
+    expect(saasIntent?.primarySourceUrl).toBe("https://developers.google.com/search/docs/essentials/spam-policies");
+    expect(saasIntent?.policyClass).toBe("auto-safe");
   });
 });

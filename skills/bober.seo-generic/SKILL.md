@@ -149,6 +149,7 @@ never reach an analyzer prompt.
 - **PrimarySourceUrl:** https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-in-seo-should-see-them/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** topical-authority, sitefocus, site-radius, leak
 
 ### schema-entity-aio-lift

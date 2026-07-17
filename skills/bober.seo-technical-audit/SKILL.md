@@ -34,6 +34,7 @@ site -- consistent with research §6's "safely automatable" audit category.
 - **PrimarySourceUrl:** https://ipullrank.com/google-algo-leak
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** siteauthority, leak, domain-quality, compressed-quality-signals
 
 ### navboost-click-quality-audit
@@ -44,6 +45,7 @@ site -- consistent with research §6's "safely automatable" audit category.
 - **PrimarySourceUrl:** https://ipullrank.com/google-algo-leak
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** navboost, click-quality, goodclicks, badclicks, ux-audit
 
 ### contenteffort-low-effort-flag
@@ -54,6 +56,7 @@ site -- consistent with research §6's "safely automatable" audit category.
 - **PrimarySourceUrl:** https://ipullrank.com/google-algo-leak
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** contenteffort, low-effort, scaled-content, people-first
 
 ### hostage-sandbox-new-domain
@@ -64,6 +67,7 @@ site -- consistent with research §6's "safely automatable" audit category.
 - **PrimarySourceUrl:** https://www.hobo-web.co.uk/evidence-based-mapping-of-google-updates-to-leaked-internal-ranking-signals/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** hostage, hostage-sandbox, new-domain, adversarial-vertical
 
 ### date-consistency-audit
@@ -74,6 +78,7 @@ site -- consistent with research §6's "safely automatable" audit category.
 - **PrimarySourceUrl:** https://ipullrank.com/google-algo-leak
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** date-consistency, bylinedate, syntacticdate, semanticdate
 
 ### gsc-url-inspection-health
@@ -94,6 +99,7 @@ site -- consistent with research §6's "safely automatable" audit category.
 - **PrimarySourceUrl:** https://www.hobo-web.co.uk/evidence-based-mapping-of-google-updates-to-leaked-internal-ranking-signals/
 - **PolicyClass:** auto-safe
 - **EvidenceGrade:** single-source
+- **LiveWeightStatus:** documented-only
 - **Keywords:** named-demotion, exact-match-domain, anchor-mismatch, scamness, igaming
 
 ### gsc-url-inspection-api-method

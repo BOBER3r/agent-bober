@@ -45,6 +45,17 @@ describe("SeoPlaybookParser — real generic skill file", () => {
     expect(dropped).toBe(1);
     expect(signatures.length).toBeGreaterThanOrEqual(10);
   });
+
+  // sc-4-1 (spec-20260717-seo-improver-builder): the leak-derived
+  // siteFocusScore/siteRadius signature is re-graded liveWeightStatus=
+  // "documented-only" -- the leak proves the attribute EXISTS, not that it
+  // is a live-weighted ranking factor.
+  it("re-grades the leak-derived sitefocus-topical-authority signature to documented-only (sc-4-1)", async () => {
+    const md = await readFile(new URL("../../skills/bober.seo-generic/SKILL.md", import.meta.url), "utf-8");
+    const signatures = SeoPlaybookParser.parse(md, "skills/bober.seo-generic/SKILL.md");
+    const siteFocus = signatures.find((s) => s.playbookId === "sitefocus-topical-authority");
+    expect(siteFocus?.liveWeightStatus).toBe("documented-only");
+  });
 });
 
 // ── Totality: parser never throws, drops malformed/uncited/never-encode ──
