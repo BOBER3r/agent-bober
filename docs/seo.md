@@ -200,7 +200,12 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   `firm` — `analyzer.toSeoFinding` downgrades it to `tentative`, because guidance that is
   merely documented is not (yet) corroborated by a live ranking signal. The rule is
   **downgrade-only** (`live-corroborated`/`unknown` change nothing; nothing is ever
-  upgraded) and the field lives on the signature only, not on `SeoFinding` (ADR-2).
+  upgraded) and the field lives on the signature only, not on `SeoFinding` (ADR-2). The
+  shipped leak-derived ranking-mechanics signatures (siteAuthority, NavBoost,
+  contentEffort, siteFocus/siteRadius, hostAge, date-consistency, named-demotions, and
+  the two leak-derived vertical blocks) are graded `documented-only`, so findings grounded
+  in them are capped at `tentative`; the `gsc-url-inspection-*` signatures stay `unknown`
+  because they document a live API, not a leaked ranking signal.
 - **Finder → verifier (opt-in).** When `seo.verifier.enabled` is `true`, a second,
   fresh-context read-only pass (`bober-seo-verifier`) tries to disprove each of the
   strategist's findings. It is strictly downgrade-only (confirm / downgrade-by-one /
