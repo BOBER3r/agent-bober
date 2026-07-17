@@ -235,7 +235,7 @@ array of objects with the same keys as the CSV header.
 ## Budget / verifier / target / threshold config
 
 All fields live under the optional top-level `seo` key (`SeoConfigSchema`,
-`src/config/schema.ts:668-699`), `.optional()` on `BoberConfig` with no top-level
+`src/config/schema.ts:668-714`), `.optional()` on `BoberConfig` with no top-level
 default — omitting `seo` entirely means the parsed config has no `seo` key at all.
 
 | Field | Type | Default | Effect |
@@ -324,14 +324,25 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 ## FAQ
 
 **Do I need any API key to use this?**
-No. The default data source reads `.bober/seo/imports/` — omit both egress axes and
-every workflow runs entirely offline against your own exported data.
+No. The default data source reads `.bober/seo/imports/` — omit all four egress axes
+(`search-console`, `serp-provider`, `ai-visibility`, `site-crawl`) and every workflow
+runs entirely offline against your own exported data.
 
 **How do I turn on live data?**
-Set the matching axis to `true` under `seo.egress` in `bober.config.json`, and provide
-the corresponding credentials as environment variables: `GSC_OAUTH_TOKEN` for
-`search-console`, and `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` for `serp-provider`.
-Each axis is independent; turning one on does not affect the other.
+It depends on the axis:
+- `search-console`: set `seo.egress["search-console"]: true` and provide
+  `GSC_OAUTH_TOKEN`.
+- `serp-provider`: set `seo.egress["serp-provider"]: true` and provide
+  `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`.
+- `ai-visibility`: set `seo.egress["ai-visibility"]: true` — no credentials needed yet;
+  because no concrete AI-visibility vendor is pinned (see Egress axes above), this axis
+  currently routes to the offline `LocalExportSource` arm (`ai-visibility.csv`/`.json`)
+  rather than a live provider.
+- `site-crawl`: set `seo.egress["site-crawl"]: true` and install the optional
+  `damcrawler`/`playwright` peer deps (`npm i damcrawler playwright && damcrawler
+  setup`) — no API key, just the local browser engine.
+
+Each axis is independent; turning one on does not affect the others.
 
 **Why does `parasite-watch` never suggest placing content on a third-party host?**
 Because that tactic is a named Google site-reputation-abuse policy violation, its

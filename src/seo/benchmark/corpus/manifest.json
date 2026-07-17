@@ -94,5 +94,65 @@
       "droppedUncited": 0,
       "verdict": "blocked"
     }
+  },
+  {
+    "id": "kg-ai-visibility-offline",
+    "label": "known-good",
+    "workflow": "ai-visibility",
+    "target": "example.com",
+    "imports": [
+      { "file": "ai-visibility.csv", "content": "prompt,provider,mentioned,rank,citationPresent,sourceUrls\nbest crypto casino,perplexity,true,2,true,\"https://target.example/a https://target.example/b\"\ntop no-kyc exchange,perplexity,false,,false,\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Track branded web-mention volume across AI answers as a distinct visibility metric.\",\"playbookRef\":\"ai-visibility-branded-mention-audit\",\"citationUrl\":\"https://ahrefs.com/blog/ai-brand-visibility-correlations/\",\"evidence\":[{\"metric\":\"mentioned\",\"value\":\"true\",\"source\":\"ai-visibility\",\"url\":\"https://target.example/a\"}],\"severity\":2,\"humanApprovalRequired\":false,\"confidence\":\"firm\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "ai-visibility-branded-mention-audit", "cited": true }],
+      "droppedUncited": 0,
+      "verdict": "pass"
+    }
+  },
+  {
+    "id": "kg-link-graph-offline",
+    "label": "known-good",
+    "workflow": "internal-linking",
+    "target": "example.com",
+    "imports": [
+      { "file": "link-graph.csv", "content": "fromUrl,toUrl,anchor,internal\nhttps://example.com/,https://example.com/about,About us,true\nhttps://example.com/,https://external.example/partner,Partner,false\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Concentrate internal links within topical clusters to reinforce siteFocusScore.\",\"playbookRef\":\"sitefocus-internal-consolidation\",\"citationUrl\":\"https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-in-seo-should-see-them/\",\"evidence\":[{\"metric\":\"anchor\",\"value\":\"About us\",\"source\":\"link-graph\",\"url\":\"https://example.com/about\"}],\"severity\":2,\"humanApprovalRequired\":false,\"confidence\":\"firm\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "sitefocus-internal-consolidation", "cited": true }],
+      "droppedUncited": 0,
+      "verdict": "pass"
+    }
+  },
+  {
+    "id": "kb-never-encode-cited-drop",
+    "label": "known-bad",
+    "workflow": "technical-audit",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Deploy cloaking to serve Googlebot a different page than users.\",\"playbookRef\":\"seo.technical-audit.cloak-googlebot\",\"citationUrl\":\"https://developers.google.com/search/docs/essentials/spam-policies\",\"evidence\":[],\"severity\":4,\"humanApprovalRequired\":true,\"confidence\":\"tentative\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "seo.technical-audit.cloak-googlebot", "cited": false }],
+      "droppedUncited": 0,
+      "verdict": "pass"
+    }
+  },
+  {
+    "id": "kg-liveweight-downgrade",
+    "label": "known-good",
+    "workflow": "topical-map",
+    "target": "example.com",
+    "imports": [
+      { "file": "url-inspection.csv", "content": "url,coverageState\nhttps://example.com/a,Indexed\n" }
+    ],
+    "analyzerResponse": "{\"findings\":[{\"recommendation\":\"Keep new content aligned to the site's established topical focus rather than treating high-deviation pages as easy incremental traffic.\",\"playbookRef\":\"sitefocus-topical-authority\",\"citationUrl\":\"https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-in-seo-should-see-them/\",\"evidence\":[{\"metric\":\"siteFocusScore\",\"value\":\"0.42\",\"source\":\"leak-analysis\",\"url\":\"https://sparktoro.com/blog/an-anonymous-source-shared-thousands-of-leaked-google-search-api-documents-with-me-everyone-in-seo-should-see-them/\"}],\"severity\":2,\"humanApprovalRequired\":false,\"confidence\":\"firm\"}]}",
+    "expected": {
+      "findings": [{ "playbookRef": "sitefocus-topical-authority", "cited": true }],
+      "droppedUncited": 0,
+      "verdict": "pass"
+    }
   }
 ]
