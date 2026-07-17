@@ -75,27 +75,26 @@ Source of truth: `SEO_WORKFLOWS`, `src/seo/command.ts:27-36`.
 
 The suite's live-data adapters are each gated behind their own default-off axis
 (`SeoEgressGuard`, `src/seo/egress.ts`). Opting into one does **not** opt into any
-other. Three axes now have a live adapter behind them (`search-console`,
-`serp-provider`, `ai-visibility`); the fourth (`site-crawl`) now has a backing engine
-too — `DamcrawlerCrawlEngine` (`src/seo/sources/damcrawler-crawl-engine.ts`) landed in
-Sprint 6 — but its `SeoDataSource`
-adapter — `CrawlSource` (`src/seo/sources/crawl-source.ts`, Sprint 7, serving
-`url-inspection` + `link-graph`) — is still **not selected by the runner's
-`selectSource`** (Sprint 9 / ADR-8 decides GSC-vs-crawl precedence), so enabling
-`site-crawl` alone still does not change a `bober seo`
-run today, and it additionally requires the optional `damcrawler`/`playwright` peer
-deps to be installed (see **Optional site-crawl deps** below). The `ai-visibility`
-adapter (`AiVisibilityAdapter`) likewise exists but is **not yet selected by the
-runner's `selectSource`** (Sprint 9 wires it), so enabling that axis alone does not
-change a `bober seo` run today; the adapter is usable only when constructed directly
-with an injected provider.
+other. **As of Sprint 9 all four axes are wired into the runner's `selectSource`**
+(`src/seo/runner.ts:259`), which assembles a capability-keyed `CapabilitySeoRouter` per
+the ADR-8/ADR-10 route table — so opting into an axis now actually routes data through a
+`bober seo` run (see **Pipeline wiring** below). The `site-crawl` axis is backed by
+`DamcrawlerCrawlEngine` (`src/seo/sources/damcrawler-crawl-engine.ts`, Sprint 6) through
+its `CrawlSource` adapter (`src/seo/sources/crawl-source.ts`, Sprint 7, serving
+`link-graph` and — per ADR-8, only when `search-console` is off — `url-inspection`); it
+additionally requires the optional `damcrawler`/`playwright` peer deps to be installed
+(see **Optional site-crawl deps** below). The `ai-visibility` axis is wired too, but
+because **no concrete AI-visibility provider is pinned yet** (Sprint 5) it routes to the
+**offline `LocalExportSource` arm** (reads `ai-visibility.csv`/`.json` if present) rather
+than to the live `AiVisibilityAdapter` — that adapter stays usable only when constructed
+directly with an injected provider, pending a provider-selection follow-up.
 
 | Axis | Config key | Gates |
 |---|---|---|
 | Google Search Console | `seo.egress.search-console` | Live search-analytics / URL-inspection API calls |
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
-| AI-visibility (GEO) | `seo.egress.ai-visibility` | Live AI-answer / GEO provider probe (`AiVisibilityAdapter`) — **provider-agnostic, no vendor pinned; adapter exists but not yet router-wired (Sprint 9)** |
-| Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **engine `DamcrawlerCrawlEngine` (Sprint 6) + adapter `CrawlSource` (Sprint 7, `url-inspection` + `link-graph`) exist but not yet router-wired (Sprint 9 / ADR-8); needs the optional `damcrawler`/`playwright` peer deps** |
+| AI-visibility (GEO) | `seo.egress.ai-visibility` | AI-answer / GEO capability — **router-wired in Sprint 9, but routed to the offline `LocalExportSource` arm because no vendor is pinned; the live `AiVisibilityAdapter` (provider-agnostic) awaits a pinned provider** |
+| Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **engine `DamcrawlerCrawlEngine` (Sprint 6) + adapter `CrawlSource` (Sprint 7) router-wired in Sprint 9 (ADR-8: `link-graph` always; `url-inspection` only when `search-console` is off); needs the optional `damcrawler`/`playwright` peer deps** |
 
 The whole `seo.egress` object is `.optional()` — a config that omits it keeps all four
 axes off, and the offline `LocalExportSource` needs none (`src/config/schema.ts:675-686`).
@@ -107,8 +106,9 @@ A companion `seo.serp.provider` key (`'dataforseo' | 'damcrawler'`, default
 `'dataforseo'`; `src/config/schema.ts:708-711`) selects which implementation serves the
 `serp` capability. Both implementations of the provider-agnostic `SerpProvider` port
 (`src/seo/serp-provider.ts`, Sprint 8; `resolveSerpProvider` is the selection factory)
-now exist, but the key is still inert end-to-end until Sprint 9 wires provider selection
-into the runner's `selectSource`:
+exist, and **as of Sprint 9 the key is live end-to-end** — `selectSource` calls
+`resolveSerpProvider(config, …)` and wraps the result in a `SerpProviderSource` on the
+`serp` route whenever the `serp-provider` **or** `site-crawl` axis is on (ADR-10):
 
 - **`dataforseo`** (default, `src/seo/sources/dataforseo-serp-provider.ts`) — a thin
   delegate over the existing `DataForSeoAdapter.serp` path; **byte-identical to today**.
@@ -137,6 +137,31 @@ adapter is egress-gated (`ai-visibility`) and USD-metered through the quota gove
 a provider error abstains and books nothing). A single `ai-visibility` axis gates
 every provider — there is no per-vendor axis.
 
+### Pipeline wiring (Sprint 9)
+
+`selectSource` (`src/seo/runner.ts:259`) turns the four axes above into the run's data
+source. With **all four off** it returns `LocalExportSource` as its first statement —
+zero governor, zero socket, `import('damcrawler')` never evaluated, byte-identical to a
+project with no SEO suite. Otherwise it loads the quota governor once and assembles a
+**`CapabilitySeoRouter`** that dispatches each capability to the one source that owns it
+(an unrouted capability resolves `{ kind: "disabled" }`; the router never throws):
+
+| Capability | Source | Axis |
+|---|---|---|
+| `search-analytics` | `GscAdapter` | `search-console` |
+| `url-inspection` | `GscAdapter`, else `CrawlSource` (ADR-8: GSC wins) | `search-console`, else `site-crawl` |
+| `link-graph` | `CrawlSource` | `site-crawl` |
+| `keywords`, `backlinks` | `DataForSeoAdapter` | `serp-provider` |
+| `serp` | `resolveSerpProvider(config)` result (ADR-10) | `serp-provider` **or** `site-crawl` |
+| `ai-visibility` | `LocalExportSource` (offline arm, no vendor pinned) | `ai-visibility` |
+
+`gatherDataBundle` then probes **only** the capabilities `WORKFLOW_CAPABILITIES`
+(`src/seo/workflow-capabilities.ts`, ADR-7) lists for the running workflow, so the
+metered `ai-visibility` capability is fetched **only** for the `ai-visibility` and
+`parasite-watch` workflows, and `link-graph` only for `internal-linking`; every other
+workflow gathers the five `CORE` capabilities and nothing more. An omitted capability is
+never called and renders as "not requested" in the analysis.
+
 ### Optional site-crawl deps (`damcrawler` + `playwright`)
 
 The `site-crawl` axis is backed by `DamcrawlerCrawlEngine`
@@ -154,14 +179,19 @@ npm i damcrawler playwright   # optional peers — absent by default
 damcrawler setup              # installs Playwright Chromium + patchright stealth (runs `npx playwright install chromium --with-deps`)
 ```
 
-Even with the deps installed and the axis on, no `bober seo` run reaches the engine
-until Sprint 9 wires `CrawlSource` into the runner's `selectSource` — the `CrawlSource`
-adapter itself (`url-inspection` + `link-graph`) landed in Sprint 7, but the router that
-selects it is Sprint 9 / ADR-8. Crawled page free-text — the body **and** the `title`
-and `url` (Sprint 7 finding F1) — passes through the fail-closed `ContentSanitizer`
-(`src/seo/content-sanitizer.ts`; **ADR-11**) at the network→in-process boundary before
-any row can reach the analyzer prompt, and `CrawlSource` re-sanitizes every field it
-emits (defense-in-depth). Every caller-supplied crawl/probe URL is additionally checked
+As of Sprint 9 the runner's `selectSource` **does** wire `CrawlSource` (ADR-8:
+`link-graph` always when `site-crawl` is on; `url-inspection` only when `search-console`
+is off), so with the deps installed and the axis on, a `bober seo` run reaches the
+engine. **Every** `DamcrawlerCrawlEngine` method — `crawl()`, `urlVisibility()`, and
+`linkGraph()` — sanitizes its row free-text at the network→in-process boundary through
+the fail-closed `ContentSanitizer` (`src/seo/content-sanitizer.ts`; **ADR-11**) before
+any row can reach the analyzer prompt: the page body/`title`/`url` from `crawl()`, the
+inspection `url` from `urlVisibility()`, and the `fromUrl`/`toUrl`/`anchor` of each edge
+from `linkGraph()` (all attacker-controlled free-text — Sprint 7 finding F1; the
+`linkGraph`/`urlVisibility` coverage was completed by the Sprint 9 iteration-2 fix, which
+closed a reopened F1 hole where those two methods had been left unsanitized). `CrawlSource`
+re-checks every field it emits as a genuine defense-in-depth second layer. Every
+caller-supplied crawl/probe URL is additionally checked
 by an engine-boundary SSRF guard (`assertSafeUrl`, Sprint 7 finding F2) before any
 network call — a private/link-local/loopback/metadata host or a non-`http(s)` scheme
 abstains (`ssrf-blocked`) with zero underlying damcrawler calls.
@@ -210,8 +240,8 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 | Field | Type | Default | Effect |
 |---|---|---|---|
-| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above (both `ai-visibility` and `site-crawl` have an engine/adapter — `site-crawl`'s `CrawlSource` adapter landed in Sprint 7 — but neither is router-wired yet; Sprint 9 wires both; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
-| `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — but selection is not yet router-wired (Sprint 9). Omitting `serp` stays byte-identical. |
+| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above, **all router-wired as of Sprint 9** (`ai-visibility` routes to the offline arm pending a pinned provider; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
+| `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — and **selection is router-wired as of Sprint 9** (`resolveSerpProvider` in `selectSource`). Omitting `serp` stays byte-identical. |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -224,10 +254,10 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   "egress": {                         // Optional. Omit => byte-identical; all axes stay off.
     "search-console": false,          // Google Search Console API egress. Default false.
     "serp-provider": false,           // DataForSEO SERP/keywords/backlinks egress. Default false.
-    "ai-visibility": false,           // AI-answer/GEO provider egress. Default false. Adapter exists (provider-agnostic); not yet router-wired (Sprint 9).
-    "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine (DamcrawlerCrawlEngine) + CrawlSource adapter exist; not yet router-wired (Sprint 9); needs optional damcrawler/playwright peer deps.
+    "ai-visibility": false,           // AI-answer/GEO egress. Default false. Router-wired (Sprint 9) to the offline LocalExportSource arm — live AiVisibilityAdapter awaits a pinned provider.
+    "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine (DamcrawlerCrawlEngine) + CrawlSource router-wired (Sprint 9, ADR-8); needs optional damcrawler/playwright peer deps.
   },
-  "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`: dataforseo (metered, serp-provider axis) | damcrawler (zero-USD scrape, gated by site-crawl axis — ADR-10). Both exist (Sprint 8); not yet router-wired (Sprint 9). Omit => byte-identical.
+  "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`: dataforseo (metered, serp-provider axis) | damcrawler (zero-USD scrape, gated by site-crawl axis — ADR-10). Both exist (Sprint 8); router-wired via resolveSerpProvider (Sprint 9). Omit => byte-identical.
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
   "budget": { "maxUsd": 5 },          // Per-run USD ceiling for PAYG DataForSEO calls. Absent = uncapped.
   "defaultTarget": "https://example.com", // Used when the CLI omits [target].
