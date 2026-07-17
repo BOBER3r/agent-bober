@@ -50,7 +50,11 @@ const WINDOW_MS = 60_000; // Rolling one-minute QPM window.
 
 /** One gated request. `capability` defaults to `"search-analytics"` for `source: "gsc"` when omitted. */
 export type QuotaRequest = {
-  source: "gsc" | "dataforseo";
+  // "ai-visibility" widened in spec-20260717-seo-improver-builder Sprint 5 —
+  // additive only; admit()/record() only special-case "gsc", so
+  // "ai-visibility" (like "dataforseo") naturally takes the USD-only branch
+  // below (no GSC daily-rows/rate-window cap applies).
+  source: "gsc" | "dataforseo" | "ai-visibility";
   /** GSC caps are modeled per-site AND per-user separately (research §4) — supply what you have. */
   scope: { siteUrl?: string; userId?: string };
   /** Which GSC/DataForSEO capability this call exercises; required to pick daily-rows vs url-inspection-cap. */

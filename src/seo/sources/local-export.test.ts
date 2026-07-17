@@ -48,6 +48,41 @@ describe("LocalExportSource — offline data arms (sc-6-2..6-4)", () => {
     expect(out.provenance.mtimeMs).toBeGreaterThan(0);
   });
 
+  it("present populated ai-visibility.csv => data + typed rows + provenance (sc-5-3)", async () => {
+    const out = await src.aiVisibility({ target: "https://target.example", prompts: ["best crypto casino", "top no-kyc exchange"] });
+
+    expect(out.kind).toBe("data");
+    if (out.kind !== "data") return;
+    expect(out.rows).toEqual([
+      {
+        prompt: "best crypto casino",
+        provider: "perplexity",
+        mentioned: true,
+        rank: 2,
+        citationPresent: true,
+        sourceUrls: ["https://target.example/a", "https://target.example/b"],
+      },
+      {
+        // Empty sourceUrls / missing rank coerce to [] / undefined (sc-5-3).
+        prompt: "top no-kyc exchange",
+        provider: "perplexity",
+        mentioned: false,
+        rank: undefined,
+        citationPresent: false,
+        sourceUrls: [],
+      },
+    ]);
+    expect(out.provenance.source).toBe("local-export");
+    expect(out.provenance.path?.endsWith("ai-visibility.csv")).toBe(true);
+  });
+
+  it("absent ai-visibility file => disabled (sc-5-3)", async () => {
+    const missing = new LocalExportSource(join(IMPORTS_DIR, "does-not-exist-dir"));
+    await missing.load();
+    const out = await missing.aiVisibility({ target: "https://target.example", prompts: ["x"] });
+    expect(out).toEqual({ kind: "disabled" });
+  });
+
   it("absent-file capability => disabled, never throws (sc-6-3)", async () => {
     const out = await src.backlinks({ target: "https://example.com" });
     expect(out).toEqual({ kind: "disabled" });

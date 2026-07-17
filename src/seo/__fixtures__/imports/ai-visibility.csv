@@ -1,0 +1,3 @@
+prompt,provider,mentioned,rank,citationPresent,sourceUrls
+best crypto casino,perplexity,true,2,true,"https://target.example/a https://target.example/b"
+top no-kyc exchange,perplexity,false,,false,

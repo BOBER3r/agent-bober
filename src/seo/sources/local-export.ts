@@ -40,19 +40,20 @@ const DEFAULT_EXPORT_DIR = ".bober/seo/imports";
 
 /**
  * The subset of `SeoCapability` this sprint's `LocalExportSource` serves from
- * a local file. `ai-visibility`/`link-graph` are NOT in this alias yet — they
- * have no local file/mapper this sprint (Sprint 1 is pure disabled-arms;
- * F5/F7 wire the offline arms). Narrowing here keeps `CAPABILITIES` and
- * `FILE_BASENAME` from being an exhaustive `Record<SeoCapability, ...>`,
- * which would otherwise fail to compile the moment `SeoCapability` widened
- * to 7 members.
+ * a local file. `link-graph` is NOT in this alias yet — it has no local
+ * file/mapper this sprint (F7 wires the offline link-graph arm in a later
+ * sprint). `ai-visibility` was added in spec-20260717-seo-improver-builder,
+ * Sprint 5. Narrowing here keeps `CAPABILITIES` and `FILE_BASENAME` from
+ * being an exhaustive `Record<SeoCapability, ...>`, which would otherwise
+ * fail to compile the moment `SeoCapability` widens to include `link-graph`.
  */
 type FileBackedCapability =
   | "search-analytics"
   | "url-inspection"
   | "serp"
   | "keywords"
-  | "backlinks";
+  | "backlinks"
+  | "ai-visibility";
 
 const CAPABILITIES: FileBackedCapability[] = [
   "search-analytics",
@@ -60,6 +61,7 @@ const CAPABILITIES: FileBackedCapability[] = [
   "serp",
   "keywords",
   "backlinks",
+  "ai-visibility",
 ];
 
 /** `<capability>` file basename — see the briefing's import-convention table. */
@@ -69,6 +71,7 @@ const FILE_BASENAME: Record<FileBackedCapability, string> = {
   serp: "serp",
   keywords: "keywords",
   backlinks: "backlinks",
+  "ai-visibility": "ai-visibility",
 };
 
 type FileEntry = { path: string; ext: "csv" | "json" };
@@ -211,6 +214,18 @@ function mapBacklinkRow(r: Record<string, string>): BacklinkRow {
   };
 }
 
+function mapAiVisibilityRow(r: Record<string, string>): AiVisibilityRow {
+  return {
+    prompt: r.prompt ?? "",
+    provider: r.provider ?? "",
+    mentioned: toOptionalBoolean(r.mentioned) ?? false,
+    rank: toOptionalNumber(r.rank),
+    citationPresent: toOptionalBoolean(r.citationPresent) ?? false,
+    // sourceUrls is a single CSV cell, space-delimited (URLs never contain spaces).
+    sourceUrls: (r.sourceUrls ?? "").split(/\s+/).filter(Boolean),
+  };
+}
+
 // -- LocalExportSource ------------------------------------------------------
 
 /**
@@ -285,13 +300,12 @@ export class LocalExportSource implements SeoDataSource {
     return this.readCapability("backlinks", mapBacklinkRow);
   }
 
-  // -- Capabilities this sprint's LocalExportSource does not yet serve;
-  //    F5/F7 wire the offline ai-visibility/link-graph arms in a later
-  //    sprint (nonGoal this sprint) --------------------------------------
-
   async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
-    return { kind: "disabled" };
+    return this.readCapability("ai-visibility", mapAiVisibilityRow);
   }
+
+  // -- link-graph is NOT yet served; F7 wires the offline link-graph arm in
+  //    a later sprint (nonGoal this sprint) --------------------------------
 
   async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
     return { kind: "disabled" };
