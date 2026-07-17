@@ -35,19 +35,30 @@ import type {
   SerpRow,
   KeywordRow,
   BacklinkRow,
+  AiVisibilityRow,
+  LinkGraphRow,
 } from "./data-source.js";
 import type { SeoRetrieveResult } from "./retriever.js";
 import type { BoberConfig } from "../config/schema.js";
 
 // -- Public types (do NOT exist elsewhere — defined here per the briefing) --
 
-/** Per-capability optional `DataOutcome<Row[]>` — a source may abstain/disable per capability. */
+/**
+ * Per-capability optional `DataOutcome<Row[]>` — a source may abstain/
+ * disable per capability. `aiVisibility`/`linkGraph` were added additively
+ * (spec-20260717-seo-improver-builder, Sprint 9; ADR-7) — an arm left
+ * `undefined` (a capability `WORKFLOW_CAPABILITIES` omits for the running
+ * workflow) renders as "not requested" (`describeDataOutcome` below), never
+ * as an error.
+ */
 export type SeoDataBundle = {
   searchAnalytics?: DataOutcome<SearchAnalyticsRow[]>;
   urlInspection?: DataOutcome<UrlInspectionRow[]>;
   serp?: DataOutcome<SerpRow[]>;
   keywords?: DataOutcome<KeywordRow[]>;
   backlinks?: DataOutcome<BacklinkRow[]>;
+  aiVisibility?: DataOutcome<AiVisibilityRow[]>;
+  linkGraph?: DataOutcome<LinkGraphRow[]>;
 };
 
 export type SeoAnalyzeInput = {
@@ -150,6 +161,8 @@ function buildDataBundleSummary(data: SeoDataBundle): string {
     describeDataOutcome("SERP", data.serp),
     describeDataOutcome("Keywords", data.keywords),
     describeDataOutcome("Backlinks", data.backlinks),
+    describeDataOutcome("AI Visibility", data.aiVisibility),
+    describeDataOutcome("Link Graph", data.linkGraph),
   ].join("\n\n");
 }
 
@@ -272,7 +285,15 @@ function toSeoFinding(
 
 function collectDataProvenance(data: SeoDataBundle): DataProvenance[] {
   const provenance: DataProvenance[] = [];
-  for (const outcome of [data.searchAnalytics, data.urlInspection, data.serp, data.keywords, data.backlinks]) {
+  for (const outcome of [
+    data.searchAnalytics,
+    data.urlInspection,
+    data.serp,
+    data.keywords,
+    data.backlinks,
+    data.aiVisibility,
+    data.linkGraph,
+  ]) {
     if (outcome?.kind === "data") provenance.push(outcome.provenance);
   }
   return provenance;

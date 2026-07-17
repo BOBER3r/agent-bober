@@ -16,7 +16,8 @@ import { LocalExportSource } from "./sources/local-export.js";
 import { GscAdapter } from "./sources/gsc-adapter.js";
 import { DataForSeoAdapter } from "./sources/dataforseo-adapter.js";
 import { SeoAnalyzer } from "./analyzer.js";
-import { SeoReportStore } from "./report-store.js";
+import { SeoReportStore, deriveReportId } from "./report-store.js";
+import { SeoQuotaGovernor } from "./quota-governor.js";
 import type { SeoFindingSink } from "./hub-emitter.js";
 import { FindingSchema } from "../hub/finding.js";
 import type { Finding } from "../hub/finding.js";
@@ -25,7 +26,8 @@ import type { BoberConfig } from "../config/schema.js";
 import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
 import type * as ProviderFactory from "../providers/factory.js";
 import type { SeoVerifier } from "./verifier.js";
-import type { SeoFinding } from "./types.js";
+import type { SeoFinding, DataOutcome } from "./types.js";
+import type { SeoDataSource, SeoCapability } from "./data-source.js";
 
 // ── createClient mock — MUST NEVER be invoked in this file ──────────────
 
@@ -119,6 +121,59 @@ function makeRecordingSink(): { sink: SeoFindingSink; calls: Finding[] } {
   return { sink, calls };
 }
 
+/**
+ * A hand-rolled fake `SeoDataSource` that records exactly how many times
+ * each capability method was invoked — used to prove `gatherDataBundle`'s
+ * `WORKFLOW_CAPABILITIES` gate omits (never calls) a capability a workflow
+ * does not list (sc-9-4), rather than calling-then-discarding it.
+ */
+function makeSpySource(): { source: SeoDataSource; calls: Record<SeoCapability, number> } {
+  const calls: Record<SeoCapability, number> = {
+    "search-analytics": 0,
+    "url-inspection": 0,
+    serp: 0,
+    keywords: 0,
+    backlinks: 0,
+    "ai-visibility": 0,
+    "link-graph": 0,
+  };
+  function dataOutcome<T>(rows: T): DataOutcome<T> {
+    return { kind: "data", rows, provenance: { source: "local-export", retrievedAt: "2026-01-01T00:00:00.000Z" } };
+  }
+  const source: SeoDataSource = {
+    capabilities: () => Object.keys(calls) as SeoCapability[],
+    searchAnalytics: async () => {
+      calls["search-analytics"]++;
+      return dataOutcome([]);
+    },
+    urlInspection: async () => {
+      calls["url-inspection"]++;
+      return dataOutcome([{ url: "https://example.com/a", coverageState: "Indexed" }]);
+    },
+    serp: async () => {
+      calls.serp++;
+      return dataOutcome([]);
+    },
+    keywords: async () => {
+      calls.keywords++;
+      return dataOutcome([]);
+    },
+    backlinks: async () => {
+      calls.backlinks++;
+      return dataOutcome([]);
+    },
+    aiVisibility: async () => {
+      calls["ai-visibility"]++;
+      return dataOutcome([]);
+    },
+    linkGraph: async () => {
+      calls["link-graph"]++;
+      return dataOutcome([]);
+    },
+  };
+  return { source, calls };
+}
+
 // ── sc-11-1/sc-11-2: offline run (both axes off, injected fakes) ────────
 
 describe("SeoWorkflowRunner.run — offline path (sc-11-1, sc-11-2)", () => {
@@ -194,26 +249,44 @@ describe("SeoWorkflowRunner.run — offline path (sc-11-1, sc-11-2)", () => {
   });
 });
 
-// ── sc-11-2: selectSource — opted-in branches ────────────────────────────
+// ── sc-9-1/sc-9-3: selectSource — opted-in branches now return a
+// ── CapabilitySeoRouter (not a raw GscAdapter/DataForSeoAdapter) ─────────
 
-describe("selectSource — opted-in axes (sc-11-2)", () => {
-  it("returns a GscAdapter when only search-console is opted in", async () => {
+describe("selectSource — opted-in axes (sc-9-1, sc-9-3)", () => {
+  it("returns a router serving ONLY search-analytics/url-inspection when only search-console is opted in", async () => {
     const config = createDefaultConfig("test-project", "brownfield", undefined, {
       seo: { egress: { "search-console": true, "serp-provider": false }, blockThreshold: "critical-uncited" },
     });
     const source = await selectSource(config, tmpRoot);
-    expect(source).toBeInstanceOf(GscAdapter);
+    // The router wraps GscAdapter — it is no longer the raw class itself
+    // (CapabilitySeoRouter replaces CompositeSeoSource, sc-9-1).
+    expect(source).not.toBeInstanceOf(GscAdapter);
+    expect(source).not.toBeInstanceOf(LocalExportSource);
+    expect(source.capabilities().sort()).toEqual(["search-analytics", "url-inspection"].sort());
+    // Unrouted capabilities resolve `disabled` — the router never throws (sc-9-1).
+    await expect(source.serp({ keyword: "x", location: "us" })).resolves.toEqual({ kind: "disabled" });
+    await expect(source.keywords({ keywords: ["x"], location: "us" })).resolves.toEqual({ kind: "disabled" });
+    await expect(source.backlinks({ target: "x" })).resolves.toEqual({ kind: "disabled" });
+    await expect(source.aiVisibility({ target: "x", prompts: ["x"] })).resolves.toEqual({ kind: "disabled" });
+    await expect(source.linkGraph({ rootUrl: "x" })).resolves.toEqual({ kind: "disabled" });
   });
 
-  it("returns a DataForSeoAdapter when only serp-provider is opted in", async () => {
+  it("returns a router serving ONLY serp/keywords/backlinks when only serp-provider is opted in", async () => {
     const config = createDefaultConfig("test-project", "brownfield", undefined, {
       seo: { egress: { "search-console": false, "serp-provider": true }, blockThreshold: "critical-uncited" },
     });
     const source = await selectSource(config, tmpRoot);
-    expect(source).toBeInstanceOf(DataForSeoAdapter);
+    expect(source).not.toBeInstanceOf(DataForSeoAdapter);
+    expect(source).not.toBeInstanceOf(LocalExportSource);
+    expect(source.capabilities().sort()).toEqual(["backlinks", "keywords", "serp"].sort());
+    await expect(source.searchAnalytics({ siteUrl: "x", startDate: "d", endDate: "d", dimensions: [] })).resolves.toEqual({
+      kind: "disabled",
+    });
+    await expect(source.urlInspection({ siteUrl: "x", inspectionUrl: "x" })).resolves.toEqual({ kind: "disabled" });
+    await expect(source.linkGraph({ rootUrl: "x" })).resolves.toEqual({ kind: "disabled" });
   });
 
-  it("returns a composite source covering all 5 capabilities when both axes are opted in", async () => {
+  it("returns a router covering all 5 original capabilities when both search-console and serp-provider are opted in", async () => {
     const config = createDefaultConfig("test-project", "brownfield", undefined, {
       seo: { egress: { "search-console": true, "serp-provider": true }, blockThreshold: "critical-uncited" },
     });
@@ -221,6 +294,219 @@ describe("selectSource — opted-in axes (sc-11-2)", () => {
     expect(source.capabilities().sort()).toEqual(
       ["backlinks", "keywords", "search-analytics", "serp", "url-inspection"].sort(),
     );
+  });
+});
+
+// ── sc-9-2: selectSource — all-four-axes-off zero-construction ──────────
+
+describe("selectSource — all-four-axes-off zero-construction (sc-9-2)", () => {
+  it("returns a LocalExportSource; no governor is loaded, no socket opens", async () => {
+    const loadSpy = vi.spyOn(SeoQuotaGovernor, "load");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    const source = await selectSource(baseConfig(), tmpRoot);
+
+    expect(source).toBeInstanceOf(LocalExportSource);
+    // The LocalExportSource `return` is the FIRST statement after the
+    // all-off predicate, strictly before `SeoQuotaGovernor.load` — no
+    // governor/ledger is ever constructed on this path (Pitfall 2).
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── sc-9-2/sc-9-3: per-axis route assembly + zero-network-when-unused ───
+
+describe("selectSource — route assembly (sc-9-2, sc-9-3, ADR-8/ADR-10)", () => {
+  it("only ai-visibility on: routes ONLY ai-visibility; every other capability disabled; zero network", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const config = createDefaultConfig("test-project", "brownfield", undefined, {
+      seo: { egress: { "ai-visibility": true }, blockThreshold: "critical-uncited" },
+    });
+
+    const source = await selectSource(config, tmpRoot);
+
+    expect(source.capabilities()).toEqual(["ai-visibility"]);
+    const disabledOutcomes = await Promise.all([
+      source.searchAnalytics({ siteUrl: "x", startDate: "d", endDate: "d", dimensions: [] }),
+      source.urlInspection({ siteUrl: "x", inspectionUrl: "x" }),
+      source.serp({ keyword: "x", location: "us" }),
+      source.keywords({ keywords: ["x"], location: "us" }),
+      source.backlinks({ target: "x" }),
+      source.linkGraph({ rootUrl: "x" }),
+    ]);
+    for (const outcome of disabledOutcomes) {
+      expect(outcome).toEqual({ kind: "disabled" });
+    }
+    // ai-visibility is routed to the offline LocalExportSource arm (no live
+    // provider is pinned, sprint briefing §9) — zero network either way.
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("only site-crawl on: routes url-inspection (fallback), link-graph, and serp; NOT search-analytics/keywords/backlinks", async () => {
+    const config = createDefaultConfig("test-project", "brownfield", undefined, {
+      seo: { egress: { "site-crawl": true }, blockThreshold: "critical-uncited" },
+    });
+    const source = await selectSource(config, tmpRoot);
+    expect(source.capabilities().sort()).toEqual(["link-graph", "serp", "url-inspection"].sort());
+  });
+
+  it("search-console + site-crawl both on: url-inspection dispatches to GscAdapter, not CrawlSource (ADR-8 GSC wins)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    } as unknown as Response);
+    const config = createDefaultConfig("test-project", "brownfield", undefined, {
+      seo: { egress: { "search-console": true, "site-crawl": true }, blockThreshold: "critical-uncited" },
+    });
+    const source = await selectSource(config, tmpRoot);
+
+    const caps = source.capabilities();
+    expect(caps.filter((c) => c === "url-inspection")).toHaveLength(1); // present exactly once
+    expect(caps).toContain("link-graph");
+    expect(caps).toContain("search-analytics");
+
+    // `gsc-http-500` is a reason literal ONLY GscAdapter produces
+    // (dataforseo-adapter's/crawl-source's abstain reasons never match this
+    // string) — proves GSC, not CrawlSource, served this call.
+    const outcome = await source.urlInspection({ siteUrl: "https://example.com", inspectionUrl: "https://example.com/a" });
+    expect(outcome).toEqual({ kind: "abstain", reason: "gsc-http-500" });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── sc-9-4: gatherDataBundle + WORKFLOW_CAPABILITIES — metered omission ──
+
+describe("gatherDataBundle / WORKFLOW_CAPABILITIES — metered omission (sc-9-4)", () => {
+  it("technical-audit run never probes the metered ai-visibility capability (stopCondition)", async () => {
+    const { source, calls } = makeSpySource();
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "technical-audit",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: source,
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(outcome.exitCode).toBe(0);
+    // CORE — always gathered for technical-audit.
+    expect(calls["search-analytics"]).toBe(1);
+    expect(calls["url-inspection"]).toBe(1);
+    expect(calls.serp).toBe(1);
+    expect(calls.keywords).toBe(1);
+    expect(calls.backlinks).toBe(1);
+    // Omitted for technical-audit — NEVER called (not called-then-discarded).
+    expect(calls["ai-visibility"]).toBe(0);
+    expect(calls["link-graph"]).toBe(0);
+  });
+
+  it("the ai-visibility workflow DOES probe ai-visibility exactly once", async () => {
+    const { source, calls } = makeSpySource();
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "ai-visibility",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: source,
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(calls["ai-visibility"]).toBe(1);
+  });
+
+  it("the internal-linking workflow probes link-graph exactly once and never probes ai-visibility", async () => {
+    const { source, calls } = makeSpySource();
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "internal-linking",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: source,
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(calls["link-graph"]).toBe(1);
+    expect(calls["ai-visibility"]).toBe(0);
+  });
+});
+
+// ── sc-9-5: full offline golden report — byte-identical-when-off ────────
+
+describe("SeoWorkflowRunner.run — full offline golden report (sc-9-5)", () => {
+  it("technical-audit offline report is unchanged by the Sprint 9 routing/gathering changes", async () => {
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink, calls } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "technical-audit",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: new LocalExportSource(fixtureImportDir),
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(outcome.exitCode).toBe(0);
+    // Deep-equal against the full report shape — `retrievedAt`/`path`/
+    // `mtimeMs` are the ONLY fields left flexible (real wall-clock/fs stat
+    // values, orthogonal to this sprint's routing/gathering change); every
+    // other field is pinned to prove the report is byte-identical to before
+    // this sprint for an unchanged (all-axes-off, CORE-only) workflow.
+    expect(outcome.report).toEqual({
+      reportId: deriveReportId("2026-07-16T00:00:00.000Z", "technical-audit", "example.com"),
+      workflow: "technical-audit",
+      target: "example.com",
+      generatedAt: "2026-07-16T00:00:00.000Z",
+      findings: [
+        {
+          recommendation: "De-duplicate the title tag shared by /a and /b.",
+          workflow: "technical-audit",
+          playbookRef: "seo.technical-audit.title-tags",
+          citationUrl: "https://developers.google.com/search/docs/appearance/title-link",
+          evidence: [
+            { metric: "coverageState", value: "Indexed", source: "url-inspection", url: "https://example.com/a" },
+          ],
+          severity: 3,
+          humanApprovalRequired: true,
+          confidence: "firm",
+        },
+      ],
+      droppedUncited: 0,
+      droppedNeverEncode: 0,
+      dataProvenance: [
+        {
+          source: "local-export",
+          retrievedAt: expect.any(String),
+          path: expect.stringContaining("url-inspection.csv"),
+          mtimeMs: expect.any(Number),
+        },
+      ],
+      verdict: "pass",
+    });
+    expect(calls).toHaveLength(1);
   });
 });
 

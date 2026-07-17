@@ -46,14 +46,25 @@ import { SeoQuotaGovernor } from "./quota-governor.js";
 import { LocalExportSource } from "./sources/local-export.js";
 import { GscAdapter } from "./sources/gsc-adapter.js";
 import { DataForSeoAdapter } from "./sources/dataforseo-adapter.js";
+import { CrawlSource } from "./sources/crawl-source.js";
+import { DamcrawlerCrawlEngine } from "./sources/damcrawler-crawl-engine.js";
+import { ContentSanitizer } from "./content-sanitizer.js";
+import { resolveSerpProvider } from "./serp-provider.js";
+import type { SerpProvider } from "./serp-provider.js";
+import { WORKFLOW_CAPABILITIES } from "./workflow-capabilities.js";
 import type {
   SeoDataSource,
   SeoCapability,
   SearchAnalyticsQuery,
+  SearchAnalyticsRow,
   UrlInspectionQuery,
+  UrlInspectionRow,
   SerpQuery,
+  SerpRow,
   KeywordQuery,
+  KeywordRow,
   BacklinkQuery,
+  BacklinkRow,
   AiVisibilityQuery,
   AiVisibilityRow,
   LinkGraphQuery,
@@ -120,45 +131,100 @@ function buildDefaultAnalyzer(): SeoAnalyzer {
   return new SeoAnalyzer(client, DEFAULT_SEO_MODEL);
 }
 
-// ── selectSource (sc-11-2) ───────────────────────────────────────────
+// ── selectSource + CapabilitySeoRouter (sc-9-1, sc-9-2, sc-9-3) ─────────
 
 function quotaLedgerPath(projectRoot: string): string {
   return `${projectRoot}/.bober/seo/quota-ledger.json`;
 }
 
 /**
- * bober: simplest correct fan-out across both live adapters when BOTH egress
- *        axes are opted in — GSC serves search-analytics/url-inspection,
- *        DataForSEO serves serp/keywords/backlinks. Swap for a capability-
- *        aware router if a third live source is ever added.
+ * Shared "unrouted" stub — every method resolves `{ kind: "disabled" }`
+ * regardless of which capability method is invoked. `CapabilitySeoRouter`
+ * dispatches to this for any capability key absent from its `routes` map.
  */
-class CompositeSeoSource implements SeoDataSource {
-  constructor(
-    private readonly gsc: GscAdapter,
-    private readonly dataForSeo: DataForSeoAdapter,
-  ) {}
+const DISABLED_SOURCE: SeoDataSource = {
+  capabilities: () => [],
+  searchAnalytics: async () => ({ kind: "disabled" }),
+  urlInspection: async () => ({ kind: "disabled" }),
+  serp: async () => ({ kind: "disabled" }),
+  keywords: async () => ({ kind: "disabled" }),
+  backlinks: async () => ({ kind: "disabled" }),
+  aiVisibility: async () => ({ kind: "disabled" }),
+  linkGraph: async () => ({ kind: "disabled" }),
+};
+
+/**
+ * CapabilitySeoRouter — dispatches each `SeoDataSource` capability method to
+ * the ONE source that owns that capability key (spec-20260717-seo-improver-
+ * builder, Sprint 9; replaces `CompositeSeoSource`). Assembled by
+ * `selectSource` per the ADR-8/ADR-10 route table (sc-9-3). An unrouted
+ * capability (absent from `routes`) resolves `{ kind: "disabled" }` via
+ * `DISABLED_SOURCE` — the router itself never throws (sc-9-1).
+ */
+class CapabilitySeoRouter implements SeoDataSource {
+  constructor(private readonly routes: Partial<Record<SeoCapability, SeoDataSource>>) {}
+
+  /**
+   * `Object.keys(routes)`, NOT a union of each routed source's OWN
+   * `capabilities()` — a routed source may itself advertise capabilities
+   * this router does not route to it (sprint briefing §11 Pitfall 8).
+   */
+  capabilities(): SeoCapability[] {
+    return Object.keys(this.routes) as SeoCapability[];
+  }
+  searchAnalytics(q: SearchAnalyticsQuery): Promise<DataOutcome<SearchAnalyticsRow[]>> {
+    return (this.routes["search-analytics"] ?? DISABLED_SOURCE).searchAnalytics(q);
+  }
+  urlInspection(q: UrlInspectionQuery): Promise<DataOutcome<UrlInspectionRow[]>> {
+    return (this.routes["url-inspection"] ?? DISABLED_SOURCE).urlInspection(q);
+  }
+  serp(q: SerpQuery): Promise<DataOutcome<SerpRow[]>> {
+    return (this.routes["serp"] ?? DISABLED_SOURCE).serp(q);
+  }
+  keywords(q: KeywordQuery): Promise<DataOutcome<KeywordRow[]>> {
+    return (this.routes["keywords"] ?? DISABLED_SOURCE).keywords(q);
+  }
+  backlinks(q: BacklinkQuery): Promise<DataOutcome<BacklinkRow[]>> {
+    return (this.routes["backlinks"] ?? DISABLED_SOURCE).backlinks(q);
+  }
+  aiVisibility(q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return (this.routes["ai-visibility"] ?? DISABLED_SOURCE).aiVisibility(q);
+  }
+  linkGraph(q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
+    return (this.routes["link-graph"] ?? DISABLED_SOURCE).linkGraph(q);
+  }
+}
+
+/**
+ * SerpProviderSource — adapts a `SerpProvider` port's `serp(keyword,
+ * location)` (`serp-provider.ts:36-45`) into this file's `SeoDataSource`
+ * seam, whose `serp` method takes a single `SerpQuery` (sprint briefing
+ * Pattern C). Serves ONLY `serp`; every other capability is
+ * `{ kind: "disabled" }` unconditionally. `q.priority` is dropped by this
+ * shim — byte-identical, because `DataForSeoAdapter.serp` already defaults
+ * an absent `priority` to `"standard"` (`dataforseo-adapter.ts:199`).
+ */
+class SerpProviderSource implements SeoDataSource {
+  constructor(private readonly provider: SerpProvider) {}
 
   capabilities(): SeoCapability[] {
-    return [...this.gsc.capabilities(), ...this.dataForSeo.capabilities()];
+    return ["serp"];
   }
-  searchAnalytics(q: SearchAnalyticsQuery) {
-    return this.gsc.searchAnalytics(q);
+  serp(q: SerpQuery): Promise<DataOutcome<SerpRow[]>> {
+    return this.provider.serp(q.keyword, q.location);
   }
-  urlInspection(q: UrlInspectionQuery) {
-    return this.gsc.urlInspection(q);
+  async searchAnalytics(_q: SearchAnalyticsQuery): Promise<DataOutcome<SearchAnalyticsRow[]>> {
+    return { kind: "disabled" };
   }
-  serp(q: SerpQuery) {
-    return this.dataForSeo.serp(q);
+  async urlInspection(_q: UrlInspectionQuery): Promise<DataOutcome<UrlInspectionRow[]>> {
+    return { kind: "disabled" };
   }
-  keywords(q: KeywordQuery) {
-    return this.dataForSeo.keywords(q);
+  async keywords(_q: KeywordQuery): Promise<DataOutcome<KeywordRow[]>> {
+    return { kind: "disabled" };
   }
-  backlinks(q: BacklinkQuery) {
-    return this.dataForSeo.backlinks(q);
+  async backlinks(_q: BacklinkQuery): Promise<DataOutcome<BacklinkRow[]>> {
+    return { kind: "disabled" };
   }
-  // Neither GSC nor DataForSEO serves ai-visibility/link-graph this sprint
-  // (spec-20260717-seo-improver-builder, Sprint 1) — disabled unconditionally,
-  // mirroring each adapter's own not-served arms.
   async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
     return { kind: "disabled" };
   }
@@ -168,43 +234,117 @@ class CompositeSeoSource implements SeoDataSource {
 }
 
 /**
- * Build the `SeoDataSource` for a run from the two independent egress axes.
- * Both axes off (default) -> `LocalExportSource` (zero egress, no
- * credentials touched, no governor/ledger constructed — sc-11-2). Opted-in
- * -> the live adapter(s), backed by a `SeoQuotaGovernor` loaded ONLY on this
- * branch.
+ * Build the `SeoDataSource` for a run from the FOUR independent egress axes
+ * (widened from two, spec-20260717-seo-improver-builder Sprint 9). ALL FOUR
+ * axes off (default) -> `LocalExportSource` (zero egress, no credentials
+ * touched, no governor/ledger constructed, `import('damcrawler')` never
+ * evaluated — sc-9-2). This `return` is the FIRST statement after the
+ * predicate, strictly BEFORE `SeoQuotaGovernor.load` (sprint briefing
+ * Pattern B / Pitfall 2) — that ordering is what makes the all-off path
+ * provably zero-construction.
+ *
+ * Otherwise, assemble a `CapabilitySeoRouter` per the deterministic
+ * ADR-8/ADR-10 route table (sc-9-3):
+ *   - `url-inspection`: `GscAdapter` when `search-console` is on (GSC always
+ *     wins, ADR-8); else `CrawlSource` when `site-crawl` is on.
+ *   - `link-graph`: `CrawlSource` when `site-crawl` is on.
+ *   - `serp`: the config-selected `SerpProvider` (`resolveSerpProvider`,
+ *     ADR-10), wrapped in `SerpProviderSource`, whenever `serp-provider` OR
+ *     `site-crawl` is on (whichever axis the selected provider itself
+ *     requires; each provider re-asserts its own axis on call).
+ *   - `keywords`/`backlinks`: `DataForSeoAdapter` when `serp-provider` is on.
+ *   - `ai-visibility`: `LocalExportSource` (the offline arm) when
+ *     `ai-visibility` is on — see the OPEN DESIGN DECISION note below.
  */
 export async function selectSource(config: BoberConfig, projectRoot: string): Promise<SeoDataSource> {
   const egress = SeoEgressGuard.fromConfig(config);
   const searchConsoleAllowed = egress.isAllowed("search-console");
   const serpProviderAllowed = egress.isAllowed("serp-provider");
+  const aiVisibilityAllowed = egress.isAllowed("ai-visibility");
+  const siteCrawlAllowed = egress.isAllowed("site-crawl");
 
-  if (!searchConsoleAllowed && !serpProviderAllowed) {
+  if (!searchConsoleAllowed && !serpProviderAllowed && !aiVisibilityAllowed && !siteCrawlAllowed) {
     return new LocalExportSource();
   }
 
   const governor = await SeoQuotaGovernor.load(quotaLedgerPath(projectRoot), config);
 
-  if (searchConsoleAllowed && serpProviderAllowed) {
-    return new CompositeSeoSource(new GscAdapter(egress, governor), new DataForSeoAdapter(egress, governor));
-  }
+  const routes: Partial<Record<SeoCapability, SeoDataSource>> = {};
+
   if (searchConsoleAllowed) {
-    return new GscAdapter(egress, governor);
+    const gsc = new GscAdapter(egress, governor);
+    routes["search-analytics"] = gsc;
+    routes["url-inspection"] = gsc; // ADR-8: GSC wins url-inspection when on
   }
-  return new DataForSeoAdapter(egress, governor);
+
+  if (siteCrawlAllowed) {
+    const crawlSource = new CrawlSource(
+      governor,
+      new DamcrawlerCrawlEngine(egress),
+      // bober: identity sanitizer (mirrors the test double in
+      // crawl-source.test.ts:40) — `DamcrawlerCrawlEngine` already
+      // sanitizes at the network->in-process boundary (ADR-11); this
+      // sanitizer is defense-in-depth only, softened until a real
+      // `dam.sanitize` is threaded through here. Follow-up: wire the loaded
+      // module's sanitize export once CrawlSource accepts one directly.
+      new ContentSanitizer((raw) => ({ content: raw, hadThreats: false })),
+    );
+    routes["link-graph"] = crawlSource;
+    if (!searchConsoleAllowed) {
+      routes["url-inspection"] = crawlSource; // ADR-8: fallback only when GSC is off
+    }
+  }
+
+  // Built unconditionally on this (not-all-off) branch and reused for
+  // keywords/backlinks AND as the resolveSerpProvider dependency — each
+  // self-gates its own axis on call, so constructing it here is inert until
+  // a routed method is actually invoked (sprint briefing §4).
+  const dataForSeo = new DataForSeoAdapter(egress, governor);
+
+  if (serpProviderAllowed) {
+    routes["keywords"] = dataForSeo;
+    routes["backlinks"] = dataForSeo;
+  }
+
+  if (serpProviderAllowed || siteCrawlAllowed) {
+    routes["serp"] = new SerpProviderSource(resolveSerpProvider(config, dataForSeo, egress)); // ADR-10
+  }
+
+  if (aiVisibilityAllowed) {
+    // OPEN DESIGN DECISION (sprint briefing §9): `AiVisibilityAdapter`
+    // requires an injected `AiVisibilityProvider`, but NO concrete provider
+    // is pinned yet (Sprint 5) — routing here would force a bogus provider
+    // argument. Route to the offline `LocalExportSource` arm instead (reads
+    // `ai-visibility.csv`/`.json` if present, else disabled/abstain) rather
+    // than constructing a non-functional live adapter.
+    // bober: swap this for `new AiVisibilityAdapter(egress, governor, provider)`
+    //        once a concrete AiVisibilityProvider is selected/pinned.
+    routes["ai-visibility"] = new LocalExportSource();
+  }
+
+  return new CapabilitySeoRouter(routes);
 }
 
 // ── Data gathering ───────────────────────────────────────────────────
 
 /**
- * bober: gathers ALL five capabilities regardless of `workflow` — each
- *        `SeoDataSource` method degrades safely (`disabled`/`abstain`) when
- *        irrelevant, so this is always correct, just not capability-minimal.
- *        Swap for a workflow -> capability-subset map if live-adapter QPM/
- *        USD usage ever needs to be trimmed per workflow.
+ * Gathers ONLY the capabilities `WORKFLOW_CAPABILITIES` lists for `workflow`
+ * (spec-20260717-seo-improver-builder, Sprint 9; ADR-7) — an omitted
+ * capability is never called on `source` at all (not called-then-discarded),
+ * so the metered `ai-visibility` capability incurs zero cost/network for a
+ * workflow that does not consume it (sc-9-4). An omitted arm resolves
+ * `undefined` on `SeoDataBundle`, which the analyzer already renders as "not
+ * requested" (`analyzer.ts:127-128`).
  */
-async function gatherDataBundle(source: SeoDataSource, target: string, now: string): Promise<SeoDataBundle> {
+async function gatherDataBundle(
+  source: SeoDataSource,
+  workflow: SeoWorkflow,
+  target: string,
+  now: string,
+): Promise<SeoDataBundle> {
   const day = now.slice(0, 10);
+  const requested = new Set(WORKFLOW_CAPABILITIES[workflow]);
+
   const searchAnalyticsQuery: SearchAnalyticsQuery = {
     siteUrl: target,
     startDate: day,
@@ -215,16 +355,20 @@ async function gatherDataBundle(source: SeoDataSource, target: string, now: stri
   const serpQuery: SerpQuery = { keyword: target, location: "us" };
   const keywordQuery: KeywordQuery = { keywords: [target], location: "us" };
   const backlinkQuery: BacklinkQuery = { target };
+  const aiVisibilityQuery: AiVisibilityQuery = { target, prompts: [target] };
+  const linkGraphQuery: LinkGraphQuery = { rootUrl: target };
 
-  const [searchAnalytics, urlInspection, serp, keywords, backlinks] = await Promise.all([
-    source.searchAnalytics(searchAnalyticsQuery),
-    source.urlInspection(urlInspectionQuery),
-    source.serp(serpQuery),
-    source.keywords(keywordQuery),
-    source.backlinks(backlinkQuery),
+  const [searchAnalytics, urlInspection, serp, keywords, backlinks, aiVisibility, linkGraph] = await Promise.all([
+    requested.has("search-analytics") ? source.searchAnalytics(searchAnalyticsQuery) : undefined,
+    requested.has("url-inspection") ? source.urlInspection(urlInspectionQuery) : undefined,
+    requested.has("serp") ? source.serp(serpQuery) : undefined,
+    requested.has("keywords") ? source.keywords(keywordQuery) : undefined,
+    requested.has("backlinks") ? source.backlinks(backlinkQuery) : undefined,
+    requested.has("ai-visibility") ? source.aiVisibility(aiVisibilityQuery) : undefined,
+    requested.has("link-graph") ? source.linkGraph(linkGraphQuery) : undefined,
   ]);
 
-  return { searchAnalytics, urlInspection, serp, keywords, backlinks };
+  return { searchAnalytics, urlInspection, serp, keywords, backlinks, aiVisibility, linkGraph };
 }
 
 // ── Hub emission ─────────────────────────────────────────────────────
@@ -289,7 +433,7 @@ export class SeoWorkflowRunner {
       });
 
       const source = input.dataSource ?? (await selectSource(input.config, input.projectRoot));
-      const data = await gatherDataBundle(source, target, input.now);
+      const data = await gatherDataBundle(source, input.workflow, target, input.now);
 
       const analyzer = input.analyzer ?? buildDefaultAnalyzer();
       const analysis = await analyzer.analyze({
