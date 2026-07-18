@@ -745,6 +745,23 @@ export const SeoConfigSchema = z.object({
           }),
         )
         .default([]),
+      /**
+       * Optional LLM-as-judge fuzzy-mention path (in-house-ai-visibility,
+       * Sprint 8). OPTIONAL with NO outer default — mirrors `serp`/
+       * `aiVisibility` above — a config that omits `judge` entirely stays
+       * byte-identical (`SeoConfigSchema.parse({ aiVisibility: {} })` leaks
+       * only `samplesPerPrompt`/`engines`, schema.test.ts:1089-1096). Only
+       * the inner `enabled` flag carries a `.default(false)`. The judge is
+       * OFF by default even when this object is present but `enabled` is
+       * omitted.
+       */
+      judge: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** Optional model override for the judge call; falls back to the injected default when absent. */
+          model: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
 });

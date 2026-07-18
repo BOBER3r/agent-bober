@@ -93,7 +93,7 @@ export class ApiSpineEngineProvider implements AiVisibilityProvider {
           url: this.sanitizer.clean(c.url, c.url).content,
         }));
 
-        const obs = this.extractor.extract({ target, answerText: sanitizedAnswerText, citations: sanitizedCitations });
+        const obs = await this.extractor.extract({ target, answerText: sanitizedAnswerText, citations: sanitizedCitations });
 
         // sc-4-2: verify every candidate url; retain ONLY live===true urls.
         // The verifier itself is fail-closed (site-crawl off / dep absent /
