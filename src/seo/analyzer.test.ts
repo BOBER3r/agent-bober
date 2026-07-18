@@ -354,6 +354,132 @@ describe("SeoAnalyzer.analyze — transport error propagation", () => {
   });
 });
 
+// ── sc-5-3/sc-5-4: AiVisibilityScorer wiring, provenance-guarded ──────
+
+describe("SeoAnalyzer.analyze — AI-visibility scorer wiring (sc-5-3, sc-5-4)", () => {
+  it("sc-5-3: a live ai-visibility outcome (provenance.source:'ai-visibility') puts rates+CI in the prompt, NOT the N raw rows", async () => {
+    const liveData: SeoDataBundle = {
+      ...SAMPLE_DATA,
+      aiVisibility: {
+        kind: "data",
+        rows: [
+          {
+            prompt: "best crypto casino",
+            provider: "perplexity",
+            mentioned: true,
+            citationPresent: true,
+            sourceUrls: ["https://target.example/a"],
+          },
+          {
+            prompt: "best crypto casino",
+            provider: "perplexity",
+            mentioned: false,
+            citationPresent: false,
+            sourceUrls: [],
+          },
+        ],
+        provenance: { source: "ai-visibility", retrievedAt: "2026-07-18T00:00:00Z" },
+      },
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: liveData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain("mentionRate");
+    expect(call.system).toContain("mentionRateCi95");
+    expect(call.system).toContain("citationRate");
+    // The raw per-row keys must be ABSENT — the scorer output, not the N raw rows.
+    expect(call.system).not.toContain('"mentioned"');
+    expect(call.system).not.toContain('"citationPresent"');
+  });
+
+  it("sc-5-3: never merges two providers answering the same prompt — both providers' rates appear in the prompt", async () => {
+    const liveData: SeoDataBundle = {
+      ...SAMPLE_DATA,
+      aiVisibility: {
+        kind: "data",
+        rows: [
+          {
+            prompt: "best crypto casino",
+            provider: "perplexity",
+            mentioned: true,
+            citationPresent: true,
+            sourceUrls: ["https://target.example/a"],
+          },
+          {
+            prompt: "best crypto casino",
+            provider: "chatgpt",
+            mentioned: false,
+            citationPresent: false,
+            sourceUrls: [],
+          },
+        ],
+        provenance: { source: "ai-visibility", retrievedAt: "2026-07-18T00:00:00Z" },
+      },
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: liveData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain('"provider":"perplexity"');
+    expect(call.system).toContain('"provider":"chatgpt"');
+  });
+
+  it("sc-5-4: a local-export ai-visibility outcome falls through to the unchanged describeDataOutcome path (byte-identical raw-row dump)", async () => {
+    const aiVisRows = [
+      {
+        prompt: "best crypto casino",
+        provider: "perplexity",
+        mentioned: true,
+        citationPresent: true,
+        sourceUrls: ["https://target.example/a"],
+      },
+    ];
+    const localExportData: SeoDataBundle = {
+      ...SAMPLE_DATA,
+      aiVisibility: {
+        kind: "data",
+        rows: aiVisRows,
+        provenance: { source: "local-export", retrievedAt: "2026-07-18T00:00:00Z" },
+      },
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: localExportData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain(
+      `AI Visibility (source: local-export, retrieved: 2026-07-18T00:00:00Z):\n${JSON.stringify(aiVisRows)}`,
+    );
+  });
+
+  it("sc-5-4: a disabled ai-visibility outcome falls through to the unchanged describeDataOutcome path", async () => {
+    const disabledData: SeoDataBundle = { ...SAMPLE_DATA, aiVisibility: { kind: "disabled" } };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: disabledData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain("AI Visibility: disabled (no data source configured for this capability).");
+  });
+
+  it("sc-5-4: an undefined ai-visibility outcome falls through to the unchanged 'not requested' path", async () => {
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: SAMPLE_DATA })); // SAMPLE_DATA has no aiVisibility key
+
+    const call = client.calls[0];
+    expect(call.system).toContain("AI Visibility: not requested.");
+  });
+});
+
 // ── Clock purity: no wall-clock reads, only the injected `now` ────────
 
 describe("SeoAnalyzer.analyze — clock purity", () => {

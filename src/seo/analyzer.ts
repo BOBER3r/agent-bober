@@ -40,6 +40,7 @@ import type {
 } from "./data-source.js";
 import type { SeoRetrieveResult } from "./retriever.js";
 import type { BoberConfig } from "../config/schema.js";
+import { AiVisibilityScorer } from "./ai-visibility-scorer.js";
 
 // -- Public types (do NOT exist elsewhere — defined here per the briefing) --
 
@@ -154,6 +155,27 @@ function describeDataOutcome<T>(label: string, outcome: DataOutcome<T> | undefin
   }
 }
 
+/**
+ * Runs `AiVisibilityScorer.aggregate` ONLY when the outcome is a live
+ * ai-visibility arm — i.e. `kind === "data"` AND
+ * `provenance.source === "ai-visibility"` (the ONLY producer of that stamp
+ * is the live adapter, `ai-visibility-adapter.ts:136`; NOT the decoy
+ * `QuotaRequest.source` at `ai-visibility-adapter.ts:116`). Every other
+ * outcome (local-export, disabled, abstain, undefined) falls through to the
+ * UNCHANGED `describeDataOutcome` path — byte-identical to pre-change
+ * (sc-5-4, ADR-5 byte-identical-when-off guarantee).
+ */
+function describeAiVisibility(outcome: DataOutcome<AiVisibilityRow[]> | undefined): string {
+  if (outcome?.kind === "data" && outcome.provenance.source === "ai-visibility") {
+    const metrics = new AiVisibilityScorer().aggregate(outcome.rows);
+    return (
+      `AI Visibility (source: ${outcome.provenance.source}, retrieved: ${outcome.provenance.retrievedAt}):\n` +
+      JSON.stringify(metrics)
+    );
+  }
+  return describeDataOutcome("AI Visibility", outcome);
+}
+
 function buildDataBundleSummary(data: SeoDataBundle): string {
   return [
     describeDataOutcome("Search Analytics", data.searchAnalytics),
@@ -161,7 +183,7 @@ function buildDataBundleSummary(data: SeoDataBundle): string {
     describeDataOutcome("SERP", data.serp),
     describeDataOutcome("Keywords", data.keywords),
     describeDataOutcome("Backlinks", data.backlinks),
-    describeDataOutcome("AI Visibility", data.aiVisibility),
+    describeAiVisibility(data.aiVisibility),
     describeDataOutcome("Link Graph", data.linkGraph),
   ].join("\n\n");
 }

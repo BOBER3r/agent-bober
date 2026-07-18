@@ -50,6 +50,9 @@ export type { HttpClient, HttpResponse, HttpRequestInit } from "./adapters/http.
 export { SeoAnalyzer } from "./analyzer.js";
 export type { SeoAnalyzeInput, SeoAnalysis, SeoDataBundle } from "./analyzer.js";
 
+export { AiVisibilityScorer } from "./ai-visibility-scorer.js";
+export type { AiVisibilityMetric } from "./ai-visibility-scorer.js";
+
 export { SeoCitationGate } from "./citation-gate.js";
 export type { SeoBlockThreshold, CitationGateResult } from "./citation-gate.js";
 
