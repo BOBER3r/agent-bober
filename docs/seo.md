@@ -270,6 +270,56 @@ pre-change** (ADR-5 provenance guard). So the analyzer shows aggregated rates+CI
 `(prompt, provider)` for a **live** ai-visibility arm, and the exact prior raw-outcome
 rendering for everything else.
 
+#### Tracked prompt set — `TrackedPromptStore` (Sprint 6)
+
+Through Sprint 5 the spine could only ever probe the target's own name: `gatherDataBundle`
+synthesized a trivial `{ target, prompts: [target] }` query. As of Sprint 6 a team can curate
+the exact prompts they track for a brand in a committed file, loaded by the filesystem-backed
+**`TrackedPromptStore`** (`src/seo/tracked-prompt-store.ts`).
+
+`TrackedPromptStore(projectRoot).load(target)` reads
+`.bober/seo/ai-visibility/<target>.json` via `node:fs/promises`, `JSON.parse`s it, and
+validates it with `TrackedPromptSetSchema.safeParse`, returning a
+`TrackedPromptSet{ target, prompts[], engines[], samplesPerPrompt, locale? }`. The file
+looks like:
+
+```json
+{
+  "target": "example.com",
+  "prompts": ["what is example.com", "who runs example.com", "is example.com trustworthy"],
+  "engines": ["anthropic"],
+  "samplesPerPrompt": 9,
+  "locale": "en-GB"
+}
+```
+
+- `target`, `prompts` are required; `locale` is optional; `engines` defaults to `[]` and
+  `samplesPerPrompt` to `5` when omitted.
+- The `<target>` **filename is traversal-safe** — non-`[a-zA-Z0-9_-]` characters are replaced
+  with `_` (so `example.com` → `example_com.json`), mirroring `report-store.ts`'s
+  sanitization. A `../`-bearing target can neither throw nor read outside the
+  `ai-visibility` directory.
+
+`gatherDataBundle` (`src/seo/runner.ts`) loads that set and feeds the real `prompts` (plus
+`locale` when present) into the locked `AiVisibilityQuery` (`{ target, prompts, locale? }`,
+`data-source.ts:61`), replacing the old `[target]` literal. Two behaviours are load-bearing:
+
+- **Byte-identical fallback.** `load()` **never throws**: a missing, unreadable, malformed, or
+  schema-invalid file all collapse to the same fallback, and `gatherDataBundle` forwards
+  `{ target, prompts: [target] }` — with **no `locale` key present at all**
+  (`hasOwnProperty("locale") === false`) — byte-identical to the pre-Sprint-6 query.
+- **No extra fs read when the axis isn't requested.** The `load()` call lives **inside** the
+  `requested.has("ai-visibility")` arm of `gatherDataBundle`'s `Promise.all` (never hoisted
+  above it), so a workflow that does not request `ai-visibility` (e.g. `technical-audit`)
+  never touches the filesystem for this store — behaviour byte-identical to pre-change.
+
+The file's **`engines` and `samplesPerPrompt` are advisory only** — they are parsed and
+validated but deliberately **not** forwarded into the locked `AiVisibilityQuery` (a contract
+nonGoal; the query shape stays `{ target, prompts, locale? }`). The real per-run N and engine
+list are resolved from the `seo.aiVisibility` config at provider construction, not from this
+file. There is **no CLI to author the file** and **no history/time-series store** (both
+nonGoals) — it is a stateless read of a committed flat file.
+
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
