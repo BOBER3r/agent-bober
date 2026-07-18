@@ -151,3 +151,50 @@ describe("SeoEgressGuard — ai-visibility and site-crawl axes default false (sc
     expect(g.isAllowed("serp-provider")).toBe(false);
   });
 });
+
+// ── sc-3-1: the fifth new axis (ai-visibility-scrape, axis-only this sprint) ──
+
+describe("SeoEgressGuard — ai-visibility-scrape axis defaults false (sc-3-1)", () => {
+  it("defaults false when omitted from the 2-arg ctor form", () => {
+    const g = new SeoEgressGuard(false, false);
+    expect(g.isAllowed("ai-visibility-scrape")).toBe(false);
+  });
+
+  it("assertAllowed throws for ai-visibility-scrape when off", () => {
+    const g = new SeoEgressGuard(false, false);
+    expect(() => g.assertAllowed("ai-visibility-scrape")).toThrow(
+      "Egress axis 'ai-visibility-scrape' not enabled",
+    );
+  });
+
+  it("5-arg ctor: ai-visibility-scrape on does not enable any other axis", () => {
+    const g = new SeoEgressGuard(false, false, false, false, true);
+    expect(g.isAllowed("ai-visibility-scrape")).toBe(true);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+    expect(g.isAllowed("search-console")).toBe(false);
+    expect(g.isAllowed("serp-provider")).toBe(false);
+    expect(() => g.assertAllowed("ai-visibility-scrape")).not.toThrow();
+  });
+
+  it("fromConfig defaults ai-visibility-scrape false when seo section absent", () => {
+    const g = SeoEgressGuard.fromConfig({} as BoberConfig);
+    expect(g.isAllowed("ai-visibility-scrape")).toBe(false);
+  });
+
+  it("fromConfig defaults ai-visibility-scrape false when seo.egress absent", () => {
+    const g = SeoEgressGuard.fromConfig({ seo: {} } as BoberConfig);
+    expect(g.isAllowed("ai-visibility-scrape")).toBe(false);
+  });
+
+  it("fromConfig reads ai-visibility-scrape opted in independently of the other four axes", () => {
+    const g = SeoEgressGuard.fromConfig({
+      seo: { egress: { "ai-visibility-scrape": true } },
+    } as BoberConfig);
+    expect(g.isAllowed("ai-visibility-scrape")).toBe(true);
+    expect(g.isAllowed("ai-visibility")).toBe(false);
+    expect(g.isAllowed("site-crawl")).toBe(false);
+    expect(g.isAllowed("search-console")).toBe(false);
+    expect(g.isAllowed("serp-provider")).toBe(false);
+  });
+});

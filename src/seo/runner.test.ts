@@ -15,6 +15,8 @@ import { SeoWorkflowRunner, selectSource } from "./runner.js";
 import { LocalExportSource } from "./sources/local-export.js";
 import { GscAdapter } from "./sources/gsc-adapter.js";
 import { DataForSeoAdapter } from "./sources/dataforseo-adapter.js";
+import { DeterministicMentionCitationExtractor } from "./sources/mention-citation-extractor.js";
+import type { AiVisibilityDeps } from "./ai-visibility-provider.js";
 import { SeoAnalyzer } from "./analyzer.js";
 import { SeoReportStore, deriveReportId } from "./report-store.js";
 import { SeoQuotaGovernor } from "./quota-governor.js";
@@ -24,6 +26,7 @@ import type { Finding } from "../hub/finding.js";
 import { createDefaultConfig } from "../config/schema.js";
 import type { BoberConfig } from "../config/schema.js";
 import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
+import type { GroundedSearchClient } from "../providers/grounded-search.js";
 import type * as ProviderFactory from "../providers/factory.js";
 import type { SeoVerifier } from "./verifier.js";
 import type { SeoFinding, DataOutcome } from "./types.js";
@@ -373,6 +376,83 @@ describe("selectSource — route assembly (sc-9-2, sc-9-3, ADR-8/ADR-10)", () =>
     const outcome = await source.urlInspection({ siteUrl: "https://example.com", inspectionUrl: "https://example.com/a" });
     expect(outcome).toEqual({ kind: "abstain", reason: "gsc-http-500" });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── sc-3-3: selectSource wires ai-visibility to the LIVE AiVisibilityAdapter
+// ── when resolveAiVisibilityProvider is viable, else the offline fallback ──
+
+describe("selectSource — ai-visibility routing wires AiVisibilityAdapter when viable, else LocalExportSource (sc-3-3)", () => {
+  function aiVisibilityConfig(): BoberConfig {
+    return createDefaultConfig("test-project", "brownfield", undefined, {
+      seo: {
+        egress: { "ai-visibility": true },
+        aiVisibility: { samplesPerPrompt: 1, engines: [{ engine: "anthropic", perCallUsd: 0.01 }] },
+        blockThreshold: "critical-uncited",
+      },
+    });
+  }
+
+  it("a keyed engine (fake deps) => routes the LIVE AiVisibilityAdapter, returning real data", async () => {
+    const scriptedClient: GroundedSearchClient = {
+      engine: "anthropic",
+      async search() {
+        return {
+          answerText: "example.com is a leading resource.",
+          citations: [{ url: "https://example.com/reviews", title: "example.com reviews" }],
+        };
+      },
+    };
+    const deps: AiVisibilityDeps = {
+      makeClient: () => scriptedClient,
+      extractor: new DeterministicMentionCitationExtractor(),
+    };
+
+    const source = await selectSource(aiVisibilityConfig(), tmpRoot, deps);
+    expect(source.capabilities()).toEqual(["ai-visibility"]);
+
+    const outcome = await source.aiVisibility({ target: "https://example.com", prompts: ["example"] });
+    expect(outcome.kind).toBe("data");
+    if (outcome.kind === "data") {
+      expect(outcome.rows).toHaveLength(1);
+      expect(outcome.rows[0].provider).toBe("anthropic");
+    }
+  });
+
+  it("no key (deps.makeClient => undefined) => falls back to LocalExportSource, NOT a live adapter", async () => {
+    const deps: AiVisibilityDeps = {
+      makeClient: () => undefined,
+      extractor: new DeterministicMentionCitationExtractor(),
+    };
+
+    const source = await selectSource(aiVisibilityConfig(), tmpRoot, deps);
+    // The router wraps whichever source was chosen; assert via behavior, not
+    // instanceof (source is a CapabilitySeoRouter either way) — an unlocated
+    // AiVisibilityAdapter would book USD or return abstain{source-error} on a
+    // configured-but-keyless engine; LocalExportSource with no import files
+    // present resolves `disabled`, proving the offline arm was chosen.
+    const outcome = await source.aiVisibility({ target: "https://example.com", prompts: ["example"] });
+    expect(outcome).toEqual({ kind: "disabled" });
+  });
+
+  it("governor books USD only on the live route, never on the no-key fallback route", async () => {
+    const scriptedClient: GroundedSearchClient = {
+      engine: "anthropic",
+      async search() {
+        return { answerText: "example.com", citations: [] };
+      },
+    };
+
+    const liveDeps: AiVisibilityDeps = {
+      makeClient: () => scriptedClient,
+      extractor: new DeterministicMentionCitationExtractor(),
+    };
+    const liveSource = await selectSource(aiVisibilityConfig(), tmpRoot, liveDeps);
+    await liveSource.aiVisibility({ target: "https://example.com", prompts: ["example"] });
+
+    const governor = await SeoQuotaGovernor.load(`${tmpRoot}/.bober/seo/quota-ledger.json`, aiVisibilityConfig());
+    // 1 engine * 1 sample = 0.01 estCostUsdPerPrompt, * 1 prompt = 0.01 booked.
+    expect(governor.spentUsd()).toBeCloseTo(0.01, 6);
   });
 });
 

@@ -991,6 +991,7 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
       "serp-provider": false,
       "ai-visibility": false,
       "site-crawl": false,
+      "ai-visibility-scrape": false,
     });
   });
 
@@ -1003,6 +1004,7 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
       "serp-provider": false,
       "ai-visibility": false,
       "site-crawl": false,
+      "ai-visibility-scrape": false,
     });
   });
 
@@ -1012,12 +1014,24 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
       "serp-provider": false,
       "ai-visibility": true,
       "site-crawl": false,
+      "ai-visibility-scrape": false,
     });
     expect(SeoConfigSchema.parse({ egress: { "site-crawl": true } }).egress).toEqual({
       "search-console": false,
       "serp-provider": false,
       "ai-visibility": false,
       "site-crawl": true,
+      "ai-visibility-scrape": false,
+    });
+  });
+
+  it("ai-visibility-scrape axis defaults false and round-trips independently of the other four (sc-3-1)", () => {
+    expect(SeoConfigSchema.parse({ egress: { "ai-visibility-scrape": true } }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": false,
+      "ai-visibility-scrape": true,
     });
   });
 
@@ -1062,6 +1076,69 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
 
   it("rejects a bogus blockThreshold value", () => {
     expect(() => SeoConfigSchema.parse({ blockThreshold: "sometimes" })).toThrow();
+  });
+});
+
+// ── SeoConfigSchema.aiVisibility tests (in-house-ai-visibility, Sprint 3 — sc-3-1) ──
+
+describe("SeoConfigSchema.aiVisibility — optional, default-safe (sc-3-1)", () => {
+  it("aiVisibility is absent (no outer default) when omitted entirely", () => {
+    expect(Object.hasOwn(SeoConfigSchema.parse({}), "aiVisibility")).toBe(false);
+  });
+
+  it("samplesPerPrompt defaults to 5 and engines defaults to [] when aiVisibility object present but empty", () => {
+    expect(SeoConfigSchema.parse({ aiVisibility: {} }).aiVisibility).toEqual({
+      samplesPerPrompt: 5,
+      engines: [],
+    });
+  });
+
+  it("engines round-trip with per-engine perCallUsd defaulting to 0 when omitted", () => {
+    const parsed = SeoConfigSchema.parse({
+      aiVisibility: { engines: [{ engine: "anthropic" }] },
+    });
+    expect(parsed.aiVisibility).toEqual({
+      samplesPerPrompt: 5,
+      engines: [{ engine: "anthropic", perCallUsd: 0 }],
+    });
+  });
+
+  it("engines and samplesPerPrompt round-trip explicit values", () => {
+    const parsed = SeoConfigSchema.parse({
+      aiVisibility: {
+        samplesPerPrompt: 8,
+        engines: [
+          { engine: "anthropic", perCallUsd: 0.01 },
+          { engine: "openai", perCallUsd: 0.02 },
+        ],
+      },
+    });
+    expect(parsed.aiVisibility).toEqual({
+      samplesPerPrompt: 8,
+      engines: [
+        { engine: "anthropic", perCallUsd: 0.01 },
+        { engine: "openai", perCallUsd: 0.02 },
+      ],
+    });
+  });
+
+  it("accepts the 'perplexity' engine value (no live mapper yet, but a valid config value)", () => {
+    const parsed = SeoConfigSchema.parse({ aiVisibility: { engines: [{ engine: "perplexity" }] } });
+    expect(parsed.aiVisibility?.engines).toEqual([{ engine: "perplexity", perCallUsd: 0 }]);
+  });
+
+  it("rejects a bogus engine value", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { engines: [{ engine: "bing" }] } })).toThrow();
+  });
+
+  it("rejects a negative perCallUsd", () => {
+    expect(() =>
+      SeoConfigSchema.parse({ aiVisibility: { engines: [{ engine: "anthropic", perCallUsd: -1 }] } }),
+    ).toThrow();
+  });
+
+  it("rejects a non-positive samplesPerPrompt", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { samplesPerPrompt: 0 } })).toThrow();
   });
 });
 
@@ -1148,6 +1225,7 @@ describe("BoberConfigSchema — seo section is optional, default-off (sc-1-1/sc-
         "serp-provider": false,
         "ai-visibility": false,
         "site-crawl": false,
+        "ai-visibility-scrape": false,
       });
       expect(result.data.seo?.blockThreshold).toBe("critical-uncited");
     }

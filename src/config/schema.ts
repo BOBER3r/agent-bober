@@ -678,10 +678,17 @@ export const SeoConfigSchema = z.object({
       "search-console": z.boolean().default(false),
       /** When true, DataForSEO SERP/keywords/backlinks egress is permitted. Default false. */
       "serp-provider": z.boolean().default(false),
-      /** When true, live AI-visibility/GEO provider egress is permitted. Default false. */
+      /** When true, live AI-visibility/GEO provider egress (BYOK grounded-LLM API spine) is permitted. Default false. */
       "ai-visibility": z.boolean().default(false),
       /** When true, damcrawler-backed site crawling (crawl/url-coverage/link-graph/SERP-scrape) is permitted. Default false. */
       "site-crawl": z.boolean().default(false),
+      /**
+       * When true, the AI-visibility UI-scrape arm's egress is permitted.
+       * SEPARATE axis from `ai-visibility` (ADR-5, in-house-ai-visibility
+       * architecture line 44) — default false and, as of Sprint 3, composes
+       * NO provider yet (axis-only; the scrape arm lands Sprint 10).
+       */
+      "ai-visibility-scrape": z.boolean().default(false),
     })
     .optional(),
   /**
@@ -708,6 +715,36 @@ export const SeoConfigSchema = z.object({
   serp: z
     .object({
       provider: z.enum(["dataforseo", "damcrawler"]).default("dataforseo"),
+    })
+    .optional(),
+  /**
+   * In-house AI-visibility API-spine configuration (in-house-ai-visibility,
+   * Sprint 3). OPTIONAL with NO outer default — a config that omits
+   * `aiVisibility` entirely stays byte-identical (mirrors the `serp` idiom
+   * above). Inner fields carry their own `.default(...)` and only
+   * materialize when the object is present. `resolveAiVisibilityProvider`
+   * (`../seo/ai-visibility-provider.js`) reads this to compose per-engine
+   * arms; an engine with no matching API key is skipped (no-key-safe).
+   */
+  aiVisibility: z
+    .object({
+      /** Grounded-search samples per prompt per engine (N in the ADR-3 N-baked cost formula). Default 5. */
+      samplesPerPrompt: z.number().int().positive().default(5),
+      /**
+       * Which engines to probe. `"perplexity"` is a valid value but has no
+       * live provider mapper yet (Sprint 7 nonGoal) — configuring it yields
+       * zero rows from that arm, not an error. Default `[]` (no engines
+       * configured => `resolveAiVisibilityProvider` returns `undefined`).
+       */
+      engines: z
+        .array(
+          z.object({
+            engine: z.enum(["anthropic", "openai", "perplexity"]),
+            /** Fixed USD price per grounded-search call for this engine. Default 0. */
+            perCallUsd: z.number().nonnegative().default(0),
+          }),
+        )
+        .default([]),
     })
     .optional(),
 });

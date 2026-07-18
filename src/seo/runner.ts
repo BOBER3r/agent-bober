@@ -37,6 +37,8 @@ import { createClient } from "../providers/factory.js";
 import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
 import { ingestFinding } from "../hub/finding-store.js";
 import { logger } from "../utils/logger.js";
+import { LiveGroundedSearchClient } from "../providers/grounded-search.js";
+import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
 
 import type { SeoWorkflow, SeoReport, DataOutcome } from "./types.js";
 import { SeoPlaybookIndex } from "./playbook-index.js";
@@ -51,6 +53,10 @@ import { DamcrawlerCrawlEngine } from "./sources/damcrawler-crawl-engine.js";
 import { ContentSanitizer } from "./content-sanitizer.js";
 import { resolveSerpProvider } from "./serp-provider.js";
 import type { SerpProvider } from "./serp-provider.js";
+import { AiVisibilityAdapter } from "./sources/ai-visibility-adapter.js";
+import { resolveAiVisibilityProvider } from "./ai-visibility-provider.js";
+import type { AiVisibilityDeps } from "./ai-visibility-provider.js";
+import { DeterministicMentionCitationExtractor } from "./sources/mention-citation-extractor.js";
 import { WORKFLOW_CAPABILITIES } from "./workflow-capabilities.js";
 import type {
   SeoDataSource,
@@ -129,6 +135,46 @@ function buildDefaultAnalyzer(): SeoAnalyzer {
   // analyzer (via input.analyzer) so a real network call is never even attempted.
   const client = createClient(undefined, null, undefined, DEFAULT_SEO_MODEL, "seo");
   return new SeoAnalyzer(client, DEFAULT_SEO_MODEL);
+}
+
+/**
+ * bober: per-engine default model is hardcoded here (not read from config —
+ *        `config.seo.aiVisibility.engines[]` carries no `model` field this
+ *        sprint). Promote to a per-engine config field if a project ever
+ *        needs a different model than these defaults. "perplexity" has no
+ *        entry: there is no `createClient` provider for it yet (Sprint 7
+ *        nonGoal), so it is intentionally absent, not merely unset.
+ */
+const AI_VISIBILITY_DEFAULT_MODEL: Partial<Record<GroundedEngine, string>> = {
+  anthropic: DEFAULT_SEO_MODEL,
+  openai: "gpt-4.1",
+};
+
+/** Env var each engine's key is read from — mirrors `factory.ts`'s `validateApiKey`. */
+const AI_VISIBILITY_KEY_ENV: Partial<Record<GroundedEngine, string>> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+};
+
+/**
+ * Production `AiVisibilityDeps.makeClient` — returns `undefined` (no-key-safe)
+ * for any engine lacking its documented env-var key, or for "perplexity"
+ * unconditionally (no live mapper this sprint, arch line 128/Sprint 7
+ * nonGoal). Only when a key is present does it call `createClient`, so a
+ * misconfigured/no-key run never throws the zero-network guard error that
+ * `runner.test.ts:34-44` asserts on.
+ */
+function defaultMakeClient(engine: GroundedEngine): GroundedSearchClient | undefined {
+  const envVar = AI_VISIBILITY_KEY_ENV[engine];
+  const model = AI_VISIBILITY_DEFAULT_MODEL[engine];
+  if (!envVar || !model || !process.env[envVar]) return undefined;
+  const client = createClient(undefined, null, undefined, model, "ai-visibility");
+  return new LiveGroundedSearchClient(engine, client, model);
+}
+
+/** Production `AiVisibilityDeps` — real client builder + the deterministic extractor (Sprint 2). */
+function defaultAiVisibilityDeps(): AiVisibilityDeps {
+  return { makeClient: defaultMakeClient, extractor: new DeterministicMentionCitationExtractor() };
 }
 
 // ── selectSource + CapabilitySeoRouter (sc-9-1, sc-9-2, sc-9-3) ─────────
@@ -253,10 +299,16 @@ class SerpProviderSource implements SeoDataSource {
  *     `site-crawl` is on (whichever axis the selected provider itself
  *     requires; each provider re-asserts its own axis on call).
  *   - `keywords`/`backlinks`: `DataForSeoAdapter` when `serp-provider` is on.
- *   - `ai-visibility`: `LocalExportSource` (the offline arm) when
- *     `ai-visibility` is on — see the OPEN DESIGN DECISION note below.
+ *   - `ai-visibility`: `AiVisibilityAdapter` wrapping the composed
+ *     `resolveAiVisibilityProvider(...)` result when `ai-visibility` is on
+ *     AND at least one configured engine is keyed (Sprint 3); the offline
+ *     `LocalExportSource` arm otherwise (no-key-safe fallback).
  */
-export async function selectSource(config: BoberConfig, projectRoot: string): Promise<SeoDataSource> {
+export async function selectSource(
+  config: BoberConfig,
+  projectRoot: string,
+  deps?: AiVisibilityDeps,
+): Promise<SeoDataSource> {
   const egress = SeoEgressGuard.fromConfig(config);
   const searchConsoleAllowed = egress.isAllowed("search-console");
   const serpProviderAllowed = egress.isAllowed("serp-provider");
@@ -317,15 +369,20 @@ export async function selectSource(config: BoberConfig, projectRoot: string): Pr
   }
 
   if (aiVisibilityAllowed) {
-    // OPEN DESIGN DECISION (sprint briefing §9): `AiVisibilityAdapter`
-    // requires an injected `AiVisibilityProvider`, but NO concrete provider
-    // is pinned yet (Sprint 5) — routing here would force a bogus provider
-    // argument. Route to the offline `LocalExportSource` arm instead (reads
-    // `ai-visibility.csv`/`.json` if present, else disabled/abstain) rather
-    // than constructing a non-functional live adapter.
-    // bober: swap this for `new AiVisibilityAdapter(egress, governor, provider)`
-    //        once a concrete AiVisibilityProvider is selected/pinned.
-    routes["ai-visibility"] = new LocalExportSource();
+    // Sprint 3 (in-house-ai-visibility): compose the in-house API-spine
+    // multiplexer via the factory. No-key-safe: when no configured engine
+    // is keyed (or `config.seo.aiVisibility` is absent/empty), the factory
+    // returns `undefined` and this falls back to the offline
+    // `LocalExportSource` arm exactly as before — never a bogus live
+    // adapter with zero arms.
+    const aiVisibilityProvider = resolveAiVisibilityProvider(
+      config,
+      egress,
+      deps ?? defaultAiVisibilityDeps(),
+    );
+    routes["ai-visibility"] = aiVisibilityProvider
+      ? new AiVisibilityAdapter(egress, governor, aiVisibilityProvider)
+      : new LocalExportSource();
   }
 
   return new CapabilitySeoRouter(routes);
