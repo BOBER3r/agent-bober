@@ -231,6 +231,45 @@ extending the boundary to `citation.title` is an in-contract, later-sprint candi
 has **no automated smoke coverage** yet — every test injects fake deps, so end-to-end
 validation needs real engine keys plus `damcrawler` installed.
 
+#### Analyzer-side aggregation — rates + Wilson CI (Sprint 5)
+
+The spine emits **one raw `AiVisibilityRow` per sample**, so N probes of the same prompt
+against the same engine produce N un-aggregated rows. As of Sprint 5 the **read side** folds
+those into a compact, statistically-honest signal for the LLM prompt via a pure
+**`AiVisibilityScorer`** (`src/seo/ai-visibility-scorer.ts`; re-exported from
+`src/seo/index.ts`):
+
+- `AiVisibilityScorer.aggregate(rows)` groups the raw rows **strictly by `(prompt, provider)`
+  — arms are NEVER merged, even when they share a prompt** (the composite key is a
+  collision-safe `JSON.stringify([prompt, provider])`, not a `"::"`-delimited concat that a
+  prompt could contain) — and folds each group into one **`AiVisibilityMetric`**:
+  `{ prompt, provider, samples, mentionRate, citationRate, meanRank?, mentionRateCi95:[number,
+  number], sourceUrls }`. `meanRank` is **omitted entirely** (never `undefined`) when no row
+  in the group carries a `rank`; `sourceUrls` is the deduped union of every row's `sourceUrls`
+  in first-seen order. The scorer is **pure, synchronous, network-free, and never throws** —
+  no `Date`, no RNG — and empty input yields `[]`.
+- `mentionRateCi95` is a **deterministic Wilson 95% score interval** over the mention
+  indicator across a group's samples (`z = 1.96`; clamped to `[0, 1]`; unit-tested against a
+  hand-computed `k = 7, n = 10 → [0.3968, 0.8922]`). A single sample (`n <= 1`) returns the
+  **degenerate `[rate, rate]`** rather than the raw one-sample Wilson output (which would be a
+  misleadingly wide `~[0.207, 1.0]` for `1/1`).
+
+This metric is a **derived, in-analyzer projection only** — it is **never** persisted. The
+locked `SeoDataBundle.aiVisibility` stays `DataOutcome<AiVisibilityRow[]>` and the
+`AiVisibilityRow` shape is unchanged; the metric lives solely in the analyzer's prompt string.
+
+The wiring is a provenance-guarded branch in the analyzer (`describeAiVisibility`,
+`src/seo/analyzer.ts:168`, called by `buildDataBundleSummary` for the AI-Visibility line).
+It runs the scorer and serializes `AiVisibilityMetric[]` (rates + CI) into the prompt **only**
+when `outcome.kind === "data" && outcome.provenance.source === "ai-visibility"` — the stamp
+set exclusively by the live adapter at `ai-visibility-adapter.ts:136` (deliberately **not**
+the similarly-named `QuotaRequest.source` at `:116`). **Every non-live outcome** (local-export,
+disabled, abstain, or an undefined bundle slot, i.e. `provenance.source !== "ai-visibility"`)
+**falls through to the unchanged `describeDataOutcome` path and is byte-identical to
+pre-change** (ADR-5 provenance guard). So the analyzer shows aggregated rates+CI per
+`(prompt, provider)` for a **live** ai-visibility arm, and the exact prior raw-outcome
+rendering for everything else.
+
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
