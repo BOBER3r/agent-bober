@@ -75,7 +75,7 @@ Source of truth: `SEO_WORKFLOWS`, `src/seo/command.ts:27-36`.
 
 The suite's live-data adapters are each gated behind their own default-off axis
 (`SeoEgressGuard`, `src/seo/egress.ts`). Opting into one does **not** opt into any
-other. **As of Sprint 9 all four axes are wired into the runner's `selectSource`**
+other. **As of Sprint 9 all four data axes are wired into the runner's `selectSource`**
 (`src/seo/runner.ts:259`), which assembles a capability-keyed `CapabilitySeoRouter` per
 the ADR-8/ADR-10 route table — so opting into an axis now actually routes data through a
 `bober seo` run (see **Pipeline wiring** below). The `site-crawl` axis is backed by
@@ -83,20 +83,34 @@ the ADR-8/ADR-10 route table — so opting into an axis now actually routes data
 its `CrawlSource` adapter (`src/seo/sources/crawl-source.ts`, Sprint 7, serving
 `link-graph` and — per ADR-8, only when `search-console` is off — `url-inspection`); it
 additionally requires the optional `damcrawler`/`playwright` peer deps to be installed
-(see **Optional site-crawl deps** below). The `ai-visibility` axis is wired too, but
-because **no concrete AI-visibility provider is pinned yet** (Sprint 5) it routes to the
-**offline `LocalExportSource` arm** (reads `ai-visibility.csv`/`.json` if present) rather
-than to the live `AiVisibilityAdapter` — that adapter stays usable only when constructed
-directly with an injected provider, pending a provider-selection follow-up.
+(see **Optional site-crawl deps** below). The `ai-visibility` axis now routes to a **live
+in-house grounded-API spine** when it is on **and** at least one configured engine is
+keyed (`spec-20260718-in-house-ai-visibility`, Sprint 3): `selectSource` calls
+`resolveAiVisibilityProvider(config, egress, deps)` — mirroring `resolveSerpProvider` —
+which composes one arm per keyed engine into an `AiVisibilityMultiplexer` behind the
+provider-agnostic `AiVisibilityAdapter`. **No-key-safe:** with the axis off, no
+`aiVisibility` config, no configured engines, or no matching API key, the factory returns
+`undefined` and the axis falls back to the **offline `LocalExportSource` arm** (reads
+`ai-visibility.csv`/`.json` if present) exactly as before — never a bogus zero-arm live
+adapter. See **In-house AI-visibility (grounded-API spine)** below.
+
+A **fifth** axis, `ai-visibility-scrape` (`seo.egress.ai-visibility-scrape`, default
+`false`, Sprint 3), reserves a separate egress gate for the future AI-visibility
+UI-scrape arm. It is **axis-only** this sprint — it composes **no provider yet** (the
+scrape arm lands Sprint 10), so it is inert end-to-end and is deliberately **excluded**
+from `selectSource`'s all-off byte-identical predicate (which reads only the four data
+axes). It is a **distinct axis** from `ai-visibility` (ADR-5): opting into one does not
+opt into the other.
 
 | Axis | Config key | Gates |
 |---|---|---|
 | Google Search Console | `seo.egress.search-console` | Live search-analytics / URL-inspection API calls |
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
-| AI-visibility (GEO) | `seo.egress.ai-visibility` | AI-answer / GEO capability — **router-wired in Sprint 9, but routed to the offline `LocalExportSource` arm because no vendor is pinned; the live `AiVisibilityAdapter` (provider-agnostic) awaits a pinned provider** |
+| AI-visibility (GEO) | `seo.egress.ai-visibility` | AI-answer / GEO capability — **routes to the live in-house grounded-API spine (`AiVisibilityAdapter` ← `resolveAiVisibilityProvider` → `AiVisibilityMultiplexer`) when the axis is on and ≥1 configured engine is keyed (Sprint 3); no-key-safe fall-back to the offline `LocalExportSource` arm otherwise** |
 | Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **engine `DamcrawlerCrawlEngine` (Sprint 6) + adapter `CrawlSource` (Sprint 7) router-wired in Sprint 9 (ADR-8: `link-graph` always; `url-inspection` only when `search-console` is off); needs the optional `damcrawler`/`playwright` peer deps** |
+| AI-visibility scrape | `seo.egress.ai-visibility-scrape` | Reserved egress gate for the future AI-visibility UI-scrape arm — **axis-only as of Sprint 3 (composes no provider until Sprint 10); a distinct axis from `ai-visibility` (ADR-5)** |
 
-The whole `seo.egress` object is `.optional()` — a config that omits it keeps all four
+The whole `seo.egress` object is `.optional()` — a config that omits it keeps all five
 axes off, and the offline `LocalExportSource` needs none (`src/config/schema.ts:675-686`).
 `SeoEgressGuard.assertAllowed` throws if a live adapter method is called against a
 not-opted-in axis — a hard, code-enforced barrier every network-opening adapter must
@@ -125,24 +139,59 @@ exist, and **as of Sprint 9 the key is live end-to-end** — `selectSource` call
   (zero sockets); dep absent ⇒ `abstain{damcrawler-not-installed}`; any anti-bot/search/parse
   error ⇒ `abstain{serp-scrape-error}`. It never throws.
 
-The live `ai-visibility` adapter (`AiVisibilityAdapter`,
+The `ai-visibility` adapter (`AiVisibilityAdapter`,
 `src/seo/sources/ai-visibility-adapter.ts`) is **provider-agnostic by design (ADR-5)**:
-no concrete AI-visibility vendor (Perplexity, Profound, etc.) is pinned or imported
-anywhere under `src/seo/`. It depends on an injected `AiVisibilityProvider` port
-(`{ name; estCostUsdPerPrompt; probe(target, prompts, locale) }`) whose concrete
-implementation lives outside `src/seo/`; swapping providers means writing a new port
-implementation, with no change to the adapter, the seam, or the egress model. The
-adapter is egress-gated (`ai-visibility`) and USD-metered through the quota governor
-(cost = `estCostUsdPerPrompt × prompts.length`, booked only after a successful probe;
-a provider error abstains and books nothing). A single `ai-visibility` axis gates
-every provider — there is no per-vendor axis.
+it depends on an injected `AiVisibilityProvider` port
+(`{ name; estCostUsdPerPrompt; probe(target, prompts, locale) }`), never on a specific
+vendor SDK. Swapping providers means writing a new port implementation, with no change to
+the adapter, the seam, or the egress model. The adapter is egress-gated (`ai-visibility`)
+and USD-metered through the quota governor (cost = `estCostUsdPerPrompt × prompts.length`,
+booked only after a successful probe; a provider error abstains and books nothing). A
+single `ai-visibility` axis gates every provider — there is no per-vendor axis.
+
+### In-house AI-visibility (grounded-API spine, Sprint 3)
+
+As of `spec-20260718-in-house-ai-visibility` (Sprint 3) the injected port is filled by an
+**all-in-house grounded-LLM-API spine** rather than a commercial SaaS vendor.
+`resolveAiVisibilityProvider(config, egress, deps)` (`src/seo/ai-visibility-provider.ts`)
+— the selection factory that mirrors `resolveSerpProvider` — composes one
+`ApiSpineEngineProvider` (Sprint 2) arm per configured **and keyed** engine into an
+`AiVisibilityMultiplexer`, and `selectSource` wraps that in the `AiVisibilityAdapter`. The
+multiplexer fans each `probe()` out to every arm in parallel (`Promise.allSettled`) and
+**concatenates** their rows — arms are never merged, each `AiVisibilityRow` keeps its own
+`provider` label — and its `estCostUsdPerPrompt` is the plain **sum** of the arms'
+already-N-baked prices (never re-multiplied by N). If **every** arm rejects it rethrows
+(the adapter degrades to abstain and books nothing); one arm rejecting only drops that
+arm's rows.
+
+Which engines run is driven by the new **`seo.aiVisibility`** config
+(`src/config/schema.ts`, optional with **no outer default** — omit it and behaviour is
+byte-identical, mirroring the `serp` idiom):
+
+- `samplesPerPrompt` (`number`, default `5`) — grounded-search samples per prompt per
+  engine (the *N* in the ADR-3 N-baked cost formula).
+- `engines` (array, default `[]`) — each entry `{ engine: "anthropic" | "openai" |
+  "perplexity"; perCallUsd: number (default 0) }`. An empty/absent list ⇒
+  `resolveAiVisibilityProvider` returns `undefined` ⇒ offline fallback. `"perplexity"` is
+  a valid enum value but has **no live mapper yet** (Sprint 7) — configuring it yields
+  zero rows from that arm, not an error.
+
+The production `makeClient` (`defaultAiVisibilityDeps`, `src/seo/runner.ts`) reads each
+engine's key from its documented env var (`anthropic` → `ANTHROPIC_API_KEY`, `openai` →
+`OPENAI_API_KEY`) and returns `undefined` when the key is absent, so a **no-key run never
+opens a socket** and falls back to `LocalExportSource`. This makes the axis both
+**byte-identical-when-off** and **no-key-safe**: turning `ai-visibility` on without a
+configured, keyed engine changes nothing. The per-engine model is currently hardcoded
+(`anthropic` → the default SEO model, `openai` → `gpt-4.1`) since the config carries no
+per-engine `model` field yet.
 
 ### Pipeline wiring (Sprint 9)
 
-`selectSource` (`src/seo/runner.ts:259`) turns the four axes above into the run's data
-source. With **all four off** it returns `LocalExportSource` as its first statement —
+`selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
+data source. With **all four off** it returns `LocalExportSource` as its first statement —
 zero governor, zero socket, `import('damcrawler')` never evaluated, byte-identical to a
-project with no SEO suite. Otherwise it loads the quota governor once and assembles a
+project with no SEO suite. (The `ai-visibility-scrape` axis composes no source yet, so it
+is deliberately **not** part of this predicate — see the Egress-axes note above.) Otherwise it loads the quota governor once and assembles a
 **`CapabilitySeoRouter`** that dispatches each capability to the one source that owns it
 (an unrouted capability resolves `{ kind: "disabled" }`; the router never throws):
 
@@ -153,7 +202,7 @@ project with no SEO suite. Otherwise it loads the quota governor once and assemb
 | `link-graph` | `CrawlSource` | `site-crawl` |
 | `keywords`, `backlinks` | `DataForSeoAdapter` | `serp-provider` |
 | `serp` | `resolveSerpProvider(config)` result (ADR-10) | `serp-provider` **or** `site-crawl` |
-| `ai-visibility` | `LocalExportSource` (offline arm, no vendor pinned) | `ai-visibility` |
+| `ai-visibility` | `AiVisibilityAdapter` ← `resolveAiVisibilityProvider` (in-house grounded-API spine) when ≥1 engine is keyed, else offline `LocalExportSource` arm | `ai-visibility` |
 
 `gatherDataBundle` then probes **only** the capabilities `WORKFLOW_CAPABILITIES`
 (`src/seo/workflow-capabilities.ts`, ADR-7) lists for the running workflow, so the
@@ -240,8 +289,9 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 | Field | Type | Default | Effect |
 |---|---|---|---|
-| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl" }` (optional) | unset | The four live-data axes above, **all router-wired as of Sprint 9** (`ai-visibility` routes to the offline arm pending a pinned provider; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
+| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl", "ai-visibility-scrape" }` (optional) | unset | The five live-data axes above (`ai-visibility` routes to the live in-house grounded-API spine when a configured engine is keyed, else the offline arm; `ai-visibility-scrape` is axis-only until Sprint 10; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
 | `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — and **selection is router-wired as of Sprint 9** (`resolveSerpProvider` in `selectSource`). Omitting `serp` stays byte-identical. |
+| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []) }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). `"perplexity"` has no live mapper yet (Sprint 7). |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -254,10 +304,17 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   "egress": {                         // Optional. Omit => byte-identical; all axes stay off.
     "search-console": false,          // Google Search Console API egress. Default false.
     "serp-provider": false,           // DataForSEO SERP/keywords/backlinks egress. Default false.
-    "ai-visibility": false,           // AI-answer/GEO egress. Default false. Router-wired (Sprint 9) to the offline LocalExportSource arm — live AiVisibilityAdapter awaits a pinned provider.
-    "site-crawl": false               // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine (DamcrawlerCrawlEngine) + CrawlSource router-wired (Sprint 9, ADR-8); needs optional damcrawler/playwright peer deps.
+    "ai-visibility": false,           // AI-answer/GEO egress. Default false. Routes to the in-house grounded-API spine when on + a keyed engine (Sprint 3); else the offline LocalExportSource arm (no-key-safe).
+    "site-crawl": false,              // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine (DamcrawlerCrawlEngine) + CrawlSource router-wired (Sprint 9, ADR-8); needs optional damcrawler/playwright peer deps.
+    "ai-visibility-scrape": false     // AI-visibility UI-scrape egress. Default false. Axis-only (Sprint 3) — composes no provider until Sprint 10.
   },
   "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`: dataforseo (metered, serp-provider axis) | damcrawler (zero-USD scrape, gated by site-crawl axis — ADR-10). Both exist (Sprint 8); router-wired via resolveSerpProvider (Sprint 9). Omit => byte-identical.
+  "aiVisibility": {                     // Optional, no outer default. In-house grounded-API spine for the ai-visibility axis (Sprint 3). Omit => byte-identical.
+    "samplesPerPrompt": 5,              // Grounded-search samples per prompt per engine (N). Default 5.
+    "engines": [                        // Default []. Empty/absent list or an unkeyed engine => offline fallback (no-key-safe).
+      { "engine": "anthropic", "perCallUsd": 0.02 } // engine: anthropic|openai|perplexity (perplexity has no live mapper yet, Sprint 7). perCallUsd default 0. Needs ANTHROPIC_API_KEY / OPENAI_API_KEY.
+    ]
+  },
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
   "budget": { "maxUsd": 5 },          // Per-run USD ceiling for PAYG DataForSEO calls. Absent = uncapped.
   "defaultTarget": "https://example.com", // Used when the CLI omits [target].
@@ -430,9 +487,9 @@ nominal-type guard is accidentally removed), this command fails with `TS2578: Un
 ## FAQ
 
 **Do I need any API key to use this?**
-No. The default data source reads `.bober/seo/imports/` — omit all four egress axes
-(`search-console`, `serp-provider`, `ai-visibility`, `site-crawl`) and every workflow
-runs entirely offline against your own exported data.
+No. The default data source reads `.bober/seo/imports/` — omit all five egress axes
+(`search-console`, `serp-provider`, `ai-visibility`, `site-crawl`, `ai-visibility-scrape`)
+and every workflow runs entirely offline against your own exported data.
 
 **How do I turn on live data?**
 It depends on the axis:
@@ -440,10 +497,13 @@ It depends on the axis:
   `GSC_OAUTH_TOKEN`.
 - `serp-provider`: set `seo.egress["serp-provider"]: true` and provide
   `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`.
-- `ai-visibility`: set `seo.egress["ai-visibility"]: true` — no credentials needed yet;
-  because no concrete AI-visibility vendor is pinned (see Egress axes above), this axis
-  currently routes to the offline `LocalExportSource` arm (`ai-visibility.csv`/`.json`)
-  rather than a live provider.
+- `ai-visibility`: set `seo.egress["ai-visibility"]: true`, add at least one engine to
+  `seo.aiVisibility.engines` (`anthropic` and/or `openai`), and provide that engine's API
+  key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`). The axis then routes to the in-house
+  grounded-API spine (Sprint 3). **No-key-safe:** with the axis on but no configured/keyed
+  engine, it falls back to the offline `LocalExportSource` arm (`ai-visibility.csv`/`.json`)
+  rather than a live provider. `ai-visibility-scrape` is a separate, still-inert axis (no
+  provider until Sprint 10).
 - `site-crawl`: set `seo.egress["site-crawl"]: true` and install the optional
   `damcrawler`/`playwright` peer deps (`npm i damcrawler playwright && damcrawler
   setup`) — no API key, just the local browser engine.
