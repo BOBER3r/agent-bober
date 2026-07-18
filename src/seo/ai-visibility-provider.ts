@@ -1,7 +1,7 @@
 /**
  * ai-visibility-provider.ts — the API-spine seam wiring (in-house-ai-
- * visibility, Sprint 3; arch-20260717-in-house-oss-ai-visibility-
- * architecture.md:42,50-63,67-77,297-314; ADR-3, ADR-5).
+ * visibility, Sprint 3, widened Sprint 4; arch-20260717-in-house-oss-ai-
+ * visibility-architecture.md:42,50-63,67-77,297-314; ADR-3, ADR-5).
  *
  * Mirrors `serp-provider.ts` in shape (a port implementer + a factory
  * function living alongside the seam, `serp-provider.ts:55-64`): composes
@@ -11,9 +11,33 @@
  * adapter.ts`) — the port, the `AiVisibilityRow` shape, and the adapter body
  * are all untouched here (nonGoals).
  *
- * No scrape arm, `CitationVerifier`, scorer, tracked-prompt store,
- * Perplexity mapper, or LLM judge land in this module — those are later
- * sprints (Sprint 4, 7, 8, 10 nonGoals).
+ * Sprint 4 adds the `CitationVerifier` + `ContentSanitizer` each arm needs
+ * (sc-4-3, sc-4-4 D1-Recommended): this is the SOLE production site that
+ * constructs `ApiSpineEngineProvider`, and `egress` is already in scope here
+ * (a parameter of this function), so a single `DamcrawlerCitationVerifier
+ * (egress)` is constructed once and shared across every arm — the verifier
+ * self-gates the `site-crawl` axis on every `verify()` call, so sharing one
+ * instance across engines is safe (it holds no per-arm state).
+ *
+ * The `ContentSanitizer` here wraps `defaultGroundedTextSanitizeFn` (below),
+ * NOT a damcrawler-backed `sanitize` export. Two reasons: (1) the text this
+ * boundary sanitizes — an LLM's grounded `answerText` + its citation urls —
+ * is NOT damcrawler-scraped, it comes straight from `GroundedSearchClient
+ * .search()`; damcrawler's `sanitize` remains the load-bearing sanitizer for
+ * the actual scraped citation BODY, inside `DamcrawlerCitationVerifier`
+ * itself, gated by `site-crawl` (`./sources/citation-verifier.ts`). (2)
+ * `ContentSanitizer` requires a SYNCHRONOUS `SanitizeFn`
+ * (`content-sanitizer.ts:29`), while any damcrawler export can only be
+ * reached via an ASYNC lazy `import()` — and this factory is itself
+ * synchronous (no `Promise` in its return type), so a damcrawler-backed
+ * sanitizer could not be constructed here even behind a gate. This second,
+ * always-on boundary is a genuine (not a no-op) layer: it strips recognized
+ * prompt-injection role/instruction markers the grounding LLM could echo
+ * back from a page it read during its own web search.
+ *
+ * No scrape arm, scorer, tracked-prompt store, Perplexity mapper, or LLM
+ * judge land in this module — those are later sprints (Sprint 7, 8, 10
+ * nonGoals).
  */
 import type { BoberConfig } from "../config/schema.js";
 import type { SeoEgressGuard } from "./egress.js";
@@ -22,6 +46,39 @@ import type { AiVisibilityRow } from "./data-source.js";
 import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
 import type { MentionCitationExtractor } from "./sources/mention-citation-extractor.js";
 import { ApiSpineEngineProvider } from "./sources/api-spine-provider.js";
+import { DamcrawlerCitationVerifier } from "./sources/citation-verifier.js";
+import { ContentSanitizer } from "./content-sanitizer.js";
+
+/**
+ * Recognized prompt-injection role/instruction markers — fenced
+ * `<system>`/`<|im_start|>`-style tags and "ignore previous instructions"
+ * phrasing — the class of payload a grounding LLM could echo back verbatim
+ * from a page it read during its own web search. Not damcrawler-grade
+ * threat classification (that stays `DamcrawlerCitationVerifier`'s job for
+ * scraped citation bodies); this is a narrower, dependency-free, always-on
+ * second layer for the LLM's own free-text summary + citation urls.
+ */
+const GROUNDED_TEXT_INJECTION_PATTERNS: RegExp[] = [
+  /<\s*\/?\s*(system|assistant|\|im_start\|?|\|im_end\|?)[^>]*>/gi,
+  /\bignore\s+(all\s+|any\s+)?(previous|prior|above)\s+instructions\b/gi,
+];
+
+/**
+ * Default `SanitizeFn` for `ApiSpineEngineProvider`'s `answerText`/citation-
+ * url boundary (sc-4-3). `String.prototype.replace` resets a global
+ * pattern's `lastIndex` on every call, so reusing the shared, module-level
+ * `RegExp` instances across calls is safe.
+ */
+export function defaultGroundedTextSanitizeFn(raw: string): { content: string; hadThreats: boolean } {
+  let content = raw;
+  let hadThreats = false;
+  for (const pattern of GROUNDED_TEXT_INJECTION_PATTERNS) {
+    const stripped = content.replace(pattern, "");
+    if (stripped !== content) hadThreats = true;
+    content = stripped;
+  }
+  return { content: content.trim(), hadThreats };
+}
 
 /**
  * Injected seam (mirrors the `deps` shape in the architecture doc's
@@ -107,11 +164,26 @@ export function resolveAiVisibilityProvider(
   const cfg = config.seo?.aiVisibility;
   if (!cfg || cfg.engines.length === 0) return undefined; // nothing configured
 
+  // Shared across every arm (Sprint 4): the verifier self-gates `site-crawl`
+  // on every `verify()` call and holds no per-arm state; the sanitizer's
+  // `SanitizeFn` is a pure function — both are safe to share.
+  const verifier = new DamcrawlerCitationVerifier(egress);
+  const sanitizer = new ContentSanitizer(defaultGroundedTextSanitizeFn);
+
   const arms: AiVisibilityProvider[] = [];
   for (const engineCfg of cfg.engines) {
     const client = deps.makeClient(engineCfg.engine);
     if (!client) continue; // no key/credential for this engine => skip (viability check)
-    arms.push(new ApiSpineEngineProvider(client, deps.extractor, cfg.samplesPerPrompt, engineCfg.perCallUsd));
+    arms.push(
+      new ApiSpineEngineProvider(
+        client,
+        deps.extractor,
+        cfg.samplesPerPrompt,
+        engineCfg.perCallUsd,
+        verifier,
+        sanitizer,
+      ),
+    );
   }
 
   return arms.length > 0 ? new AiVisibilityMultiplexer(arms) : undefined; // no-key-safe

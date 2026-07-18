@@ -1,14 +1,20 @@
 /**
  * ApiSpineEngineProvider — one grounded-search engine's `AiVisibilityProvider`
- * (in-house-ai-visibility, Sprint 2;
+ * (in-house-ai-visibility, Sprint 2, wired in Sprint 4;
  * arch-20260717-in-house-oss-ai-visibility-architecture.md:44,84-97,278).
  *
  * Mirrors `DamcrawlerSerpProvider`'s injected-deps + `readonly name`/
  * `readonly estCost...` shape (`./damcrawler-serp-provider.ts:69-101`), but
  * the injected transport is a Sprint-1 `GroundedSearchClient` (not
- * damcrawler) and there is no egress gate or sanitizer here — those are the
- * ADAPTER's job (`./ai-visibility-adapter.ts`), which is NOT wired to this
- * class this sprint (nonGoal: no seam/factory/multiplexer wiring, Sprint 3).
+ * damcrawler). There is still no egress gate here — the transport's own
+ * network call is ungated (that remains the ADAPTER's/factory's job) — but
+ * as of Sprint 4 this class DOES own two boundary responsibilities per
+ * ADR-11: (1) sanitize every piece of grounded free-text (`answerText` +
+ * each candidate citation url) via the injected `ContentSanitizer` BEFORE
+ * the row is built, and (2) verify each sanitized candidate url via the
+ * injected `CitationVerifier` (gated by the `site-crawl` axis inside the
+ * verifier itself) and retain ONLY `live === true` urls in `row.sourceUrls`
+ * — an unverifiable citation NEVER reaches a row (sc-4-2).
  *
  * `probe()` runs `samplesPerPrompt` (N) independent grounded-search samples
  * per prompt and emits ONE raw `AiVisibilityRow` per real observation —
@@ -33,12 +39,19 @@
  * into `abstain` + books nothing (`ai-visibility-adapter.ts:141-143`), which
  * is exactly the "all fail => abstain, nothing booked" outcome. Calling
  * `probe()` with zero prompts or `samplesPerPrompt <= 0` attempts nothing
- * and returns `[]` without throwing (there is no failure to report).
+ * and returns `[]` without throwing (there is no failure to report). This
+ * contract is unaffected by the Sprint-4 sanitize/verify additions: verifier
+ * errors stay INSIDE `probe` (fail-closed, `live:false`) and never throw
+ * out of the sample loop — so cost accounting in the adapter (which books
+ * only after a successful `probe()`) is unaffected by a verification
+ * failure.
  */
 import type { AiVisibilityProvider } from "./ai-visibility-adapter.js";
 import type { AiVisibilityRow } from "../data-source.js";
 import type { GroundedAnswer, GroundedEngine, GroundedSearchClient } from "../../providers/grounded-search.js";
 import type { MentionCitationExtractor } from "./mention-citation-extractor.js";
+import type { CitationVerifier } from "./citation-verifier.js";
+import type { ContentSanitizer } from "../content-sanitizer.js";
 
 export class ApiSpineEngineProvider implements AiVisibilityProvider {
   readonly name: GroundedEngine;
@@ -49,6 +62,8 @@ export class ApiSpineEngineProvider implements AiVisibilityProvider {
     private readonly extractor: MentionCitationExtractor,
     private readonly samplesPerPrompt: number,
     perCallUsd: number,
+    private readonly verifier: CitationVerifier,
+    private readonly sanitizer: ContentSanitizer,
   ) {
     this.name = client.engine; // every row is stamped with the injected client's engine
     this.estCostUsdPerPrompt = perCallUsd * samplesPerPrompt; // ADR-3: N baked in, once, from the SAME N used below
@@ -68,13 +83,31 @@ export class ApiSpineEngineProvider implements AiVisibilityProvider {
           continue; // sc-2-4: drop the failed sample — never throw, never mislabel, never merge
         }
 
-        const obs = this.extractor.extract({ target, answerText: answer.answerText, citations: answer.citations });
+        // sc-4-3: sanitize every piece of grounded free-text at the
+        // network->in-process boundary BEFORE the row is built — the
+        // sanitized answerText feeds the extractor, and every candidate
+        // citation url is sanitized before it is handed to the verifier.
+        const sanitizedAnswerText = this.sanitizer.clean(answer.answerText, target).content;
+        const sanitizedCitations = answer.citations.map((c) => ({
+          ...c,
+          url: this.sanitizer.clean(c.url, c.url).content,
+        }));
+
+        const obs = this.extractor.extract({ target, answerText: sanitizedAnswerText, citations: sanitizedCitations });
+
+        // sc-4-2: verify every candidate url; retain ONLY live===true urls.
+        // The verifier itself is fail-closed (site-crawl off / dep absent /
+        // scrape error all degrade to live:false) — never fabricate a live
+        // citation here.
+        const verified = await this.verifier.verify(target, obs.sourceUrls);
+        const sourceUrls = verified.filter((v) => v.live).map((v) => v.url);
+
         const row: AiVisibilityRow = {
           prompt,
           provider: this.name,
           mentioned: obs.mentioned,
           citationPresent: obs.citationPresent,
-          sourceUrls: obs.sourceUrls,
+          sourceUrls,
         };
         if (obs.rank !== undefined) row.rank = obs.rank; // optional-key omission — never `rank: undefined`
         rows.push(row);
