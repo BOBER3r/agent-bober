@@ -95,12 +95,15 @@ provider-agnostic `AiVisibilityAdapter`. **No-key-safe:** with the axis off, no
 adapter. See **In-house AI-visibility (grounded-API spine)** below.
 
 A **fifth** axis, `ai-visibility-scrape` (`seo.egress.ai-visibility-scrape`, default
-`false`, Sprint 3), reserves a separate egress gate for the future AI-visibility
-UI-scrape arm. It is **axis-only** this sprint — it composes **no provider yet** (the
-scrape arm lands Sprint 10), so it is inert end-to-end and is deliberately **excluded**
-from `selectSource`'s all-off byte-identical predicate (which reads only the four data
-axes). It is a **distinct axis** from `ai-visibility` (ADR-5): opting into one does not
-opt into the other.
+`false`, Sprint 3), is the separate egress gate for the AI-visibility **UI-scrape arm**.
+As of **Sprint 10** it has its first live consumer — `ScrapeArmEngineProvider` self-asserts
+this axis as `probe()`'s first statement (see **Gated damcrawler UI-scrape arm** below).
+It is deliberately **excluded** from `selectSource`'s all-off byte-identical predicate
+(which reads only the four data axes). It is a **distinct axis** from `ai-visibility`
+(ADR-5): opting into one does not opt into the other. **Note:** the scrape arm is composed
+by the factory + fully tested but **not yet wired into the production run path** — turning
+this axis on in a real run does not yet scrape (the runner wiring is deferred to Sprint 11;
+see the known-limitation note in that section).
 
 | Axis | Config key | Gates |
 |---|---|---|
@@ -108,7 +111,7 @@ opt into the other.
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
 | AI-visibility (GEO) | `seo.egress.ai-visibility` | AI-answer / GEO capability — **routes to the live in-house grounded-API spine (`AiVisibilityAdapter` ← `resolveAiVisibilityProvider` → `AiVisibilityMultiplexer`) when the axis is on and ≥1 configured engine is keyed (Sprint 3); no-key-safe fall-back to the offline `LocalExportSource` arm otherwise** |
 | Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **engine `DamcrawlerCrawlEngine` (Sprint 6) + adapter `CrawlSource` (Sprint 7) router-wired in Sprint 9 (ADR-8: `link-graph` always; `url-inspection` only when `search-console` is off); needs the optional `damcrawler`/`playwright` peer deps** |
-| AI-visibility scrape | `seo.egress.ai-visibility-scrape` | Reserved egress gate for the future AI-visibility UI-scrape arm — **axis-only as of Sprint 3 (composes no provider until Sprint 10); a distinct axis from `ai-visibility` (ADR-5)** |
+| AI-visibility scrape | `seo.egress.ai-visibility-scrape` | Egress gate for the AI-visibility UI-scrape arm — **first live consumer `ScrapeArmEngineProvider` (`chatgpt-ui`) composed by `resolveAiVisibilityProvider` as of Sprint 10 (behind an injected `ScrapeThrottle` + `config.seo.aiVisibility.scrape`); production runner wiring deferred to Sprint 11. A distinct axis from `ai-visibility` (ADR-5)** |
 
 The whole `seo.egress` object is `.optional()` — a config that omits it keeps all five
 axes off, and the offline `LocalExportSource` needs none (`src/config/schema.ts:675-686`).
@@ -472,11 +475,72 @@ treated as corrupt. The clock is **injected** (`() => ISO string`, mirroring
 tested deterministically; caps come from the constructor via `ScrapeThrottleLimits
 { maxPerWindow, windowMs, maxProxyUsd }`.
 
-> **Delivered in isolation.** `ScrapeThrottle` is the enforcement primitive only — **no scrape
-> provider constructs or calls it yet**, it adds **no config-schema field** (caps are
-> constructor-injected), and the `ai-visibility-scrape` axis still composes no provider. **The
-> scrape arm wires this in during Sprint 10.** The public API (`acquire`/`recordProxyCost`,
-> `ThrottleDecision.proceed`) was frozen this sprint so that wiring is a pure composition step.
+> **Delivered in isolation (Sprint 9), consumed in Sprint 10.** `ScrapeThrottle` was built as the
+> enforcement primitive only, with its public API (`acquire`/`recordProxyCost`,
+> `ThrottleDecision.proceed`) frozen so the scrape arm could wire it in as a pure composition step.
+> **Sprint 10 delivers that consumer** — `ScrapeArmEngineProvider` calls `acquire` before each
+> scrape and `recordProxyCost` after a row-producing one (see below). The Sprint-9 caps that were
+> constructor-only now also have a config home (`config.seo.aiVisibility.scrape.{maxPerWindow,
+> windowMs, maxProxyUsd, proxyUsdPerScrape}`), though a real `ScrapeThrottle` is still not
+> constructed by the production runner (Sprint 11).
+
+#### Gated damcrawler UI-scrape arm — `ScrapeArmEngineProvider` + `ChatgptUiScrapeParser` (Sprint 10)
+
+As of `spec-20260718-in-house-ai-visibility` Sprint 10 the scrape arm has its **first live
+engine**. It is the second `AiVisibilityProvider` arm — a peer of the grounded-API spine, composed
+into the **same** `AiVisibilityMultiplexer` — but it collects a **different** signal by scraping
+the ChatGPT web UI through `damcrawler` rather than calling a grounded LLM API.
+
+- **`ScrapeArmEngineProvider`** (`src/seo/sources/scrape-arm-provider.ts`) implements
+  `AiVisibilityProvider` with **`estCostUsdPerPrompt = 0`** — it books **zero** USD to the
+  `SeoQuotaGovernor`; its real proxy cost accrues to the separate `ScrapeThrottle` ledger (the
+  two-ledger model above). It is **guard-first**: `probe()`'s **first statement** self-asserts the
+  **`ai-visibility-scrape`** axis (ADR-4 load-bearing barrier), so axis-off means **zero sockets,
+  no `damcrawler` load, and no `ScrapeThrottle.acquire` call**. It **lazy-loads `damcrawler`** via
+  the same variable-indirection `import(mod)` the other damcrawler adapters use, so the build stays
+  **`tsc`-clean without `damcrawler` installed** (dep absent ⇒ abstain).
+- Per sample (N = `samplesPerPrompt`, per prompt) the chain is: **`throttle.acquire`** (a denial
+  skips that one sample) → **`dam.scrape`** of a provider-constructed `chatgpt.com/?q=…` URL →
+  **`ContentSanitizer.clean` BEFORE the parser** (the Sprint-9 F1 prompt-injection order — the arm
+  builds its **own** sanitizer from the loaded `damcrawler.sanitize`, not the API arms'
+  `defaultGroundedTextSanitizeFn`) → **`ChatgptUiScrapeParser.parse`** → `MentionCitationExtractor`
+  → the shared `DamcrawlerCitationVerifier` (retains only `live` URLs) → **`recordProxyCost`** (only
+  after a row-producing scrape) → emit one `AiVisibilityRow` labeled **`"chatgpt-ui"`**. It
+  **never throws**: a scrape `.error`/throw/zero-row drops that sample, and total failure returns
+  `[]` (abstain). Returning `[]` on total failure instead of throwing (as `ApiSpineEngineProvider`
+  does) is safe here precisely because the arm books `$0` — there is no over-book risk.
+- **`ChatgptUiScrapeParser`** (`src/seo/sources/engine-scrape-parser-chatgpt.ts`) is a **PURE,
+  synchronous, dependency-free** `RawScrape -> ParsedAnswer{answerText, citations}`: it strips a
+  trailing `Sources`/`Citations`/`References` block for the prose and extracts markdown links →
+  autolinks → bare URLs (deduped by URL, first-seen title wins) into locked `GroundedCitation`s.
+  Empty/whitespace/malformed input yields `{ answerText: "", citations: [] }` — it never fabricates
+  a positive observation and never throws (parser drift degrades to not-mentioned, by design).
+- **The `"chatgpt-ui"` rows are never mixed with the API arms.** Both arms land in the one
+  `AiVisibilityMultiplexer`, which only ever concatenates; each `AiVisibilityRow` keeps its own
+  `provider` label, so a `"chatgpt-ui"` row is unmixable with `anthropic`/`openai`/`perplexity`.
+- **Composition** is triple-gated in `resolveAiVisibilityProvider`: the arm is added only when the
+  **`ai-visibility-scrape`** axis is on **AND** an injected `AiVisibilityDeps.scrapeThrottle` is
+  present **AND** `config.seo.aiVisibility.scrape.engines` includes `"chatgpt-ui"`. The
+  `scrapeThrottle` dep is **optional** (absent ⇒ the arm never composes, every existing caller stays
+  byte-identical), and the factory's top-level early-return was relaxed so a **scrape-only** config
+  (API axis off, scrape axis on) composes.
+- **Config** (`config.seo.aiVisibility.scrape`, `src/config/schema.ts`) is **optional with no outer
+  default** — omit it and behaviour is byte-identical, and its presence does **not** itself enable
+  scraping (the axis does). Fields: `engines` (`("chatgpt-ui" | "perplexity-ui")[]`, default `[]`),
+  `authSession?` / `proxy?` (operator-supplied, passed opaquely to `dam.scrape` — no auth
+  harvesting or proxy sourcing), `proxyUsdPerScrape` (default `0`), and the `ScrapeThrottle` caps
+  `maxPerWindow` (10), `windowMs` (60000), `maxProxyUsd` (0).
+
+> **KNOWN LIMITATION — not yet production-wired.** The arm is composed by the factory and fully
+> unit-tested, but **`runner.ts` is byte-identical this sprint**: production `defaultAiVisibilityDeps()`
+> supplies **no** `ScrapeThrottle`, so turning the `ai-visibility-scrape` axis on + configuring
+> `config.seo.aiVisibility.scrape` in a **real run** does **not** yet compose or run the scrape arm
+> (it is exercised only via injected test deps). A `ScrapeThrottle` needs an absolute ledger path
+> the factory has no `projectRoot` to build, so it must arrive already-constructed via the
+> `AiVisibilityDeps` seam. The **scrape-arm runner wiring** (a real `ScrapeThrottle` from
+> `projectRoot`/`config` + a damcrawler scrape loader + auth-session) is deferred to **Sprint 11**,
+> alongside the still-inert **Sprint-8 LLM-judge** wiring. `"perplexity-ui"` is a valid config value
+> with **no live parser yet** (also Sprint 11).
 
 ### Pipeline wiring (Sprint 9)
 
