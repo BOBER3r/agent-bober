@@ -1142,6 +1142,66 @@ describe("SeoConfigSchema.aiVisibility — optional, default-safe (sc-3-1)", () 
   });
 });
 
+// ── SeoConfigSchema.aiVisibility.scrape tests (in-house-ai-visibility, Sprint 10 — sc-10-4) ──
+
+describe("SeoConfigSchema.aiVisibility.scrape — optional, default-safe, no leakage (sc-10-4)", () => {
+  it("scrape is absent (no outer default) when aiVisibility is present but scrape is omitted — parse({ aiVisibility: {} }) still leaks only samplesPerPrompt/engines", () => {
+    const parsed = SeoConfigSchema.parse({ aiVisibility: {} });
+    expect(Object.hasOwn(parsed.aiVisibility ?? {}, "scrape")).toBe(false);
+    expect(parsed.aiVisibility).toEqual({ samplesPerPrompt: 5, engines: [] });
+  });
+
+  it("scrape sub-object defaults when present but empty", () => {
+    const parsed = SeoConfigSchema.parse({ aiVisibility: { scrape: {} } });
+    expect(parsed.aiVisibility?.scrape).toEqual({
+      engines: [],
+      proxyUsdPerScrape: 0,
+      maxPerWindow: 10,
+      windowMs: 60_000,
+      maxProxyUsd: 0,
+    });
+  });
+
+  it("scrape.engines accepts 'chatgpt-ui' and 'perplexity-ui'; authSession/proxy round-trip", () => {
+    const parsed = SeoConfigSchema.parse({
+      aiVisibility: {
+        scrape: {
+          engines: ["chatgpt-ui", "perplexity-ui"],
+          authSession: "/secrets/chatgpt-session.json",
+          proxy: "http://proxy.example:8080",
+          proxyUsdPerScrape: 0.02,
+          maxPerWindow: 20,
+          windowMs: 30_000,
+          maxProxyUsd: 5,
+        },
+      },
+    });
+    expect(parsed.aiVisibility?.scrape).toEqual({
+      engines: ["chatgpt-ui", "perplexity-ui"],
+      authSession: "/secrets/chatgpt-session.json",
+      proxy: "http://proxy.example:8080",
+      proxyUsdPerScrape: 0.02,
+      maxPerWindow: 20,
+      windowMs: 30_000,
+      maxProxyUsd: 5,
+    });
+  });
+
+  it("rejects a bogus scrape engine value", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { engines: ["bing-ui"] } } })).toThrow();
+  });
+
+  it("rejects a negative proxyUsdPerScrape / maxProxyUsd", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { proxyUsdPerScrape: -1 } } })).toThrow();
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { maxProxyUsd: -1 } } })).toThrow();
+  });
+
+  it("rejects a non-positive maxPerWindow / windowMs", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { maxPerWindow: 0 } } })).toThrow();
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { windowMs: 0 } } })).toThrow();
+  });
+});
+
 describe("BoberConfigSchema — seo section is optional, default-off (sc-1-1/sc-1-2)", () => {
   const minimalBase = {
     project: { name: "test-project", mode: "greenfield" },

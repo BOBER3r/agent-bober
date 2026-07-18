@@ -12,6 +12,7 @@ import { join } from "node:path";
 import type { BoberConfig } from "../config/schema.js";
 import { SeoEgressGuard } from "./egress.js";
 import { SeoQuotaGovernor } from "./quota-governor.js";
+import { ScrapeThrottle } from "./scrape-throttle.js";
 import { AiVisibilityAdapter } from "./sources/ai-visibility-adapter.js";
 import type { AiVisibilityProvider } from "./sources/ai-visibility-adapter.js";
 import type { AiVisibilityRow } from "./data-source.js";
@@ -32,6 +33,16 @@ async function freshGovernor(maxUsd: number | null = null): Promise<SeoQuotaGove
   const dir = await mkdtemp(join(tmpdir(), "ai-visibility-provider-"));
   tempDirs.push(dir);
   return SeoQuotaGovernor.load(join(dir, "quota-ledger.json"), { seo: { budget: { maxUsd } } } as BoberConfig);
+}
+
+async function freshThrottle(): Promise<ScrapeThrottle> {
+  const dir = await mkdtemp(join(tmpdir(), "ai-visibility-provider-scrape-"));
+  tempDirs.push(dir);
+  return new ScrapeThrottle(
+    join(dir, "scrape-throttle-ledger.json"),
+    { maxPerWindow: 100, windowMs: 60_000, maxProxyUsd: 100 },
+    () => "2026-07-18T00:00:00.000Z",
+  );
 }
 
 afterEach(async () => {
@@ -406,5 +417,144 @@ describe("defaultGroundedTextSanitizeFn — dependency-free grounded-text saniti
   it("never throws on malformed input", () => {
     expect(() => defaultGroundedTextSanitizeFn("")).not.toThrow();
     expect(defaultGroundedTextSanitizeFn("")).toEqual({ content: "", hadThreats: false });
+  });
+});
+
+// ── sc-10-4: resolveAiVisibilityProvider composes the scrape arm ────────
+
+describe("resolveAiVisibilityProvider — composes the scrape arm behind the scrape axis + config + throttle dep (sc-10-4)", () => {
+  const extractor = new DeterministicMentionCitationExtractor();
+
+  it("scrape axis ON + chatgpt-ui configured + throttle dep present => composes an AiVisibilityMultiplexer", async () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 2,
+          engines: [],
+          scrape: { engines: ["chatgpt-ui"] },
+        },
+      },
+    } as unknown as BoberConfig;
+    // Only ai-visibility-scrape is on (ai-visibility API axis stays off).
+    const egressScrapeOnly = new SeoEgressGuard(false, false, false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => undefined,
+      extractor,
+      scrapeThrottle: await freshThrottle(),
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressScrapeOnly, deps);
+    expect(provider).toBeInstanceOf(AiVisibilityMultiplexer);
+  });
+
+  it("scrape axis ON but chatgpt-ui NOT in cfg.scrape.engines => does not compose the scrape arm (undefined overall, no API engines either)", async () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 2,
+          engines: [],
+          scrape: { engines: ["perplexity-ui"] },
+        },
+      },
+    } as unknown as BoberConfig;
+    const egressScrapeOnly = new SeoEgressGuard(false, false, false, false, true);
+    const deps: AiVisibilityDeps = { makeClient: () => undefined, extractor, scrapeThrottle: await freshThrottle() };
+
+    expect(resolveAiVisibilityProvider(config, egressScrapeOnly, deps)).toBeUndefined();
+  });
+
+  it("scrape axis ON + chatgpt-ui configured but NO scrapeThrottle dep => does not compose the scrape arm", async () => {
+    const config = {
+      seo: {
+        aiVisibility: { samplesPerPrompt: 2, engines: [], scrape: { engines: ["chatgpt-ui"] } },
+      },
+    } as unknown as BoberConfig;
+    const egressScrapeOnly = new SeoEgressGuard(false, false, false, false, true);
+    const deps: AiVisibilityDeps = { makeClient: () => undefined, extractor }; // no scrapeThrottle
+
+    expect(resolveAiVisibilityProvider(config, egressScrapeOnly, deps)).toBeUndefined();
+  });
+
+  it("scrape axis OFF => never composes the scrape arm even when fully configured + throttle present", async () => {
+    const config = {
+      seo: {
+        aiVisibility: { samplesPerPrompt: 2, engines: [], scrape: { engines: ["chatgpt-ui"] } },
+      },
+    } as unknown as BoberConfig;
+    // ai-visibility ON, ai-visibility-scrape OFF (default).
+    const egressApiOnly = new SeoEgressGuard(false, false, true);
+    const deps: AiVisibilityDeps = { makeClient: () => undefined, extractor, scrapeThrottle: await freshThrottle() };
+
+    // No API engines configured either => undefined overall.
+    expect(resolveAiVisibilityProvider(config, egressApiOnly, deps)).toBeUndefined();
+  });
+
+  it("both axes off => undefined regardless of config", async () => {
+    const config = {
+      seo: { aiVisibility: { samplesPerPrompt: 2, engines: [], scrape: { engines: ["chatgpt-ui"] } } },
+    } as unknown as BoberConfig;
+    const egressOff = new SeoEgressGuard(false, false, false, false, false);
+    const deps: AiVisibilityDeps = { makeClient: () => undefined, extractor, scrapeThrottle: await freshThrottle() };
+
+    expect(resolveAiVisibilityProvider(config, egressOff, deps)).toBeUndefined();
+  });
+
+  it("API arm + scrape arm compose together (both axes on): API rows stay labeled 'anthropic', never mislabeled by the co-composed scrape arm", async () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 1,
+          engines: [{ engine: "anthropic" as const, perCallUsd: 0.01 }],
+          scrape: { engines: ["chatgpt-ui"], proxyUsdPerScrape: 0.02 },
+        },
+      },
+    } as unknown as BoberConfig;
+    // BOTH axes on.
+    const egressBoth = new SeoEgressGuard(false, false, true, false, true);
+    const scriptedAnthropic: GroundedSearchClient = {
+      engine: "anthropic",
+      async search() {
+        return {
+          answerText: "target.example is a leading casino review site.",
+          citations: [{ url: "https://target.example/reviews", title: "target.example reviews" }],
+        };
+      },
+    };
+
+    const throttle = await freshThrottle();
+    const deps: AiVisibilityDeps = {
+      makeClient: (engine) => (engine === "anthropic" ? scriptedAnthropic : undefined),
+      extractor,
+      scrapeThrottle: throttle,
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressBoth, deps);
+    expect(provider).toBeInstanceOf(AiVisibilityMultiplexer);
+
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+    // damcrawler is genuinely not installed in this test environment, so the
+    // co-composed scrape arm abstains ([]) per its own dep-absent contract
+    // (sc-10-5, unit-tested directly in scrape-arm-provider.test.ts —
+    // "the default loader (real lazy import of a non-installed dep) also
+    // abstains []"). This asserts the API arm's rows are unaffected and
+    // never mislabeled by having a scrape arm composed alongside it — the
+    // row.provider === "chatgpt-ui" distinct-label invariant itself is
+    // covered at the `ScrapeArmEngineProvider` unit level and at the
+    // `AiVisibilityMultiplexer` fan-out level ("concatenates rows from
+    // every arm without merging", above).
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.provider).toBe("anthropic");
+    }
+  });
+
+  it("existing return-undefined-when-ai-visibility-axis-off behavior is unaffected by the scrape composition change", () => {
+    const config = {
+      seo: { aiVisibility: { samplesPerPrompt: 5, engines: [{ engine: "anthropic" as const, perCallUsd: 0.01 }] } },
+    } as BoberConfig;
+    const egressOff = new SeoEgressGuard(false, false, false);
+    const deps: AiVisibilityDeps = { makeClient: () => undefined, extractor };
+
+    expect(resolveAiVisibilityProvider(config, egressOff, deps)).toBeUndefined();
   });
 });

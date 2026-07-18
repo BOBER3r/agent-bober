@@ -47,9 +47,13 @@ import type { AiVisibilityProvider } from "./sources/ai-visibility-adapter.js";
 import type { AiVisibilityRow } from "./data-source.js";
 import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
 import type { MentionCitationExtractor } from "./sources/mention-citation-extractor.js";
+import type { ScrapeThrottle } from "./scrape-throttle.js";
+import type { ScrapeEngine } from "./sources/scrape-arm-provider.js";
 import { ApiSpineEngineProvider } from "./sources/api-spine-provider.js";
 import { DamcrawlerCitationVerifier } from "./sources/citation-verifier.js";
 import { ContentSanitizer } from "./content-sanitizer.js";
+import { ScrapeArmEngineProvider } from "./sources/scrape-arm-provider.js";
+import { ChatgptUiScrapeParser } from "./sources/engine-scrape-parser-chatgpt.js";
 
 /**
  * Recognized prompt-injection role/instruction markers — fenced
@@ -90,10 +94,22 @@ export function defaultGroundedTextSanitizeFn(raw: string): { content: string; h
  * Production wiring builds a real `LiveGroundedSearchClient` per keyed
  * engine (`runner.ts`'s `defaultAiVisibilityDeps`); tests inject fakes so
  * this factory — and every caller of it — stays network-free (sc-3-4).
+ *
+ * `scrapeThrottle` (Sprint 10) is OPTIONAL — `resolveAiVisibilityProvider`
+ * (`../runner.ts:57-58,190-192,392-396` is the SOLE production caller,
+ * `defaultAiVisibilityDeps()` builds only `{ makeClient, extractor }`)
+ * composes the damcrawler UI-scrape arm ONLY when this dep is present AND
+ * the `ai-visibility-scrape` axis is on AND `chatgpt-ui` is configured. A
+ * `ScrapeThrottle` needs an absolute ledger path this factory has no
+ * `projectRoot` to construct, so it must arrive already-built via this
+ * seam — production wiring of a real throttle (`defaultAiVisibilityDeps`
+ * constructing one from `config`/`projectRoot`) is a follow-up sprint's
+ * work (runner.ts stays byte-identical this sprint, sc-10-5).
  */
 export interface AiVisibilityDeps {
   makeClient: (engine: GroundedEngine) => GroundedSearchClient | undefined;
   extractor: MentionCitationExtractor;
+  scrapeThrottle?: ScrapeThrottle;
 }
 
 /**
@@ -147,13 +163,26 @@ export class AiVisibilityMultiplexer implements AiVisibilityProvider {
  * Select which per-engine arms are viable and compose them into an
  * `AiVisibilityMultiplexer` — mirrors `resolveSerpProvider`
  * (`serp-provider.ts:55-64`) in DI style: this factory does NO gating of its
- * own beyond the two viability checks below; each returned provider is
- * already fully constructed from already-built dependencies.
+ * own beyond the viability checks below; each returned provider is already
+ * fully constructed from already-built dependencies. The API spine and the
+ * scrape arm (Sprint 10) land in the SAME `arms` array and share the ONE
+ * multiplexer — they stay unmixable because each row carries its own
+ * `provider` label (sc-10-4; `AiVisibilityMultiplexer` never merges rows).
  *
- * Returns `undefined` (never an empty-arms multiplexer) when no engine is
- * viable — axis off, `config.seo.aiVisibility` absent, `engines` empty, or
- * every `deps.makeClient` call returns `undefined` (no key). `selectSource`
- * falls back to the offline `LocalExportSource` in that case (no-key-safe,
+ * An arm is added when EITHER:
+ *   (a) the `ai-visibility` axis is on AND a configured engine is keyed
+ *       (`deps.makeClient` returns a client) — the existing API-spine loop, or
+ *   (b) the `ai-visibility-scrape` axis is on AND `cfg.scrape?.engines`
+ *       includes `"chatgpt-ui"` AND `deps.scrapeThrottle` is provided (the
+ *       scrape arm needs an already-built throttle, see `AiVisibilityDeps`
+ *       docstring).
+ * Both API and scrape arms reuse the SAME shared `DamcrawlerCitationVerifier`
+ * (self-gates `site-crawl` per call, holds no per-arm state — safe to share).
+ *
+ * Returns `undefined` (never an empty-arms multiplexer) when NEITHER axis is
+ * on, `config.seo.aiVisibility` is absent, or no arm ends up viable (no key /
+ * no scrape engine configured / no throttle dep). `selectSource` falls back
+ * to the offline `LocalExportSource` in that case (no-key-safe,
  * byte-identical-when-off).
  */
 export function resolveAiVisibilityProvider(
@@ -161,32 +190,57 @@ export function resolveAiVisibilityProvider(
   egress: SeoEgressGuard,
   deps: AiVisibilityDeps,
 ): AiVisibilityProvider | undefined {
-  if (!egress.isAllowed("ai-visibility")) return undefined; // axis off => offline fallback
-
   const cfg = config.seo?.aiVisibility;
-  if (!cfg || cfg.engines.length === 0) return undefined; // nothing configured
+  if (!cfg) return undefined; // nothing configured at all
 
-  // Shared across every arm (Sprint 4): the verifier self-gates `site-crawl`
-  // on every `verify()` call and holds no per-arm state; the sanitizer's
-  // `SanitizeFn` is a pure function — both are safe to share.
+  const apiAxisOn = egress.isAllowed("ai-visibility");
+  const scrapeAxisOn = egress.isAllowed("ai-visibility-scrape");
+  if (!apiAxisOn && !scrapeAxisOn) return undefined; // both axes off => offline fallback
+
+  // Shared across every arm (Sprint 4, extended Sprint 10): the verifier
+  // self-gates `site-crawl` on every `verify()` call and holds no per-arm
+  // state; the sanitizer's `SanitizeFn` is a pure function — both are safe
+  // to share across API arms (the scrape arm builds its OWN sanitizer from
+  // the loaded damcrawler module, not this one — see `ScrapeArmEngineProvider`).
   const verifier = new DamcrawlerCitationVerifier(egress);
   const sanitizer = new ContentSanitizer(defaultGroundedTextSanitizeFn);
 
   const arms: AiVisibilityProvider[] = [];
-  for (const engineCfg of cfg.engines) {
-    const client = deps.makeClient(engineCfg.engine);
-    if (!client) continue; // no key/credential for this engine => skip (viability check)
+
+  if (apiAxisOn) {
+    for (const engineCfg of cfg.engines) {
+      const client = deps.makeClient(engineCfg.engine);
+      if (!client) continue; // no key/credential for this engine => skip (viability check)
+      arms.push(
+        new ApiSpineEngineProvider(
+          client,
+          deps.extractor,
+          cfg.samplesPerPrompt,
+          engineCfg.perCallUsd,
+          verifier,
+          sanitizer,
+        ),
+      );
+    }
+  }
+
+  if (scrapeAxisOn && deps.scrapeThrottle && cfg.scrape?.engines.includes("chatgpt-ui" satisfies ScrapeEngine)) {
+    const scrapeCfg = cfg.scrape;
     arms.push(
-      new ApiSpineEngineProvider(
-        client,
+      new ScrapeArmEngineProvider(
+        egress,
+        "chatgpt-ui",
+        new ChatgptUiScrapeParser(),
         deps.extractor,
-        cfg.samplesPerPrompt,
-        engineCfg.perCallUsd,
         verifier,
-        sanitizer,
+        deps.scrapeThrottle,
+        cfg.samplesPerPrompt,
+        scrapeCfg.authSession,
+        scrapeCfg.proxyUsdPerScrape,
+        scrapeCfg.proxy,
       ),
     );
   }
 
-  return arms.length > 0 ? new AiVisibilityMultiplexer(arms) : undefined; // no-key-safe
+  return arms.length > 0 ? new AiVisibilityMultiplexer(arms) : undefined; // no-key-safe / no-throttle-safe
 }

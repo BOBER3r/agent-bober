@@ -762,6 +762,38 @@ export const SeoConfigSchema = z.object({
           model: z.string().optional(),
         })
         .optional(),
+      /**
+       * Gated damcrawler UI-scrape arm configuration (in-house-ai-
+       * visibility, Sprint 9/10). OPTIONAL with NO outer default — mirrors
+       * `serp`/`judge` above — a config that omits `scrape` entirely stays
+       * byte-identical (`SeoConfigSchema.parse({ aiVisibility: {} })` leaks
+       * only `samplesPerPrompt`/`engines`). Only the inner fields carry
+       * `.default(...)`. Gated separately by the `ai-visibility-scrape`
+       * egress axis (`../seo/egress.js`) — this object being present does
+       * NOT itself enable scraping. `authSession`/`proxy` are operator-
+       * supplied (nonGoal: no auth harvesting, no proxy sourcing); the rate/
+       * proxy-budget caps are consumed by a follow-up sprint's
+       * `ScrapeThrottle` runner wiring (Sprint 9 built the throttle itself
+       * in isolation; Sprint 10 composes the arm behind an injected dep).
+       */
+      scrape: z
+        .object({
+          /** Which scrape-arm engines to compose. This sprint composes ONLY "chatgpt-ui"; "perplexity-ui" is a valid config value with no live parser yet (Sprint 11 nonGoal). Default []. */
+          engines: z.array(z.enum(["chatgpt-ui", "perplexity-ui"])).default([]),
+          /** Operator-supplied auth session (storageState path / profile name / cookie blob) passed opaquely to damcrawler's scrape options. */
+          authSession: z.string().optional(),
+          /** Operator-supplied proxy passed opaquely to damcrawler's scrape options. */
+          proxy: z.string().optional(),
+          /** Fixed USD cost booked to the ScrapeThrottle proxy ledger per successful scrape. Default 0. */
+          proxyUsdPerScrape: z.number().nonnegative().default(0),
+          /** ScrapeThrottle rate-window cap: max acquire() grants per engine per window. Default 10. */
+          maxPerWindow: z.number().int().positive().default(10),
+          /** ScrapeThrottle rate-window length in milliseconds. Default 60000 (1 minute). */
+          windowMs: z.number().int().positive().default(60_000),
+          /** ScrapeThrottle cumulative proxy-USD cap per engine. Default 0 (no proxy spend permitted until explicitly raised). */
+          maxProxyUsd: z.number().nonnegative().default(0),
+        })
+        .optional(),
     })
     .optional(),
 });
