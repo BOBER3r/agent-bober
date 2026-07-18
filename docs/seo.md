@@ -366,6 +366,62 @@ plain **sum** of all three arms' already-N-baked prices. (Worked example: three 
 `perCallUsd` `0.02`/`0.01`/`0.03` sum to `0.24`; drop the unkeyed Perplexity arm and the
 remaining two sum to `0.12`.)
 
+#### Optional LLM-as-judge fuzzy-mention path (Sprint 8)
+
+The deterministic `MentionCitationExtractor` (Sprint 2) decides mention by pure string/host
+matching, so a **paraphrased** reference ("their bullseye logo" for Target) reads as
+*unmentioned*. As of Sprint 8 an **optional, injected LLM-as-judge second pass** can catch
+those fuzzy mentions: a new **`LlmJudgeMentionCitationExtractor`**
+(`src/seo/sources/mention-citation-extractor.ts`) that **composes** the deterministic
+extractor rather than replacing it.
+
+`extract()` on the judge variant is **async** and runs the deterministic pass first:
+
+- If the deterministic pass already found a mention, it is returned **verbatim** — **no LLM
+  call** (cost control: the judge only ever runs on a deterministic *miss*).
+- On a deterministic miss over a **non-empty** answer, the answer text is **sanitized**
+  (`ContentSanitizer`) *before* the judge prompt is built, and a **single bounded, Zod-parsed**
+  judge turn — the injected provider-agnostic `LLMClient.chat({ jsonObjectMode: true })` (no new
+  provider — a nonGoal) — decides whether the answer fuzzily/paraphrasedly mentions the target.
+  The verdict shape is locked to **`JudgeVerdictSchema`** `{ mentioned: boolean, rank?: positive
+  int }`, parsed by a **never-throws 3-tier `parseJudgeVerdict`** (direct JSON → fenced
+  ```` ```json ```` block → first `{…}` span → `safeParse`, mirroring the medical
+  `validateGroundingVerdict` idiom).
+
+Three properties are **load-bearing**:
+
+- **Fail-safe, never fail-open** — a thrown `llm.chat` transport error, an unparseable or
+  schema-invalid verdict, an empty/whitespace answer, or a sanitizer that drops the text to
+  `""` all short-circuit or fall back to the **deterministic result verbatim**. The judge
+  **never** turns an empty/malformed answer into `mentioned:true`.
+- **Sanitize-before-judge** — the judge sees only already-sanitized answer text, never raw
+  scraped/answer content (a defense-in-depth re-sanitize at this boundary).
+- **Judge overrides mention only** — it applies the verdict's `mentioned`/`rank`
+  (`rank` **omitted**, never `undefined`, when absent); `citationPresent`/`sourceUrls` always
+  come from the deterministic pass. The judge is **not** used for citation-URL verification
+  (that stays `CitationVerifier`'s job).
+
+The judge is gated by a new optional **`config.seo.aiVisibility.judge`** object
+(`src/config/schema.ts`) — `{ enabled: boolean (default false), model?: string }` with **no
+outer default**: omit `judge` and `SeoConfigSchema.parse({ aiVisibility: {} })` is
+byte-identical (leaks only `samplesPerPrompt`/`engines`), and the judge is off even when the
+object is present but `enabled` is omitted. The `MentionCitationExtractor.extract()` port
+return type widens to `SampleObservation | Promise<SampleObservation>` so both the sync
+deterministic and async judge variants satisfy it (this forces a single `await` at
+`api-spine-provider.ts:96`; `probe()` was already async). Deterministic-only extraction stays
+**byte-identical** when the judge is off or no `llm` is injected — the judge is opt-in and
+deterministic-by-default (making it the default is a nonGoal).
+
+> **KNOWN LIMITATION — the flag is currently INERT.** `LlmJudgeMentionCitationExtractor` is
+> exported and unit-tested but **not yet wired into the production factory**:
+> `resolveAiVisibilityProvider` / `runner.ts` still construct the plain
+> `DeterministicMentionCitationExtractor` with no `llm`. **Setting
+> `config.seo.aiVisibility.judge.enabled: true` today produces no behavior change and no
+> warning** — nothing reads the flag to build the judge extractor. This is an in-contract
+> deferral (the contract scoped Sprint 8 to the extractor + config + build, excluding the
+> factory); **the wiring is planned for Sprint 11** (`resolveAiVisibilityProvider` reading
+> `judge.enabled`/`judge.model`). Until then, treat `judge` as a reserved-but-inert config key.
+
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
@@ -472,7 +528,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 |---|---|---|---|
 | `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl", "ai-visibility-scrape" }` (optional) | unset | The five live-data axes above (`ai-visibility` routes to the live in-house grounded-API spine when a configured engine is keyed, else the offline arm; `ai-visibility-scrape` is axis-only until Sprint 10; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
 | `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — and **selection is router-wired as of Sprint 9** (`resolveSerpProvider` in `selectSource`). Omitting `serp` stays byte-identical. |
-| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []) }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). All three engines are live: `anthropic`/`openai` need `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, `perplexity` needs `PERPLEXITY_API_KEY` (Sprint 7). |
+| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []), judge?: { enabled: boolean (default false), model?: string } }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). All three engines are live: `anthropic`/`openai` need `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, `perplexity` needs `PERPLEXITY_API_KEY` (Sprint 7). `judge` (Sprint 8, optional, no outer default) gates the optional LLM-as-judge fuzzy-mention pass — **but is currently INERT**: it is not yet read by the production factory, so `judge.enabled:true` changes nothing until the wiring lands (planned Sprint 11). |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -494,7 +550,8 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
     "samplesPerPrompt": 5,              // Grounded-search samples per prompt per engine (N). Default 5.
     "engines": [                        // Default []. Empty/absent list or an unkeyed engine => offline fallback (no-key-safe).
       { "engine": "anthropic", "perCallUsd": 0.02 } // engine: anthropic|openai|perplexity (all live). perCallUsd default 0. Needs ANTHROPIC_API_KEY / OPENAI_API_KEY / PERPLEXITY_API_KEY respectively.
-    ]
+    ],
+    "judge": { "enabled": false }       // Optional, no outer default (Sprint 8). Gates the LLM-as-judge fuzzy-mention pass. model? optional. CURRENTLY INERT — not yet read by the production factory (wiring planned Sprint 11), so enabled:true changes nothing today.
   },
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
   "budget": { "maxUsd": 5 },          // Per-run USD ceiling for PAYG DataForSEO calls. Absent = uncapped.
