@@ -422,6 +422,62 @@ deterministic-by-default (making it the default is a nonGoal).
 > factory); **the wiring is planned for Sprint 11** (`resolveAiVisibilityProvider` reading
 > `judge.enabled`/`judge.model`). Until then, treat `judge` as a reserved-but-inert config key.
 
+#### Scrape-arm throttle — `ScrapeThrottle` (in-house AI-visibility Sprint 9)
+
+The gated scrape arm (the `ai-visibility-scrape` axis, provider lands Sprint 10) meters a
+**different** cost than the grounded-API spine: **proxy USD** plus a **per-engine rate window**
+that keeps a stealth scraper polite. As of `spec-20260718-in-house-ai-visibility` Sprint 9 the
+enforcement primitive for both exists — **`ScrapeThrottle`** (`src/seo/scrape-throttle.ts`) — and
+it deliberately uses a **SEPARATE** ledger from the `SeoQuotaGovernor`. This is the arch's
+**two-independent-ledgers cost model**:
+
+- The scrape arm books **`$0`** to the `SeoQuotaGovernor` (whose USD ceiling gates only the
+  grounded-API spine); its **real proxy cost** is tracked in `ScrapeThrottle`'s own filesystem
+  ledger at **`.bober/seo/scrape-throttle-ledger.json`** — a **distinct path** from the governor's
+  `.bober/seo/quota-ledger.json`.
+- The two ledgers are **independently capped** and **never cross-reconciled** (a deliberate
+  nonGoal). Independence is verified in **both directions**: `$50` of proxy spend leaves a
+  co-located `governor.spentUsd()` at `0` and never creates the governor ledger file, and a
+  corrupt *governor* ledger does not block a throttle `acquire` on its own path.
+
+`ScrapeThrottle` copies the governor's proven concurrency discipline rather than reinventing it:
+the **path-generic** `withLedgerLock` per-path mutex reused from `quota-ledger.ts` (so this
+ledger gets its **own** serialization chain and cannot interfere with the governor's),
+**read-fresh-inside-the-lock**, **atomic temp-file + rename** writes, and **fail-closed-on-corrupt**
+— but imports **nothing** from `quota-governor.ts` and keeps its own per-engine
+`{ windowStart, count, proxyUsdSpent }` shape.
+
+Its two methods mirror the governor's `admit()`/`record()` pair:
+
+- **`acquire(engine)`** → `{ proceed: true } | { proceed: false; reason: "rate-window" |
+  "proxy-budget" }` — **decides and consumes** a rate slot in one read-modify-write under the
+  mutex. It grants within the window and proxy budget, denies `"proxy-budget"` once cumulative
+  `proxyUsdSpent >= maxProxyUsd`, and denies `"rate-window"` once `count + 1 > maxPerWindow`
+  (**proxy-budget is checked before the rate window**). It writes the ledger **only on the
+  granting branch** — a refusal has **no side effect** (mirrors `SeoQuotaGovernor.admit()`'s
+  no-write-on-refuse). A fixed window resets (`windowStart`/`count`) once
+  `now - windowStart >= windowMs`. The decision discriminant is **`proceed`**, not `allowed`.
+- **`recordProxyCost(engine, usd)`** — the governor's `record()` twin: accrues completed proxy
+  spend under the same mutex + read-fresh + atomic write, so **concurrent calls sharing the
+  ledger never lose an update** (proven exact at 100/100, single- and dual-instance). It
+  **guards NaN/negative/zero** (a bad value can never corrupt or reduce the total) and **heals a
+  corrupt ledger back to `{}`** before accruing.
+
+**Fail-closed asymmetry is intentional.** A corrupt/unreadable ledger makes `acquire` deny
+`"proxy-budget"` **without writing** (mirroring the governor's Infinity-on-corrupt refuse), while
+`recordProxyCost` *heals* the corruption — corruption blocks the gate, not the accrual. A
+**missing** ledger (first run / offline) is a fresh `{}`, i.e. **allow**, and is explicitly **not**
+treated as corrupt. The clock is **injected** (`() => ISO string`, mirroring
+`DamcrawlerCrawlEngine.now`), never `Date.now()` for the window, so rate-window boundaries are
+tested deterministically; caps come from the constructor via `ScrapeThrottleLimits
+{ maxPerWindow, windowMs, maxProxyUsd }`.
+
+> **Delivered in isolation.** `ScrapeThrottle` is the enforcement primitive only — **no scrape
+> provider constructs or calls it yet**, it adds **no config-schema field** (caps are
+> constructor-injected), and the `ai-visibility-scrape` axis still composes no provider. **The
+> scrape arm wires this in during Sprint 10.** The public API (`acquire`/`recordProxyCost`,
+> `ThrottleDecision.proceed`) was frozen this sprint so that wiring is a pure composition step.
+
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
