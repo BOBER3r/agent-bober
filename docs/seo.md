@@ -172,18 +172,19 @@ byte-identical, mirroring the `serp` idiom):
   engine (the *N* in the ADR-3 N-baked cost formula).
 - `engines` (array, default `[]`) — each entry `{ engine: "anthropic" | "openai" |
   "perplexity"; perCallUsd: number (default 0) }`. An empty/absent list ⇒
-  `resolveAiVisibilityProvider` returns `undefined` ⇒ offline fallback. `"perplexity"` is
-  a valid enum value but has **no live mapper yet** (Sprint 7) — configuring it yields
-  zero rows from that arm, not an error.
+  `resolveAiVisibilityProvider` returns `undefined` ⇒ offline fallback. All three engines
+  are **live** as of Sprint 7 (`"perplexity"` was type-only through Sprint 6 — see
+  **Perplexity Sonar** below).
 
 The production `makeClient` (`defaultAiVisibilityDeps`, `src/seo/runner.ts`) reads each
 engine's key from its documented env var (`anthropic` → `ANTHROPIC_API_KEY`, `openai` →
-`OPENAI_API_KEY`) and returns `undefined` when the key is absent, so a **no-key run never
-opens a socket** and falls back to `LocalExportSource`. This makes the axis both
-**byte-identical-when-off** and **no-key-safe**: turning `ai-visibility` on without a
-configured, keyed engine changes nothing. The per-engine model is currently hardcoded
-(`anthropic` → the default SEO model, `openai` → `gpt-4.1`) since the config carries no
-per-engine `model` field yet.
+`OPENAI_API_KEY`, `perplexity` → `PERPLEXITY_API_KEY`) and returns `undefined` when the key
+is absent, so a **no-key run never opens a socket** and falls back to `LocalExportSource`.
+This makes the axis both **byte-identical-when-off** and **no-key-safe**: turning
+`ai-visibility` on without a configured, keyed engine changes nothing. The `anthropic`/`openai`
+per-engine model is hardcoded (`anthropic` → the default SEO model, `openai` → `gpt-4.1`) since
+the config carries no per-engine `model` field yet; `perplexity` carries its own default
+(`"sonar"`) on the client itself and is constructed via a separate branch (below).
 
 #### Citation verification + sanitization boundary (Sprint 4)
 
@@ -320,6 +321,51 @@ list are resolved from the `seo.aiVisibility` config at provider construction, n
 file. There is **no CLI to author the file** and **no history/time-series store** (both
 nonGoals) — it is a stateless read of a committed flat file.
 
+#### Perplexity Sonar — third grounded engine (Sprint 7)
+
+Through Sprint 6 the spine had two live arms (`anthropic`, `openai`), both
+`LiveGroundedSearchClient`s wrapping an injected `LLMClient.chat` turn; `"perplexity"` was a
+valid `GroundedEngine` enum value but **type-only** — no mapper, no client. As of Sprint 7 it
+is a real third arm, built as **`PerplexitySonarClient`** (`src/providers/grounded-search.ts`,
+the second `GroundedSearchClient` implementation in that file).
+
+Perplexity Sonar is a **direct HTTP `chat/completions` API** (`https://api.perplexity.ai`),
+**not** reachable through `LLMClient.chat` + a `web_search` `ToolDef`. So `PerplexitySonarClient`
+— unlike `LiveGroundedSearchClient` — does **not** wrap an `LLMClient`: it speaks HTTP itself
+through an **injectable fetch-like transport** (the file's only `fetch` reference, behind a
+default global-`fetch` wrapper) and reads its key from `PERPLEXITY_API_KEY` via an injected
+`getApiKey` (env, never hardcoded — mirroring the DataForSEO credential-injection idiom). The
+default model is `"sonar"`. Both the transport and the key-reader default to real
+implementations, so production wiring needs no arguments while tests stub both and never open a
+socket.
+
+- **Citation mapping** (`mapSonarCitations`, local to `grounded-search.ts`) normalizes a Sonar
+  response into `GroundedCitation[]`, using the same `title ?? url` fallback as the
+  Anthropic/OpenAI mappers: it **prefers `search_results[{ title, url }]`** (the richest shape,
+  carrying a title), **falls back to the plain `citations[]` URL array** (URL doubles as title)
+  when `search_results` is absent/empty, and returns **`[]` when both are absent** (ungrounded).
+- **Never throws** (the abstain contract): a missing key, an `!res.ok` response, a network
+  error, or malformed JSON all degrade to `{ answerText: "", citations: [] }`; the adapter
+  abstains upstream. `costUsd` is intentionally **omitted** (cost is N-baked via the engine's
+  `perCallUsd`, per the multiplexer's cost model above).
+- **No SDK/type leak.** Every Sonar-specific type (the response/transport shapes) stays **local
+  and unexported** to `grounded-search.ts`; only `PerplexitySonarClient` — which implements the
+  provider-agnostic `GroundedSearchClient` — is exported. No Perplexity type crosses
+  `src/providers/`.
+
+**Composition is unchanged.** Perplexity is wired in via an **early branch** in
+`defaultMakeClient` (`src/seo/runner.ts`): because Sonar is BYOK HTTP and not an `LLMClient`
+provider, the branch constructs `new PerplexitySonarClient()` **directly**, bypassing
+`createClient` (which has no `perplexity` entry and would otherwise return `undefined`). It is
+**no-key-safe** — with `PERPLEXITY_API_KEY` unset the branch returns `undefined` and the arm is
+simply skipped. From there the **generic** `resolveAiVisibilityProvider` /
+`AiVisibilityMultiplexer` composes it as a third `ApiSpineEngineProvider` arm with **no logic
+change**: three configured+keyed engines fan out in parallel and concatenate their rows (never
+merged; each `AiVisibilityRow` keeps its own `provider` label), and `estCostUsdPerPrompt` is the
+plain **sum** of all three arms' already-N-baked prices. (Worked example: three engines at
+`perCallUsd` `0.02`/`0.01`/`0.03` sum to `0.24`; drop the unkeyed Perplexity arm and the
+remaining two sum to `0.12`.)
+
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
@@ -426,7 +472,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 |---|---|---|---|
 | `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl", "ai-visibility-scrape" }` (optional) | unset | The five live-data axes above (`ai-visibility` routes to the live in-house grounded-API spine when a configured engine is keyed, else the offline arm; `ai-visibility-scrape` is axis-only until Sprint 10; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
 | `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — and **selection is router-wired as of Sprint 9** (`resolveSerpProvider` in `selectSource`). Omitting `serp` stays byte-identical. |
-| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []) }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). `"perplexity"` has no live mapper yet (Sprint 7). |
+| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []) }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). All three engines are live: `anthropic`/`openai` need `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, `perplexity` needs `PERPLEXITY_API_KEY` (Sprint 7). |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -447,7 +493,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
   "aiVisibility": {                     // Optional, no outer default. In-house grounded-API spine for the ai-visibility axis (Sprint 3). Omit => byte-identical.
     "samplesPerPrompt": 5,              // Grounded-search samples per prompt per engine (N). Default 5.
     "engines": [                        // Default []. Empty/absent list or an unkeyed engine => offline fallback (no-key-safe).
-      { "engine": "anthropic", "perCallUsd": 0.02 } // engine: anthropic|openai|perplexity (perplexity has no live mapper yet, Sprint 7). perCallUsd default 0. Needs ANTHROPIC_API_KEY / OPENAI_API_KEY.
+      { "engine": "anthropic", "perCallUsd": 0.02 } // engine: anthropic|openai|perplexity (all live). perCallUsd default 0. Needs ANTHROPIC_API_KEY / OPENAI_API_KEY / PERPLEXITY_API_KEY respectively.
     ]
   },
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
@@ -633,9 +679,10 @@ It depends on the axis:
 - `serp-provider`: set `seo.egress["serp-provider"]: true` and provide
   `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD`.
 - `ai-visibility`: set `seo.egress["ai-visibility"]: true`, add at least one engine to
-  `seo.aiVisibility.engines` (`anthropic` and/or `openai`), and provide that engine's API
-  key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`). The axis then routes to the in-house
-  grounded-API spine (Sprint 3). **No-key-safe:** with the axis on but no configured/keyed
+  `seo.aiVisibility.engines` (`anthropic`, `openai`, and/or `perplexity`), and provide that
+  engine's API key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `PERPLEXITY_API_KEY`). The axis
+  then routes to the in-house grounded-API spine (Sprint 3; `perplexity` added Sprint 7).
+  **No-key-safe:** with the axis on but no configured/keyed
   engine, it falls back to the offline `LocalExportSource` arm (`ai-visibility.csv`/`.json`)
   rather than a live provider. `ai-visibility-scrape` is a separate, still-inert axis (no
   provider until Sprint 10).

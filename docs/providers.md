@@ -130,18 +130,38 @@ with `?? []`, so `citations` is simply `[]`.
 
 | Engine        | `search` behavior                                                                |
 | ------------- | -------------------------------------------------------------------------------- |
-| `anthropic`   | maps `web_search_result_location` citations → `{ url, title }`                    |
-| `openai`      | maps `url_citation` annotations → `{ url, title }`                                |
-| `perplexity`  | **type-only** — no mapper yet (a later sprint); `search` returns `citations: []` without throwing |
+| `anthropic`   | `LiveGroundedSearchClient` maps `web_search_result_location` citations → `{ url, title }` |
+| `openai`      | `LiveGroundedSearchClient` maps `url_citation` annotations → `{ url, title }`     |
+| `perplexity`  | `PerplexitySonarClient` (Sprint 7) — a **real client**, not type-only; see below |
 
-No `@anthropic-ai/sdk` or `openai` type crosses this file's boundary — it imports **only** from
-`./types.js`, and `GroundedAnswer`/`GroundedCitation`/`GroundedEngine` are plain provider-agnostic
-types (upholding the no-SDK-leak principle). The client is **not** exported from `src/index.ts`
-(import directly from `src/providers/grounded-search.js`), and it is **not seam-wired** into any
-consumer yet — it is the ToS-clean "API spine" primitive for the in-house AI-visibility hybrid
-(arch-20260717-in-house-oss-ai-visibility), which a later sprint composes into the SEO suite's
-`AiVisibilityProvider` seam. See
-[docs/sprints](./sprints/sprint-spec-20260718-in-house-ai-visibility-1.md) for the sprint record.
+**`PerplexitySonarClient` (Sprint 7).** The third `GroundedSearchClient` and the second
+implementation in this file. Perplexity Sonar is a **direct HTTP `chat/completions` API**
+(`https://api.perplexity.ai/chat/completions`, default model `"sonar"`), **not** reachable
+through `LLMClient.chat` — so this class, unlike `LiveGroundedSearchClient`, does **not** wrap an
+`LLMClient`. It speaks HTTP itself through a constructor-**injected fetch-like transport** (the
+file's only `fetch` reference, behind a default global-`fetch` wrapper) and reads its key from
+`PERPLEXITY_API_KEY` via an injected `getApiKey` (env, never hardcoded — mirroring the DataForSEO
+credential-injection idiom); all three constructor params default to real implementations, so
+production needs no arguments while tests stub both seams and open no socket. Its `search` maps
+the Sonar payload into `GroundedAnswer.citations`, preferring `search_results[{ title, url }]`
+(`title ?? url`), falling back to the plain `citations[]` URL array, and returning `[]` when both
+are absent. Like `LiveGroundedSearchClient` it **never throws** — a missing key, an `!res.ok`
+response, a network error, or malformed JSON all degrade to `{ answerText: "", citations: [] }`;
+`costUsd` is intentionally omitted (cost is N-baked upstream by the SEO spine). Every
+Perplexity-specific type (the Sonar response/transport shapes) stays **local and unexported** to
+this file; only `PerplexitySonarClient` is exported.
+
+No `@anthropic-ai/sdk`, `openai`, or Perplexity SDK/type crosses this file's boundary — it imports
+**only** from `./types.js`, and `GroundedAnswer`/`GroundedCitation`/`GroundedEngine` are plain
+provider-agnostic types (upholding the no-SDK-leak principle). The clients are **not** exported
+from `src/index.ts` (import directly from `src/providers/grounded-search.js`) — they are the
+ToS-clean "API spine" primitives for the in-house AI-visibility hybrid
+(arch-20260717-in-house-oss-ai-visibility). `LiveGroundedSearchClient` (Anthropic/OpenAI) and
+`PerplexitySonarClient` are composed into the SEO suite's `AiVisibilityProvider` seam by
+`resolveAiVisibilityProvider` (Sprint 3; Perplexity added Sprint 7 — see
+[docs/seo.md](./seo.md#perplexity-sonar--third-grounded-engine-sprint-7)). See
+[docs/sprints](./sprints/sprint-spec-20260718-in-house-ai-visibility-1.md) for the Sprint-1 record
+and [Sprint 7](./sprints/sprint-spec-20260718-in-house-ai-visibility-7.md) for the Perplexity arm.
 
 ### Per-role reasoning effort & USD budget ceiling
 
