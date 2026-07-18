@@ -35,9 +35,11 @@
  * prompt-injection role/instruction markers the grounding LLM could echo
  * back from a page it read during its own web search.
  *
- * No scrape arm, scorer, tracked-prompt store, Perplexity mapper, or LLM
- * judge land in this module — those are later sprints (Sprint 7, 8, 10
- * nonGoals).
+ * No scrape arm, scorer, or LLM judge land in this module — those are later
+ * sprints (Sprint 8, 10 nonGoals). The Perplexity engine (Sprint 7,
+ * `PerplexitySonarClient`, `../providers/grounded-search.js`) composes
+ * automatically through the loop below once `deps.makeClient("perplexity")`
+ * returns a client — no logic change here was needed.
  */
 import type { BoberConfig } from "../config/schema.js";
 import type { SeoEgressGuard } from "./egress.js";

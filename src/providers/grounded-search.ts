@@ -20,6 +20,13 @@
  * yet — that population is deferred to a later sprint (see the field's doc
  * comment in `types.ts`). This client already reads and normalizes the
  * field; it just has nothing to read from a live call today.
+ *
+ * Sprint 7 adds `PerplexitySonarClient`, a SECOND `GroundedSearchClient`
+ * implementation in this same file. Perplexity Sonar is a direct HTTP
+ * `chat/completions` API, not reachable through `LLMClient.chat` — that
+ * class does not wrap an `LLMClient` and introduces the file's only
+ * `fetch` reference, behind an injectable transport. All Perplexity-
+ * specific types stay local/unexported to this file (sc-7-4).
  */
 import type { ChatResponse, LLMClient, ToolDef } from "./types.js";
 
@@ -142,4 +149,138 @@ function buildSystemPrompt(locale?: string): string {
     "current, factual sources before answering, and cite every source you " +
     `rely on.${localeClause}`
   );
+}
+
+// ── PerplexitySonarClient (Sprint 7, sc-7-1..sc-7-4) ─────────────────
+
+/**
+ * Perplexity Sonar is a DIRECT HTTP `chat/completions` API — it is NOT
+ * reachable through `LLMClient.chat` + a `web_search` `ToolDef`, so this
+ * class (unlike `LiveGroundedSearchClient`) does not wrap an `LLMClient` at
+ * all. Endpoint + default model per the Sonar docs; kept as local `const`s
+ * so no magic string is repeated.
+ */
+const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
+const PERPLEXITY_DEFAULT_MODEL = "sonar";
+
+/**
+ * Duck-typed response — deliberately NOT the global `Response` type, so
+ * tests can construct fakes without touching the real fetch API. Mirrors
+ * `HttpResponse` (`seo/adapters/http.ts:23-27`) in SHAPE only — defined
+ * LOCALLY here (unexported) because `src/providers/` must not import from
+ * `src/seo/` (sc-7-4 / sprint briefing Pattern C).
+ */
+interface PerplexityTransportResponse {
+  ok: boolean;
+  status: number;
+  json(): Promise<unknown>;
+}
+
+/**
+ * Fetch-like injectable transport — the SOLE seam through which
+ * `PerplexitySonarClient` reaches the network. Defaults to a thin global-
+ * `fetch` wrapper (`defaultPerplexityTransport` below); tests inject a fake
+ * so no socket ever opens (sc-7-3).
+ */
+type PerplexityTransport = (
+  url: string,
+  init: { method: string; headers: Record<string, string>; body: string },
+) => Promise<PerplexityTransportResponse>;
+
+/** Default transport = global fetch. The sole global-fetch reference in this file. */
+const defaultPerplexityTransport: PerplexityTransport = async (url, init) => {
+  const res = await fetch(url, { method: init.method, headers: init.headers, body: init.body });
+  return { ok: res.ok, status: res.status, json: () => res.json() };
+};
+
+/** One `search_results[]` entry — the richest Sonar citation shape (carries a title). */
+interface SonarSearchResult {
+  title?: string;
+  url?: string;
+}
+
+/**
+ * Raw Perplexity `chat/completions` Sonar response shape. Kept LOCAL and
+ * UNEXPORTED so no Perplexity type ever crosses this file's boundary
+ * (sc-7-4) — only `PerplexitySonarClient` (which implements the
+ * provider-agnostic `GroundedSearchClient`) is exported.
+ */
+interface SonarChatCompletionResponse {
+  choices?: { message?: { content?: string } }[];
+  citations?: string[];
+  search_results?: SonarSearchResult[];
+}
+
+/**
+ * Normalize a Sonar response's citations into `GroundedCitation[]`. Prefers
+ * `search_results` (richest — carries a title, same `title ?? url` fallback
+ * as `mapAnthropicCitations`/`mapOpenAiCitations` above); falls back to the
+ * plain `citations` URL array (URL doubles as title) when `search_results`
+ * is absent/empty; `[]` when both are absent/empty (ungrounded).
+ */
+function mapSonarCitations(data: SonarChatCompletionResponse): GroundedCitation[] {
+  const withUrls = (data.search_results ?? []).filter(
+    (r): r is SonarSearchResult & { url: string } => typeof r.url === "string",
+  );
+  if (withUrls.length > 0) {
+    return withUrls.map((r) => ({ url: r.url, title: r.title ?? r.url }));
+  }
+  return (data.citations ?? []).map((url) => ({ url, title: url }));
+}
+
+/**
+ * `PerplexitySonarClient` — the third `GroundedSearchClient` arm (sc-7-1..
+ * sc-7-4). Mirrors the DataForSEO credential-injection idiom
+ * (`dataforseo-adapter.ts:162-178`): the API key is read from
+ * `PERPLEXITY_API_KEY` via an injected `getApiKey` (never hardcoded), and
+ * the network call goes through an injected `transport` — both default to
+ * real implementations so production wiring needs no arguments, while tests
+ * stub both and never open a real socket (sc-7-3).
+ */
+export class PerplexitySonarClient implements GroundedSearchClient {
+  readonly engine: GroundedEngine = "perplexity";
+
+  constructor(
+    private readonly transport: PerplexityTransport = defaultPerplexityTransport,
+    private readonly getApiKey: () => string | undefined = () => process.env["PERPLEXITY_API_KEY"],
+    private readonly model: string = PERPLEXITY_DEFAULT_MODEL,
+  ) {}
+
+  /**
+   * Runs one Sonar-grounded turn. Never throws (sc-7-1): a missing key, an
+   * `!res.ok` response, a network error, or malformed JSON all degrade to
+   * `{ answerText: "", citations: [] }` — there is no `DataOutcome`/abstain
+   * at this layer (that happens upstream in `ApiSpineEngineProvider.probe`,
+   * api-spine-provider.ts:80-84). `costUsd` is intentionally OMITTED
+   * (Pattern D) — Sonar cost is already N-baked via `perCallUsd`.
+   */
+  async search(prompt: string, locale?: string): Promise<GroundedAnswer> {
+    try {
+      const apiKey = this.getApiKey();
+      if (!apiKey) return { answerText: "", citations: [] };
+
+      const localeClause = locale ? ` Answer as relevant to the "${locale}" locale.` : "";
+      const res = await this.transport(PERPLEXITY_API_URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            {
+              role: "system",
+              content: `Search the web and cite every source you rely on.${localeClause}`,
+            },
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+      if (!res.ok) return { answerText: "", citations: [] };
+
+      const data = (await res.json()) as SonarChatCompletionResponse;
+      const answerText = data.choices?.[0]?.message?.content ?? "";
+      return { answerText, citations: mapSonarCitations(data) };
+    } catch {
+      return { answerText: "", citations: [] };
+    }
+  }
 }

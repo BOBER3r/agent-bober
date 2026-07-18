@@ -223,6 +223,58 @@ describe("resolveAiVisibilityProvider — composes only viable arms; no-key-safe
     // anthropic 0.01*4=0.04, openai 0.02*4=0.08, sum=0.12 — never re-multiplied by N again.
     expect(provider?.estCostUsdPerPrompt).toBeCloseTo(0.12, 6);
   });
+
+  // ── sc-7-2/sc-7-4: Perplexity composes as the third engine, generically ──
+
+  it("composes all three arms (anthropic, openai, perplexity) when all three are keyed; estCostUsdPerPrompt sums all three N-baked prices", () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 4,
+          engines: [
+            { engine: "anthropic" as const, perCallUsd: 0.01 },
+            { engine: "openai" as const, perCallUsd: 0.02 },
+            { engine: "perplexity" as const, perCallUsd: 0.03 },
+          ],
+        },
+      },
+    } as BoberConfig;
+    const egressOn = new SeoEgressGuard(false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: (engine) => scriptedClient(engine, []),
+      extractor,
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressOn, deps);
+    expect(provider).toBeInstanceOf(AiVisibilityMultiplexer);
+    // anthropic 0.01*4=0.04, openai 0.02*4=0.08, perplexity 0.03*4=0.12, sum=0.24.
+    expect(provider?.estCostUsdPerPrompt).toBeCloseTo(0.24, 6);
+  });
+
+  it("omits the perplexity arm when it is configured but unkeyed (no-key-safe); the other two still compose", () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 4,
+          engines: [
+            { engine: "anthropic" as const, perCallUsd: 0.01 },
+            { engine: "openai" as const, perCallUsd: 0.02 },
+            { engine: "perplexity" as const, perCallUsd: 0.03 },
+          ],
+        },
+      },
+    } as BoberConfig;
+    const egressOn = new SeoEgressGuard(false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: (engine) => (engine === "perplexity" ? undefined : scriptedClient(engine, [])),
+      extractor,
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressOn, deps);
+    expect(provider).toBeInstanceOf(AiVisibilityMultiplexer);
+    // Only anthropic + openai compose: 0.01*4 + 0.02*4 = 0.12 (perplexity's 0.12 excluded).
+    expect(provider?.estCostUsdPerPrompt).toBeCloseTo(0.12, 6);
+  });
 });
 
 // ── sc-3-4: axis ON + fake key => real rows through the real AiVisibilityAdapter ──

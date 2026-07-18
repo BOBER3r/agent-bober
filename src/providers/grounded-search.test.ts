@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 
 import type { ChatParams, ChatResponse, LLMClient } from "./types.js";
-import { LiveGroundedSearchClient, type GroundedEngine } from "./grounded-search.js";
+import { LiveGroundedSearchClient, PerplexitySonarClient, type GroundedEngine } from "./grounded-search.js";
 
 // ── Scripted fake client ─────────────────────────────────────────────
 
@@ -185,5 +185,162 @@ describe("LiveGroundedSearchClient — engine identity", () => {
     const search = new LiveGroundedSearchClient("openai", client, "gpt-5");
 
     expect(search.engine).toBe("openai");
+  });
+});
+
+// ── PerplexitySonarClient (Sprint 7, sc-7-1..sc-7-4) ──────────────────
+//
+// A parallel fake TRANSPORT (not an `LLMClient`) — Perplexity Sonar is a
+// direct HTTP `chat/completions` API. `fakeTransport` never opens a real
+// socket; `calls` records every invocation so tests can assert the fake
+// (not global `fetch`) was actually used (sc-7-3).
+
+interface FakeTransportCall {
+  url: string;
+  init: { method: string; headers: Record<string, string>; body: string };
+}
+
+function fakeTransport(payload: unknown, ok = true, status = 200) {
+  const calls: FakeTransportCall[] = [];
+  const transport = async (
+    url: string,
+    init: { method: string; headers: Record<string, string>; body: string },
+  ) => {
+    calls.push({ url, init });
+    return { ok, status, json: async () => payload };
+  };
+  return { transport, calls };
+}
+
+describe("PerplexitySonarClient — engine identity (sc-7-1)", () => {
+  it("exposes engine as 'perplexity'", () => {
+    const { transport } = fakeTransport({});
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    expect(client.engine).toBe("perplexity");
+  });
+});
+
+describe("PerplexitySonarClient — citation mapping (sc-7-1)", () => {
+  it("prefers search_results[{title,url}] over citations[], mapping to {url, title}", async () => {
+    const { transport, calls } = fakeTransport({
+      choices: [{ message: { content: "Casino X is a trusted operator." } }],
+      citations: ["https://fallback.example.com"],
+      search_results: [
+        { title: "Casino X Review", url: "https://a.example.com/review" },
+        { title: "Casino X News", url: "https://b.example.com/news" },
+      ],
+    });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    const answer = await client.search("best casino");
+
+    expect(answer.answerText).toBe("Casino X is a trusted operator.");
+    expect(answer.citations).toEqual([
+      { url: "https://a.example.com/review", title: "Casino X Review" },
+      { url: "https://b.example.com/news", title: "Casino X News" },
+    ]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://api.perplexity.ai/chat/completions");
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(calls[0]?.init.headers["Authorization"]).toBe("Bearer test-key");
+  });
+
+  it("falls back to a URL-doubles-as-title mapping of citations[] when search_results is absent", async () => {
+    const { transport } = fakeTransport({
+      choices: [{ message: { content: "Casino X is a trusted operator." } }],
+      citations: ["https://fallback.example.com/a", "https://fallback.example.com/b"],
+    });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    const answer = await client.search("best casino");
+
+    expect(answer.citations).toEqual([
+      { url: "https://fallback.example.com/a", title: "https://fallback.example.com/a" },
+      { url: "https://fallback.example.com/b", title: "https://fallback.example.com/b" },
+    ]);
+  });
+
+  it("falls back to citations[] when search_results is present but empty", async () => {
+    const { transport } = fakeTransport({
+      choices: [{ message: { content: "text" } }],
+      search_results: [],
+      citations: ["https://only.example.com"],
+    });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    const answer = await client.search("q");
+
+    expect(answer.citations).toEqual([{ url: "https://only.example.com", title: "https://only.example.com" }]);
+  });
+
+  it("returns citations: [] when both search_results and citations are absent (ungrounded)", async () => {
+    const { transport } = fakeTransport({ choices: [{ message: { content: "no grounding available" } }] });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    const answer = await client.search("ungrounded question");
+
+    expect(answer).toEqual({ answerText: "no grounding available", citations: [] });
+  });
+});
+
+describe("PerplexitySonarClient — never throws (sc-7-1, sc-7-3)", () => {
+  it("degrades to an empty answer on an HTTP error response, without throwing", async () => {
+    const { transport } = fakeTransport({ error: "rate limited" }, false, 429);
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    await expect(client.search("q")).resolves.toEqual({ answerText: "", citations: [] });
+  });
+
+  it("degrades to an empty answer on malformed JSON, without throwing", async () => {
+    const transport = async () => ({
+      ok: true,
+      status: 200,
+      json: async (): Promise<unknown> => {
+        throw new Error("malformed JSON");
+      },
+    });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    await expect(client.search("q")).resolves.toEqual({ answerText: "", citations: [] });
+  });
+
+  it("degrades to an empty answer without invoking the transport when no API key is configured", async () => {
+    const { transport, calls } = fakeTransport({});
+    const client = new PerplexitySonarClient(transport, () => undefined);
+
+    const answer = await client.search("q");
+
+    expect(answer).toEqual({ answerText: "", citations: [] });
+    expect(calls).toHaveLength(0);
+  });
+
+  it("omits the costUsd key (never sets it to undefined)", async () => {
+    const { transport } = fakeTransport({
+      choices: [{ message: { content: "text" } }],
+      search_results: [{ title: "T", url: "https://example.com" }],
+    });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    const answer = await client.search("q");
+
+    expect("costUsd" in answer).toBe(false);
+  });
+});
+
+describe("PerplexitySonarClient — no real network (sc-7-3)", () => {
+  it("uses only the injected transport, never the real global fetch", async () => {
+    const { transport, calls } = fakeTransport({
+      choices: [{ message: { content: "ok" } }],
+      citations: ["https://example.com"],
+    });
+    const client = new PerplexitySonarClient(transport, () => "test-key");
+
+    await client.search("q", "en-GB");
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.init.headers["Content-Type"]).toBe("application/json");
+    expect(calls[0]?.init.body).toContain("en-GB");
+    expect(calls[0]?.init.body).toContain("\"q\"");
   });
 });

@@ -37,7 +37,7 @@ import { createClient } from "../providers/factory.js";
 import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
 import { ingestFinding } from "../hub/finding-store.js";
 import { logger } from "../utils/logger.js";
-import { LiveGroundedSearchClient } from "../providers/grounded-search.js";
+import { LiveGroundedSearchClient, PerplexitySonarClient } from "../providers/grounded-search.js";
 import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
 
 import type { SeoWorkflow, SeoReport, DataOutcome } from "./types.js";
@@ -143,8 +143,9 @@ function buildDefaultAnalyzer(): SeoAnalyzer {
  *        `config.seo.aiVisibility.engines[]` carries no `model` field this
  *        sprint). Promote to a per-engine config field if a project ever
  *        needs a different model than these defaults. "perplexity" has no
- *        entry: there is no `createClient` provider for it yet (Sprint 7
- *        nonGoal), so it is intentionally absent, not merely unset.
+ *        entry: it does NOT go through `createClient`/`LLMClient` at all
+ *        (Sprint 7) — `PerplexitySonarClient` reads its own model default,
+ *        so it is intentionally absent from this table, not merely unset.
  */
 const AI_VISIBILITY_DEFAULT_MODEL: Partial<Record<GroundedEngine, string>> = {
   anthropic: DEFAULT_SEO_MODEL,
@@ -159,13 +160,25 @@ const AI_VISIBILITY_KEY_ENV: Partial<Record<GroundedEngine, string>> = {
 
 /**
  * Production `AiVisibilityDeps.makeClient` — returns `undefined` (no-key-safe)
- * for any engine lacking its documented env-var key, or for "perplexity"
- * unconditionally (no live mapper this sprint, arch line 128/Sprint 7
- * nonGoal). Only when a key is present does it call `createClient`, so a
+ * for any engine lacking its documented env-var key. "perplexity" is handled
+ * by an EARLY, separate branch (Sprint 7): Perplexity Sonar is a direct HTTP
+ * `chat/completions` API, not an `LLMClient` provider, so it is constructed
+ * directly as a `PerplexitySonarClient` and MUST NOT fall through to the
+ * generic `createClient` path below (that path has no "perplexity" entry in
+ * either table above, so it would otherwise return `undefined` — this branch
+ * exists so a Perplexity-keyed engine composes a real arm instead). Only
+ * when a key is present does the generic path call `createClient`, so a
  * misconfigured/no-key run never throws the zero-network guard error that
  * `runner.test.ts:34-44` asserts on.
  */
 function defaultMakeClient(engine: GroundedEngine): GroundedSearchClient | undefined {
+  if (engine === "perplexity") {
+    // Sonar is BYOK HTTP, not routed through createClient — no-key-safe:
+    // absent PERPLEXITY_API_KEY => undefined, arm skipped (sc-7-2).
+    if (!process.env["PERPLEXITY_API_KEY"]) return undefined;
+    return new PerplexitySonarClient(); // defaults: env key + global-fetch transport + "sonar"
+  }
+
   const envVar = AI_VISIBILITY_KEY_ENV[engine];
   const model = AI_VISIBILITY_DEFAULT_MODEL[engine];
   if (!envVar || !model || !process.env[envVar]) return undefined;
