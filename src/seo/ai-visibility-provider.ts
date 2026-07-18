@@ -47,13 +47,17 @@ import type { AiVisibilityProvider } from "./sources/ai-visibility-adapter.js";
 import type { AiVisibilityRow } from "./data-source.js";
 import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
 import type { MentionCitationExtractor } from "./sources/mention-citation-extractor.js";
+import type { LLMClient } from "../providers/types.js";
 import type { ScrapeThrottle } from "./scrape-throttle.js";
-import type { ScrapeEngine } from "./sources/scrape-arm-provider.js";
+import type { ScrapeEngine, DamcrawlerScrapeLoader } from "./sources/scrape-arm-provider.js";
+import type { EngineScrapeParser } from "./sources/engine-scrape-parser-chatgpt.js";
 import { ApiSpineEngineProvider } from "./sources/api-spine-provider.js";
 import { DamcrawlerCitationVerifier } from "./sources/citation-verifier.js";
 import { ContentSanitizer } from "./content-sanitizer.js";
 import { ScrapeArmEngineProvider } from "./sources/scrape-arm-provider.js";
 import { ChatgptUiScrapeParser } from "./sources/engine-scrape-parser-chatgpt.js";
+import { PerplexityUiScrapeParser } from "./sources/engine-scrape-parser-perplexity.js";
+import { DeterministicMentionCitationExtractor, LlmJudgeMentionCitationExtractor } from "./sources/mention-citation-extractor.js";
 
 /**
  * Recognized prompt-injection role/instruction markers — fenced
@@ -96,20 +100,32 @@ export function defaultGroundedTextSanitizeFn(raw: string): { content: string; h
  * this factory — and every caller of it — stays network-free (sc-3-4).
  *
  * `scrapeThrottle` (Sprint 10) is OPTIONAL — `resolveAiVisibilityProvider`
- * (`../runner.ts:57-58,190-192,392-396` is the SOLE production caller,
- * `defaultAiVisibilityDeps()` builds only `{ makeClient, extractor }`)
- * composes the damcrawler UI-scrape arm ONLY when this dep is present AND
- * the `ai-visibility-scrape` axis is on AND `chatgpt-ui` is configured. A
- * `ScrapeThrottle` needs an absolute ledger path this factory has no
- * `projectRoot` to construct, so it must arrive already-built via this
- * seam — production wiring of a real throttle (`defaultAiVisibilityDeps`
- * constructing one from `config`/`projectRoot`) is a follow-up sprint's
- * work (runner.ts stays byte-identical this sprint, sc-10-5).
+ * composes the damcrawler UI-scrape arm(s) ONLY when this dep is present AND
+ * the `ai-visibility-scrape` axis is on AND a matching engine is configured.
+ * As of Sprint 11, `defaultAiVisibilityDeps` (`../runner.ts`) constructs a
+ * REAL `ScrapeThrottle` from `config`/`projectRoot` in production — this dep
+ * is no longer test-only (sc-11-2).
+ *
+ * `makeJudgeLlm` (Sprint 11, sc-11-3) is OPTIONAL — when present AND
+ * `config.seo.aiVisibility.judge.enabled` is true, `resolveAiVisibilityProvider`
+ * wraps each API arm's extractor in a `LlmJudgeMentionCitationExtractor`
+ * built from the returned `{ client, model }`. Returning `undefined` (e.g.
+ * no API key) keeps the plain `deps.extractor` in use — no-key-safe, mirrors
+ * `makeClient`'s viability-check idiom.
+ *
+ * `scrapeLoad` (Sprint 11) is OPTIONAL test injection for the scrape arm's
+ * `DamcrawlerScrapeLoader` seam — `undefined` in production lets each
+ * `ScrapeArmEngineProvider` fall back to its own real lazy `damcrawler`
+ * import (`./sources/scrape-arm-provider.ts`'s `defaultLoader`); tests
+ * inject a fake module so a scrape-composition test never needs the real
+ * dependency installed.
  */
 export interface AiVisibilityDeps {
   makeClient: (engine: GroundedEngine) => GroundedSearchClient | undefined;
   extractor: MentionCitationExtractor;
   scrapeThrottle?: ScrapeThrottle;
+  makeJudgeLlm?: () => { client: LLMClient; model: string } | undefined;
+  scrapeLoad?: DamcrawlerScrapeLoader;
 }
 
 /**
@@ -165,19 +181,32 @@ export class AiVisibilityMultiplexer implements AiVisibilityProvider {
  * (`serp-provider.ts:55-64`) in DI style: this factory does NO gating of its
  * own beyond the viability checks below; each returned provider is already
  * fully constructed from already-built dependencies. The API spine and the
- * scrape arm (Sprint 10) land in the SAME `arms` array and share the ONE
- * multiplexer — they stay unmixable because each row carries its own
+ * scrape arm(s) (Sprint 10/11) land in the SAME `arms` array and share the
+ * ONE multiplexer — they stay unmixable because each row carries its own
  * `provider` label (sc-10-4; `AiVisibilityMultiplexer` never merges rows).
  *
  * An arm is added when EITHER:
  *   (a) the `ai-visibility` axis is on AND a configured engine is keyed
  *       (`deps.makeClient` returns a client) — the existing API-spine loop, or
- *   (b) the `ai-visibility-scrape` axis is on AND `cfg.scrape?.engines`
- *       includes `"chatgpt-ui"` AND `deps.scrapeThrottle` is provided (the
- *       scrape arm needs an already-built throttle, see `AiVisibilityDeps`
- *       docstring).
+ *   (b) the `ai-visibility-scrape` axis is on AND `deps.scrapeThrottle` is
+ *       provided (the scrape arm needs an already-built throttle, see
+ *       `AiVisibilityDeps` docstring) — one arm is composed per engine in
+ *       `cfg.scrape.engines` (`"chatgpt-ui"` and/or `"perplexity-ui"`,
+ *       sc-11-1), each with its matching `EngineScrapeParser`.
  * Both API and scrape arms reuse the SAME shared `DamcrawlerCitationVerifier`
  * (self-gates `site-crawl` per call, holds no per-arm state — safe to share).
+ *
+ * `apiAxisOn` (Sprint 11, sc-11-3): each API arm's extractor is
+ * `deps.extractor` (the plain deterministic pass) UNLESS BOTH
+ * `cfg.judge?.enabled` is true AND `deps.makeJudgeLlm()` returns a usable
+ * `{ client, model }` — in which case every API arm gets a SHARED
+ * `LlmJudgeMentionCitationExtractor` wrapping a fresh
+ * `DeterministicMentionCitationExtractor` (the judge always composes the
+ * deterministic pass, never replaces it). The scrape arm(s) always stay on
+ * `deps.extractor` — the judge is API-arms only (contract: "for each API
+ * arm"). judge-disabled (or no llm resolvable) is BYTE-IDENTICAL to before:
+ * `apiExtractor` stays exactly `deps.extractor`, no judge/extractor is
+ * constructed at all (sc-11-3, Pitfall 5).
  *
  * Returns `undefined` (never an empty-arms multiplexer) when NEITHER axis is
  * on, `config.seo.aiVisibility` is absent, or no arm ends up viable (no key /
@@ -208,13 +237,31 @@ export function resolveAiVisibilityProvider(
   const arms: AiVisibilityProvider[] = [];
 
   if (apiAxisOn) {
+    // sc-11-3: judge wraps the API-arm extractor ONLY when enabled AND an
+    // llm resolves — otherwise `apiExtractor` stays exactly `deps.extractor`
+    // (byte-identical-when-disabled, Pitfall 5). One shared judge instance
+    // (mirrors sharing `verifier`/`sanitizer` above) — the judge itself is
+    // stateless per call.
+    let apiExtractor: MentionCitationExtractor = deps.extractor;
+    if (cfg.judge?.enabled) {
+      const judge = deps.makeJudgeLlm?.();
+      if (judge) {
+        apiExtractor = new LlmJudgeMentionCitationExtractor(
+          new DeterministicMentionCitationExtractor(),
+          judge.client,
+          judge.model,
+          sanitizer,
+        );
+      }
+    }
+
     for (const engineCfg of cfg.engines) {
       const client = deps.makeClient(engineCfg.engine);
       if (!client) continue; // no key/credential for this engine => skip (viability check)
       arms.push(
         new ApiSpineEngineProvider(
           client,
-          deps.extractor,
+          apiExtractor,
           cfg.samplesPerPrompt,
           engineCfg.perCallUsd,
           verifier,
@@ -224,22 +271,29 @@ export function resolveAiVisibilityProvider(
     }
   }
 
-  if (scrapeAxisOn && deps.scrapeThrottle && cfg.scrape?.engines.includes("chatgpt-ui" satisfies ScrapeEngine)) {
+  if (scrapeAxisOn && deps.scrapeThrottle && cfg.scrape) {
     const scrapeCfg = cfg.scrape;
-    arms.push(
-      new ScrapeArmEngineProvider(
-        egress,
-        "chatgpt-ui",
-        new ChatgptUiScrapeParser(),
-        deps.extractor,
-        verifier,
-        deps.scrapeThrottle,
-        cfg.samplesPerPrompt,
-        scrapeCfg.authSession,
-        scrapeCfg.proxyUsdPerScrape,
-        scrapeCfg.proxy,
-      ),
-    );
+    const throttle = deps.scrapeThrottle;
+    const parserFor = (engine: ScrapeEngine): EngineScrapeParser =>
+      engine === "perplexity-ui" ? new PerplexityUiScrapeParser() : new ChatgptUiScrapeParser();
+
+    for (const engine of scrapeCfg.engines) {
+      arms.push(
+        new ScrapeArmEngineProvider(
+          egress,
+          engine,
+          parserFor(engine),
+          deps.extractor,
+          verifier,
+          throttle,
+          cfg.samplesPerPrompt,
+          scrapeCfg.authSession,
+          scrapeCfg.proxyUsdPerScrape,
+          scrapeCfg.proxy,
+          deps.scrapeLoad,
+        ),
+      );
+    }
   }
 
   return arms.length > 0 ? new AiVisibilityMultiplexer(arms) : undefined; // no-key-safe / no-throttle-safe

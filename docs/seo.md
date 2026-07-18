@@ -100,10 +100,13 @@ As of **Sprint 10** it has its first live consumer — `ScrapeArmEngineProvider`
 this axis as `probe()`'s first statement (see **Gated damcrawler UI-scrape arm** below).
 It is deliberately **excluded** from `selectSource`'s all-off byte-identical predicate
 (which reads only the four data axes). It is a **distinct axis** from `ai-visibility`
-(ADR-5): opting into one does not opt into the other. **Note:** the scrape arm is composed
-by the factory + fully tested but **not yet wired into the production run path** — turning
-this axis on in a real run does not yet scrape (the runner wiring is deferred to Sprint 11;
-see the known-limitation note in that section).
+(ADR-5): opting into one does not opt into the other. **As of Sprint 11 the scrape arm is
+production-wired** (`runner.ts`'s `defaultAiVisibilityDeps` builds a real `ScrapeThrottle`
+from `config`/`projectRoot`) — see **Production wiring — scrape arm + LLM judge (Sprint 11)**
+below. Because the scrape arm is routed through the same, LOCKED `AiVisibilityAdapter` as
+the API spine, it produces rows in a real run only when **both** `ai-visibility` **and**
+`ai-visibility-scrape` are on (turning on `ai-visibility-scrape` alone still abstains at the
+adapter's `ai-visibility` gate) — this is the intended live configuration, not a bug.
 
 | Axis | Config key | Gates |
 |---|---|---|
@@ -111,7 +114,7 @@ see the known-limitation note in that section).
 | DataForSEO | `seo.egress.serp-provider` | Live SERP / keyword / backlink API calls |
 | AI-visibility (GEO) | `seo.egress.ai-visibility` | AI-answer / GEO capability — **routes to the live in-house grounded-API spine (`AiVisibilityAdapter` ← `resolveAiVisibilityProvider` → `AiVisibilityMultiplexer`) when the axis is on and ≥1 configured engine is keyed (Sprint 3); no-key-safe fall-back to the offline `LocalExportSource` arm otherwise** |
 | Site crawl | `seo.egress.site-crawl` | damcrawler-backed crawl / URL-coverage / link-graph / SERP-scrape — **engine `DamcrawlerCrawlEngine` (Sprint 6) + adapter `CrawlSource` (Sprint 7) router-wired in Sprint 9 (ADR-8: `link-graph` always; `url-inspection` only when `search-console` is off); needs the optional `damcrawler`/`playwright` peer deps** |
-| AI-visibility scrape | `seo.egress.ai-visibility-scrape` | Egress gate for the AI-visibility UI-scrape arm — **first live consumer `ScrapeArmEngineProvider` (`chatgpt-ui`) composed by `resolveAiVisibilityProvider` as of Sprint 10 (behind an injected `ScrapeThrottle` + `config.seo.aiVisibility.scrape`); production runner wiring deferred to Sprint 11. A distinct axis from `ai-visibility` (ADR-5)** |
+| AI-visibility scrape | `seo.egress.ai-visibility-scrape` | Egress gate for the AI-visibility UI-scrape arm — **`ScrapeArmEngineProvider` (`chatgpt-ui` Sprint 10, `perplexity-ui` Sprint 11) composed by `resolveAiVisibilityProvider` behind an injected `ScrapeThrottle` + `config.seo.aiVisibility.scrape`; production-wired as of Sprint 11 (`runner.ts`'s `defaultAiVisibilityDeps` builds a real `ScrapeThrottle`). A distinct axis from `ai-visibility` (ADR-5) — both must be on for the arm to produce rows in a real run (routed through the locked adapter's `ai-visibility` gate)** |
 
 The whole `seo.egress` object is `.optional()` — a config that omits it keeps all five
 axes off, and the offline `LocalExportSource` needs none (`src/config/schema.ts:675-686`).
@@ -415,15 +418,20 @@ deterministic and async judge variants satisfy it (this forces a single `await` 
 **byte-identical** when the judge is off or no `llm` is injected — the judge is opt-in and
 deterministic-by-default (making it the default is a nonGoal).
 
-> **KNOWN LIMITATION — the flag is currently INERT.** `LlmJudgeMentionCitationExtractor` is
-> exported and unit-tested but **not yet wired into the production factory**:
-> `resolveAiVisibilityProvider` / `runner.ts` still construct the plain
-> `DeterministicMentionCitationExtractor` with no `llm`. **Setting
-> `config.seo.aiVisibility.judge.enabled: true` today produces no behavior change and no
-> warning** — nothing reads the flag to build the judge extractor. This is an in-contract
-> deferral (the contract scoped Sprint 8 to the extractor + config + build, excluding the
-> factory); **the wiring is planned for Sprint 11** (`resolveAiVisibilityProvider` reading
-> `judge.enabled`/`judge.model`). Until then, treat `judge` as a reserved-but-inert config key.
+> **WIRED as of Sprint 11.** `resolveAiVisibilityProvider` (`src/seo/ai-visibility-provider.ts`)
+> now reads `judge.enabled`/`judge.model`: when `config.seo.aiVisibility.judge.enabled` is
+> `true` **and** the injected `deps.makeJudgeLlm()` resolves a usable `{ client, model }`,
+> every **API-arm** extractor is wrapped in a `LlmJudgeMentionCitationExtractor` composing a
+> fresh `DeterministicMentionCitationExtractor` (Pattern C — the judge never replaces the
+> deterministic pass, only adds a fuzzy-mention fallback on a deterministic miss). The
+> production `makeJudgeLlm` (`runner.ts`'s `defaultAiVisibilityDeps`) mirrors
+> `defaultMakeClient`'s no-key-safe guard order (Pattern B): it returns `undefined` **before**
+> calling `createClient` when `ANTHROPIC_API_KEY` is absent, and the model falls back to
+> `DEFAULT_SEO_MODEL` (`"sonnet"`) when `judge.model` is unset. **Byte-identical when
+> disabled** (or when no llm resolves): `apiExtractor` stays exactly `deps.extractor` — no
+> judge, and no fresh deterministic extractor, is ever constructed. **The judge applies to
+> API arms only** — the scrape arm(s) always use `deps.extractor` unwrapped, even when the
+> judge is enabled (the contract scopes the judge to "each API arm").
 
 #### Scrape-arm throttle — `ScrapeThrottle` (in-house AI-visibility Sprint 9)
 
@@ -475,21 +483,28 @@ treated as corrupt. The clock is **injected** (`() => ISO string`, mirroring
 tested deterministically; caps come from the constructor via `ScrapeThrottleLimits
 { maxPerWindow, windowMs, maxProxyUsd }`.
 
-> **Delivered in isolation (Sprint 9), consumed in Sprint 10.** `ScrapeThrottle` was built as the
-> enforcement primitive only, with its public API (`acquire`/`recordProxyCost`,
-> `ThrottleDecision.proceed`) frozen so the scrape arm could wire it in as a pure composition step.
-> **Sprint 10 delivers that consumer** — `ScrapeArmEngineProvider` calls `acquire` before each
-> scrape and `recordProxyCost` after a row-producing one (see below). The Sprint-9 caps that were
-> constructor-only now also have a config home (`config.seo.aiVisibility.scrape.{maxPerWindow,
-> windowMs, maxProxyUsd, proxyUsdPerScrape}`), though a real `ScrapeThrottle` is still not
-> constructed by the production runner (Sprint 11).
+> **Delivered in isolation (Sprint 9), consumed in Sprint 10, production-wired in Sprint 11.**
+> `ScrapeThrottle` was built as the enforcement primitive only, with its public API
+> (`acquire`/`recordProxyCost`, `ThrottleDecision.proceed`) frozen so the scrape arm could wire
+> it in as a pure composition step. **Sprint 10 delivers that consumer** —
+> `ScrapeArmEngineProvider` calls `acquire` before each scrape and `recordProxyCost` after a
+> row-producing one (see below). The Sprint-9 caps that were constructor-only now also have a
+> config home (`config.seo.aiVisibility.scrape.{maxPerWindow, windowMs, maxProxyUsd,
+> proxyUsdPerScrape}`). **As of Sprint 11**, `runner.ts`'s `defaultAiVisibilityDeps` constructs
+> a REAL `ScrapeThrottle` from those caps at `scrapeThrottleLedgerPath(projectRoot)` — see
+> **Production wiring — scrape arm + LLM judge (Sprint 11)** below.
 
-#### Gated damcrawler UI-scrape arm — `ScrapeArmEngineProvider` + `ChatgptUiScrapeParser` (Sprint 10)
+#### Gated damcrawler UI-scrape arm — `ScrapeArmEngineProvider` + `ChatgptUiScrapeParser` / `PerplexityUiScrapeParser` (Sprint 10, `perplexity-ui` Sprint 11)
 
 As of `spec-20260718-in-house-ai-visibility` Sprint 10 the scrape arm has its **first live
-engine**. It is the second `AiVisibilityProvider` arm — a peer of the grounded-API spine, composed
-into the **same** `AiVisibilityMultiplexer` — but it collects a **different** signal by scraping
-the ChatGPT web UI through `damcrawler` rather than calling a grounded LLM API.
+engine** (`chatgpt-ui`); Sprint 11 adds a second, `perplexity-ui`. It is the second
+`AiVisibilityProvider` arm family — a peer of the grounded-API spine, composed into the
+**same** `AiVisibilityMultiplexer` — but it collects a **different** signal by scraping a
+chat-UI answer page through `damcrawler` rather than calling a grounded LLM API. Both engines
+share ONE generic `ScrapeArmEngineProvider` class, parameterized by `engine: ScrapeEngine`
+(`"chatgpt-ui" | "perplexity-ui"`) and an `EngineScrapeParser` — composing a second engine is
+purely a new parser + a URL-builder `case`, no change to the arm's guard/throttle/sanitize/
+verify chain.
 
 - **`ScrapeArmEngineProvider`** (`src/seo/sources/scrape-arm-provider.ts`) implements
   `AiVisibilityProvider` with **`estCostUsdPerPrompt = 0`** — it books **zero** USD to the
@@ -500,30 +515,42 @@ the ChatGPT web UI through `damcrawler` rather than calling a grounded LLM API.
   the same variable-indirection `import(mod)` the other damcrawler adapters use, so the build stays
   **`tsc`-clean without `damcrawler` installed** (dep absent ⇒ abstain).
 - Per sample (N = `samplesPerPrompt`, per prompt) the chain is: **`throttle.acquire`** (a denial
-  skips that one sample) → **`dam.scrape`** of a provider-constructed `chatgpt.com/?q=…` URL →
+  skips that one sample) → **`dam.scrape`** of an engine-specific, provider-constructed URL
+  (`scrapeUrlFor(engine, prompt)`: `https://chatgpt.com/?q=…` for `chatgpt-ui`,
+  `https://www.perplexity.ai/search?q=…` for `perplexity-ui`) →
   **`ContentSanitizer.clean` BEFORE the parser** (the Sprint-9 F1 prompt-injection order — the arm
   builds its **own** sanitizer from the loaded `damcrawler.sanitize`, not the API arms'
-  `defaultGroundedTextSanitizeFn`) → **`ChatgptUiScrapeParser.parse`** → `MentionCitationExtractor`
+  `defaultGroundedTextSanitizeFn`) → the engine's `EngineScrapeParser.parse` → `MentionCitationExtractor`
   → the shared `DamcrawlerCitationVerifier` (retains only `live` URLs) → **`recordProxyCost`** (only
-  after a row-producing scrape) → emit one `AiVisibilityRow` labeled **`"chatgpt-ui"`**. It
-  **never throws**: a scrape `.error`/throw/zero-row drops that sample, and total failure returns
-  `[]` (abstain). Returning `[]` on total failure instead of throwing (as `ApiSpineEngineProvider`
-  does) is safe here precisely because the arm books `$0` — there is no over-book risk.
-- **`ChatgptUiScrapeParser`** (`src/seo/sources/engine-scrape-parser-chatgpt.ts`) is a **PURE,
-  synchronous, dependency-free** `RawScrape -> ParsedAnswer{answerText, citations}`: it strips a
-  trailing `Sources`/`Citations`/`References` block for the prose and extracts markdown links →
-  autolinks → bare URLs (deduped by URL, first-seen title wins) into locked `GroundedCitation`s.
-  Empty/whitespace/malformed input yields `{ answerText: "", citations: [] }` — it never fabricates
+  after a row-producing scrape) → emit one `AiVisibilityRow` labeled with the engine name
+  (**`"chatgpt-ui"`** or **`"perplexity-ui"`**). It **never throws**: a scrape `.error`/throw/zero-row
+  drops that sample, and total failure returns `[]` (abstain). Returning `[]` on total failure
+  instead of throwing (as `ApiSpineEngineProvider` does) is safe here precisely because the arm
+  books `$0` — there is no over-book risk.
+- **`ChatgptUiScrapeParser`** (`src/seo/sources/engine-scrape-parser-chatgpt.ts`, Sprint 10) and
+  **`PerplexityUiScrapeParser`** (`src/seo/sources/engine-scrape-parser-perplexity.ts`, Sprint 11)
+  are each a **PURE, synchronous, dependency-free** `RawScrape -> ParsedAnswer{answerText,
+  citations}`, sharing the same `EngineScrapeParser`/`RawScrape`/`ParsedAnswer` types (imported
+  from the chatgpt module, never redefined): each strips a trailing `Sources`/`Citations`/
+  `References` block for the prose and extracts markdown links → autolinks → bare URLs (deduped
+  by URL, first-seen title wins) into locked `GroundedCitation`s. A Perplexity answer page's
+  layout differs from ChatGPT-UI's (inline `[1]`/`[2]` numbered refs plus a trailing sources
+  block) but shares the same `dam.scrape()` output shape and the same generic markdown-shape
+  heuristics, so `PerplexityUiScrapeParser` is a parallel class, not a rewrite. Both parsers:
+  empty/whitespace/malformed input yields `{ answerText: "", citations: [] }` — never fabricates
   a positive observation and never throws (parser drift degrades to not-mentioned, by design).
-- **The `"chatgpt-ui"` rows are never mixed with the API arms.** Both arms land in the one
+- **Rows are never mixed with the API arms, or with each other.** All arms land in the one
   `AiVisibilityMultiplexer`, which only ever concatenates; each `AiVisibilityRow` keeps its own
-  `provider` label, so a `"chatgpt-ui"` row is unmixable with `anthropic`/`openai`/`perplexity`.
-- **Composition** is triple-gated in `resolveAiVisibilityProvider`: the arm is added only when the
-  **`ai-visibility-scrape`** axis is on **AND** an injected `AiVisibilityDeps.scrapeThrottle` is
-  present **AND** `config.seo.aiVisibility.scrape.engines` includes `"chatgpt-ui"`. The
-  `scrapeThrottle` dep is **optional** (absent ⇒ the arm never composes, every existing caller stays
-  byte-identical), and the factory's top-level early-return was relaxed so a **scrape-only** config
-  (API axis off, scrape axis on) composes.
+  `provider` label, so `"chatgpt-ui"` and `"perplexity-ui"` rows are unmixable with each other and
+  with `anthropic`/`openai`/`perplexity` (the API engine) rows.
+- **Composition** in `resolveAiVisibilityProvider` loops over `config.seo.aiVisibility.scrape.engines`
+  and composes ONE arm per configured engine (picking `PerplexityUiScrapeParser` for
+  `"perplexity-ui"`, `ChatgptUiScrapeParser` otherwise), gated on: the **`ai-visibility-scrape`**
+  axis is on **AND** an injected `AiVisibilityDeps.scrapeThrottle` is present **AND**
+  `config.seo.aiVisibility.scrape` is present. The `scrapeThrottle` dep is **optional** (absent ⇒
+  no scrape arm ever composes, every existing caller stays byte-identical), and the factory's
+  top-level early-return was relaxed so a **scrape-only** config (API axis off, scrape axis on)
+  composes.
 - **Config** (`config.seo.aiVisibility.scrape`, `src/config/schema.ts`) is **optional with no outer
   default** — omit it and behaviour is byte-identical, and its presence does **not** itself enable
   scraping (the axis does). Fields: `engines` (`("chatgpt-ui" | "perplexity-ui")[]`, default `[]`),
@@ -531,24 +558,74 @@ the ChatGPT web UI through `damcrawler` rather than calling a grounded LLM API.
   harvesting or proxy sourcing), `proxyUsdPerScrape` (default `0`), and the `ScrapeThrottle` caps
   `maxPerWindow` (10), `windowMs` (60000), `maxProxyUsd` (0).
 
-> **KNOWN LIMITATION — not yet production-wired.** The arm is composed by the factory and fully
-> unit-tested, but **`runner.ts` is byte-identical this sprint**: production `defaultAiVisibilityDeps()`
-> supplies **no** `ScrapeThrottle`, so turning the `ai-visibility-scrape` axis on + configuring
-> `config.seo.aiVisibility.scrape` in a **real run** does **not** yet compose or run the scrape arm
-> (it is exercised only via injected test deps). A `ScrapeThrottle` needs an absolute ledger path
-> the factory has no `projectRoot` to build, so it must arrive already-constructed via the
-> `AiVisibilityDeps` seam. The **scrape-arm runner wiring** (a real `ScrapeThrottle` from
-> `projectRoot`/`config` + a damcrawler scrape loader + auth-session) is deferred to **Sprint 11**,
-> alongside the still-inert **Sprint-8 LLM-judge** wiring. `"perplexity-ui"` is a valid config value
-> with **no live parser yet** (also Sprint 11).
+#### Production wiring — scrape arm + LLM judge (Sprint 11)
+
+As of Sprint 11 both config flags below are **LIVE** in a real `bober seo` run — `runner.ts`'s
+`defaultAiVisibilityDeps(config, projectRoot)` is the sole production `AiVisibilityDeps`
+builder and now populates BOTH the previously-unset `scrapeThrottle` and a new `makeJudgeLlm`:
+
+- **Scrape-arm throttle.** When `config.seo.aiVisibility.scrape` is present,
+  `defaultAiVisibilityDeps` constructs a real `ScrapeThrottle` at
+  `scrapeThrottleLedgerPath(projectRoot)` = `<projectRoot>/.bober/seo/scrape-throttle-ledger.json`
+  (**distinct** from the governor's `.bober/seo/quota-ledger.json` — the two ledgers are never
+  cross-reconciled), using `scrape.{maxPerWindow, windowMs, maxProxyUsd}` as its caps. Absent
+  `scrape` config leaves `scrapeThrottle` undefined (no-config-safe) — `resolveAiVisibilityProvider`
+  then never composes a scrape arm, exactly as before Sprint 11. The scrape arm's own damcrawler
+  loader stays the class's real lazy default (`AiVisibilityDeps.scrapeLoad` is production-`undefined`
+  — only tests inject a fake).
+- **LLM judge.** When `config.seo.aiVisibility.judge?.enabled` is `true`, `defaultAiVisibilityDeps`
+  builds `makeJudgeLlm: () => { client, model } | undefined`, mirroring `defaultMakeClient`'s
+  no-key-safe guard order: it returns `undefined` **before** calling `createClient` when
+  `ANTHROPIC_API_KEY` is absent, and otherwise builds a real client via `createClient(...)` with
+  `judge.model ?? DEFAULT_SEO_MODEL` (`"sonnet"`). `resolveAiVisibilityProvider` then wraps each
+  **API arm's** extractor in a `LlmJudgeMentionCitationExtractor` (Sprint 8) — see the **Optional
+  LLM-as-judge fuzzy-mention path** section above for the wrap semantics and byte-identical-when-
+  disabled guarantee.
+- **Pitfall to know:** because the scrape arm is routed through the same LOCKED
+  `AiVisibilityAdapter` as the API spine (ADR-5: one `ai-visibility` axis gates every provider),
+  the scrape arm produces rows in a real run only when **both** `ai-visibility` **and**
+  `ai-visibility-scrape` are on — `ai-visibility-scrape` alone still abstains at the adapter's
+  gate. This is the intended live configuration.
+- **Invariants preserved:** `selectSource`'s all-off predicate (`runner.ts`) is untouched — both
+  axes off still returns `LocalExportSource` as the very first statement, before any governor,
+  throttle, or judge-llm construction (byte-identical-when-off). No key/no scrape config/judge
+  disabled all fall back exactly as before (no-key-safe). The build stays `tsc`-clean **without**
+  `damcrawler` installed (the loader indirection is untouched by this wiring).
+
+#### Honest caveat — API-view vs what users see (never mix signals)
+
+The two arm families measure **genuinely different things**, and this suite intentionally
+**never merges them into one number**:
+
+- The **API spine** (`ApiSpineEngineProvider`, `anthropic`/`openai`/`perplexity`) calls a
+  vendor's grounded-search/chat-completions **API** directly. That is the vendor's
+  *programmatic* answer surface — it is not guaranteed to be byte-identical to what a human
+  sees rendered in the vendor's own consumer chat UI (different system prompts, different
+  grounding/tool configuration, and UI-only features like inline citation chips can all
+  differ from the API response).
+- The **scrape arm(s)** (`ScrapeArmEngineProvider`, `chatgpt-ui`/`perplexity-ui`) instead
+  render/scrape the actual **consumer web UI** page — closer to "what a real user searching
+  that prompt would see", but fragile to markup drift (the parser degrades to
+  `not-mentioned` on drift, by design — see **Gated damcrawler UI-scrape arm** above) and
+  slower/costlier to run (proxy + rate-limited).
+- Because these are different observation methods with different failure modes, every row
+  keeps its own `provider` label (`"anthropic"`, `"chatgpt-ui"`, `"perplexity-ui"`, …) all the
+  way through the pipeline — the multiplexer only ever **concatenates**, `AiVisibilityScorer
+  .aggregate` groups strictly by `(prompt, provider)`, and no code path anywhere blends an
+  API-arm observation with a scrape-arm observation into a single reported metric. Read a
+  `"chatgpt-ui"` mention rate as "what the ChatGPT web UI rendered for this prompt", and an
+  `"anthropic"` mention rate as "what the Anthropic-backed grounded-search API returned" —
+  never as interchangeable proxies for the same underlying reality.
 
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
 data source. With **all four off** it returns `LocalExportSource` as its first statement —
 zero governor, zero socket, `import('damcrawler')` never evaluated, byte-identical to a
-project with no SEO suite. (The `ai-visibility-scrape` axis composes no source yet, so it
-is deliberately **not** part of this predicate — see the Egress-axes note above.) Otherwise it loads the quota governor once and assembles a
+project with no SEO suite. (The `ai-visibility-scrape` axis is routed through the same
+`ai-visibility` capability key as the API spine — it never widens this predicate on its own
+(Pitfall 1 above), so it is deliberately **not** part of it — see the Egress-axes note above.)
+Otherwise it loads the quota governor once and assembles a
 **`CapabilitySeoRouter`** that dispatches each capability to the one source that owns it
 (an unrouted capability resolves `{ kind: "disabled" }`; the router never throws):
 
@@ -646,9 +723,9 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
 
 | Field | Type | Default | Effect |
 |---|---|---|---|
-| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl", "ai-visibility-scrape" }` (optional) | unset | The five live-data axes above (`ai-visibility` routes to the live in-house grounded-API spine when a configured engine is keyed, else the offline arm; `ai-visibility-scrape` is axis-only until Sprint 10; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
+| `egress` | `{ "search-console", "serp-provider", "ai-visibility", "site-crawl", "ai-visibility-scrape" }` (optional) | unset | The five live-data axes above (`ai-visibility` routes to the live in-house grounded-API spine when a configured engine is keyed, else the offline arm; `ai-visibility-scrape` is production-wired as of Sprint 11 but requires `ai-visibility` on too — Pitfall 1; `site-crawl` also needs the optional `damcrawler`/`playwright` peer deps). Omit entirely ⇒ byte-identical, all stay off. |
 | `serp.provider` | `"dataforseo" \| "damcrawler"` (optional object, inner default) | `"dataforseo"` | Selects the SERP implementation for the `serp` capability. Both `SerpProvider` impls exist (Sprint 8) — `dataforseo` (metered, `serp-provider` axis, byte-identical to today) and `damcrawler` (zero-USD scrape, gated by the `site-crawl` axis per ADR-10) — and **selection is router-wired as of Sprint 9** (`resolveSerpProvider` in `selectSource`). Omitting `serp` stays byte-identical. |
-| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []), judge?: { enabled: boolean (default false), model?: string } }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). All three engines are live: `anthropic`/`openai` need `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, `perplexity` needs `PERPLEXITY_API_KEY` (Sprint 7). `judge` (Sprint 8, optional, no outer default) gates the optional LLM-as-judge fuzzy-mention pass — **but is currently INERT**: it is not yet read by the production factory, so `judge.enabled:true` changes nothing until the wiring lands (planned Sprint 11). |
+| `aiVisibility` | `{ samplesPerPrompt: number (default 5), engines: { engine: "anthropic"\|"openai"\|"perplexity"; perCallUsd: number (default 0) }[] (default []), judge?: { enabled: boolean (default false), model?: string }, scrape?: { engines: ("chatgpt-ui"\|"perplexity-ui")[] (default []), authSession?: string, proxy?: string, proxyUsdPerScrape: number (default 0), maxPerWindow: number (default 10), windowMs: number (default 60000), maxProxyUsd: number (default 0) } }` (optional, no outer default) | unset | In-house grounded-API-spine config for the `ai-visibility` axis (Sprint 3). Omit ⇒ byte-identical; an empty/absent `engines` list or an unkeyed engine ⇒ offline fallback (no-key-safe). All three API engines are live: `anthropic`/`openai` need `ANTHROPIC_API_KEY`/`OPENAI_API_KEY`, `perplexity` needs `PERPLEXITY_API_KEY` (Sprint 7). `judge` (Sprint 8, optional, no outer default) gates the LLM-as-judge fuzzy-mention pass for API arms — **LIVE as of Sprint 11**: `enabled:true` + a resolvable llm (needs `ANTHROPIC_API_KEY`) wraps each API arm's extractor; byte-identical when disabled or unkeyed. `scrape` (Sprint 9/10, optional, no outer default) configures the gated UI-scrape arm(s) — both `chatgpt-ui` and `perplexity-ui` engines are live as of Sprint 11 and are **production-wired**: with `ai-visibility-scrape` (and `ai-visibility`) on, `runner.ts` builds a real `ScrapeThrottle` from these caps. |
 | `verifier.enabled` | `boolean` | `false` | Adversarial downgrade-only `bober-seo-verifier` stage — see Guardrails below. |
 | `budget.maxUsd` | `number` (optional) | unset | Per-run USD ceiling for PAYG DataForSEO calls (reuses `BudgetSectionSchema`). Absent = uncapped. |
 | `defaultTarget` | `string` (optional) | unset | Used when the CLI omits `[target]`. |
@@ -663,7 +740,7 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
     "serp-provider": false,           // DataForSEO SERP/keywords/backlinks egress. Default false.
     "ai-visibility": false,           // AI-answer/GEO egress. Default false. Routes to the in-house grounded-API spine when on + a keyed engine (Sprint 3); else the offline LocalExportSource arm (no-key-safe).
     "site-crawl": false,              // damcrawler crawl/link-graph/SERP-scrape egress. Default false. Engine (DamcrawlerCrawlEngine) + CrawlSource router-wired (Sprint 9, ADR-8); needs optional damcrawler/playwright peer deps.
-    "ai-visibility-scrape": false     // AI-visibility UI-scrape egress. Default false. Axis-only (Sprint 3) — composes no provider until Sprint 10.
+    "ai-visibility-scrape": false     // AI-visibility UI-scrape egress. Default false. Production-wired (Sprint 11) -- also needs "ai-visibility": true (Pitfall 1, same locked adapter gate).
   },
   "serp": { "provider": "dataforseo" }, // Optional. Which SERP impl serves `serp`: dataforseo (metered, serp-provider axis) | damcrawler (zero-USD scrape, gated by site-crawl axis — ADR-10). Both exist (Sprint 8); router-wired via resolveSerpProvider (Sprint 9). Omit => byte-identical.
   "aiVisibility": {                     // Optional, no outer default. In-house grounded-API spine for the ai-visibility axis (Sprint 3). Omit => byte-identical.
@@ -671,7 +748,15 @@ default — omitting `seo` entirely means the parsed config has no `seo` key at 
     "engines": [                        // Default []. Empty/absent list or an unkeyed engine => offline fallback (no-key-safe).
       { "engine": "anthropic", "perCallUsd": 0.02 } // engine: anthropic|openai|perplexity (all live). perCallUsd default 0. Needs ANTHROPIC_API_KEY / OPENAI_API_KEY / PERPLEXITY_API_KEY respectively.
     ],
-    "judge": { "enabled": false }       // Optional, no outer default (Sprint 8). Gates the LLM-as-judge fuzzy-mention pass. model? optional. CURRENTLY INERT — not yet read by the production factory (wiring planned Sprint 11), so enabled:true changes nothing today.
+    "judge": { "enabled": false },      // Optional, no outer default (Sprint 8). Gates the LLM-as-judge fuzzy-mention pass for API arms. model? optional, falls back to DEFAULT_SEO_MODEL. LIVE as of Sprint 11 -- needs ANTHROPIC_API_KEY; no-key-safe (falls back to the plain deterministic extractor).
+    "scrape": {                         // Optional, no outer default (Sprint 9/10). Gated UI-scrape arm(s). Presence alone does NOT enable scraping -- the "ai-visibility-scrape" axis does. Production-wired as of Sprint 11.
+      "engines": ["chatgpt-ui"],        // Default []. "chatgpt-ui" (Sprint 10) and "perplexity-ui" (Sprint 11) both live -- one arm composed per configured engine.
+      "proxyUsdPerScrape": 0,           // Fixed USD cost booked to the ScrapeThrottle proxy ledger per successful scrape. Default 0.
+      "maxPerWindow": 10,               // ScrapeThrottle rate-window cap: max acquire() grants per engine per window. Default 10.
+      "windowMs": 60000,                // ScrapeThrottle rate-window length in ms. Default 60000 (1 minute).
+      "maxProxyUsd": 0                  // ScrapeThrottle cumulative proxy-USD cap per engine. Default 0 (no proxy spend permitted until explicitly raised).
+      // "authSession" / "proxy" (both optional): operator-supplied, passed opaquely to dam.scrape. No auth harvesting or proxy sourcing.
+    }
   },
   "verifier": { "enabled": false },   // Adversarial downgrade-only verifier stage. Default false.
   "budget": { "maxUsd": 5 },          // Per-run USD ceiling for PAYG DataForSEO calls. Absent = uncapped.
@@ -861,8 +946,14 @@ It depends on the axis:
   then routes to the in-house grounded-API spine (Sprint 3; `perplexity` added Sprint 7).
   **No-key-safe:** with the axis on but no configured/keyed
   engine, it falls back to the offline `LocalExportSource` arm (`ai-visibility.csv`/`.json`)
-  rather than a live provider. `ai-visibility-scrape` is a separate, still-inert axis (no
-  provider until Sprint 10).
+  rather than a live provider.
+- `ai-visibility-scrape`: set `seo.egress["ai-visibility-scrape"]: true` **and**
+  `seo.egress["ai-visibility"]: true` (both — Pitfall 1, the arm is routed through the same
+  locked adapter), add at least one entry to `seo.aiVisibility.scrape.engines`
+  (`"chatgpt-ui"` and/or `"perplexity-ui"`, both live as of Sprint 11), install the optional
+  `damcrawler`/`playwright` peer deps, and supply `seo.aiVisibility.scrape.authSession`/`proxy`
+  if the target chat UI needs an authenticated session. No API key — proxy/session are
+  operator-supplied.
 - `site-crawl`: set `seo.egress["site-crawl"]: true` and install the optional
   `damcrawler`/`playwright` peer deps (`npm i damcrawler playwright && damcrawler
   setup`) — no API key, just the local browser engine.

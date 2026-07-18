@@ -18,6 +18,8 @@ import type { AiVisibilityProvider } from "./sources/ai-visibility-adapter.js";
 import type { AiVisibilityRow } from "./data-source.js";
 import { DeterministicMentionCitationExtractor } from "./sources/mention-citation-extractor.js";
 import type { GroundedAnswer, GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
+import type { LLMClient, ChatParams, ChatResponse } from "../providers/types.js";
+import type { DamcrawlerScrapeLoader, DamcrawlerScrapeModule } from "./sources/scrape-arm-provider.js";
 import {
   AiVisibilityMultiplexer,
   resolveAiVisibilityProvider,
@@ -447,13 +449,13 @@ describe("resolveAiVisibilityProvider — composes the scrape arm behind the scr
     expect(provider).toBeInstanceOf(AiVisibilityMultiplexer);
   });
 
-  it("scrape axis ON but chatgpt-ui NOT in cfg.scrape.engines => does not compose the scrape arm (undefined overall, no API engines either)", async () => {
+  it("scrape axis ON but cfg.scrape.engines is empty => does not compose the scrape arm (undefined overall, no API engines either)", async () => {
     const config = {
       seo: {
         aiVisibility: {
           samplesPerPrompt: 2,
           engines: [],
-          scrape: { engines: ["perplexity-ui"] },
+          scrape: { engines: [] },
         },
       },
     } as unknown as BoberConfig;
@@ -556,5 +558,208 @@ describe("resolveAiVisibilityProvider — composes the scrape arm behind the scr
     const deps: AiVisibilityDeps = { makeClient: () => undefined, extractor };
 
     expect(resolveAiVisibilityProvider(config, egressOff, deps)).toBeUndefined();
+  });
+});
+
+// ── sc-11-1: resolveAiVisibilityProvider composes a 'perplexity-ui' scrape arm ──
+
+/** A fake damcrawler scrape module whose scraped markdown mentions the target. */
+function fakeScrapeModule(markdown: string): DamcrawlerScrapeModule {
+  return {
+    scrape: async (urls) => [{ url: urls[0], title: "t", markdown }],
+    sanitize: (raw) => ({ content: raw, hadThreats: false }),
+  };
+}
+
+function fakeScrapeLoad(markdown: string): DamcrawlerScrapeLoader {
+  return async () => fakeScrapeModule(markdown);
+}
+
+describe("resolveAiVisibilityProvider — composes a 'perplexity-ui' scrape arm, distinct label (sc-11-1)", () => {
+  const extractor = new DeterministicMentionCitationExtractor();
+
+  it("scrape axis ON + perplexity-ui configured + throttle dep present => composes an arm whose rows are labeled 'perplexity-ui'", async () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 1,
+          engines: [],
+          scrape: { engines: ["perplexity-ui"] },
+        },
+      },
+    } as unknown as BoberConfig;
+    const egressScrapeOnly = new SeoEgressGuard(false, false, false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => undefined,
+      extractor,
+      scrapeThrottle: await freshThrottle(),
+      scrapeLoad: fakeScrapeLoad("target.example is a top site.\n\nSources\n[r](https://target.example/r)"),
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressScrapeOnly, deps);
+    expect(provider).toBeInstanceOf(AiVisibilityMultiplexer);
+
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].provider).toBe("perplexity-ui");
+    expect(rows[0].mentioned).toBe(true);
+  });
+
+  it("both chatgpt-ui and perplexity-ui configured => two arms compose, each row carrying its own distinct engine label (never merged)", async () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 1,
+          engines: [],
+          scrape: { engines: ["chatgpt-ui", "perplexity-ui"] },
+        },
+      },
+    } as unknown as BoberConfig;
+    const egressScrapeOnly = new SeoEgressGuard(false, false, false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => undefined,
+      extractor,
+      scrapeThrottle: await freshThrottle(),
+      scrapeLoad: fakeScrapeLoad("target.example is a top site.\n\nSources\n[r](https://target.example/r)"),
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressScrapeOnly, deps);
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.provider).sort()).toEqual(["chatgpt-ui", "perplexity-ui"]);
+  });
+});
+
+// ── sc-11-3: judge wraps the API-arm extractor when enabled + an llm resolves ──
+
+/** Records every ChatParams; returns scripted responses in order (mirrors mention-citation-extractor.test.ts). NO network. */
+class ScriptedLlm implements LLMClient {
+  readonly calls: ChatParams[] = [];
+  private idx = 0;
+  constructor(private readonly responses: string[]) {}
+  async chat(params: ChatParams): Promise<ChatResponse> {
+    this.calls.push(params);
+    const text = this.responses[Math.min(this.idx, this.responses.length - 1)] ?? "";
+    this.idx += 1;
+    return { text, toolCalls: [], stopReason: "end", usage: { inputTokens: 3, outputTokens: 5 } };
+  }
+}
+
+function judgeConfig(judgeEnabled: boolean): BoberConfig {
+  return {
+    seo: {
+      aiVisibility: {
+        samplesPerPrompt: 1,
+        engines: [{ engine: "anthropic" as const, perCallUsd: 0.01 }],
+        judge: { enabled: judgeEnabled },
+      },
+    },
+  } as unknown as BoberConfig;
+}
+
+/** A GroundedSearchClient whose answer the DETERMINISTIC pass marks mentioned:false (no brand token/host present). */
+const nonMatchingClient: GroundedSearchClient = {
+  engine: "anthropic",
+  async search() {
+    return { answerText: "This page discusses unrelated topics with no brand reference.", citations: [] };
+  },
+};
+
+describe("resolveAiVisibilityProvider — judge wraps the API-arm extractor when config.seo.aiVisibility.judge.enabled + an llm resolves (sc-11-3)", () => {
+  it("judge enabled + makeJudgeLlm resolves + deterministic MISS => the judge's verdict decides mentioned:true", async () => {
+    const egressOn = new SeoEgressGuard(false, false, true);
+    const scriptedLlm = new ScriptedLlm(['{"mentioned":true}']);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => nonMatchingClient,
+      extractor: new DeterministicMentionCitationExtractor(),
+      makeJudgeLlm: () => ({ client: scriptedLlm, model: "test-judge-model" }),
+    };
+
+    const provider = resolveAiVisibilityProvider(judgeConfig(true), egressOn, deps);
+    expect(provider).toBeDefined();
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mentioned).toBe(true); // ONLY possible if the judge ran and overrode the deterministic miss
+    expect(scriptedLlm.calls).toHaveLength(1);
+  });
+
+  it("judge.enabled: false => byte-identical to the deterministic path: mentioned:false, no llm ever invoked", async () => {
+    const egressOn = new SeoEgressGuard(false, false, true);
+    const scriptedLlm = new ScriptedLlm(['{"mentioned":true}']);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => nonMatchingClient,
+      extractor: new DeterministicMentionCitationExtractor(),
+      makeJudgeLlm: () => ({ client: scriptedLlm, model: "test-judge-model" }),
+    };
+
+    const provider = resolveAiVisibilityProvider(judgeConfig(false), egressOn, deps);
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mentioned).toBe(false);
+    expect(scriptedLlm.calls).toHaveLength(0); // the judge is never even constructed when disabled
+  });
+
+  it("judge.enabled: true but makeJudgeLlm() returns undefined (no key) => apiExtractor stays deps.extractor, no-key-safe", async () => {
+    const egressOn = new SeoEgressGuard(false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => nonMatchingClient,
+      extractor: new DeterministicMentionCitationExtractor(),
+      makeJudgeLlm: () => undefined, // mirrors an absent judge-model key
+    };
+
+    const provider = resolveAiVisibilityProvider(judgeConfig(true), egressOn, deps);
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mentioned).toBe(false); // deterministic-only, judge never constructed
+  });
+
+  it("judge.enabled: true but deps.makeJudgeLlm is undefined (not injected at all) => apiExtractor stays deps.extractor", async () => {
+    const egressOn = new SeoEgressGuard(false, false, true);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => nonMatchingClient,
+      extractor: new DeterministicMentionCitationExtractor(),
+      // makeJudgeLlm omitted entirely
+    };
+
+    const provider = resolveAiVisibilityProvider(judgeConfig(true), egressOn, deps);
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].mentioned).toBe(false);
+  });
+
+  it("the scrape arm always stays on deps.extractor even when the judge is enabled for API arms (judge is API-arms only)", async () => {
+    const config = {
+      seo: {
+        aiVisibility: {
+          samplesPerPrompt: 1,
+          engines: [],
+          scrape: { engines: ["chatgpt-ui"] },
+          judge: { enabled: true },
+        },
+      },
+    } as unknown as BoberConfig;
+    const egressScrapeOnly = new SeoEgressGuard(false, false, false, false, true);
+    const scriptedLlm = new ScriptedLlm(['{"mentioned":true}']);
+    const deps: AiVisibilityDeps = {
+      makeClient: () => undefined,
+      extractor: new DeterministicMentionCitationExtractor(),
+      scrapeThrottle: await freshThrottle(),
+      makeJudgeLlm: () => ({ client: scriptedLlm, model: "test-judge-model" }),
+      // Unrelated scraped markdown: the DETERMINISTIC pass marks mentioned:false and the
+      // judge (if it ran) would be the only way to flip it to true.
+      scrapeLoad: fakeScrapeLoad("This page discusses unrelated topics with no brand reference."),
+    };
+
+    const provider = resolveAiVisibilityProvider(config, egressScrapeOnly, deps);
+    const rows = await provider!.probe("https://target.example", ["best casino"]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].provider).toBe("chatgpt-ui");
+    expect(rows[0].mentioned).toBe(false); // scrape arm never gets the judge-wrapped extractor
+    expect(scriptedLlm.calls).toHaveLength(0);
   });
 });

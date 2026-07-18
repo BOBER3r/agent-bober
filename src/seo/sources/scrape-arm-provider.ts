@@ -30,8 +30,9 @@
  *   that regression, arch:346 "critical") -> `EngineScrapeParser.parse`
  *   (PURE) -> `MentionCitationExtractor.extract` -> `CitationVerifier.verify`
  *   -> `ScrapeThrottle.recordProxyCost` (only after a row is produced) ->
- *   push a row labeled `this.name` (`"chatgpt-ui"` this sprint — distinct
- *   from every API-arm provider label, sc-10-4 unmixable-by-label).
+ *   push a row labeled `this.name` (`"chatgpt-ui"` (Sprint 10) or
+ *   `"perplexity-ui"` (Sprint 11) — distinct from every API-arm provider
+ *   label, sc-10-4/sc-11-1 unmixable-by-label).
  *
  * `estCostUsdPerPrompt = 0` — the scrape arm books ZERO USD to the
  * `SeoQuotaGovernor`; its real proxy cost lives entirely in the
@@ -51,7 +52,7 @@ import type { ScrapeThrottle } from "../scrape-throttle.js";
 import type { EngineScrapeParser, RawScrape } from "./engine-scrape-parser-chatgpt.js";
 import { ContentSanitizer } from "../content-sanitizer.js";
 
-/** The scrape arm's engine labels (net-new; `AiVisibilityRow.provider` is a plain string). This sprint composes ONLY `"chatgpt-ui"` (`"perplexity-ui"` parser is Sprint 11, a nonGoal here). */
+/** The scrape arm's engine labels (net-new; `AiVisibilityRow.provider` is a plain string). Both `"chatgpt-ui"` (Sprint 10) and `"perplexity-ui"` (Sprint 11) are live — see `scrapeUrlFor` below. */
 export type ScrapeEngine = "chatgpt-ui" | "perplexity-ui";
 
 /**
@@ -85,13 +86,25 @@ const defaultLoader: DamcrawlerScrapeLoader = async () => {
 };
 
 /**
- * Builds the ChatGPT-UI target URL for one prompt. This sprint's scrape
- * target is provider-constructed from the prompt text alone (no per-target
- * routing yet) — mirrors the `DamcrawlerSerpProvider` "no SSRF guard needed"
- * rationale (this class never fetches a caller-supplied URL).
+ * Builds the target URL for one prompt, per configured `ScrapeEngine`
+ * (Sprint 11 — generalized from the Sprint-10 ChatGPT-only builder). Each
+ * engine's scrape target is provider-constructed from the prompt text alone
+ * (no per-target routing) — mirrors the `DamcrawlerSerpProvider` "no SSRF
+ * guard needed" rationale (this class never fetches a caller-supplied URL).
+ * The `switch` is exhaustive over `ScrapeEngine` (a compile error surfaces
+ * any future engine value left unhandled).
  */
-function chatgptUiUrlFor(prompt: string): string {
-  return `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
+function scrapeUrlFor(engine: ScrapeEngine, prompt: string): string {
+  switch (engine) {
+    case "chatgpt-ui":
+      return `https://chatgpt.com/?q=${encodeURIComponent(prompt)}`;
+    case "perplexity-ui":
+      return `https://www.perplexity.ai/search?q=${encodeURIComponent(prompt)}`;
+    default: {
+      const _exhaustive: never = engine;
+      return _exhaustive;
+    }
+  }
 }
 
 /**
@@ -144,7 +157,7 @@ export class ScrapeArmEngineProvider implements AiVisibilityProvider {
         if (!decision.proceed) continue; // throttle denial => skip this sample (sc-10-3), no ledger side effect
 
         try {
-          const [result] = await dam.scrape([chatgptUiUrlFor(prompt)], {
+          const [result] = await dam.scrape([scrapeUrlFor(this.name, prompt)], {
             formats: ["markdown"],
             proxy: this.proxy,
             authSession: this.authSession,

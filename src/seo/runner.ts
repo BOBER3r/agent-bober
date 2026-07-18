@@ -39,6 +39,7 @@ import { ingestFinding } from "../hub/finding-store.js";
 import { logger } from "../utils/logger.js";
 import { LiveGroundedSearchClient, PerplexitySonarClient } from "../providers/grounded-search.js";
 import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
+import { ScrapeThrottle } from "./scrape-throttle.js";
 
 import type { SeoWorkflow, SeoReport, DataOutcome } from "./types.js";
 import { SeoPlaybookIndex } from "./playbook-index.js";
@@ -186,15 +187,77 @@ function defaultMakeClient(engine: GroundedEngine): GroundedSearchClient | undef
   return new LiveGroundedSearchClient(engine, client, model);
 }
 
-/** Production `AiVisibilityDeps` — real client builder + the deterministic extractor (Sprint 2). */
-function defaultAiVisibilityDeps(): AiVisibilityDeps {
-  return { makeClient: defaultMakeClient, extractor: new DeterministicMentionCitationExtractor() };
-}
-
 // ── selectSource + CapabilitySeoRouter (sc-9-1, sc-9-2, sc-9-3) ─────────
 
 function quotaLedgerPath(projectRoot: string): string {
   return `${projectRoot}/.bober/seo/quota-ledger.json`;
+}
+
+/**
+ * The scrape arm's proxy/rate ledger — DISTINCT from `quotaLedgerPath` above
+ * (Pitfall 6, sc-11-2): the two ledgers are never cross-reconciled
+ * (`scrape-throttle.ts` docstring lines 8-12).
+ */
+function scrapeThrottleLedgerPath(projectRoot: string): string {
+  return `${projectRoot}/.bober/seo/scrape-throttle-ledger.json`;
+}
+
+/**
+ * Production `AiVisibilityDeps` — real client builder + the deterministic
+ * extractor (Sprint 2), plus (Sprint 11) a real `ScrapeThrottle` and a
+ * no-key-safe judge-llm builder, both built ONLY when their config section is
+ * present:
+ *
+ * - `scrapeThrottle` (sc-11-2) is constructed from `config.seo.aiVisibility.scrape`
+ *   (path under `projectRoot`, caps from config) ONLY when that section is
+ *   present — absent config leaves `scrapeThrottle` undefined, so
+ *   `resolveAiVisibilityProvider` never composes a scrape arm (no-config-safe,
+ *   mirrors `defaultMakeClient`'s no-key-safe idiom). This is what makes the
+ *   `ai-visibility-scrape` axis + a configured scrape engine LIVE in a real
+ *   `selectSource` run (Pitfall 1: BOTH `ai-visibility` and
+ *   `ai-visibility-scrape` must be on for the scrape arm to produce rows,
+ *   since it is routed through the LOCKED `AiVisibilityAdapter`'s
+ *   `ai-visibility` gate).
+ * - `makeJudgeLlm` (sc-11-3) mirrors `defaultMakeClient`'s guard order
+ *   (Pattern B): it returns `undefined` BEFORE calling `createClient` when
+ *   `ANTHROPIC_API_KEY` is absent — no-key-safe. Only built when
+ *   `config.seo.aiVisibility.judge?.enabled` is true; otherwise `makeJudgeLlm`
+ *   stays undefined and `resolveAiVisibilityProvider` never constructs a
+ *   judge (byte-identical-when-disabled, sc-11-3).
+ *
+ * `scrapeLoad` is intentionally NOT set here — production always uses each
+ * `ScrapeArmEngineProvider`'s own real lazy `damcrawler` loader (the class's
+ * constructor default); only tests inject a fake.
+ */
+function defaultAiVisibilityDeps(config: BoberConfig, projectRoot: string): AiVisibilityDeps {
+  const deps: AiVisibilityDeps = {
+    makeClient: defaultMakeClient,
+    extractor: new DeterministicMentionCitationExtractor(),
+  };
+
+  const scrapeCfg = config.seo?.aiVisibility?.scrape;
+  if (scrapeCfg) {
+    deps.scrapeThrottle = new ScrapeThrottle(scrapeThrottleLedgerPath(projectRoot), {
+      maxPerWindow: scrapeCfg.maxPerWindow,
+      windowMs: scrapeCfg.windowMs,
+      maxProxyUsd: scrapeCfg.maxProxyUsd,
+    });
+  }
+
+  const judgeCfg = config.seo?.aiVisibility?.judge;
+  if (judgeCfg?.enabled) {
+    deps.makeJudgeLlm = () => {
+      // Pitfall 3 / Pattern B: return undefined BEFORE createClient when
+      // unkeyed — runner.test.ts mocks createClient to THROW, so an eager
+      // call here would fail the whole file on a no-key run.
+      if (!process.env["ANTHROPIC_API_KEY"]) return undefined;
+      const model = judgeCfg.model ?? DEFAULT_SEO_MODEL;
+      const client = createClient(undefined, null, undefined, model, "ai-visibility");
+      return { client, model };
+    };
+  }
+
+  return deps;
 }
 
 /**
@@ -392,7 +455,7 @@ export async function selectSource(
     const aiVisibilityProvider = resolveAiVisibilityProvider(
       config,
       egress,
-      deps ?? defaultAiVisibilityDeps(),
+      deps ?? defaultAiVisibilityDeps(config, projectRoot),
     );
     routes["ai-visibility"] = aiVisibilityProvider
       ? new AiVisibilityAdapter(egress, governor, aiVisibilityProvider)

@@ -457,6 +457,88 @@ describe("selectSource — ai-visibility routing wires AiVisibilityAdapter when 
   });
 });
 
+// ── sc-11-2/sc-11-3: PRODUCTION WIRING — defaultAiVisibilityDeps builds a
+// ── real ScrapeThrottle + a no-key-safe judge-llm builder (real selectSource
+// ── run, NO injected deps) ───────────────────────────────────────────────
+
+describe("selectSource — scrape-arm + judge PRODUCTION wiring, no injected deps (sc-11-2, sc-11-3)", () => {
+  const savedKeys: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const key of ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "PERPLEXITY_API_KEY"]) {
+      savedKeys[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(savedKeys)) {
+      if (value !== undefined) process.env[key] = value;
+      else delete process.env[key];
+    }
+  });
+
+  function scrapeWiredConfig(): BoberConfig {
+    return createDefaultConfig("test-project", "brownfield", undefined, {
+      seo: {
+        egress: { "ai-visibility": true, "ai-visibility-scrape": true },
+        aiVisibility: {
+          samplesPerPrompt: 1,
+          engines: [{ engine: "anthropic", perCallUsd: 0.01 }],
+          scrape: { engines: ["chatgpt-ui"], maxPerWindow: 10, windowMs: 60_000, maxProxyUsd: 5 },
+          judge: { enabled: true },
+        },
+        blockThreshold: "critical-uncited",
+      },
+    });
+  }
+
+  it("a real (no-deps) selectSource run composes the scrape arm: kind 'data' (not 'disabled'), proving defaultAiVisibilityDeps built a real ScrapeThrottle from config/projectRoot", async () => {
+    // NO `deps` argument: this exercises the REAL `defaultAiVisibilityDeps`,
+    // not an injected fake — the exact "production construction" pattern
+    // the sprint briefing calls out (§6). Both AI axes on + a configured
+    // scrape engine; no engine is keyed, so the sole viable arm is the
+    // scrape arm — its presence alone proves the throttle was constructed
+    // (absent the Sprint-11 wiring, `deps.scrapeThrottle` would stay
+    // undefined and `resolveAiVisibilityProvider` would return `undefined`,
+    // falling back to `LocalExportSource` => `kind: 'disabled'`).
+    const source = await selectSource(scrapeWiredConfig(), tmpRoot);
+    const outcome = await source.aiVisibility({ target: "https://target.example", prompts: ["best casino"] });
+
+    expect(outcome.kind).toBe("data"); // LIVE adapter + scrape arm composed
+    if (outcome.kind === "data") {
+      // damcrawler is genuinely not installed in this test environment, so
+      // the composed scrape arm's own dep-absent guard abstains per sample
+      // (scrape-arm-provider.test.ts covers this at the unit level) — rows
+      // is empty, but `kind` alone already proves composition happened.
+      expect(outcome.rows).toEqual([]);
+    }
+
+    // judge.enabled:true but no ANTHROPIC_API_KEY => makeJudgeLlm's guard
+    // (Pattern B / Pitfall 3) returns undefined BEFORE calling createClient
+    // — the mocked-to-throw createClient must never be invoked.
+    const { createClient } = await import("../providers/factory.js");
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
+  it("no `scrape` config present => scrapeThrottle stays undefined, no-config-safe: falls back to LocalExportSource (kind 'disabled')", async () => {
+    const config = createDefaultConfig("test-project", "brownfield", undefined, {
+      seo: {
+        egress: { "ai-visibility": true, "ai-visibility-scrape": true },
+        aiVisibility: { samplesPerPrompt: 1, engines: [] }, // no `scrape` key at all
+        blockThreshold: "critical-uncited",
+      },
+    });
+
+    const source = await selectSource(config, tmpRoot);
+    const outcome = await source.aiVisibility({ target: "https://target.example", prompts: ["best casino"] });
+    expect(outcome).toEqual({ kind: "disabled" });
+
+    const { createClient } = await import("../providers/factory.js");
+    expect(createClient).not.toHaveBeenCalled();
+  });
+});
+
 // ── sc-9-4: gatherDataBundle + WORKFLOW_CAPABILITIES — metered omission ──
 
 describe("gatherDataBundle / WORKFLOW_CAPABILITIES — metered omission (sc-9-4)", () => {
