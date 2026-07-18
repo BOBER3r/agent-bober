@@ -185,6 +185,52 @@ configured, keyed engine changes nothing. The per-engine model is currently hard
 (`anthropic` → the default SEO model, `openai` → `gpt-4.1`) since the config carries no
 per-engine `model` field yet.
 
+#### Citation verification + sanitization boundary (Sprint 4)
+
+As of Sprint 4 every `ApiSpineEngineProvider` arm applies two fail-closed boundaries inside
+`probe()`, **before any `AiVisibilityRow` is emitted** — both injected once (shared across
+all arms) by `resolveAiVisibilityProvider`:
+
+- **Fail-closed cited-URL verification.** A **`CitationVerifier`**
+  (`DamcrawlerCitationVerifier`, `src/seo/sources/citation-verifier.ts`) live-checks each
+  URL a grounded answer surfaced as a candidate citation, **gated by the existing
+  `site-crawl` axis** (no new egress axis — the same axis `DamcrawlerCrawlEngine` uses). It
+  is guard-first: egress gate → lazy `import("damcrawler")` → per-url `assertSafeUrl` SSRF
+  guard → `scrape`. Only URLs that scrape without a batch-mode `.error` are marked
+  `live` (damcrawler's `ScrapeResult` has no numeric HTTP-status field, so `live` means
+  "scraped cleanly", not literally HTTP 200), and `brandOnPage` is a word-boundary
+  brand-token match over the **sanitized** scraped body. Crucially, `ApiSpineEngineProvider`
+  retains **only `live === true` URLs** in `row.sourceUrls`. The verifier is **fail-closed
+  on every path** — `site-crawl` off, `damcrawler` absent (optional peer dep), a per-url
+  SSRF rejection, or a scrape error all degrade that URL to `{ live:false, brandOnPage:false }`;
+  it never throws and never fabricates a live citation. So with `site-crawl` off,
+  `mentioned`/`citationPresent` can still be `true` (from the offline extractor) while
+  `sourceUrls` is `[]` — a cited URL only ships once the `site-crawl` axis independently
+  re-verified it live.
+- **Fail-closed grounded-text sanitization.** The LLM's grounded `answerText` **and** every
+  candidate citation URL pass through the fail-closed **`ContentSanitizer`**
+  (`src/seo/content-sanitizer.ts`; **ADR-11**) at the network→in-process boundary *before*
+  the row is built (spy-asserted call order `[sanitize:text, sanitize:url, verify, row]`; a
+  thrown sanitize call fails closed to empty text). Because that text is **not**
+  damcrawler-scraped (it comes straight from `GroundedSearchClient.search()`) and
+  `ContentSanitizer` needs a **synchronous** `SanitizeFn` while any damcrawler `sanitize`
+  export is only reachable via an async lazy `import()`, this boundary wraps
+  `defaultGroundedTextSanitizeFn` (`src/seo/ai-visibility-provider.ts`) — a **real,
+  dependency-free, synchronous** injection-stripper (removes `<system>`/`<|im_start|>`-style
+  role-marker tags and "ignore previous instructions" phrasing), **not** an identity/no-op.
+  An identity sanitizer at a named security boundary would be exactly the fake-ceiling the
+  Sprint-9 F1 prompt-injection lesson forbids. damcrawler's real async `sanitize` stays
+  load-bearing for the actual scraped citation **body** inside `DamcrawlerCitationVerifier`.
+
+The build stays `tsc`-clean **without** `damcrawler` installed (the verifier uses the same
+variable-indirection lazy loader as the other damcrawler adapters). Two follow-ups are
+tracked: (1) citation **title** text is not yet sanitized (Sprint 4 scopes the grounded-text
+boundary to `answerText` + citation URLs only; a title is LLM-echoable free text, so
+extending the boundary to `citation.title` is an in-contract, later-sprint candidate); and
+(2) the live grounded-API-spine egress path (and the live damcrawler scrape in the verifier)
+has **no automated smoke coverage** yet — every test injects fake deps, so end-to-end
+validation needs real engine keys plus `damcrawler` installed.
+
 ### Pipeline wiring (Sprint 9)
 
 `selectSource` (`src/seo/runner.ts:259`) turns the four **data** axes above into the run's
