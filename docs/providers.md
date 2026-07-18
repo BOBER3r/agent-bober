@@ -85,6 +85,64 @@ This field is substrate for the `Budget` USD ceiling (`Budget.maxUsd` /
 charges it per turn** — see [Per-role reasoning effort & USD budget ceiling](#per-role-reasoning-effort--usd-budget-ceiling)
 below for the config that turns it on.
 
+### Grounded web-search citations (`ChatResponse.groundingCitations`)
+
+`ChatResponse` (`src/providers/types.ts`) carries an **optional, provider-agnostic**
+`groundingCitations?: { url: string; title?: string; cited_text?: string }[]` — the raw citations a
+provider surfaces when a turn used a server-side `web_search` tool. It is the **vendor-native
+superset** that a per-adapter response mapper populates (Anthropic `web_search_result_location` →
+`{ url, title, cited_text }`; OpenAI `url_citation` annotation → `{ url, title }`). The field is
+**additive and default-absent**: the key is **omitted** (never an empty array set by convention) when
+the turn was not grounded or the provider returned no citations, so a consumer can distinguish "not
+grounded" from "grounded with zero sources."
+
+> **Not yet populated by any adapter.** As of the sprint that introduced this field, no adapter fills
+> it — `anthropic.ts`'s `normalizeContent` still **drops** `web_search` citation blocks. The field is
+> the transport contract a later sprint wires into the real adapters. A live grounded call therefore
+> surfaces `groundingCitations` as **absent** today; the normalization layer below is exercised via a
+> scripted client in tests.
+
+**`GroundedSearchClient` (provider-layer, `src/providers/grounded-search.ts`).** A
+provider-agnostic client that runs **one** `web_search`-grounded LLM turn and normalizes the payload
+above into a plain `GroundedAnswer`:
+
+```ts
+export type GroundedEngine = "anthropic" | "openai" | "perplexity";
+export interface GroundedCitation { url: string; title: string }
+export interface GroundedAnswer {
+  answerText: string;
+  citations: GroundedCitation[];
+  costUsd?: number; // key omitted when unknown, per the costUsd convention above
+}
+export interface GroundedSearchClient {
+  readonly engine: GroundedEngine;
+  search(prompt: string, locale?: string): Promise<GroundedAnswer>;
+}
+```
+
+`LiveGroundedSearchClient` is the concrete implementation. It **constructor-injects** an `LLMClient`
+(`new LiveGroundedSearchClient(engine, llm, model)`), and its `search` runs a single `chat` turn with
+a `web_search` `ToolDef` (expressed via the existing `ToolDef` surface — not a vendor-specific tool
+type), threads an optional `locale` into the system prompt, and maps `res.groundingCitations` by
+engine into normalized `{ url, title }` citations (`title` falls back to `url`; Anthropic `cited_text`
+is intentionally dropped). It **never throws on a non-grounded response** — the payload is guarded
+with `?? []`, so `citations` is simply `[]`.
+
+| Engine        | `search` behavior                                                                |
+| ------------- | -------------------------------------------------------------------------------- |
+| `anthropic`   | maps `web_search_result_location` citations → `{ url, title }`                    |
+| `openai`      | maps `url_citation` annotations → `{ url, title }`                                |
+| `perplexity`  | **type-only** — no mapper yet (a later sprint); `search` returns `citations: []` without throwing |
+
+No `@anthropic-ai/sdk` or `openai` type crosses this file's boundary — it imports **only** from
+`./types.js`, and `GroundedAnswer`/`GroundedCitation`/`GroundedEngine` are plain provider-agnostic
+types (upholding the no-SDK-leak principle). The client is **not** exported from `src/index.ts`
+(import directly from `src/providers/grounded-search.js`), and it is **not seam-wired** into any
+consumer yet — it is the ToS-clean "API spine" primitive for the in-house AI-visibility hybrid
+(arch-20260717-in-house-oss-ai-visibility), which a later sprint composes into the SEO suite's
+`AiVisibilityProvider` seam. See
+[docs/sprints](./sprints/sprint-spec-20260718-in-house-ai-visibility-1.md) for the sprint record.
+
 ### Per-role reasoning effort & USD budget ceiling
 
 Each per-role config section (`planner`, `curator`, `generator`, `evaluator`) accepts two
