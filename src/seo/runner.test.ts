@@ -30,7 +30,8 @@ import type { GroundedSearchClient } from "../providers/grounded-search.js";
 import type * as ProviderFactory from "../providers/factory.js";
 import type { SeoVerifier } from "./verifier.js";
 import type { SeoFinding, DataOutcome } from "./types.js";
-import type { SeoDataSource, SeoCapability } from "./data-source.js";
+import type { SeoDataSource, SeoCapability, AiVisibilityQuery } from "./data-source.js";
+import { TrackedPromptStore } from "./tracked-prompt-store.js";
 
 // ── createClient mock — MUST NEVER be invoked in this file ──────────────
 
@@ -837,5 +838,124 @@ describe("SeoWorkflowRunner.run — opt-in verifier stage (sc-12-2, sc-12-4)", (
     expect(outcome.report?.findings).toHaveLength(1);
     expect(outcome.report!.findings[0].severity).toBe(3); // unchanged — fail-closed
     expect(calls).toHaveLength(1);
+  });
+});
+
+// ── spec-20260718-in-house-ai-visibility, Sprint 6: TrackedPromptStore
+// ── feeds gatherDataBundle's AiVisibilityQuery (sc-6-3, sc-6-4) ─────────
+
+/** A `SeoDataSource` whose `aiVisibility` records the query it was called with. */
+function makeQueryCapturingSource(): {
+  source: SeoDataSource;
+  captured: AiVisibilityQuery[];
+} {
+  const captured: AiVisibilityQuery[] = [];
+  function dataOutcome<T>(rows: T): DataOutcome<T> {
+    return { kind: "data", rows, provenance: { source: "local-export", retrievedAt: "2026-01-01T00:00:00.000Z" } };
+  }
+  const source: SeoDataSource = {
+    capabilities: () => [],
+    searchAnalytics: async () => dataOutcome([]),
+    urlInspection: async () => dataOutcome([{ url: "https://example.com/a", coverageState: "Indexed" }]),
+    serp: async () => dataOutcome([]),
+    keywords: async () => dataOutcome([]),
+    backlinks: async () => dataOutcome([]),
+    aiVisibility: async (q) => {
+      captured.push(q);
+      return dataOutcome([]);
+    },
+    linkGraph: async () => dataOutcome([]),
+  };
+  return { source, captured };
+}
+
+describe("gatherDataBundle — TrackedPromptStore feed (sc-6-3)", () => {
+  it("ai-visibility workflow: a valid tracked-prompt file feeds real prompts + locale into the query", async () => {
+    const avDir = join(tmpRoot, ".bober/seo/ai-visibility");
+    await mkdir(avDir, { recursive: true });
+    await writeFile(
+      join(avDir, "example_com.json"),
+      JSON.stringify({
+        target: "example.com",
+        prompts: ["what is example.com", "who runs example.com", "is example.com trustworthy"],
+        engines: ["anthropic"],
+        samplesPerPrompt: 9,
+        locale: "en-GB",
+      }) + "\n",
+      "utf-8",
+    );
+
+    const { source, captured } = makeQueryCapturingSource();
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "ai-visibility",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: source,
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(captured).toHaveLength(1);
+    // LOCKED query shape: only target/prompts/locale — engines/samplesPerPrompt
+    // are advisory and must NOT be forwarded (contract nonGoal).
+    expect(captured[0]).toEqual({
+      target: "example.com",
+      prompts: ["what is example.com", "who runs example.com", "is example.com trustworthy"],
+      locale: "en-GB",
+    });
+  });
+
+  it("ai-visibility workflow: missing tracked-prompt file falls back to {target, prompts:[target]} with NO locale key", async () => {
+    const { source, captured } = makeQueryCapturingSource();
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    await runner.run({
+      projectRoot: tmpRoot, // no .bober/seo/ai-visibility/<target>.json written
+      config: baseConfig(),
+      workflow: "ai-visibility",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: source,
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(captured).toHaveLength(1);
+    // Byte-identical to the pre-Sprint-6 literal: no `locale` key present at all.
+    expect(captured[0]).toEqual({ target: "example.com", prompts: ["example.com"] });
+    expect(Object.prototype.hasOwnProperty.call(captured[0], "locale")).toBe(false);
+  });
+});
+
+describe("gatherDataBundle — TrackedPromptStore NOT loaded when ai-visibility isn't requested (sc-6-4)", () => {
+  it("technical-audit workflow never calls TrackedPromptStore.load and its bundle arm stays undefined", async () => {
+    const loadSpy = vi.spyOn(TrackedPromptStore.prototype, "load");
+    const { source, calls } = makeSpySource();
+    const analyzer = new SeoAnalyzer(new ScriptedClient([CITED_FINDING_JSON]), "test-model");
+    const { sink } = makeRecordingSink();
+
+    const runner = new SeoWorkflowRunner();
+    const outcome = await runner.run({
+      projectRoot: tmpRoot,
+      config: baseConfig(),
+      workflow: "technical-audit",
+      target: "example.com",
+      now: "2026-07-16T00:00:00.000Z",
+      dataSource: source,
+      analyzer,
+      findingSink: sink,
+    });
+
+    expect(loadSpy).not.toHaveBeenCalled();
+    expect(calls["ai-visibility"]).toBe(0);
+    expect(outcome.exitCode).toBe(0);
   });
 });

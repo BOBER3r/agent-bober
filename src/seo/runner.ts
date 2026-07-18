@@ -58,6 +58,7 @@ import { resolveAiVisibilityProvider } from "./ai-visibility-provider.js";
 import type { AiVisibilityDeps } from "./ai-visibility-provider.js";
 import { DeterministicMentionCitationExtractor } from "./sources/mention-citation-extractor.js";
 import { WORKFLOW_CAPABILITIES } from "./workflow-capabilities.js";
+import { TrackedPromptStore } from "./tracked-prompt-store.js";
 import type {
   SeoDataSource,
   SeoCapability,
@@ -398,12 +399,22 @@ export async function selectSource(
  * workflow that does not consume it (sc-9-4). An omitted arm resolves
  * `undefined` on `SeoDataBundle`, which the analyzer already renders as "not
  * requested" (`analyzer.ts:127-128`).
+ *
+ * The `ai-visibility` arm (spec-20260718-in-house-ai-visibility, Sprint 6)
+ * loads the committed `TrackedPromptStore` set for `target` INSIDE the
+ * `requested.has("ai-visibility")` ternary — never hoisted above
+ * `Promise.all` — so a workflow that does not request `ai-visibility` never
+ * touches the filesystem for this store (sc-6-4). Only `prompts`/`locale`
+ * flow into the LOCKED `AiVisibilityQuery` (`data-source.ts:61`); the file's
+ * `engines`/`samplesPerPrompt` are advisory and are NOT forwarded (contract
+ * nonGoal — config resolves the real N/engines at provider construction).
  */
 async function gatherDataBundle(
   source: SeoDataSource,
   workflow: SeoWorkflow,
   target: string,
   now: string,
+  projectRoot: string,
 ): Promise<SeoDataBundle> {
   const day = now.slice(0, 10);
   const requested = new Set(WORKFLOW_CAPABILITIES[workflow]);
@@ -418,7 +429,6 @@ async function gatherDataBundle(
   const serpQuery: SerpQuery = { keyword: target, location: "us" };
   const keywordQuery: KeywordQuery = { keywords: [target], location: "us" };
   const backlinkQuery: BacklinkQuery = { target };
-  const aiVisibilityQuery: AiVisibilityQuery = { target, prompts: [target] };
   const linkGraphQuery: LinkGraphQuery = { rootUrl: target };
 
   const [searchAnalytics, urlInspection, serp, keywords, backlinks, aiVisibility, linkGraph] = await Promise.all([
@@ -427,7 +437,14 @@ async function gatherDataBundle(
     requested.has("serp") ? source.serp(serpQuery) : undefined,
     requested.has("keywords") ? source.keywords(keywordQuery) : undefined,
     requested.has("backlinks") ? source.backlinks(backlinkQuery) : undefined,
-    requested.has("ai-visibility") ? source.aiVisibility(aiVisibilityQuery) : undefined,
+    requested.has("ai-visibility")
+      ? (async () => {
+          const set = await new TrackedPromptStore(projectRoot).load(target);
+          const query: AiVisibilityQuery = { target, prompts: set.prompts };
+          if (set.locale !== undefined) query.locale = set.locale; // omit key entirely when absent (sc-6-2)
+          return source.aiVisibility(query);
+        })()
+      : undefined,
     requested.has("link-graph") ? source.linkGraph(linkGraphQuery) : undefined,
   ]);
 
@@ -496,7 +513,7 @@ export class SeoWorkflowRunner {
       });
 
       const source = input.dataSource ?? (await selectSource(input.config, input.projectRoot));
-      const data = await gatherDataBundle(source, input.workflow, target, input.now);
+      const data = await gatherDataBundle(source, input.workflow, target, input.now, input.projectRoot);
 
       const analyzer = input.analyzer ?? buildDefaultAnalyzer();
       const analysis = await analyzer.analyze({
