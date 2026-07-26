@@ -105,6 +105,7 @@ function renderSignature(signature: SeoSignature): string {
     `Invariant: ${signature.invariant}`,
     `Tactic: ${signature.tactic}`,
     `Source: ${signature.primarySourceUrl}`,
+    `LiveWeight: ${signature.liveWeightStatus}`,
   ].join("\n");
 }
 

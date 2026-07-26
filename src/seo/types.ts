@@ -32,9 +32,13 @@ export type SeoWorkflow =
  * `path`/`mtimeMs` are set only by file-backed sources (LocalExportSource,
  * Sprint 6) for freshness auditing — optional so `gsc`/`dataforseo`
  * provenance stays byte-compatible (same optional idiom as `costUsd`).
+ *
+ * Widened (spec-20260717-seo-improver-builder, Sprint 1) with `"ai-visibility"`
+ * and `"damcrawler"` — additive only; no consumer exhaustively switches on
+ * `source` (`analyzer.ts` switches on `DataOutcome.kind`, not `source`).
  */
 export type DataProvenance = {
-  source: "local-export" | "gsc" | "dataforseo";
+  source: "local-export" | "gsc" | "dataforseo" | "ai-visibility" | "damcrawler";
   retrievedAt: string;
   costUsd?: number;
   path?: string;
@@ -55,6 +59,13 @@ export type DataOutcome<T> =
 /**
  * Parsed from each `skills/bober.seo-*` directory's `SKILL.md`, strong/
  * read-only, memoised per process (architecture lines 349-360).
+ *
+ * `liveWeightStatus` (spec-20260717-seo-improver-builder, Sprint 3) is a
+ * soft field encoding the documented-vs-live-weight caveat: whether the
+ * signature's invariant is corroborated by a LIVE ranking signal
+ * (`live-corroborated`), is documented-only guidance not (yet) confirmed
+ * live (`documented-only`), or unknown/unstated (`unknown`, the default).
+ * It lives ONLY on the signature — `SeoFinding` is unchanged (ADR-2).
  */
 export type SeoSignature = {
   playbookId: string;
@@ -65,6 +76,7 @@ export type SeoSignature = {
   primarySourceUrl: string;
   policyClass: "auto-safe" | "human-approve";
   evidenceGrade: "verified" | "primary-unverified" | "single-source";
+  liveWeightStatus: "live-corroborated" | "documented-only" | "unknown";
   keywords: string[];
   skillRef: string;
 };
@@ -92,6 +104,12 @@ export type SeoFinding = {
 /**
  * Persisted at `.bober/seo/reports/<safeId>-seo-report.json` (architecture
  * lines 363-372).
+ *
+ * `droppedNeverEncode` (spec-20260717-seo-improver-builder, Sprint 1 field /
+ * Sprint 2 wiring) mirrors `droppedUncited` exactly — a required plain
+ * `number` counter. Populated by `NeverEncodeFilter` (`never-encode-filter.ts`,
+ * Sprint 2), which runs in `SeoWorkflowRunner.run` between the
+ * `analysis.parsed` check and `SeoCitationGate.apply`.
  */
 export type SeoReport = {
   reportId: string;
@@ -100,6 +118,7 @@ export type SeoReport = {
   generatedAt: string;
   findings: SeoFinding[];
   droppedUncited: number;
+  droppedNeverEncode: number;
   dataProvenance: DataProvenance[];
   verdict: "pass" | "blocked";
 };

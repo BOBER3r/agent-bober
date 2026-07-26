@@ -58,6 +58,103 @@ function assertBaseline(signatures: ReturnType<typeof SeoPlaybookParser.parse>, 
   }
 }
 
+// ── sc-3-4 (spec-20260717-seo-improver-builder): skills-lint over
+// `liveWeightStatus` -- a high-severity playbook (policyClass:
+// "human-approve", the only high-stakes signal ON a SeoSignature; ADR-2)
+// that OMITS **LiveWeightStatus:** resolves to "unknown" and must be
+// flagged. Uses SYNTHETIC parsed signatures, NOT real skill files -- Sprint
+// 4 is responsible for authoring `LiveWeightStatus` into the real
+// bober.seo-* skill files (nonGoal of this sprint). ────────────────────
+
+/**
+ * "High-severity" is undefined directly on `SeoSignature` (severity is
+ * model-emitted, on `SeoFinding`). `policyClass === "human-approve"` is the
+ * only high-stakes signal a signature carries, so it is the lint's proxy
+ * for "high-severity playbook" (per the sprint briefing/ADR-2 risk note).
+ */
+function findHighSeverityOmissions(signatures: ReturnType<typeof SeoPlaybookParser.parse>) {
+  return signatures.filter((s) => s.policyClass === "human-approve" && s.liveWeightStatus === "unknown");
+}
+
+describe("SeoPlaybookParser — skills-lint: LiveWeightStatus omission on high-severity playbooks (sc-3-4)", () => {
+  it("flags a human-approve signature that omits LiveWeightStatus (resolves to unknown)", () => {
+    const md = [
+      "### risky-live-site-rewrite",
+      "- **Title:** Large-scale rewrite",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      // No LiveWeightStatus label -- soft-field default applies.
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures).toHaveLength(1);
+    expect(signatures[0].liveWeightStatus).toBe("unknown");
+    expect(omissions).toHaveLength(1);
+    expect(omissions[0].playbookId).toBe("risky-live-site-rewrite");
+  });
+
+  it("does NOT flag a human-approve signature that declares LiveWeightStatus", () => {
+    const md = [
+      "### risky-live-site-rewrite-declared",
+      "- **Title:** Large-scale rewrite",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      "- **LiveWeightStatus:** documented-only",
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures[0].liveWeightStatus).toBe("documented-only");
+    expect(omissions).toHaveLength(0);
+  });
+
+  it("does NOT flag an auto-safe signature that omits LiveWeightStatus (not high-severity)", () => {
+    const md = [
+      "### low-severity-tactic",
+      "- **Title:** Low-risk tactic",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** auto-safe",
+      // No LiveWeightStatus label -- defaults to unknown, but not high-severity.
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures[0].policyClass).toBe("auto-safe");
+    expect(signatures[0].liveWeightStatus).toBe("unknown");
+    expect(omissions).toHaveLength(0);
+  });
+
+  it("flags each omitting human-approve signature independently across a mixed batch", () => {
+    const md = [
+      "### mixed-flagged-1",
+      "- **Title:** A",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      "",
+      "### mixed-declared",
+      "- **Title:** B",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+      "- **LiveWeightStatus:** live-corroborated",
+      "",
+      "### mixed-flagged-2",
+      "- **Title:** C",
+      "- **PrimarySourceUrl:** https://x",
+      "- **PolicyClass:** human-approve",
+    ].join("\n");
+
+    const signatures = SeoPlaybookParser.parse(md, "synthetic-fixture.md");
+    const omissions = findHighSeverityOmissions(signatures);
+
+    expect(signatures).toHaveLength(3);
+    expect(omissions.map((s) => s.playbookId).sort()).toEqual(["mixed-flagged-1", "mixed-flagged-2"]);
+  });
+});
+
 describe("SeoPlaybookParser — real bober.seo-technical-audit skill file", () => {
   it("parses skills/bober.seo-technical-audit/SKILL.md into >=6 valid, cited signatures", async () => {
     const relPath = "skills/bober.seo-technical-audit/SKILL.md";
@@ -73,6 +170,29 @@ describe("SeoPlaybookParser — real bober.seo-technical-audit skill file", () =
     for (const s of signatures) {
       expect(s.workflows).toContain("technical-audit");
     }
+  });
+
+  // sc-4-1 (spec-20260717-seo-improver-builder): the three leak-derived
+  // attributes hard-required by the sprint (siteAuthority, NavBoost/click
+  // signals, contentEffort) are re-graded liveWeightStatus="documented-only"
+  // -- the leak proves the attribute EXISTS, not that it is a live-weighted
+  // ranking factor (research LOAD-BEARING CAVEAT).
+  it("re-grades the leak-derived siteAuthority/NavBoost/contentEffort signatures to documented-only (sc-4-1)", async () => {
+    const relPath = "skills/bober.seo-technical-audit/SKILL.md";
+    const signatures = await loadSkill(relPath);
+
+    const siteAuth = signatures.find((s) => s.playbookId === "siteauthority-domain-quality");
+    expect(siteAuth?.liveWeightStatus).toBe("documented-only");
+
+    const navboost = signatures.find((s) => s.playbookId === "navboost-click-quality-audit");
+    expect(navboost?.liveWeightStatus).toBe("documented-only");
+
+    const contentEffort = signatures.find((s) => s.playbookId === "contenteffort-low-effort-flag");
+    expect(contentEffort?.liveWeightStatus).toBe("documented-only");
+
+    // live-API-doc signatures (not leak-derived) must NOT be re-graded.
+    const gscHealth = signatures.find((s) => s.playbookId === "gsc-url-inspection-health");
+    expect(gscHealth?.liveWeightStatus).toBe("unknown");
   });
 });
 
@@ -289,5 +409,40 @@ describe("SeoPlaybookParser — real bober.seo-verticals skill file", () => {
     // sc-5-3: regulatory disclosure is human-approve, never auto-published.
     const disclosure = signatures.find((s) => s.playbookId === "igaming-regulatory-disclosure");
     expect(disclosure?.policyClass).toBe("human-approve");
+  });
+
+  // sc-4-1/sc-4-2 (spec-20260717-seo-improver-builder): the two leak-derived
+  // vertical signatures (scamness) are re-graded documented-only, and a
+  // focused set of new SaaS/crypto/iGaming signatures is added, each cited
+  // to a curl-verified primary source (research-20260716 VERIFIED findings).
+  it("re-grades leak-derived vertical signatures and adds focused new SaaS/crypto/iGaming signatures (sc-4-1, sc-4-2)", async () => {
+    const relPath = "skills/bober.seo-verticals/SKILL.md";
+    const { signatures, dropped } = await loadSkillWithDiagnostics(relPath);
+    assertBaseline(signatures, relPath);
+    assertNoForbiddenActions(signatures);
+    expect(dropped).toBeGreaterThan(0);
+
+    const scamness = signatures.find((s) => s.playbookId === "igaming-scamness-demotion-awareness");
+    expect(scamness?.liveWeightStatus).toBe("documented-only");
+
+    const cryptoYmyl = signatures.find((s) => s.playbookId === "crypto-ymyl-editorial-override");
+    expect(cryptoYmyl?.liveWeightStatus).toBe("documented-only");
+
+    const ids = signatures.map((s) => s.playbookId);
+    expect(ids).toContain("igaming-ads-certification-compliance");
+    expect(ids).toContain("crypto-igaming-site-reputation-abuse-audit");
+    expect(ids).toContain("saas-scaled-content-intent-audit");
+
+    const igamingAds = signatures.find((s) => s.playbookId === "igaming-ads-certification-compliance");
+    expect(igamingAds?.primarySourceUrl).toBe("https://support.google.com/adspolicy/answer/15132179");
+    expect(igamingAds?.policyClass).toBe("human-approve");
+
+    const reputationAbuse = signatures.find((s) => s.playbookId === "crypto-igaming-site-reputation-abuse-audit");
+    expect(reputationAbuse?.primarySourceUrl).toBe("https://developers.google.com/search/blog/2024/11/site-reputation-abuse");
+    expect(reputationAbuse?.policyClass).toBe("human-approve");
+
+    const saasIntent = signatures.find((s) => s.playbookId === "saas-scaled-content-intent-audit");
+    expect(saasIntent?.primarySourceUrl).toBe("https://developers.google.com/search/docs/essentials/spam-policies");
+    expect(saasIntent?.policyClass).toBe("auto-safe");
   });
 });

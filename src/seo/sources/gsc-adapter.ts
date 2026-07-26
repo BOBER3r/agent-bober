@@ -39,6 +39,10 @@ import type {
   KeywordRow,
   BacklinkQuery,
   BacklinkRow,
+  AiVisibilityQuery,
+  AiVisibilityRow,
+  LinkGraphQuery,
+  LinkGraphRow,
 } from "../data-source.js";
 import type { DataOutcome, DataProvenance } from "../types.js";
 
@@ -262,6 +266,16 @@ export class GscAdapter implements SeoDataSource {
   }
 
   async backlinks(_q: BacklinkQuery): Promise<DataOutcome<BacklinkRow[]>> {
+    return { kind: "disabled" };
+  }
+
+  // -- GSC does not serve ai-visibility/link-graph either (spec-20260717-seo-improver-builder, Sprint 1) --
+
+  async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return { kind: "disabled" };
+  }
+
+  async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
     return { kind: "disabled" };
   }
 }

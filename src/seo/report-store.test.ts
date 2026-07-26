@@ -29,6 +29,7 @@ function makeReport(overrides: Partial<SeoReport> = {}): SeoReport {
     generatedAt: "2026-07-16T00:00:00.000Z",
     findings: [],
     droppedUncited: 0,
+    droppedNeverEncode: 0,
     dataProvenance: [],
     verdict: "pass",
     ...overrides,

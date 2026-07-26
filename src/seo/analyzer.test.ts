@@ -22,6 +22,10 @@ class ScriptedClient implements LLMClient {
 
 // ── Fixtures ─────────────────────────────────────────────────────────
 
+// `liveWeightStatus` is set to a NON-downgrading value ("live-corroborated")
+// on both base fixtures so the existing confidence:"firm" assertions below
+// (e.g. line ~117) are unaffected. The downgrade-only tests (sc-3-3) clone
+// these via `{ ...SAMPLE_SIGNATURE, liveWeightStatus: "documented-only" }`.
 const SAMPLE_SIGNATURE: SeoSignature = {
   playbookId: "seo.technical-audit.title-tags",
   workflows: ["technical-audit"],
@@ -31,6 +35,7 @@ const SAMPLE_SIGNATURE: SeoSignature = {
   primarySourceUrl: "https://developers.google.com/search/docs/appearance/title-link",
   policyClass: "auto-safe",
   evidenceGrade: "verified",
+  liveWeightStatus: "live-corroborated",
   keywords: ["title", "duplicate"],
   skillRef: "bober.seo-technical-audit",
 };
@@ -44,6 +49,7 @@ const SAMPLE_HUMAN_APPROVE_SIGNATURE: SeoSignature = {
   primarySourceUrl: "https://developers.google.com/search/docs/essentials/spam-policies",
   policyClass: "human-approve",
   evidenceGrade: "verified",
+  liveWeightStatus: "live-corroborated",
   keywords: ["paid", "sponsored"],
   skillRef: "bober.seo-technical-audit",
 };
@@ -165,6 +171,92 @@ describe("SeoAnalyzer.analyze — well-formed model output (sc-10-1)", () => {
   });
 });
 
+// ── sc-3-3 (spec-20260717-seo-improver-builder): liveWeightStatus drives a
+// downgrade-only confidence rule -- documented-only + firm -> tentative;
+// live-corroborated/unknown leave confidence unchanged; never upgrades ────
+
+describe("SeoAnalyzer.analyze — liveWeightStatus downgrade-only confidence rule (sc-3-3)", () => {
+  it("downgrades a firm finding to tentative when grounded in a documented-only signature", async () => {
+    const documentedOnlySignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "documented-only" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [documentedOnlySignature],
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings).toHaveLength(1);
+    expect(analysis.findings[0].confidence).toBe("tentative");
+  });
+
+  it("leaves confidence unchanged (firm) when grounded in a live-corroborated signature", async () => {
+    const liveCorroboratedSignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "live-corroborated" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [liveCorroboratedSignature],
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings[0].confidence).toBe("firm");
+  });
+
+  it("leaves confidence unchanged (firm) when grounded in an unknown-liveWeightStatus signature", async () => {
+    const unknownSignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "unknown" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [unknownSignature],
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings[0].confidence).toBe("firm");
+  });
+
+  it("never upgrades: a tentative finding grounded in documented-only stays tentative", async () => {
+    const documentedOnlySignature: SeoSignature = { ...SAMPLE_SIGNATURE, liveWeightStatus: "documented-only" };
+    const context: SeoRetrieveResult = {
+      promptFragment: SAMPLE_CONTEXT.promptFragment,
+      signatures: [documentedOnlySignature],
+    };
+    const tentativeFindingJson = JSON.stringify({
+      findings: [
+        {
+          recommendation: "De-duplicate the title tag shared by /a and /b.",
+          playbookRef: "seo.technical-audit.title-tags",
+          citationUrl: "https://developers.google.com/search/docs/appearance/title-link",
+          evidence: [],
+          severity: 3,
+          humanApprovalRequired: false,
+          confidence: "tentative",
+        },
+      ],
+    });
+    const client = new ScriptedClient([tentativeFindingJson]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context }));
+
+    expect(analysis.findings[0].confidence).toBe("tentative");
+  });
+
+  it("leaves confidence unchanged when no matching signature is found for the playbookRef", async () => {
+    const emptyContext: SeoRetrieveResult = { promptFragment: SAMPLE_CONTEXT.promptFragment, signatures: [] };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]); // confidence: "firm"
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    const analysis = await analyzer.analyze(baseInput({ context: emptyContext }));
+
+    expect(analysis.findings[0].confidence).toBe("firm");
+  });
+});
+
 // ── sc-10-2: unparseable output -> parsed:false, never throws ─────────
 
 describe("SeoAnalyzer.analyze — unparseable model output (sc-10-2, stopCondition)", () => {
@@ -259,6 +351,132 @@ describe("SeoAnalyzer.analyze — transport error propagation", () => {
     const analyzer = new SeoAnalyzer(throwingClient, "test-model");
 
     await expect(analyzer.analyze(baseInput())).rejects.toThrow("Network timeout");
+  });
+});
+
+// ── sc-5-3/sc-5-4: AiVisibilityScorer wiring, provenance-guarded ──────
+
+describe("SeoAnalyzer.analyze — AI-visibility scorer wiring (sc-5-3, sc-5-4)", () => {
+  it("sc-5-3: a live ai-visibility outcome (provenance.source:'ai-visibility') puts rates+CI in the prompt, NOT the N raw rows", async () => {
+    const liveData: SeoDataBundle = {
+      ...SAMPLE_DATA,
+      aiVisibility: {
+        kind: "data",
+        rows: [
+          {
+            prompt: "best crypto casino",
+            provider: "perplexity",
+            mentioned: true,
+            citationPresent: true,
+            sourceUrls: ["https://target.example/a"],
+          },
+          {
+            prompt: "best crypto casino",
+            provider: "perplexity",
+            mentioned: false,
+            citationPresent: false,
+            sourceUrls: [],
+          },
+        ],
+        provenance: { source: "ai-visibility", retrievedAt: "2026-07-18T00:00:00Z" },
+      },
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: liveData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain("mentionRate");
+    expect(call.system).toContain("mentionRateCi95");
+    expect(call.system).toContain("citationRate");
+    // The raw per-row keys must be ABSENT — the scorer output, not the N raw rows.
+    expect(call.system).not.toContain('"mentioned"');
+    expect(call.system).not.toContain('"citationPresent"');
+  });
+
+  it("sc-5-3: never merges two providers answering the same prompt — both providers' rates appear in the prompt", async () => {
+    const liveData: SeoDataBundle = {
+      ...SAMPLE_DATA,
+      aiVisibility: {
+        kind: "data",
+        rows: [
+          {
+            prompt: "best crypto casino",
+            provider: "perplexity",
+            mentioned: true,
+            citationPresent: true,
+            sourceUrls: ["https://target.example/a"],
+          },
+          {
+            prompt: "best crypto casino",
+            provider: "chatgpt",
+            mentioned: false,
+            citationPresent: false,
+            sourceUrls: [],
+          },
+        ],
+        provenance: { source: "ai-visibility", retrievedAt: "2026-07-18T00:00:00Z" },
+      },
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: liveData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain('"provider":"perplexity"');
+    expect(call.system).toContain('"provider":"chatgpt"');
+  });
+
+  it("sc-5-4: a local-export ai-visibility outcome falls through to the unchanged describeDataOutcome path (byte-identical raw-row dump)", async () => {
+    const aiVisRows = [
+      {
+        prompt: "best crypto casino",
+        provider: "perplexity",
+        mentioned: true,
+        citationPresent: true,
+        sourceUrls: ["https://target.example/a"],
+      },
+    ];
+    const localExportData: SeoDataBundle = {
+      ...SAMPLE_DATA,
+      aiVisibility: {
+        kind: "data",
+        rows: aiVisRows,
+        provenance: { source: "local-export", retrievedAt: "2026-07-18T00:00:00Z" },
+      },
+    };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: localExportData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain(
+      `AI Visibility (source: local-export, retrieved: 2026-07-18T00:00:00Z):\n${JSON.stringify(aiVisRows)}`,
+    );
+  });
+
+  it("sc-5-4: a disabled ai-visibility outcome falls through to the unchanged describeDataOutcome path", async () => {
+    const disabledData: SeoDataBundle = { ...SAMPLE_DATA, aiVisibility: { kind: "disabled" } };
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: disabledData }));
+
+    const call = client.calls[0];
+    expect(call.system).toContain("AI Visibility: disabled (no data source configured for this capability).");
+  });
+
+  it("sc-5-4: an undefined ai-visibility outcome falls through to the unchanged 'not requested' path", async () => {
+    const client = new ScriptedClient([VALID_FINDINGS_JSON]);
+    const analyzer = new SeoAnalyzer(client, "test-model");
+
+    await analyzer.analyze(baseInput({ data: SAMPLE_DATA })); // SAMPLE_DATA has no aiVisibility key
+
+    const call = client.calls[0];
+    expect(call.system).toContain("AI Visibility: not requested.");
   });
 });
 

@@ -142,6 +142,55 @@ describe("runBenchmark — precision/recall report (sc-13-2)", () => {
     expect(caseResult!.emitted).toHaveLength(0);
   });
 
+  it("kg-ai-visibility-offline: the offline ai-visibility.csv capability is read and the cited finding reaches the sink", async () => {
+    const report = await runBenchmark(corpus, tmpRootA);
+    const caseResult = report.cases.find((c) => c.id === "kg-ai-visibility-offline");
+
+    expect(caseResult).toBeDefined();
+    expect(caseResult!.exitCode).toBe(0);
+    expect(caseResult!.emitted).toHaveLength(1);
+    expect(caseResult!.emitted[0].tags).toContain("playbook:ai-visibility-branded-mention-audit");
+    expect(caseResult!.report?.verdict).toBe("pass");
+    expect(caseResult!.report?.dataProvenance.some((p) => p.path?.endsWith("ai-visibility.csv"))).toBe(true);
+  });
+
+  it("kg-link-graph-offline: the offline link-graph.csv capability is read and the cited finding reaches the sink", async () => {
+    const report = await runBenchmark(corpus, tmpRootA);
+    const caseResult = report.cases.find((c) => c.id === "kg-link-graph-offline");
+
+    expect(caseResult).toBeDefined();
+    expect(caseResult!.exitCode).toBe(0);
+    expect(caseResult!.emitted).toHaveLength(1);
+    expect(caseResult!.emitted[0].tags).toContain("playbook:sitefocus-internal-consolidation");
+    expect(caseResult!.report?.verdict).toBe("pass");
+    expect(caseResult!.report?.dataProvenance.some((p) => p.path?.endsWith("link-graph.csv"))).toBe(true);
+  });
+
+  it("kb-never-encode-cited-drop: a never-encode tactic carrying a VALID citation is still dropped -- by the runtime filter, not the citation gate", async () => {
+    const report = await runBenchmark(corpus, tmpRootA);
+    const caseResult = report.cases.find((c) => c.id === "kb-never-encode-cited-drop");
+
+    expect(caseResult).toBeDefined();
+    expect(caseResult!.exitCode).toBe(0);
+    expect(caseResult!.emitted).toHaveLength(0);
+    expect(caseResult!.report?.droppedNeverEncode).toBe(1);
+    expect(caseResult!.report?.droppedUncited).toBe(0);
+    expect(caseResult!.report?.verdict).toBe("pass");
+  });
+
+  it("kg-liveweight-downgrade: a firm finding grounded in the always-present documented-only generic-floor signature is downgraded to tentative", async () => {
+    const report = await runBenchmark(corpus, tmpRootA);
+    const caseResult = report.cases.find((c) => c.id === "kg-liveweight-downgrade");
+
+    expect(caseResult).toBeDefined();
+    expect(caseResult!.exitCode).toBe(0);
+    expect(caseResult!.emitted).toHaveLength(1);
+    const downgraded = caseResult!.report?.findings.find((f) => f.playbookRef === "sitefocus-topical-authority");
+    expect(downgraded?.confidence).toBe("tentative");
+    expect(caseResult!.emitted[0].tags).toContain("confidence:tentative");
+    expect(caseResult!.emitted[0].tags).not.toContain("confidence:firm");
+  });
+
   it("is deterministic -- two independent runs over the same corpus yield identical metrics and emitted-finding identities", async () => {
     const first = await runBenchmark(corpus, tmpRootA);
     const second = await runBenchmark(corpus, tmpRootB);

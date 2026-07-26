@@ -35,19 +35,31 @@ import type {
   SerpRow,
   KeywordRow,
   BacklinkRow,
+  AiVisibilityRow,
+  LinkGraphRow,
 } from "./data-source.js";
 import type { SeoRetrieveResult } from "./retriever.js";
 import type { BoberConfig } from "../config/schema.js";
+import { AiVisibilityScorer } from "./ai-visibility-scorer.js";
 
 // -- Public types (do NOT exist elsewhere — defined here per the briefing) --
 
-/** Per-capability optional `DataOutcome<Row[]>` — a source may abstain/disable per capability. */
+/**
+ * Per-capability optional `DataOutcome<Row[]>` — a source may abstain/
+ * disable per capability. `aiVisibility`/`linkGraph` were added additively
+ * (spec-20260717-seo-improver-builder, Sprint 9; ADR-7) — an arm left
+ * `undefined` (a capability `WORKFLOW_CAPABILITIES` omits for the running
+ * workflow) renders as "not requested" (`describeDataOutcome` below), never
+ * as an error.
+ */
 export type SeoDataBundle = {
   searchAnalytics?: DataOutcome<SearchAnalyticsRow[]>;
   urlInspection?: DataOutcome<UrlInspectionRow[]>;
   serp?: DataOutcome<SerpRow[]>;
   keywords?: DataOutcome<KeywordRow[]>;
   backlinks?: DataOutcome<BacklinkRow[]>;
+  aiVisibility?: DataOutcome<AiVisibilityRow[]>;
+  linkGraph?: DataOutcome<LinkGraphRow[]>;
 };
 
 export type SeoAnalyzeInput = {
@@ -143,6 +155,27 @@ function describeDataOutcome<T>(label: string, outcome: DataOutcome<T> | undefin
   }
 }
 
+/**
+ * Runs `AiVisibilityScorer.aggregate` ONLY when the outcome is a live
+ * ai-visibility arm — i.e. `kind === "data"` AND
+ * `provenance.source === "ai-visibility"` (the ONLY producer of that stamp
+ * is the live adapter, `ai-visibility-adapter.ts:136`; NOT the decoy
+ * `QuotaRequest.source` at `ai-visibility-adapter.ts:116`). Every other
+ * outcome (local-export, disabled, abstain, undefined) falls through to the
+ * UNCHANGED `describeDataOutcome` path — byte-identical to pre-change
+ * (sc-5-4, ADR-5 byte-identical-when-off guarantee).
+ */
+function describeAiVisibility(outcome: DataOutcome<AiVisibilityRow[]> | undefined): string {
+  if (outcome?.kind === "data" && outcome.provenance.source === "ai-visibility") {
+    const metrics = new AiVisibilityScorer().aggregate(outcome.rows);
+    return (
+      `AI Visibility (source: ${outcome.provenance.source}, retrieved: ${outcome.provenance.retrievedAt}):\n` +
+      JSON.stringify(metrics)
+    );
+  }
+  return describeDataOutcome("AI Visibility", outcome);
+}
+
 function buildDataBundleSummary(data: SeoDataBundle): string {
   return [
     describeDataOutcome("Search Analytics", data.searchAnalytics),
@@ -150,6 +183,8 @@ function buildDataBundleSummary(data: SeoDataBundle): string {
     describeDataOutcome("SERP", data.serp),
     describeDataOutcome("Keywords", data.keywords),
     describeDataOutcome("Backlinks", data.backlinks),
+    describeAiVisibility(data.aiVisibility),
+    describeDataOutcome("Link Graph", data.linkGraph),
   ].join("\n\n");
 }
 
@@ -234,6 +269,15 @@ function parseFindingsContainer(rawText: string): ParseFindingsResult {
  * grounded in a `playbookRef` whose matching `SeoSignature.policyClass` is
  * `"human-approve"` is always flagged for human approval, even if the model
  * forgot to set the flag itself.
+ *
+ * Applies the same signature-driven-override idiom to `confidence`
+ * (spec-20260717-seo-improver-builder, Sprint 3, ADR-2): a finding grounded
+ * in a signature whose `liveWeightStatus` is `"documented-only"` cannot be
+ * emitted as `"firm"` — it is downgraded to `"tentative"`, because
+ * "documented" guidance is not (yet) corroborated by a live ranking signal.
+ * This is DOWNGRADE-ONLY: `"live-corroborated"`/`"unknown"` never change
+ * `confidence`, and there is no branch that upgrades `"tentative"` ->
+ * `"firm"`.
  */
 function toSeoFinding(
   modelFinding: SeoModelFinding,
@@ -244,6 +288,11 @@ function toSeoFinding(
   const humanApprovalRequired =
     modelFinding.humanApprovalRequired || signature?.policyClass === "human-approve";
 
+  const confidence =
+    signature?.liveWeightStatus === "documented-only" && modelFinding.confidence === "firm"
+      ? "tentative"
+      : modelFinding.confidence;
+
   return {
     recommendation: modelFinding.recommendation,
     workflow,
@@ -252,13 +301,21 @@ function toSeoFinding(
     evidence: modelFinding.evidence,
     severity: modelFinding.severity,
     humanApprovalRequired,
-    confidence: modelFinding.confidence,
+    confidence,
   };
 }
 
 function collectDataProvenance(data: SeoDataBundle): DataProvenance[] {
   const provenance: DataProvenance[] = [];
-  for (const outcome of [data.searchAnalytics, data.urlInspection, data.serp, data.keywords, data.backlinks]) {
+  for (const outcome of [
+    data.searchAnalytics,
+    data.urlInspection,
+    data.serp,
+    data.keywords,
+    data.backlinks,
+    data.aiVisibility,
+    data.linkGraph,
+  ]) {
     if (outcome?.kind === "data") provenance.push(outcome.provenance);
   }
   return provenance;

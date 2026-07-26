@@ -3,7 +3,8 @@
  * (spec-20260715-ultimate-seo-suite, Sprint 11). Mirrors
  * `runStandaloneSecurityAudit` (`src/cli/commands/security-audit.ts:141-180`):
  * resolve playbook context -> select a data source -> gather data -> analyze
- * -> citation gate -> persist -> best-effort hub emit -> exit code.
+ * -> never-encode filter -> citation gate -> persist -> best-effort hub emit
+ * -> exit code.
  *
  * Clock discipline: `now` is injected by the caller (`SeoCommand`) and NEVER
  * re-stamped here — this file never constructs a `Date` for wall-clock
@@ -16,7 +17,13 @@
  * from `analyzer.analyze` (which does NOT catch `llm.chat` errors itself,
  * `analyzer.ts:16-18`) is caught here. A `parsed: false` analysis result is
  * ALSO fail-closed -> `exitCode: 2` with ZERO hub emits (sc-11-5) — checked
- * BEFORE the citation gate runs.
+ * BEFORE the never-encode filter and citation gate run.
+ *
+ * Never-encode belt (spec-20260717-seo-improver-builder, Sprint 2; ADR-3):
+ * `NeverEncodeFilter` runs between the `parsed` check and the citation gate,
+ * dropping any LLM-synthesized banned tactic — even one carrying a
+ * well-formed `citationUrl` that would otherwise pass the gate. Only its
+ * `kept` findings ever reach `SeoCitationGate.apply`.
  *
  * Hub emission is best-effort and happens strictly AFTER the report has
  * been persisted; a hub failure never changes the exit code (mirrors
@@ -30,8 +37,11 @@ import { createClient } from "../providers/factory.js";
 import { FactStore, factsDbPath, ensureFactsDir } from "../state/facts.js";
 import { ingestFinding } from "../hub/finding-store.js";
 import { logger } from "../utils/logger.js";
+import { LiveGroundedSearchClient, PerplexitySonarClient } from "../providers/grounded-search.js";
+import type { GroundedEngine, GroundedSearchClient } from "../providers/grounded-search.js";
+import { ScrapeThrottle } from "./scrape-throttle.js";
 
-import type { SeoWorkflow, SeoReport } from "./types.js";
+import type { SeoWorkflow, SeoReport, DataOutcome } from "./types.js";
 import { SeoPlaybookIndex } from "./playbook-index.js";
 import { SeoPlaybookRetriever } from "./retriever.js";
 import { SeoEgressGuard } from "./egress.js";
@@ -39,18 +49,39 @@ import { SeoQuotaGovernor } from "./quota-governor.js";
 import { LocalExportSource } from "./sources/local-export.js";
 import { GscAdapter } from "./sources/gsc-adapter.js";
 import { DataForSeoAdapter } from "./sources/dataforseo-adapter.js";
+import { CrawlSource } from "./sources/crawl-source.js";
+import { DamcrawlerCrawlEngine } from "./sources/damcrawler-crawl-engine.js";
+import { ContentSanitizer } from "./content-sanitizer.js";
+import { resolveSerpProvider } from "./serp-provider.js";
+import type { SerpProvider } from "./serp-provider.js";
+import { AiVisibilityAdapter } from "./sources/ai-visibility-adapter.js";
+import { resolveAiVisibilityProvider } from "./ai-visibility-provider.js";
+import type { AiVisibilityDeps } from "./ai-visibility-provider.js";
+import { DeterministicMentionCitationExtractor } from "./sources/mention-citation-extractor.js";
+import { WORKFLOW_CAPABILITIES } from "./workflow-capabilities.js";
+import { TrackedPromptStore } from "./tracked-prompt-store.js";
 import type {
   SeoDataSource,
   SeoCapability,
   SearchAnalyticsQuery,
+  SearchAnalyticsRow,
   UrlInspectionQuery,
+  UrlInspectionRow,
   SerpQuery,
+  SerpRow,
   KeywordQuery,
+  KeywordRow,
   BacklinkQuery,
+  BacklinkRow,
+  AiVisibilityQuery,
+  AiVisibilityRow,
+  LinkGraphQuery,
+  LinkGraphRow,
 } from "./data-source.js";
 import { SeoAnalyzer } from "./analyzer.js";
 import type { SeoAnalysis, SeoDataBundle } from "./analyzer.js";
 import { SeoCitationGate } from "./citation-gate.js";
+import { NeverEncodeFilter } from "./never-encode-filter.js";
 import { SeoReportStore, deriveReportId } from "./report-store.js";
 import { SeoHubEmitter } from "./hub-emitter.js";
 import type { SeoFindingSink } from "./hub-emitter.js";
@@ -108,82 +139,362 @@ function buildDefaultAnalyzer(): SeoAnalyzer {
   return new SeoAnalyzer(client, DEFAULT_SEO_MODEL);
 }
 
-// ── selectSource (sc-11-2) ───────────────────────────────────────────
+/**
+ * bober: per-engine default model is hardcoded here (not read from config —
+ *        `config.seo.aiVisibility.engines[]` carries no `model` field this
+ *        sprint). Promote to a per-engine config field if a project ever
+ *        needs a different model than these defaults. "perplexity" has no
+ *        entry: it does NOT go through `createClient`/`LLMClient` at all
+ *        (Sprint 7) — `PerplexitySonarClient` reads its own model default,
+ *        so it is intentionally absent from this table, not merely unset.
+ */
+const AI_VISIBILITY_DEFAULT_MODEL: Partial<Record<GroundedEngine, string>> = {
+  anthropic: DEFAULT_SEO_MODEL,
+  openai: "gpt-4.1",
+};
+
+/** Env var each engine's key is read from — mirrors `factory.ts`'s `validateApiKey`. */
+const AI_VISIBILITY_KEY_ENV: Partial<Record<GroundedEngine, string>> = {
+  anthropic: "ANTHROPIC_API_KEY",
+  openai: "OPENAI_API_KEY",
+};
+
+/**
+ * Production `AiVisibilityDeps.makeClient` — returns `undefined` (no-key-safe)
+ * for any engine lacking its documented env-var key. "perplexity" is handled
+ * by an EARLY, separate branch (Sprint 7): Perplexity Sonar is a direct HTTP
+ * `chat/completions` API, not an `LLMClient` provider, so it is constructed
+ * directly as a `PerplexitySonarClient` and MUST NOT fall through to the
+ * generic `createClient` path below (that path has no "perplexity" entry in
+ * either table above, so it would otherwise return `undefined` — this branch
+ * exists so a Perplexity-keyed engine composes a real arm instead). Only
+ * when a key is present does the generic path call `createClient`, so a
+ * misconfigured/no-key run never throws the zero-network guard error that
+ * `runner.test.ts:34-44` asserts on.
+ */
+function defaultMakeClient(engine: GroundedEngine): GroundedSearchClient | undefined {
+  if (engine === "perplexity") {
+    // Sonar is BYOK HTTP, not routed through createClient — no-key-safe:
+    // absent PERPLEXITY_API_KEY => undefined, arm skipped (sc-7-2).
+    if (!process.env["PERPLEXITY_API_KEY"]) return undefined;
+    return new PerplexitySonarClient(); // defaults: env key + global-fetch transport + "sonar"
+  }
+
+  const envVar = AI_VISIBILITY_KEY_ENV[engine];
+  const model = AI_VISIBILITY_DEFAULT_MODEL[engine];
+  if (!envVar || !model || !process.env[envVar]) return undefined;
+  const client = createClient(undefined, null, undefined, model, "ai-visibility");
+  return new LiveGroundedSearchClient(engine, client, model);
+}
+
+// ── selectSource + CapabilitySeoRouter (sc-9-1, sc-9-2, sc-9-3) ─────────
 
 function quotaLedgerPath(projectRoot: string): string {
   return `${projectRoot}/.bober/seo/quota-ledger.json`;
 }
 
 /**
- * bober: simplest correct fan-out across both live adapters when BOTH egress
- *        axes are opted in — GSC serves search-analytics/url-inspection,
- *        DataForSEO serves serp/keywords/backlinks. Swap for a capability-
- *        aware router if a third live source is ever added.
+ * The scrape arm's proxy/rate ledger — DISTINCT from `quotaLedgerPath` above
+ * (Pitfall 6, sc-11-2): the two ledgers are never cross-reconciled
+ * (`scrape-throttle.ts` docstring lines 8-12).
  */
-class CompositeSeoSource implements SeoDataSource {
-  constructor(
-    private readonly gsc: GscAdapter,
-    private readonly dataForSeo: DataForSeoAdapter,
-  ) {}
+function scrapeThrottleLedgerPath(projectRoot: string): string {
+  return `${projectRoot}/.bober/seo/scrape-throttle-ledger.json`;
+}
 
+/**
+ * Production `AiVisibilityDeps` — real client builder + the deterministic
+ * extractor (Sprint 2), plus (Sprint 11) a real `ScrapeThrottle` and a
+ * no-key-safe judge-llm builder, both built ONLY when their config section is
+ * present:
+ *
+ * - `scrapeThrottle` (sc-11-2) is constructed from `config.seo.aiVisibility.scrape`
+ *   (path under `projectRoot`, caps from config) ONLY when that section is
+ *   present — absent config leaves `scrapeThrottle` undefined, so
+ *   `resolveAiVisibilityProvider` never composes a scrape arm (no-config-safe,
+ *   mirrors `defaultMakeClient`'s no-key-safe idiom). This is what makes the
+ *   `ai-visibility-scrape` axis + a configured scrape engine LIVE in a real
+ *   `selectSource` run (Pitfall 1: BOTH `ai-visibility` and
+ *   `ai-visibility-scrape` must be on for the scrape arm to produce rows,
+ *   since it is routed through the LOCKED `AiVisibilityAdapter`'s
+ *   `ai-visibility` gate).
+ * - `makeJudgeLlm` (sc-11-3) mirrors `defaultMakeClient`'s guard order
+ *   (Pattern B): it returns `undefined` BEFORE calling `createClient` when
+ *   `ANTHROPIC_API_KEY` is absent — no-key-safe. Only built when
+ *   `config.seo.aiVisibility.judge?.enabled` is true; otherwise `makeJudgeLlm`
+ *   stays undefined and `resolveAiVisibilityProvider` never constructs a
+ *   judge (byte-identical-when-disabled, sc-11-3).
+ *
+ * `scrapeLoad` is intentionally NOT set here — production always uses each
+ * `ScrapeArmEngineProvider`'s own real lazy `damcrawler` loader (the class's
+ * constructor default); only tests inject a fake.
+ */
+function defaultAiVisibilityDeps(config: BoberConfig, projectRoot: string): AiVisibilityDeps {
+  const deps: AiVisibilityDeps = {
+    makeClient: defaultMakeClient,
+    extractor: new DeterministicMentionCitationExtractor(),
+  };
+
+  const scrapeCfg = config.seo?.aiVisibility?.scrape;
+  if (scrapeCfg) {
+    deps.scrapeThrottle = new ScrapeThrottle(scrapeThrottleLedgerPath(projectRoot), {
+      maxPerWindow: scrapeCfg.maxPerWindow,
+      windowMs: scrapeCfg.windowMs,
+      maxProxyUsd: scrapeCfg.maxProxyUsd,
+    });
+  }
+
+  const judgeCfg = config.seo?.aiVisibility?.judge;
+  if (judgeCfg?.enabled) {
+    deps.makeJudgeLlm = () => {
+      // Pitfall 3 / Pattern B: return undefined BEFORE createClient when
+      // unkeyed — runner.test.ts mocks createClient to THROW, so an eager
+      // call here would fail the whole file on a no-key run.
+      if (!process.env["ANTHROPIC_API_KEY"]) return undefined;
+      const model = judgeCfg.model ?? DEFAULT_SEO_MODEL;
+      const client = createClient(undefined, null, undefined, model, "ai-visibility");
+      return { client, model };
+    };
+  }
+
+  return deps;
+}
+
+/**
+ * Shared "unrouted" stub — every method resolves `{ kind: "disabled" }`
+ * regardless of which capability method is invoked. `CapabilitySeoRouter`
+ * dispatches to this for any capability key absent from its `routes` map.
+ */
+const DISABLED_SOURCE: SeoDataSource = {
+  capabilities: () => [],
+  searchAnalytics: async () => ({ kind: "disabled" }),
+  urlInspection: async () => ({ kind: "disabled" }),
+  serp: async () => ({ kind: "disabled" }),
+  keywords: async () => ({ kind: "disabled" }),
+  backlinks: async () => ({ kind: "disabled" }),
+  aiVisibility: async () => ({ kind: "disabled" }),
+  linkGraph: async () => ({ kind: "disabled" }),
+};
+
+/**
+ * CapabilitySeoRouter — dispatches each `SeoDataSource` capability method to
+ * the ONE source that owns that capability key (spec-20260717-seo-improver-
+ * builder, Sprint 9; replaces `CompositeSeoSource`). Assembled by
+ * `selectSource` per the ADR-8/ADR-10 route table (sc-9-3). An unrouted
+ * capability (absent from `routes`) resolves `{ kind: "disabled" }` via
+ * `DISABLED_SOURCE` — the router itself never throws (sc-9-1).
+ */
+class CapabilitySeoRouter implements SeoDataSource {
+  constructor(private readonly routes: Partial<Record<SeoCapability, SeoDataSource>>) {}
+
+  /**
+   * `Object.keys(routes)`, NOT a union of each routed source's OWN
+   * `capabilities()` — a routed source may itself advertise capabilities
+   * this router does not route to it (sprint briefing §11 Pitfall 8).
+   */
   capabilities(): SeoCapability[] {
-    return [...this.gsc.capabilities(), ...this.dataForSeo.capabilities()];
+    return Object.keys(this.routes) as SeoCapability[];
   }
-  searchAnalytics(q: SearchAnalyticsQuery) {
-    return this.gsc.searchAnalytics(q);
+  searchAnalytics(q: SearchAnalyticsQuery): Promise<DataOutcome<SearchAnalyticsRow[]>> {
+    return (this.routes["search-analytics"] ?? DISABLED_SOURCE).searchAnalytics(q);
   }
-  urlInspection(q: UrlInspectionQuery) {
-    return this.gsc.urlInspection(q);
+  urlInspection(q: UrlInspectionQuery): Promise<DataOutcome<UrlInspectionRow[]>> {
+    return (this.routes["url-inspection"] ?? DISABLED_SOURCE).urlInspection(q);
   }
-  serp(q: SerpQuery) {
-    return this.dataForSeo.serp(q);
+  serp(q: SerpQuery): Promise<DataOutcome<SerpRow[]>> {
+    return (this.routes["serp"] ?? DISABLED_SOURCE).serp(q);
   }
-  keywords(q: KeywordQuery) {
-    return this.dataForSeo.keywords(q);
+  keywords(q: KeywordQuery): Promise<DataOutcome<KeywordRow[]>> {
+    return (this.routes["keywords"] ?? DISABLED_SOURCE).keywords(q);
   }
-  backlinks(q: BacklinkQuery) {
-    return this.dataForSeo.backlinks(q);
+  backlinks(q: BacklinkQuery): Promise<DataOutcome<BacklinkRow[]>> {
+    return (this.routes["backlinks"] ?? DISABLED_SOURCE).backlinks(q);
+  }
+  aiVisibility(q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return (this.routes["ai-visibility"] ?? DISABLED_SOURCE).aiVisibility(q);
+  }
+  linkGraph(q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
+    return (this.routes["link-graph"] ?? DISABLED_SOURCE).linkGraph(q);
   }
 }
 
 /**
- * Build the `SeoDataSource` for a run from the two independent egress axes.
- * Both axes off (default) -> `LocalExportSource` (zero egress, no
- * credentials touched, no governor/ledger constructed — sc-11-2). Opted-in
- * -> the live adapter(s), backed by a `SeoQuotaGovernor` loaded ONLY on this
- * branch.
+ * SerpProviderSource — adapts a `SerpProvider` port's `serp(keyword,
+ * location)` (`serp-provider.ts:36-45`) into this file's `SeoDataSource`
+ * seam, whose `serp` method takes a single `SerpQuery` (sprint briefing
+ * Pattern C). Serves ONLY `serp`; every other capability is
+ * `{ kind: "disabled" }` unconditionally. `q.priority` is dropped by this
+ * shim — byte-identical, because `DataForSeoAdapter.serp` already defaults
+ * an absent `priority` to `"standard"` (`dataforseo-adapter.ts:199`).
  */
-export async function selectSource(config: BoberConfig, projectRoot: string): Promise<SeoDataSource> {
+class SerpProviderSource implements SeoDataSource {
+  constructor(private readonly provider: SerpProvider) {}
+
+  capabilities(): SeoCapability[] {
+    return ["serp"];
+  }
+  serp(q: SerpQuery): Promise<DataOutcome<SerpRow[]>> {
+    return this.provider.serp(q.keyword, q.location);
+  }
+  async searchAnalytics(_q: SearchAnalyticsQuery): Promise<DataOutcome<SearchAnalyticsRow[]>> {
+    return { kind: "disabled" };
+  }
+  async urlInspection(_q: UrlInspectionQuery): Promise<DataOutcome<UrlInspectionRow[]>> {
+    return { kind: "disabled" };
+  }
+  async keywords(_q: KeywordQuery): Promise<DataOutcome<KeywordRow[]>> {
+    return { kind: "disabled" };
+  }
+  async backlinks(_q: BacklinkQuery): Promise<DataOutcome<BacklinkRow[]>> {
+    return { kind: "disabled" };
+  }
+  async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return { kind: "disabled" };
+  }
+  async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
+    return { kind: "disabled" };
+  }
+}
+
+/**
+ * Build the `SeoDataSource` for a run from the FOUR independent egress axes
+ * (widened from two, spec-20260717-seo-improver-builder Sprint 9). ALL FOUR
+ * axes off (default) -> `LocalExportSource` (zero egress, no credentials
+ * touched, no governor/ledger constructed, `import('damcrawler')` never
+ * evaluated — sc-9-2). This `return` is the FIRST statement after the
+ * predicate, strictly BEFORE `SeoQuotaGovernor.load` (sprint briefing
+ * Pattern B / Pitfall 2) — that ordering is what makes the all-off path
+ * provably zero-construction.
+ *
+ * Otherwise, assemble a `CapabilitySeoRouter` per the deterministic
+ * ADR-8/ADR-10 route table (sc-9-3):
+ *   - `url-inspection`: `GscAdapter` when `search-console` is on (GSC always
+ *     wins, ADR-8); else `CrawlSource` when `site-crawl` is on.
+ *   - `link-graph`: `CrawlSource` when `site-crawl` is on.
+ *   - `serp`: the config-selected `SerpProvider` (`resolveSerpProvider`,
+ *     ADR-10), wrapped in `SerpProviderSource`, whenever `serp-provider` OR
+ *     `site-crawl` is on (whichever axis the selected provider itself
+ *     requires; each provider re-asserts its own axis on call).
+ *   - `keywords`/`backlinks`: `DataForSeoAdapter` when `serp-provider` is on.
+ *   - `ai-visibility`: `AiVisibilityAdapter` wrapping the composed
+ *     `resolveAiVisibilityProvider(...)` result when `ai-visibility` is on
+ *     AND at least one configured engine is keyed (Sprint 3); the offline
+ *     `LocalExportSource` arm otherwise (no-key-safe fallback).
+ */
+export async function selectSource(
+  config: BoberConfig,
+  projectRoot: string,
+  deps?: AiVisibilityDeps,
+): Promise<SeoDataSource> {
   const egress = SeoEgressGuard.fromConfig(config);
   const searchConsoleAllowed = egress.isAllowed("search-console");
   const serpProviderAllowed = egress.isAllowed("serp-provider");
+  const aiVisibilityAllowed = egress.isAllowed("ai-visibility");
+  const siteCrawlAllowed = egress.isAllowed("site-crawl");
 
-  if (!searchConsoleAllowed && !serpProviderAllowed) {
+  if (!searchConsoleAllowed && !serpProviderAllowed && !aiVisibilityAllowed && !siteCrawlAllowed) {
     return new LocalExportSource();
   }
 
   const governor = await SeoQuotaGovernor.load(quotaLedgerPath(projectRoot), config);
 
-  if (searchConsoleAllowed && serpProviderAllowed) {
-    return new CompositeSeoSource(new GscAdapter(egress, governor), new DataForSeoAdapter(egress, governor));
-  }
+  const routes: Partial<Record<SeoCapability, SeoDataSource>> = {};
+
   if (searchConsoleAllowed) {
-    return new GscAdapter(egress, governor);
+    const gsc = new GscAdapter(egress, governor);
+    routes["search-analytics"] = gsc;
+    routes["url-inspection"] = gsc; // ADR-8: GSC wins url-inspection when on
   }
-  return new DataForSeoAdapter(egress, governor);
+
+  if (siteCrawlAllowed) {
+    const crawlSource = new CrawlSource(
+      governor,
+      new DamcrawlerCrawlEngine(egress),
+      // bober: identity sanitizer for CrawlSource's OWN (defense-in-depth,
+      // sc-7-3) layer only. As of the Sprint 9 fix, `DamcrawlerCrawlEngine`
+      // sanitizes EVERY method (crawl/urlVisibility/linkGraph) at the
+      // network->in-process boundary via the real `dam.sanitize`
+      // (damcrawler-crawl-engine.ts F1) — that is now the genuine, load-
+      // bearing sanitization layer for every row this source returns.
+      // Leaving this second layer as identity is safe (it is redundant, not
+      // sole) — wiring the loaded module's `sanitize` export through here
+      // too would require exposing the engine's already-loaded damcrawler
+      // module, which `selectSource` cannot reach without duplicating the
+      // engine's own guard/load sequence. Follow-up: thread a real
+      // `dam.sanitize` here if CrawlSource is ever given its own loader.
+      new ContentSanitizer((raw) => ({ content: raw, hadThreats: false })),
+    );
+    routes["link-graph"] = crawlSource;
+    if (!searchConsoleAllowed) {
+      routes["url-inspection"] = crawlSource; // ADR-8: fallback only when GSC is off
+    }
+  }
+
+  // Built unconditionally on this (not-all-off) branch and reused for
+  // keywords/backlinks AND as the resolveSerpProvider dependency — each
+  // self-gates its own axis on call, so constructing it here is inert until
+  // a routed method is actually invoked (sprint briefing §4).
+  const dataForSeo = new DataForSeoAdapter(egress, governor);
+
+  if (serpProviderAllowed) {
+    routes["keywords"] = dataForSeo;
+    routes["backlinks"] = dataForSeo;
+  }
+
+  if (serpProviderAllowed || siteCrawlAllowed) {
+    routes["serp"] = new SerpProviderSource(resolveSerpProvider(config, dataForSeo, egress)); // ADR-10
+  }
+
+  if (aiVisibilityAllowed) {
+    // Sprint 3 (in-house-ai-visibility): compose the in-house API-spine
+    // multiplexer via the factory. No-key-safe: when no configured engine
+    // is keyed (or `config.seo.aiVisibility` is absent/empty), the factory
+    // returns `undefined` and this falls back to the offline
+    // `LocalExportSource` arm exactly as before — never a bogus live
+    // adapter with zero arms.
+    const aiVisibilityProvider = resolveAiVisibilityProvider(
+      config,
+      egress,
+      deps ?? defaultAiVisibilityDeps(config, projectRoot),
+    );
+    routes["ai-visibility"] = aiVisibilityProvider
+      ? new AiVisibilityAdapter(egress, governor, aiVisibilityProvider)
+      : new LocalExportSource();
+  }
+
+  return new CapabilitySeoRouter(routes);
 }
 
 // ── Data gathering ───────────────────────────────────────────────────
 
 /**
- * bober: gathers ALL five capabilities regardless of `workflow` — each
- *        `SeoDataSource` method degrades safely (`disabled`/`abstain`) when
- *        irrelevant, so this is always correct, just not capability-minimal.
- *        Swap for a workflow -> capability-subset map if live-adapter QPM/
- *        USD usage ever needs to be trimmed per workflow.
+ * Gathers ONLY the capabilities `WORKFLOW_CAPABILITIES` lists for `workflow`
+ * (spec-20260717-seo-improver-builder, Sprint 9; ADR-7) — an omitted
+ * capability is never called on `source` at all (not called-then-discarded),
+ * so the metered `ai-visibility` capability incurs zero cost/network for a
+ * workflow that does not consume it (sc-9-4). An omitted arm resolves
+ * `undefined` on `SeoDataBundle`, which the analyzer already renders as "not
+ * requested" (`analyzer.ts:127-128`).
+ *
+ * The `ai-visibility` arm (spec-20260718-in-house-ai-visibility, Sprint 6)
+ * loads the committed `TrackedPromptStore` set for `target` INSIDE the
+ * `requested.has("ai-visibility")` ternary — never hoisted above
+ * `Promise.all` — so a workflow that does not request `ai-visibility` never
+ * touches the filesystem for this store (sc-6-4). Only `prompts`/`locale`
+ * flow into the LOCKED `AiVisibilityQuery` (`data-source.ts:61`); the file's
+ * `engines`/`samplesPerPrompt` are advisory and are NOT forwarded (contract
+ * nonGoal — config resolves the real N/engines at provider construction).
  */
-async function gatherDataBundle(source: SeoDataSource, target: string, now: string): Promise<SeoDataBundle> {
+async function gatherDataBundle(
+  source: SeoDataSource,
+  workflow: SeoWorkflow,
+  target: string,
+  now: string,
+  projectRoot: string,
+): Promise<SeoDataBundle> {
   const day = now.slice(0, 10);
+  const requested = new Set(WORKFLOW_CAPABILITIES[workflow]);
+
   const searchAnalyticsQuery: SearchAnalyticsQuery = {
     siteUrl: target,
     startDate: day,
@@ -194,16 +505,26 @@ async function gatherDataBundle(source: SeoDataSource, target: string, now: stri
   const serpQuery: SerpQuery = { keyword: target, location: "us" };
   const keywordQuery: KeywordQuery = { keywords: [target], location: "us" };
   const backlinkQuery: BacklinkQuery = { target };
+  const linkGraphQuery: LinkGraphQuery = { rootUrl: target };
 
-  const [searchAnalytics, urlInspection, serp, keywords, backlinks] = await Promise.all([
-    source.searchAnalytics(searchAnalyticsQuery),
-    source.urlInspection(urlInspectionQuery),
-    source.serp(serpQuery),
-    source.keywords(keywordQuery),
-    source.backlinks(backlinkQuery),
+  const [searchAnalytics, urlInspection, serp, keywords, backlinks, aiVisibility, linkGraph] = await Promise.all([
+    requested.has("search-analytics") ? source.searchAnalytics(searchAnalyticsQuery) : undefined,
+    requested.has("url-inspection") ? source.urlInspection(urlInspectionQuery) : undefined,
+    requested.has("serp") ? source.serp(serpQuery) : undefined,
+    requested.has("keywords") ? source.keywords(keywordQuery) : undefined,
+    requested.has("backlinks") ? source.backlinks(backlinkQuery) : undefined,
+    requested.has("ai-visibility")
+      ? (async () => {
+          const set = await new TrackedPromptStore(projectRoot).load(target);
+          const query: AiVisibilityQuery = { target, prompts: set.prompts };
+          if (set.locale !== undefined) query.locale = set.locale; // omit key entirely when absent (sc-6-2)
+          return source.aiVisibility(query);
+        })()
+      : undefined,
+    requested.has("link-graph") ? source.linkGraph(linkGraphQuery) : undefined,
   ]);
 
-  return { searchAnalytics, urlInspection, serp, keywords, backlinks };
+  return { searchAnalytics, urlInspection, serp, keywords, backlinks, aiVisibility, linkGraph };
 }
 
 // ── Hub emission ─────────────────────────────────────────────────────
@@ -268,7 +589,7 @@ export class SeoWorkflowRunner {
       });
 
       const source = input.dataSource ?? (await selectSource(input.config, input.projectRoot));
-      const data = await gatherDataBundle(source, target, input.now);
+      const data = await gatherDataBundle(source, input.workflow, target, input.now, input.projectRoot);
 
       const analyzer = input.analyzer ?? buildDefaultAnalyzer();
       const analysis = await analyzer.analyze({
@@ -285,8 +606,14 @@ export class SeoWorkflowRunner {
         return { exitCode: 2 };
       }
 
+      // Third never-encode belt (spec-20260717-seo-improver-builder, Sprint 2;
+      // ADR-3): drops an LLM-synthesized banned tactic BEFORE the citation
+      // gate, even when it carries a well-formed citationUrl that would
+      // otherwise sail through `SeoCitationGate` untouched.
+      const scrubbed = new NeverEncodeFilter().apply(analysis.findings);
+
       const threshold = input.config.seo?.blockThreshold ?? "critical-uncited";
-      const gate = new SeoCitationGate().apply(analysis.findings, threshold);
+      const gate = new SeoCitationGate().apply(scrubbed.kept, threshold);
 
       // Opt-in, downgrade-only adversarial verifier stage (Sprint 12),
       // between the citation gate and persistence. The `enabled` check
@@ -317,6 +644,7 @@ export class SeoWorkflowRunner {
         generatedAt: input.now,
         findings: cited,
         droppedUncited: gate.dropped.length,
+        droppedNeverEncode: scrubbed.dropped.length,
         dataProvenance: analysis.dataProvenance,
         verdict: gate.blocked ? "blocked" : "pass",
       };

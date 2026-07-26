@@ -678,6 +678,17 @@ export const SeoConfigSchema = z.object({
       "search-console": z.boolean().default(false),
       /** When true, DataForSEO SERP/keywords/backlinks egress is permitted. Default false. */
       "serp-provider": z.boolean().default(false),
+      /** When true, live AI-visibility/GEO provider egress (BYOK grounded-LLM API spine) is permitted. Default false. */
+      "ai-visibility": z.boolean().default(false),
+      /** When true, damcrawler-backed site crawling (crawl/url-coverage/link-graph/SERP-scrape) is permitted. Default false. */
+      "site-crawl": z.boolean().default(false),
+      /**
+       * When true, the AI-visibility UI-scrape arm's egress is permitted.
+       * SEPARATE axis from `ai-visibility` (ADR-5, in-house-ai-visibility
+       * architecture line 44) — default false and, as of Sprint 3, composes
+       * NO provider yet (axis-only; the scrape arm lands Sprint 10).
+       */
+      "ai-visibility-scrape": z.boolean().default(false),
     })
     .optional(),
   /**
@@ -695,6 +706,96 @@ export const SeoConfigSchema = z.object({
   defaultTarget: z.string().optional(),
   /** Citation-gate blocking threshold for the CI exit code. Default 'critical-uncited'. */
   blockThreshold: z.enum(["never", "any-uncited", "critical-uncited"]).default("critical-uncited"),
+  /**
+   * Which SERP provider implementation serves the `serp` capability. OPTIONAL
+   * with an INNER default on `provider` (not an outer default on the whole
+   * object) — a config omitting `serp` entirely stays byte-identical
+   * (`SeoConfigSchema.parse({})` leaks only `blockThreshold`, schema.test.ts:978-985).
+   */
+  serp: z
+    .object({
+      provider: z.enum(["dataforseo", "damcrawler"]).default("dataforseo"),
+    })
+    .optional(),
+  /**
+   * In-house AI-visibility API-spine configuration (in-house-ai-visibility,
+   * Sprint 3). OPTIONAL with NO outer default — a config that omits
+   * `aiVisibility` entirely stays byte-identical (mirrors the `serp` idiom
+   * above). Inner fields carry their own `.default(...)` and only
+   * materialize when the object is present. `resolveAiVisibilityProvider`
+   * (`../seo/ai-visibility-provider.js`) reads this to compose per-engine
+   * arms; an engine with no matching API key is skipped (no-key-safe).
+   */
+  aiVisibility: z
+    .object({
+      /** Grounded-search samples per prompt per engine (N in the ADR-3 N-baked cost formula). Default 5. */
+      samplesPerPrompt: z.number().int().positive().default(5),
+      /**
+       * Which engines to probe. `"perplexity"` is a valid value but has no
+       * live provider mapper yet (Sprint 7 nonGoal) — configuring it yields
+       * zero rows from that arm, not an error. Default `[]` (no engines
+       * configured => `resolveAiVisibilityProvider` returns `undefined`).
+       */
+      engines: z
+        .array(
+          z.object({
+            engine: z.enum(["anthropic", "openai", "perplexity"]),
+            /** Fixed USD price per grounded-search call for this engine. Default 0. */
+            perCallUsd: z.number().nonnegative().default(0),
+          }),
+        )
+        .default([]),
+      /**
+       * Optional LLM-as-judge fuzzy-mention path (in-house-ai-visibility,
+       * Sprint 8). OPTIONAL with NO outer default — mirrors `serp`/
+       * `aiVisibility` above — a config that omits `judge` entirely stays
+       * byte-identical (`SeoConfigSchema.parse({ aiVisibility: {} })` leaks
+       * only `samplesPerPrompt`/`engines`, schema.test.ts:1089-1096). Only
+       * the inner `enabled` flag carries a `.default(false)`. The judge is
+       * OFF by default even when this object is present but `enabled` is
+       * omitted.
+       */
+      judge: z
+        .object({
+          enabled: z.boolean().default(false),
+          /** Optional model override for the judge call; falls back to the injected default when absent. */
+          model: z.string().optional(),
+        })
+        .optional(),
+      /**
+       * Gated damcrawler UI-scrape arm configuration (in-house-ai-
+       * visibility, Sprint 9/10). OPTIONAL with NO outer default — mirrors
+       * `serp`/`judge` above — a config that omits `scrape` entirely stays
+       * byte-identical (`SeoConfigSchema.parse({ aiVisibility: {} })` leaks
+       * only `samplesPerPrompt`/`engines`). Only the inner fields carry
+       * `.default(...)`. Gated separately by the `ai-visibility-scrape`
+       * egress axis (`../seo/egress.js`) — this object being present does
+       * NOT itself enable scraping. `authSession`/`proxy` are operator-
+       * supplied (nonGoal: no auth harvesting, no proxy sourcing); the rate/
+       * proxy-budget caps are consumed by a follow-up sprint's
+       * `ScrapeThrottle` runner wiring (Sprint 9 built the throttle itself
+       * in isolation; Sprint 10 composes the arm behind an injected dep).
+       */
+      scrape: z
+        .object({
+          /** Which scrape-arm engines to compose. This sprint composes ONLY "chatgpt-ui"; "perplexity-ui" is a valid config value with no live parser yet (Sprint 11 nonGoal). Default []. */
+          engines: z.array(z.enum(["chatgpt-ui", "perplexity-ui"])).default([]),
+          /** Operator-supplied auth session (storageState path / profile name / cookie blob) passed opaquely to damcrawler's scrape options. */
+          authSession: z.string().optional(),
+          /** Operator-supplied proxy passed opaquely to damcrawler's scrape options. */
+          proxy: z.string().optional(),
+          /** Fixed USD cost booked to the ScrapeThrottle proxy ledger per successful scrape. Default 0. */
+          proxyUsdPerScrape: z.number().nonnegative().default(0),
+          /** ScrapeThrottle rate-window cap: max acquire() grants per engine per window. Default 10. */
+          maxPerWindow: z.number().int().positive().default(10),
+          /** ScrapeThrottle rate-window length in milliseconds. Default 60000 (1 minute). */
+          windowMs: z.number().int().positive().default(60_000),
+          /** ScrapeThrottle cumulative proxy-USD cap per engine. Default 0 (no proxy spend permitted until explicitly raised). */
+          maxProxyUsd: z.number().nonnegative().default(0),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 export type SeoConfig = z.infer<typeof SeoConfigSchema>;
 

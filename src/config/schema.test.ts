@@ -916,7 +916,7 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
         provider: "anthropic",
         panel: { enabled: false, lenses: [], maxConcurrent: 4 },
       },
-      sprint: { maxSprints: 14, requireContracts: true, sprintSize: "medium" },
+      sprint: { maxSprints: 16, requireContracts: true, sprintSize: "medium" },
       pipeline: {
         maxIterations: 20,
         maxCheckpointIterations: 3,
@@ -975,19 +975,23 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
 // ── SeoConfigSchema tests (spec-20260715-ultimate-seo-suite sprint 1 — sc-1-1) ──
 
 describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
-  it("parse({}) leaks NO axis/verifier/budget/defaultTarget defaults — only blockThreshold", () => {
+  it("parse({}) leaks NO axis/verifier/budget/defaultTarget/serp defaults — only blockThreshold", () => {
     const parsed = SeoConfigSchema.parse({});
     expect(parsed).toEqual({ blockThreshold: "critical-uncited" });
     expect(Object.hasOwn(parsed, "egress")).toBe(false);
     expect(Object.hasOwn(parsed, "verifier")).toBe(false);
     expect(Object.hasOwn(parsed, "budget")).toBe(false);
     expect(Object.hasOwn(parsed, "defaultTarget")).toBe(false);
+    expect(Object.hasOwn(parsed, "serp")).toBe(false);
   });
 
   it("egress axes default false when egress object present", () => {
     expect(SeoConfigSchema.parse({ egress: {} }).egress).toEqual({
       "search-console": false,
       "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": false,
+      "ai-visibility-scrape": false,
     });
   });
 
@@ -995,7 +999,52 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
     const parsed = SeoConfigSchema.parse({
       egress: { "search-console": true, "serp-provider": false },
     });
-    expect(parsed.egress).toEqual({ "search-console": true, "serp-provider": false });
+    expect(parsed.egress).toEqual({
+      "search-console": true,
+      "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": false,
+      "ai-visibility-scrape": false,
+    });
+  });
+
+  it("ai-visibility and site-crawl axes default false and round-trip independently (sc-1-1)", () => {
+    expect(SeoConfigSchema.parse({ egress: { "ai-visibility": true } }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+      "ai-visibility": true,
+      "site-crawl": false,
+      "ai-visibility-scrape": false,
+    });
+    expect(SeoConfigSchema.parse({ egress: { "site-crawl": true } }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": true,
+      "ai-visibility-scrape": false,
+    });
+  });
+
+  it("ai-visibility-scrape axis defaults false and round-trips independently of the other four (sc-3-1)", () => {
+    expect(SeoConfigSchema.parse({ egress: { "ai-visibility-scrape": true } }).egress).toEqual({
+      "search-console": false,
+      "serp-provider": false,
+      "ai-visibility": false,
+      "site-crawl": false,
+      "ai-visibility-scrape": true,
+    });
+  });
+
+  it("serp.provider defaults to 'dataforseo' when serp object present, is optional otherwise (sc-1-1)", () => {
+    expect(Object.hasOwn(SeoConfigSchema.parse({}), "serp")).toBe(false);
+    expect(SeoConfigSchema.parse({ serp: {} }).serp).toEqual({ provider: "dataforseo" });
+    expect(SeoConfigSchema.parse({ serp: { provider: "damcrawler" } }).serp).toEqual({
+      provider: "damcrawler",
+    });
+  });
+
+  it("rejects a bogus serp.provider value", () => {
+    expect(() => SeoConfigSchema.parse({ serp: { provider: "bing" } })).toThrow();
   });
 
   it("verifier.enabled defaults false when verifier object present", () => {
@@ -1027,6 +1076,129 @@ describe("SeoConfigSchema — standalone validation (sc-1-1)", () => {
 
   it("rejects a bogus blockThreshold value", () => {
     expect(() => SeoConfigSchema.parse({ blockThreshold: "sometimes" })).toThrow();
+  });
+});
+
+// ── SeoConfigSchema.aiVisibility tests (in-house-ai-visibility, Sprint 3 — sc-3-1) ──
+
+describe("SeoConfigSchema.aiVisibility — optional, default-safe (sc-3-1)", () => {
+  it("aiVisibility is absent (no outer default) when omitted entirely", () => {
+    expect(Object.hasOwn(SeoConfigSchema.parse({}), "aiVisibility")).toBe(false);
+  });
+
+  it("samplesPerPrompt defaults to 5 and engines defaults to [] when aiVisibility object present but empty", () => {
+    expect(SeoConfigSchema.parse({ aiVisibility: {} }).aiVisibility).toEqual({
+      samplesPerPrompt: 5,
+      engines: [],
+    });
+  });
+
+  it("engines round-trip with per-engine perCallUsd defaulting to 0 when omitted", () => {
+    const parsed = SeoConfigSchema.parse({
+      aiVisibility: { engines: [{ engine: "anthropic" }] },
+    });
+    expect(parsed.aiVisibility).toEqual({
+      samplesPerPrompt: 5,
+      engines: [{ engine: "anthropic", perCallUsd: 0 }],
+    });
+  });
+
+  it("engines and samplesPerPrompt round-trip explicit values", () => {
+    const parsed = SeoConfigSchema.parse({
+      aiVisibility: {
+        samplesPerPrompt: 8,
+        engines: [
+          { engine: "anthropic", perCallUsd: 0.01 },
+          { engine: "openai", perCallUsd: 0.02 },
+        ],
+      },
+    });
+    expect(parsed.aiVisibility).toEqual({
+      samplesPerPrompt: 8,
+      engines: [
+        { engine: "anthropic", perCallUsd: 0.01 },
+        { engine: "openai", perCallUsd: 0.02 },
+      ],
+    });
+  });
+
+  it("accepts the 'perplexity' engine value (no live mapper yet, but a valid config value)", () => {
+    const parsed = SeoConfigSchema.parse({ aiVisibility: { engines: [{ engine: "perplexity" }] } });
+    expect(parsed.aiVisibility?.engines).toEqual([{ engine: "perplexity", perCallUsd: 0 }]);
+  });
+
+  it("rejects a bogus engine value", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { engines: [{ engine: "bing" }] } })).toThrow();
+  });
+
+  it("rejects a negative perCallUsd", () => {
+    expect(() =>
+      SeoConfigSchema.parse({ aiVisibility: { engines: [{ engine: "anthropic", perCallUsd: -1 }] } }),
+    ).toThrow();
+  });
+
+  it("rejects a non-positive samplesPerPrompt", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { samplesPerPrompt: 0 } })).toThrow();
+  });
+});
+
+// ── SeoConfigSchema.aiVisibility.scrape tests (in-house-ai-visibility, Sprint 10 — sc-10-4) ──
+
+describe("SeoConfigSchema.aiVisibility.scrape — optional, default-safe, no leakage (sc-10-4)", () => {
+  it("scrape is absent (no outer default) when aiVisibility is present but scrape is omitted — parse({ aiVisibility: {} }) still leaks only samplesPerPrompt/engines", () => {
+    const parsed = SeoConfigSchema.parse({ aiVisibility: {} });
+    expect(Object.hasOwn(parsed.aiVisibility ?? {}, "scrape")).toBe(false);
+    expect(parsed.aiVisibility).toEqual({ samplesPerPrompt: 5, engines: [] });
+  });
+
+  it("scrape sub-object defaults when present but empty", () => {
+    const parsed = SeoConfigSchema.parse({ aiVisibility: { scrape: {} } });
+    expect(parsed.aiVisibility?.scrape).toEqual({
+      engines: [],
+      proxyUsdPerScrape: 0,
+      maxPerWindow: 10,
+      windowMs: 60_000,
+      maxProxyUsd: 0,
+    });
+  });
+
+  it("scrape.engines accepts 'chatgpt-ui' and 'perplexity-ui'; authSession/proxy round-trip", () => {
+    const parsed = SeoConfigSchema.parse({
+      aiVisibility: {
+        scrape: {
+          engines: ["chatgpt-ui", "perplexity-ui"],
+          authSession: "/secrets/chatgpt-session.json",
+          proxy: "http://proxy.example:8080",
+          proxyUsdPerScrape: 0.02,
+          maxPerWindow: 20,
+          windowMs: 30_000,
+          maxProxyUsd: 5,
+        },
+      },
+    });
+    expect(parsed.aiVisibility?.scrape).toEqual({
+      engines: ["chatgpt-ui", "perplexity-ui"],
+      authSession: "/secrets/chatgpt-session.json",
+      proxy: "http://proxy.example:8080",
+      proxyUsdPerScrape: 0.02,
+      maxPerWindow: 20,
+      windowMs: 30_000,
+      maxProxyUsd: 5,
+    });
+  });
+
+  it("rejects a bogus scrape engine value", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { engines: ["bing-ui"] } } })).toThrow();
+  });
+
+  it("rejects a negative proxyUsdPerScrape / maxProxyUsd", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { proxyUsdPerScrape: -1 } } })).toThrow();
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { maxProxyUsd: -1 } } })).toThrow();
+  });
+
+  it("rejects a non-positive maxPerWindow / windowMs", () => {
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { maxPerWindow: 0 } } })).toThrow();
+    expect(() => SeoConfigSchema.parse({ aiVisibility: { scrape: { windowMs: 0 } } })).toThrow();
   });
 });
 
@@ -1111,6 +1283,9 @@ describe("BoberConfigSchema — seo section is optional, default-off (sc-1-1/sc-
       expect(result.data.seo?.egress).toEqual({
         "search-console": true,
         "serp-provider": false,
+        "ai-visibility": false,
+        "site-crawl": false,
+        "ai-visibility-scrape": false,
       });
       expect(result.data.seo?.blockThreshold).toBe("critical-uncited");
     }

@@ -12,6 +12,12 @@
  * Lives at `src/seo/command.ts` (not `src/cli/commands/seo.ts`) per the
  * contract's `estimatedFiles` — mirrors `registerFleetCommand`
  * (`src/fleet/index.ts`, imported into the CLI at `cli/index.ts:39`).
+ *
+ * `bober seo build <reportId>` (spec-20260717-seo-improver-builder,
+ * Sprint 13) is an ADDITIVE child subcommand hung off the returned `seo`
+ * command — it does NOT alter the `seo <workflow> [target]` `.action()`
+ * chain above (sc-13-3). Same stamp-once + never-throw discipline via
+ * `SeoBuildRunner`.
  */
 import chalk from "chalk";
 import type { Command } from "commander";
@@ -22,6 +28,8 @@ import { loadConfig } from "../config/loader.js";
 import type { SeoWorkflow } from "./types.js";
 import { SeoWorkflowRunner } from "./runner.js";
 import type { SeoRunInput, SeoRunOutcome } from "./runner.js";
+import { SeoBuildRunner } from "./builder/build-runner.js";
+import type { SeoBuildRunInput, SeoBuildRunOutcome } from "./builder/build-runner.js";
 
 /** The 8 SEO workflows the CLI dispatches on (mirrors `types.ts:17-25`). */
 const SEO_WORKFLOWS: readonly SeoWorkflow[] = [
@@ -42,10 +50,12 @@ function isSeoWorkflow(value: string): value is SeoWorkflow {
 export interface SeoCommandOverrides {
   /** Injected in tests to bypass the real runner (no real LLM/network/fs). */
   runWorkflow?: (input: SeoRunInput) => Promise<SeoRunOutcome>;
+  /** Injected in tests to bypass the real build runner (no real fs/hub). */
+  runBuild?: (input: SeoBuildRunInput) => Promise<SeoBuildRunOutcome>;
 }
 
 export function registerSeoCommand(program: Command, overrides?: SeoCommandOverrides): void {
-  program
+  const seo = program
     .command("seo <workflow> [target]")
     .description(
       "Run an SEO workflow end-to-end (offline by default; opt-in live data via config.seo.egress).",
@@ -82,6 +92,33 @@ export function registerSeoCommand(program: Command, overrides?: SeoCommandOverr
       } catch (err) {
         process.stderr.write(
           chalk.red(`seo failed: ${err instanceof Error ? err.message : String(err)}\n`),
+        );
+        process.exitCode = 2; // fail-closed; 1 is Commander-reserved
+      }
+    });
+
+  // Additive child subcommand (spec-20260717-seo-improver-builder, Sprint 13)
+  // — does NOT alter the analyze `.action()` chain above (sc-13-3).
+  seo
+    .command("build <reportId>")
+    .description(
+      "Draft human-approval-required SEO artifacts from a report's approved hub findings.",
+    )
+    .action(async (reportId: string) => {
+      try {
+        const projectRoot = (await findProjectRoot()) ?? process.cwd();
+        // Stamp wall-clock time ONLY here — never inside the build runner.
+        const now = new Date().toISOString();
+        const config = await loadConfig(projectRoot);
+
+        const run =
+          overrides?.runBuild ?? ((i: SeoBuildRunInput) => new SeoBuildRunner().run(i));
+
+        const { exitCode } = await run({ projectRoot, config, reportId, now });
+        process.exitCode = exitCode;
+      } catch (err) {
+        process.stderr.write(
+          chalk.red(`seo build failed: ${err instanceof Error ? err.message : String(err)}\n`),
         );
         process.exitCode = 2; // fail-closed; 1 is Commander-reserved
       }

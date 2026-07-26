@@ -49,6 +49,10 @@ import type {
   KeywordRow,
   BacklinkQuery,
   BacklinkRow,
+  AiVisibilityQuery,
+  AiVisibilityRow,
+  LinkGraphQuery,
+  LinkGraphRow,
 } from "../data-source.js";
 import type { DataOutcome, DataProvenance } from "../types.js";
 
@@ -347,6 +351,16 @@ export class DataForSeoAdapter implements SeoDataSource {
   }
 
   async urlInspection(_q: UrlInspectionQuery): Promise<DataOutcome<UrlInspectionRow[]>> {
+    return { kind: "disabled" };
+  }
+
+  // -- DataForSEO does not serve ai-visibility/link-graph either (spec-20260717-seo-improver-builder, Sprint 1) --
+
+  async aiVisibility(_q: AiVisibilityQuery): Promise<DataOutcome<AiVisibilityRow[]>> {
+    return { kind: "disabled" };
+  }
+
+  async linkGraph(_q: LinkGraphQuery): Promise<DataOutcome<LinkGraphRow[]>> {
     return { kind: "disabled" };
   }
 }

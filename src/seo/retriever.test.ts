@@ -65,6 +65,18 @@ describe("SeoPlaybookRetriever — real skill files", () => {
 
     expect(result.signatures.length).toBeGreaterThan(0);
   });
+
+  // Carried from the Sprint-3 evaluation (sc-3-2, medium): persisted
+  // assertion that a retrieved promptFragment renders a `LiveWeight:` line.
+  // Sprint 4 (spec-20260717-seo-improver-builder) authors the first real
+  // documented-only values on the technical-audit leak signatures
+  // (siteauthority-domain-quality, navboost-click-quality-audit,
+  // contenteffort-low-effort-flag), which rank into the top-8 and render.
+  it("renders a LiveWeight: documented-only line for a leak-signature workflow", async () => {
+    const retriever = new SeoPlaybookRetriever(index);
+    const result = await retriever.retrieve({ workflow: "technical-audit" });
+    expect(result.promptFragment).toContain("LiveWeight: documented-only");
+  });
 });
 
 // ── never-empty fallback when the index is entirely empty (sc-2-4) ─────

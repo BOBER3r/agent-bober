@@ -264,6 +264,26 @@ export interface ChatResponse {
    * determined, e.g. an unpriced model or an older CLI that didn't report it.
    */
   costUsd?: number;
+  /**
+   * Raw grounded-search citations surfaced by a `web_search` turn
+   * (in-house-in-house-ai-visibility sprint 1). Absent (key omitted) when
+   * the turn was not grounded / the provider returned no citations — never
+   * an empty array set by convention, so `GroundedSearchClient` can
+   * distinguish "not grounded" from "grounded with zero sources" if that
+   * ever matters upstream.
+   *
+   * Vendor-native superset, populated by the per-adapter response mapper:
+   *   - Anthropic `web_search_result_location` → `{url, title, cited_text}`
+   *   - OpenAI `url_citation` annotation → `{url, title}`
+   *
+   * NOTE: no adapter populates this field yet (`anthropic.ts`'s
+   * `normalizeContent` still drops `web_search` citation blocks). Wiring
+   * real-adapter population is deferred to a later sprint; this field is
+   * the contract that sprint will fill. `LiveGroundedSearchClient`
+   * (`grounded-search.ts`) already reads and normalizes it via a scripted
+   * `LLMClient` in tests.
+   */
+  groundingCitations?: { url: string; title?: string; cited_text?: string }[];
 }
 
 // ── LLMClient interface ─────────────────────────────────────────────
