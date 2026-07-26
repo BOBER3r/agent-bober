@@ -201,6 +201,13 @@ agent-bober impact <symbol>    # Analyse impact radius and test coverage
 
 In Claude Code, the same workflows are available as slash commands: `/bober-graph`, `/bober-onboard`, `/bober-impact`.
 
+> **Pluggable backend (internal).** The graph layer now talks to its engine through a `GraphBackend`
+> seam (`src/graph/backends/`): `GraphClient` owns the cross-cutting sandbox/staleness/health/fallback
+> logic and delegates the per-engine tool catalog and response adapters to an injected backend.
+> Today the only backend is `TokensaveBackend`, so behaviour is unchanged — the seam exists so a second
+> code-graph engine can be added without touching `GraphClient`. There is no user-facing backend
+> selector yet.
+
 For architecture details see: [`.bober/architecture/arch-20260524-port-code-review-graph-architecture.md`](.bober/architecture/arch-20260524-port-code-review-graph-architecture.md)
 
 ---
