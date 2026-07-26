@@ -19,6 +19,7 @@ import { TokensaveMcpClient } from "../../graph/mcp-client.js";
 import { IncidentLog } from "../../graph/incidents.js";
 import { GraphFallback } from "../../graph/fallback.js";
 import { GraphClient } from "../../graph/client.js";
+import { TokensaveBackend } from "../../graph/backends/tokensave-backend.js";
 import { OnboardingComposer } from "../../graph/onboarding-composer.js";
 import type { OnboardingInputs } from "../../graph/types.js";
 
@@ -111,6 +112,7 @@ export function registerOnboardCommand(program: Command): void {
           fallback,
           incidents,
           graphCfg,
+          new TokensaveBackend(),
         );
 
         process.stdout.write(chalk.cyan("Querying code graph...\n"));

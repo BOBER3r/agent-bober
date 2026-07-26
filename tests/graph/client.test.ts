@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { GraphClient } from "../../src/graph/client.js";
 import { GraphFallback } from "../../src/graph/fallback.js";
+import { TokensaveBackend } from "../../src/graph/backends/tokensave-backend.js";
 import type { TokensaveMcpClient } from "../../src/graph/mcp-client.js";
 import type { GraphArtifactStore } from "../../src/graph/artifact-store.js";
 import type { IncidentLog } from "../../src/graph/incidents.js";
@@ -81,6 +82,7 @@ function makeClient(
     new GraphFallback("dual"),
     incidents ?? makeMockIncidents(),
     makeConfig(enabled),
+    new TokensaveBackend(),
   );
 }
 
@@ -404,6 +406,7 @@ describe("GraphClient sandbox post-filter", () => {
       new GraphFallback("dual"),
       incidents,
       makeConfig(),
+      new TokensaveBackend(),
     );
     const r = await client.search("anything");
     expect(r.ok).toBe(true);
@@ -434,6 +437,7 @@ describe("GraphClient sandbox post-filter", () => {
       new GraphFallback("dual"),
       incidents,
       makeConfig(),
+      new TokensaveBackend(),
     );
     const r = await client.search("anything");
     if (r.ok) {
@@ -462,6 +466,7 @@ describe("GraphClient sandbox post-filter", () => {
       new GraphFallback("dual"),
       incidents,
       makeConfig(),
+      new TokensaveBackend(),
     );
     const r = await client.search("anything");
     expect(r.ok).toBe(true);
@@ -486,6 +491,7 @@ describe("GraphClient sandbox post-filter", () => {
       new GraphFallback("dual"),
       incidents,
       makeConfig(),
+      new TokensaveBackend(),
     );
     const r = await client.search("anything");
     if (r.ok) expect(r.data.length).toBe(0);
@@ -596,6 +602,7 @@ describe("GraphClient staleness flag", () => {
       new GraphFallback("dual"),
       makeMockIncidents(),
       makeConfig(),
+      new TokensaveBackend(),
     );
     await client.search("x");
     await client.search("y");

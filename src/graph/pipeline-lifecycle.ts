@@ -24,6 +24,7 @@ import { TokensaveMcpClient, type EngineHealth } from "./mcp-client.js";
 import { IncidentLog } from "./incidents.js";
 import { GraphClient } from "./client.js";
 import { GraphFallback } from "./fallback.js";
+import { TokensaveBackend } from "./backends/tokensave-backend.js";
 import { GraphHookHandler } from "./hook-handler.js";
 import { TokensaveCli } from "./cli.js";
 
@@ -246,6 +247,7 @@ class GraphPipelineLifecycleImpl {
             researcherPhase2: 3000,
           },
         },
+        new TokensaveBackend(),
       );
     }
     return this._graphClient;

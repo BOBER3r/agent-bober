@@ -86,6 +86,7 @@ export async function createBoberMCPServer(
         const { IncidentLog } = await import("../graph/incidents.js");
         const { TokensaveMcpClient } = await import("../graph/mcp-client.js");
         const { GraphClient } = await import("../graph/client.js");
+        const { TokensaveBackend } = await import("../graph/backends/tokensave-backend.js");
         const { registerGraphTools } = await import("./tools/graph.js");
 
         const cfg = config.graph;
@@ -105,6 +106,7 @@ export async function createBoberMCPServer(
           graphFallback,
           incidents,
           cfg,
+          new TokensaveBackend(),
         );
         registerGraphTools({ client, fallback: graphFallback });
       }

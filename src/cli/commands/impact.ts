@@ -21,6 +21,7 @@ import { TokensaveMcpClient } from "../../graph/mcp-client.js";
 import { IncidentLog } from "../../graph/incidents.js";
 import { GraphFallback } from "../../graph/fallback.js";
 import { GraphClient } from "../../graph/client.js";
+import { TokensaveBackend } from "../../graph/backends/tokensave-backend.js";
 import type { NodeRef } from "../../graph/types.js";
 
 // ── Architecture doc link ──────────────────────────────────────────
@@ -142,6 +143,7 @@ export function registerImpactCommand(program: Command): void {
           fallback,
           incidents,
           graphCfg,
+          new TokensaveBackend(),
         );
 
         process.stdout.write(chalk.cyan(`Analysing impact for: ${target}\n`));
