@@ -8,9 +8,10 @@
  * the agent-bober repository root when running vitest.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { join } from "node:path";
 import { writeFile, mkdir, rm } from "node:fs/promises";
+import { execa } from "execa";
 import { scanProject } from "./scanner.js";
 import { scanPackageScripts } from "./scanners/package-scripts.js";
 import { scanCIChecks } from "./scanners/ci-checks.js";
@@ -315,6 +316,30 @@ describe("scanCIChecks()", () => {
 // ── scanGitConventions ────────────────────────────────────────────
 
 describe("scanGitConventions()", () => {
+  // A hermetic temp git repo with known commits + branches, so the
+  // convention-detection assertions below are deterministic. Scanning
+  // PROJECT_ROOT for these is non-deterministic in CI: a PR checkout is a
+  // detached-HEAD merge ref (no bober/* branches) with a shallow history
+  // (no bober( commits), so those assertions fail on every PR.
+  const GIT_FIXTURE = join("/tmp", "bober-test-git-conventions");
+  beforeAll(async () => {
+    await rm(GIT_FIXTURE, { recursive: true, force: true });
+    await mkdir(GIT_FIXTURE, { recursive: true });
+    const git = (args: string[]) => execa("git", args, { cwd: GIT_FIXTURE });
+    await git(["init"]);
+    await git(["config", "user.email", "test@bober.local"]);
+    await git(["config", "user.name", "Bober Test"]);
+    await git(["config", "commit.gpgsign", "false"]);
+    await git(["commit", "--allow-empty", "-m", "feat: initial scaffold"]);
+    await git(["commit", "--allow-empty", "-m", "bober(sprint-1): add discovery scanner"]);
+    await git(["commit", "--allow-empty", "-m", "bober(sprint-2): wire eval gate"]);
+    await git(["commit", "--allow-empty", "-m", "fix: handle empty git log"]);
+    await git(["branch", "bober/test-feature"]);
+  });
+  afterAll(async () => {
+    await rm(GIT_FIXTURE, { recursive: true, force: true });
+  });
+
   it("scans agent-bober git history successfully", async () => {
     const report = await scanGitConventions(PROJECT_ROOT);
     // agent-bober is a git repo, so this should succeed
@@ -327,24 +352,24 @@ describe("scanGitConventions()", () => {
   });
 
   it("detects a conventional-style prefix as most common commit pattern", async () => {
-    const report = await scanGitConventions(PROJECT_ROOT);
-    // The repo uses conventional commits (feat:, docs:, bober(*):, etc.)
-    // At minimum, mostCommonPrefix should be non-null and contain ":"
+    const report = await scanGitConventions(GIT_FIXTURE);
+    // The fixture uses conventional/bober( prefixes (feat:, bober(sprint-N):, fix:).
+    // mostCommonPrefix should be non-null and contain ":"
     expect(report?.mostCommonPrefix).not.toBeNull();
     expect(report?.mostCommonPrefix).toMatch(/:/);
   });
 
   it("detects bober( prefix in recent commit messages", async () => {
-    const report = await scanGitConventions(PROJECT_ROOT);
-    // The repo has many "bober(sprint-N):" commits in its history
+    const report = await scanGitConventions(GIT_FIXTURE);
+    // The fixture has "bober(sprint-N):" commits in its history
     const hasBober = report?.recentMessages.some((m) => m.startsWith("bober("));
     expect(hasBober).toBe(true);
   });
 
   it("detects branch patterns from git branches", async () => {
-    const report = await scanGitConventions(PROJECT_ROOT);
+    const report = await scanGitConventions(GIT_FIXTURE);
     expect(Array.isArray(report?.branchPatterns)).toBe(true);
-    // agent-bober has bober/* branches
+    // The fixture has a bober/* branch
     expect(report?.branchPatterns).toContain("bober/*");
   });
 
