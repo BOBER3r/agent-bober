@@ -203,10 +203,14 @@ In Claude Code, the same workflows are available as slash commands: `/bober-grap
 
 > **Pluggable backend (internal).** The graph layer now talks to its engine through a `GraphBackend`
 > seam (`src/graph/backends/`): `GraphClient` owns the cross-cutting sandbox/staleness/health/fallback
-> logic and delegates the per-engine tool catalog and response adapters to an injected backend.
-> Today the only backend is `TokensaveBackend`, so behaviour is unchanged — the seam exists so a second
-> code-graph engine can be added without touching `GraphClient`. There is no user-facing backend
-> selector yet.
+> logic and delegates the per-engine tool catalog and response adapters to an injected backend. A
+> backend also describes *how to run* its engine — a `ProcessSpec` (binary + serve args) the MCP
+> transport spawns from, a `PrereqSpec` (version command, compatibility predicate, and the install
+> hints shown above), and a `CliMap` (init/sync/status args + output parsers). The tokensave version
+> range and install-hint strings live only in `TokensaveBackend`. Today the only backend is
+> `TokensaveBackend`, so behaviour is unchanged — the seam exists so a second code-graph engine can be
+> added without touching `GraphClient`, the transport, the prereq check, or the CLI wrapper. There is
+> no user-facing backend selector yet.
 
 For architecture details see: [`.bober/architecture/arch-20260524-port-code-review-graph-architecture.md`](.bober/architecture/arch-20260524-port-code-review-graph-architecture.md)
 
