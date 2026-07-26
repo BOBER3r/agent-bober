@@ -42,7 +42,21 @@ Based on the user's answers, determine the appropriate `mode` and `preset`:
 
 The planner should be able to plan ANY type of project -- web apps, APIs, smart contracts, CLI tools, mobile apps, libraries, data pipelines, etc. Do not limit the user to predefined categories.
 
-Create `bober.config.json` using the appropriate defaults from the mode and preset. Use the schema defined in `src/config/schema.ts` and defaults from `src/config/defaults.ts` as reference. Auto-detect commands by examining `package.json`, `Cargo.toml`, `Anchor.toml`, `hardhat.config.*`, `foundry.toml`, or other project manifests if available.
+**Write `bober.config.json` now — do not wait for further confirmation, and do NOT try to read `src/config/*.ts` or `templates/*` (those source files are absent in a plugin or standalone install; only relative project paths resolve).** Use the self-contained default below as your starting point. Set `project.name`, `project.mode` (`"greenfield"` or `"brownfield"`), and `project.description` from the user's answers; add `project.preset` and/or `project.stack` when they apply. Auto-detect the `commands` by examining `package.json`, `Cargo.toml`, `Anchor.toml`, `hardhat.config.*`, `foundry.toml`, or other manifests — omit any command you cannot detect rather than guessing.
+
+```json
+{
+  "project": { "name": "<name>", "mode": "greenfield", "description": "<what they are building>" },
+  "planner": { "maxClarifications": 5, "model": "opus" },
+  "generator": { "model": "sonnet", "maxTurnsPerSprint": 50, "autoCommit": true, "branchPattern": "bober/{feature-name}" },
+  "evaluator": { "model": "sonnet", "strategies": [ { "type": "build", "required": true } ], "maxIterations": 3 },
+  "sprint": { "maxSprints": 10, "requireContracts": true, "sprintSize": "medium" },
+  "pipeline": { "maxIterations": 20, "requireApproval": false, "contextReset": "always" },
+  "commands": {}
+}
+```
+
+`project.preset` (optional) is one of `"nextjs"`, `"react-vite"`, `"solidity"`, `"anchor"`, `"api-node"`, `"python-api"`; `project.stack` (optional) is a free-form object such as `{ "frontend": "react", "backend": "express", "database": "postgresql" }`. For richer stacks, add the matching `evaluator.strategies` (e.g. `typecheck`, `lint`, `unit-test`, `playwright`) alongside their `commands`. After writing the file, verify it exists on disk, then continue — the config now exists, so the "does not exist" branch must not trigger again.
 
 Then create the `.bober/` directory structure:
 ```bash
