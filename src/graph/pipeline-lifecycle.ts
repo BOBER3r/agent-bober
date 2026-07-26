@@ -18,13 +18,15 @@ import { resolve } from "node:path";
 import type { BoberConfig } from "../config/schema.js";
 import { fileExists, readJson, writeJson } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
-import { TokensavePrereqCheck } from "./prereq.js";
+import { GenericPrereqCheck } from "./prereq.js";
 import { GraphArtifactStore } from "./artifact-store.js";
 import { TokensaveMcpClient, type EngineHealth } from "./mcp-client.js";
 import { IncidentLog } from "./incidents.js";
 import { GraphClient } from "./client.js";
 import { GraphFallback } from "./fallback.js";
 import { TokensaveBackend } from "./backends/tokensave-backend.js";
+import type { GraphBackend } from "./backends/types.js";
+import { resolveGraphBackend, binaryForBackend } from "./backends/registry.js";
 import { GraphHookHandler } from "./hook-handler.js";
 import { TokensaveCli } from "./cli.js";
 
@@ -43,7 +45,7 @@ class GraphPipelineLifecycleImpl {
   private stopping = false;
   private healthOverride: "disabled" | null = null;
   private mcpClient: TokensaveMcpClient | null = null;
-  private backend: TokensaveBackend | null = null;
+  private backend: GraphBackend | null = null;
   private store: GraphArtifactStore | null = null;
   private incidents: IncidentLog | null = null;
   private hookHandler: GraphHookHandler | null = null;
@@ -75,10 +77,13 @@ class GraphPipelineLifecycleImpl {
     this.pidPath = resolve(projectRoot, ".bober/graph/.serve.pid");
     this.incidents = new IncidentLog(projectRoot);
 
+    // Resolve which engine to run — explicit config.graph.backend wins,
+    // else auto-detect (tokensave preferred when both are installed).
+    const backend = await resolveGraphBackend(config);
+    const binary = binaryForBackend(backend, config);
+
     // Prereq check — fail fast on missing/incompatible binary
-    const prereq = await new TokensavePrereqCheck(
-      cfg.tokensavePath ?? "tokensave",
-    ).check();
+    const prereq = await new GenericPrereqCheck(binary, backend.prereqSpec()).check();
 
     if (!prereq.ok) {
       throw new Error(
@@ -93,9 +98,9 @@ class GraphPipelineLifecycleImpl {
     // Orphan cleanup
     await this.handleOrphan();
 
-    // Spawn — reuse ONE TokensaveBackend instance for both the transport
+    // Spawn — reuse ONE resolved backend instance for both the transport
     // (processSpec) and the GraphClient (constructed lazily in getGraphClient).
-    this.backend = new TokensaveBackend();
+    this.backend = backend;
     this.mcpClient = new TokensaveMcpClient(
       projectRoot,
       cfg,

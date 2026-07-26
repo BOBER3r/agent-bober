@@ -24,6 +24,8 @@ describe("GraphArtifactStore", () => {
     const m = {
       schemaVersion: 1 as const,
       tokensaveVersion: "6.0.0-beta.1",
+      backend: "tokensave",
+      backendVersion: "6.0.0-beta.1",
       createdAt: "2026-05-24T00:00:00Z",
       lastSyncAt: "2026-05-24T00:00:00Z",
       indexedFileCount: 0,
@@ -37,6 +39,35 @@ describe("GraphArtifactStore", () => {
     expect(read?.schemaVersion).toBe(1);
   });
 
+  it("readManifest normalizes a legacy manifest (no backend/backendVersion) to backend='tokensave' (sc-3-7)", async () => {
+    const store = new GraphArtifactStore(tmp);
+    const legacy = {
+      schemaVersion: 1 as const,
+      tokensaveVersion: "6.0.0-beta.1",
+      createdAt: "2026-05-24T00:00:00Z",
+      lastSyncAt: "2026-05-24T00:00:00Z",
+      indexedFileCount: 3,
+      languageTier: "core",
+      lastSyncedHeadSha: null,
+      pendingFiles: [],
+    };
+    // Write the raw legacy shape directly (bypassing writeManifest's type,
+    // which now requires backend/backendVersion) to simulate an on-disk
+    // manifest written before this sprint.
+    await store.ensureLayout();
+    await writeFile(
+      join(tmp, ".bober/graph/manifest.json"),
+      JSON.stringify(legacy),
+      "utf-8",
+    );
+
+    const read = await store.readManifest();
+    expect(read).not.toBeNull();
+    expect(read?.backend).toBe("tokensave");
+    expect(read?.backendVersion).toBe(legacy.tokensaveVersion);
+    expect(read?.indexedFileCount).toBe(3);
+  });
+
   it("staleness returns NO_MANIFEST when no manifest exists", async () => {
     const v = await new GraphArtifactStore(tmp).staleness();
     expect(v.stale).toBe(true);
@@ -48,6 +79,8 @@ describe("GraphArtifactStore", () => {
     await store.writeManifest({
       schemaVersion: 1,
       tokensaveVersion: "6.0.0-beta.1",
+      backend: "tokensave",
+      backendVersion: "6.0.0-beta.1",
       createdAt: new Date(Date.now() - 60_000).toISOString(),
       lastSyncAt: new Date(Date.now() - 60_000).toISOString(),
       indexedFileCount: 0,
@@ -74,6 +107,8 @@ describe("GraphArtifactStore", () => {
     await store.writeManifest({
       schemaVersion: 1,
       tokensaveVersion: "6.0.0-beta.1",
+      backend: "tokensave",
+      backendVersion: "6.0.0-beta.1",
       createdAt: new Date().toISOString(),
       lastSyncAt: new Date().toISOString(),
       indexedFileCount: 0,
@@ -89,6 +124,8 @@ describe("GraphArtifactStore", () => {
     await store.writeManifest({
       schemaVersion: 1,
       tokensaveVersion: "6.0.0-beta.1",
+      backend: "tokensave",
+      backendVersion: "6.0.0-beta.1",
       createdAt: new Date().toISOString(),
       lastSyncAt: new Date().toISOString(),
       indexedFileCount: 0,

@@ -12,7 +12,12 @@ export type PrereqResult =
 
 export type GraphManifest = {
   schemaVersion: 1;
+  /** Kept for back-compat — always written when the backend is tokensave. */
   tokensaveVersion: string;
+  /** Resolved engine id, e.g. "tokensave" | "code-review-graph". */
+  backend: string;
+  /** Resolved engine version (mirrors tokensaveVersion for the tokensave backend). */
+  backendVersion: string;
   createdAt: string;
   lastSyncAt: string;
   indexedFileCount: number;

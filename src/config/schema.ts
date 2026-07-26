@@ -394,6 +394,10 @@ export type GraphPreflightBudgets = z.infer<typeof GraphPreflightBudgetsSchema>;
 export const GraphSectionSchema = z.object({
   enabled: z.boolean().default(false),
   tokensavePath: z.string().optional(),
+  /** Explicit engine override. Unset = auto-detect (tokensave preferred). */
+  backend: z.enum(["tokensave", "code-review-graph"]).optional(),
+  /** Custom code-review-graph binary path (mirrors tokensavePath). */
+  codeReviewGraphPath: z.string().optional(),
   autoSync: z.boolean().default(true),
   languageTier: GraphLanguageTierSchema.default("core"),
   manifestPath: z.string().default(".bober/graph/manifest.json"),

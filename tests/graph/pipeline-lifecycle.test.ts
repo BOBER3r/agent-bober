@@ -22,10 +22,32 @@ vi.mock("../../src/graph/prereq.js", () => {
   const MockPrereq = vi.fn().mockImplementation(() => ({
     check: vi.fn().mockResolvedValue({ ok: true, version: "6.0.0-beta.1" }),
   }));
-  return { TokensavePrereqCheck: MockPrereq };
+  return { GenericPrereqCheck: MockPrereq };
 });
 
-import { TokensavePrereqCheck } from "../../src/graph/prereq.js";
+// Mock backend resolution — these lifecycle tests exercise start/stop/PID/
+// orphan behavior, not backend auto-detection (that lives in
+// tests/graph/backends/registry.test.ts). Resolve deterministically to a
+// tokensave-shaped backend without probing any real binary.
+vi.mock("../../src/graph/backends/registry.js", () => {
+  const stubBackend = {
+    id: "tokensave",
+    processSpec: () => ({ binary: "tokensave", serveArgs: ["serve"] }),
+    prereqSpec: () => ({
+      versionArgs: ["--version"],
+      isCompatible: () => true,
+      installHint: () => "brew install aovestdipaperino/tap/tokensave",
+      incompatibleHint: () => "",
+    }),
+  };
+  return {
+    resolveGraphBackend: vi.fn().mockResolvedValue(stubBackend),
+    binaryForBackend: vi.fn().mockReturnValue("tokensave"),
+    KNOWN_BACKENDS: [stubBackend],
+  };
+});
+
+import { GenericPrereqCheck } from "../../src/graph/prereq.js";
 import { TokensaveMcpClient } from "../../src/graph/mcp-client.js";
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -61,7 +83,7 @@ let tmp: string;
 beforeEach(async () => {
   vi.clearAllMocks();
   // Reset mocks to default (pass) state each test
-  (TokensavePrereqCheck as unknown as Mock).mockImplementation(() => ({
+  (GenericPrereqCheck as unknown as Mock).mockImplementation(() => ({
     check: vi.fn().mockResolvedValue({ ok: true, version: "6.0.0-beta.1" }),
   }));
   (TokensaveMcpClient as unknown as Mock).mockImplementation(() => ({
@@ -117,7 +139,7 @@ describe("GraphPipelineLifecycle — graph.enabled=false", () => {
 
 describe("GraphPipelineLifecycle — prereq failure", () => {
   it("start() throws structured error when prereq fails", async () => {
-    (TokensavePrereqCheck as unknown as Mock).mockImplementation(() => ({
+    (GenericPrereqCheck as unknown as Mock).mockImplementation(() => ({
       check: vi.fn().mockResolvedValue({
         ok: false,
         reason: "MISSING",
@@ -132,7 +154,7 @@ describe("GraphPipelineLifecycle — prereq failure", () => {
   });
 
   it("does not spawn MCP client when prereq fails", async () => {
-    (TokensavePrereqCheck as unknown as Mock).mockImplementation(() => ({
+    (GenericPrereqCheck as unknown as Mock).mockImplementation(() => ({
       check: vi.fn().mockResolvedValue({
         ok: false,
         reason: "INCOMPATIBLE",

@@ -86,13 +86,13 @@ export async function createBoberMCPServer(
         const { IncidentLog } = await import("../graph/incidents.js");
         const { TokensaveMcpClient } = await import("../graph/mcp-client.js");
         const { GraphClient } = await import("../graph/client.js");
-        const { TokensaveBackend } = await import("../graph/backends/tokensave-backend.js");
+        const { resolveGraphBackend } = await import("../graph/backends/registry.js");
         const { registerGraphTools } = await import("./tools/graph.js");
 
         const cfg = config.graph;
         const store = new GraphArtifactStore(projectRoot);
         const incidents = new IncidentLog(projectRoot);
-        const backend = new TokensaveBackend();
+        const backend = await resolveGraphBackend(config);
         const mcpClient = new TokensaveMcpClient(
           projectRoot,
           cfg,
