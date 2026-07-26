@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-07-26
+
+### Fixed
+
+- **Config bootstrap in plugin / standalone installs**: `bober.plan` and `bober.run` bootstrapped `bober.config.json` by telling the model to reference `src/config/schema.ts` and `src/config/defaults.ts` — source files that are **absent** when the plugin (or a bare `.claude/` copy) runs inside a user's project, so the config was frequently never written and every downstream step failed with a missing-config error. Both skills now embed a self-contained default config inline, make the write step **non-optional** (create-then-adjust rather than ask-and-wait), and no longer depend on the agent-bober source tree.
+- **`run` prerequisites check on plugin installs**: `bober.run` step 1b ran `bash scripts/check-prereqs.sh` and stopped the run if it failed — but that script is not present in a plugin/standalone project, so the run dead-ended. The step now skips gracefully when the script is absent and only enforces it when present.
+
+### Changed
+
+- **Release catch-up to `main`**: first published release since `0.18.0` to include the work merged via [#55](https://github.com/BOBER3r/agent-bober/pull/55) — the cross-domain knowledge platform, medical pipeline, SEO agent/skill suite, stack-aware security auditor, and fleet orchestrator. The npm package and the plugin manifest (`.claude-plugin/plugin.json`) both track `main` at `0.19.0`.
+
 ## [0.18.0] — 2026-06-23
 
 ### Fixed

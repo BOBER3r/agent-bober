@@ -1,6 +1,6 @@
 {
   "name": "agent-bober",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "description": "Multi-agent, multi-provider harness for building software autonomously with any LLM. Researcher, Planner, Curator, Generator, Evaluator, Documenter pipeline with a fail-closed security-audit gate, a fleet orchestrator for bulk multi-agent runs, and a cross-domain knowledge platform (medical, vault, priority hub). Supports Claude, GPT, Gemini, DeepSeek, Ollama, and Claude Code subscriptions. MCP server for Cursor/Windsurf.",
   "type": "module",
   "main": "dist/index.js",

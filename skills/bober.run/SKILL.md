@@ -74,8 +74,9 @@ ORCHESTRATOR (you — this session)
 Read `bober.config.json`. If it does not exist:
 - Ask the user the minimal initialization questions: project name, mode (greenfield vs brownfield), and what they are building.
 - Determine the appropriate `mode` and `preset` (if any) from the user's description.
-- Create `bober.config.json` with appropriate defaults.
-- Create the `.bober/` directory structure.
+- **Write `bober.config.json` immediately** using the self-contained default config embedded in the `bober.plan` skill (Step 1) — do NOT wait for further confirmation, and do NOT try to read `src/config/*.ts` or `templates/*` (those source files are absent in a plugin or standalone install). Auto-detect `commands` from the project manifests; omit any you cannot detect.
+- Create the `.bober/` directory structure: `mkdir -p .bober/specs .bober/contracts .bober/handoffs .bober/eval-results`.
+- Verify `bober.config.json` now exists on disk before proceeding — every later step reads it.
 
 If `bober.config.json` exists, read the configuration.
 
@@ -83,11 +84,13 @@ Read `.bober/principles.md` if it exists. You will pass the principles text into
 
 ### 1b. Run Prerequisites Check
 
+If `scripts/check-prereqs.sh` exists in the project, run it:
+
 ```bash
-bash scripts/check-prereqs.sh
+[ -f scripts/check-prereqs.sh ] && bash scripts/check-prereqs.sh || echo "scripts/check-prereqs.sh not present (plugin/standalone install) — skipping prerequisites check"
 ```
 
-If it fails, report the missing prerequisites and stop.
+If the script is present and fails, report the missing prerequisites and stop. If the script is absent — a plugin or standalone install where the agent-bober source tree is not in the project — skip this check and continue; it is not required.
 
 ### 1c. Check for Existing Plans
 
