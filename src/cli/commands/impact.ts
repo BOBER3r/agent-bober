@@ -114,13 +114,14 @@ export function registerImpactCommand(program: Command): void {
 
       const incidents = new IncidentLog(projectRoot);
       const fallback = new GraphFallback("dual");
+      const backend = new TokensaveBackend();
 
       // Spawn a short-lived MCP client
       const mcpClient = new TokensaveMcpClient(
         projectRoot,
         graphCfg,
         incidents,
-        graphCfg.tokensavePath ?? "tokensave",
+        backend.processSpec(),
       );
 
       process.stdout.write(chalk.cyan("Starting graph engine...\n"));
@@ -143,7 +144,7 @@ export function registerImpactCommand(program: Command): void {
           fallback,
           incidents,
           graphCfg,
-          new TokensaveBackend(),
+          backend,
         );
 
         process.stdout.write(chalk.cyan(`Analysing impact for: ${target}\n`));

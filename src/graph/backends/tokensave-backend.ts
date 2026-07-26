@@ -7,9 +7,10 @@
  * filesystem access, no sandbox filtering — GraphClient owns all of that.
  */
 
-import type { ImpactReport, NodeRef, SearchHit } from "../types.js";
+import semver from "semver";
+import type { ImpactReport, NodeRef, SearchHit, StatusResult } from "../types.js";
 import { assertNever } from "../types.js";
-import type { CallPlan, GraphBackend, QueryPattern, SearchOpts } from "./types.js";
+import type { CallPlan, CliMap, GraphBackend, Platform, PrereqSpec, ProcessSpec, QueryPattern, SearchOpts } from "./types.js";
 
 // ── Tokensave 6.1.1 tool catalog ────────────────────────────────────
 // All tools use the `tokensave_` prefix as emitted by tokensave 6.1.1's tools/list.
@@ -29,6 +30,98 @@ const QUERY_TOOL = {
   imports_of: "tokensave_file_dependents",
   tests_for: "tokensave_test_map",
 } as const;
+
+// ── Process / prereq / CLI specs (verbatim — DO NOT paraphrase) ────
+// tokensave binary + supported version range + install hints + CLI verbs.
+// These strings are the ONLY place tokensave-specific literals for the
+// transport/prereq/cli layers should live (sc-2-5).
+
+export const TOKENSAVE_VERSION_RANGE = ">=6.0.0-beta.1 <7.0.0";
+
+/** Platform-aware install hint. Strings are verbatim from s1-c2 — DO NOT paraphrase. */
+function tokensaveInstallHint(platform: Platform): string {
+  switch (platform) {
+    case "darwin":
+      return "brew install aovestdipaperino/tap/tokensave";
+    case "win32":
+      return "scoop bucket add tokensave https://github.com/aovestdipaperino/scoop-bucket && scoop install tokensave";
+    default:
+      return "cargo install tokensave";
+  }
+}
+
+/** Must name both detected and required versions (s1-c2). */
+function tokensaveIncompatibleHint(detected: string): string {
+  return `tokensave ${detected} is incompatible; required range: ${TOKENSAVE_VERSION_RANGE}`;
+}
+
+/**
+ * Parse the number of indexed files from tokensave sync output.
+ *
+ * tokensave 6.x prints a human summary like
+ *   "✔ sync done — 3 added, 1 modified, 0 removed in 41ms"
+ * (with ANSI colour codes), so we sum added + modified. Legacy JSON
+ * (`{"indexed": N}`) and `indexed: N` key-value forms are still accepted.
+ */
+function parseSyncOutput(output: string): number {
+  // Strip ANSI escape sequences before matching.
+  // eslint-disable-next-line no-control-regex
+  const trimmed = output.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "").trim();
+  if (!trimmed) return 0;
+
+  // Try direct JSON parse (legacy shape)
+  try {
+    const obj = JSON.parse(trimmed) as Record<string, unknown>;
+    if (typeof obj.indexed === "number") return obj.indexed;
+  } catch {
+    // Fall through
+  }
+
+  // Incremental sync summary: "N added, M modified, K removed"
+  const added = /(\d+)\s+added/.exec(trimmed);
+  const modified = /(\d+)\s+modified/.exec(trimmed);
+  if (added || modified) {
+    return (
+      (added ? parseInt(added[1], 10) : 0) +
+      (modified ? parseInt(modified[1], 10) : 0)
+    );
+  }
+
+  // Full re-index summary (--force): "indexing done — N files, ... nodes"
+  const files = /(\d+)\s+files\b/.exec(trimmed);
+  if (files) return parseInt(files[1], 10);
+
+  // Legacy key-value pattern like "indexed: 42"
+  const match = /indexed["\s:]+(\d+)/.exec(trimmed);
+  if (match) return parseInt(match[1], 10);
+
+  return 0;
+}
+
+/** Parse `tokensave status --json` stdout into the shared StatusResult shape. */
+function parseStatusOutput(stdout: string): StatusResult {
+  const parsed = JSON.parse(stdout) as Record<string, unknown>;
+  // tokensave `status --json` returns {node_count, edge_count, file_count,
+  // nodes_by_kind, ...}. There is no `ready`/`indexedFileCount` field and no
+  // version, so derive `ready` from the presence of an index (file_count).
+  // Tolerate the legacy {ready, indexedFileCount, tokensaveVersion} shape too.
+  const fileCount =
+    typeof parsed.file_count === "number"
+      ? parsed.file_count
+      : typeof parsed.indexedFileCount === "number"
+        ? parsed.indexedFileCount
+        : 0;
+  const ready =
+    parsed.ready === true ||
+    typeof parsed.file_count === "number" ||
+    typeof parsed.node_count === "number";
+  return {
+    ready,
+    indexedFileCount: fileCount,
+    tokensaveVersion:
+      typeof parsed.tokensaveVersion === "string" ? parsed.tokensaveVersion : "",
+  };
+}
 
 // ── Raw 6.1.1 row types (adapter-internal only) ────────────────────
 
@@ -243,6 +336,37 @@ export class TokensaveBackend implements GraphBackend {
         const result = raw as TsChangelogResult;
         return result.symbols_in_changed_files.map((row) => toNodeRef(row));
       },
+    };
+  }
+
+  // ── Process / prereq / CLI specs ────────────────────────────────────
+
+  processSpec(): ProcessSpec {
+    return { binary: "tokensave", serveArgs: ["serve"] };
+  }
+
+  prereqSpec(): PrereqSpec {
+    return {
+      versionArgs: ["--version"],
+      isCompatible: (version) =>
+        semver.satisfies(version, TOKENSAVE_VERSION_RANGE, {
+          includePrerelease: true,
+        }),
+      installHint: (platform) => tokensaveInstallHint(platform),
+      incompatibleHint: (detected) => tokensaveIncompatibleHint(detected),
+    };
+  }
+
+  cliMap(): CliMap {
+    return {
+      // languageTier is a bober-level concept recorded in the manifest only;
+      // it is accepted for caller convenience but NOT forwarded to the binary
+      // (tokensave's `init` has no `--tier` flag).
+      initArgs: (_opts) => ["init"],
+      syncArgs: (paths) => ["sync", ...paths],
+      statusArgs: ["status", "--json"],
+      parseSync: (out) => parseSyncOutput(out),
+      parseStatus: (stdout) => parseStatusOutput(stdout),
     };
   }
 }

@@ -30,6 +30,18 @@ export type StalenessVerdict =
       newerFiles?: string[];
     };
 
+// ── Short-lived CLI result shapes (backend CliMap.parseSync/parseStatus) ──
+
+export interface SyncResult {
+  indexed: number;
+}
+
+export interface StatusResult {
+  ready: boolean;
+  indexedFileCount: number;
+  tokensaveVersion: string;
+}
+
 // ── Graph result contract (ADR-3) ──────────────────────────────────
 
 /** Discriminated union for all GraphClient method returns. ADR-3. */

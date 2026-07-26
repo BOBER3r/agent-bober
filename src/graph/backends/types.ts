@@ -3,7 +3,7 @@
 // ownership of sandbox filtering, staleness, health short-circuits, and
 // prefetch dispatch (see src/graph/client.ts).
 
-import type { ImpactReport, NodeRef, SearchHit } from "../types.js";
+import type { ImpactReport, NodeRef, SearchHit, StatusResult } from "../types.js";
 
 // ── Public API types shared with GraphClient ───────────────────────
 
@@ -18,6 +18,37 @@ export type QueryPattern =
 export interface SearchOpts {
   limit?: number;
   kind?: NodeRef["kind"];
+}
+
+// ── Engine process / prereq / CLI specs ─────────────────────────────
+
+/** Alias of the ambient `NodeJS.Platform` type via `process.platform`,
+ *  avoiding a direct `NodeJS.*` reference (eslint no-undef has no type-aware
+ *  awareness of the ambient NodeJS namespace in this project's flat config). */
+export type Platform = typeof process.platform;
+
+/** How to run the engine's long-lived MCP server. */
+export interface ProcessSpec {
+  binary: string;
+  serveArgs: string[];
+}
+
+/** How to detect + version-gate the engine binary. */
+export interface PrereqSpec {
+  versionArgs: string[];
+  isCompatible(version: string): boolean;
+  installHint(platform: Platform): string;
+  /** Hint shown when a version was detected but does not satisfy isCompatible(). */
+  incompatibleHint(detected: string): string;
+}
+
+/** How to run the short-lived init/sync/status CLI + parse its output. */
+export interface CliMap {
+  initArgs(opts: { languageTier?: string }): string[];
+  syncArgs(paths: string[]): string[];
+  statusArgs: string[];
+  parseSync(output: string): number;
+  parseStatus(stdout: string): StatusResult;
 }
 
 // ── Backend seam ────────────────────────────────────────────────────
@@ -54,4 +85,11 @@ export interface GraphBackend {
   reviewContextPlan(nodes: NodeRef[]): CallPlan<string>;
   overviewPlan(): CallPlan<string>;
   changesPlan(since?: string): CallPlan<NodeRef[]>;
+
+  /** How to spawn the engine's long-lived MCP server (binary + serve args). */
+  processSpec(): ProcessSpec;
+  /** How to detect + version-gate the engine binary. */
+  prereqSpec(): PrereqSpec;
+  /** How to run + parse the engine's short-lived init/sync/status CLI. */
+  cliMap(): CliMap;
 }

@@ -43,6 +43,7 @@ class GraphPipelineLifecycleImpl {
   private stopping = false;
   private healthOverride: "disabled" | null = null;
   private mcpClient: TokensaveMcpClient | null = null;
+  private backend: TokensaveBackend | null = null;
   private store: GraphArtifactStore | null = null;
   private incidents: IncidentLog | null = null;
   private hookHandler: GraphHookHandler | null = null;
@@ -92,12 +93,14 @@ class GraphPipelineLifecycleImpl {
     // Orphan cleanup
     await this.handleOrphan();
 
-    // Spawn
+    // Spawn — reuse ONE TokensaveBackend instance for both the transport
+    // (processSpec) and the GraphClient (constructed lazily in getGraphClient).
+    this.backend = new TokensaveBackend();
     this.mcpClient = new TokensaveMcpClient(
       projectRoot,
       cfg,
       this.incidents,
-      cfg.tokensavePath ?? "tokensave",
+      this.backend.processSpec(),
     );
 
     await this.mcpClient.start();
@@ -247,7 +250,7 @@ class GraphPipelineLifecycleImpl {
             researcherPhase2: 3000,
           },
         },
-        new TokensaveBackend(),
+        this.backend ?? new TokensaveBackend(),
       );
     }
     return this._graphClient;
@@ -276,6 +279,7 @@ class GraphPipelineLifecycleImpl {
     this.stopping = false;
     this.healthOverride = null;
     this.mcpClient = null;
+    this.backend = null;
     this.store = null;
     this.incidents = null;
     this.hookHandler = null;

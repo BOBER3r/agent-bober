@@ -14,6 +14,7 @@ import { execa } from "execa";
 import type { Subprocess } from "execa";
 import type { GraphSection } from "./types.js";
 import type { IncidentLog } from "./incidents.js";
+import type { ProcessSpec } from "./backends/types.js";
 import { logger } from "../utils/logger.js";
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ export class TokensaveMcpClient {
     private readonly projectRoot: string,
     private readonly cfg: GraphSection,
     private readonly incidents: IncidentLog,
-    private readonly binary: string = "tokensave",
+    private readonly processSpec: ProcessSpec,
   ) {}
 
   health(): EngineHealth {
@@ -239,7 +240,8 @@ export class TokensaveMcpClient {
   private async spawnAndHandshake(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       // Spawn without shell — argv array per ADR-10
-      const child = execa(this.binary, ["serve"], {
+      const binary = this.cfg.tokensavePath ?? this.processSpec.binary;
+      const child = execa(binary, this.processSpec.serveArgs, {
         cwd: this.projectRoot,
         stdio: ["pipe", "pipe", "pipe"],
         reject: false,

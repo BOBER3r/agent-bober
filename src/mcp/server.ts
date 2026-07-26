@@ -92,11 +92,12 @@ export async function createBoberMCPServer(
         const cfg = config.graph;
         const store = new GraphArtifactStore(projectRoot);
         const incidents = new IncidentLog(projectRoot);
+        const backend = new TokensaveBackend();
         const mcpClient = new TokensaveMcpClient(
           projectRoot,
           cfg,
           incidents,
-          cfg.tokensavePath ?? "tokensave",
+          backend.processSpec(),
         );
         const graphFallback = new GraphFallback("dual");
         const client = new GraphClient(
@@ -106,7 +107,7 @@ export async function createBoberMCPServer(
           graphFallback,
           incidents,
           cfg,
-          new TokensaveBackend(),
+          backend,
         );
         registerGraphTools({ client, fallback: graphFallback });
       }

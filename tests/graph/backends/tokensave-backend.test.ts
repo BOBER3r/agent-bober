@@ -231,4 +231,107 @@ describe("TokensaveBackend", () => {
     expect(nodes[0]!.symbol).toBe("a");
     expect(nodes[0]!.file).toBe("src/a.ts");
   });
+
+  // ── processSpec (sc-2-2) ────────────────────────────────────────────
+
+  describe("processSpec", () => {
+    it("returns binary 'tokensave' and serveArgs ['serve']", () => {
+      expect(backend.processSpec()).toEqual({ binary: "tokensave", serveArgs: ["serve"] });
+    });
+  });
+
+  // ── prereqSpec (sc-2-3) ─────────────────────────────────────────────
+
+  describe("prereqSpec", () => {
+    const spec = backend.prereqSpec();
+
+    it("versionArgs is ['--version']", () => {
+      expect(spec.versionArgs).toEqual(["--version"]);
+    });
+
+    it("isCompatible accepts versions within '>=6.0.0-beta.1 <7.0.0'", () => {
+      expect(spec.isCompatible("6.1.1")).toBe(true);
+      expect(spec.isCompatible("6.0.0-beta.1")).toBe(true);
+      expect(spec.isCompatible("6.0.0")).toBe(true);
+    });
+
+    it("isCompatible rejects out-of-range versions", () => {
+      expect(spec.isCompatible("5.9.0")).toBe(false);
+      expect(spec.isCompatible("7.0.0")).toBe(false);
+    });
+
+    it("installHint returns the verbatim per-platform strings", () => {
+      expect(spec.installHint("darwin")).toBe("brew install aovestdipaperino/tap/tokensave");
+      expect(spec.installHint("win32")).toBe(
+        "scoop bucket add tokensave https://github.com/aovestdipaperino/scoop-bucket && scoop install tokensave",
+      );
+      expect(spec.installHint("linux")).toBe("cargo install tokensave");
+    });
+
+    it("incompatibleHint names both the detected version and the required range", () => {
+      const hint = spec.incompatibleHint("5.4.0");
+      expect(hint).toContain("5.4.0");
+      expect(hint).toContain(">=6.0.0-beta.1 <7.0.0");
+    });
+  });
+
+  // ── cliMap (sc-2-4) ─────────────────────────────────────────────────
+
+  describe("cliMap", () => {
+    const cliMap = backend.cliMap();
+
+    it("initArgs is ['init'] regardless of languageTier (not forwarded)", () => {
+      expect(cliMap.initArgs({})).toEqual(["init"]);
+      expect(cliMap.initArgs({ languageTier: "core" })).toEqual(["init"]);
+    });
+
+    it("syncArgs is ['sync', ...paths]", () => {
+      expect(cliMap.syncArgs(["src/", "tests/"])).toEqual(["sync", "src/", "tests/"]);
+    });
+
+    it("statusArgs is ['status', '--json']", () => {
+      expect(cliMap.statusArgs).toEqual(["status", "--json"]);
+    });
+
+    it("parseSync sums 'N added, M modified' summaries", () => {
+      expect(cliMap.parseSync("3 added, 1 modified, 0 removed")).toBe(4);
+    });
+
+    it("parseSync handles the legacy JSON {indexed} shape", () => {
+      expect(cliMap.parseSync('{"indexed": 42}')).toBe(42);
+    });
+
+    it("parseSync handles the full re-index 'N files' summary", () => {
+      expect(cliMap.parseSync("indexing done — 743 files, 7421 nodes, 9100 edges")).toBe(743);
+    });
+
+    it("parseSync handles the legacy 'indexed: N' key-value form", () => {
+      expect(cliMap.parseSync("indexed: 42")).toBe(42);
+    });
+
+    it("parseSync strips ANSI escape codes before matching", () => {
+      expect(cliMap.parseSync("\x1b[32m✔\x1b[0m sync done — 40 added, 2 modified, 0 removed in 41ms")).toBe(42);
+    });
+
+    it("parseSync returns 0 on empty output", () => {
+      expect(cliMap.parseSync("")).toBe(0);
+    });
+
+    it("parseStatus derives ready/indexedFileCount from {file_count, node_count}", () => {
+      const result = cliMap.parseStatus(
+        JSON.stringify({ node_count: 8, edge_count: 0, file_count: 4, nodes_by_kind: {} }),
+      );
+      expect(result.ready).toBe(true);
+      expect(result.indexedFileCount).toBe(4);
+    });
+
+    it("parseStatus tolerates the legacy {ready, indexedFileCount, tokensaveVersion} shape", () => {
+      const result = cliMap.parseStatus(
+        JSON.stringify({ ready: true, indexedFileCount: 123, tokensaveVersion: "6.0.0-beta.1" }),
+      );
+      expect(result.ready).toBe(true);
+      expect(result.indexedFileCount).toBe(123);
+      expect(result.tokensaveVersion).toBe("6.0.0-beta.1");
+    });
+  });
 });

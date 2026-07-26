@@ -83,13 +83,14 @@ export function registerOnboardCommand(program: Command): void {
 
       const incidents = new IncidentLog(projectRoot);
       const fallback = new GraphFallback("dual");
+      const backend = new TokensaveBackend();
 
       // Spawn a short-lived MCP client for the duration of this command
       const mcpClient = new TokensaveMcpClient(
         projectRoot,
         graphCfg,
         incidents,
-        graphCfg.tokensavePath ?? "tokensave",
+        backend.processSpec(),
       );
 
       process.stdout.write(chalk.cyan("Starting graph engine...\n"));
@@ -112,7 +113,7 @@ export function registerOnboardCommand(program: Command): void {
           fallback,
           incidents,
           graphCfg,
-          new TokensaveBackend(),
+          backend,
         );
 
         process.stdout.write(chalk.cyan("Querying code graph...\n"));
