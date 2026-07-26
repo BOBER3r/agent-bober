@@ -1,0 +1,209 @@
+{
+  "specId": "spec-20260726-graph-backend-choice",
+  "version": 1,
+  "createdAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-26T00:00:00Z",
+  "title": "Pluggable code-graph backend (tokensave or code-review-graph)",
+  "description": "Let the user run the graph layer against either tokensave (current default, Rust) or code-review-graph (Python, https://github.com/tirth8205/code-review-graph). Both run as an MCP server over stdio, so the generic transport is reused; a backend adapter abstraction supplies the per-engine tool catalog, response-shape narrowing, prereq/version check, and init/sync/status CLI mapping. Backend is chosen by auto-detecting whichever binary is installed (tokensave preferred when both are present), with an optional explicit override.",
+  "mode": "greenfield",
+  "status": "ready",
+  "ambiguityScore": 5,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "gate-design-approval",
+      "answer": "User approved interactively: 'Approve — write contracts'. Kept the optional explicit graph.backend override on top of auto-detect. Emit 8 sprint contracts (split feat-1 into a client-delegation slice + a process-spec/transport slice, and feat-4 into read-adapters + query-sub-patterns slices). Assumptions are evidence-cited to file:line; the code-review-graph adapter shapes are de-risked by the git-history reference at 6ed3f77~1 and confirmed by live fixtures captured from the locally-installed binary.",
+      "resolvedAt": "2026-07-26T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q1-selection",
+      "answer": "Auto-detect the installed binary (prefer tokensave when both are present). An optional explicit graph.backend override is added as an escape hatch (honored before detection) for determinism/CI — flagged as an assumption for validation.",
+      "resolvedAt": "2026-07-26T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q2-parity",
+      "answer": "Full parity: all GraphClient operations (search, impact, reviewContext, overview, changes) plus the four query sub-patterns (callers_of, callees_of, imports_of, tests_for) and the onboard command must work on code-review-graph.",
+      "resolvedAt": "2026-07-26T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q3-shapes",
+      "answer": "code-review-graph is installed locally; sprints capture the real MCP tool output JSON shapes by probing a live `code-review-graph serve` and commit them as fixtures. (NB: the binary was NOT on this shell's PATH at plan time — likely a venv/pipx install; the fixture-capture sprint must locate it or the user provides the path.)",
+      "resolvedAt": "2026-07-26T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "Q4-verification",
+      "answer": "Fixtures now, live smoke deferred: deterministic fixture-based unit tests (recorded tool responses) run in CI; a real end-to-end `code-review-graph serve` smoke run is a documented manual follow-up.",
+      "resolvedAt": "2026-07-26T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The MCP transport is already backend-generic: src/graph/mcp-client.ts TokensaveMcpClient spawns `this.binary serve` (line 242, execa(this.binary, [\"serve\"], ...)), performs the MCP `initialize` handshake (lines 254-266), and issues `tools/call` with {name, arguments} (lines 218-223). Only the default binary string \"tokensave\" (constructor line 121) and the hardcoded [\"serve\"] args are engine-specific. code-review-graph also runs as `code-review-graph serve` (per its README), so the same transport is reused by parameterizing binary + serveArgs.",
+    "The ONLY source file carrying tokensave tool names is src/graph/client.ts: TOOL (lines 31-37: tokensave_search/impact/context/module_api/changelog) and QUERY_TOOL (lines 40-45: tokensave_callers/callees/file_dependents/test_map), plus the raw row types Ts*Row (lines 52-109) and toNodeRef (lines 116-131). grep confirms no other src file references `tokensave_` tool names. This is the single adapter chokepoint.",
+    "The shared data model is already backend-neutral: src/graph/types.ts NodeRef/SearchHit/ImpactReport (lines 59-77) and GraphResult (lines 36-46) are engine-independent; the file header states it 'Mirrors arch-20260524-port-code-review-graph-architecture.md §Data Model'. GraphClient's public method signatures (search/query/impact/reviewContext/overview/changes/prefetch, client.ts:168-321) stay unchanged; only the injected adapter changes.",
+    "HISTORY DE-RISKS THE MAPPING: agent-bober's graph layer was ORIGINALLY built against code-review-graph. The pre-remap catalog at commit 6ed3f77~1 (src/graph/client.ts:31-38) is exactly {search:'semantic_search_nodes', query:'query_graph', impact:'get_impact_radius', reviewContext:'get_review_context', overview:'get_architecture_overview', changes:'detect_changes'}. `git show 6ed3f77~1:src/graph/client.ts` recovers the original code-review-graph response-shape narrowing as a starting point for the new adapter. Current code-review-graph tool names add a `_tool` suffix (semantic_search_nodes_tool, get_impact_radius_tool, query_graph_tool, get_review_context_tool, get_architecture_overview_tool, detect_changes_tool, traverse_graph_tool, build_or_update_graph_tool) and shapes may have evolved, so live fixtures still confirm current output.",
+    "Backend binary consumers are five construction sites, all reading `cfg.tokensavePath ?? \"tokensave\"`: src/graph/pipeline-lifecycle.ts (TokensaveMcpClient line 95-100, TokensavePrereqCheck line 77-79, TokensaveCli line 105-109), src/mcp/server.ts, src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/cli/commands/onboard.ts (lines 70,87-92,107-114). Each must resolve the active backend instead of hardcoding tokensave.",
+    "The prereq check is engine-specific and must become backend-driven: src/graph/prereq.ts TokensavePrereqCheck runs `<binary> --version` (line 13), validates semver range TOKENSAVE_VERSION_RANGE `>=6.0.0-beta.1 <7.0.0` (line 5), and returns tokensave-only install hints (lines 48-58: brew/scoop/cargo). code-review-graph needs its own version command, compatible range, and install hint `pip install code-review-graph` (Python 3.10+).",
+    "The short-lived CLI wrapper needs a per-backend command map: src/graph/cli.ts TokensaveCli runs init/sync/status (`tokensave init`, `tokensave sync <paths>`, `tokensave status --json`) with tokensave-specific output parsing (parseSyncOutput lines 187-220). code-review-graph equivalents are `code-review-graph build` (init), `code-review-graph update` (sync), and `code-review-graph detect-changes`/status (status) with their own output parsing.",
+    "Onboard is already mostly backend-agnostic: src/cli/commands/onboard.ts gathers all inputs through five graphClient.search() calls (lines 119-126) and maps SearchHit → OnboardingInputs (lines 137-185). It only needs the resolved backend + a version-source fix (manifest.tokensaveVersion → generic backendVersion, onboard.ts:134).",
+    "Manifest evolves additively: src/graph/types.ts GraphManifest.tokensaveVersion (line 15) is kept for back-compat; a generic `backend` (engine id) and `backendVersion` are added. GraphArtifactStore read/write stays compatible with old manifests (missing backend defaults to 'tokensave').",
+    "Auto-detect resolution: when graph.backend is unset (the default), resolveGraphBackend probes `tokensave --version` then `code-review-graph --version`; tokensave wins when both succeed; when neither is present, the prereq failure surfaces a combined install hint for both engines. An explicit graph.backend value short-circuits detection.",
+    "Verification is deterministic + fixture-based (Q4): every adapter is unit-tested against committed fixtures captured from the live code-review-graph binary (Q3). Existing tokensave graph tests continue to pass unchanged, proving the tokensave path is byte-identical after the refactor. A live cross-process `code-review-graph serve` end-to-end smoke run is an explicit deferred follow-up, mirroring how the tokensave integration gates real-binary tests with skipIf.",
+    "The `agent-bober` binary is a symlink to the dist build (npm run build); any end-to-end check of onboard/graph CLIs must run the freshly built CLI. tokensave 6.1.1 is installed and on PATH here; code-review-graph is installed locally per the user but was not on this shell's PATH at plan time."
+  ],
+  "outOfScope": [
+    "Improving, forking, or vendoring code-review-graph itself — it is consumed as an external installed binary only.",
+    "Bundling/installing either engine for the user — installation stays the user's responsibility; bober only detects and surfaces install hints.",
+    "Semantic-search quality parity or benchmark-matching between the two engines — adapters map shapes faithfully but do not normalize ranking/scoring semantics.",
+    "A live end-to-end `code-review-graph serve` smoke test in CI — deferred to a documented manual follow-up (Q4); CI uses committed fixtures.",
+    "Changing GraphFallback semantics, the circuit-breaker rolling-window math, PID/orphan handling, staleness cache, or the sandbox post-filter — all preserved as-is.",
+    "Running both engines simultaneously, per-query backend switching, or blending results from both — exactly one backend is active per pipeline invocation.",
+    "New graph capabilities beyond the current GraphClient surface (no new tools, no new CLI verbs except a backend-status readout).",
+    "Reworking onboard.ts to use dedicated structured tools instead of semantic search — it keeps its current search()-based path (only its backend + version source change)."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Backend adapter abstraction (tokensave byte-identical)",
+      "description": "Introduce a GraphBackend abstraction (process spec + tool catalog + response adapters + engine identity) and refactor GraphClient + the MCP client to delegate to an injected backend. Implement TokensaveBackend reproducing today's exact behavior.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A GraphBackend interface exists exposing, per logical operation, the MCP tool name, param builder, and a narrow(raw)->typed adapter, plus process spec (binary, serveArgs), prereq spec, and CLI command map.",
+        "AC2: GraphClient no longer hardcodes tokensave_* tool names or Ts*Row narrowing inline; it delegates tool-name/params/narrow to the injected backend while keeping sandbox, staleness, health, and fallback logic unchanged.",
+        "AC3: The MCP client spawns `binary serveArgs` from the backend's process spec (tokensave -> serve) instead of a hardcoded ['serve'].",
+        "AC4: With backend=tokensave, all existing src/graph and CLI tests pass unchanged (tokensave path byte-identical).",
+        "AC5: grep shows `tokensave_` tool names now live only in the tokensave backend module, not in client.ts."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Backend selection: config field + auto-detection + generalized prereq",
+      "description": "Add an optional graph.backend config field, a resolveGraphBackend() that auto-detects the installed binary (tokensave preferred, explicit override honored), a backend-aware prereq check, and wire all five construction sites. Evolve the manifest to record the active backend additively.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: bober.config.json with no graph.backend field auto-detects tokensave when present (existing behavior byte-identical); explicit graph.backend:'tokensave' behaves identically.",
+        "AC2: When only code-review-graph is installed, auto-detect selects it; when both are installed, tokensave wins; an explicit graph.backend override short-circuits detection.",
+        "AC3: When neither binary is present, the prereq failure surfaces a combined install hint naming both engines.",
+        "AC4: The prereq check derives its version command, compatible range, and install hint from the active backend (tokensave hints unchanged).",
+        "AC5: All five construction sites (pipeline-lifecycle, mcp/server, cli/impact, cli/graph, cli/onboard) resolve the backend instead of hardcoding 'tokensave'.",
+        "AC6: Detection + selection are unit-tested with execa mocked (no real binaries required)."
+      ],
+      "dependencies": ["feat-1"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "code-review-graph backend: process spec, prereq, CLI mapping, live fixtures",
+      "description": "Implement CodeReviewGraphBackend's process spec (binary code-review-graph, serve args), prereq (version command + install hint pip install code-review-graph), and init/sync/status CLI mapping (build/update/detect-changes). Capture real MCP tool output JSON from the live local binary and commit as fixtures.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: CodeReviewGraphBackend process spec resolves binary 'code-review-graph' with serve args, detected by the generalized prereq via its --version command.",
+        "AC2: The CLI map targets `code-review-graph build` (init), `code-review-graph update` (sync), and status/detect-changes, with output parsers unit-tested.",
+        "AC3: Real MCP tool outputs are captured from a live `code-review-graph serve` for every needed tool (semantic_search_nodes_tool, get_impact_radius_tool, get_review_context_tool, get_architecture_overview_tool, detect_changes_tool, query_graph_tool, traverse_graph_tool) and committed under tests/graph/fixtures/cr-graph/.",
+        "AC4: Auto-detect selects code-review-graph when only it is installed; its install hint reads `pip install code-review-graph`.",
+        "AC5: If the live binary cannot be located, the sprint records that blocker and falls back to the git-history shapes (6ed3f77~1) with a documented follow-up to refresh fixtures — it does NOT invent shapes silently."
+      ],
+      "dependencies": ["feat-2"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "code-review-graph read adapters + query sub-patterns (full parity)",
+      "description": "Implement the CodeReviewGraphBackend response adapters for search, reviewContext, overview, impact, and changes, plus the four query sub-patterns (callers_of, callees_of, imports_of, tests_for) via query_graph_tool/traverse_graph_tool. All validated against committed fixtures.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: search (semantic_search_nodes_tool) yields SearchHit[] with correct NodeRef (symbol/file/line/kind coercion) and score/snippet, validated against fixtures.",
+        "AC2: reviewContext (get_review_context_tool) and overview (get_architecture_overview_tool) return their string payloads; impact (get_impact_radius_tool) yields ImpactReport with correct root/affected/testsAffected partition.",
+        "AC3: changes (detect_changes_tool) yields NodeRef[] for changed symbols.",
+        "AC4: All four query patterns map to code-review-graph tools and return correct NodeRef[]; edge direction for callers_of vs callees_of is verified against fixtures.",
+        "AC5: The sandbox post-filter and kind coercion apply identically for code-review-graph results; GraphClient returns GraphResult.ok=true through the code-review-graph backend in tests."
+      ],
+      "dependencies": ["feat-3"],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Command parity: onboard, graph/impact CLI, external MCP, backend status",
+      "description": "Verify onboard, the graph and impact CLIs, and the external MCP server all operate through the resolved backend. Add a backend-status readout so the user can see which engine is active.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `agent-bober onboard` against code-review-graph fixtures writes all 5 markdown artifacts, with the status/version line showing the code-review-graph version (backendVersion), not a tokensave assumption.",
+        "AC2: `agent-bober impact` and `agent-bober graph` construct and use the resolved backend, verified with the backend forced to code-review-graph in tests.",
+        "AC3: src/mcp/server.ts exposes graph tools backed by the resolved backend.",
+        "AC4: A backend-status readout (e.g. `agent-bober graph status`) prints the active engine id and version.",
+        "AC5: Forcing graph.backend to each engine in turn produces a working graph layer for that engine in tests."
+      ],
+      "dependencies": ["feat-4"],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Documentation + deferred live-smoke follow-up",
+      "description": "Update the README and any graph docs to describe backend selection, auto-detection, the optional override, install paths for both engines, a parity table, and the deferred live-smoke follow-up.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: README 'Graph (Tokensave) Integration' is generalized to cover both engines: how selection works (auto-detect + optional graph.backend override), install commands for tokensave and code-review-graph, and a parity table.",
+        "AC2: Docs record the deferred live `code-review-graph serve` smoke run and how to run it manually.",
+        "AC3: A final check confirms the tokensave path remains byte-identical (existing tests green) and code-review-graph is selectable end-to-end via fixtures."
+      ],
+      "dependencies": ["feat-5"],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Backward compatibility: an existing config with no graph.backend field, and the tokensave engine, must behave exactly as today (byte-identical outputs and tests).",
+      "verificationMethod": "Run the full existing src/graph + graph-CLI test suite unchanged with backend=tokensave; assert all pass."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Graceful degradation is preserved: on any prereq/handshake/tool failure, GraphClient still returns GraphResult.ok=false (never throws) for either backend.",
+      "verificationMethod": "Unit tests assert ok=false with correct reason on simulated failures for both backend adapters; toFailureResult path unchanged."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Engine-specific knowledge is confined to per-backend modules; adding a third backend later should require no changes to GraphClient, the transport, or the construction sites.",
+      "verificationMethod": "git diff review: tool names / shapes / prereq / CLI commands live only inside backend modules; GraphClient and mcp-client contain no engine-specific strings."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Deterministic, CI-safe verification independent of the Python binary: all code-review-graph adapter tests run against committed fixtures; live-binary tests are skipIf-gated.",
+      "verificationMethod": "Run the adapter tests with no code-review-graph installed and confirm fixture-based assertions pass and any live tests skip."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [
+      "tokensave serve (MCP over stdio, protocolVersion 2024-11-05, tools tokensave_*), current default backend",
+      "code-review-graph serve (MCP over stdio, Python 3.10+, tools *_tool e.g. semantic_search_nodes_tool/get_impact_radius_tool/query_graph_tool), new alternative backend, https://github.com/tirth8205/code-review-graph"
+    ],
+    "dataModel": "No persistent data model change beyond the manifest. GraphManifest gains additive `backend` (engine id) + `backendVersion`; tokensaveVersion kept for back-compat (old manifests default backend='tokensave'). Wire shapes unchanged: MCP initialize + tools/call {name, arguments} -> result{content:[{type:'text',text}], isError?}. Shared types NodeRef/SearchHit/ImpactReport unchanged.",
+    "securityConsiderations": [
+      "No new network egress; both engines are local stdio subprocesses spawned with execa argv arrays (no shell, ADR-10).",
+      "Sandbox post-filter on NodeRef.file is preserved for both backends (client.ts keepNode).",
+      "Auto-detection only runs `<binary> --version`; no code execution beyond the engines the user already installed."
+    ],
+    "existingPatterns": "Follow ESM .js import specifiers, `import type`, unicode section-header comments, execa argv-array spawn, and the fake-subprocess test harness in tests/graph/mcp-client.test.ts. Recover the original code-review-graph adapter shapes from `git show 6ed3f77~1:src/graph/client.ts` as a starting reference. Mirror TokensavePrereqCheck/TokensaveCli constructor patterns for the new backend."
+  },
+  "sprints": [
+    "sprint-spec-20260726-graph-backend-choice-1",
+    "sprint-spec-20260726-graph-backend-choice-2",
+    "sprint-spec-20260726-graph-backend-choice-3",
+    "sprint-spec-20260726-graph-backend-choice-4",
+    "sprint-spec-20260726-graph-backend-choice-5",
+    "sprint-spec-20260726-graph-backend-choice-6",
+    "sprint-spec-20260726-graph-backend-choice-7",
+    "sprint-spec-20260726-graph-backend-choice-8"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "10-15 hours",
+    "riskLevel": "medium",
+    "riskNotes": "The transport and data model are already backend-neutral and tool names live in one file, so the refactor is low risk and the tokensave path is provably byte-identical via existing tests. The real risk is the code-review-graph adapter shapes (feat-3/feat-4): tool names gained a _tool suffix and JSON shapes may have evolved since agent-bober's original code-review-graph era. Mitigated by (a) capturing real fixtures from the live local binary, (b) the git-history reference at 6ed3f77~1, and (c) confining unknowns to two sprints. Secondary risk: code-review-graph was not on this shell's PATH at plan time, so fixture capture must locate the venv/pipx install or get the path from the user."
+  }
+}

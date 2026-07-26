@@ -927,3 +927,4 @@
 {"event":"plan-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"pipeline-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"totalIterations":3,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"sprint-docs-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","docsCommit":"3053de4","timestamp":"2026-07-14T22:46:00Z"}
+{"event":"plan-created","specId":"spec-20260726-graph-backend-choice","title":"Pluggable code-graph backend (tokensave or code-review-graph)","sprintCount":8,"status":"ready","timestamp":"2026-07-26T00:00:00Z"}

@@ -1,0 +1,50 @@
+{
+  "contractId": "sprint-spec-20260726-graph-backend-choice-2",
+  "specId": "spec-20260726-graph-backend-choice",
+  "sprintNumber": 2,
+  "title": "Fold process spec + prereq + CLI map into the backend; parameterize the transport (tokensave byte-identical)",
+  "description": "Extend the GraphBackend abstraction (Sprint 1) with the remaining engine-specific surface so a backend fully describes how to run its engine: a ProcessSpec (binary name + serve args), a PrereqSpec (version command, compatible-version predicate, install hint), and a CliMap (init/sync/status commands + output parsers). Parameterize the MCP transport so it spawns `binary + serveArgs` from the backend's ProcessSpec instead of the hardcoded execa(this.binary, ['serve']) at mcp-client.ts:242. Make TokensavePrereqCheck (src/graph/prereq.ts) and TokensaveCli (src/graph/cli.ts) either driven by, or produced from, the tokensave backend's specs. Still tokensave-only; construction sites keep building a TokensaveBackend. Behavior byte-identical.",
+  "status": "proposed",
+  "dependsOn": ["sprint-spec-20260726-graph-backend-choice-1"],
+  "features": ["feat-1"],
+  "successCriteria": [
+    { "criterionId": "sc-2-1", "description": "Build + typecheck pass with zero errors.", "verificationMethod": "build", "required": true },
+    { "criterionId": "sc-2-2", "description": "GraphBackend gains a ProcessSpec {binary, serveArgs} accessor. The MCP transport spawns `execa(spec.binary, spec.serveArgs)` derived from the backend; for tokensave this resolves to binary 'tokensave' (or cfg.tokensavePath) and serveArgs ['serve'] — identical to today. A unit test asserts the spawn argv for the tokensave backend is ['serve'].", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-3", "description": "GraphBackend gains a PrereqSpec: version command args (['--version']), a compatible-version predicate (tokensave: semver satisfies '>=6.0.0-beta.1 <7.0.0'), and an install hint (tokensave: the existing brew/scoop/cargo per-platform strings, VERBATIM). The prereq check derives these from the backend; the tokensave hints and range are unchanged. A unit test (execa mocked) asserts tokensave version 6.1.1 passes and an out-of-range version fails with the existing incompatible hint.", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-4", "description": "GraphBackend gains a CliMap describing init/sync/status commands + output parsers. For tokensave: init->['init'], sync->['sync', ...paths], status->['status','--json'], with the existing parseSyncOutput/status parsing. The short-lived CLI wrapper runs the backend's commands. A unit test asserts tokensave sync output '3 added, 1 modified, 0 removed' parses to indexed=4 (unchanged behavior).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-5", "description": "The transport class no longer contains the engine-specific literal 'tokensave' default binary or ['serve'] literal in a way that other engines can't override; engine specifics come from the injected backend. (The class may keep a generic name; tokensave strings live only in the tokensave backend module.)", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-6", "description": "The full existing test suite is green with no NEW failures; with backend=tokensave the prereq, transport spawn, init/sync/status, and query paths are byte-identical. Real-binary skipIf integration tests still pass against tokensave 6.1.1 when present (start handshake + a tokensave_status round-trip).", "verificationMethod": "unit-test", "required": true },
+    { "criterionId": "sc-2-7", "description": "lint passes; diff confined to the graph layer (backends/*, mcp-client.ts, prereq.ts, cli.ts + their tests) plus the construction sites that already inject the backend.", "verificationMethod": "lint", "required": false }
+  ],
+  "nonGoals": [
+    "Do NOT add config.graph.backend or auto-detection yet — that is Sprint 3 (this sprint only makes the backend able to DESCRIBE its process/prereq/cli).",
+    "Do NOT add code-review-graph specs.",
+    "Do NOT change the circuit-breaker math, health-state machine, PID/orphan handling, or the MCP initialize/tools-call wire protocol.",
+    "Do NOT change public GraphClient signatures or shared types."
+  ],
+  "stopConditions": [
+    "All required success criteria pass",
+    "A tokensave backend fully describes its process/prereq/cli specs, the transport spawns from ProcessSpec, and tokensave behavior is byte-identical with build/typecheck/test/lint green"
+  ],
+  "definitionOfDone": "GraphBackend carries ProcessSpec + PrereqSpec + CliMap; the transport spawns binary+serveArgs from the backend; prereq and init/sync/status run the backend's specs; tokensave strings (binary, serve, version range, install hints, cli verbs) live only in the tokensave backend module; existing tests + skipIf integration tests pass unchanged.",
+  "assumptions": [
+    "Transport spawn: mcp-client.ts spawnAndHandshake (line 242) does `execa(this.binary, ['serve'], ...)`. Replace ['serve'] with serveArgs sourced from the backend's ProcessSpec; keep the binary resolution (cfg.tokensavePath ?? spec.binary). Everything else in the transport (handshake, tools/call envelope, breaker, health) stays identical.",
+    "Prereq: prereq.ts TokensavePrereqCheck runs `<binary> --version` (13), matches a semver (25), checks TOKENSAVE_VERSION_RANGE (5,34-38), and returns per-platform install hints (48-58). Refactor so a generic prereq check takes the backend's PrereqSpec {versionArgs, isCompatible(version), installHint()}; keep TOKENSAVE_VERSION_RANGE + the exact hint strings inside the tokensave backend (they are marked 'verbatim, DO NOT paraphrase').",
+    "CLI: cli.ts TokensaveCli runs init/sync/status with tokensave-specific args and parseSyncOutput (187-220) + status JSON parsing (128-174). Refactor so a generic short-lived CLI takes the backend's CliMap {initArgs, syncArgs(paths), statusArgs, parseSync(output), parseStatus(stdout)}; keep tokensave parsing inside the tokensave backend.",
+    "Construction sites (pipeline-lifecycle.ts:77-79,95-100,105-109; onboard.ts:70,87-92; plus mcp/server.ts, cli/impact.ts, cli/graph.ts) currently pass cfg.tokensavePath ?? 'tokensave' into these classes. After this sprint they pass the tokensave backend (or its specs). Auto-selection of WHICH backend is Sprint 3 — here they still hardcode the tokensave backend.",
+    "The class name TokensaveMcpClient may be kept for now (a rename to a generic name is optional and can be a follow-up); what matters is it takes serveArgs from the backend, not a hardcoded ['serve']."
+  ],
+  "outOfScope": [
+    "config.graph.backend + resolveGraphBackend + manifest fields (Sprint 3)",
+    "code-review-graph specs/adapters/fixtures (Sprints 4-6)",
+    "MCP wire-protocol changes"
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Read FIRST: src/graph/mcp-client.ts (spawnAndHandshake spawn line 242; constructor binary param 117-122), src/graph/prereq.ts (all — version check + hints), src/graph/cli.ts (all — init/sync/status + parseSyncOutput), src/graph/pipeline-lifecycle.ts (77-117 where these are constructed), and the Sprint-1 GraphBackend interface + tokensave-backend.ts.\n\nEXTEND GraphBackend with: `processSpec(): {binary: string; serveArgs: string[]}`, `prereqSpec(): {versionArgs: string[]; isCompatible(v: string): boolean; installHint(platform: NodeJS.Platform): string}`, `cliMap(): {initArgs(opts): string[]; syncArgs(paths): string[]; statusArgs: string[]; parseSync(out: string): number; parseStatus(stdout: string): StatusResult}`. Implement all in tokensave-backend.ts by MOVING the existing logic (TOKENSAVE_VERSION_RANGE, the brew/scoop/cargo hints verbatim, parseSyncOutput, the status JSON parsing).\n\nREFACTOR mcp-client.ts to read serveArgs from the injected backend/spec. REFACTOR prereq.ts and cli.ts into backend-driven generic helpers (either a GenericPrereqCheck(spec) / GenericGraphCli(cliMap) or keep the class names but have them accept a spec). Preserve every behavior: idempotent init 'already initialized' (cli.ts:59), timeout handling (84-88), status not-throwing on non-zero (142-146), the ANSI-strip in parseSyncOutput (190).\n\nKeep construction hardcoded to the tokensave backend for now. Run `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite; confirm skipIf integration tests still pass against tokensave 6.1.1. Commit `bober(sprint-2): fold process/prereq/cli specs into GraphBackend; transport spawns from ProcessSpec`.",
+  "evaluatorNotes": "Byte-identical tokensave is the bar. sc-2-2: assert the tokensave backend's serveArgs is exactly ['serve'] and the transport uses it. sc-2-3: mock execa; a '--version' output 'tokensave 6.1.1' passes; '5.9.0' fails INCOMPATIBLE with the existing range string; confirm the brew/scoop/cargo hint strings are unchanged character-for-character (they were marked verbatim). sc-2-4: '3 added, 1 modified, 0 removed' -> 4; legacy '{\"indexed\":42}' -> 42; a full-index 'N files' summary -> N (parseSyncOutput cases preserved). sc-2-6: run full suite (no new failures) and, if tokensave present, the skipIf integration tests (handshake + tokensave_status round-trip). Reject if any tokensave literal (version range, install hints, cli verbs, 'serve') leaked outside the tokensave backend module, or if the initialize/tools-call wire protocol changed.",
+  "estimatedFiles": ["src/graph/backends/types.ts", "src/graph/backends/tokensave-backend.ts", "src/graph/mcp-client.ts", "src/graph/prereq.ts", "src/graph/cli.ts", "src/graph/pipeline-lifecycle.ts", "tests/graph/mcp-client.test.ts", "tests/graph/prereq.test.ts", "tests/graph/cli.test.ts", "tests/graph/backends/tokensave-backend.test.ts"],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-26T00:00:00Z"
+}

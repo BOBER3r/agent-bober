@@ -628,3 +628,21 @@ vault-store → medical-ingest → medical-analysis → priority-hub → task-in
 2. [completed] Sync README CLI quick-reference (fleet + those 5 commands, deferring to COMMANDS.md) and refresh package.json description/keywords for the 0.18.0 surface (security-audit, fleet, incident-response, knowledge-platform). -- PASSED iteration 1 (bdb2e04)
 
 Scope: docs + npm metadata only — no src/ or *.test.ts changes, no git tags. VISION.md/providers.md spot-checked current and excluded; CHANGELOG already through [0.18.0].
+
+## Plan: Pluggable code-graph backend (tokensave or code-review-graph)
+- Spec: spec-20260726-graph-backend-choice
+- Created: 2026-07-26
+- Sprints: 8
+- Status: ready (approved; contracts written)
+
+### Sprint Breakdown
+1. [proposed] GraphBackend interface + extract TokensaveBackend (tokensave byte-identical) -- move tool catalog + row narrows out of client.ts; GraphClient delegates
+2. [proposed] Fold process/prereq/CLI specs into the backend + parameterize transport serveArgs (tokensave byte-identical)
+3. [proposed] graph.backend config + resolveGraphBackend auto-detect (tokensave preferred) + wire 5 construction sites + additive manifest backend/backendVersion
+4. [proposed] code-review-graph process/prereq/CLI specs + capture LIVE MCP fixtures (git 6ed3f77~1 = original cr-graph adapter reference)
+5. [proposed] cr-graph read adapters: search/reviewContext/overview/impact/changes (fixture-validated)
+6. [proposed] cr-graph query sub-patterns callers/callees/imports/tests (full parity, edge-direction verified)
+7. [proposed] Command parity: onboard/impact/graph/external-MCP through resolved backend + `graph status` readout
+8. [proposed] Docs (selection + both install paths + parity table) + deferred live-smoke follow-up + final byte-identical check
+
+Decisions: auto-detect binary (tokensave wins if both) + optional graph.backend override; FULL parity incl. onboard; cr-graph installed locally -> capture real fixtures; fixtures now, live smoke deferred. Key asset: agent-bober's graph layer was ORIGINALLY built against code-review-graph (pre-remap catalog at 6ed3f77~1), so this partly RESTORES the original adapter. Only src/graph/client.ts carries tokensave tool names today; transport is already generic MCP-over-stdio.
