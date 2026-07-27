@@ -178,6 +178,25 @@ cargo install tokensave
 
 Required version range: **`>=6.0.0-beta.1 <7.0.0`**. agent-bober verifies this on `agent-bober graph init` and prints the correct install hint if `tokensave` is missing or out of range. If the binary is absent, graph features degrade gracefully and the rest of the pipeline is unaffected.
 
+### Choosing a graph backend
+
+The graph engine is **pluggable**. By default agent-bober **auto-detects** which engine to use: it probes `tokensave --version` first, then `code-review-graph --version`, and uses whichever is installed (**tokensave is preferred** when both are present). If neither is installed, resolution fails with a single hint naming both install paths.
+
+You can pin the engine explicitly with `graph.backend`, and point at a custom `code-review-graph` binary with `graph.codeReviewGraphPath` (mirroring `tokensavePath`):
+
+```json
+{
+  "graph": {
+    "enabled": true,
+    "backend": "tokensave"
+  }
+}
+```
+
+An explicit `backend` value short-circuits detection (the other engine is never probed). Selection is config-only — there is no per-command `--backend` flag.
+
+> **`code-review-graph` selection is wired, but the engine is not functional yet.** `code-review-graph` is registered so it can be *selected* and prereq-checked, but its query/CLI adapters land in later sprints — selecting it today surfaces a clear "not implemented until Sprints 4-6" error rather than silently falling back to tokensave. For real use, stay on `tokensave`.
+
 Once `tokensave` is installed, enable the graph by adding a `graph` section to `bober.config.json`:
 
 ```json
@@ -207,10 +226,13 @@ In Claude Code, the same workflows are available as slash commands: `/bober-grap
 > backend also describes *how to run* its engine — a `ProcessSpec` (binary + serve args) the MCP
 > transport spawns from, a `PrereqSpec` (version command, compatibility predicate, and the install
 > hints shown above), and a `CliMap` (init/sync/status args + output parsers). The tokensave version
-> range and install-hint strings live only in `TokensaveBackend`. Today the only backend is
-> `TokensaveBackend`, so behaviour is unchanged — the seam exists so a second code-graph engine can be
-> added without touching `GraphClient`, the transport, the prereq check, or the CLI wrapper. There is
-> no user-facing backend selector yet.
+> range and install-hint strings live only in `TokensaveBackend`. `resolveGraphBackend()`
+> (`src/graph/backends/registry.ts`) selects the engine — the `graph.backend` override wins, else it
+> auto-detects (tokensave preferred) — and every graph construction site resolves through it. A
+> second engine (`code-review-graph`) is registered as a stub so it is selectable and prereq-checkable;
+> its adapters land in later sprints, so selecting it today throws a clear "not implemented" error.
+> Adding a real engine needs no changes to `GraphClient`, the transport, the prereq check, or the CLI
+> wrapper. The tokensave path is byte-identical when `graph.backend` is unset.
 
 For architecture details see: [`.bober/architecture/arch-20260524-port-code-review-graph-architecture.md`](.bober/architecture/arch-20260524-port-code-review-graph-architecture.md)
 
