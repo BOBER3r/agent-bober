@@ -109,11 +109,9 @@ export function registerGraphCommand(program: Command): void {
       const store = new GraphArtifactStore(projectRoot);
       await store.ensureLayout();
 
-      const cli = new TokensaveCli(
-        projectRoot,
-        store,
-        graphCfg.tokensavePath ?? "tokensave",
-      );
+      // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
+      // init honors whichever engine was selected, not a hardcoded tokensave.
+      const cli = new TokensaveCli(projectRoot, store, binary, backend);
 
       try {
         await cli.init({
@@ -200,11 +198,9 @@ export function registerGraphCommand(program: Command): void {
       const store = new GraphArtifactStore(projectRoot);
       await store.ensureLayout();
 
-      const cli = new TokensaveCli(
-        projectRoot,
-        store,
-        graphCfg.tokensavePath ?? "tokensave",
-      );
+      // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
+      // sync honors whichever engine was selected, not a hardcoded tokensave.
+      const cli = new TokensaveCli(projectRoot, store, binary, backend);
 
       // --force → `tokensave sync --force .` re-indexes everything;
       // otherwise an incremental sync of the project root.
@@ -280,14 +276,12 @@ export function registerGraphCommand(program: Command): void {
       const manifest = await store.readManifest();
       const staleness = await store.staleness();
 
-      // Attempt to get live status from tokensave binary
+      // Attempt to get live status from the resolved engine's binary.
       let liveStatus = { ready: false, indexedFileCount: 0, tokensaveVersion: "" };
       if (prereq.ok) {
-        const cli = new TokensaveCli(
-          projectRoot,
-          null,
-          graphCfg.tokensavePath ?? "tokensave",
-        );
+        // Construct the CLI from the ALREADY-RESOLVED backend (see above) so
+        // status honors whichever engine was selected, not a hardcoded tokensave.
+        const cli = new TokensaveCli(projectRoot, null, binary, backend);
         try {
           liveStatus = await cli.status();
         } catch {

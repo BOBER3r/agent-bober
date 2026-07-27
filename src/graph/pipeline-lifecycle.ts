@@ -111,11 +111,10 @@ class GraphPipelineLifecycleImpl {
     await this.mcpClient.start();
 
     // Instantiate and start hook handler (debounce + queue + IPC poll).
-    const cli = new TokensaveCli(
-      projectRoot,
-      this.store,
-      cfg.tokensavePath ?? "tokensave",
-    );
+    // Construct the CLI from the ALREADY-RESOLVED backend (see above) so the
+    // hook-sync loop honors whichever engine was selected, not a hardcoded
+    // tokensave.
+    const cli = new TokensaveCli(projectRoot, this.store, binary, backend);
     this.hookHandler = new GraphHookHandler(
       cli,
       this.store,
