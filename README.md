@@ -195,7 +195,7 @@ You can pin the engine explicitly with `graph.backend`, and point at a custom `c
 
 An explicit `backend` value short-circuits detection (the other engine is never probed). Selection is config-only — there is no per-command `--backend` flag.
 
-> **`code-review-graph` selection is wired, but the engine is not fully functional yet.** `code-review-graph` is registered so it can be *selected* and prereq-checked, and as of Sprint 4 its CLI path is real — `graph init`/`sync`/`status` run the actual `code-review-graph` `build`/`update`/`status --json` verbs. Its **read/query adapters** (search, impact, review-context, overview, changes, query) are not implemented yet, so those operations — and the commands that use them (`onboard`, `impact`, and the pipeline's graph queries) — surface a clear "not implemented until Sprints 4-6" error rather than silently falling back to tokensave. For real querying, stay on `tokensave`.
+> **`code-review-graph` selection is wired, and most of the engine is now functional.** `code-review-graph` is registered so it can be *selected* and prereq-checked; as of Sprint 4 its CLI path is real (`graph init`/`sync`/`status` run the actual `code-review-graph` `build`/`update`/`status --json` verbs), and as of Sprint 5 its **five read adapters** — search, impact, review-context, overview, changes — are implemented and validated against captured live cr-graph fixtures, so `onboard`, `impact`, and the pipeline's graph reads work through it. The **four `query` sub-patterns** (callers/callees/imports/tests) are not implemented yet (Sprint 6) and still surface a clear "not implemented" error rather than silently falling back to tokensave. One honest caveat: `reviewContext` currently returns cr-graph's raw response payload unnarrowed (the client bypasses the adapter's narrow — a pre-existing wiring gap scheduled to be fixed in Sprint 7). For full querying today, stay on `tokensave`.
 
 Once `tokensave` is installed, enable the graph by adding a `graph` section to `bober.config.json`:
 
@@ -230,8 +230,9 @@ In Claude Code, the same workflows are available as slash commands: `/bober-grap
 > (`src/graph/backends/registry.ts`) selects the engine — the `graph.backend` override wins, else it
 > auto-detects (tokensave preferred) — and every graph construction site resolves through it. A
 > second engine (`code-review-graph`) is registered so it is selectable and prereq-checkable, with a
-> real `CliMap` (init/sync/status) as of Sprint 4; its read/query response adapters land in later
-> sprints, so those operations still throw a clear "not implemented" error.
+> real `CliMap` (init/sync/status) as of Sprint 4 and its five read response adapters
+> (search/impact/review-context/overview/changes) as of Sprint 5; only its `query` sub-pattern
+> adapter lands in a later sprint, so that operation still throws a clear "not implemented" error.
 > Adding a real engine needs no changes to `GraphClient`, the transport, the prereq check, or the CLI
 > wrapper. The tokensave path is byte-identical when `graph.backend` is unset.
 
