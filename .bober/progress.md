@@ -633,16 +633,16 @@ Scope: docs + npm metadata only — no src/ or *.test.ts changes, no git tags. V
 - Spec: spec-20260726-graph-backend-choice
 - Created: 2026-07-26
 - Sprints: 8
-- Status: ready (approved; contracts written)
+- Status: completed (8/8 sprints) 2026-07-27
 
 ### Sprint Breakdown
-1. [proposed] GraphBackend interface + extract TokensaveBackend (tokensave byte-identical) -- move tool catalog + row narrows out of client.ts; GraphClient delegates
-2. [proposed] Fold process/prereq/CLI specs into the backend + parameterize transport serveArgs (tokensave byte-identical)
-3. [proposed] graph.backend config + resolveGraphBackend auto-detect (tokensave preferred) + wire 5 construction sites + additive manifest backend/backendVersion
-4. [proposed] code-review-graph process/prereq/CLI specs + capture LIVE MCP fixtures (git 6ed3f77~1 = original cr-graph adapter reference)
-5. [proposed] cr-graph read adapters: search/reviewContext/overview/impact/changes (fixture-validated)
-6. [proposed] cr-graph query sub-patterns callers/callees/imports/tests (full parity, edge-direction verified)
+1. [completed] GraphBackend interface + extract TokensaveBackend -- PASSED iter 1 (ae1bde7); suite 4974/0-fail, grep gate clean, byte-identical
+2. [completed] Fold process/prereq/CLI specs + parameterize transport -- PASSED iter 1 (129d841); verbatim strings, cli.test byte-identical, suite 4994/0-fail
+3. [completed] graph.backend config + resolveGraphBackend auto-detect + wire 5 sites + additive manifest -- PASSED iter 2 (77bb53c+6fc5a00); iter1 caught 2 CLI sites bypassing resolved backend; suite 5018/0-fail
+4. [completed] code-review-graph CLI map + capture LIVE MCP fixtures -- PASSED iter 1 (ed7d9cf); cr-graph 2.3.7 probed live, 8 real fixtures (30 _tool-suffixed tools confirmed), skipIf live handshake, suite 5038/2-skip/0-fail
+5. [completed] cr-graph read adapters: search/reviewContext/overview/impact/changes -- PASSED iter 1 (2ebe2af); narrows traced vs real fixtures; reviewContext client-path bypass = follow-up folded into S7; suite 5060/0-fail
+6. [completed] cr-graph query sub-patterns callers/callees/imports/tests -- PASSED iter 1 (4b837ff); full parity via query_graph_tool, edge-direction verified, both traps guard-tested; suite 5076/0-fail. feat-4 COMPLETE
 7. [proposed] Command parity: onboard/impact/graph/external-MCP through resolved backend + `graph status` readout
-8. [proposed] Docs (selection + both install paths + parity table) + deferred live-smoke follow-up + final byte-identical check
+8. [completed] Docs (selection + both install paths + parity table) + deferred live-smoke + broken-link fix + final check -- PASSED iter 1 (7137bf0); suite 5083/0-fail byte-identical. feat-6 COMPLETE
 
 Decisions: auto-detect binary (tokensave wins if both) + optional graph.backend override; FULL parity incl. onboard; cr-graph installed locally -> capture real fixtures; fixtures now, live smoke deferred. Key asset: agent-bober's graph layer was ORIGINALLY built against code-review-graph (pre-remap catalog at 6ed3f77~1), so this partly RESTORES the original adapter. Only src/graph/client.ts carries tokensave tool names today; transport is already generic MCP-over-stdio.

@@ -1,0 +1,31 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-3-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-3",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "fail",
+  "score": { "criteriaTotal": 8, "criteriaPassed": 7, "criteriaFailed": 1, "criteriaSkipped": 0, "requiredPassed": 7, "requiredFailed": 1, "requiredTotal": 8 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "unit-test", "required": false, "result": "pass", "output": "full suite 5006 passed / 1 skip / 0 fail (baseline 4994, +12 new); no regressions" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-3-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-3-2", "required": true, "result": "pass", "evidence": "backend enum + codeReviewGraphPath optional-no-default; golden snapshot test passes unchanged" },
+    { "criterionId": "sc-3-3", "required": true, "result": "pass", "evidence": "registry.test.ts covers tokensave-only/crgraph-only/both->tokensave with mocked probe" },
+    { "criterionId": "sc-3-4", "required": true, "result": "pass", "evidence": "neither-installed -> combined hint naming both engines; probe called twice" },
+    { "criterionId": "sc-3-5", "required": true, "result": "pass", "evidence": "explicit wins, zero probe of other, no fallback when missing" },
+    { "criterionId": "sc-3-6", "required": true, "result": "fail", "evidence": "prereq+transport+GraphClient wired correctly, but src/cli/commands/graph.ts (init/sync/status 112-116/203-207/286-290) and src/graph/pipeline-lifecycle.ts:113-117 hardcode `new TokensaveCli(...)` ignoring the resolved backend; root cause src/graph/cli.ts hardcodes new TokensaveBackend().cliMap() with no injection point.", "feedback": "With backend=code-review-graph, `agent-bober graph init/sync/status` and the pipeline file-watch sync hook still shell out to tokensave's binary+argv instead of honoring the resolved backend (should use backend.cliMap(), which for the cr-graph stub throws the clean NOT_IMPL). Not caught by tests because no test exercises the cr-graph-selected path through these two sites." },
+    { "criterionId": "sc-3-7", "required": true, "result": "pass", "evidence": "GraphManifest backend+backendVersion additive; legacy manifest reads backend='tokensave', backendVersion=tokensaveVersion, no throw" },
+    { "criterionId": "sc-3-8", "required": true, "result": "pass", "evidence": "full suite 0 failures; lint clean; tokensave-unset path byte-identical (pipeline-lifecycle tests pass)" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "critical", "category": "bug", "file": "src/cli/commands/graph.ts", "line": "112-116, 203-207, 286-290", "description": "init/sync/status resolve the backend for the prereq check but then unconditionally construct new TokensaveCli(...) ignoring the resolved backend. Same at src/graph/pipeline-lifecycle.ts:113-117 (GraphHookHandler sync loop). Root cause: src/graph/cli.ts TokensaveCli hardcodes new TokensaveBackend().cliMap() with no way to inject a different backend's CliMap.", "expected": "When resolved backend is code-review-graph, these sites must use that backend's binary + cliMap (the stub's cliMap throws 'not implemented until Sprints 4-6') — not tokensave's CLI.", "reproduction": "graph.backend='code-review-graph' with tokensave NOT on PATH + cr-graph installed; `agent-bober graph init` passes prereq (reports cr-graph) but cli.init() spawns 'tokensave init' -> ENOENT instead of the NOT_IMPL message." }
+  ],
+  "summary": "6/8 required criteria + the optional pass; build/typecheck/lint/full-suite (5006/0-fail, no regressions) clean. sc-3-6 FAILS: 2 of 5 construction sites (graph.ts init/sync/status + pipeline-lifecycle hook-sync) bypass the resolved backend and hardcode TokensaveCli. IRON LAW: one required fail => sprint fails.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite + per-site diff read of all 5 construction sites)"
+}

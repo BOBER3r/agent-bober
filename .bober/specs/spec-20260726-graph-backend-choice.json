@@ -2,11 +2,11 @@
   "specId": "spec-20260726-graph-backend-choice",
   "version": 1,
   "createdAt": "2026-07-26T00:00:00Z",
-  "updatedAt": "2026-07-26T00:00:00Z",
+  "updatedAt": "2026-07-27T00:00:00Z",
   "title": "Pluggable code-graph backend (tokensave or code-review-graph)",
   "description": "Let the user run the graph layer against either tokensave (current default, Rust) or code-review-graph (Python, https://github.com/tirth8205/code-review-graph). Both run as an MCP server over stdio, so the generic transport is reused; a backend adapter abstraction supplies the per-engine tool catalog, response-shape narrowing, prereq/version check, and init/sync/status CLI mapping. Backend is chosen by auto-detecting whichever binary is installed (tokensave preferred when both are present), with an optional explicit override.",
   "mode": "greenfield",
-  "status": "ready",
+  "status": "completed",
   "ambiguityScore": 5,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -94,7 +94,9 @@
         "AC5: All five construction sites (pipeline-lifecycle, mcp/server, cli/impact, cli/graph, cli/onboard) resolve the backend instead of hardcoding 'tokensave'.",
         "AC6: Detection + selection are unit-tested with execa mocked (no real binaries required)."
       ],
-      "dependencies": ["feat-1"],
+      "dependencies": [
+        "feat-1"
+      ],
       "estimatedComplexity": "medium"
     },
     {
@@ -109,7 +111,9 @@
         "AC4: Auto-detect selects code-review-graph when only it is installed; its install hint reads `pip install code-review-graph`.",
         "AC5: If the live binary cannot be located, the sprint records that blocker and falls back to the git-history shapes (6ed3f77~1) with a documented follow-up to refresh fixtures — it does NOT invent shapes silently."
       ],
-      "dependencies": ["feat-2"],
+      "dependencies": [
+        "feat-2"
+      ],
       "estimatedComplexity": "high"
     },
     {
@@ -124,7 +128,9 @@
         "AC4: All four query patterns map to code-review-graph tools and return correct NodeRef[]; edge direction for callers_of vs callees_of is verified against fixtures.",
         "AC5: The sandbox post-filter and kind coercion apply identically for code-review-graph results; GraphClient returns GraphResult.ok=true through the code-review-graph backend in tests."
       ],
-      "dependencies": ["feat-3"],
+      "dependencies": [
+        "feat-3"
+      ],
       "estimatedComplexity": "high"
     },
     {
@@ -139,7 +145,9 @@
         "AC4: A backend-status readout (e.g. `agent-bober graph status`) prints the active engine id and version.",
         "AC5: Forcing graph.backend to each engine in turn produces a working graph layer for that engine in tests."
       ],
-      "dependencies": ["feat-4"],
+      "dependencies": [
+        "feat-4"
+      ],
       "estimatedComplexity": "medium"
     },
     {
@@ -152,7 +160,9 @@
         "AC2: Docs record the deferred live `code-review-graph serve` smoke run and how to run it manually.",
         "AC3: A final check confirms the tokensave path remains byte-identical (existing tests green) and code-review-graph is selectable end-to-end via fixtures."
       ],
-      "dependencies": ["feat-5"],
+      "dependencies": [
+        "feat-5"
+      ],
       "estimatedComplexity": "low"
     }
   ],
@@ -205,5 +215,6 @@
     "estimatedTotalDuration": "10-15 hours",
     "riskLevel": "medium",
     "riskNotes": "The transport and data model are already backend-neutral and tool names live in one file, so the refactor is low risk and the tokensave path is provably byte-identical via existing tests. The real risk is the code-review-graph adapter shapes (feat-3/feat-4): tool names gained a _tool suffix and JSON shapes may have evolved since agent-bober's original code-review-graph era. Mitigated by (a) capturing real fixtures from the live local binary, (b) the git-history reference at 6ed3f77~1, and (c) confining unknowns to two sprints. Secondary risk: code-review-graph was not on this shell's PATH at plan time, so fixture capture must locate the venv/pipx install or get the path from the user."
-  }
+  },
+  "completedAt": "2026-07-27T00:00:00Z"
 }

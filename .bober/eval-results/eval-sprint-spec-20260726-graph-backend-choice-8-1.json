@@ -1,0 +1,26 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-8-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-8",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 5, "criteriaPassed": 5, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 5, "requiredFailed": 0, "requiredTotal": 5 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "full suite 5083 passed / 2 skip / 0 fail — exact Sprint-7 baseline (byte-identical)" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-8-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0; only code change is cosmetic graph.ts .description() string" },
+    { "criterionId": "sc-8-2", "required": true, "result": "pass", "evidence": "README generalized: auto-detect (tokensave first), graph.backend + tokensavePath + codeReviewGraphPath overrides, both install paths (tokensave hints verbatim + pip install), 9-row parity table + 3-row CLI table. Spot-checked 3+ rows vs source incl. imports_of->importers_of nuance (proves derived not fabricated)" },
+    { "criterionId": "sc-8-3", "required": true, "result": "pass", "evidence": "docs/graph-backends.md §4: deferred manual smoke recipe (pip install, venv+.pth workaround, build, set backend, onboard, 5 artifacts); CI uses 14 committed REAL fixtures (not provisional)" },
+    { "criterionId": "sc-8-4", "required": true, "result": "pass", "evidence": "final numbers recorded (5083/2-skip/0-fail, build/typecheck/lint clean) matching independent run; docs explicitly state NO live cr-graph run performed (deferred)" },
+    { "criterionId": "sc-8-5", "required": true, "result": "pass", "evidence": "suite 0 new failures; lint clean; stale caveat gone (0 'not implemented'/'stay on tokensave'); broken arch-doc link gone (0); 95 headings + 5 anchors slugified -> 0 unresolved (incl. the renamed #graph-integration anchor)" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Sprint 8 (FINAL) PASSES all 5. Docs generalized to both engines with a source-derived parity table, deferred live-smoke documented, broken link + stale caveat fixed, no new broken anchors, byte-identical suite (5083/0-fail), zero behavioral code change, no false live-run claim. Commit 7137bf0. spec-20260726-graph-backend-choice COMPLETE (8/8).",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite + parity-table source spot-check + link/anchor slugifier + git-show scope check)"
+}

@@ -4,18 +4,62 @@
   "sprintNumber": 3,
   "title": "Backend selection: graph.backend config + auto-detection + wire construction sites + additive manifest",
   "description": "Add an optional graph.backend config field and a resolveGraphBackend() that decides which engine to run: an explicit graph.backend value wins; otherwise auto-detect by probing each engine's version command (tokensave preferred when both succeed); when neither is installed, surface a combined install hint naming both. Wire all five construction sites (pipeline-lifecycle.ts, mcp/server.ts, cli/impact.ts, cli/graph.ts, cli/onboard.ts) to resolve the backend instead of hardcoding the tokensave backend. Evolve GraphManifest additively to record `backend` + `backendVersion` (keep tokensaveVersion; old manifests default backend='tokensave'). A CodeReviewGraphBackend stub is registered so detection can select it, but its adapters/fixtures come in Sprints 4-6.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260726-graph-backend-choice-2"],
-  "features": ["feat-2"],
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260726-graph-backend-choice-2"
+  ],
+  "features": [
+    "feat-2"
+  ],
   "successCriteria": [
-    { "criterionId": "sc-3-1", "description": "Build + typecheck pass with zero errors.", "verificationMethod": "build", "required": true },
-    { "criterionId": "sc-3-2", "description": "GraphSectionSchema gains an optional `backend` enum ('tokensave' | 'code-review-graph'), default undefined (=auto-detect). A config with no backend field loads and validates exactly as before (schema back-compat).", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-3-3", "description": "resolveGraphBackend(config, {probe}) returns the tokensave backend when graph.backend='tokensave' or when unset and only tokensave is detected; returns the code-review-graph backend when graph.backend='code-review-graph' or when unset and only code-review-graph is detected; prefers tokensave when unset and BOTH are detected. Unit-tested with the version probe mocked (no real binaries).", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-3-4", "description": "When graph.backend is unset and NEITHER binary is detected, resolution fails with a combined install hint that names BOTH engines (tokensave install hint AND `pip install code-review-graph`). Unit-tested with both probes failing.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-3-5", "description": "An explicit graph.backend value short-circuits detection (no probe of the other engine) and is honored even if that engine's binary is missing (the prereq check then fails with that engine's install hint, not a combined one). Unit-tested.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-3-6", "description": "All five construction sites resolve the backend via resolveGraphBackend and pass it into the transport/prereq/cli/GraphClient: src/graph/pipeline-lifecycle.ts, src/mcp/server.ts, src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/cli/commands/onboard.ts. With graph.backend unset + tokensave installed, every one behaves byte-identically to today.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-3-7", "description": "GraphManifest adds `backend: string` and `backendVersion: string` additively; GraphArtifactStore reads legacy manifests (missing backend -> 'tokensave', backendVersion falls back to tokensaveVersion) without error. Unit-tested with an old-shape manifest fixture.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-3-8", "description": "Full suite green (no NEW failures); lint clean. With graph.backend unset and tokensave present, `agent-bober onboard`/`impact`/`graph` and the run pipeline are byte-identical to before this spec.", "verificationMethod": "unit-test", "required": true }
+    {
+      "criterionId": "sc-3-1",
+      "description": "Build + typecheck pass with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "GraphSectionSchema gains an optional `backend` enum ('tokensave' | 'code-review-graph'), default undefined (=auto-detect). A config with no backend field loads and validates exactly as before (schema back-compat).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "resolveGraphBackend(config, {probe}) returns the tokensave backend when graph.backend='tokensave' or when unset and only tokensave is detected; returns the code-review-graph backend when graph.backend='code-review-graph' or when unset and only code-review-graph is detected; prefers tokensave when unset and BOTH are detected. Unit-tested with the version probe mocked (no real binaries).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "When graph.backend is unset and NEITHER binary is detected, resolution fails with a combined install hint that names BOTH engines (tokensave install hint AND `pip install code-review-graph`). Unit-tested with both probes failing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "An explicit graph.backend value short-circuits detection (no probe of the other engine) and is honored even if that engine's binary is missing (the prereq check then fails with that engine's install hint, not a combined one). Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "All five construction sites resolve the backend via resolveGraphBackend and pass it into the transport/prereq/cli/GraphClient: src/graph/pipeline-lifecycle.ts, src/mcp/server.ts, src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/cli/commands/onboard.ts. With graph.backend unset + tokensave installed, every one behaves byte-identically to today.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "GraphManifest adds `backend: string` and `backendVersion: string` additively; GraphArtifactStore reads legacy manifests (missing backend -> 'tokensave', backendVersion falls back to tokensaveVersion) without error. Unit-tested with an old-shape manifest fixture.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "Full suite green (no NEW failures); lint clean. With graph.backend unset and tokensave present, `agent-bober onboard`/`impact`/`graph` and the run pipeline are byte-identical to before this spec.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
   ],
   "nonGoals": [
     "Do NOT implement code-review-graph response adapters, tool catalog, or fixtures — a stub backend (id + process/prereq/cli specs only, adapters throwing GRAPH_UNAVAILABLE / marked TODO) is enough for detection to select it. Adapters land in Sprints 4-6.",
@@ -44,9 +88,23 @@
   "ambiguityScore": 4,
   "generatorNotes": "Read FIRST: src/config/schema.ts (GraphSectionSchema 394-417), src/graph/pipeline-lifecycle.ts (start() 61-139 + getGraphClient 215-252), src/cli/commands/onboard.ts, src/cli/commands/impact.ts, src/cli/commands/graph.ts, src/mcp/server.ts (backend construction), and the Sprint-1/2 GraphBackend + tokensave-backend.\n\nADD schema field(s): backend enum optional (+ optional codeReviewGraphPath). Regenerate any golden config snapshot if one exists (there is a dogfood golden snapshot in this repo — update it if the schema default output changes; backend is optional so default output should be unchanged).\n\nWRITE src/graph/backends/registry.ts (or resolve.ts): export resolveGraphBackend(config, deps?) with an injectable version probe. Logic: if config.graph.backend set -> return that backend (no probe of others). Else probe each known backend's prereqSpec.versionArgs; collect installed; if tokensave installed -> tokensave; else if cr-graph installed -> cr-graph; else throw a structured error with combined hints.\n\nADD a CodeReviewGraphBackend STUB in src/graph/backends/code-review-graph-backend.ts: real id ('code-review-graph'), processSpec {binary:'code-review-graph', serveArgs:['serve']}, prereqSpec {versionArgs:['--version'], isCompatible: accept-any-for-now (or a documented TODO range), installHint: 'pip install code-review-graph'}, cliMap TODO, and *Plan adapter methods that THROW/return a TODO marker (they are filled in Sprints 4-6). It only needs to be selectable + prereq-checkable this sprint.\n\nWIRE all five construction sites to resolveGraphBackend. EVOLVE the manifest additively (types.ts + artifact-store read/write) with legacy fallback.\n\nVERIFY: unit-test resolveGraphBackend with a mocked probe for all branches (tokensave-only, crgraph-only, both->tokensave, neither->combined hint, explicit-wins). Run full suite + lint. Confirm a no-backend config is byte-identical for tokensave. Commit `bober(sprint-3): graph.backend config + auto-detect resolveGraphBackend + additive manifest`.",
   "evaluatorNotes": "sc-3-2: a config WITHOUT graph.backend must still parse and produce the same effective config (assert no golden-snapshot drift, or that backend is undefined). sc-3-3/3-4/3-5: drive resolveGraphBackend with a MOCKED probe — verify each branch, especially: both installed -> tokensave; neither -> error hint contains BOTH the tokensave platform hint AND 'pip install code-review-graph'; explicit 'code-review-graph' does NOT probe tokensave and does NOT fall back to tokensave when cr-graph is missing. sc-3-6: confirm all five sites call resolveGraphBackend (grep for it) and no site still hardcodes a bare 'tokensave' backend for the run/onboard/impact/graph/mcp paths. sc-3-7: feed a legacy manifest (no backend field) and confirm read yields backend='tokensave', backendVersion=tokensaveVersion, no throw. sc-3-8: full suite no new failures; with tokensave present and no backend set, onboard still writes 5 files (byte-identical path). Reject if an explicit backend value triggers a probe of the other engine, or if the tokensave-unset path changed behavior.",
-  "estimatedFiles": ["src/config/schema.ts", "src/graph/backends/registry.ts", "src/graph/backends/code-review-graph-backend.ts", "src/graph/types.ts", "src/graph/artifact-store.ts", "src/graph/pipeline-lifecycle.ts", "src/mcp/server.ts", "src/cli/commands/impact.ts", "src/cli/commands/graph.ts", "src/cli/commands/onboard.ts", "tests/graph/backends/registry.test.ts", "tests/graph/artifact-store.test.ts"],
+  "estimatedFiles": [
+    "src/config/schema.ts",
+    "src/graph/backends/registry.ts",
+    "src/graph/backends/code-review-graph-backend.ts",
+    "src/graph/types.ts",
+    "src/graph/artifact-store.ts",
+    "src/graph/pipeline-lifecycle.ts",
+    "src/mcp/server.ts",
+    "src/cli/commands/impact.ts",
+    "src/cli/commands/graph.ts",
+    "src/cli/commands/onboard.ts",
+    "tests/graph/backends/registry.test.ts",
+    "tests/graph/artifact-store.test.ts"
+  ],
   "estimatedDuration": "medium",
   "iterationHistory": [],
   "createdAt": "2026-07-26T00:00:00Z",
-  "updatedAt": "2026-07-26T00:00:00Z"
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
 }

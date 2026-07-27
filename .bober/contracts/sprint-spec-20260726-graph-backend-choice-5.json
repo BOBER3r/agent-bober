@@ -4,17 +4,56 @@
   "sprintNumber": 5,
   "title": "code-review-graph read adapters: search, reviewContext, overview, impact, changes",
   "description": "Implement the CodeReviewGraphBackend response adapters for the five non-query operations, validated against the fixtures captured in Sprint 4. search -> semantic_search_nodes_tool (SearchHit[] with NodeRef + score/snippet, kind coercion), reviewContext -> get_review_context_tool (string), overview -> get_architecture_overview_tool (string), impact -> get_impact_radius_tool (ImpactReport with root/affected/testsAffected partition), changes -> detect_changes_tool (NodeRef[]). Each adapter's *Plan method returns {tool, params, narrow} exactly like the tokensave backend, so GraphClient's sandbox/staleness/health/fallback logic is reused unchanged.",
-  "status": "proposed",
-  "dependsOn": ["sprint-spec-20260726-graph-backend-choice-4"],
-  "features": ["feat-4"],
+  "status": "completed",
+  "dependsOn": [
+    "sprint-spec-20260726-graph-backend-choice-4"
+  ],
+  "features": [
+    "feat-4"
+  ],
   "successCriteria": [
-    { "criterionId": "sc-5-1", "description": "Build + typecheck pass with zero errors.", "verificationMethod": "build", "required": true },
-    { "criterionId": "sc-5-2", "description": "search: CodeReviewGraphBackend.searchPlan returns {tool:'semantic_search_nodes_tool', params: <query+limit shape>, narrow}, and narrow(fixture) yields SearchHit[] whose NodeRef carries symbol/file/line with kind coerced to the NodeRef kind set, and score/snippet populated where the fixture provides them. Unit-tested against tests/graph/fixtures/cr-graph/semantic_search_nodes_tool.json.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-5-3", "description": "reviewContext (get_review_context_tool) and overview (get_architecture_overview_tool) narrows return the correct string payload from their fixtures (matching how GraphClient.reviewContext/overview consume a string).", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-5-4", "description": "impact: impactPlan narrow(fixture from get_impact_radius_tool) yields an ImpactReport with a root NodeRef and affected vs testsAffected partitioned by the test/spec heuristic (or cr-graph's own test edges if the fixture distinguishes them). Unit-tested.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-5-5", "description": "changes: changesPlan narrow(fixture from detect_changes_tool) yields NodeRef[] of changed symbols. Unit-tested.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-5-6", "description": "End-to-end through GraphClient: with the code-review-graph backend injected and the transport mocked to return the captured fixtures, GraphClient.search/reviewContext/overview/impact/changes return GraphResult.ok=true with correctly-narrowed data, and the sandbox post-filter + kind coercion apply identically to the tokensave path. Unit-tested.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-5-7", "description": "Full suite green (no NEW failures); tokensave path unaffected; lint clean.", "verificationMethod": "unit-test", "required": false }
+    {
+      "criterionId": "sc-5-1",
+      "description": "Build + typecheck pass with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "search: CodeReviewGraphBackend.searchPlan returns {tool:'semantic_search_nodes_tool', params: <query+limit shape>, narrow}, and narrow(fixture) yields SearchHit[] whose NodeRef carries symbol/file/line with kind coerced to the NodeRef kind set, and score/snippet populated where the fixture provides them. Unit-tested against tests/graph/fixtures/cr-graph/semantic_search_nodes_tool.json.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "reviewContext (get_review_context_tool) and overview (get_architecture_overview_tool) narrows return the correct string payload from their fixtures (matching how GraphClient.reviewContext/overview consume a string).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "impact: impactPlan narrow(fixture from get_impact_radius_tool) yields an ImpactReport with a root NodeRef and affected vs testsAffected partitioned by the test/spec heuristic (or cr-graph's own test edges if the fixture distinguishes them). Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "changes: changesPlan narrow(fixture from detect_changes_tool) yields NodeRef[] of changed symbols. Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "End-to-end through GraphClient: with the code-review-graph backend injected and the transport mocked to return the captured fixtures, GraphClient.search/reviewContext/overview/impact/changes return GraphResult.ok=true with correctly-narrowed data, and the sandbox post-filter + kind coercion apply identically to the tokensave path. Unit-tested.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "Full suite green (no NEW failures); tokensave path unaffected; lint clean.",
+      "verificationMethod": "unit-test",
+      "required": false
+    }
   ],
   "nonGoals": [
     "Do NOT implement the four query sub-patterns (callers/callees/imports/tests) — Sprint 6.",
@@ -42,9 +81,13 @@
   "ambiguityScore": 4,
   "generatorNotes": "Read FIRST: tests/graph/fixtures/cr-graph/*.json (the captured shapes — THESE are your source of truth), the tokensave-backend *Plan methods (the template for {tool, params, narrow}), GraphClient's search/reviewContext/overview/impact/changes (how each result is consumed), and `git show 6ed3f77~1:src/graph/client.ts` (original cr-graph narrows).\n\nIMPLEMENT on CodeReviewGraphBackend: searchPlan(q, opts) -> {tool:'semantic_search_nodes_tool', params (query + limit — match the captured arg shape), narrow: rows->SearchHit[]}; reviewContextPlan(nodes) -> {tool:'get_review_context_tool', params, narrow: raw->string}; overviewPlan() -> {tool:'get_architecture_overview_tool', params, narrow: raw->string (JSON.stringify if it returns an object, matching how tokensave overview stringifies module_api)}; impactPlan(target) -> {tool:'get_impact_radius_tool', params (node id / symbol — match capture), narrow: raw->ImpactReport}; changesPlan(since) -> {tool:'detect_changes_tool', params, narrow: raw->NodeRef[]}.\n\nWRITE the narrows to consume the ACTUAL fixture fields. Add a fixture-driven unit test per operation: load the JSON, call narrow, assert the produced SearchHit/ImpactReport/etc. Add an end-to-end test that injects the cr-graph backend into GraphClient with a mocked transport returning the fixture, asserting GraphResult.ok=true and sandbox filtering applies.\n\nRun `npm run build && npm run typecheck && npx vitest run tests/graph/` + full suite + lint. Commit `bober(sprint-5): code-review-graph read adapters (search/reviewContext/overview/impact/changes)`.",
   "evaluatorNotes": "sc-5-2..5-5: for each op, open the fixture and independently trace that the narrow maps the RIGHT fixture fields (e.g. semantic search score -> SearchHit.score, node name -> NodeRef.symbol). Reject adapters that ignore the fixture and hardcode/guess. sc-5-4: confirm impact partitions affected vs tests sensibly and root is populated. sc-5-6: confirm the end-to-end GraphClient test uses the cr-graph backend (not tokensave) and that sandbox keepNode still drops out-of-repo files. sc-5-7: tokensave tests + full suite unaffected. Reject if any narrow was written against an assumed shape that contradicts the committed fixture, or if scoring was 'normalized' to tokensave rather than mapped faithfully.",
-  "estimatedFiles": ["src/graph/backends/code-review-graph-backend.ts", "tests/graph/backends/code-review-graph-backend.test.ts"],
+  "estimatedFiles": [
+    "src/graph/backends/code-review-graph-backend.ts",
+    "tests/graph/backends/code-review-graph-backend.test.ts"
+  ],
   "estimatedDuration": "medium",
   "iterationHistory": [],
   "createdAt": "2026-07-26T00:00:00Z",
-  "updatedAt": "2026-07-26T00:00:00Z"
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
 }

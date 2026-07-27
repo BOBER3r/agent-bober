@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-3-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-3",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "Sprint 3 RETRY (iteration 2). Iteration 1 (committed 77bb53c) is 7/8 correct: schema graph.backend/codeReviewGraphPath, resolveGraphBackend + registry, CodeReviewGraphBackend stub, additive manifest, and wiring of prereq + long-lived MCP transport + GraphClient are all DONE and verified. Only sc-3-6 failed. DO NOT redo the passing work — make a SURGICAL fix.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-1", "title": "GraphBackend interface + TokensaveBackend", "summary": "ae1bde7" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-2", "title": "process/prereq/CLI specs + transport param", "summary": "129d841" }
+    ],
+    "currentBranch": "bober/graph-backend-choice",
+    "priorCommit": "77bb53c (iteration 1 — keep it, fix on top)",
+    "relevantFiles": [
+      "src/graph/cli.ts",
+      "src/cli/commands/graph.ts",
+      "src/graph/pipeline-lifecycle.ts",
+      "src/graph/backends/code-review-graph-backend.ts",
+      "src/graph/backends/tokensave-backend.ts",
+      "src/graph/backends/registry.ts"
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-3.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run", "testScoped": "npx vitest run tests/graph/ tests/cli/ tests/config/" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "TypeScript strict, ESM .js imports, import type, no any, no sync fs, conventional commits. Never main. Full-suite baseline at 77bb53c: 5006 passed / 1 skipped / 0 failures.",
+  "evaluatorFeedback": {
+    "overallResult": "fail",
+    "failedCriteria": ["sc-3-6"],
+    "critical": {
+      "file": "src/graph/cli.ts + src/cli/commands/graph.ts + src/graph/pipeline-lifecycle.ts",
+      "problem": "src/graph/cli.ts TokensaveCli hardcodes `this.cliMap = new TokensaveBackend().cliMap()` at constructor (line 35) with NO way to inject a different backend. Consequently src/cli/commands/graph.ts init/sync/status (new TokensaveCli at lines 112, 203, 286) and src/graph/pipeline-lifecycle.ts (new TokensaveCli at line 114, for the GraphHookHandler sync loop) resolve the backend for the prereq check but then IGNORE it and hardcode a tokensave CLI. So with backend=code-review-graph the CLI init/sync/status shells out to tokensave instead of honoring the resolved backend.",
+      "expected": "These sites must construct the CLI from the RESOLVED backend so its binary + cliMap are used. For the CodeReviewGraphBackend stub, backend.cliMap() throws 'code-review-graph adapter not implemented until Sprints 4-6' — that clean NOT_IMPL error is the CORRECT honored behavior for now (better than silently running tokensave or an ENOENT).",
+      "reproduction": "graph.backend='code-review-graph', tokensave NOT on PATH, cr-graph installed -> `agent-bober graph init` passes prereq (reports cr-graph) but cli.init() spawns 'tokensave init' -> ENOENT, instead of the NOT_IMPL message."
+    }
+  }
+}

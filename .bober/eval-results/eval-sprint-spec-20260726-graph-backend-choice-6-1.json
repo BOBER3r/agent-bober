@@ -1,0 +1,29 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-6-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-6",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 6, "criteriaPassed": 6, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": true, "result": "pass", "output": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "full suite 5076 passed / 2 skip / 0 fail (baseline 5060, +16); no regressions" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-6-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-6-2", "required": true, "result": "pass", "evidence": "callers_of/callees_of via query_graph_tool distinct pattern strings + target.id; INBOUND [compute,test_multiply] != OUTBOUND [add,range] asserted at unit + e2e. query_graph_tool choice justified: traverse_graph_tool fixture has no direction arg + its docs point to query_graph." },
+    { "criterionId": "sc-6-3", "required": true, "result": "pass", "evidence": "imports_of uses cr-graph 'importers_of' (dependents), target.file -> module NodeRefs from results[].importer; trap fixture (imports_of=opposite direction) guard-tested; structurally distinct (import_target vs importer)" },
+    { "criterionId": "sc-6-4", "required": true, "result": "pass", "evidence": "tests_for uses target.id (qualified_name) NOT target.file; guard-tested; narrow yields [test_multiply,test_add]" },
+    { "criterionId": "sc-6-5", "required": true, "result": "pass", "evidence": "e2e all 4 patterns via cr-graph backend ok:true NodeRef[]; sandbox drops builtin 'range' (no file_path) + out-of-repo dependents; NO GRAPH_UNAVAILABLE anywhere (full parity)" },
+    { "criterionId": "sc-6-6", "required": true, "result": "pass", "evidence": "full suite 0 fail; tokensave-backend.ts + client.ts + types.ts byte-unchanged (git diff empty); QueryPattern union + query() signature untouched; both backends produce same NodeRef shape" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "low", "category": "quality", "file": "src/graph/backends/code-review-graph-backend.ts", "description": "File is 327 lines (>300 smell threshold). Cohesive (all 6 *Plan + process/prereq/cliMap for one backend). Consider extracting the queryPlan pattern map to its own module only if it keeps growing." }
+  ],
+  "summary": "Sprint 6 PASSES all 6 criteria. Full query parity: 4 sub-patterns via query_graph_tool, edge direction verified (callers!=callees), both traps (importers_of pattern; tests_for target.id) avoided + guard-tested, no GRAPH_UNAVAILABLE. tokensave/client/types byte-unchanged; suite 5076/0-fail. feat-4 complete. Commit 4b837ff.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite + fixture-by-fixture edge-direction + trap verification + git-diff nonGoal check)"
+}

@@ -1,0 +1,41 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-6-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-6",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 6: complete FULL PARITY by implementing CodeReviewGraphBackend.queryPlan for the 4 sub-patterns callers_of, callees_of, imports_of, tests_for. queryPlan currently throws NOT_IMPL. Map callers_of/callees_of to cr-graph traversal with correct edge DIRECTION (inbound callers vs outbound callees), imports_of/tests_for to query_graph_tool (dependents/coverage). Each narrow -> NodeRef[] exactly like the tokensave query() does. Validate against fixtures; edge-direction correctness (callers != callees for a node with distinct edges) is the key risk.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-1", "title": "GraphBackend + TokensaveBackend", "summary": "ae1bde7" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-2", "title": "process/prereq/CLI specs", "summary": "129d841" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-3", "title": "backend selection", "summary": "77bb53c+6fc5a00" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-4", "title": "cr-graph CLI map + live fixtures", "summary": "ed7d9cf" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-5", "title": "cr-graph read adapters", "summary": "2ebe2af — search/reviewContext/overview/impact/changes done; crToNodeRef/crKind helpers exist" }
+    ],
+    "currentBranch": "bober/graph-backend-choice",
+    "queryPatternMapping": {
+      "tokensaveReference": "tokensave query(): callers_of->tokensave_callers, callees_of->tokensave_callees, imports_of->tokensave_file_dependents, tests_for->tokensave_test_map; each -> NodeRef[] (module-style NodeRefs for file-path results in imports_of/tests_for).",
+      "crGraphTools": "query_graph_tool has a 15-value pattern enum (see tests/graph/fixtures/cr-graph/_args.json); traverse_graph_tool does directional neighbor traversal. The existing query_graph_tool.json fixture captured the 'callers_of' pattern. The curator will capture any MISSING directional/pattern fixtures live (callees_of, imports_of, tests_for) — use the curator's briefing + committed fixtures as ground truth.",
+      "reuseHelpers": "Reuse the crToNodeRef/crKind helpers added in Sprint 5 (Function->function, Class->class, File->module, unknown->symbol). For file-path results (imports_of/tests_for) build module-style NodeRefs like tokensave does."
+    },
+    "relevantFiles": [
+      "src/graph/backends/code-review-graph-backend.ts",
+      "src/graph/backends/tokensave-backend.ts",
+      "src/graph/client.ts",
+      "tests/graph/fixtures/cr-graph/query_graph_tool.json",
+      "tests/graph/fixtures/cr-graph/traverse_graph_tool.json",
+      "tests/graph/fixtures/cr-graph/_args.json"
+    ],
+    "crGraphBinary": "code-review-graph 2.3.7 at /Users/bober4ik/Library/Python/3.12/bin/code-review-graph (export PATH or use full path). Fixture capture recipe (venv+.pth for a non-zero-node graph) is in the Sprint-4 briefing/sprint doc.",
+    "keyReference": "`git show 6ed3f77~1:src/graph/client.ts` = the ORIGINAL cr-graph adapter mapped query -> a single 'query_graph' tool with a pattern arg. Validate current shapes against the ACTUAL fixtures."
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-6.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run", "testScoped": "npx vitest run tests/graph/" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "TypeScript strict, ESM .js imports, import type, no any, no sync fs, conventional commits. Never main. Baseline entering this sprint: 5060 passed / 2 skipped / 0 failures. Commit BEFORE final response. NEVER fabricate fixtures — capture live if a shape is missing (binary reachable). Edge direction (callers vs callees) is the correctness bar: assert they differ for a node with distinct in/out edges.",
+  "evaluatorFeedback": null
+}

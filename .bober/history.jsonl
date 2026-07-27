@@ -928,3 +928,31 @@
 {"event":"pipeline-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"totalIterations":3,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"sprint-docs-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","docsCommit":"3053de4","timestamp":"2026-07-14T22:46:00Z"}
 {"event":"plan-created","specId":"spec-20260726-graph-backend-choice","title":"Pluggable code-graph backend (tokensave or code-review-graph)","sprintCount":8,"status":"ready","timestamp":"2026-07-26T00:00:00Z"}
+{"event":"pipeline-started","specId":"spec-20260726-graph-backend-choice","task":"Pluggable code-graph backend (tokensave or code-review-graph)","branch":"bober/graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-1","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-1","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-1","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"ae1bde7","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-2","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-2","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-2","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"129d841","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-3","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-3","iteration":1,"note":"generator stalled post-implementation; orchestrator committed verified work","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260726-graph-backend-choice-3","iteration":1,"failedCriteria":["sc-3-6"],"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-3","iteration":2,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-3","specId":"spec-20260726-graph-backend-choice","iteration":2,"commits":["77bb53c","6fc5a00"],"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-4","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-4","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-4","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"ed7d9cf","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-5","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-5","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-5","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"2ebe2af","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-6","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-6","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-6","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"4b837ff","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-7","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-7","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-7","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"d190d7b","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260726-graph-backend-choice-8","specId":"spec-20260726-graph-backend-choice","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260726-graph-backend-choice-8","iteration":1,"timestamp":"2026-07-27T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260726-graph-backend-choice-8","specId":"spec-20260726-graph-backend-choice","iteration":1,"commit":"7137bf0","timestamp":"2026-07-27T00:00:00Z"}
+{"event":"plan-completed","specId":"spec-20260726-graph-backend-choice","sprintsCompleted":8,"timestamp":"2026-07-27T00:00:00Z"}

@@ -4,17 +4,54 @@
   "sprintNumber": 1,
   "title": "GraphBackend interface + extract TokensaveBackend (tokensave byte-identical)",
   "description": "Introduce a GraphBackend abstraction that owns the per-engine tool catalog, param builders, and response-shape adapters, and refactor GraphClient to delegate to an injected backend. Move the tokensave-specific pieces out of src/graph/client.ts — TOOL (client.ts:31-37), QUERY_TOOL (40-45), the Ts*Row raw types (52-109), and toNodeRef (116-131) — into a new src/graph/backends/tokensave-backend.ts implementing the interface. GraphClient keeps ALL of its cross-cutting logic (runWithSandbox/runRaw, sandbox keepNode, staleness cache, health short-circuit, GRAPH_DISABLED/UNAVAILABLE, GraphFallback, prefetch dispatch) and instead of a hardcoded TOOL name + inline narrow, asks the backend for {tool, params, narrow} per operation. Construction sites keep passing a concrete TokensaveBackend so behavior is byte-identical. No config, detection, or code-review-graph work in this sprint.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
-  "features": ["feat-1"],
+  "features": [
+    "feat-1"
+  ],
   "successCriteria": [
-    { "criterionId": "sc-1-1", "description": "Build + typecheck pass with zero errors (npm run build, npm run typecheck).", "verificationMethod": "build", "required": true },
-    { "criterionId": "sc-1-2", "description": "A GraphBackend interface (new src/graph/backends/types.ts or similar) declares, for each logical operation used by GraphClient (search, query[callers_of|callees_of|imports_of|tests_for], impact, reviewContext, overview, changes), a way to obtain the MCP tool name, build the params object, and narrow the raw MCP payload into the shared type (SearchHit[] | NodeRef[] | ImpactReport | string). It also carries an engine `id` (e.g. 'tokensave').", "verificationMethod": "typecheck", "required": true },
-    { "criterionId": "sc-1-3", "description": "src/graph/backends/tokensave-backend.ts implements GraphBackend and contains the tokensave_* tool names + Ts*Row narrowing that previously lived in client.ts, producing identical outputs (same NodeRef/SearchHit/ImpactReport values for the same raw input).", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-1-4", "description": "GraphClient no longer references any tokensave_* string or Ts*Row type; it delegates tool-name/params/narrow to the injected backend. Its public method signatures (search/query/impact/reviewContext/overview/changes/prefetch) and GraphResult return shapes are unchanged. A grep for `tokensave_` over src/graph/client.ts returns zero matches; over src/graph/backends/tokensave-backend.ts it returns the catalog.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-1-5", "description": "Cross-cutting behavior is preserved: sandbox post-filter (keepNode), staleness cache (checkStaleness), GRAPH_DISABLED short-circuit when config.enabled=false, GRAPH_UNAVAILABLE on broken/restarting health, toFailureResult mapping, and prefetch dispatch all behave exactly as before. Existing tests/graph/client.test.ts passes unchanged (adjusting only the construction to inject a TokensaveBackend).", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-1-6", "description": "The full existing test suite is green with no NEW failures (pre-existing unrelated failures such as cockpit-integration MCP E2E may remain). With backend=tokensave the graph path is byte-identical.", "verificationMethod": "unit-test", "required": true },
-    { "criterionId": "sc-1-7", "description": "lint passes (zero errors); ESM .js import specifiers, `import type`, unicode section-header comments, no synchronous fs are preserved.", "verificationMethod": "lint", "required": false }
+    {
+      "criterionId": "sc-1-1",
+      "description": "Build + typecheck pass with zero errors (npm run build, npm run typecheck).",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "A GraphBackend interface (new src/graph/backends/types.ts or similar) declares, for each logical operation used by GraphClient (search, query[callers_of|callees_of|imports_of|tests_for], impact, reviewContext, overview, changes), a way to obtain the MCP tool name, build the params object, and narrow the raw MCP payload into the shared type (SearchHit[] | NodeRef[] | ImpactReport | string). It also carries an engine `id` (e.g. 'tokensave').",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "src/graph/backends/tokensave-backend.ts implements GraphBackend and contains the tokensave_* tool names + Ts*Row narrowing that previously lived in client.ts, producing identical outputs (same NodeRef/SearchHit/ImpactReport values for the same raw input).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "GraphClient no longer references any tokensave_* string or Ts*Row type; it delegates tool-name/params/narrow to the injected backend. Its public method signatures (search/query/impact/reviewContext/overview/changes/prefetch) and GraphResult return shapes are unchanged. A grep for `tokensave_` over src/graph/client.ts returns zero matches; over src/graph/backends/tokensave-backend.ts it returns the catalog.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "Cross-cutting behavior is preserved: sandbox post-filter (keepNode), staleness cache (checkStaleness), GRAPH_DISABLED short-circuit when config.enabled=false, GRAPH_UNAVAILABLE on broken/restarting health, toFailureResult mapping, and prefetch dispatch all behave exactly as before. Existing tests/graph/client.test.ts passes unchanged (adjusting only the construction to inject a TokensaveBackend).",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "The full existing test suite is green with no NEW failures (pre-existing unrelated failures such as cockpit-integration MCP E2E may remain). With backend=tokensave the graph path is byte-identical.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "lint passes (zero errors); ESM .js import specifiers, `import type`, unicode section-header comments, no synchronous fs are preserved.",
+      "verificationMethod": "lint",
+      "required": false
+    }
   ],
   "nonGoals": [
     "Do NOT add config.graph.backend, auto-detection, or resolveGraphBackend — that is Sprint 3.",
@@ -43,9 +80,18 @@
   "ambiguityScore": 3,
   "generatorNotes": "Read FIRST in full: src/graph/client.ts (all of it — the TOOL/QUERY_TOOL maps, the Ts*Row types, every public method, runWithSandbox/runRaw, keepNode), src/graph/types.ts (shared types), tests/graph/client.test.ts (makeClient + the per-method assertions). This is a pure refactor: same inputs -> same outputs.\n\nDESIGN the GraphBackend interface to expose, per operation, either (a) a method returning {tool: string, params: unknown, narrow: (raw:unknown)=>T}, or (b) direct methods the client calls. Recommended shape: an object with `id: string` and one method per op, e.g. `searchPlan(q, opts) -> {tool, params, narrow}`, `queryPlan(pattern, target) -> {tool, params, narrow}`, `impactPlan(target)`, `reviewContextPlan(nodes)`, `overviewPlan()`, `changesPlan(since)`. GraphClient's method bodies then become: `const {tool, params, narrow} = this.backend.searchPlan(q, opts); return this.runWithSandbox(tool, params, (raw)=>narrow(raw).filter(h=>this.keepNode(h.node,'search')))`. Keep the sandbox filtering IN GraphClient (it needs projectRoot + incidents); the backend only produces the raw-typed value.\n\nMOVE to src/graph/backends/tokensave-backend.ts: TOOL, QUERY_TOOL, all Ts*Row types, toNodeRef, NODE_KINDS. Implement each *Plan method to return the same tool + params + narrow logic that client.ts currently inlines (e.g. searchPlan.narrow maps TsSearchRow[] -> SearchHit[] via toNodeRef, applies the opts.kind post-filter). Put the interface in src/graph/backends/types.ts (or fold into src/graph/types.ts if cleaner) and export GraphBackend.\n\nWIRE construction: pipeline-lifecycle.ts getGraphClient and cli/commands/onboard.ts pass `new TokensaveBackend()`. Update tests/graph/client.test.ts makeClient to inject it.\n\nVERIFY: `npm run build && npm run typecheck && npx vitest run tests/graph/` then the full suite. grep -n 'tokensave_' src/graph/client.ts must be empty. Commit `bober(sprint-1): GraphBackend interface + extract TokensaveBackend, GraphClient delegates`.",
   "evaluatorNotes": "This sprint's whole point is BYTE-IDENTICAL tokensave behavior via a new seam. sc-1-4: `grep -n 'tokensave_' src/graph/client.ts` MUST be empty and the same grep over src/graph/backends/tokensave-backend.ts must show the catalog — confirm the extraction actually happened (not just an alias re-export from client.ts). sc-1-3/1-5: read tokensave-backend.ts and confirm the narrow logic matches the old client.ts (same toNodeRef coercion, same opts.kind post-filter in search, same callers/callees/imports/tests mapping, same impact root/affected/testsAffected partition, same changes mapping). sc-1-5: confirm keepNode/sandbox, staleness, GRAPH_DISABLED, GRAPH_UNAVAILABLE, prefetch dispatch still live in GraphClient and are unchanged. sc-1-6: run the full suite; assert NO new failures vs baseline (git stash to compare if unsure). Reject if any tokensave_* string or Ts*Row type remains in client.ts, or if any public GraphClient signature changed.",
-  "estimatedFiles": ["src/graph/client.ts", "src/graph/backends/types.ts", "src/graph/backends/tokensave-backend.ts", "src/graph/pipeline-lifecycle.ts", "src/cli/commands/onboard.ts", "tests/graph/client.test.ts", "tests/graph/backends/tokensave-backend.test.ts"],
+  "estimatedFiles": [
+    "src/graph/client.ts",
+    "src/graph/backends/types.ts",
+    "src/graph/backends/tokensave-backend.ts",
+    "src/graph/pipeline-lifecycle.ts",
+    "src/cli/commands/onboard.ts",
+    "tests/graph/client.test.ts",
+    "tests/graph/backends/tokensave-backend.test.ts"
+  ],
   "estimatedDuration": "medium",
   "iterationHistory": [],
   "createdAt": "2026-07-26T00:00:00Z",
-  "updatedAt": "2026-07-26T00:00:00Z"
+  "updatedAt": "2026-07-27T00:00:00Z",
+  "completedAt": "2026-07-27T00:00:00Z"
 }

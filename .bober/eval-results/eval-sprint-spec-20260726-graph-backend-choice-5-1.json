@@ -1,0 +1,31 @@
+{
+  "evalId": "eval-sprint-spec-20260726-graph-backend-choice-5-1",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-5",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": { "criteriaTotal": 7, "criteriaPassed": 7, "criteriaFailed": 0, "criteriaSkipped": 0, "requiredPassed": 6, "requiredFailed": 0, "requiredTotal": 6 },
+  "strategyResults": [
+    { "strategy": "build", "required": true, "result": "pass", "output": "tsc exit 0" },
+    { "strategy": "typecheck", "required": true, "result": "pass", "output": "tsc --noEmit exit 0" },
+    { "strategy": "lint", "required": false, "result": "pass", "output": "0 errors, 2 pre-existing warnings" },
+    { "strategy": "unit-test", "required": true, "result": "pass", "output": "full suite 5060 passed / 2 skip / 0 fail (baseline 5038, +22); tokensave 32/32 + live integration 22/22 unchanged" }
+  ],
+  "criteriaResults": [
+    { "criterionId": "sc-5-1", "required": true, "result": "pass", "evidence": "build+typecheck exit 0" },
+    { "criterionId": "sc-5-2", "required": true, "result": "pass", "evidence": "searchPlan narrow traced by hand vs fixture: name->symbol, qualified_name->id, line_start->line, Function->function, score 0.016393 faithful (not normalized), signature->snippet" },
+    { "criterionId": "sc-5-3", "required": true, "result": "pass", "evidence": "reviewContextPlan.narrow + overviewPlan.narrow return correct strings (unit + overview e2e via runWithSandbox). reviewContext client-path uses pre-existing runRaw identity cast (bypasses narrow) — judged ACCEPTABLE known limitation (nonGoal forbids GraphClient change; honestly documented + non-overclaiming test). Filed high-priority follow-up." },
+    { "criterionId": "sc-5-4", "required": true, "result": "pass", "evidence": "impact: changed_nodes[0]->root (File->module), impacted_nodes partitioned by is_test (all false -> affected=4, testsAffected=0)" },
+    { "criterionId": "sc-5-5", "required": true, "result": "pass", "evidence": "changes reads changed_functions key -> NodeRef[] 'another' correct" },
+    { "criterionId": "sc-5-6", "required": true, "result": "pass", "evidence": "e2e injects CodeReviewGraphBackend (not tokensave), projectRoot='/repo' keeps nodes; 2 tmp-projectRoot cases prove sandbox drops out-of-repo nodes (parity chokepoint)" },
+    { "criterionId": "sc-5-7", "required": false, "result": "pass", "evidence": "full suite 0 fail; tokensave-backend.ts + client.ts byte-unchanged (git diff 0 lines); fixtures untouched; lint clean" }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    { "priority": "high", "category": "bug", "file": "src/graph/client.ts", "line": "91-94, 216-218", "description": "GraphClient.reviewContext() uses runRaw() (identity cast) so the backend's reviewContextPlan.narrow is never invoked. Fine for tokensave (raw is already a string) but for cr-graph get_review_context_tool returns a JSON object -> reviewContext returns raw object typed as GraphResult<string>. Pre-existing (Sprint 1); nonGoal to fix this sprint.", "expected": "A near-term sprint should make GraphClient.reviewContext() invoke the narrow (call runWithSandbox like overview, or give runRaw an optional narrow). FOLDED INTO SPRINT 7." },
+    { "priority": "low", "category": "quality", "file": "src/graph/backends/code-review-graph-backend.ts", "line": "135-137", "description": "isTestRow() is_test===true branch untested (no fixture row has is_test:true). Add a synthetic hand-built row unit test in a follow-up." }
+  ],
+  "summary": "Sprint 5 PASSES. 5 read-adapter narrows independently traced faithful vs real fixtures; queryPlan still NOT_IMPL; tokensave + client.ts byte-unchanged; suite 5060/0-fail (+22). sc-5-3 reviewContext client-path bypass judged an acceptable documented known-limitation (pre-existing, nonGoal-protected) -> high-priority follow-up folded into Sprint 7. Commit 2ebe2af.",
+  "evaluatorVerifiedBy": "bober-evaluator (independent build/typecheck/lint/full-suite + hand-traced narrows vs fixtures + reviewContext client-path source analysis)"
+}

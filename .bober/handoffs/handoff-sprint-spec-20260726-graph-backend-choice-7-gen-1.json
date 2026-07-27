@@ -1,0 +1,30 @@
+{
+  "handoffId": "handoff-sprint-spec-20260726-graph-backend-choice-7-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260726-graph-backend-choice-7",
+  "specId": "spec-20260726-graph-backend-choice",
+  "timestamp": "2026-07-27T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Sprint 7: make every graph-consuming surface work end-to-end through the RESOLVED backend, add a backend-status readout, AND close the accumulated cr-graph correctness follow-ups so cr-graph genuinely works command-to-command. The cr-graph adapter is now feature-complete (Sprints 5+6: read + query). Sprints 1-6 wired resolveGraphBackend into construction; this sprint proves the surfaces EXERCISE it for cr-graph and fixes the last gaps.",
+    "completedSprints": [
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-3", "title": "backend selection + auto-detect + manifest backend/backendVersion", "summary": "77bb53c+6fc5a00" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-4", "title": "cr-graph CLI map + fixtures", "summary": "ed7d9cf" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-5", "title": "cr-graph read adapters", "summary": "2ebe2af" },
+      { "contractId": "sprint-spec-20260726-graph-backend-choice-6", "title": "cr-graph query sub-patterns (full parity)", "summary": "4b837ff" }
+    ],
+    "currentBranch": "bober/graph-backend-choice",
+    "accumulatedFollowupsToFoldIn": [
+      "HIGH — reviewContext narrow bypass (from Sprint 5 eval): GraphClient.reviewContext() (client.ts ~91-94) uses runRaw() (identity cast, client.ts ~216-218) which BYPASSES the backend's reviewContextPlan.narrow. For cr-graph, get_review_context_tool returns a JSON OBJECT, so reviewContext() returns the raw object mistyped as GraphResult<string> instead of the narrowed string. FIX: make GraphClient.reviewContext() apply the backend's narrow (call runWithSandbox with narrow like overview() does, or give runRaw an optional narrow param defaulting to identity). This is authorized in-scope for Sprint 7 (command parity / make cr-graph work). Keep tokensave reviewContext byte-identical (its raw is already a string, so narrow=identity-equivalent there — verify the tokensave reviewContextPlan.narrow is a passthrough).",
+      "MEDIUM — codeReviewGraphPath not threaded through the transport (from Sprint 4 doc): mcp-client.ts spawnAndHandshake resolves the spawned binary as `cfg.tokensavePath ?? processSpec.binary`, so config.graph.codeReviewGraphPath is NOT honored for the serve subprocess (only processSpec.binary is). FIX: thread the per-backend binary override so codeReviewGraphPath is used when backend=code-review-graph (e.g. resolve the binary at the construction site from the backend + config, and pass it in, rather than hardcoding cfg.tokensavePath). Keep tokensave byte-identical.",
+      "LOW/doc — cr-graph `update` is git-diff-base driven, not positional-path like tokensave `sync <paths>` (from Sprint 4). If not cleanly reconcilable within the CliMap interface here, leave the existing behavior + the bober: ceiling comment and defer to a Sprint-8 documented follow-up. Do NOT force a risky change."
+    ]
+  },
+  "contractPath": ".bober/contracts/sprint-spec-20260726-graph-backend-choice-7.json",
+  "config": {
+    "commands": { "build": "npm run build", "typecheck": "npm run typecheck", "lint": "npm run lint", "test": "npx vitest run", "testScoped": "npx vitest run tests/graph/ tests/cli/" },
+    "generator": { "model": "sonnet", "autoCommit": true, "provider": "anthropic" }
+  },
+  "principles": "TypeScript strict, ESM .js imports, import type, no any, no sync fs, conventional commits. Never main. Baseline entering this sprint: 5076 passed / 2 skipped / 0 failures. Commit BEFORE final response. Tokensave path MUST stay byte-identical (its existing onboard/impact/graph/reviewContext tests must pass unchanged). Do NOT rework onboard's search()-based data strategy (nonGoal).",
+  "evaluatorFeedback": null
+}
