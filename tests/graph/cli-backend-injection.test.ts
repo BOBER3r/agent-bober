@@ -10,8 +10,9 @@
  * As of Sprint 4, CodeReviewGraphBackend.cliMap() is REAL (init->build,
  * sync->update, status->status --json) — the init()/sync()/status() cases
  * below now assert the real argv/execa behavior instead of the Sprint-3
- * NOT_IMPL throw. The 6 response *Plan adapters (search/impact/etc.) remain
- * unimplemented until Sprints 5-6; that is asserted separately below.
+ * NOT_IMPL throw. As of Sprint 5, 5 of the 6 response *Plan adapters
+ * (search/impact/reviewContext/overview/changes) are also real; only
+ * queryPlan remains unimplemented until Sprint 6 — asserted below.
  */
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -108,18 +109,21 @@ describe("TokensaveCli — backend injection (sc-3-6)", () => {
     expect(result.indexedFileCount).toBe(2);
   });
 
-  // ── Response *Plan adapters remain unimplemented (Sprints 5-6) ───────
+  // ── queryPlan still NOT_IMPL; the other 5 response *Plan adapters are
+  //    implemented as of Sprint 5 (search/impact/reviewContext/overview/
+  //    changes) — see tests/graph/backends/code-review-graph-backend.test.ts
+  //    and tests/graph/client.test.ts for their fixture-driven coverage. ───
 
-  it("the 6 response *Plan adapters still throw NOT_IMPL (not implemented until Sprints 5-6)", () => {
+  it("queryPlan still throws NOT_IMPL (Sprint 6); the other 5 adapters are implemented", () => {
     const backend = new CodeReviewGraphBackend();
     const nodeRef = { id: "x", kind: "symbol" as const, file: "f.py", line: 1, symbol: "x" };
     const NOT_IMPL = /code-review-graph adapter not implemented until Sprints 4-6/;
-    expect(() => backend.searchPlan("x")).toThrow(NOT_IMPL);
     expect(() => backend.queryPlan("callers_of", nodeRef)).toThrow(NOT_IMPL);
-    expect(() => backend.impactPlan(nodeRef)).toThrow(NOT_IMPL);
-    expect(() => backend.reviewContextPlan([nodeRef])).toThrow(NOT_IMPL);
-    expect(() => backend.overviewPlan()).toThrow(NOT_IMPL);
-    expect(() => backend.changesPlan()).toThrow(NOT_IMPL);
+    expect(backend.searchPlan("x").tool).toBe("semantic_search_nodes_tool");
+    expect(backend.impactPlan(nodeRef).tool).toBe("get_impact_radius_tool");
+    expect(backend.reviewContextPlan([nodeRef]).tool).toBe("get_review_context_tool");
+    expect(backend.overviewPlan().tool).toBe("get_architecture_overview_tool");
+    expect(backend.changesPlan().tool).toBe("detect_changes_tool");
   });
 
   // ── Byte-identical for tokensave (default / unset backend) ──────────

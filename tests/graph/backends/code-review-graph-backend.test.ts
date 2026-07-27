@@ -1,11 +1,16 @@
 /**
- * Unit tests for CodeReviewGraphBackend's non-adapter surface (sc-4-2/4-3).
+ * Unit tests for CodeReviewGraphBackend.
  *
- * The 6 response *Plan adapters stay untested here — they still throw
- * NOT_IMPL until Sprints 5-6 (covered by cli-backend-injection.test.ts,
- * which asserts the throw behaviour end-to-end via TokensaveCli).
+ * processSpec/prereqSpec/cliMap (sc-4-2/4-3) plus the 5 response *Plan
+ * adapters implemented in Sprint 5 (search/impact/reviewContext/overview/
+ * changes), fixture-driven against the real captures under
+ * tests/graph/fixtures/cr-graph/. `queryPlan` still throws NOT_IMPL until
+ * Sprint 6 (covered by cli-backend-injection.test.ts).
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 vi.mock("execa", () => ({
   execa: vi.fn(),
@@ -14,6 +19,13 @@ vi.mock("execa", () => ({
 import { execa } from "execa";
 import { CodeReviewGraphBackend } from "../../../src/graph/backends/code-review-graph-backend.js";
 import { GenericPrereqCheck } from "../../../src/graph/prereq.js";
+
+const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../fixtures/cr-graph");
+
+async function loadFixture(name: string): Promise<unknown> {
+  const raw = await readFile(join(FIXTURES_DIR, name), "utf-8");
+  return JSON.parse(raw) as unknown;
+}
 
 function mockExeca(value: Record<string, unknown>): void {
   (execa as unknown as Mock).mockResolvedValue({
@@ -197,5 +209,151 @@ describe("CodeReviewGraphBackend", () => {
       expect(result.ready).toBe(false);
       expect(result.indexedFileCount).toBe(0);
     });
+  });
+
+  // ── searchPlan (sc-5-2) ─────────────────────────────────────────────
+
+  describe("searchPlan", () => {
+    it("uses semantic_search_nodes_tool with {query, limit}", () => {
+      expect(backend.searchPlan("add").params).toEqual({ query: "add" });
+      expect(backend.searchPlan("add", { limit: 5 }).params).toEqual({
+        query: "add",
+        limit: 5,
+      });
+    });
+
+    it("narrows the real semantic_search_nodes_tool.json fixture -> SearchHit[]", async () => {
+      const plan = backend.searchPlan("add", { limit: 5 });
+      expect(plan.tool).toBe("semantic_search_nodes_tool");
+      const fixture = await loadFixture("semantic_search_nodes_tool.json");
+      const hits = plan.narrow(fixture);
+      expect(hits).toHaveLength(1);
+      expect(hits[0]!.node.symbol).toBe("add");
+      expect(hits[0]!.node.id).toBe("/repo/src/math_utils.py::add");
+      expect(hits[0]!.node.file).toBe("/repo/src/math_utils.py");
+      expect(hits[0]!.node.line).toBe(1);
+      expect(hits[0]!.node.kind).toBe("function"); // "Function" -> "function"
+      expect(hits[0]!.score).toBeCloseTo(0.016393);
+      expect(hits[0]!.snippet).toBe("def add((a, b))");
+    });
+
+    it("post-filters by opts.kind after narrowing", async () => {
+      const plan = backend.searchPlan("add", { kind: "class" });
+      const fixture = await loadFixture("semantic_search_nodes_tool.json");
+      expect(plan.narrow(fixture)).toHaveLength(0);
+    });
+  });
+
+  // ── impactPlan (sc-5-4) ─────────────────────────────────────────────
+
+  describe("impactPlan", () => {
+    it("uses get_impact_radius_tool with {changed_files: [file]}", () => {
+      const target = { id: "x", kind: "module" as const, file: "src/math_utils.py", line: 0, symbol: "math_utils" };
+      expect(backend.impactPlan(target).tool).toBe("get_impact_radius_tool");
+      expect(backend.impactPlan(target).params).toEqual({ changed_files: ["src/math_utils.py"] });
+    });
+
+    it("accepts a qualified_name string target and derives the file portion", () => {
+      const plan = backend.impactPlan("/repo/src/main.py::another");
+      expect(plan.params).toEqual({ changed_files: ["/repo/src/main.py"] });
+    });
+
+    it("narrows the real get_impact_radius_tool.json fixture -> ImpactReport", async () => {
+      const target = { id: "x", kind: "module" as const, file: "src/math_utils.py", line: 0, symbol: "math_utils" };
+      const plan = backend.impactPlan(target);
+      const fixture = await loadFixture("get_impact_radius_tool.json");
+      const report = plan.narrow(fixture);
+      // root = changed_nodes[0] = the File node for math_utils.py
+      expect(report.root.file).toBe("/repo/src/math_utils.py");
+      expect(report.root.kind).toBe("module"); // "File" -> "module"
+      // impacted_nodes (4 rows) are all is_test:false -> all affected, none testsAffected
+      expect(report.affected).toHaveLength(4);
+      expect(report.testsAffected).toHaveLength(0);
+      expect(report.affected.map((n) => n.symbol).sort()).toEqual(
+        ["another", "helper", "run", "/repo/src/main.py"].sort(),
+      );
+    });
+  });
+
+  // ── reviewContextPlan (sc-5-3) ──────────────────────────────────────
+
+  describe("reviewContextPlan", () => {
+    it("uses get_review_context_tool with de-duplicated changed_files from node.file", () => {
+      const nodes = [
+        { id: "1", kind: "function" as const, file: "src/main.py", line: 5, symbol: "another" },
+        { id: "2", kind: "function" as const, file: "src/main.py", line: 4, symbol: "helper" },
+      ];
+      const plan = backend.reviewContextPlan(nodes);
+      expect(plan.tool).toBe("get_review_context_tool");
+      expect(plan.params).toEqual({ changed_files: ["src/main.py"] });
+    });
+
+    it("narrows the real get_review_context_tool.json fixture -> string", async () => {
+      const plan = backend.reviewContextPlan([]);
+      const fixture = await loadFixture("get_review_context_tool.json");
+      const result = plan.narrow(fixture);
+      expect(typeof result).toBe("string");
+      expect(result).toContain("review_guidance");
+    });
+
+    it("passes an already-string raw payload through unchanged", () => {
+      const plan = backend.reviewContextPlan([]);
+      expect(plan.narrow("already a string")).toBe("already a string");
+    });
+  });
+
+  // ── overviewPlan (sc-5-3) ───────────────────────────────────────────
+
+  describe("overviewPlan", () => {
+    it("uses get_architecture_overview_tool with no params", () => {
+      const plan = backend.overviewPlan();
+      expect(plan.tool).toBe("get_architecture_overview_tool");
+      expect(plan.params).toEqual({});
+    });
+
+    it("narrows the real get_architecture_overview_tool.json fixture -> string", async () => {
+      const plan = backend.overviewPlan();
+      const fixture = await loadFixture("get_architecture_overview_tool.json");
+      const result = plan.narrow(fixture);
+      expect(typeof result).toBe("string");
+      expect(result).toContain("src-helper");
+      expect(result).toContain("communities");
+    });
+  });
+
+  // ── changesPlan (sc-5-5) ────────────────────────────────────────────
+
+  describe("changesPlan", () => {
+    it("uses detect_changes_tool with {base} defaulting to HEAD~1", () => {
+      expect(backend.changesPlan().params).toEqual({ base: "HEAD~1" });
+      expect(backend.changesPlan("HEAD~3").params).toEqual({ base: "HEAD~3" });
+    });
+
+    it("narrows the real detect_changes_tool.json fixture -> NodeRef[]", async () => {
+      const plan = backend.changesPlan();
+      expect(plan.tool).toBe("detect_changes_tool");
+      const fixture = await loadFixture("detect_changes_tool.json");
+      const nodes = plan.narrow(fixture);
+      expect(nodes).toHaveLength(1);
+      expect(nodes[0]!.symbol).toBe("another");
+      expect(nodes[0]!.id).toBe("/repo/src/main.py::another");
+      expect(nodes[0]!.file).toBe("/repo/src/main.py");
+      expect(nodes[0]!.line).toBe(5);
+      expect(nodes[0]!.kind).toBe("function");
+    });
+
+    it("returns [] when changed_functions is absent", () => {
+      const plan = backend.changesPlan();
+      expect(plan.narrow({})).toEqual([]);
+    });
+  });
+
+  // ── queryPlan still NOT_IMPL (Sprint 6) ─────────────────────────────
+
+  it("queryPlan still throws NOT_IMPL (Sprint 6)", () => {
+    const nodeRef = { id: "x", kind: "symbol" as const, file: "f.py", line: 1, symbol: "x" };
+    expect(() => backend.queryPlan("callers_of", nodeRef)).toThrow(
+      /code-review-graph adapter not implemented until Sprints 4-6/,
+    );
   });
 });

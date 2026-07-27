@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { GraphClient } from "../../src/graph/client.js";
 import { GraphFallback } from "../../src/graph/fallback.js";
 import { TokensaveBackend } from "../../src/graph/backends/tokensave-backend.js";
+import { CodeReviewGraphBackend } from "../../src/graph/backends/code-review-graph-backend.js";
 import type { TokensaveMcpClient } from "../../src/graph/mcp-client.js";
 import type { GraphArtifactStore } from "../../src/graph/artifact-store.js";
 import type { IncidentLog } from "../../src/graph/incidents.js";
@@ -667,5 +669,125 @@ describe("GraphClient with engineHealth='broken'", () => {
     if (!r2.ok) expect(r2.reason).toBe("GRAPH_UNAVAILABLE");
 
     expect(mcp.call).not.toHaveBeenCalled();
+  });
+});
+
+// ── CodeReviewGraphBackend end-to-end (Sprint 5, sc-5-6) ─────────────
+//
+// Injects the real CodeReviewGraphBackend (not TokensaveBackend) into
+// GraphClient with a mocked transport returning the Sprint-4 captured
+// fixtures verbatim. Confirms GraphClient's sandbox/staleness/health
+// plumbing works identically for a second backend, and that the sandbox
+// keepNode chokepoint still applies (the fixtures use /repo/... absolute
+// paths — projectRoot must be "/repo" to keep them; sandbox.ts is pure
+// path math with no fs access, so "/repo" need not exist on disk).
+
+const CR_FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "fixtures/cr-graph");
+
+async function loadCrFixture(name: string): Promise<unknown> {
+  const raw = await readFile(join(CR_FIXTURES_DIR, name), "utf-8");
+  return JSON.parse(raw) as unknown;
+}
+
+function makeCrClient(
+  projectRoot: string,
+  callImpl: (tool: string, params: unknown) => Promise<unknown>,
+): GraphClient {
+  return new GraphClient(
+    projectRoot,
+    makeMockMcp({ callImpl }),
+    makeMockStore(false),
+    new GraphFallback("dual"),
+    makeMockIncidents(),
+    makeConfig(),
+    new CodeReviewGraphBackend(),
+  );
+}
+
+describe("GraphClient with CodeReviewGraphBackend (Sprint 5 e2e)", () => {
+  it("search: keeps in-repo /repo/... nodes when projectRoot='/repo' and coerces kind", async () => {
+    const fixture = await loadCrFixture("semantic_search_nodes_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.search("add");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(1);
+      expect(r.data[0]!.node.symbol).toBe("add");
+      expect(r.data[0]!.node.file).toBe("/repo/src/math_utils.py");
+      expect(r.data[0]!.node.kind).toBe("function"); // "Function" -> "function"
+      expect(r.data[0]!.score).toBeCloseTo(0.016393);
+      expect(r.data[0]!.snippet).toBe("def add((a, b))");
+      expect(r.backend).toBe("mcp");
+    }
+  });
+
+  it("search: sandbox drops all /repo/... nodes when projectRoot does not contain them", async () => {
+    const fixture = await loadCrFixture("semantic_search_nodes_tool.json");
+    const client = makeCrClient(tmp, async () => fixture); // tmp !== /repo
+    const r = await client.search("add");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toHaveLength(0);
+  });
+
+  it("overview: returns ok:true with a JSON-stringified string via the narrow", async () => {
+    const fixture = await loadCrFixture("get_architecture_overview_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.overview();
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(typeof r.data).toBe("string");
+      expect(r.data).toContain("communities");
+      expect(r.data).toContain("src-helper");
+    }
+  });
+
+  it("reviewContext: returns ok:true (GraphClient.reviewContext bypasses the narrow via runRaw)", async () => {
+    const fixture = await loadCrFixture("get_review_context_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const nodes = [{ id: "1", kind: "function" as const, file: "src/main.py", line: 5, symbol: "another" }];
+    const r = await client.reviewContext(nodes);
+    // GraphClient.reviewContext() calls runRaw(), which passes raw through
+    // untouched (client.ts:91-94, 216-218) — the narrow is NOT invoked here,
+    // so r.data is the raw fixture object, not a string. Assert only .ok.
+    expect(r.ok).toBe(true);
+  });
+
+  it("impact: root + affected/testsAffected partition from the real fixture, sandboxed to /repo", async () => {
+    const fixture = await loadCrFixture("get_impact_radius_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const target = { id: "x", kind: "module" as const, file: "src/math_utils.py", line: 0, symbol: "math_utils" };
+    const r = await client.impact(target);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.root.file).toBe("/repo/src/math_utils.py");
+      expect(r.data.root.kind).toBe("module"); // "File" -> "module"
+      expect(r.data.affected).toHaveLength(4);
+      expect(r.data.testsAffected).toHaveLength(0);
+    }
+  });
+
+  it("impact: sandbox drops affected/testsAffected nodes outside projectRoot", async () => {
+    const fixture = await loadCrFixture("get_impact_radius_tool.json");
+    const client = makeCrClient(tmp, async () => fixture); // tmp !== /repo
+    const target = { id: "x", kind: "module" as const, file: "src/math_utils.py", line: 0, symbol: "math_utils" };
+    const r = await client.impact(target);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.affected).toHaveLength(0);
+      expect(r.data.testsAffected).toHaveLength(0);
+    }
+  });
+
+  it("changes: returns NodeRef[] from the real fixture, sandboxed to /repo", async () => {
+    const fixture = await loadCrFixture("detect_changes_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.changes("HEAD~1");
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data).toHaveLength(1);
+      expect(r.data[0]!.symbol).toBe("another");
+      expect(r.data[0]!.file).toBe("/repo/src/main.py");
+      expect(r.data[0]!.line).toBe(5);
+    }
   });
 });
