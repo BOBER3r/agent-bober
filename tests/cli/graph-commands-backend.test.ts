@@ -1,25 +1,44 @@
 /**
- * Regression tests for sc-3-6 (sprint-3 iteration 2 retry).
+ * Regression tests for sc-3-6 (sprint-3 iteration 2 retry), updated for
+ * Sprint 4 (sc-4-3).
  *
  * src/cli/commands/graph.ts's init/sync/status handlers each resolve a
  * GraphBackend via resolveGraphBackend() for the prereq check, then MUST
  * construct TokensaveCli from that SAME resolved backend — not a hardcoded
- * tokensave. With graph.backend explicitly set to "code-review-graph" (a
- * stub with no tokensave on PATH), init/sync must surface the stub's clean
- * NOT_IMPL message (not an ENOENT from spawning "tokensave"), and all three
- * commands must construct TokensaveCli with the cr-graph backend + binary.
+ * tokensave. With graph.backend explicitly set to "code-review-graph", all
+ * three commands must construct TokensaveCli with the cr-graph backend +
+ * binary.
+ *
+ * As of Sprint 4, CodeReviewGraphBackend.cliMap() is REAL (init->build,
+ * sync->update, status->status --json), so init/sync/status now actually
+ * spawn `code-review-graph <verb>` (execa mocked below with real captured
+ * output samples) instead of surfacing the Sprint-3 stub's NOT_IMPL error.
  *
  * We wrap the REAL TokensaveCli class (via vi.importActual) with a spy that
- * records constructor args, so behavior stays real (the stub's cliMap()
- * genuinely throws) while we can assert exactly which backend/binary each
- * site passed in.
+ * records constructor args, so behavior stays real while we can assert
+ * exactly which backend/binary each site passed in AND which argv execa
+ * received.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { Command } from "commander";
 
 // ── Static mocks ──────────────────────────────────────────────────────────
 
 vi.mock("execa", () => ({ execa: vi.fn() }));
+
+import { execa } from "execa";
+
+function mockExeca(value: Record<string, unknown>): void {
+  (execa as unknown as Mock).mockResolvedValue({
+    exitCode: 0,
+    stdout: "",
+    stderr: "",
+    failed: false,
+    timedOut: false,
+    all: "",
+    ...value,
+  });
+}
 
 vi.mock("../../src/utils/fs.js", () => ({
   findProjectRoot: vi.fn().mockResolvedValue("/fake/project"),
@@ -110,6 +129,7 @@ function captureStdio(): {
 beforeEach(() => {
   (TokensaveCli as unknown as SpyCliClass).calls = [];
   (loadConfig as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(crGraphConfig());
+  (execa as unknown as Mock).mockReset();
   process.exitCode = undefined;
 });
 
@@ -117,12 +137,10 @@ afterEach(() => {
   process.exitCode = undefined;
 });
 
-describe("graph commands — cr-graph backend selected (sc-3-6 regression)", () => {
-  it("graph init constructs TokensaveCli from the RESOLVED cr-graph backend, not hardcoded tokensave", async () => {
-    const { messages, restore } = (() => {
-      const { stderr, restore } = captureStdio();
-      return { messages: stderr, restore };
-    })();
+describe("graph commands — cr-graph backend selected (sc-3-6 regression, cliMap real as of Sprint 4)", () => {
+  it("graph init constructs TokensaveCli from the RESOLVED cr-graph backend AND runs 'code-review-graph build'", async () => {
+    mockExeca({ exitCode: 0, stdout: "Full build: 2 files, 8 nodes, 15 edges (postprocess=full)" });
+    const { restore } = captureStdio();
     try {
       const { registerGraphCommand } = await import("../../src/cli/commands/graph.js");
       const prog = new Command();
@@ -136,22 +154,22 @@ describe("graph commands — cr-graph backend selected (sc-3-6 regression)", () 
       expect(binaryArg).toBe("code-review-graph");
       expect((backendArg as { id: string }).id).toBe("code-review-graph");
 
-      // The stub's clean NOT_IMPL error must surface — NOT a tokensave ENOENT.
-      expect(messages.some((m) => m.includes("not implemented until Sprints 4-6"))).toBe(true);
-      expect(messages.some((m) => /tokensave/i.test(m) && !/code-review-graph/i.test(m))).toBe(
-        false,
+      // cliMap is real as of Sprint 4 — init now spawns the actual build verb.
+      expect(execa).toHaveBeenCalledWith(
+        "code-review-graph",
+        ["build"],
+        expect.any(Object),
       );
-      expect(process.exitCode).toBe(1);
+      expect(process.exitCode).toBeUndefined();
     } finally {
       restore();
     }
   });
 
-  it("graph sync constructs TokensaveCli from the RESOLVED cr-graph backend, not hardcoded tokensave", async () => {
-    const { messages, restore } = (() => {
-      const { stderr, restore } = captureStdio();
-      return { messages: stderr, restore };
-    })();
+  it("graph sync constructs TokensaveCli from the RESOLVED cr-graph backend AND runs 'code-review-graph update'", async () => {
+    const syncOutput = "Incremental: 1 files updated, 4 nodes, 9 edges (postprocess=full)";
+    mockExeca({ exitCode: 0, stdout: syncOutput, all: syncOutput });
+    const { restore } = captureStdio();
     try {
       const { registerGraphCommand } = await import("../../src/cli/commands/graph.js");
       const prog = new Command();
@@ -165,14 +183,23 @@ describe("graph commands — cr-graph backend selected (sc-3-6 regression)", () 
       expect(binaryArg).toBe("code-review-graph");
       expect((backendArg as { id: string }).id).toBe("code-review-graph");
 
-      expect(messages.some((m) => m.includes("not implemented until Sprints 4-6"))).toBe(true);
-      expect(process.exitCode).toBe(1);
+      // cliMap is real as of Sprint 4 — sync now spawns the actual update verb.
+      expect(execa).toHaveBeenCalledWith(
+        "code-review-graph",
+        ["update", "."],
+        expect.any(Object),
+      );
+      expect(process.exitCode).toBeUndefined();
     } finally {
       restore();
     }
   });
 
-  it("graph status constructs TokensaveCli from the RESOLVED cr-graph backend, not hardcoded tokensave", async () => {
+  it("graph status constructs TokensaveCli from the RESOLVED cr-graph backend AND runs 'code-review-graph status --json'", async () => {
+    mockExeca({
+      exitCode: 0,
+      stdout: JSON.stringify({ nodes: 8, edges: 15, files: 2, languages: ["python"] }),
+    });
     const { restore } = captureStdio();
     try {
       const { registerGraphCommand } = await import("../../src/cli/commands/graph.js");
@@ -187,6 +214,13 @@ describe("graph commands — cr-graph backend selected (sc-3-6 regression)", () 
       expect(storeArg).toBeNull();
       expect(binaryArg).toBe("code-review-graph");
       expect((backendArg as { id: string }).id).toBe("code-review-graph");
+
+      // cliMap is real as of Sprint 4 — status now spawns the actual status verb.
+      expect(execa).toHaveBeenCalledWith(
+        "code-review-graph",
+        ["status", "--json"],
+        expect.any(Object),
+      );
     } finally {
       restore();
     }

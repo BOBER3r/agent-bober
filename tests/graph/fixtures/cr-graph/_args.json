@@ -1,0 +1,51 @@
+{
+  "_comment": "Real tools/call argument shapes captured live from code-review-graph 2.3.7 (MCP serverInfo.version=3.4.4) via the initialize+tools/call probe documented in the sprint-4 briefing. Each key is a captured fixture tool name; the value is the exact `arguments` object sent in that capture.",
+  "capturedAt": "2026-07-27T03:49:05Z",
+  "crGraphVersion": "2.3.7",
+  "mcpServerInfoVersion": "3.4.4",
+  "queryGraphPatternEnum": [
+    "callers_of",
+    "callees_of",
+    "imports_of",
+    "importers_of",
+    "children_of",
+    "tests_for",
+    "inheritors_of",
+    "triggers_of",
+    "triggered_by",
+    "publishers_of",
+    "listeners_of",
+    "handlers_of",
+    "endpoints_for",
+    "consumers_of",
+    "file_summary"
+  ],
+  "toolArgs": {
+    "semantic_search_nodes_tool": {
+      "query": "add",
+      "limit": 5
+    },
+    "query_graph_tool": {
+      "pattern": "callers_of",
+      "target": "add"
+    },
+    "get_impact_radius_tool": {
+      "changed_files": [
+        "src/math_utils.py"
+      ]
+    },
+    "get_review_context_tool": {
+      "changed_files": [
+        "src/main.py"
+      ]
+    },
+    "get_architecture_overview_tool": {},
+    "detect_changes_tool": {
+      "base": "HEAD~1"
+    },
+    "traverse_graph_tool": {
+      "query": "compute"
+    },
+    "list_graph_stats_tool": {}
+  }
+}

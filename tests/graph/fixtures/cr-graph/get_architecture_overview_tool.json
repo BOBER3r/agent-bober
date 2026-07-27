@@ -1,0 +1,62 @@
+{
+  "status": "ok",
+  "summary": "Architecture: 2 communities, 1 community pairs, 0 warning(s)",
+  "communities": [
+    {
+      "id": 1,
+      "name": "src-helper",
+      "size": 3,
+      "cohesion": 0.25,
+      "dominant_language": "python"
+    },
+    {
+      "id": 2,
+      "name": "src-multiply",
+      "size": 3,
+      "cohesion": 0.3333,
+      "dominant_language": "python"
+    }
+  ],
+  "cross_community_edges": [
+    {
+      "source_community": "src-helper",
+      "target_community": "src-multiply",
+      "edge_count": 1,
+      "top_kinds": [
+        "CONTAINS"
+      ]
+    }
+  ],
+  "warnings": [],
+  "_hints": {
+    "next_steps": [
+      {
+        "tool": "list_communities",
+        "suggestion": "Drill into individual communities"
+      },
+      {
+        "tool": "detect_changes",
+        "suggestion": "See how recent changes affect the architecture"
+      },
+      {
+        "tool": "list_flows",
+        "suggestion": "Explore execution flows"
+      }
+    ],
+    "related": [],
+    "warnings": []
+  },
+  "context_savings": {
+    "estimated": true,
+    "saved_tokens": 190,
+    "saved_percent": 52
+  },
+  "_graph": {
+    "updated_at": "2026-07-27T03:49:05",
+    "age_seconds": 40,
+    "built_on_branch": "master",
+    "built_at_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_matches_build": true
+  }
+}

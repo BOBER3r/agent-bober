@@ -1,0 +1,304 @@
+{
+  "status": "ok",
+  "summary": "Blast radius for 1 changed file(s):\n  - 5 nodes directly changed\n  - 4 nodes impacted (within 2 hops)\n  - 1 additional files affected",
+  "changed_files": [
+    "src/math_utils.py"
+  ],
+  "changed_nodes": [
+    {
+      "id": 4,
+      "kind": "File",
+      "name": "/repo/src/math_utils.py",
+      "qualified_name": "/repo/src/math_utils.py",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 1,
+      "line_end": 8,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    },
+    {
+      "id": 7,
+      "kind": "Class",
+      "name": "Calculator",
+      "qualified_name": "/repo/src/math_utils.py::Calculator",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 6,
+      "line_end": 7,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    },
+    {
+      "id": 8,
+      "kind": "Function",
+      "name": "compute",
+      "qualified_name": "/repo/src/math_utils.py::Calculator.compute",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 7,
+      "line_end": 7,
+      "language": "python",
+      "parent_name": "Calculator",
+      "is_test": false
+    },
+    {
+      "id": 5,
+      "kind": "Function",
+      "name": "add",
+      "qualified_name": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 1,
+      "line_end": 1,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    },
+    {
+      "id": 6,
+      "kind": "Function",
+      "name": "multiply",
+      "qualified_name": "/repo/src/math_utils.py::multiply",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 2,
+      "line_end": 5,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    }
+  ],
+  "impacted_nodes": [
+    {
+      "id": 10,
+      "kind": "Function",
+      "name": "run",
+      "qualified_name": "/repo/src/main.py::run",
+      "file_path": "/repo/src/main.py",
+      "line_start": 2,
+      "line_end": 3,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false,
+      "impact_score": 0.6
+    },
+    {
+      "id": 11,
+      "kind": "Function",
+      "name": "helper",
+      "qualified_name": "/repo/src/main.py::helper",
+      "file_path": "/repo/src/main.py",
+      "line_start": 4,
+      "line_end": 4,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false,
+      "impact_score": 0.36
+    },
+    {
+      "id": 9,
+      "kind": "File",
+      "name": "/repo/src/main.py",
+      "qualified_name": "/repo/src/main.py",
+      "file_path": "/repo/src/main.py",
+      "line_start": 1,
+      "line_end": 6,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false,
+      "impact_score": 0.3
+    },
+    {
+      "id": 12,
+      "kind": "Function",
+      "name": "another",
+      "qualified_name": "/repo/src/main.py::another",
+      "file_path": "/repo/src/main.py",
+      "line_start": 5,
+      "line_end": 5,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false,
+      "impact_score": 0.054
+    }
+  ],
+  "impacted_files": [
+    "/repo/src/main.py"
+  ],
+  "edges": [
+    {
+      "id": 16,
+      "kind": "IMPORTS_FROM",
+      "source": "/repo/src/main.py",
+      "target": "/repo/src/math_utils.py",
+      "file_path": "/repo/src/main.py",
+      "line": 1,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 17,
+      "kind": "CONTAINS",
+      "source": "/repo/src/main.py",
+      "target": "/repo/src/main.py::run",
+      "file_path": "/repo/src/main.py",
+      "line": 2,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 21,
+      "kind": "CONTAINS",
+      "source": "/repo/src/main.py",
+      "target": "/repo/src/main.py::helper",
+      "file_path": "/repo/src/main.py",
+      "line": 4,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 23,
+      "kind": "CONTAINS",
+      "source": "/repo/src/main.py",
+      "target": "/repo/src/main.py::another",
+      "file_path": "/repo/src/main.py",
+      "line": 5,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 24,
+      "kind": "CALLS",
+      "source": "/repo/src/main.py::another",
+      "target": "/repo/src/main.py::helper",
+      "file_path": "/repo/src/main.py",
+      "line": 5,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 22,
+      "kind": "CALLS",
+      "source": "/repo/src/main.py::helper",
+      "target": "/repo/src/main.py::run",
+      "file_path": "/repo/src/main.py",
+      "line": 4,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 18,
+      "kind": "CALLS",
+      "source": "/repo/src/main.py::run",
+      "target": "/repo/src/math_utils.py::Calculator",
+      "file_path": "/repo/src/main.py",
+      "line": 3,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 19,
+      "kind": "CALLS",
+      "source": "/repo/src/main.py::run",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/main.py",
+      "line": 3,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 20,
+      "kind": "CALLS",
+      "source": "/repo/src/main.py::run",
+      "target": "/repo/src/math_utils.py::Calculator.compute",
+      "file_path": "/repo/src/main.py",
+      "line": 3,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 8,
+      "kind": "CONTAINS",
+      "source": "/repo/src/math_utils.py",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 1,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 9,
+      "kind": "CONTAINS",
+      "source": "/repo/src/math_utils.py",
+      "target": "/repo/src/math_utils.py::multiply",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 2,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 12,
+      "kind": "CONTAINS",
+      "source": "/repo/src/math_utils.py",
+      "target": "/repo/src/math_utils.py::Calculator",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 6,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 13,
+      "kind": "CONTAINS",
+      "source": "/repo/src/math_utils.py::Calculator",
+      "target": "/repo/src/math_utils.py::Calculator.compute",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 7,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 14,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::Calculator.compute",
+      "target": "/repo/src/math_utils.py::multiply",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 7,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 15,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::Calculator.compute",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 7,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 11,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::multiply",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 4,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    }
+  ],
+  "truncated": false,
+  "total_impacted": 4,
+  "nodes_omitted": 0,
+  "context_savings": {
+    "estimated": true,
+    "saved_tokens": 0,
+    "saved_percent": 0
+  },
+  "_graph": {
+    "updated_at": "2026-07-27T03:49:05",
+    "age_seconds": 40,
+    "built_on_branch": "master",
+    "built_at_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_matches_build": true
+  }
+}

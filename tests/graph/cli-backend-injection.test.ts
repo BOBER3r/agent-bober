@@ -4,9 +4,14 @@
  * TokensaveCli must accept the RESOLVED GraphBackend via its constructor
  * instead of hardcoding `new TokensaveBackend().cliMap()`. The backend's
  * `cliMap()` must be resolved LAZILY inside init()/sync()/status() — not in
- * the constructor — so constructing the CLI for a stub backend (e.g.
- * CodeReviewGraphBackend) never throws at construction time; only an actual
- * init/sync/status call surfaces the stub's NOT_IMPL error.
+ * the constructor — so constructing the CLI for a stub backend never throws
+ * at construction time.
+ *
+ * As of Sprint 4, CodeReviewGraphBackend.cliMap() is REAL (init->build,
+ * sync->update, status->status --json) — the init()/sync()/status() cases
+ * below now assert the real argv/execa behavior instead of the Sprint-3
+ * NOT_IMPL throw. The 6 response *Plan adapters (search/impact/etc.) remain
+ * unimplemented until Sprints 5-6; that is asserted separately below.
  */
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -56,31 +61,65 @@ describe("TokensaveCli — backend injection (sc-3-6)", () => {
     ).not.toThrow();
   });
 
-  it("init() surfaces the cr-graph stub's NOT_IMPL error, never calling execa", async () => {
+  // ── cr-graph cliMap is REAL as of Sprint 4 (sc-4-3) ──────────────────
+
+  it("init() runs 'code-review-graph build' via the real cr-graph cliMap", async () => {
+    mockExeca({ exitCode: 0, stdout: "Full build: 2 files, 8 nodes, 15 edges (postprocess=full)" });
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp, null, undefined, new CodeReviewGraphBackend());
-    await expect(cli.init({ languageTier: "core" })).rejects.toThrow(
-      /code-review-graph adapter not implemented until Sprints 4-6/,
+    await cli.init({ languageTier: "core" });
+    expect(execa).toHaveBeenCalledWith(
+      "code-review-graph",
+      ["build"],
+      expect.objectContaining({ cwd: tmp, reject: false }),
     );
-    expect(execa).not.toHaveBeenCalled();
   });
 
-  it("sync() surfaces the cr-graph stub's NOT_IMPL error, never calling execa", async () => {
+  it("sync() runs 'code-review-graph update <paths>' via the real cr-graph cliMap", async () => {
+    const syncOutput = "Incremental: 1 files updated, 4 nodes, 9 edges (postprocess=full)";
+    // cli.sync() parses `result.all` (combined stdout+stderr) — set both so
+    // the mock matches how execa's real `all: true` option behaves.
+    mockExeca({ exitCode: 0, stdout: syncOutput, all: syncOutput });
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp, null, undefined, new CodeReviewGraphBackend());
-    await expect(cli.sync(["."], 2_000)).rejects.toThrow(
-      /code-review-graph adapter not implemented until Sprints 4-6/,
+    const result = await cli.sync(["src/"], 2_000);
+    expect(execa).toHaveBeenCalledWith(
+      "code-review-graph",
+      ["update", "src/"],
+      expect.objectContaining({ cwd: tmp, reject: false }),
     );
-    expect(execa).not.toHaveBeenCalled();
+    expect(result).toEqual({ indexed: 1 });
   });
 
-  it("status() surfaces the cr-graph stub's NOT_IMPL error, never calling execa", async () => {
+  it("status() runs 'code-review-graph status --json' via the real cr-graph cliMap", async () => {
+    mockExeca({
+      exitCode: 0,
+      stdout: JSON.stringify({ nodes: 8, edges: 15, files: 2, languages: ["python"] }),
+    });
     const { TokensaveCli } = await import("../../src/graph/cli.js");
     const cli = new TokensaveCli(tmp, null, undefined, new CodeReviewGraphBackend());
-    await expect(cli.status()).rejects.toThrow(
-      /code-review-graph adapter not implemented until Sprints 4-6/,
+    const result = await cli.status();
+    expect(execa).toHaveBeenCalledWith(
+      "code-review-graph",
+      ["status", "--json"],
+      expect.objectContaining({ cwd: tmp, reject: false }),
     );
-    expect(execa).not.toHaveBeenCalled();
+    expect(result.ready).toBe(true);
+    expect(result.indexedFileCount).toBe(2);
+  });
+
+  // ── Response *Plan adapters remain unimplemented (Sprints 5-6) ───────
+
+  it("the 6 response *Plan adapters still throw NOT_IMPL (not implemented until Sprints 5-6)", () => {
+    const backend = new CodeReviewGraphBackend();
+    const nodeRef = { id: "x", kind: "symbol" as const, file: "f.py", line: 1, symbol: "x" };
+    const NOT_IMPL = /code-review-graph adapter not implemented until Sprints 4-6/;
+    expect(() => backend.searchPlan("x")).toThrow(NOT_IMPL);
+    expect(() => backend.queryPlan("callers_of", nodeRef)).toThrow(NOT_IMPL);
+    expect(() => backend.impactPlan(nodeRef)).toThrow(NOT_IMPL);
+    expect(() => backend.reviewContextPlan([nodeRef])).toThrow(NOT_IMPL);
+    expect(() => backend.overviewPlan()).toThrow(NOT_IMPL);
+    expect(() => backend.changesPlan()).toThrow(NOT_IMPL);
   });
 
   // ── Byte-identical for tokensave (default / unset backend) ──────────

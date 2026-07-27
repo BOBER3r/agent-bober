@@ -1,0 +1,87 @@
+{
+  "status": "ok",
+  "pattern": "callers_of",
+  "target": "/repo/src/math_utils.py::add",
+  "description": "Find all functions that call a given function",
+  "summary": "Found 3 result(s) for callers_of('/repo/src/math_utils.py::add')",
+  "result_count": 3,
+  "results_omitted": 0,
+  "results": [
+    {
+      "id": 6,
+      "kind": "Function",
+      "name": "multiply",
+      "qualified_name": "/repo/src/math_utils.py::multiply",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 2,
+      "line_end": 5,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    },
+    {
+      "id": 8,
+      "kind": "Function",
+      "name": "compute",
+      "qualified_name": "/repo/src/math_utils.py::Calculator.compute",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 7,
+      "line_end": 7,
+      "language": "python",
+      "parent_name": "Calculator",
+      "is_test": false
+    },
+    {
+      "id": 10,
+      "kind": "Function",
+      "name": "run",
+      "qualified_name": "/repo/src/main.py::run",
+      "file_path": "/repo/src/main.py",
+      "line_start": 2,
+      "line_end": 3,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    }
+  ],
+  "edges": [
+    {
+      "id": 11,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::multiply",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 4,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 15,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::Calculator.compute",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 7,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 19,
+      "kind": "CALLS",
+      "source": "/repo/src/main.py::run",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/main.py",
+      "line": 3,
+      "confidence": 1,
+      "confidence_tier": "EXTRACTED"
+    }
+  ],
+  "_graph": {
+    "updated_at": "2026-07-27T03:49:05",
+    "age_seconds": 40,
+    "built_on_branch": "master",
+    "built_at_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_sha": "e8380cda1c1ddbec593269fe68a6a7c10d16eb21",
+    "head_matches_build": true
+  }
+}
