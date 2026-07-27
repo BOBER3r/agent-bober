@@ -89,8 +89,8 @@ export class GraphClient {
   }
 
   async reviewContext(nodes: NodeRef[]): Promise<GraphResult<string>> {
-    const { tool, params } = this.backend.reviewContextPlan(nodes);
-    return this.runRaw<string>(tool, params);
+    const { tool, params, narrow } = this.backend.reviewContextPlan(nodes);
+    return this.runWithSandbox<string>(tool, params, narrow);
   }
 
   async overview(): Promise<GraphResult<string>> {
@@ -210,11 +210,6 @@ export class GraphClient {
     } catch (err) {
       return this.toFailureResult(err);
     }
-  }
-
-  /** Same as runWithSandbox but the result type is T with no NodeRef post-filter. */
-  private async runRaw<T>(tool: string, params: unknown): Promise<GraphResult<T>> {
-    return this.runWithSandbox<T>(tool, params, (raw) => raw as T);
   }
 
   /** Convert a makeGraphError-tagged Error from TokensaveMcpClient.call into a

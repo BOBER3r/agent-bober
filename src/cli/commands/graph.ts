@@ -289,12 +289,26 @@ export function registerGraphCommand(program: Command): void {
         }
       }
 
+      // Backend-status readout (sc-7-5): which engine is active, its version,
+      // and whether it was pinned by explicit config or auto-detected. This
+      // mirrors resolveGraphBackend's own "explicit config.graph.backend wins"
+      // branch (registry.ts:100-103) without needing to change that function's
+      // signature (it has 5 existing call sites + its own test suite).
+      const engine = backend.id;
+      const backendVersion = (prereq.ok ? prereq.version : "") || manifest?.backendVersion || "";
+      const selectedBy: "config" | "auto-detect" = config.graph?.backend
+        ? "config"
+        : "auto-detect";
+
       const output = {
         ready: liveStatus.ready,
         indexedFileCount: liveStatus.indexedFileCount || manifest?.indexedFileCount || 0,
         tokensaveVersion: liveStatus.tokensaveVersion || manifest?.tokensaveVersion || "",
         lastSyncedHeadSha: manifest?.lastSyncedHeadSha ?? null,
         stale: staleness.stale,
+        engine,
+        backendVersion,
+        selectedBy,
       };
 
       if (opts.json) {
@@ -313,5 +327,10 @@ export function registerGraphCommand(program: Command): void {
       process.stdout.write(
         `Last HEAD SHA:   ${output.lastSyncedHeadSha ?? chalk.gray("(none)")}\n`,
       );
+      process.stdout.write(`Engine:          ${output.engine}\n`);
+      process.stdout.write(
+        `Version:         ${output.backendVersion || chalk.gray("(unknown)")}\n`,
+      );
+      process.stdout.write(`Selected by:     ${output.selectedBy}\n`);
     });
 }

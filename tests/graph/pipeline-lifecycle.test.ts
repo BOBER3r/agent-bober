@@ -43,6 +43,7 @@ vi.mock("../../src/graph/backends/registry.js", () => {
   return {
     resolveGraphBackend: vi.fn().mockResolvedValue(stubBackend),
     binaryForBackend: vi.fn().mockReturnValue("tokensave"),
+    processSpecForBackend: vi.fn().mockReturnValue({ binary: "tokensave", serveArgs: ["serve"] }),
     KNOWN_BACKENDS: [stubBackend],
   };
 });

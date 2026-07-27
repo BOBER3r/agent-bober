@@ -26,7 +26,7 @@ import { GraphClient } from "./client.js";
 import { GraphFallback } from "./fallback.js";
 import { TokensaveBackend } from "./backends/tokensave-backend.js";
 import type { GraphBackend } from "./backends/types.js";
-import { resolveGraphBackend, binaryForBackend } from "./backends/registry.js";
+import { resolveGraphBackend, binaryForBackend, processSpecForBackend } from "./backends/registry.js";
 import { GraphHookHandler } from "./hook-handler.js";
 import { TokensaveCli } from "./cli.js";
 
@@ -100,12 +100,14 @@ class GraphPipelineLifecycleImpl {
 
     // Spawn — reuse ONE resolved backend instance for both the transport
     // (processSpec) and the GraphClient (constructed lazily in getGraphClient).
+    // processSpecForBackend threads a per-backend binary override (e.g.
+    // graph.codeReviewGraphPath) into the serve subprocess.
     this.backend = backend;
     this.mcpClient = new TokensaveMcpClient(
       projectRoot,
       cfg,
       this.incidents,
-      this.backend.processSpec(),
+      processSpecForBackend(this.backend, config),
     );
 
     await this.mcpClient.start();

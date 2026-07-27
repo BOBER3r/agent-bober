@@ -254,8 +254,9 @@ export class CodeReviewGraphBackend implements GraphBackend {
   reviewContextPlan(nodes: NodeRef[]): CallPlan<string> {
     // cr-graph's get_review_context_tool takes changed file paths, not a
     // joined symbol list (_args.json: {changed_files: ["src/main.py"]}).
-    // NOTE: GraphClient.reviewContext() calls runRaw(), which bypasses this
-    // narrow entirely (client.ts:91-94) — it is only exercised by unit tests.
+    // GraphClient.reviewContext() routes through runWithSandbox and applies
+    // this narrow (client.ts:91-94, mirroring overview()), so get_review_context_tool's
+    // JSON object response is stringified here before it reaches callers.
     return {
       tool: "get_review_context_tool",
       params: { changed_files: [...new Set(nodes.map((n) => n.file))] },

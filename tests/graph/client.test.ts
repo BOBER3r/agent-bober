@@ -741,15 +741,19 @@ describe("GraphClient with CodeReviewGraphBackend (Sprint 5 e2e)", () => {
     }
   });
 
-  it("reviewContext: returns ok:true (GraphClient.reviewContext bypasses the narrow via runRaw)", async () => {
+  it("reviewContext: applies the cr-graph narrow — data is a JSON-stringified string", async () => {
     const fixture = await loadCrFixture("get_review_context_tool.json");
     const client = makeCrClient("/repo", async () => fixture);
     const nodes = [{ id: "1", kind: "function" as const, file: "src/main.py", line: 5, symbol: "another" }];
     const r = await client.reviewContext(nodes);
-    // GraphClient.reviewContext() calls runRaw(), which passes raw through
-    // untouched (client.ts:91-94, 216-218) — the narrow is NOT invoked here,
-    // so r.data is the raw fixture object, not a string. Assert only .ok.
+    // GraphClient.reviewContext() now routes through runWithSandbox with the
+    // backend's narrow (client.ts:91-94, mirroring overview()) — the Sprint-5
+    // gap is closed: r.data is the narrowed STRING, not the raw fixture object.
     expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(typeof r.data).toBe("string");
+      expect(r.data).toContain("changed_files");
+    }
   });
 
   it("impact: root + affected/testsAffected partition from the real fixture, sandboxed to /repo", async () => {

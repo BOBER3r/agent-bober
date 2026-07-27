@@ -19,7 +19,11 @@ import { TokensaveMcpClient } from "../../graph/mcp-client.js";
 import { IncidentLog } from "../../graph/incidents.js";
 import { GraphFallback } from "../../graph/fallback.js";
 import { GraphClient } from "../../graph/client.js";
-import { resolveGraphBackend, binaryForBackend } from "../../graph/backends/registry.js";
+import {
+  resolveGraphBackend,
+  binaryForBackend,
+  processSpecForBackend,
+} from "../../graph/backends/registry.js";
 import { OnboardingComposer } from "../../graph/onboarding-composer.js";
 import type { OnboardingInputs } from "../../graph/types.js";
 
@@ -90,11 +94,13 @@ export function registerOnboardCommand(program: Command): void {
       const fallback = new GraphFallback("dual");
 
       // Spawn a short-lived MCP client for the duration of this command
+      // (processSpecForBackend threads a per-backend binary override — e.g.
+      // graph.codeReviewGraphPath — into the serve subprocess).
       const mcpClient = new TokensaveMcpClient(
         projectRoot,
         graphCfg,
         incidents,
-        backend.processSpec(),
+        processSpecForBackend(backend, config),
       );
 
       process.stdout.write(chalk.cyan("Starting graph engine...\n"));
@@ -138,7 +144,11 @@ export function registerOnboardCommand(program: Command): void {
         // Build onboarding inputs from graph results
         const inputs: OnboardingInputs = {
           status: {
-            tokensaveVersion: manifest?.tokensaveVersion ?? prereq.version ?? "",
+            // Source the version from the RESOLVED backend, not tokensave
+            // specifically — manifest.backendVersion mirrors tokensaveVersion
+            // on the tokensave path (byte-identical there) but is the correct
+            // (and only) source of truth when a non-tokensave engine is active.
+            tokensaveVersion: manifest?.backendVersion ?? prereq.version ?? "",
             indexedFileCount: manifest?.indexedFileCount ?? 0,
           },
           hotspots: hotspotsResult.ok

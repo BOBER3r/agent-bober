@@ -18,7 +18,7 @@
 
 import { execa } from "execa";
 import type { BoberConfig } from "../../config/schema.js";
-import type { GraphBackend } from "./types.js";
+import type { GraphBackend, ProcessSpec } from "./types.js";
 import { TokensaveBackend } from "./tokensave-backend.js";
 import { CodeReviewGraphBackend } from "./code-review-graph-backend.js";
 
@@ -79,6 +79,30 @@ export function binaryForBackend(
     return graph?.codeReviewGraphPath ?? backend.processSpec().binary;
   }
   return backend.processSpec().binary;
+}
+
+/**
+ * The backend's ProcessSpec with `binary` resolved via binaryForBackend().
+ *
+ * TokensaveMcpClient.spawnAndHandshake() resolves its transport binary as
+ * `cfg.tokensavePath ?? processSpec.binary` (mcp-client.ts:243) — that
+ * precedence is load-bearing for an EXISTING test (mcp-client.test.ts:381-401)
+ * and must not change. So for the cr-graph backend (where cfg.tokensavePath is
+ * never set), threading `codeReviewGraphPath` through here — rather than
+ * touching mcp-client.ts — is what makes the override actually reach the
+ * spawned `code-review-graph serve` subprocess.
+ *
+ * bober: a config that sets BOTH `tokensavePath` AND `backend:"code-review-graph"`
+ * still has mcp-client.ts prefer `tokensavePath` (mcp-client.ts:243's own
+ * precedence, untouched here) — a documented, low-probability residual
+ * ambiguity. Reconciling it would require changing mcp-client.ts's own
+ * precedence, which risks the tokensavePath-override test above; deferred.
+ */
+export function processSpecForBackend(
+  backend: GraphBackend,
+  config: BoberConfig,
+): ProcessSpec {
+  return { ...backend.processSpec(), binary: binaryForBackend(backend, config) };
 }
 
 // ── Errors ───────────────────────────────────────────────────────────

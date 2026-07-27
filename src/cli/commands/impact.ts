@@ -21,7 +21,11 @@ import { TokensaveMcpClient } from "../../graph/mcp-client.js";
 import { IncidentLog } from "../../graph/incidents.js";
 import { GraphFallback } from "../../graph/fallback.js";
 import { GraphClient } from "../../graph/client.js";
-import { resolveGraphBackend, binaryForBackend } from "../../graph/backends/registry.js";
+import {
+  resolveGraphBackend,
+  binaryForBackend,
+  processSpecForBackend,
+} from "../../graph/backends/registry.js";
 import type { NodeRef } from "../../graph/types.js";
 
 // ── Architecture doc link ──────────────────────────────────────────
@@ -120,12 +124,14 @@ export function registerImpactCommand(program: Command): void {
       const incidents = new IncidentLog(projectRoot);
       const fallback = new GraphFallback("dual");
 
-      // Spawn a short-lived MCP client
+      // Spawn a short-lived MCP client (processSpecForBackend threads a
+      // per-backend binary override — e.g. graph.codeReviewGraphPath — into
+      // the serve subprocess).
       const mcpClient = new TokensaveMcpClient(
         projectRoot,
         graphCfg,
         incidents,
-        backend.processSpec(),
+        processSpecForBackend(backend, config),
       );
 
       process.stdout.write(chalk.cyan("Starting graph engine...\n"));
