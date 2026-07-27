@@ -101,7 +101,7 @@ agent-bober update               # in each project: refresh .claude/ commands + 
 
 `update` re-emits `.claude/commands/` and `.claude/agents/` from the new package version without touching your `bober.config.json` or `.bober/` state. Claude Code **plugin** users update separately with `/plugin update bober` (the plugin tracks the GitHub repo, not npm).
 
-This is required to use the DeepSeek / claude-code providers, run bober headlessly or in CI, or expose the MCP server. A few plugin skills (`bober.plan`, `bober.sprint`, `bober.impact`, `bober.onboard`, `bober.graph`) also shell out to the `agent-bober` CLI, so installing it unlocks their full behavior. Graph features additionally require the separate [`tokensave`](#graph-tokensave-integration) binary.
+This is required to use the DeepSeek / claude-code providers, run bober headlessly or in CI, or expose the MCP server. A few plugin skills (`bober.plan`, `bober.sprint`, `bober.impact`, `bober.onboard`, `bober.graph`) also shell out to the `agent-bober` CLI, so installing it unlocks their full behavior. Graph features additionally require a separate [`tokensave` or `code-review-graph`](#graph-integration-tokensave-or-code-review-graph) engine.
 
 agent-bober works in multiple environments:
 
@@ -159,15 +159,35 @@ Specialized workflows:
 
 ---
 
-## Graph (Tokensave) Integration
+## Graph Integration (tokensave or code-review-graph)
 
 > **Optional.** The graph is an opt-in enhancement — agent-bober's core pipeline (Researcher → Planner → Curator → Generator → Evaluator) works fully without it. Enable it only if you want semantic code search, impact analysis, and auto-generated onboarding docs.
 
-agent-bober integrates with [tokensave](https://github.com/aovestdipaperino/tokensave) to build a structural code graph that powers semantic search, impact analysis, and automated onboarding documentation.
+agent-bober builds a structural code graph that powers semantic search, impact analysis, and automated onboarding documentation. The graph engine is **pluggable** — it works with either [tokensave](https://github.com/aovestdipaperino/tokensave) (a native Rust binary) or [code-review-graph](https://pypi.org/project/code-review-graph/) (a Python package), both accessed through the same `GraphBackend` seam so every graph-consuming surface (`onboard`, `impact`, `graph init/sync/status`, the MCP server) works identically regardless of which engine is installed. This section is the short version; see [docs/graph-backends.md](./docs/graph-backends.md) for the complete parity table, install/verification recipes, and residual follow-ups.
 
-**Prerequisite — install the `tokensave` binary.** It is a native Rust binary, **not** an npm package, so `npm install -g agent-bober` does **not** install it. Install it separately:
+### Choosing a graph backend
+
+By default agent-bober **auto-detects** which engine to use: it probes `tokensave --version` first, then `code-review-graph --version`, and uses whichever is installed (**tokensave is preferred** when both are present). If neither is installed, resolution fails with a single hint naming both install paths.
+
+You can pin the engine explicitly with `graph.backend`, and point at a custom binary path per engine with `graph.tokensavePath` / `graph.codeReviewGraphPath`:
+
+```json
+{
+  "graph": {
+    "enabled": true,
+    "backend": "tokensave",
+    "tokensavePath": "/custom/path/to/tokensave",
+    "codeReviewGraphPath": "/custom/path/to/code-review-graph"
+  }
+}
+```
+
+`backend` is optional (omit it for auto-detect); the two `*Path` overrides are also optional and apply only to their own engine. An explicit `backend` value short-circuits detection (the other engine is never probed). Selection is config-only — there is no per-command `--backend` flag.
+
+**Prerequisite — install an engine.** Neither engine ships with `npm install -g agent-bober` — install at least one separately:
 
 ```bash
+# tokensave (native Rust binary)
 # macOS (Homebrew)
 brew install aovestdipaperino/tap/tokensave
 # Windows (Scoop)
@@ -176,28 +196,40 @@ scoop bucket add tokensave https://github.com/aovestdipaperino/scoop-bucket && s
 cargo install tokensave
 ```
 
-Required version range: **`>=6.0.0-beta.1 <7.0.0`**. agent-bober verifies this on `agent-bober graph init` and prints the correct install hint if `tokensave` is missing or out of range. If the binary is absent, graph features degrade gracefully and the rest of the pipeline is unaffected.
-
-### Choosing a graph backend
-
-The graph engine is **pluggable**. By default agent-bober **auto-detects** which engine to use: it probes `tokensave --version` first, then `code-review-graph --version`, and uses whichever is installed (**tokensave is preferred** when both are present). If neither is installed, resolution fails with a single hint naming both install paths.
-
-You can pin the engine explicitly with `graph.backend`, and point at a custom `code-review-graph` binary with `graph.codeReviewGraphPath` (mirroring `tokensavePath`):
-
-```json
-{
-  "graph": {
-    "enabled": true,
-    "backend": "tokensave"
-  }
-}
+```bash
+# code-review-graph (Python package, requires Python 3.10+)
+pip install code-review-graph
 ```
 
-An explicit `backend` value short-circuits detection (the other engine is never probed). Selection is config-only — there is no per-command `--backend` flag.
+Required tokensave version range: **`>=6.0.0-beta.1 <7.0.0`**. agent-bober verifies this on `agent-bober graph init` and prints the correct install hint if the resolved engine's binary is missing or out of range. If no engine is installed, graph features degrade gracefully and the rest of the pipeline is unaffected.
 
-> **`code-review-graph` selection is wired, and most of the engine is now functional.** `code-review-graph` is registered so it can be *selected* and prereq-checked; as of Sprint 4 its CLI path is real (`graph init`/`sync`/`status` run the actual `code-review-graph` `build`/`update`/`status --json` verbs), and as of Sprint 5 its **five read adapters** — search, impact, review-context, overview, changes — are implemented and validated against captured live cr-graph fixtures, so `onboard`, `impact`, and the pipeline's graph reads work through it. The **four `query` sub-patterns** (callers/callees/imports/tests) are not implemented yet (Sprint 6) and still surface a clear "not implemented" error rather than silently falling back to tokensave. One honest caveat: `reviewContext` currently returns cr-graph's raw response payload unnarrowed (the client bypasses the adapter's narrow — a pre-existing wiring gap scheduled to be fixed in Sprint 7). For full querying today, stay on `tokensave`.
+### Operation parity — same `GraphClient` API, different tool underneath
 
-Once `tokensave` is installed, enable the graph by adding a `graph` section to `bober.config.json`:
+`code-review-graph` has **full read/write parity** with tokensave — every `GraphClient` operation is implemented for both engines (search, impact, review-context, overview, changes, and all four `query` sub-patterns: callers/callees/imports/tests):
+
+| `GraphClient` operation | tokensave tool | code-review-graph tool |
+|---|---|---|
+| `search` | `tokensave_search` | `semantic_search_nodes_tool` |
+| `reviewContext` | `tokensave_context` | `get_review_context_tool` |
+| `overview` | `tokensave_module_api` | `get_architecture_overview_tool` |
+| `impact` | `tokensave_impact` | `get_impact_radius_tool` |
+| `changes` | `tokensave_changelog` | `detect_changes_tool` |
+| `query(callers_of)` | `tokensave_callers` | `query_graph_tool` (`pattern: "callers_of"`) |
+| `query(callees_of)` | `tokensave_callees` | `query_graph_tool` (`pattern: "callees_of"`) |
+| `query(imports_of)` | `tokensave_file_dependents` | `query_graph_tool` (`pattern: "importers_of"`) |
+| `query(tests_for)` | `tokensave_test_map` | `query_graph_tool` (`pattern: "tests_for"`) |
+
+CLI verbs map onto each engine's own commands:
+
+| bober CLI | tokensave | code-review-graph |
+|---|---|---|
+| `agent-bober graph init` | `tokensave init` | `code-review-graph build` |
+| `agent-bober graph sync` | `tokensave sync <paths>` | `code-review-graph update <paths>` |
+| `agent-bober graph status --json` | `tokensave status --json` | `code-review-graph status --json` |
+
+See [docs/graph-backends.md](./docs/graph-backends.md) for the full derivation (source files + line references) and known ceilings (e.g. `code-review-graph update` is git-diff-base driven, not a positional-path receiver).
+
+Once an engine is installed, enable the graph by adding a `graph` section to `bober.config.json`:
 
 ```json
 {
@@ -208,7 +240,7 @@ Once `tokensave` is installed, enable the graph by adding a `graph` section to `
 }
 ```
 
-Once enabled, three new CLI commands and slash commands become available:
+Once enabled, these new CLI commands become available (three of them — `graph`, `onboard`, `impact` — also ship as Claude Code slash commands):
 
 ```bash
 agent-bober graph init         # Initialise the graph index
@@ -218,25 +250,38 @@ agent-bober onboard            # Generate .bober/onboarding/ documentation
 agent-bober impact <symbol>    # Analyse impact radius and test coverage
 ```
 
+`agent-bober graph status --json` also reports which engine is active:
+
+```json
+{
+  "ready": true,
+  "indexedFileCount": 128,
+  "stale": false,
+  "engine": "tokensave",
+  "backendVersion": "6.1.1",
+  "selectedBy": "auto-detect"
+}
+```
+
+`engine` is the resolved backend id (`tokensave` | `code-review-graph`), `backendVersion` is that engine's detected version, and `selectedBy` is `"config"` when `graph.backend` was set explicitly or `"auto-detect"` otherwise.
+
 In Claude Code, the same workflows are available as slash commands: `/bober-graph`, `/bober-onboard`, `/bober-impact`.
 
-> **Pluggable backend (internal).** The graph layer now talks to its engine through a `GraphBackend`
+> **Pluggable backend (internal).** The graph layer talks to its engine through a `GraphBackend`
 > seam (`src/graph/backends/`): `GraphClient` owns the cross-cutting sandbox/staleness/health/fallback
 > logic and delegates the per-engine tool catalog and response adapters to an injected backend. A
 > backend also describes *how to run* its engine — a `ProcessSpec` (binary + serve args) the MCP
 > transport spawns from, a `PrereqSpec` (version command, compatibility predicate, and the install
-> hints shown above), and a `CliMap` (init/sync/status args + output parsers). The tokensave version
-> range and install-hint strings live only in `TokensaveBackend`. `resolveGraphBackend()`
+> hints shown above), and a `CliMap` (init/sync/status args + output parsers). `resolveGraphBackend()`
 > (`src/graph/backends/registry.ts`) selects the engine — the `graph.backend` override wins, else it
-> auto-detects (tokensave preferred) — and every graph construction site resolves through it. A
-> second engine (`code-review-graph`) is registered so it is selectable and prereq-checkable, with a
-> real `CliMap` (init/sync/status) as of Sprint 4 and its five read response adapters
-> (search/impact/review-context/overview/changes) as of Sprint 5; only its `query` sub-pattern
-> adapter lands in a later sprint, so that operation still throws a clear "not implemented" error.
-> Adding a real engine needs no changes to `GraphClient`, the transport, the prereq check, or the CLI
-> wrapper. The tokensave path is byte-identical when `graph.backend` is unset.
+> auto-detects (tokensave preferred) — and every graph construction site (`onboard`, `impact`, the
+> `graph` CLI, and the external MCP server) resolves through it. `code-review-graph` has all six
+> response `*Plan` adapters (search/impact/review-context/overview/changes/query) implemented and
+> validated against real captured MCP fixtures, plus a real `CliMap`. Adding a new engine needs no
+> changes to `GraphClient`, the transport, the prereq check, or the CLI wrapper. The tokensave path is
+> byte-identical when `graph.backend` is unset.
 
-For architecture details see: [`.bober/architecture/arch-20260524-port-code-review-graph-architecture.md`](.bober/architecture/arch-20260524-port-code-review-graph-architecture.md)
+Full reference (selection algorithm, both install paths, the complete parity table, deferred live-smoke recipe, and residual follow-ups): [docs/graph-backends.md](./docs/graph-backends.md).
 
 ---
 
@@ -528,7 +573,7 @@ The `/bober-principles` command also triggers auto-discovery when called with no
 | `/bober-seo` | SEO/GEO suite orchestrator -- routes to the 8 workflows (`bober seo <workflow> [target]`), offline by default, live data behind two default-false egress axes; spawns `bober-seo-strategist`/`bober-seo-verifier` |
 | `/bober-verify` | Verification-before-completion -- run checks and confirm output before claiming success |
 | `/bober-debug` | Systematic debugging -- reproduce, isolate, hypothesize, fix, verify |
-| `/bober-graph` | Manage the code graph index -- init, sync, status (requires tokensave) |
+| `/bober-graph` | Manage the code graph index -- init, sync, status (requires tokensave or code-review-graph) |
 | `/bober-impact` | Analyse the impact radius and test coverage of a symbol or file |
 | `/bober-onboard` | Generate onboarding docs from the code graph |
 | `/bober-incident` | Run the incident lifecycle -- diagnose, deploy, verify, postmortem |
@@ -808,6 +853,7 @@ guide, then drill into a subsystem:
 - [docs/telegram.md](./docs/telegram.md) — the local long-polling Telegram frontend.
 - [docs/providers.md](./docs/providers.md) — provider/model selection and env-var setup.
 - [docs/storage.md](./docs/storage.md) — the local SQLite / JSON storage model and egress axes.
+- [docs/graph-backends.md](./docs/graph-backends.md) — pluggable code-graph backend (tokensave / code-review-graph): selection algorithm, install paths, the full operation parity table, and the deferred live-smoke follow-up.
 
 ---
 

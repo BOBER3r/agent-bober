@@ -37,7 +37,7 @@ async function resolveRoot(): Promise<string> {
 export function registerGraphCommand(program: Command): void {
   const graph = program
     .command("graph")
-    .description("Code-graph (tokensave) integration commands");
+    .description("Code-graph (tokensave or code-review-graph) integration commands");
 
   // ── check-prereq ─────────────────────────────────────────────────
   graph
