@@ -3,17 +3,18 @@
  * `code-review-graph` engine.
  *
  * Registered so backend auto-detection (Sprint 3) can select it when
- * tokensave is not installed but code-review-graph is. As of Sprint 5,
- * 5 of the 6 response *Plan adapters are real (search/impact/reviewContext/
- * overview/changes), validated against the live fixtures captured in
- * Sprint 4 under tests/graph/fixtures/cr-graph/. `queryPlan` (the 4 query
- * sub-patterns: callers/callees/imports/tests) is still NOT implemented —
- * that is Sprint 6. `id`, `processSpec()`, `prereqSpec()`, and `cliMap()`
- * are real as of Sprint 4: enough to be selectable, prereq-checkable, and
- * to run init/sync/status against the real `code-review-graph` CLI.
+ * tokensave is not installed but code-review-graph is. As of Sprint 6, all
+ * 6 response *Plan adapters are real (search/impact/reviewContext/overview/
+ * changes from Sprint 5, plus queryPlan's 4 sub-patterns from Sprint 6),
+ * validated against the live fixtures captured in Sprints 4 and 6 under
+ * tests/graph/fixtures/cr-graph/. `id`, `processSpec()`, `prereqSpec()`, and
+ * `cliMap()` are real as of Sprint 4: enough to be selectable,
+ * prereq-checkable, and to run init/sync/status against the real
+ * `code-review-graph` CLI.
  */
 
 import type { ImpactReport, NodeRef, SearchHit, StatusResult } from "../types.js";
+import { assertNever } from "../types.js";
 import type {
   CallPlan,
   CliMap,
@@ -24,9 +25,6 @@ import type {
   QueryPattern,
   SearchOpts,
 } from "./types.js";
-
-const NOT_IMPL =
-  "code-review-graph adapter not implemented until Sprints 4-6";
 
 /** code-review-graph install hint. Verbatim — pip is the documented install path. */
 function codeReviewGraphInstallHint(_platform: Platform): string {
@@ -136,6 +134,30 @@ function isTestRow(row: CrNodeRow): boolean {
   return typeof row.is_test === "boolean" ? row.is_test : /test|spec/i.test(row.file_path);
 }
 
+// ── queryPlan pattern map (Sprint 6) ────────────────────────────────
+//
+// All 4 bober QueryPatterns route through cr-graph's single
+// `query_graph_tool`, whose `pattern` argument IS the direction/relationship
+// selector (confirmed live against code-review-graph 2.3.7 — see
+// tests/graph/fixtures/cr-graph/_args.json:sprint6DirectionMap).
+//
+// TRAP: bober's `imports_of` ("who imports the target" — dependents, same
+// direction as tokensave's tokensave_file_dependents) maps to cr-graph's
+// `importers_of` pattern, NOT cr-graph's own `imports_of` (which is the
+// OPPOSITE direction: what the target imports). Using cr-graph `imports_of`
+// here would silently return wrong data — see the trap fixture
+// query_graph_imports_of_tool.json, committed only to document this.
+const CR_QUERY_PATTERN: Record<QueryPattern, string> = {
+  callers_of: "callers_of",
+  callees_of: "callees_of",
+  imports_of: "importers_of",
+  tests_for: "tests_for",
+};
+
+/** imports_of ("importers_of") result row: a path string, not a CrNodeRow —
+ *  cr-graph returns `{importer, file}` pairs with no name/kind/line. */
+type CrImporterRow = { importer?: string; file?: string };
+
 export class CodeReviewGraphBackend implements GraphBackend {
   readonly id = "code-review-graph";
 
@@ -157,8 +179,46 @@ export class CodeReviewGraphBackend implements GraphBackend {
     };
   }
 
-  queryPlan(_pattern: QueryPattern, _target: NodeRef): CallPlan<NodeRef[]> {
-    throw new Error(NOT_IMPL);
+  queryPlan(pattern: QueryPattern, target: NodeRef): CallPlan<NodeRef[]> {
+    switch (pattern) {
+      // callers_of / callees_of / tests_for all key on the qualified_name
+      // (target.id): a bare name returns status:"ambiguous" with no
+      // `results` (see the _args.json capture notes). tests_for ALSO keys
+      // on target.id, NOT target.file — cr-graph's tests_for(file) returns
+      // 0 results (the second Sprint-6 direction trap).
+      case "callers_of":
+      case "callees_of":
+      case "tests_for": {
+        return {
+          tool: "query_graph_tool",
+          params: { pattern: CR_QUERY_PATTERN[pattern], target: target.id },
+          narrow: (raw) => {
+            const rows = (raw as { results?: CrNodeRow[] }).results ?? [];
+            return rows.map(crToNodeRef);
+          },
+        };
+      }
+      case "imports_of": {
+        // cr-graph pattern here is "importers_of" (dependents), NOT its own
+        // "imports_of" (opposite direction — see CR_QUERY_PATTERN comment
+        // above). Rows are {importer, file} path strings, not CrNodeRow —
+        // build module NodeRefs directly, mirroring tokensave's imports_of
+        // (tokensave-backend.ts:252-258).
+        return {
+          tool: "query_graph_tool",
+          params: { pattern: CR_QUERY_PATTERN.imports_of, target: target.file },
+          narrow: (raw) => {
+            const rows = (raw as { results?: CrImporterRow[] }).results ?? [];
+            return rows
+              .map((row) => row.importer ?? row.file)
+              .filter((path): path is string => typeof path === "string")
+              .map((path): NodeRef => ({ id: path, kind: "module", file: path, line: 0, symbol: path }));
+          },
+        };
+      }
+      default:
+        return assertNever(pattern);
+    }
   }
 
   impactPlan(target: NodeRef | string): CallPlan<ImpactReport> {

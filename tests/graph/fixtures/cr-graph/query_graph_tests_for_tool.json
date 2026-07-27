@@ -1,0 +1,46 @@
+{
+  "status": "ok",
+  "pattern": "tests_for",
+  "target": "/repo/src/math_utils.py::multiply",
+  "description": "Find all tests for a given function or class",
+  "summary": "Found 2 result(s) for tests_for('/repo/src/math_utils.py::multiply')",
+  "result_count": 2,
+  "results_omitted": 0,
+  "results": [
+    {
+      "id": 12,
+      "kind": "Test",
+      "name": "test_multiply",
+      "qualified_name": "/repo/tests/test_math_utils.py::test_multiply",
+      "file_path": "/repo/tests/test_math_utils.py",
+      "line_start": 6,
+      "line_end": 7,
+      "language": "python",
+      "parent_name": null,
+      "is_test": true,
+      "indirect": false
+    },
+    {
+      "id": 11,
+      "kind": "Test",
+      "name": "test_add",
+      "qualified_name": "/repo/tests/test_math_utils.py::test_add",
+      "file_path": "/repo/tests/test_math_utils.py",
+      "line_start": 3,
+      "line_end": 4,
+      "language": "python",
+      "parent_name": null,
+      "is_test": true,
+      "indirect": true
+    }
+  ],
+  "edges": [],
+  "_graph": {
+    "updated_at": "2026-07-27T04:37:33",
+    "age_seconds": 98,
+    "built_on_branch": "master",
+    "built_at_sha": "de76ca9ea52b51c74cd35703742c19b1ce457c92",
+    "head_sha": "de76ca9ea52b51c74cd35703742c19b1ce457c92",
+    "head_matches_build": true
+  }
+}

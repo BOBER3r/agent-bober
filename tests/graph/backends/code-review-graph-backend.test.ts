@@ -1,11 +1,10 @@
 /**
  * Unit tests for CodeReviewGraphBackend.
  *
- * processSpec/prereqSpec/cliMap (sc-4-2/4-3) plus the 5 response *Plan
- * adapters implemented in Sprint 5 (search/impact/reviewContext/overview/
- * changes), fixture-driven against the real captures under
- * tests/graph/fixtures/cr-graph/. `queryPlan` still throws NOT_IMPL until
- * Sprint 6 (covered by cli-backend-injection.test.ts).
+ * processSpec/prereqSpec/cliMap (sc-4-2/4-3) plus all 6 response *Plan
+ * adapters (search/impact/reviewContext/overview/changes from Sprint 5,
+ * queryPlan's 4 sub-patterns from Sprint 6), fixture-driven against the
+ * real captures under tests/graph/fixtures/cr-graph/.
  */
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { readFile } from "node:fs/promises";
@@ -19,6 +18,7 @@ vi.mock("execa", () => ({
 import { execa } from "execa";
 import { CodeReviewGraphBackend } from "../../../src/graph/backends/code-review-graph-backend.js";
 import { GenericPrereqCheck } from "../../../src/graph/prereq.js";
+import type { NodeRef } from "../../../src/graph/types.js";
 
 const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "../fixtures/cr-graph");
 
@@ -348,12 +348,118 @@ describe("CodeReviewGraphBackend", () => {
     });
   });
 
-  // ── queryPlan still NOT_IMPL (Sprint 6) ─────────────────────────────
+  // ── queryPlan (Sprint 6, sc-6-2/6-3/6-4/6-5) ─────────────────────────
+  //
+  // All 4 patterns route through query_graph_tool with `pattern` as the
+  // direction/relationship selector (fixtures captured live from
+  // code-review-graph 2.3.7 — tests/graph/fixtures/cr-graph/_args.json).
 
-  it("queryPlan still throws NOT_IMPL (Sprint 6)", () => {
-    const nodeRef = { id: "x", kind: "symbol" as const, file: "f.py", line: 1, symbol: "x" };
-    expect(() => backend.queryPlan("callers_of", nodeRef)).toThrow(
-      /code-review-graph adapter not implemented until Sprints 4-6/,
-    );
+  describe("queryPlan", () => {
+    const target: NodeRef = {
+      id: "/repo/src/math_utils.py::multiply",
+      kind: "function",
+      file: "/repo/src/math_utils.py",
+      line: 4,
+      symbol: "multiply",
+    };
+
+    it("callers_of uses query_graph_tool with pattern='callers_of' + target.id", () => {
+      const plan = backend.queryPlan("callers_of", target);
+      expect(plan.tool).toBe("query_graph_tool");
+      expect(plan.params).toEqual({ pattern: "callers_of", target: target.id });
+    });
+
+    it("callers_of narrows the real fixture -> INBOUND NodeRef[]", async () => {
+      const nodes = backend
+        .queryPlan("callers_of", target)
+        .narrow(await loadFixture("query_graph_callers_of_tool.json"));
+      expect(nodes.map((n) => n.symbol).sort()).toEqual(["compute", "test_multiply"]);
+    });
+
+    it("callees_of uses query_graph_tool with pattern='callees_of' + target.id", () => {
+      const plan = backend.queryPlan("callees_of", target);
+      expect(plan.tool).toBe("query_graph_tool");
+      expect(plan.params).toEqual({ pattern: "callees_of", target: target.id });
+    });
+
+    it("callees_of narrows the real fixture -> OUTBOUND NodeRef[]", async () => {
+      const nodes = backend
+        .queryPlan("callees_of", target)
+        .narrow(await loadFixture("query_graph_callees_of_tool.json"));
+      // range (builtin) has no file_path -> file undefined; add is in-repo.
+      expect(nodes.map((n) => n.symbol).sort()).toEqual(["add", "range"]);
+    });
+
+    // ── the required edge-direction assertion (sc-6-2) ──
+    it("callers_of != callees_of for the same node with distinct in/out edges", async () => {
+      const inbound = backend
+        .queryPlan("callers_of", target)
+        .narrow(await loadFixture("query_graph_callers_of_tool.json"))
+        .map((n) => n.symbol)
+        .sort();
+      const outbound = backend
+        .queryPlan("callees_of", target)
+        .narrow(await loadFixture("query_graph_callees_of_tool.json"))
+        .map((n) => n.symbol)
+        .sort();
+      expect(inbound).not.toEqual(outbound);
+      expect(inbound).toEqual(["compute", "test_multiply"]);
+      expect(outbound).toEqual(["add", "range"]);
+    });
+
+    it("imports_of uses query_graph_tool with pattern='importers_of' (NOT 'imports_of') + target.file", () => {
+      const importTarget: NodeRef = { ...target, file: "src/math_utils.py" };
+      const plan = backend.queryPlan("imports_of", importTarget);
+      expect(plan.tool).toBe("query_graph_tool");
+      expect(plan.params).toEqual({ pattern: "importers_of", target: "src/math_utils.py" });
+    });
+
+    it("imports_of narrows the real 'importers_of' fixture -> module NodeRef[] from results[].importer", async () => {
+      const importTarget: NodeRef = { ...target, file: "src/math_utils.py" };
+      const nodes = backend
+        .queryPlan("imports_of", importTarget)
+        .narrow(await loadFixture("query_graph_importers_of_tool.json"));
+      expect(nodes.map((n) => n.file).sort()).toEqual([
+        "/repo/src/main.py",
+        "/repo/tests/test_math_utils.py",
+      ]);
+      expect(nodes.every((n) => n.kind === "module")).toBe(true);
+    });
+
+    it("imports_of does NOT use cr-graph's own 'imports_of' pattern (guards trap #1)", async () => {
+      // Sanity check against the trap fixture: cr-graph's own "imports_of"
+      // pattern returns the OPPOSITE direction (what the target imports,
+      // not who imports it) — confirm the adapter's plan.params never
+      // requests it, and that narrowing the trap fixture through the
+      // "importers_of"-shaped narrow would NOT produce the correct dependents.
+      const trapFixture = (await loadFixture("query_graph_imports_of_tool.json")) as {
+        pattern: string;
+      };
+      expect(trapFixture.pattern).toBe("imports_of");
+      const importTarget: NodeRef = { ...target, file: "src/math_utils.py" };
+      expect(backend.queryPlan("imports_of", importTarget).params).not.toEqual({
+        pattern: "imports_of",
+        target: "src/math_utils.py",
+      });
+    });
+
+    it("tests_for uses query_graph_tool with pattern='tests_for' + target.id (NOT target.file, guards trap #2)", () => {
+      const plan = backend.queryPlan("tests_for", target);
+      expect(plan.tool).toBe("query_graph_tool");
+      expect(plan.params).toEqual({ pattern: "tests_for", target: target.id });
+      expect(plan.params).not.toEqual({ pattern: "tests_for", target: target.file });
+    });
+
+    it("tests_for narrows the real fixture -> test-symbol NodeRef[]", async () => {
+      const nodes = backend
+        .queryPlan("tests_for", target)
+        .narrow(await loadFixture("query_graph_tests_for_tool.json"));
+      expect(nodes.map((n) => n.symbol).sort()).toEqual(["test_add", "test_multiply"]);
+    });
+
+    it("defaults to [] when `results` is absent (e.g. an ambiguous bare-name payload)", () => {
+      expect(backend.queryPlan("callers_of", target).narrow({ status: "ambiguous" })).toEqual([]);
+      expect(backend.queryPlan("imports_of", target).narrow({ status: "ambiguous" })).toEqual([]);
+    });
   });
 });

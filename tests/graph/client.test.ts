@@ -790,4 +790,81 @@ describe("GraphClient with CodeReviewGraphBackend (Sprint 5 e2e)", () => {
       expect(r.data[0]!.line).toBe(5);
     }
   });
+
+  // ── query (Sprint 6, sc-6-5): all 4 sub-patterns end-to-end ────────
+
+  const queryTarget = {
+    id: "/repo/src/math_utils.py::multiply",
+    kind: "function" as const,
+    file: "/repo/src/math_utils.py",
+    line: 4,
+    symbol: "multiply",
+  };
+
+  it("query(callers_of): ok:true INBOUND NodeRef[], sandboxed to /repo", async () => {
+    const fixture = await loadCrFixture("query_graph_callers_of_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.query("callers_of", queryTarget);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.map((n) => n.symbol).sort()).toEqual(["compute", "test_multiply"]);
+  });
+
+  it("query(callees_of): builtin 'range' (no file_path) is sandbox-dropped, leaving [add]", async () => {
+    const fixture = await loadCrFixture("query_graph_callees_of_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.query("callees_of", queryTarget);
+    expect(r.ok).toBe(true);
+    // keepNode (client.ts:241) drops nodes with no .file -> range gone, add kept.
+    if (r.ok) expect(r.data.map((n) => n.symbol)).toEqual(["add"]);
+  });
+
+  it("query(callers_of) != query(callees_of) end-to-end for the same target", async () => {
+    const callersClient = makeCrClient(
+      "/repo",
+      async () => await loadCrFixture("query_graph_callers_of_tool.json"),
+    );
+    const calleesClient = makeCrClient(
+      "/repo",
+      async () => await loadCrFixture("query_graph_callees_of_tool.json"),
+    );
+    const callers = await callersClient.query("callers_of", queryTarget);
+    const callees = await calleesClient.query("callees_of", queryTarget);
+    expect(callers.ok).toBe(true);
+    expect(callees.ok).toBe(true);
+    if (callers.ok && callees.ok) {
+      expect(callers.data.map((n) => n.symbol).sort()).not.toEqual(
+        callees.data.map((n) => n.symbol).sort(),
+      );
+    }
+  });
+
+  it("query(imports_of): dependents as module NodeRef[], sandboxed to /repo", async () => {
+    const fixture = await loadCrFixture("query_graph_importers_of_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.query("imports_of", { ...queryTarget, file: "src/math_utils.py" });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.data.map((n) => n.file).sort()).toEqual([
+        "/repo/src/main.py",
+        "/repo/tests/test_math_utils.py",
+      ]);
+      expect(r.data.every((n) => n.kind === "module")).toBe(true);
+    }
+  });
+
+  it("query(imports_of): sandbox drops dependents outside projectRoot", async () => {
+    const fixture = await loadCrFixture("query_graph_importers_of_tool.json");
+    const client = makeCrClient(tmp, async () => fixture); // tmp !== /repo
+    const r = await client.query("imports_of", { ...queryTarget, file: "src/math_utils.py" });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data).toHaveLength(0);
+  });
+
+  it("query(tests_for): test-symbol NodeRef[], sandboxed to /repo", async () => {
+    const fixture = await loadCrFixture("query_graph_tests_for_tool.json");
+    const client = makeCrClient("/repo", async () => fixture);
+    const r = await client.query("tests_for", queryTarget);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.map((n) => n.symbol).sort()).toEqual(["test_add", "test_multiply"]);
+  });
 });

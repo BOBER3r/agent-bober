@@ -1,0 +1,49 @@
+{
+  "status": "ok",
+  "pattern": "importers_of",
+  "target": "src/math_utils.py",
+  "description": "Find all files that import a given file or module",
+  "summary": "Found 2 result(s) for importers_of('src/math_utils.py')",
+  "result_count": 2,
+  "results_omitted": 0,
+  "results": [
+    {
+      "importer": "/repo/src/main.py",
+      "file": "/repo/src/main.py"
+    },
+    {
+      "importer": "/repo/tests/test_math_utils.py",
+      "file": "/repo/tests/test_math_utils.py"
+    }
+  ],
+  "edges": [
+    {
+      "id": 1,
+      "kind": "IMPORTS_FROM",
+      "source": "/repo/src/main.py",
+      "target": "/repo/src/math_utils.py",
+      "file_path": "/repo/src/main.py",
+      "line": 1,
+      "confidence": 1.0,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 19,
+      "kind": "IMPORTS_FROM",
+      "source": "/repo/tests/test_math_utils.py",
+      "target": "/repo/src/math_utils.py",
+      "file_path": "/repo/tests/test_math_utils.py",
+      "line": 1,
+      "confidence": 1.0,
+      "confidence_tier": "EXTRACTED"
+    }
+  ],
+  "_graph": {
+    "updated_at": "2026-07-27T04:37:33",
+    "age_seconds": 38,
+    "built_on_branch": "master",
+    "built_at_sha": "de76ca9ea52b51c74cd35703742c19b1ce457c92",
+    "head_sha": "de76ca9ea52b51c74cd35703742c19b1ce457c92",
+    "head_matches_build": true
+  }
+}

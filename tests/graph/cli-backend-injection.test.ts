@@ -10,9 +10,9 @@
  * As of Sprint 4, CodeReviewGraphBackend.cliMap() is REAL (init->build,
  * sync->update, status->status --json) — the init()/sync()/status() cases
  * below now assert the real argv/execa behavior instead of the Sprint-3
- * NOT_IMPL throw. As of Sprint 5, 5 of the 6 response *Plan adapters
- * (search/impact/reviewContext/overview/changes) are also real; only
- * queryPlan remains unimplemented until Sprint 6 — asserted below.
+ * NOT_IMPL throw. As of Sprint 6, all 6 response *Plan adapters
+ * (search/impact/reviewContext/overview/changes from Sprint 5, plus
+ * queryPlan from Sprint 6) are real — asserted below.
  */
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -109,16 +109,19 @@ describe("TokensaveCli — backend injection (sc-3-6)", () => {
     expect(result.indexedFileCount).toBe(2);
   });
 
-  // ── queryPlan still NOT_IMPL; the other 5 response *Plan adapters are
-  //    implemented as of Sprint 5 (search/impact/reviewContext/overview/
-  //    changes) — see tests/graph/backends/code-review-graph-backend.test.ts
-  //    and tests/graph/client.test.ts for their fixture-driven coverage. ───
+  // ── All 6 response *Plan adapters are real as of Sprint 6 (queryPlan's
+  //    4 sub-patterns; the other 5 — search/impact/reviewContext/overview/
+  //    changes — landed in Sprint 5) — see
+  //    tests/graph/backends/code-review-graph-backend.test.ts and
+  //    tests/graph/client.test.ts for their fixture-driven coverage. ───
 
-  it("queryPlan still throws NOT_IMPL (Sprint 6); the other 5 adapters are implemented", () => {
+  it("queryPlan is implemented (Sprint 6); all 6 adapters route to real cr-graph tools", () => {
     const backend = new CodeReviewGraphBackend();
     const nodeRef = { id: "x", kind: "symbol" as const, file: "f.py", line: 1, symbol: "x" };
-    const NOT_IMPL = /code-review-graph adapter not implemented until Sprints 4-6/;
-    expect(() => backend.queryPlan("callers_of", nodeRef)).toThrow(NOT_IMPL);
+    expect(backend.queryPlan("callers_of", nodeRef).tool).toBe("query_graph_tool");
+    expect(backend.queryPlan("callees_of", nodeRef).tool).toBe("query_graph_tool");
+    expect(backend.queryPlan("imports_of", nodeRef).tool).toBe("query_graph_tool");
+    expect(backend.queryPlan("tests_for", nodeRef).tool).toBe("query_graph_tool");
     expect(backend.searchPlan("x").tool).toBe("semantic_search_nodes_tool");
     expect(backend.impactPlan(nodeRef).tool).toBe("get_impact_radius_tool");
     expect(backend.reviewContextPlan([nodeRef]).tool).toBe("get_review_context_tool");

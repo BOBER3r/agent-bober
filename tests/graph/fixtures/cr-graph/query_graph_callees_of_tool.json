@@ -1,0 +1,58 @@
+{
+  "status": "ok",
+  "pattern": "callees_of",
+  "target": "/repo/src/math_utils.py::multiply",
+  "description": "Find all functions called by a given function",
+  "summary": "Found 2 result(s) for callees_of('/repo/src/math_utils.py::multiply')",
+  "result_count": 2,
+  "results_omitted": 0,
+  "results": [
+    {
+      "kind": "Function",
+      "name": "range",
+      "qualified_name": "range"
+    },
+    {
+      "id": 6,
+      "kind": "Function",
+      "name": "add",
+      "qualified_name": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line_start": 1,
+      "line_end": 2,
+      "language": "python",
+      "parent_name": null,
+      "is_test": false
+    }
+  ],
+  "edges": [
+    {
+      "id": 13,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::multiply",
+      "target": "range",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 6,
+      "confidence": 1.0,
+      "confidence_tier": "EXTRACTED"
+    },
+    {
+      "id": 14,
+      "kind": "CALLS",
+      "source": "/repo/src/math_utils.py::multiply",
+      "target": "/repo/src/math_utils.py::add",
+      "file_path": "/repo/src/math_utils.py",
+      "line": 7,
+      "confidence": 1.0,
+      "confidence_tier": "EXTRACTED"
+    }
+  ],
+  "_graph": {
+    "updated_at": "2026-07-27T04:37:33",
+    "age_seconds": 98,
+    "built_on_branch": "master",
+    "built_at_sha": "de76ca9ea52b51c74cd35703742c19b1ce457c92",
+    "head_sha": "de76ca9ea52b51c74cd35703742c19b1ce457c92",
+    "head_matches_build": true
+  }
+}
