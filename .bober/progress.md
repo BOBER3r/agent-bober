@@ -628,3 +628,15 @@ vault-store → medical-ingest → medical-analysis → priority-hub → task-in
 2. [completed] Sync README CLI quick-reference (fleet + those 5 commands, deferring to COMMANDS.md) and refresh package.json description/keywords for the 0.18.0 surface (security-audit, fleet, incident-response, knowledge-platform). -- PASSED iteration 1 (bdb2e04)
 
 Scope: docs + npm metadata only — no src/ or *.test.ts changes, no git tags. VISION.md/providers.md spot-checked current and excluded; CHANGELOG already through [0.18.0].
+
+## Plan: Configurable documenter docs output (solo vs team)
+- Spec: spec-20260731-documenter-docs-output
+- Created: 2026-07-31
+- Sprints: 3
+- Status: completed (3/3 sprints) — PLAN COMPLETE
+- Origin: Telegram thread with maintainer (BOBER3r) — documenter silently commits docs/sprints/*.md into shared repos; agreed direction: config customization ("надо кастомизацию конфига допиливать"), PR welcome.
+
+### Sprint Breakdown
+1. [completed] Add docsMode/docsDir config keys + mode-aware runDocumenter — passed iter-2 (c0d97c5+4155e53); schema keys, resolveSprintDocPath, ensureGitignoreEntry, buildDocumenterUserMessage; +31 tests
+2. [completed] Sync skill/agent surfaces and docs — passed iter-1 (3938793); 3 md surfaces mode-gated, 3 .claude copies byte-identical, README/VISION recipes + carve-outs, CHANGELOG entry
+3. [completed] Init flow solo/team question — passed iter-1 (7d97de4); askDocsMode in all 3 interactive flows, non-TTY structurally promptless; +7 tests

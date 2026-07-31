@@ -1,0 +1,79 @@
+{
+  "evalId": "eval-sprint-spec-20260731-documenter-docs-output-2-1",
+  "contractId": "sprint-spec-20260731-documenter-docs-output-2",
+  "specId": "spec-20260731-documenter-docs-output",
+  "timestamp": "2026-07-31T12:42:09Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "score": {
+    "criteriaTotal": 5,
+    "criteriaPassed": 5,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 5,
+    "requiredFailed": 0,
+    "requiredTotal": 5
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "tsc --noEmit clean"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "tsc clean"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "366 files, 4990 passed, 1 pre-existing skip"
+    },
+    {
+      "strategy": "manual-drift-check",
+      "required": true,
+      "result": "pass",
+      "output": "update-all.mjs --check: 14 pre-existing out-of-scope files; zero sprint-owned drift; cmp + independent inlineSkill reimplementation confirm byte-identity of the 3 owned copies"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-2-1",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "sc-2-2",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "sc-2-3",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "sc-2-4",
+      "required": true,
+      "result": "pass"
+    },
+    {
+      "criterionId": "sc-2-5",
+      "required": true,
+      "result": "pass"
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "All 5 criteria pass with independent verification: md surfaces mirror the TS mode semantics line-by-line, owned .claude copies byte-identical, README/VISION carry the solo-vs-team recipe with both carve-outs, CHANGELOG entry present. Strategies green; exactly the 9 expected files changed, zero src/ changes, no voice softening."
+}

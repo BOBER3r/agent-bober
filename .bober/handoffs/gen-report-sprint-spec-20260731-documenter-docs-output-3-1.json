@@ -1,0 +1,12 @@
+{
+  "contractId": "sprint-spec-20260731-documenter-docs-output-3",
+  "status": "complete",
+  "iteration": 1,
+  "commits": ["7d97de4 - bober(sprint-3): add solo/team docs question to bober init"],
+  "filesChanged": [
+    {"path": "src/cli/commands/init.ts", "action": "modified", "description": "exported askDocsMode(isTTY) select (committed/local), wired into all three interactive flows after askModelPreferences; writes only { documenter: { docsMode } }; summary line added"},
+    {"path": "src/cli/commands/init.test.ts", "action": "created", "description": "7 tests: prompts.inject for both answers, schema validation, non-TTY never prompts and returns committed, omitted section resolves committed via resolveSprintDocPath"}
+  ],
+  "testsAdded": ["src/cli/commands/init.test.ts (7 tests)"],
+  "notes": "config-generator.ts/test deliberately untouched (briefing override of advisory estimatedFiles — no documenter awareness there, docsMode not scan-derivable). mcp/tools/init.ts untouched (already prompt-free, resolves committed). Only { docsMode } emitted, never full DocumenterSection (would pin model 'sonnet'). 'external' excluded from prompt per nonGoals. Suite 4997 passed (+7) | 1 pre-existing skip."
+}

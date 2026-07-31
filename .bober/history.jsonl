@@ -927,3 +927,12 @@
 {"event":"plan-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"pipeline-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","sprintsCompleted":2,"totalIterations":3,"timestamp":"2026-07-14T22:45:00Z"}
 {"event":"sprint-docs-completed","specId":"spec-20260714-docs-metadata-0-18-refresh","docsCommit":"3053de4","timestamp":"2026-07-14T22:46:00Z"}
+{"event":"plan-created","specId":"spec-20260731-documenter-docs-output","title":"Configurable documenter docs output (solo vs team)","sprintCount":3,"timestamp":"2026-07-31T00:00:00Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260731-documenter-docs-output-1","specId":"spec-20260731-documenter-docs-output","timestamp":"2026-07-31T00:10:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260731-documenter-docs-output-1","iteration":1,"failedCriteria":[],"regression":"committed-mode absolute-path nonGoal violation","timestamp":"2026-07-31T12:15:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260731-documenter-docs-output-1","specId":"spec-20260731-documenter-docs-output","iteration":2,"timestamp":"2026-07-31T12:16:25Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260731-documenter-docs-output-2","specId":"spec-20260731-documenter-docs-output","timestamp":"2026-07-31T12:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260731-documenter-docs-output-2","specId":"spec-20260731-documenter-docs-output","iteration":1,"timestamp":"2026-07-31T12:42:09Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260731-documenter-docs-output-3","specId":"spec-20260731-documenter-docs-output","timestamp":"2026-07-31T13:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260731-documenter-docs-output-3","specId":"spec-20260731-documenter-docs-output","iteration":1,"timestamp":"2026-07-31T13:03:11Z"}
+{"event":"plan-completed","specId":"spec-20260731-documenter-docs-output","sprintsCompleted":3,"timestamp":"2026-07-31T13:03:11Z"}

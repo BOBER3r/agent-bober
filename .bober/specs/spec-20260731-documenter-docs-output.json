@@ -1,0 +1,234 @@
+{
+  "specId": "spec-20260731-documenter-docs-output",
+  "version": 2,
+  "createdAt": "2026-07-31T00:00:00Z",
+  "updatedAt": "2026-07-31T13:03:11Z",
+  "title": "Configurable documenter docs output (solo vs team)",
+  "description": "Make the per-sprint documenter's output location and git behavior configurable via bober.config.json. Solo users (current default) keep committed docs/sprints/ records for cross-machine sync; teams can keep the repo clean by writing sprint records locally (gitignored) or entirely outside the repo. Resolves the pain that bober silently commits docs/sprints/sprint-spec-*.md into shared repos.",
+  "mode": "greenfield",
+  "status": "completed",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [
+    {
+      "questionId": "Q1",
+      "category": "scope",
+      "question": "Should the default behavior change to not committing docs, or stay as-is (commit) with team mode opt-in?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Keep default = committed (backward compatible); local/external are opt-in"
+        },
+        {
+          "label": "B",
+          "description": "Flip default to local (no commit) — breaking change for existing users"
+        }
+      ],
+      "recommendation": "A — this is a PR into an upstream repo whose maintainer relies on committed docs for a two-machine workflow; a silent default flip would break that. The maintainer can flip the default in review if he wants.",
+      "ambiguityWeight": 3
+    },
+    {
+      "questionId": "Q2",
+      "category": "data-model",
+      "question": "What config shape: flat keys on the existing documenter section, or a nested docs object?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Flat: documenter.docsMode (committed|local|external) + documenter.docsDir (string, optional)"
+        },
+        {
+          "label": "B",
+          "description": "Nested: documenter.docs = { mode, dir }"
+        }
+      ],
+      "recommendation": "A — DocumenterSectionSchema (src/config/schema.ts:304) is already flat (timeoutMs, enabled, model, maxTurns); flat keys match section style.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q3",
+      "category": "error-handling",
+      "question": "In local/external mode, should the documenter still update related repo docs (README, ADRs)?",
+      "options": [
+        {
+          "label": "A",
+          "description": "No — non-committed modes write ONLY the sprint record; stale repo docs are reported in 'concerns' instead of edited"
+        },
+        {
+          "label": "B",
+          "description": "Yes — edit repo docs but leave them uncommitted (dirty working tree)"
+        }
+      ],
+      "recommendation": "A — the whole point of team mode is not to touch the shared repo; leaving a dirty tree after every sprint is worse than committing.",
+      "ambiguityWeight": 2
+    },
+    {
+      "questionId": "Q4",
+      "category": "tech-constraints",
+      "question": "Who ensures the gitignore entry in local mode — the LLM subagent or deterministic TS code?",
+      "options": [
+        {
+          "label": "A",
+          "description": "Deterministic TS helper in runDocumenter before the agent runs (append docsDir to .gitignore if not covered)"
+        },
+        {
+          "label": "B",
+          "description": "Instruct the LLM documenter to edit .gitignore"
+        }
+      ],
+      "recommendation": "A — gitignore correctness is a safety property; do it in code, not in a prompt.",
+      "ambiguityWeight": 1
+    }
+  ],
+  "resolvedClarifications": [
+    {
+      "questionId": "Q1",
+      "answer": "A — default stays 'committed'; team behavior is opt-in via docsMode. Evidenced by the Telegram thread: maintainer's solo two-mac workflow depends on committed docs; user's ask is a config knob ('надо кастомизацию конфига допиливать', 'версия bober team — то же самое с другим пресетом').",
+      "resolvedAt": "2026-07-31T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q2",
+      "answer": "A — flat docsMode + docsDir on DocumenterSectionSchema.",
+      "resolvedAt": "2026-07-31T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q3",
+      "answer": "A — non-committed modes write only the sprint record; stale docs go to 'concerns'.",
+      "resolvedAt": "2026-07-31T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "Q4",
+      "answer": "A — deterministic ensureGitignoreEntry helper in TS.",
+      "resolvedAt": "2026-07-31T00:00:00Z",
+      "resolvedBy": "planner"
+    }
+  ],
+  "assumptions": [
+    "Default docsMode='committed' preserves today's behavior byte-for-byte for existing configs (schema defaults only; no new required keys).",
+    "'external' default directory is ~/.bober/docs/<project.name>/sprints when docsDir is unset; docsDir accepts absolute paths and ~ expansion.",
+    "The skill-engine flow (skills/bober.sprint, skills/bober.run) mirrors the TS pipeline: the orchestrating agent reads documenter.docsMode/docsDir from bober.config.json and adjusts the documenter prompt.",
+    "Scope is the documenter's output only; .bober/ artifacts (specs, contracts, eval-results) commit behavior is unchanged.",
+    "This lands as a PR to BOBER3r/agent-bober; no duplicate open/closed PR exists (checked #27-#56: #41/#42 introduced the documenter, none make its output configurable)."
+  ],
+  "outOfScope": [
+    "Changing the default docsMode away from 'committed' (maintainer's call in PR review)",
+    "Configurable commit behavior for .bober/ pipeline artifacts (specs, contracts, handoffs)",
+    "A full 'bober team' project preset (presets axis stays nextjs/solidity/etc.); team behavior is documented as a config recipe",
+    "Retroactive migration/cleanup of already-committed docs/sprints/ files in downstream repos",
+    "Documenter content changes (what the record contains) — only where it goes and whether it is committed"
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "docsMode + docsDir config keys",
+      "description": "Extend DocumenterSectionSchema with docsMode ('committed'|'local'|'external', default 'committed') and optional docsDir (string). Validated by zod; documented inline like sibling sections.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When bober.config.json has no documenter section or no docsMode, the resolved config yields docsMode 'committed' and runtime behavior is identical to today.",
+        "AC2: When documenter.docsMode is set to an invalid value, config loading fails with a zod validation error naming the key.",
+        "AC3: documenter.docsDir accepts a relative path, an absolute path, and a ~-prefixed path."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Runtime behavior in runDocumenter",
+      "description": "runDocumenter resolves the sprint record path from config and adjusts the agent prompt per mode: committed = today's behavior; local = write to docsDir, no commit, docsDir ensured in .gitignore by deterministic code; external = write outside the repo (default ~/.bober/docs/<project>/sprints), no git operations. Non-committed modes forbid related-doc edits (stale docs reported as concerns).",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: When docsMode='committed', the prompt instructs writing to <docsDir or docs/sprints>/<contractId>.md and committing doc files only (current behavior).",
+        "AC2: When docsMode='local', the prompt contains no git commit instruction, forbids editing other repo files, and before the agent runs .gitignore contains an entry covering docsDir (added idempotently if missing).",
+        "AC3: When docsMode='external' with docsDir unset, the resolved sprintDocPath is an absolute path under the user home at .bober/docs/<project.name>/sprints/<contractId>.md and no git instructions appear in the prompt.",
+        "AC4: parseDocumentationResult defaults sprintDocPath to the mode-resolved path, not a hardcoded docs/sprints value.",
+        "AC5: A documenter failure in any mode never downgrades the passed sprint (existing advisory guarantee preserved)."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Skill and agent surface sync",
+      "description": "agents/bober-documenter.md, skills/bober.sprint/SKILL.md and skills/bober.run/SKILL.md read documenter.docsMode/docsDir from bober.config.json and pass the resolved path + commit policy into the documenter prompt, instead of hardcoding docs/sprints and 'commit the doc files'. Generated .claude copies stay in sync via npm run update-all.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: skills/bober.sprint/SKILL.md and skills/bober.run/SKILL.md documenter steps instruct reading documenter.docsMode/docsDir from bober.config.json and describe all three modes.",
+        "AC2: agents/bober-documenter.md no longer hardcodes committing as unconditional — commit instructions are gated on the mode passed in the prompt.",
+        "AC3: npm run update-all --check reports zero drift between canonical files and .claude copies."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Documentation and changelog",
+      "description": "VISION.md configuration reference and README document the new keys with a solo-vs-team recipe; CHANGELOG records the feature.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: The config reference documents docsMode values with the solo (committed) and team (local/external) recipes.",
+        "AC2: CHANGELOG.md has an entry for the feature."
+      ],
+      "dependencies": [
+        "feat-2"
+      ],
+      "estimatedComplexity": "low"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Init flow asks solo vs team",
+      "description": "bober init asks one question — 'Commit sprint docs into the repo (solo) or keep the repo clean (team)?' — and writes documenter.docsMode accordingly.",
+      "priority": "should-have",
+      "acceptanceCriteria": [
+        "AC1: Init offers a solo/team choice and writes documenter.docsMode 'committed' or 'local' into the generated bober.config.json.",
+        "AC2: Non-interactive init (flags/CI) defaults to 'committed' without prompting."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "low"
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "Existing configs (no documenter section, or documenter without the new keys) resolve to today's exact behavior — zero behavior change without opt-in.",
+      "verificationMethod": "Unit test: parse a config omitting the new keys, assert docsMode='committed' and resolved path docs/sprints/<contractId>.md."
+    },
+    {
+      "category": "security",
+      "requirement": "The gitignore mutation is idempotent, appends at most one line, and never rewrites unrelated .gitignore content.",
+      "verificationMethod": "Unit test: call the helper twice on a fixture .gitignore, assert single entry and untouched existing lines."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Canonical skills/agents and generated .claude copies stay byte-identical.",
+      "verificationMethod": "Run npm run update-all --check (or the repo's drift check) and assert zero drift."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "Two new keys on the existing documenter config section: docsMode enum (committed|local|external, default committed) and optional docsDir string. Resolution: committed/local → projectRoot-relative (default docs/sprints); external → absolute, default ~/.bober/docs/<project.name>/sprints.",
+    "securityConsiderations": [
+      "Do gitignore mutation in deterministic TS, not via the LLM agent",
+      "In non-committed modes the prompt must explicitly forbid git add/commit and repo-file edits",
+      "~ expansion and absolute-path handling must not escape into committing files outside the repo"
+    ],
+    "existingPatterns": "Follow DocumenterSectionSchema comment style (src/config/schema.ts:299-313); path plumbed via sprintDocPath in src/orchestrator/documenter-agent.ts:106; advisory failure handling in src/orchestrator/pipeline.ts:611-618; resilient JSON parsing untouched; utils in src/utils/{git,fs}.ts."
+  },
+  "sprints": [
+    "sprint-spec-20260731-documenter-docs-output-1",
+    "sprint-spec-20260731-documenter-docs-output-2",
+    "sprint-spec-20260731-documenter-docs-output-3"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "3-5 hours",
+    "riskLevel": "low",
+    "riskNotes": "Additive config keys with a behavior-preserving default; the main risk is prompt-text drift between TS pipeline, agent md, and skill md — covered by the update-all drift check and explicit criteria."
+  },
+  "completedAt": "2026-07-31T13:03:11Z"
+}

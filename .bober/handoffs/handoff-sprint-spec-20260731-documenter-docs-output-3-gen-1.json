@@ -1,0 +1,106 @@
+{
+  "handoffId": "handoff-sprint-spec-20260731-documenter-docs-output-3-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260731-documenter-docs-output-3",
+  "specId": "spec-20260731-documenter-docs-output",
+  "timestamp": "2026-07-31T13:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent harness shipping as npm CLI + MCP server. This spec makes the per-sprint documenter's output location and git behavior configurable (docsMode committed|local|external + docsDir). Sprint 1 shipped the TS runtime (schema keys, resolveSprintDocPath, buildDocumenterUserMessage, ensureGitignoreEntry). Sprint 2 synced the md surfaces + README/VISION/CHANGELOG. Sprint 3 adds one bober init question: solo (committed) vs team (local).",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260731-documenter-docs-output-1",
+        "title": "docsMode/docsDir config keys + mode-aware runDocumenter",
+        "summary": "Commits c0d97c5+4155e53. committed default = relative literal docs/sprints/<id>.md; local = absolute under root + ensureGitignoreEntry, no commit; external = ~/.bober/docs/<project.name>/sprints, no git; docsDir wins in all modes."
+      },
+      {
+        "contractId": "sprint-spec-20260731-documenter-docs-output-2",
+        "title": "Skill/agent surface + docs sync",
+        "summary": "Commit 3938793. Mode-gated md instructions, byte-identical .claude copies, README/VISION config reference with solo-vs-team recipes, CHANGELOG entry."
+      }
+    ],
+    "currentBranch": "bober/documenter-docs-output",
+    "relevantFiles": [
+      "src/cli/commands/init.ts",
+      "src/discovery/config-generator.ts",
+      "src/discovery/config-generator.test.ts",
+      "src/config/schema.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260731-documenter-docs-output-3",
+    "specId": "spec-20260731-documenter-docs-output",
+    "sprintNumber": 3,
+    "title": "Init flow: solo vs team docs question",
+    "description": "bober init asks one question — commit sprint docs into the repo (solo, default) or keep the repo clean (team) — and writes documenter.docsMode into the generated bober.config.json. Non-interactive init paths default to 'committed' without prompting. Should-have: the feature is complete without it; skip if init internals make this disproportionate.",
+    "status": "in-progress",
+    "createdAt": "2026-07-31T00:00:00Z",
+    "updatedAt": "2026-07-31T13:00:00Z",
+    "dependsOn": [
+      "sprint-spec-20260731-documenter-docs-output-1"
+    ],
+    "features": [
+      "feat-5"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-3-1",
+        "description": "Interactive bober init offers a solo/team choice (prompts lib, matching existing init questions' style) and writes documenter.docsMode 'committed' (solo) or 'local' (team) into the generated bober.config.json.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-2",
+        "description": "Non-interactive init (existing flags / CI / --yes-style paths) does not prompt and produces docsMode 'committed' (or omits the key entirely, which resolves to 'committed').",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-3-3",
+        "description": "npm run typecheck, lint, build and the full test suite pass.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "generatorNotes": "Entry point: src/cli/commands/init.ts (large file — find where other config questions are asked and where the config object is assembled/serialized; also check src/discovery/config-generator.ts, which generates configs from scanning, and keep the two paths consistent). The repo uses the 'prompts' package. Follow the existing question wording style. If init has a config-generator golden-snapshot test (see commit 255f992 'match golden snapshot'), update it deliberately and mention it in completion notes. Keep the diff minimal — one question, one key.",
+    "evaluatorNotes": "sc-3-1: unit test drives the prompt with injected answers (prompts supports injection via prompts.inject) or tests the pure config-assembly function for both answers. sc-3-2: run/simulate the non-interactive path; assert no new prompt fires and the generated config resolves to docsMode 'committed'. sc-3-3: full suite + typecheck + lint + build. Verify the generated config still passes BoberConfigSchema.parse.",
+    "estimatedFiles": [
+      "src/cli/commands/init.ts",
+      "src/discovery/config-generator.ts",
+      "src/discovery/config-generator.test.ts"
+    ],
+    "estimatedDuration": "small",
+    "iterationHistory": [],
+    "nonGoals": [
+      "Do not add more than one init question — a single solo/team choice writing documenter.docsMode.",
+      "Do not change the discovery scanner's stack detection or any unrelated init output.",
+      "Do not make 'external' an init option — external mode stays a hand-edited config choice (keeps the prompt binary and simple)."
+    ],
+    "stopConditions": [
+      "Interactive init writes docsMode 'committed' (solo) or 'local' (team) based on the answer; non-interactive paths never prompt and resolve to 'committed'.",
+      "Generated config passes BoberConfigSchema.parse; golden-snapshot tests (if any) updated deliberately.",
+      "typecheck, lint, build, and full suite pass."
+    ],
+    "definitionOfDone": "bober init asks one solo-vs-team question and writes documenter.docsMode into the generated bober.config.json ('committed' for solo, 'local' for team); non-interactive/CI init paths default to 'committed' without prompting; the generated config validates against the zod schema and the suite is green.",
+    "assumptions": [
+      "The 'prompts' package with prompts.inject is the existing test pattern for interactive init flows.",
+      "If this proves disproportionate inside init.ts, the sprint may be descoped by the orchestrator (should-have feature)."
+    ],
+    "outOfScope": [
+      "Any documenter runtime or md-surface change (sprints 1-2)."
+    ],
+    "ambiguityScore": 4
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

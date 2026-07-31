@@ -1,0 +1,12 @@
+{
+  "contractId": "sprint-spec-20260731-documenter-docs-output-1",
+  "status": "complete",
+  "iteration": 2,
+  "commits": ["4155e53 - bober(sprint-1): fix resolveSprintDocPath regression for committed default"],
+  "filesChanged": [
+    {"path": "src/orchestrator/documenter-agent.ts", "action": "modified", "description": "committed-default branch returns relative literal docs/sprints/<id>.md; local default stays absolute (needed for gitignore computation)"},
+    {"path": "src/orchestrator/documenter-agent.test.ts", "action": "modified", "description": "3 test expectations updated for the committed/no-config relative literal"}
+  ],
+  "testsAdded": [],
+  "notes": "Committed-mode rendered prompt verified byte-identical to pre-sprint version (66ea273). pipeline.ts untouched; history.jsonl now receives the portable relative path for committed mode."
+}

@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260731-documenter-docs-output-3",
+  "specId": "spec-20260731-documenter-docs-output",
+  "sprintNumber": 3,
+  "title": "Init flow: solo vs team docs question",
+  "description": "bober init asks one question — commit sprint docs into the repo (solo, default) or keep the repo clean (team) — and writes documenter.docsMode into the generated bober.config.json. Non-interactive init paths default to 'committed' without prompting. Should-have: the feature is complete without it; skip if init internals make this disproportionate.",
+  "status": "completed",
+  "createdAt": "2026-07-31T00:00:00Z",
+  "updatedAt": "2026-07-31T13:03:11Z",
+  "dependsOn": [
+    "sprint-spec-20260731-documenter-docs-output-1"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "Interactive bober init offers a solo/team choice (prompts lib, matching existing init questions' style) and writes documenter.docsMode 'committed' (solo) or 'local' (team) into the generated bober.config.json.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "Non-interactive init (existing flags / CI / --yes-style paths) does not prompt and produces docsMode 'committed' (or omits the key entirely, which resolves to 'committed').",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "npm run typecheck, lint, build and the full test suite pass.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "generatorNotes": "Entry point: src/cli/commands/init.ts (large file — find where other config questions are asked and where the config object is assembled/serialized; also check src/discovery/config-generator.ts, which generates configs from scanning, and keep the two paths consistent). The repo uses the 'prompts' package. Follow the existing question wording style. If init has a config-generator golden-snapshot test (see commit 255f992 'match golden snapshot'), update it deliberately and mention it in completion notes. Keep the diff minimal — one question, one key.",
+  "evaluatorNotes": "sc-3-1: unit test drives the prompt with injected answers (prompts supports injection via prompts.inject) or tests the pure config-assembly function for both answers. sc-3-2: run/simulate the non-interactive path; assert no new prompt fires and the generated config resolves to docsMode 'committed'. sc-3-3: full suite + typecheck + lint + build. Verify the generated config still passes BoberConfigSchema.parse.",
+  "estimatedFiles": [
+    "src/cli/commands/init.ts",
+    "src/discovery/config-generator.ts",
+    "src/discovery/config-generator.test.ts"
+  ],
+  "estimatedDuration": "small",
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260731-documenter-docs-output-3-1",
+      "result": "pass",
+      "timestamp": "2026-07-31T13:03:11Z"
+    }
+  ],
+  "nonGoals": [
+    "Do not add more than one init question — a single solo/team choice writing documenter.docsMode.",
+    "Do not change the discovery scanner's stack detection or any unrelated init output.",
+    "Do not make 'external' an init option — external mode stays a hand-edited config choice (keeps the prompt binary and simple)."
+  ],
+  "stopConditions": [
+    "Interactive init writes docsMode 'committed' (solo) or 'local' (team) based on the answer; non-interactive paths never prompt and resolve to 'committed'.",
+    "Generated config passes BoberConfigSchema.parse; golden-snapshot tests (if any) updated deliberately.",
+    "typecheck, lint, build, and full suite pass."
+  ],
+  "definitionOfDone": "bober init asks one solo-vs-team question and writes documenter.docsMode into the generated bober.config.json ('committed' for solo, 'local' for team); non-interactive/CI init paths default to 'committed' without prompting; the generated config validates against the zod schema and the suite is green.",
+  "assumptions": [
+    "The 'prompts' package with prompts.inject is the existing test pattern for interactive init flows.",
+    "If this proves disproportionate inside init.ts, the sprint may be descoped by the orchestrator (should-have feature)."
+  ],
+  "outOfScope": [
+    "Any documenter runtime or md-surface change (sprints 1-2)."
+  ],
+  "ambiguityScore": 4,
+  "completedAt": "2026-07-31T13:03:11Z",
+  "lastEvalId": "eval-sprint-spec-20260731-documenter-docs-output-3-1"
+}

@@ -1,0 +1,143 @@
+{
+  "handoffId": "handoff-sprint-spec-20260731-documenter-docs-output-1-gen-2",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260731-documenter-docs-output-1",
+  "specId": "spec-20260731-documenter-docs-output",
+  "timestamp": "2026-07-31T12:15:00Z",
+  "iteration": 2,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent harness (Researcher/Planner/Curator/Generator/Evaluator) shipping as npm CLI + MCP server. This spec makes the per-sprint documenter's output location and git behavior configurable (solo vs team): docsMode committed|local|external + docsDir on the documenter config section.",
+    "completedSprints": [],
+    "currentBranch": "bober/documenter-docs-output",
+    "relevantFiles": [
+      "src/config/schema.ts",
+      "src/orchestrator/documenter-agent.ts",
+      "src/orchestrator/documenter-agent.test.ts",
+      "src/utils/git.ts",
+      "src/orchestrator/pipeline.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260731-documenter-docs-output-1",
+    "specId": "spec-20260731-documenter-docs-output",
+    "sprintNumber": 1,
+    "title": "Add docsMode/docsDir config keys and mode-aware runDocumenter behavior",
+    "description": "Extend DocumenterSectionSchema with docsMode ('committed'|'local'|'external', default 'committed') and optional docsDir. Teach runDocumenter to resolve the sprint record path from config and adapt the agent prompt per mode: committed keeps today's behavior; local writes to docsDir without committing and deterministically ensures a .gitignore entry; external writes outside the repo (default ~/.bober/docs/<project.name>/sprints) with no git operations. Non-committed modes forbid related-doc edits — stale docs are reported in concerns.",
+    "status": "in-progress",
+    "createdAt": "2026-07-31T00:00:00Z",
+    "updatedAt": "2026-07-31T12:07:13Z",
+    "dependsOn": [],
+    "features": [
+      "feat-1",
+      "feat-2"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "DocumenterSectionSchema accepts docsMode 'committed'|'local'|'external' (default 'committed') and optional docsDir; an invalid docsMode fails zod parsing with an error naming the key. A config omitting the new keys resolves identically to before (docsMode 'committed').",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "A pure exported path-resolution function (e.g. resolveSprintDocPath(config, projectRoot, contractId)) returns: docs/sprints/<contractId>.md under projectRoot for committed/local with docsDir unset; the custom docsDir when set (relative resolved against projectRoot, absolute and ~-prefixed honored); and an absolute ~/.bober/docs/<project.name>/sprints/<contractId>.md default for external. Covered by unit tests for all branches.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "In docsMode 'local', runDocumenter ensures .gitignore covers docsDir via a deterministic idempotent helper (unit-tested: creates entry when missing, no duplicate on second call, preserves unrelated lines, no-op when an existing pattern already covers the dir). The LLM agent is NOT instructed to edit .gitignore.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "The user message built by runDocumenter differs by mode: committed contains the git add/commit instruction (current text); local and external contain NO git add/commit instruction, explicitly forbid modifying repo files other than the sprint record, and direct stale-doc observations into 'concerns'. Verified by unit tests on the exported prompt-builder (extract the prompt construction into a testable function).",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "parseDocumentationResult keeps working with the mode-resolved default sprintDocPath (no hardcoded docs/sprints fallback drift); existing documenter-agent tests still pass.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-6",
+        "description": "npm run typecheck, npm run lint, npm run build and the full vitest suite pass with zero regressions.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "generatorNotes": "Key files: src/config/schema.ts:299-313 (DocumenterSectionSchema — add docsMode + docsDir with doc comments matching sibling style, e.g. the verifier block at :289); src/orchestrator/documenter-agent.ts:106 (sprintDocPath currently hardcoded) and :108-151 (userMessage template — extract into an exported buildDocumenterUserMessage(...) so sc-1-4 is testable without an LLM); src/orchestrator/documenter-agent.ts:62-89 (config threading pattern via config.documenter?.x ?? fallback). Put the gitignore helper in src/utils/git.ts (fs-based, no execa needed) and the path resolver either in documenter-agent.ts or a small documenter-paths.ts next to it. Use os.homedir() for ~ expansion and the external default; project name from config.project.name (fall back to path.basename(projectRoot) if absent). Do NOT change pipeline.ts call sites beyond what's needed — the advisory try/catch at pipeline.ts:611-618 must stay intact. Do not touch agents/*.md or skills/*.md in this sprint (sprint 2). Match existing test patterns in src/orchestrator/documenter-agent.test.ts.",
+    "evaluatorNotes": "sc-1-1: parse fixtures through the zod schema — omitted section, empty documenter object, each valid docsMode, an invalid docsMode (expect failure naming docsMode). sc-1-2: assert exact resolved paths for: defaults per mode, relative docsDir, absolute docsDir, ~/x docsDir; external default must contain .bober/docs/<project.name>/sprints. sc-1-3: run the helper against a temp dir fixture twice; also test an existing covering pattern (e.g. 'docs/sprints/' already present) → no append. sc-1-4: call the exported prompt builder for all three modes; committed prompt must contain 'git add' and 'git commit'; local/external prompts must contain neither and must contain an explicit prohibition on editing other repo files. sc-1-5/sc-1-6: run the full suite (npm test -- --run), typecheck, lint, build; zero regressions against the pre-sprint baseline.",
+    "estimatedFiles": [
+      "src/config/schema.ts",
+      "src/config/schema.test.ts",
+      "src/orchestrator/documenter-agent.ts",
+      "src/orchestrator/documenter-agent.test.ts",
+      "src/utils/git.ts",
+      "src/utils/git.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [
+      {
+        "iteration": 1,
+        "evalId": "eval-sprint-spec-20260731-documenter-docs-output-1-1",
+        "result": "fail",
+        "timestamp": "2026-07-31T12:07:13Z"
+      }
+    ],
+    "nonGoals": [
+      "Do not change the default behavior — docsMode 'committed' must reproduce today's output and commit flow byte-for-byte for configs that omit the new keys.",
+      "Do not touch agents/*.md or skills/*.md prompt surfaces (sprint 2 handles the skill-engine flow).",
+      "Do not add commit-behavior config for other .bober/ pipeline artifacts (specs, contracts, handoffs, eval-results).",
+      "Do not let the LLM documenter edit .gitignore — the gitignore mutation is deterministic TS code only.",
+      "Do not alter the advisory failure guarantee in pipeline.ts (documenter failure never downgrades a passed sprint)."
+    ],
+    "stopConditions": [
+      "All three docsMode branches (committed/local/external) are unit-tested for path resolution, prompt content, and gitignore behavior.",
+      "A config omitting the new keys parses to docsMode 'committed' and produces the exact current sprintDocPath and prompt.",
+      "typecheck, lint, build, and the full vitest suite pass with zero regressions."
+    ],
+    "definitionOfDone": "DocumenterSectionSchema exposes docsMode ('committed'|'local'|'external', default 'committed') and optional docsDir; runDocumenter resolves the sprint record path via an exported pure resolver, builds a mode-aware prompt via an exported builder (commit instructions only in 'committed'; repo-file edits forbidden otherwise), and in 'local' mode idempotently ensures a .gitignore entry via a deterministic helper in src/utils/git.ts — all covered by unit tests with the full suite green.",
+    "assumptions": [
+      "External default directory is ~/.bober/docs/<project.name>/sprints (project name falls back to basename(projectRoot)).",
+      "Test config literals bypass zod, so runtime reads config.documenter?.docsMode ?? 'committed'.",
+      "No tilde-expansion helper exists in src/ yet — the resolver implements ~ expansion via os.homedir()."
+    ],
+    "outOfScope": [
+      "Skill/agent md surface sync (sprint 2), config-reference docs and CHANGELOG (sprint 2), init solo/team question (sprint 3)."
+    ],
+    "ambiguityScore": 3,
+    "lastEvalId": "eval-sprint-spec-20260731-documenter-docs-output-1-1"
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": {
+    "evalId": "eval-sprint-spec-20260731-documenter-docs-output-1-1",
+    "failedCriteria": [],
+    "regressions": [
+      "nonGoals[0] violation: resolveSprintDocPath returns an absolute machine-specific path for docsMode='committed' default; previously the repo-relative literal 'docs/sprints/<contractId>.md' was used in the prompt and persisted into the git-tracked .bober/history.jsonl (pipeline.ts:627). Breaks byte-for-byte default behavior and cross-machine portability."
+    ],
+    "generatorFeedback": [
+      {
+        "priority": "critical",
+        "category": "regression",
+        "file": "src/orchestrator/documenter-agent.ts",
+        "line": "66-86",
+        "description": "Committed-default externally observable string changed from relative 'docs/sprints/<id>.md' to absolute path (prompt text + DocumentationResult.sprintDocPath -> history.jsonl).",
+        "expected": "For docsMode 'committed' with docsDir unset, the prompt text and DocumentationResult.sprintDocPath must remain the repo-relative literal 'docs/sprints/<contractId>.md' exactly as before. Absolute paths are fine internally for local/external file writes or explicit docsDir."
+      }
+    ]
+  }
+}

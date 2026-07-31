@@ -1,0 +1,16 @@
+{
+  "contractId": "sprint-spec-20260731-documenter-docs-output-1",
+  "status": "complete",
+  "iteration": 1,
+  "commits": ["c0d97c5 - bober(sprint-1): add docsMode/docsDir config keys and mode-aware documenter behavior"],
+  "filesChanged": [
+    {"path": "src/config/schema.ts", "action": "modified"},
+    {"path": "src/config/schema.test.ts", "action": "modified"},
+    {"path": "src/orchestrator/documenter-agent.ts", "action": "modified"},
+    {"path": "src/orchestrator/documenter-agent.test.ts", "action": "modified"},
+    {"path": "src/utils/git.ts", "action": "modified"},
+    {"path": "src/utils/git.test.ts", "action": "created"}
+  ],
+  "testsAdded": ["src/config/schema.test.ts (+9)", "src/orchestrator/documenter-agent.test.ts (+14)", "src/utils/git.test.ts (new, 8)"],
+  "notes": "docsDir takes priority over mode defaults in ALL modes; resolveSprintDocPath returns absolute paths (committed mode previously used relative literal). Local/external prompt prohibition reworded to avoid literal 'git add'/'git commit' substrings. agents/bober-documenter.md still hardcodes old path/commit text — sprint 2 scope."
+}

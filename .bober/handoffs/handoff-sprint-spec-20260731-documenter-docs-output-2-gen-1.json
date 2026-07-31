@@ -1,0 +1,125 @@
+{
+  "handoffId": "handoff-sprint-spec-20260731-documenter-docs-output-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260731-documenter-docs-output-2",
+  "specId": "spec-20260731-documenter-docs-output",
+  "timestamp": "2026-07-31T12:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "agent-bober: multi-agent harness shipping as npm CLI + MCP server. This spec makes the per-sprint documenter's output location and git behavior configurable (docsMode committed|local|external + docsDir). Sprint 1 (completed, commits c0d97c5+4155e53) shipped the TS runtime: DocumenterSectionSchema keys, resolveSprintDocPath, buildDocumenterUserMessage (mode-gated commit instructions), ensureGitignoreEntry. Sprint 2 syncs the skill/agent md surfaces and docs.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260731-documenter-docs-output-1",
+        "title": "Add docsMode/docsDir config keys and mode-aware runDocumenter behavior",
+        "summary": "Schema keys docsMode/docsDir; resolveSprintDocPath (committed default = relative literal docs/sprints/<id>.md; local default absolute under projectRoot; external default ~/.bober/docs/<project.name>/sprints; docsDir wins in all modes, ~-expanded); buildDocumenterUserMessage gates git add/commit on committed mode, local/external forbid repo-file edits and route staleness to concerns; ensureGitignoreEntry (idempotent, fs-based) called only in local mode. Sprint record: docs/sprints/sprint-spec-20260731-documenter-docs-output-1.md"
+      }
+    ],
+    "currentBranch": "bober/documenter-docs-output",
+    "relevantFiles": [
+      "agents/bober-documenter.md",
+      "skills/bober.sprint/SKILL.md",
+      "skills/bober.run/SKILL.md",
+      "scripts/update-all.mjs",
+      "src/orchestrator/documenter-agent.ts",
+      "VISION.md",
+      "README.md",
+      "CHANGELOG.md"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260731-documenter-docs-output-2",
+    "specId": "spec-20260731-documenter-docs-output",
+    "sprintNumber": 2,
+    "title": "Sync skill/agent surfaces and docs with the mode-aware documenter",
+    "description": "Update agents/bober-documenter.md, skills/bober.sprint/SKILL.md, and skills/bober.run/SKILL.md so the skill-engine flow mirrors the TS pipeline: read documenter.docsMode/docsDir from bober.config.json, resolve the sprint record path, and only instruct committing in 'committed' mode. Regenerate .claude copies (update-all), document the new keys in the config reference with solo-vs-team recipes, and record the change in CHANGELOG.md.",
+    "status": "in-progress",
+    "createdAt": "2026-07-31T00:00:00Z",
+    "updatedAt": "2026-07-31T12:55:00Z",
+    "dependsOn": [
+      "sprint-spec-20260731-documenter-docs-output-1"
+    ],
+    "features": [
+      "feat-3",
+      "feat-4"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-2-1",
+        "description": "skills/bober.sprint/SKILL.md and skills/bober.run/SKILL.md documenter steps instruct the orchestrator to read documenter.docsMode and documenter.docsDir from bober.config.json, describe the three modes' behavior (committed/local/external), and pass the resolved record path + commit policy into the documenter prompt instead of the hardcoded 'docs/sprints/<contractId>.md ... commit ONLY the doc files' text.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-2",
+        "description": "agents/bober-documenter.md gates all commit instructions and the docs/sprints default on the mode passed in by the orchestrator; in non-committed modes it forbids editing any repo file except the sprint record and routes stale-doc findings into 'concerns'.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-3",
+        "description": "The repo's copy-sync check reports zero NEW drift for the files owned by this sprint: run `node scripts/update-all.mjs --check .` and confirm the three owned copies (.claude/agents/bober-documenter.md, .claude/commands/bober-sprint.md, .claude/commands/bober-run.md) are in-sync/byte-identical with their canonical sources. Pre-existing drift in files outside this sprint's scope (e.g. bober-plan.md, bober-seo*) is NOT a failure and must NOT be 'fixed' by this sprint.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-4",
+        "description": "The configuration reference (VISION.md and/or README.md, wherever the documenter section is documented) lists docsMode and docsDir with defaults and a short solo-vs-team recipe; CHANGELOG.md gains an entry for the feature.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-5",
+        "description": "npm run typecheck, lint, build and the full test suite still pass (docs-only sprint must not regress anything).",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "generatorNotes": "Hardcoded strings to replace: skills/bober.sprint/SKILL.md:380-409 (documenter spawn step; :402 hardcodes docs/sprints and unconditional commit), skills/bober.run/SKILL.md:562-568 (same pattern), agents/bober-documenter.md:64 (record path), :92-94 (related docs), :121 (result JSON sprintDocPath example). Keep the advisory-failure semantics text intact (documenter crash never fails the sprint). Check scripts/ + package.json for the exact update-all invocation and .claude copy layout before editing — copies must be regenerated, not hand-edited. Config reference: grep VISION.md and README.md for the documenter section added in PR #42 (branch bober/docs-documenter-simplicity); follow its table/format. CHANGELOG.md: follow the existing entry format (see 0.19.0 entry). Voice discipline per AGENTS.md: do not soften Iron-Law/EXTREMELY-IMPORTANT phrasing anywhere. NEGOTIATED: the canonical drift check is `npm run update-all:check` (scripts/update-all.mjs --check). CARRY-FORWARD CONCERNS from sprint 1's documenter (address in prose where the md surfaces describe modes; do NOT change TS code): (a) docsMode 'local' with a docsDir outside the repo cannot be gitignored — md surfaces should say out-of-repo output belongs to 'external'; (b) setting docsDir explicitly yields absolute paths in tracked history.jsonl — an explicit opt-in, worth one sentence in the config reference.",
+    "evaluatorNotes": "sc-2-1/sc-2-2: read the three md files; confirm (a) explicit instruction to read documenter.docsMode/docsDir from bober.config.json, (b) all three modes described with correct semantics matching sprint 1's TS implementation (compare against src/orchestrator/documenter-agent.ts prompt builder), (c) no remaining unconditional 'commit the doc files' instruction. sc-2-3: run the copy-sync check command and paste its output. sc-2-4: confirm docsMode/docsDir documented with defaults ('committed', docs/sprints) and team recipe present; CHANGELOG entry exists. sc-2-5: full suite + typecheck + lint + build. Also grep the whole repo for remaining hardcoded 'docs/sprints' occurrences and confirm each survivor is intentional (e.g. describing the default).",
+    "estimatedFiles": [
+      "agents/bober-documenter.md",
+      "skills/bober.sprint/SKILL.md",
+      "skills/bober.run/SKILL.md",
+      ".claude/agents/bober-documenter.md",
+      ".claude/commands/bober-sprint.md",
+      ".claude/commands/bober-run.md",
+      "VISION.md",
+      "README.md",
+      "CHANGELOG.md"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "nonGoals": [
+      "Do not change TS runtime behavior in this sprint — src/ is frozen except where a doc-comment correction is unavoidable.",
+      "Do not hand-edit generated .claude copies — regenerate them with the repo's update-all script.",
+      "Do not soften Iron-Law/EXTREMELY-IMPORTANT voice in behavior-shaping content (AGENTS.md prohibition).",
+      "Do not rewrite the documenter's record content guidance — only where the record goes and whether it is committed."
+    ],
+    "stopConditions": [
+      "All three md surfaces (agents/bober-documenter.md, skills/bober.sprint/SKILL.md, skills/bober.run/SKILL.md) describe the three docsMode behaviors and read the mode from bober.config.json.",
+      "The copy-sync drift check reports zero drift.",
+      "Config reference + CHANGELOG updated; full suite still green."
+    ],
+    "definitionOfDone": "The skill-engine documenter flow mirrors the TS pipeline: orchestrator instructions read documenter.docsMode/docsDir from bober.config.json and gate commit instructions on 'committed' mode; agents/bober-documenter.md gates its commit steps on the mode passed in; .claude copies are regenerated with zero drift; docsMode/docsDir are documented with solo-vs-team recipes and a CHANGELOG entry exists; typecheck/lint/build/tests stay green.",
+    "assumptions": [
+      "The config reference for the documenter section lives in VISION.md and/or README.md (added by PR #42); the generator locates it by grepping for 'documenter'.",
+      "npm run update-all (see package.json/scripts) is the canonical copy-sync mechanism and supports a --check drift mode."
+    ],
+    "outOfScope": [
+      "Runtime TS changes (sprint 1), init flow (sprint 3)."
+    ],
+    "ambiguityScore": 4
+  },
+  "config": {
+    "commands": {},
+    "generator": {
+      "model": "sonnet",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced — users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` — provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}
