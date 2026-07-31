@@ -330,19 +330,19 @@ describe("resolveSprintDocPath", () => {
     } as any;
   }
 
-  it("committed + docsDir unset -> docs/sprints/<id>.md under projectRoot", async () => {
+  it("committed + docsDir unset -> the repo-relative literal docs/sprints/<id>.md (byte-identical to the pre-sprint-1 hardcoded path, since it is persisted into .bober/history.jsonl and must stay portable across machines)", async () => {
     const { resolveSprintDocPath } = await import("./documenter-agent.js");
     const result = resolveSprintDocPath(configWith({ docsMode: "committed" }), projectRoot, contractId);
-    expect(result).toBe("/repo/root/docs/sprints/sprint-x-1.md");
+    expect(result).toBe("docs/sprints/sprint-x-1.md");
   });
 
-  it("no documenter config at all -> defaults to the committed path", async () => {
+  it("no documenter config at all -> defaults to the committed (relative) path", async () => {
     const { resolveSprintDocPath } = await import("./documenter-agent.js");
     const result = resolveSprintDocPath(configWith(undefined), projectRoot, contractId);
-    expect(result).toBe("/repo/root/docs/sprints/sprint-x-1.md");
+    expect(result).toBe("docs/sprints/sprint-x-1.md");
   });
 
-  it("local + docsDir unset -> docs/sprints/<id>.md under projectRoot (same as committed)", async () => {
+  it("local + docsDir unset -> docs/sprints/<id>.md resolved to an absolute path under projectRoot (new mode, no compatibility constraint)", async () => {
     const { resolveSprintDocPath } = await import("./documenter-agent.js");
     const result = resolveSprintDocPath(configWith({ docsMode: "local" }), projectRoot, contractId);
     expect(result).toBe("/repo/root/docs/sprints/sprint-x-1.md");

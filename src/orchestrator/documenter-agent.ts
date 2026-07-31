@@ -50,14 +50,22 @@ function resolveDocsDir(dir: string, projectRoot: string): string {
 }
 
 /**
- * Resolve the absolute path where the per-sprint doc record for
- * `contractId` should be written, given the documenter's `docsMode`
- * and optional `docsDir`.
+ * Resolve the path where the per-sprint doc record for `contractId` should
+ * be written, given the documenter's `docsMode` and optional `docsDir`.
  *
- * - `committed`/`local` with `docsDir` unset: `docs/sprints/<id>.md` under
- *   `projectRoot` (byte-identical to the pre-sprint-1 hardcoded path).
+ * - `committed` with `docsDir` unset: the repo-relative literal
+ *   `docs/sprints/<id>.md` — byte-identical to the pre-sprint-1 hardcoded
+ *   path. This string is embedded verbatim in the documenter prompt and
+ *   persisted into the git-tracked `.bober/history.jsonl`
+ *   (pipeline.ts:627), so it MUST stay a portable, projectRoot-relative
+ *   literal rather than an absolute, machine-specific path (nonGoals[0]).
+ * - `local` with `docsDir` unset: `docs/sprints/<id>.md` resolved to an
+ *   absolute path under `projectRoot`. This is new behavior (no
+ *   pre-existing compatibility constraint) and needs an absolute path
+ *   internally to compute the `.gitignore` entry.
  * - Any mode with `docsDir` set: `docsDir` resolved against `projectRoot`
- *   (relative), or honored as-is (absolute / `~`-prefixed).
+ *   (relative), or honored as-is (absolute / `~`-prefixed) — always
+ *   returned as an absolute path.
  * - `external` with `docsDir` unset: `~/.bober/docs/<project.name>/sprints/<id>.md`
  *   (project name falls back to `basename(projectRoot)`).
  *
@@ -81,7 +89,11 @@ export function resolveSprintDocPath(
     return join(homedir(), ".bober", "docs", projectName, "sprints", fileName);
   }
 
-  // committed / local defaults
+  if (docsMode === "committed") {
+    return `docs/sprints/${fileName}`;
+  }
+
+  // local default (docsDir unset)
   return join(projectRoot, "docs", "sprints", fileName);
 }
 
