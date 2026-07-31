@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable documenter output location** (`documenter.docsMode` / `documenter.docsDir`): the per-sprint documenter now supports three modes for where its record goes and whether it is committed. `committed` (default, unchanged behavior) writes `docs/sprints/<contractId>.md` and commits it, updating related stale docs. `local` writes inside the repo without committing and without touching any other repo file (a deterministic pre-step gitignores the directory); `external` writes to `~/.bober/docs/<project.name>/sprints/<contractId>.md`, entirely outside the repo, with no git operation at all. `documenter.docsDir` overrides the default location in any mode. The skill-engine flow (`bober.sprint`/`bober.run` skills and the `bober-documenter` agent) now reads these keys and mirrors the same mode-gated behavior as the TS pipeline.
+
 ## [0.19.0] — 2026-07-26
 
 ### Fixed

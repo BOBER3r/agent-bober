@@ -367,6 +367,13 @@ suggestion. A future sprint may promote this to a configurable field.
 | `architect.panel.lenses` | `string[]` | `[]` | 0.16.0 | Lens set to run. Empty `[]` uses the built-ins: `scalability`, `security`, `cost`, `operability`, `maintainability`, `reversibility`. |
 | `architect.panel.maxConcurrent` | `number` | `4` | 0.16.0 | Maximum lenses evaluated in parallel. Minimum 1. |
 
+### `documenter` section
+
+| Field | Type | Default | Since | Description |
+|-------|------|---------|-------|-------------|
+| `documenter.docsDir` | `string` | unset | Unreleased | Optional override for where the per-sprint doc record is written. Wins over `docsMode`'s default location in every mode. Relative paths resolve against the project root; a `~`-prefixed path expands against the home directory; absolute paths are honored as-is. Setting this explicitly resolves to an absolute, machine-specific path that is interpolated into the documenter's prompt and persisted into the git-tracked `.bober/history.jsonl` — an explicit opt-in trade-off, not the default. |
+| `documenter.docsMode` | `'committed'\|'local'\|'external'` | `'committed'` | Unreleased | Where the per-sprint doc record goes and whether it is committed. `committed` writes the repo-relative `docs/sprints/<contractId>.md` and the documenter commits it (and updates related stale docs). `local` writes inside the repo (default `docs/sprints/<contractId>.md` resolved to an absolute path) but never commits and never edits any other repo file — a deterministic pre-step gitignores the directory instead. `external` writes to `~/.bober/docs/<project.name>/sprints/<contractId>.md`, entirely outside the repo, with the same no-commit/no-other-edits behavior and no git operation of any kind. A `local` `docsDir` that points outside the project root cannot be gitignored by git — that use case belongs to `external`, not `local`. |
+
 ---
 
 ## The Foundation: Behavior-Shaping Discipline

@@ -50,6 +50,8 @@ The orchestrator's prompt gives you these paths. Read them before doing anything
 4. `.bober/principles.md` if it exists — documentation tone/standards to honor.
 5. The actual committed diff: run `git show --stat HEAD` and `git diff HEAD~1 HEAD -- <changed files>` (or the specific commit hashes from the generator report) to see exactly what shipped.
 
+The orchestrator's prompt also tells you the resolved **record path** and the **docs mode** (`committed` | `local` | `external`) to use for Steps 2-4 below. If it does not, assume the default: mode `committed`, record path `docs/sprints/<contractId>.md`.
+
 ## Step 1: Determine what was built
 
 From the generator report's `filesChanged` plus the committed diff, build an accurate, grounded picture of:
@@ -61,7 +63,7 @@ Read the source of the key new/changed symbols — do not document from the file
 
 ## Step 2: Write the sprint documentation record
 
-Write a focused record of this sprint to **`docs/sprints/<contractId>.md`** (create the `docs/sprints/` directory if it does not exist). Keep it tight — this is a durable record, not a transcript:
+Write a focused record of this sprint to **the record path the orchestrator gave you** (create parent directories if they do not exist). By default — mode `committed`, no override — that path is `docs/sprints/<contractId>.md`, repo-relative. Keep it tight — this is a durable record, not a transcript:
 
 ```markdown
 # <Sprint title>
@@ -84,9 +86,11 @@ Write a focused record of this sprint to **`docs/sprints/<contractId>.md`** (cre
 
 If the project already has an established place/format for this kind of record, prefer matching it over inventing a new one — note any such deviation in your response.
 
-## Step 3: Find & update related existing docs
+## Step 3: Find & update related existing docs — `committed` mode only
 
-This is the higher-value half of your job. The change you just documented likely makes **existing** docs stale. Hunt for them and update them:
+**This step applies only when the docs mode is `committed` (the default).** In `local` and `external` mode, skip it entirely: do NOT search for or edit any other repo file. If the sprint appears to have made an existing doc stale, do NOT edit it — report it in your response's `concerns` field instead and move on to Step 4.
+
+In `committed` mode, this is the higher-value half of your job. The change you just documented likely makes **existing** docs stale. Hunt for them and update them:
 
 1. **Discover candidate docs.** Use Grep/Glob (or the graph tools if granted) to find docs that reference the area you touched:
    - `README.md` and any `docs/**/*.md`
@@ -100,9 +104,9 @@ This is the higher-value half of your job. The change you just documented likely
 
 Match each doc's existing voice, heading style, and formatting. Do not reformat or restructure surrounding content beyond what your update requires.
 
-## Step 4: Commit the docs
+## Step 4: Commit the docs — mode-gated
 
-Commit only the documentation files you created/edited, separately from the implementation:
+**`committed` mode (default):** Commit only the documentation files you created/edited, separately from the implementation:
 
 ```bash
 git add <only the doc files you changed>
@@ -111,19 +115,37 @@ git commit -m "bober(<sprint-N>): docs for <short sprint title>"
 
 Never commit source/test/config changes — you should not have made any. Verify with `git status` before committing that only docs are staged.
 
+**`local` mode:** Do NOT modify ANY repo file other than the sprint record you wrote in Step 2 — this includes README.md, docs/**, CLAUDE.md, AGENTS.md, ADRs, module docs, and `.gitignore`. Do NOT stage or commit anything, and do NOT invoke any version-control command. The record's directory is intentionally not committed — a deterministic pre-step run by the orchestrator (not you) already ensured it is gitignored; do NOT edit `.gitignore` yourself.
+
+**`external` mode:** Same prohibition as `local` — do NOT touch any repo file other than the sprint record, do NOT stage or commit anything. This record location is outside the project repository entirely, so no version-control operation of any kind applies here.
+
 ## Your Response
 
-When done, respond to the orchestrator with EXACTLY this JSON structure (no other text):
+When done, respond to the orchestrator with EXACTLY this JSON structure (no other text).
+
+**`committed` mode (default):**
 
 ```json
 {
   "contractId": "<contract ID>",
-  "sprintDocPath": "docs/sprints/<contractId>.md",
+  "sprintDocPath": "<the resolved record path, e.g. docs/sprints/<contractId>.md>",
   "relatedDocsUpdated": [
     {"path": "<path>", "reason": "<why it was stale / what you changed>"}
   ],
   "docsCommit": "<hash> - <message>",
   "concerns": ["<any code/doc issues you noticed but did NOT fix, or empty>"],
   "summary": "<2-3 sentence summary of what you documented and updated>"
+}
+```
+
+**`local` / `external` mode:** omit `docsCommit` entirely and leave `relatedDocsUpdated` empty — nothing was staged, committed, or edited besides the sprint record itself:
+
+```json
+{
+  "contractId": "<contract ID>",
+  "sprintDocPath": "<the resolved record path>",
+  "relatedDocsUpdated": [],
+  "concerns": ["<any code/doc issues you noticed but did NOT fix, or empty>"],
+  "summary": "<2-3 sentence summary of what you documented>"
 }
 ```

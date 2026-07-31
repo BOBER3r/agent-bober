@@ -379,6 +379,14 @@ Respond with EXACTLY this JSON structure (no other text):
 
 4. **Spawn the Documenter subagent — write docs now, while the change is fresh.** The sprint is committed and marked complete; document it per-sprint instead of batching all docs into a final sprint (which goes stale and error-prone). Use the Agent tool:
 
+   **Resolve the docs mode and record path first.** Read `documenter.docsMode` from `bober.config.json` (default `committed`) and `documenter.docsDir` (optional, unset by default). There are three modes:
+   - `committed` (default, no `docsDir` set): record path is the repo-relative literal `docs/sprints/<contractId>.md`. The documenter commits ONLY the doc files it changed, and also hunts for & updates related stale docs (README, ADRs, CLAUDE.md, module docs).
+   - `local` (no `docsDir` set): record path is `docs/sprints/<contractId>.md` resolved to an absolute path under the project root. The documenter does NOT commit anything and does NOT edit any other repo file — a deterministic pre-step already ensures the directory is gitignored. Any doc the sprint made stale is reported in `concerns` instead of being edited.
+   - `external`: record path is `~/.bober/docs/<project.name>/sprints/<contractId>.md` (falls back to the project directory's basename), entirely outside the repo. Same no-commit, no-other-file-edits behavior as `local`; there is no git operation of any kind.
+   - If `documenter.docsDir` is set (any mode), it overrides the default location: relative paths resolve against the project root, absolute paths and `~`-prefixed paths are honored as given, and the resolved path always wins over the mode's default.
+
+   Compute the concrete resolved record path from the mode + `docsDir` before writing the prompt below, and interpolate it in place of `<resolved record path>`.
+
    ```
    Agent tool call:
      description: "Docs for sprint <N>: <sprint title>"
@@ -387,9 +395,9 @@ Respond with EXACTLY this JSON structure (no other text):
      prompt: <the prompt below>
    ```
 
-   IMPORTANT: Use `mode: auto` or `mode: bypassPermissions` — the documenter needs write access to create/edit docs and commit them.
+   IMPORTANT: Use `mode: auto` or `mode: bypassPermissions` — the documenter needs write access to create/edit the doc record (and, in `committed` mode, to commit it).
 
-   **Documenter prompt:**
+   **Documenter prompt (`committed` mode):**
    ```
    You are the Bober Documenter subagent. Sprint <N> just PASSED evaluation and was marked complete. Write its documentation and update related docs while the change is fresh.
 
@@ -399,7 +407,22 @@ Respond with EXACTLY this JSON structure (no other text):
    - Eval result: .bober/eval-results/eval-<contractId>-<iteration>.json
    - .bober/principles.md if it exists
 
-   Then follow your agent instructions: determine what was built from the committed diff, write the sprint record to docs/sprints/<contractId>.md, find & update related existing docs (README, ADRs, CLAUDE.md, module docs) that the change made stale, and commit ONLY the doc files separately. Do NOT modify application code or tests.
+   Then follow your agent instructions: determine what was built from the committed diff, write the sprint record to <resolved record path>, find & update related existing docs (README, ADRs, CLAUDE.md, module docs) that the change made stale, and commit ONLY the doc files separately. Do NOT modify application code or tests.
+
+   Respond with the JSON structure defined in your agent spec.
+   ```
+
+   **Documenter prompt (`local` / `external` mode):**
+   ```
+   You are the Bober Documenter subagent. Sprint <N> just PASSED evaluation and was marked complete. Write its documentation while the change is fresh.
+
+   Read these from disk:
+   - SprintContract: .bober/contracts/<contractId>.json
+   - Generator report: .bober/handoffs/gen-report-<contractId>-<iteration>.json
+   - Eval result: .bober/eval-results/eval-<contractId>-<iteration>.json
+   - .bober/principles.md if it exists
+
+   Then follow your agent instructions: determine what was built from the committed diff and write the sprint record to <resolved record path>. Do NOT modify any other repo file, do NOT stage or commit anything, and do NOT modify application code or tests. If the sprint made an existing doc stale, report it in "concerns" instead of editing it.
 
    Respond with the JSON structure defined in your agent spec.
    ```

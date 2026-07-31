@@ -854,8 +854,20 @@ All configuration lives in `bober.config.json` at your project root. The `init` 
     "maxTurns": 20,                       // Max tool-use turns for the doc pass
     "timeoutMs": 300000,                  // Advisory: a documenter timeout never downgrades the passed sprint
     "provider": "anthropic",              // Optional provider override
-    "endpoint": null                      // Custom base URL (for openai-compat)
+    "endpoint": null,                     // Custom base URL (for openai-compat)
+    "docsMode": "committed",              // 'committed' | 'local' | 'external' -- where the per-sprint record goes and whether it's committed
+    "docsDir": null                       // Optional override; wins over docsMode's default in every mode. Relative -> project root, '~' -> home dir, absolute -> used as-is
   },
+
+  // Solo-vs-team docsMode recipes:
+  //   "documenter": { "docsMode": "committed" }                                 // solo repo (default): docs/sprints/<id>.md, committed with the code
+  //   "documenter": { "docsMode": "local", "docsDir": ".bober-docs/sprints" }   // team: on-disk, gitignored, never committed
+  //   "documenter": { "docsMode": "external" }                                  // team: written outside the repo entirely, no git operation
+  // Two things to know before choosing `local` with a `docsDir` outside the project root: git cannot
+  // gitignore a path outside the repo, so out-of-repo output belongs to `external`, not `local`. And
+  // explicitly setting `docsDir` resolves to an absolute, machine-specific path that gets interpolated
+  // into the documenter prompt and persisted into the git-tracked `.bober/history.jsonl` -- an
+  // explicit opt-in trade-off, not the default behavior.
 
   // -- Architect (lens panel, opt-in) ------------------
   "architect": {
@@ -1315,7 +1327,7 @@ Each agent runs as a **multi-turn agentic loop** with tool access via the unifie
 - **Curator** (default: Claude Opus): Read-only codebase analysis scoped to a single sprint. For each sprint contract, reads the target files, extracts relevant code sections, inventories existing utilities the generator must reuse, identifies affected files and tests, gathers testing patterns, and produces a structured Sprint Briefing saved to `.bober/briefings/`. Runs once per sprint before the generator. Configurable via `curator` section in config.
 - **Generator** (default: Claude Sonnet): Full tool access (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `grep`). Receives the Sprint Briefing (curated patterns, utils, impact analysis) plus the sprint contract and principles -- no research, design, or outline artifacts (context distillation). Starts coding immediately instead of exploring the codebase.
 - **Evaluator** (default: Claude Sonnet): Read-only + bash tools (`bash`, `read_file`, `glob`, `grep` -- deliberately NO write/edit). Independently verifies by running the dev server, taking Playwright screenshots, executing tests, and inspecting code. Cannot fix bugs -- only report them with precise feedback.
-- **Documenter** (default: Claude Sonnet): Spawned after a sprint's evaluator returns PASS, while the change is fresh. Writes a concise record of what the sprint built and finds & updates the existing docs that are now stale (README, ADRs, CLAUDE.md, module docs). Documentation only -- never touches application code or tests, and its result is **advisory**: a documenter failure or timeout never downgrades the already-passed sprint. On by default; configurable via the `documenter` section (set `enabled: false` to skip).
+- **Documenter** (default: Claude Sonnet): Spawned after a sprint's evaluator returns PASS, while the change is fresh. Writes a concise record of what the sprint built and finds & updates the existing docs that are now stale (README, ADRs, CLAUDE.md, module docs). Documentation only -- never touches application code or tests, and its result is **advisory**: a documenter failure or timeout never downgrades the already-passed sprint. On by default; configurable via the `documenter` section (set `enabled: false` to skip). The record's location and git behavior are controlled by `documenter.docsMode` (`committed` \| `local` \| `external`, default `committed`) and the optional `documenter.docsDir`: in `committed` mode the record is committed and stale docs are updated; in `local`/`external` mode nothing is committed and stale-doc findings are reported instead of edited.
 
 Beyond the build pipeline, agent-bober ships a set of **operations subagents** for the incident lifecycle (invoked via `/bober-incident`, `/bober-diagnose`, `/bober-deploy`, `/bober-runbook`, and `/bober-postmortem`). Like every pipeline agent they run through the same provider-agnostic `LLMClient` layer, so they honour whatever provider you configure (Anthropic, DeepSeek, or any OpenAI-compatible endpoint):
 
