@@ -1,4 +1,6 @@
 import { execa } from "execa";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // ── Git Helpers ────────────────────────────────────────────────────
 
@@ -144,5 +146,51 @@ export async function isClean(
   // Porcelain format: "XY path" — strip the leading "XY " (3 chars)
   const dirtyFiles = lines.map((l) => l.slice(3).trim());
   return { clean: false, dirtyFiles };
+}
+
+/**
+ * Deterministically ensure `.gitignore` covers a directory entry.
+ *
+ * Idempotent: a line is only appended when no existing (trimmed) line
+ * already matches `entry`, `entry/`, `/entry`, or `/entry/`. Unrelated
+ * lines are never rewritten or reordered. Creates `.gitignore` when it
+ * does not exist. This is deterministic TS, never an LLM instruction —
+ * gitignore correctness is a safety property, not a documentation task
+ * (sc-1-3, nonGoals[3]).
+ *
+ * @returns Whether a new line was appended.
+ */
+export async function ensureGitignoreEntry(
+  projectRoot: string,
+  entry: string,
+): Promise<boolean> {
+  const gitignorePath = join(projectRoot, ".gitignore");
+  const normalized = entry.replace(/^\/+/, "").replace(/\/+$/, "");
+  const coveringForms = new Set([
+    normalized,
+    `${normalized}/`,
+    `/${normalized}`,
+    `/${normalized}/`,
+  ]);
+
+  let content: string;
+  try {
+    content = await readFile(gitignorePath, "utf-8");
+  } catch {
+    content = "";
+  }
+
+  const alreadyCovered = content
+    .split("\n")
+    .some((line) => coveringForms.has(line.trim()));
+
+  if (alreadyCovered) {
+    return false;
+  }
+
+  const separator = content.length === 0 || content.endsWith("\n") ? "" : "\n";
+  const appended = `${content}${separator}${normalized}/\n`;
+  await writeFile(gitignorePath, appended, "utf-8");
+  return true;
 }
 

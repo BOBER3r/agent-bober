@@ -310,6 +310,171 @@ describe("documenter pipeline integration", () => {
   });
 });
 
+// ── resolveSprintDocPath unit tests (sc-1-2) ────────────────────────────
+
+describe("resolveSprintDocPath", () => {
+  const projectRoot = "/repo/root";
+  const contractId = "sprint-x-1";
+
+  function configWith(documenter?: Record<string, unknown>) {
+    return {
+      project: { name: "acme-app", mode: "brownfield" as const },
+      planner: {},
+      generator: { model: "sonnet", maxTurnsPerSprint: 50, autoCommit: true, branchPattern: "bober/{feature-name}" },
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      ...(documenter ? { documenter } : {}),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+  }
+
+  it("committed + docsDir unset -> docs/sprints/<id>.md under projectRoot", async () => {
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(configWith({ docsMode: "committed" }), projectRoot, contractId);
+    expect(result).toBe("/repo/root/docs/sprints/sprint-x-1.md");
+  });
+
+  it("no documenter config at all -> defaults to the committed path", async () => {
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(configWith(undefined), projectRoot, contractId);
+    expect(result).toBe("/repo/root/docs/sprints/sprint-x-1.md");
+  });
+
+  it("local + docsDir unset -> docs/sprints/<id>.md under projectRoot (same as committed)", async () => {
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(configWith({ docsMode: "local" }), projectRoot, contractId);
+    expect(result).toBe("/repo/root/docs/sprints/sprint-x-1.md");
+  });
+
+  it("local + relative docsDir -> resolved against projectRoot", async () => {
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(
+      configWith({ docsMode: "local", docsDir: "notes/docs" }),
+      projectRoot,
+      contractId,
+    );
+    expect(result).toBe("/repo/root/notes/docs/sprint-x-1.md");
+  });
+
+  it("local + absolute docsDir -> honored as-is", async () => {
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(
+      configWith({ docsMode: "local", docsDir: "/var/bober-docs" }),
+      projectRoot,
+      contractId,
+    );
+    expect(result).toBe("/var/bober-docs/sprint-x-1.md");
+  });
+
+  it("local + ~-prefixed docsDir -> expanded via os.homedir()", async () => {
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(
+      configWith({ docsMode: "local", docsDir: "~/bober-docs" }),
+      projectRoot,
+      contractId,
+    );
+    expect(result).toBe(path.join(os.homedir(), "bober-docs", "sprint-x-1.md"));
+  });
+
+  it("external + docsDir unset -> ~/.bober/docs/<project.name>/sprints/<id>.md", async () => {
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(configWith({ docsMode: "external" }), projectRoot, contractId);
+    expect(result).toBe(
+      path.join(os.homedir(), ".bober", "docs", "acme-app", "sprints", "sprint-x-1.md"),
+    );
+    expect(result).toContain(path.join(".bober", "docs", "acme-app", "sprints"));
+  });
+
+  it("external + no project.name -> falls back to basename(projectRoot)", async () => {
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const configNoName = {
+      planner: {},
+      generator: { model: "sonnet", maxTurnsPerSprint: 50, autoCommit: true, branchPattern: "bober/{feature-name}" },
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+      documenter: { docsMode: "external" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    const result = resolveSprintDocPath(configNoName, projectRoot, contractId);
+    expect(result).toBe(
+      path.join(os.homedir(), ".bober", "docs", "root", "sprints", "sprint-x-1.md"),
+    );
+  });
+
+  it("external + docsDir set -> docsDir wins over the external default", async () => {
+    const { resolveSprintDocPath } = await import("./documenter-agent.js");
+    const result = resolveSprintDocPath(
+      configWith({ docsMode: "external", docsDir: "/opt/docs" }),
+      projectRoot,
+      contractId,
+    );
+    expect(result).toBe("/opt/docs/sprint-x-1.md");
+  });
+});
+
+// ── buildDocumenterUserMessage unit tests (sc-1-4) ──────────────────────
+
+describe("buildDocumenterUserMessage", () => {
+  const baseOptions = {
+    contract: testContract,
+    contractJson: "{}",
+    evalSummary: "{}",
+    filesChanged: "- src/a.ts",
+    projectRoot: "/repo/root",
+    sprintDocPath: "/repo/root/docs/sprints/test-contract.md",
+  };
+
+  it("committed mode contains the git add AND git commit instruction", async () => {
+    const { buildDocumenterUserMessage } = await import("./documenter-agent.js");
+    const message = buildDocumenterUserMessage({ ...baseOptions, docsMode: "committed" });
+    expect(message).toContain("git add");
+    expect(message).toContain("git commit");
+  });
+
+  it("local mode contains NEITHER git add nor git commit, and forbids editing other repo files", async () => {
+    const { buildDocumenterUserMessage } = await import("./documenter-agent.js");
+    const message = buildDocumenterUserMessage({ ...baseOptions, docsMode: "local" });
+    expect(message).not.toContain("git add");
+    expect(message).not.toContain("git commit");
+    expect(message).toMatch(/Do NOT modify ANY repo file/i);
+    expect(message).toMatch(/concerns/i);
+  });
+
+  it("external mode contains NEITHER git add nor git commit, and forbids editing other repo files", async () => {
+    const { buildDocumenterUserMessage } = await import("./documenter-agent.js");
+    const message = buildDocumenterUserMessage({ ...baseOptions, docsMode: "external" });
+    expect(message).not.toContain("git add");
+    expect(message).not.toContain("git commit");
+    expect(message).toMatch(/Do NOT modify ANY repo file/i);
+    expect(message).toMatch(/concerns/i);
+  });
+
+  it("local and external prompts direct stale-doc observations into concerns, not edits", async () => {
+    const { buildDocumenterUserMessage } = await import("./documenter-agent.js");
+    const local = buildDocumenterUserMessage({ ...baseOptions, docsMode: "local" });
+    const external = buildDocumenterUserMessage({ ...baseOptions, docsMode: "external" });
+    for (const message of [local, external]) {
+      expect(message).toMatch(/do NOT edit it — report it in "concerns"/i);
+    }
+  });
+
+  it("committed prompt still instructs updating related stale docs directly", async () => {
+    const { buildDocumenterUserMessage } = await import("./documenter-agent.js");
+    const message = buildDocumenterUserMessage({ ...baseOptions, docsMode: "committed" });
+    expect(message).toMatch(/Find & update related existing docs/i);
+  });
+});
+
 // ── parser unit tests ──────────────────────────────────────────────────
 
 describe("parseDocumentationResult", () => {

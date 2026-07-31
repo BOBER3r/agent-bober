@@ -297,6 +297,14 @@ export const SecuritySectionSchema = z.object({
 export type SecuritySection = z.infer<typeof SecuritySectionSchema>;
 
 /**
+ * Sprint-20260731: the documenter's output-location/git-behavior modes.
+ * Extracted as a named schema so `documenter-agent.ts` can import the
+ * union as a type without re-declaring it.
+ */
+export const DocumenterDocsModeSchema = z.enum(["committed", "local", "external"]);
+export type DocumenterDocsMode = z.infer<typeof DocumenterDocsModeSchema>;
+
+/**
  * Per-sprint documenter — writes docs immediately after a sprint's evaluator
  * passes (instead of batching all docs into a final sprint). Advisory: a
  * documenter failure never downgrades the already-passed sprint.
@@ -309,6 +317,28 @@ export const DocumenterSectionSchema = z.object({
   provider: z.string().optional(),
   endpoint: z.string().nullable().optional(),
   providerConfig: z.record(z.string(), z.unknown()).optional(),
+  /**
+   * Sprint-20260731: where/how the per-sprint doc record is written.
+   * `committed` reproduces today's behavior byte-for-byte (write under
+   * `docs/sprints/` inside the repo and let the LLM `git add`/`git commit`
+   * it). `local` writes under `docsDir` inside the repo without committing
+   * (a deterministic helper ensures `.gitignore` covers `docsDir`).
+   * `external` writes outside the repo entirely (default
+   * `~/.bober/docs/<project.name>/sprints`) with no git operations at all.
+   * Defaults to `committed` so configs that omit this key are unaffected
+   * (sc-1-1, nonGoals[0]).
+   */
+  docsMode: DocumenterDocsModeSchema.default("committed"),
+  /**
+   * Optional override for where the per-sprint doc record is written, in
+   * any `docsMode`. Relative paths resolve against the project root;
+   * absolute and `~`-prefixed paths are honored as-is. When unset, each
+   * mode falls back to its own default location (`docs/sprints/` under
+   * the project root for `committed`/`local`, or
+   * `~/.bober/docs/<project.name>/sprints` for `external`) — see
+   * `resolveSprintDocPath` in documenter-agent.ts.
+   */
+  docsDir: z.string().optional(),
 });
 export type DocumenterSection = z.infer<typeof DocumenterSectionSchema>;
 

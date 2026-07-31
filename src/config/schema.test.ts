@@ -22,6 +22,7 @@ import {
   SecuritySupplyChainConfigSchema,
   SecurityEgressConfigSchema,
   SeoConfigSchema,
+  DocumenterSectionSchema,
 } from "./schema.js";
 
 describe("EvaluatorSectionSchema.panel", () => {
@@ -825,6 +826,72 @@ describe("SecuritySectionSchema.verifier — opt-in adversarial verifier config 
 
   it("rejects maxTurns < 1 on the verifier sub-object", () => {
     expect(() => SecuritySectionSchema.parse({ verifier: { maxTurns: 0 } })).toThrow();
+  });
+});
+
+// ── DocumenterSectionSchema.docsMode/docsDir tests (sprint 20260731 — sc-1-1) ─
+
+describe("DocumenterSectionSchema — docsMode/docsDir (sc-1-1)", () => {
+  it("parse({}) defaults docsMode to 'committed' and does NOT materialize docsDir", () => {
+    const parsed = DocumenterSectionSchema.parse({});
+    expect(parsed).toEqual({
+      timeoutMs: 300_000,
+      enabled: true,
+      model: "sonnet",
+      maxTurns: 20,
+      docsMode: "committed",
+    });
+    expect(Object.hasOwn(parsed, "docsDir")).toBe(false);
+  });
+
+  it("accepts docsMode 'committed'", () => {
+    expect(DocumenterSectionSchema.parse({ docsMode: "committed" }).docsMode).toBe("committed");
+  });
+
+  it("accepts docsMode 'local'", () => {
+    expect(DocumenterSectionSchema.parse({ docsMode: "local" }).docsMode).toBe("local");
+  });
+
+  it("accepts docsMode 'external'", () => {
+    expect(DocumenterSectionSchema.parse({ docsMode: "external" }).docsMode).toBe("external");
+  });
+
+  it("rejects an invalid docsMode, naming the 'docsMode' key in the issue path", () => {
+    const result = DocumenterSectionSchema.safeParse({ docsMode: "bogus" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.includes("docsMode"))).toBe(true);
+    }
+  });
+
+  it("accepts an optional docsDir (relative)", () => {
+    expect(DocumenterSectionSchema.parse({ docsDir: "docs/local" }).docsDir).toBe("docs/local");
+  });
+
+  it("accepts an optional docsDir (absolute)", () => {
+    expect(DocumenterSectionSchema.parse({ docsDir: "/tmp/bober-docs" }).docsDir).toBe(
+      "/tmp/bober-docs",
+    );
+  });
+
+  it("accepts an optional docsDir (tilde-prefixed)", () => {
+    expect(DocumenterSectionSchema.parse({ docsDir: "~/bober-docs" }).docsDir).toBe(
+      "~/bober-docs",
+    );
+  });
+
+  it("a config that omits documenter entirely still resolves docsMode to 'committed' when the section IS present with no keys — full BoberConfigSchema does not materialize `documenter` when omitted", () => {
+    const minimalBase = {
+      project: { name: "test-project", mode: "greenfield" as const },
+      planner: {},
+      generator: {},
+      evaluator: { strategies: [] },
+      sprint: {},
+      pipeline: {},
+      commands: {},
+    };
+    const parsed = BoberConfigSchema.parse(minimalBase);
+    expect(Object.hasOwn(parsed, "documenter")).toBe(false);
   });
 });
 
