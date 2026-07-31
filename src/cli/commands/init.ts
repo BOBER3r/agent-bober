@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import prompts from "prompts";
 import chalk from "chalk";
 
-import type { EvalStrategyType, ProjectMode } from "../../config/schema.js";
+import type { EvalStrategyType, ProjectMode, DocumenterDocsMode } from "../../config/schema.js";
 import { createDefaultConfig } from "../../config/schema.js";
 import { configExists } from "../../config/loader.js";
 import { getDefaults, getPresetNames } from "../../config/defaults.js";
@@ -177,6 +177,44 @@ async function askProvider(): Promise<SupportedProvider | null> {
 
   if (provider === undefined) return null;
   return provider as SupportedProvider;
+}
+
+// ── Docs output (solo vs team) ────────────────────────────────────
+
+/**
+ * Ask whether per-sprint documentation should be committed into the repo
+ * (solo) or kept out of version control (team).
+ *
+ * Non-interactive environments (no TTY, e.g. CI) never prompt and default
+ * to "committed" so scripted/automated init runs stay unattended.
+ */
+export async function askDocsMode(
+  isTTY: boolean = process.stdin.isTTY ?? false,
+): Promise<DocumenterDocsMode> {
+  if (!isTTY) return "committed";
+
+  const { docsMode } = await prompts({
+    type: "select",
+    name: "docsMode",
+    message: "Where should per-sprint docs go?",
+    choices: [
+      {
+        title: "Commit them into the repo (solo)",
+        description: "docs/sprints/<sprint>.md, committed with the code",
+        value: "committed",
+      },
+      {
+        title: "Keep the repo clean (team)",
+        description: "Written on disk and gitignored — never committed",
+        value: "local",
+      },
+    ],
+    initial: 0,
+  });
+
+  // Guard against a drained prompts.inject() queue (returns the numeric
+  // `initial` index, not a value) and SIGINT (returns undefined).
+  return docsMode === "local" ? "local" : "committed";
 }
 
 // ── Preset metadata ──────────────────────────────────────────────
@@ -616,6 +654,7 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
   }
 
   const { plannerModel, generatorModel } = await askModelPreferences(provider);
+  const docsMode = await askDocsMode();
 
   // ── Step 6: Build config using discovered strategies/commands ─
   const mode: ProjectMode = "brownfield";
@@ -648,7 +687,8 @@ async function brownfieldFlow(projectRoot: string): Promise<void> {
   });
 
   // Write bober.config.json first (synthesizePrinciples needs a BoberConfig)
-  await writeConfig(projectRoot, config, mode, evalConfig.strategies, undefined, provider);
+  const configToWrite = { ...config, documenter: { docsMode } };
+  await writeConfig(projectRoot, configToWrite, mode, evalConfig.strategies, undefined, provider);
 
   // ── Step 7: Synthesize principles ─────────────────────────────
   console.log();
@@ -717,6 +757,7 @@ async function brownfieldManualFlow(projectRoot: string): Promise<void> {
 
   // Ask model preferences (conditional on provider)
   const { plannerModel, generatorModel } = await askModelPreferences(provider);
+  const docsMode = await askDocsMode();
 
   // Ask strategies separately so multiselect works properly
   console.log(chalk.gray("\n  ↑↓ Navigate  ⎵ Space = toggle  ⏎ Enter = confirm\n"));
@@ -762,7 +803,8 @@ async function brownfieldManualFlow(projectRoot: string): Promise<void> {
     },
   });
 
-  await writeConfig(projectRoot, config, mode, strategies, undefined, provider);
+  const configToWrite = { ...config, documenter: { docsMode } };
+  await writeConfig(projectRoot, configToWrite, mode, strategies, undefined, provider);
 }
 
 // ── Greenfield flow ──────────────────────────────────────────────
@@ -848,6 +890,7 @@ async function greenfieldFlow(
 
   // Ask model preferences (conditional on provider)
   const { plannerModel, generatorModel } = await askModelPreferences(provider);
+  const docsMode = await askDocsMode();
 
   // Ask strategies separately so multiselect works properly
   const stratAnswer = await prompts({
@@ -901,7 +944,8 @@ async function greenfieldFlow(
     config.project.description = description;
   }
 
-  await writeConfig(projectRoot, config, mode, strategies, selectedPreset, provider);
+  const configToWrite = { ...config, documenter: { docsMode } };
+  await writeConfig(projectRoot, configToWrite, mode, strategies, selectedPreset, provider);
 }
 
 // ── Shared helpers ───────────────────────────────────────────────
@@ -1123,6 +1167,7 @@ interface ConfigShape {
   planner: { model: string; provider?: string };
   generator: { model: string; provider?: string };
   evaluator: { strategies: Array<{ type: string }>; provider?: string };
+  documenter?: { docsMode: DocumenterDocsMode };
 }
 
 async function writeConfig(
@@ -1179,6 +1224,9 @@ async function writeConfig(
   console.log(
     `  Strategies:  ${chalk.cyan(strategies.map((s) => s.type).join(", "))}`,
   );
+  if (config.documenter) {
+    console.log(`  Docs:        ${chalk.cyan(config.documenter.docsMode)}`);
+  }
   console.log();
   console.log("Next steps:");
   console.log(`  ${chalk.gray("$")} ${chalk.green("claude")}                    ${chalk.gray("# Open Claude Code in this dir")}`);
