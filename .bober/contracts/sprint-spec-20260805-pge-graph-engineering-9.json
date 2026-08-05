@@ -1,0 +1,111 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-9",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 9,
+  "title": "Partial-failure resilience — branch result caching, failed-branch-only jittered retry, enforced loop counters, graceful failure terminal and qualified synthesis",
+  "description": "Make one failing branch a bounded local event rather than a run-ending exception. Successful branch results are cached and preserved so a re-run reuses them without re-invoking their executors; only the failed branch is retried, spaced by the decorrelated jittered exponential policy the repo already ships. Every cyclic edge's loop counter is enforced at runtime against the maxIterations declared in the topology, using the idempotent counter reducer so a replayed superstep cannot double-count. When retries are exhausted the graph routes to a graceful failure terminal that writes a failure artifact and terminates cleanly, and the synthesis node enumerates every branch with an explicit status naming failed branches and their error classes, so the run's terminal verdict is 'partial' rather than a success claim or an uncaught exception.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-7"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-9-1",
+      "description": "In a 3-branch fan-out where branch 2 throws, branches 1 and 3 results are persisted and the run continues; a re-run reuses the cached branch 1 and 3 results and their executor spies record zero additional invocations.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-2",
+      "description": "Only branch 2 is retried, successive retry timestamps match the configured jittered exponential policy within tolerance, and the branch 1 and branch 3 executors are invoked exactly once in total across the whole run.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-3",
+      "description": "A permanently failing node attempts exactly MAX_RETRIES times with a default of 3, then routes to the graceful-failure terminal, writes a failure artifact under .bober/failures/<runId>.json, and terminates cleanly with the test's own hard iteration ceiling never reached.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-4",
+      "description": "The runtime enforces each cycle's declared counterKey and maxIterations from the topology artifact, and a fixture graph whose loop would otherwise run forever exits by bound with a recorded bounded-exit span rather than by timeout.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-5",
+      "description": "The counter channel uses the idempotent maxNumber reducer, so replaying a superstep after a crash leaves the counter unchanged; a test replays a superstep and asserts the loop neither exhausts early nor gains an extra iteration.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-6",
+      "description": "The final synthesis output enumerates every branch with an explicit status and names each failed branch plus its error class, and the run's terminal verdict is 'partial' — not 'success' and not an uncaught exception.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-7",
+      "description": "branchStatus in state carries state, attempts and errorClass per branch key and merges through the lastWriteWinsByKey reducer over disjoint per-branch key domains, asserted by a concurrent-branch merge test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-8",
+      "description": "A transient provider failure classified by the existing classifyTransient helper is retried while a non-transient failure is not, asserted by a table of error shapes covering HTTP 408, 429 and 5xx alongside a schema-validation failure.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-9",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not retry a whole superstep or a whole fan-out batch when one branch fails; retry scope is the failed branch only.",
+    "Do not swallow a failure into a success verdict. A run with any exhausted branch terminates 'partial' or 'failed', never 'success'.",
+    "Do not write a new retry or backoff implementation; reuse withRetry and classifyTransient from src/orchestrator/workflow/retry.ts:61,103.",
+    "Do not implement the evaluator, critique or rework node bodies — sprint 12 builds those on top of this terminal and retry machinery.",
+    "Do not implement checkpoint persistence or interrupts; this sprint depends on sprint 7 only and must not duplicate sprint 8's work.",
+    "Do not let the graceful-failure terminal emit the pipeline-complete event directly; it produces a failure artifact and a verdict, and the single terminal side-effect owner from sprint 4 still emits the completion event."
+  ],
+  "stopConditions": [
+    "The 3-branch partial-failure and cached-reuse assertions are both green.",
+    "The permanently failing node terminates by bound with a written failure artifact.",
+    "The counter replay test shows neither early exhaustion nor an extra iteration.",
+    "Meeting a criterion would require a non-idempotent counter reducer, which ADR-4 forbids."
+  ],
+  "definitionOfDone": "A failing branch is retried in isolation on a jittered exponential schedule while its siblings' results are preserved and reused, every cyclic edge is bounded by the counter declared in the topology, exhausted retries route to a graceful terminal that writes a failure artifact, and synthesis reports per-branch status with a 'partial' verdict. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path reaches this code.",
+  "assumptions": [
+    "Scheduler.settle from sprint 7 is the mechanism by which a rejecting branch no longer rejects the whole batch; this sprint builds the policy on top of it rather than changing Scheduler again.",
+    "The branch result cache is the checkpoint's completedTaskKeys plus the committed branch outputs; it is not a second persistence store.",
+    "MAX_RETRIES defaults to 3 and is configurable; the topology's per-cycle maxIterations governs loop re-entry while MAX_RETRIES governs transient-failure retry, and the two are deliberately separate knobs."
+  ],
+  "outOfScope": [
+    "Cross-run retry or resumption of a failed run from a previous invocation — sprint 8 owns resume.",
+    "Any latency or throughput assertion about retry scheduling; timestamps are asserted against the policy, not against wall-clock targets."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Reuse workflow/retry.ts (withRetry at :61, classifyTransient at :103) and workflow/synthesizer.ts rather than writing new ones — both are green with near-zero live callers and this sprint gives them production callers. The retry timestamp assertion must be tolerant of jitter by construction: assert each interval falls inside the policy's min and max envelope rather than pinning exact values, and inject the clock so the test does not actually sleep. The graceful-failure terminal is a node in the topology (graceful_failure) whose body writes .bober/failures/<runId>.json and returns a terminal Command; it must not perform any other effect. Branch failure records carry branchKey, contractId, attempts and errorClass so synthesis can name them without reading the trace file.",
+  "evaluatorNotes": "Verify the cached-reuse assertion counts executor invocations across BOTH runs, not just the second. Verify the retry test injects a clock and does not actually wait, and that it still asserts the interval envelope rather than merely counting attempts. Verify the terminal verdict for a partially failed run is 'partial' and that no code path can produce 'success' with a failed branch present. Verify the counter replay test replays a genuine superstep rather than calling the reducer twice in isolation. Confirm no new retry implementation was added alongside the existing one.",
+  "estimatedFiles": [
+    "src/pge/runtime/retry-planner.ts",
+    "src/pge/runtime/retry-planner.test.ts",
+    "src/pge/runtime/interpreter.ts",
+    "src/pge/runtime/graceful-failure.ts",
+    "src/pge/runtime/graceful-failure.test.ts",
+    "src/pge/runtime/__tests__/partial-failure.test.ts",
+    "src/orchestrator/workflow/retry.ts",
+    "src/orchestrator/workflow/synthesizer.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

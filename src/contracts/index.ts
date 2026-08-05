@@ -57,6 +57,8 @@ export {
   resolveClarification,
 } from "./spec.js";
 
+export * from "./topology.js";
+
 export {
   // Zod schemas
   SeveritySchema,

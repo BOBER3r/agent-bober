@@ -1,0 +1,119 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-3",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 3,
+  "title": "Topology toolkit — mermaid/dot render, structural diff with route labels, doc-drift check, state audit, optimisation hook",
+  "description": "Complete Layer A by deriving every inspection artifact from the committed topology alone. Adds renderTopology for mermaid and dot, diffTopology reporting node, edge, channel and router-outcome-label additions, removals, renames and field changes, checkDocDrift comparing documented node ids to artifact node ids, generateStateAudit deriving every state key's writers and readers from nodes[].writes/reads, and optimizeTopology which applies a caller-supplied mutation, re-validates the result and records a per-variant score. Surfaces all five through the `bober pge` CLI. This is the sprint that makes the graph a versionable, diffable, optimisable engineering artifact.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-2"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-3-1",
+      "description": "`bober pge render --format mermaid` emits text that a mermaid parser accepts without error, pinned by a snapshot of the committed coding topology; adding one node to a fixture graph changes the snapshot.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-2",
+      "description": "renderTopology with format 'dot' emits a digraph whose node count equals spec.nodes.length and whose edge count equals spec.edges.length, so the diagram is derived from the artifact rather than hand-drawn.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-3",
+      "description": "`bober pge diff a.json b.json` emits structured JSON; a fixture pair differing by one added node and one added edge yields exactly one entry in nodesAdded, exactly one in edgesAdded and empty nodesRemoved and edgesRemoved.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-4",
+      "description": "Diffing a file against itself produces empty:true and exit code 0, and diffing two files that differ only in key ordering also produces empty:true because both are canonicalised first.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-5",
+      "description": "Adding one outcome label to a router's targets produces exactly one routeLabelsAdded entry naming the router and the label, so a change to routing behaviour can never present as an empty structural diff.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-6",
+      "description": "diffTopology reports graphVersion.from, graphVersion.to and a bumped boolean, and a fixture pair with structural changes and an unchanged graphVersion sets bumped:false.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-7",
+      "description": "checkDocDrift returns the symmetric difference between node ids in a markdown doc and node ids in the artifact, returning an empty array only when the two sets are equal.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-8",
+      "description": "`bober pge audit-state` writes .bober/topology/state-audit.json in which every channel key has at least one declared writer, no writer id exists outside spec.nodes, and running the command twice produces byte-identical output.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-9",
+      "description": "optimizeTopology applied to a mutator that swaps one node's promptRef and drops one optional gate returns a spec that passes validateTopology, sets provenance to 'optimizer', writes a per-variant score record under .bober/topology/variants/, and performs zero node executions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-3-10",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add any CI workflow job — sprint 14 owns the blocking gate; wiring it now would gate merges on tooling that has no golden dataset behind it.",
+    "Do not author docs/pge-graph.md; this sprint delivers the drift checker, sprint 14 delivers the document it checks.",
+    "Do not implement an automated search strategy, scoring model or variant-promotion command for the optimiser — the mutation and re-validation hook only.",
+    "Do not let the optimiser's variant output participate in `dump --check`, which applies only to provenance 'authored'.",
+    "Do not import any runtime, node or orchestrator module; the sprint-1 boundary still governs this directory."
+  ],
+  "stopConditions": [
+    "All five derivations run against the committed .bober/topology/coding.json and produce deterministic output.",
+    "The route-label diff case is proven with a fixture whose only change is inside a router's targets array.",
+    "A derivation would require executing a node or resolving a live prompt body to produce its output."
+  ],
+  "definitionOfDone": "renderTopology, diffTopology, checkDocDrift, generateStateAudit and optimizeTopology exist with paired tests, all five are reachable through `bober pge`, and every one derives its result from the artifact with no executor in the module graph. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no existing execution path changed.",
+  "assumptions": [
+    "The state audit derives writers and readers from nodes[].writes/reads because ADR-4 forbids storing them a second time on channels[], so there is exactly one encoding to read.",
+    "The per-variant score record is a placeholder schema whose score field may be null until a golden dataset exists in sprint 14; the hook exists so an optimiser can be written offline.",
+    "diffTopology throws TypeError when either input fails TopologySpecSchema.parse rather than returning a partial diff."
+  ],
+  "outOfScope": [
+    "Rendering runtime traces or executed paths — this renders topology, not history.",
+    "Any diff of prompt bodies; prompt content is deliberately outside the topology."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Keep each derivation in its own small module under src/pge/topology/ per the repo's small-utility-module principle: render.ts, diff.ts, docs.ts, audit.ts, optimize.ts. Canonicalise both inputs before diffing so key ordering never produces a spurious diff. Node renames are detected by matching an added and a removed node whose full field set is identical apart from id; anything else is reported as add plus remove rather than a guessed rename. For mermaid, node shapes should follow the architecture blueprint's convention (subgraph as {{...}}, hitl as [[...]], terminals as (...)), because the snapshot in sprint 14's documentation is compared against this output. state-audit.json must include generatedFrom { graphId, checksum } so a stale audit is detectable.",
+  "evaluatorNotes": "Confirm the diff is genuinely structural and not textual — reorder the nodes array in one input and assert the diff is still empty. Confirm route-label detection is not conflated with edge detection: a label added to an existing router with no new edge must still be reported. Confirm audit-state determinism by running it twice in one test and comparing bytes, not by comparing parsed objects. Confirm optimizeTopology returns a NEW spec and does not mutate its input. Confirm the variants directory is written under .bober/topology/variants/ and is excluded from dump --check.",
+  "estimatedFiles": [
+    "src/pge/topology/render.ts",
+    "src/pge/topology/render.test.ts",
+    "src/pge/topology/diff.ts",
+    "src/pge/topology/diff.test.ts",
+    "src/pge/topology/docs.ts",
+    "src/pge/topology/docs.test.ts",
+    "src/pge/topology/audit.ts",
+    "src/pge/topology/audit.test.ts",
+    "src/pge/topology/optimize.ts",
+    "src/pge/topology/optimize.test.ts",
+    "src/cli/commands/pge.ts",
+    ".bober/topology/state-audit.json"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

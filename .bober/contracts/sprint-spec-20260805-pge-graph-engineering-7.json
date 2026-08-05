@@ -1,0 +1,141 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-7",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 7,
+  "title": "Superstep interpreter, dependency- and file-conflict-aware admission, unified Command routing, single commit boundary",
+  "description": "Deliver executable graph semantics (G3). GraphInterpreter runs a compiled graph as a Pregel loop: plan frontier, admit, execute under the shipped Scheduler and Semaphore, barrier, commit once, route. Nodes return a single Command combining a state delta and a destination — a declared route label, a node, a runtime fan-out, or the parent scope — replacing exhaustive static conditional-edge maps. FrontierPlanner becomes the first consumer of SprintContract.dependsOn anywhere in the repo and additionally serializes contracts whose declared file sets intersect, recording the reason in the trace. CommitBoundary is the sole writer of .bober/ domain artifacts and the sole clock source, applying each channel reducer exactly once per superstep with the whole batch and rejecting any channel value above its inline byte limit so bulk offloading is enforced rather than advised. Ships with the determinism and exactly-once invariant suites.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-5",
+    "sprint-spec-20260805-pge-graph-engineering-6"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "One integration test compiles a golden fixture topology, runs it against stub providers, and asserts from a single recorded trace the scheduled node order, at least one dynamic route taken, at least one loop re-entry and at least one shared-state merge.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "Node returns validate against a Command Zod type with optional update and required goto; a test asserts a node returning both produces exactly one state commit and one routing decision in the trace, and a structural assertion confirms no static conditional-edge map exists for that node.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "A nested node returning goto with scope 'parent' resumes control at the parent supervisor, while the same goto without the parent scope fails with UnknownNodeInScope.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "A planner emitting 5 contracts produces 5 branch dispatches from a single routing decision, and re-running the same graph with 3 contracts leaves the topology checksum unchanged, proving fan-out cardinality is runtime-determined rather than encoded as a static edge per contract.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "With B.dependsOn set to A, B is never dispatched before A completes; with two contracts sharing an entry in estimatedFiles, the two never run concurrently and the trace records status 'serialized' with serializedReason 'fileConflict' and both contract ids.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "With deliberately staggered branch completion, the evaluator stage's first invocation timestamp is after the last branch completion and it observes exactly N results, proving the fan-in barrier holds.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-7",
+      "description": "A write-counter spy on CommitBoundary across 8 concurrent branches asserts writesPerChannel is exactly 1 for every touched channel per superstep, and the final artifacts are byte-identical to a sequential run of the same inputs.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-8",
+      "description": "The determinism suite runs the same golden fixture at concurrency 1 and concurrency 8 and asserts the resulting .bober/ artifact trees are byte-identical after canonicalisation.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-9",
+      "description": "Committing a channel value that serialises above the channel's maxInlineBytes is rejected with StateBloatError naming the channel and the byte count, and a node feeding a 5 MB diff must offload and pass a ScratchRef for the commit to succeed.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-10",
+      "description": "After a node returns, none of that node's private keys appear in merged state, while the trace shows those keys existed during that node's execution.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-11",
+      "description": "The trace's currentPhase sequence for the golden run equals a pinned expected sequence and no routing decision leaves the phase unset.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-12",
+      "description": "A fully blocked frontier returns an empty admit list and the interpreter treats it as deadlock and routes to the graceful-failure terminal rather than spinning or hanging.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-13",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement checkpoint persistence, resume or HITL interrupts — sprint 8 owns durability; this sprint's interpreter runs to completion or fails in one process.",
+    "Do not implement retry policy, per-branch backoff, branch-result caching or the graceful-failure node body — sprint 9 owns resilience; this sprint only routes to the terminal on deadlock.",
+    "Do not implement any production node body; the invariant suites use fixture nodes with deterministic stub providers.",
+    "Do not raise the default fan-out concurrency above 1. Higher concurrency is opt-in per spec and always subordinate to dependsOn and file-conflict serialization.",
+    "Do not write any acceptance test that asserts a wall-clock speedup or compares elapsed time between concurrency settings.",
+    "Do not modify src/orchestrator/pipeline.ts or select the PGE engine anywhere; nothing in this sprint is reachable from a shipped run.",
+    "Do not add a second write site for .bober/ domain artifacts; CommitBoundary is the only writer and the only new Date() source."
+  ],
+  "stopConditions": [
+    "The determinism suite is green at concurrency 1 and 8 with byte-identical artifacts.",
+    "The exactly-once write-counter spy reports one write per channel per superstep across 8 branches.",
+    "dependsOn and file-set intersection both demonstrably gate admission with the reason recorded in the trace.",
+    "An invariant cannot hold without making a reducer order-dependent, in which case the channel must be modelled as an offloaded artifact instead."
+  ],
+  "definitionOfDone": "src/pge/runtime/{interpreter,frontier,commit}.ts execute a compiled graph as a superstep loop with unified Command routing, admission that honours dependsOn and serializes file conflicts, and a single commit boundary that applies each reducer once per superstep and enforces the inline byte limit. Two of the three blocking invariant suites — determinism and exactly-once — are green. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path reaches the interpreter.",
+  "assumptions": [
+    "Scheduler gains exactly one new method, settle, of roughly 25 lines, so a rejecting branch does not reject the whole batch the way Scheduler.parallel's Promise.all does at scheduler.ts:140. This is the only edit to a shipped runtime file in this sprint.",
+    "taskKey is sha256 of nodeId plus branchKey plus inputHash; sprint 8 uses it for resume, this sprint uses it for identity and for the file-conflict ledger.",
+    "The evaluator barrier is implicit in the superstep model: the evaluator stage is simply the next superstep after the last branch commits.",
+    "File sets come from SprintContract.estimatedFiles, which is the only declared file information available; contracts with an empty estimatedFiles are treated as conflicting with everything at concurrency above 1."
+  ],
+  "outOfScope": [
+    "Context compression at superstep boundaries — sprint 10 hooks into the boundary this sprint creates.",
+    "Any conformance comparison against the TS engine — sprint 13."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Reuse rather than reimplement: Scheduler and Semaphore (workflow/scheduler.ts:54-165) for bounded execution, Budget (budget.ts:40) for the ceiling, and the flusher's single-commit-boundary and single-clock discipline (flusher.ts:23-104) generalised from one-shot to per-superstep. The interpreter loop order is fixed: plan frontier, admit, execute, barrier, commit once, checkpoint (sprint 8), route. Reducers are invoked once per channel per superstep with the whole batch — never folded update by update, because pairwise folding is order-dependent and breaks the concurrency-1-versus-8 criterion. Goto has kinds label, node, fanout and parent; the label kind resolves through the compiled adjacency, and a label outside the router's declared targets is UndeclaredRouteLabel. The empty-admit deadlock path must be distinguishable in the trace from a normal completion. Keep the interpreter free of any direct fs write — every artifact write goes through CommitBoundary.",
+  "evaluatorNotes": "This sprint carries the highest silent-corruption risk in the plan; weight the invariant suites above feature completeness. Verify the determinism suite compares canonicalised bytes of the artifact tree, not parsed objects, and that it genuinely runs at two different concurrency settings rather than reading a cached result. Verify the write-counter spy counts reducer invocations at the commit boundary and not node returns. Verify the file-conflict test uses two contracts with a genuine intersection and asserts the trace reason, not merely that they did not overlap by luck. Verify no test anywhere in the diff asserts elapsed time. Verify CommitBoundary is the only new Date() call site in src/pge/runtime/ by inspection.",
+  "estimatedFiles": [
+    "src/pge/runtime/interpreter.ts",
+    "src/pge/runtime/interpreter.test.ts",
+    "src/pge/runtime/frontier.ts",
+    "src/pge/runtime/frontier.test.ts",
+    "src/pge/runtime/commit.ts",
+    "src/pge/runtime/commit.test.ts",
+    "src/pge/runtime/__tests__/determinism.invariant.test.ts",
+    "src/pge/runtime/__tests__/exactly-once.invariant.test.ts",
+    "src/pge/runtime/__fixtures__/",
+    "src/orchestrator/workflow/scheduler.ts",
+    "src/orchestrator/workflow/scheduler.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

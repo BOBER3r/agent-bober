@@ -1,0 +1,131 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-13",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 13,
+  "title": "PgeEngine behind the seam, ts-versus-pge artifact equivalence via EngineConformanceHarness, offline trace replay and an off-by-default exporter",
+  "description": "Wire the graph runtime into the private PipelineEngine seam as the fifth engine, default-off, with a downgrade path that logs one line and re-dispatches the TypeScript engine when the topology fails to compile so a broken artifact cannot brick a run. This is the first sprint in which the full committed artifact compiles, because every node implementation now exists. Point EngineConformanceHarness — built for exactly this comparison and never yet aimed at a real engine — at 'ts' and 'pge' with a deterministic client, a frozen clock and a fixed run id, widened to an eleven-field artifact set with an order-tolerant structured diff. Add offline trace replay that re-executes a recorded run from its span file with the network stubbed to throw, reproducing byte-identical artifacts after volatile-key stripping. Add an OTLP exporter that is off by default and performs zero network calls when unconfigured.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-4",
+    "sprint-spec-20260805-pge-graph-engineering-10",
+    "sprint-spec-20260805-pge-graph-engineering-11",
+    "sprint-spec-20260805-pge-graph-engineering-12"
+  ],
+  "features": [
+    "feat-10"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-13-1",
+      "description": "loadCompiledGraph reads .bober/topology/coding.json, validates it and compiles it with the full production registries, throwing neither UnregisteredNodeImpl nor OrphanNodeImpl, so the committed artifact and the registered implementations are proven to be the same graph.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-2",
+      "description": "EngineConformanceHarness reports equivalent true for 'ts' versus 'pge' across eleven artifact fields — contracts, history, specs, evalResults, briefings, reviews, audits, progress, runState, completionMarker and pipelineResult — on the golden spec, with any diff reported as a structured ConformanceDiff naming artifact, path and engines.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-3",
+      "description": "Both engines emit the pipeline-complete history event and the completion marker through the single owner from sprint 4, and an end-to-end test asserts CompletionTailer.poll() yields the runId for a pge-engine run exactly as it does for a ts-engine run.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-4",
+      "description": "A TopologyCompileError during PgeEngine.run logs exactly one downgrade line and re-dispatches TsPipelineEngine, and the resulting PipelineResult is indistinguishable from a direct TS run for the same input.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-5",
+      "description": "config.pipeline.engine still defaults to 'ts' and the entire existing suite passes with the PGE engine unselected, asserted by a test that loads the shipped default config and resolves the engine name.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-6",
+      "description": "`bober trace replay <runId>` re-executes from .bober/traces/<runId>.jsonl using the recorded provider responses with the network stubbed to throw, and reproduces byte-identical artifacts after volatile-key stripping using the existing conformance comparator.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-7",
+      "description": "The run manifest's per-node sums equal the run totals for calls, tokens and USD, and exceeding a configured ceiling aborts the run with a typed budget error rather than continuing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-8",
+      "description": "A pge run's trace contains zero frontier-tier model calls attributable to routing, classification or syntax nodes, asserted from the span model tier field against the node kinds.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-9",
+      "description": "The OTLP exporter converts a local trace file into an OTLP-compatible payload accepted by a local sink in test, and a second test asserts the exporter is off by default and performs zero network calls when unconfigured.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-10",
+      "description": "A worktree-style test runs the pge engine with a substituted project root and asserts zero writes under the original root, proving no store holds a module-level singleton.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-13-11",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not change the default engine away from 'ts'. Selecting pge stays an explicit opt-in for the whole of this sprint and beyond.",
+    "Do not delete, deprecate or stop maintaining TsPipelineEngine; it is retained permanently as the conformance oracle and is the only thing that gives a future conformance failure a single interpretation.",
+    "Do not change the runPipeline signature or any PipelineResult field while wiring the new engine.",
+    "Do not make the OTLP exporter on by default, and do not let it become the source of truth for traces; the local JSONL span file is authoritative.",
+    "Do not modify the committed topology artifact to make conformance pass; a conformance diff is evidence about the runtime, not a reason to edit the graph.",
+    "Do not author the golden dataset here — sprint 14 owns the 20 to 50 curated cases; this sprint uses the single golden spec fixture."
+  ],
+  "stopConditions": [
+    "The full committed artifact compiles with production registries.",
+    "EngineConformanceHarness reports equivalent true across all eleven fields for the golden spec.",
+    "Trace replay reproduces byte-identical artifacts with the network stubbed to throw.",
+    "Conformance does not converge, in which case the pre-authorised end state applies: pge ships as a permanently opt-in engine, the default stays 'ts', nothing is deleted, and the divergences are recorded rather than papered over."
+  ],
+  "definitionOfDone": "PgeEngine runs the committed topology behind the private seam with a safe downgrade, the conformance harness proves artifact equivalence against the TypeScript engine across eleven fields on the golden spec, a recorded trace replays offline to byte-identical artifacts, and cost accounting reconciles per node against the run total. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, pipeline.engine still defaults to 'ts', and every existing consumer — run, MCP RunManager, worktree runner, fleet children, chat-spawned runs and team routing — behaves as before.",
+  "assumptions": [
+    "EngineConformanceHarness needs a real runnerFor with a deterministic client, a frozen clock and a fixed run id; its current shape (conformance.ts:64-153) supports this and needs widening from two artifact fields to eleven plus an order-tolerant diff.",
+    "Volatile keys stripped by the harness already cover createdAt, runId and duration; any new volatile key introduced by the graph runtime must be added to that list in this sprint rather than tolerated as a diff.",
+    "Trace replay uses the recorded provider responses in the span file, so it regression-tests runtime and artifact shape rather than model output quality."
+  ],
+  "outOfScope": [
+    "Any CI wiring — sprint 14 owns the blocking jobs.",
+    "Deleting the dormant src/orchestrator/workflow/ subtree — sprint 14 records the disposition."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Mirror the downgrade pattern at workflow/selector.ts:29-31 exactly: catch TopologyCompileError, log one info line, construct TsPipelineEngine and re-dispatch. PgeEngine's constructor takes optional deps (interpreterFactory, registries, graphId) so tests can inject without touching production wiring. CommitBoundary.finalize must call the sprint-4 finalizePipelineRun rather than emitting the terminal side effects itself, so all three engines converge on one owner. For replay, the network stub must throw rather than return a canned value, so a missed recording surfaces as a failure instead of silently degrading. The budget ceiling abort must surface as a typed BudgetExceededError propagated to the PipelineResult, not as a generic failure string.",
+  "evaluatorNotes": "The conformance result is the central claim of this sprint — verify it is a genuine comparison of two real engine runs against a fresh project root each, not two invocations of the same runner. Verify the eleven fields are all populated for both engines rather than empty on both sides, which would make equivalence vacuous. Verify the volatile-key stripping list did not grow to hide a real divergence; inspect every key added to it in this diff and justify each. Verify replay's network stub throws. Verify the default-engine test loads the real shipped default config rather than a fixture. Verify the trace tier assertion maps spans to node kinds from the artifact rather than from a hardcoded list.",
+  "estimatedFiles": [
+    "src/pge/engine/pge-engine.ts",
+    "src/pge/engine/pge-engine.test.ts",
+    "src/pge/runtime/replay.ts",
+    "src/pge/runtime/replay.test.ts",
+    "src/pge/runtime/otlp-exporter.ts",
+    "src/pge/runtime/otlp-exporter.test.ts",
+    "src/orchestrator/workflow/conformance.ts",
+    "src/orchestrator/workflow/conformance.test.ts",
+    "src/orchestrator/workflow/selector.ts",
+    "src/orchestrator/workflow/selector.test.ts",
+    "src/pge/runtime/commit.ts",
+    "src/cli/commands/trace.ts",
+    "src/cli/index.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

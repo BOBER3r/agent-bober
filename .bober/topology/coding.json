@@ -1,0 +1,1823 @@
+{
+  "channels": [
+    {
+      "id": "branchStatus",
+      "maxInlineBytes": 4096,
+      "reducerRef": "lastWriteWinsByKey",
+      "schemaRef": "BranchStatus",
+      "scope": "private"
+    },
+    {
+      "id": "counters",
+      "maxInlineBytes": 4096,
+      "reducerRef": "maxNumber",
+      "schemaRef": "Counters",
+      "scope": "public"
+    },
+    {
+      "id": "evaluations",
+      "maxInlineBytes": 4096,
+      "reducerRef": "appendById",
+      "schemaRef": "SprintVerdict",
+      "scope": "public"
+    },
+    {
+      "id": "ledger",
+      "maxInlineBytes": 4096,
+      "reducerRef": "mergeLedger",
+      "schemaRef": "BudgetLedger",
+      "scope": "public"
+    },
+    {
+      "id": "messages",
+      "maxInlineBytes": 4096,
+      "reducerRef": "appendById",
+      "schemaRef": "GraphMessage",
+      "scope": "public"
+    },
+    {
+      "id": "refs",
+      "maxInlineBytes": 4096,
+      "reducerRef": "appendById",
+      "schemaRef": "ScratchRef",
+      "scope": "public"
+    },
+    {
+      "id": "spec",
+      "maxInlineBytes": 4096,
+      "reducerRef": "replaceIfNewer",
+      "schemaRef": "PlanSpec",
+      "scope": "public"
+    },
+    {
+      "id": "sprintContracts",
+      "maxInlineBytes": 4096,
+      "reducerRef": "appendById",
+      "schemaRef": "SprintContract",
+      "scope": "public"
+    },
+    {
+      "id": "testAnchors",
+      "maxInlineBytes": 4096,
+      "reducerRef": "setUnion",
+      "schemaRef": "TestAnchors",
+      "scope": "public"
+    },
+    {
+      "id": "verdict",
+      "maxInlineBytes": 4096,
+      "reducerRef": "replaceIfNewer",
+      "schemaRef": "RunVerdict",
+      "scope": "public"
+    }
+  ],
+  "checksum": "sha256:c83eb2c1dd2869d85c907dea48cc2ee63348fd296e96a9f3e3266cc56eeaf188",
+  "defaults": {
+    "concurrency": 1,
+    "durability": "superstep",
+    "maxInlineBytes": 4096,
+    "modelTier": "light",
+    "supervisorNodeId": "supervisor"
+  },
+  "description": "The agent-bober coding pipeline: research reflexion loop, planner with a clarification loop, supervisor, bounded sprint subgraph with curator/security/evaluation gates, global evaluation with rework, synthesis, documentation, gated commit, graceful failure and context compaction.",
+  "edges": [
+    {
+      "from": "hitl_commit",
+      "id": "e-approval-commit",
+      "kind": "normal",
+      "to": "commit"
+    },
+    {
+      "from": "commit",
+      "id": "e-commit-finalize",
+      "kind": "normal",
+      "to": "finalize"
+    },
+    {
+      "from": "context_compact",
+      "id": "e-compact-supervisor",
+      "kind": "normal",
+      "to": "supervisor"
+    },
+    {
+      "from": "documenter",
+      "id": "e-doc-approval",
+      "kind": "normal",
+      "to": "hitl_commit"
+    },
+    {
+      "from": "critique",
+      "id": "e-eval-critiqued",
+      "kind": "normal",
+      "to": "rework_route"
+    },
+    {
+      "from": "route_after_eval",
+      "id": "e-eval-exhausted",
+      "kind": "conditional",
+      "label": "exhausted",
+      "to": "graceful_failure"
+    },
+    {
+      "from": "gate_eval_in",
+      "id": "e-eval-global",
+      "kind": "normal",
+      "to": "evaluate_global"
+    },
+    {
+      "from": "route_after_eval",
+      "id": "e-eval-partial",
+      "kind": "conditional",
+      "label": "partial",
+      "to": "synthesize"
+    },
+    {
+      "from": "route_after_eval",
+      "id": "e-eval-pass",
+      "kind": "conditional",
+      "label": "pass",
+      "to": "documenter"
+    },
+    {
+      "from": "route_after_eval",
+      "id": "e-eval-rework",
+      "kind": "conditional",
+      "label": "rework",
+      "to": "critique"
+    },
+    {
+      "from": "evaluate_global",
+      "id": "e-eval-route",
+      "kind": "normal",
+      "ports": {
+        "from": "verdict",
+        "to": "verdict"
+      },
+      "to": "route_after_eval"
+    },
+    {
+      "from": "synthesize",
+      "id": "e-eval-synthesized",
+      "kind": "normal",
+      "to": "documenter"
+    },
+    {
+      "from": "graceful_failure",
+      "id": "e-failure-end",
+      "kind": "normal",
+      "to": "END"
+    },
+    {
+      "from": "finalize",
+      "id": "e-finalize-end",
+      "kind": "normal",
+      "to": "END"
+    },
+    {
+      "from": "plan_draft",
+      "id": "e-plan-check",
+      "kind": "normal",
+      "ports": {
+        "from": "draft",
+        "to": "draft"
+      },
+      "to": "plan_clarify_check"
+    },
+    {
+      "from": "plan_clarify",
+      "id": "e-plan-clarified",
+      "kind": "normal",
+      "to": "plan_draft"
+    },
+    {
+      "from": "plan_clarify_check",
+      "id": "e-plan-clarify",
+      "kind": "conditional",
+      "label": "clarify",
+      "to": "plan_clarify"
+    },
+    {
+      "from": "gate_plan_in",
+      "id": "e-plan-draft",
+      "kind": "normal",
+      "ports": {
+        "from": "brief",
+        "to": "brief"
+      },
+      "to": "plan_draft"
+    },
+    {
+      "from": "gate_plan_out",
+      "id": "e-plan-exit",
+      "kind": "normal",
+      "to": "supervisor"
+    },
+    {
+      "from": "plan_materialize",
+      "id": "e-plan-materialized",
+      "kind": "normal",
+      "ports": {
+        "from": "contracts",
+        "to": "contracts"
+      },
+      "to": "gate_plan_out"
+    },
+    {
+      "from": "plan_clarify_check",
+      "id": "e-plan-ok",
+      "kind": "conditional",
+      "label": "ok",
+      "to": "plan_materialize"
+    },
+    {
+      "from": "research_collect",
+      "id": "e-research-collected",
+      "kind": "normal",
+      "ports": {
+        "from": "digest",
+        "to": "digest"
+      },
+      "to": "gate_research_out"
+    },
+    {
+      "from": "research_explore",
+      "id": "e-research-critique",
+      "kind": "normal",
+      "ports": {
+        "from": "digest",
+        "to": "digest"
+      },
+      "to": "research_critique"
+    },
+    {
+      "from": "research_route",
+      "id": "e-research-done",
+      "kind": "conditional",
+      "label": "done",
+      "to": "research_collect"
+    },
+    {
+      "from": "research_body",
+      "id": "e-research-entry",
+      "kind": "normal",
+      "ports": {
+        "from": "request",
+        "to": "request"
+      },
+      "to": "gate_research_in"
+    },
+    {
+      "from": "gate_research_out",
+      "id": "e-research-exit",
+      "kind": "normal",
+      "to": "supervisor"
+    },
+    {
+      "from": "research_reflect",
+      "id": "e-research-explore",
+      "kind": "normal",
+      "ports": {
+        "from": "digest",
+        "to": "digest"
+      },
+      "to": "research_explore"
+    },
+    {
+      "from": "gate_research_in",
+      "id": "e-research-reflect",
+      "kind": "normal",
+      "ports": {
+        "from": "request",
+        "to": "request"
+      },
+      "to": "research_reflect"
+    },
+    {
+      "from": "research_route",
+      "id": "e-research-retry",
+      "kind": "conditional",
+      "label": "retry",
+      "to": "research_explore"
+    },
+    {
+      "from": "research_critique",
+      "id": "e-research-route",
+      "kind": "normal",
+      "ports": {
+        "from": "digest",
+        "to": "digest"
+      },
+      "to": "research_route"
+    },
+    {
+      "from": "rework_route",
+      "id": "e-rework-dispatch",
+      "kind": "fanout",
+      "label": "rework",
+      "to": "sprint_body"
+    },
+    {
+      "from": "rework_route",
+      "id": "e-rework-exhausted",
+      "kind": "conditional",
+      "label": "exhausted",
+      "to": "graceful_failure"
+    },
+    {
+      "from": "sprint_evaluate",
+      "id": "e-sprint-anchor",
+      "kind": "normal",
+      "ports": {
+        "from": "verdict",
+        "to": "verdict"
+      },
+      "to": "gate_anchor_regression"
+    },
+    {
+      "from": "sprint_correct",
+      "id": "e-sprint-corrected",
+      "kind": "normal",
+      "to": "sprint_generate"
+    },
+    {
+      "from": "fanout_sprints",
+      "id": "e-sprint-dispatch",
+      "kind": "fanout",
+      "label": "dispatch",
+      "to": "sprint_body"
+    },
+    {
+      "from": "fanout_sprints",
+      "id": "e-sprint-drained",
+      "kind": "conditional",
+      "label": "drained",
+      "to": "supervisor"
+    },
+    {
+      "from": "sprint_body",
+      "id": "e-sprint-entry",
+      "kind": "normal",
+      "ports": {
+        "from": "contract",
+        "to": "contract"
+      },
+      "to": "gate_sprint_in"
+    },
+    {
+      "from": "sprint_security",
+      "id": "e-sprint-evaluate",
+      "kind": "normal",
+      "to": "sprint_evaluate"
+    },
+    {
+      "from": "sprint_route",
+      "id": "e-sprint-exhausted",
+      "kind": "conditional",
+      "label": "exhausted",
+      "to": "sprint_exit"
+    },
+    {
+      "from": "reduce_sprints",
+      "id": "e-sprint-exit",
+      "kind": "normal",
+      "to": "supervisor"
+    },
+    {
+      "from": "gate_sprint_in",
+      "id": "e-sprint-explain",
+      "kind": "normal",
+      "ports": {
+        "from": "contract",
+        "to": "contract"
+      },
+      "to": "sprint_curate_explain"
+    },
+    {
+      "from": "gate_mock_coverage",
+      "id": "e-sprint-generate",
+      "kind": "normal",
+      "to": "sprint_generate"
+    },
+    {
+      "from": "sprint_curate_mocks",
+      "id": "e-sprint-mock-gate",
+      "kind": "normal",
+      "to": "gate_mock_coverage"
+    },
+    {
+      "from": "sprint_curate_explain",
+      "id": "e-sprint-mocks",
+      "kind": "normal",
+      "ports": {
+        "from": "contract",
+        "to": "contract"
+      },
+      "to": "sprint_curate_mocks"
+    },
+    {
+      "from": "sprint_route",
+      "id": "e-sprint-pass",
+      "kind": "conditional",
+      "label": "pass",
+      "to": "sprint_review"
+    },
+    {
+      "from": "sprint_exit",
+      "id": "e-sprint-reduce",
+      "kind": "normal",
+      "to": "gate_sprint_out"
+    },
+    {
+      "from": "gate_sprint_out",
+      "id": "e-sprint-released",
+      "kind": "normal",
+      "to": "reduce_sprints"
+    },
+    {
+      "from": "sprint_route",
+      "id": "e-sprint-retry",
+      "kind": "conditional",
+      "label": "retry",
+      "to": "sprint_correct"
+    },
+    {
+      "from": "sprint_review",
+      "id": "e-sprint-reviewed",
+      "kind": "normal",
+      "to": "sprint_exit"
+    },
+    {
+      "from": "gate_anchor_regression",
+      "id": "e-sprint-route",
+      "kind": "normal",
+      "ports": {
+        "from": "verdict",
+        "to": "verdict"
+      },
+      "to": "sprint_route"
+    },
+    {
+      "from": "gate_syntax",
+      "id": "e-sprint-security",
+      "kind": "normal",
+      "to": "sprint_security"
+    },
+    {
+      "from": "sprint_generate",
+      "id": "e-sprint-syntax",
+      "kind": "normal",
+      "to": "gate_syntax"
+    },
+    {
+      "from": "supervisor",
+      "id": "e-supervisor-compact",
+      "kind": "conditional",
+      "label": "compact",
+      "to": "context_compact"
+    },
+    {
+      "from": "supervisor",
+      "id": "e-supervisor-evaluate",
+      "kind": "conditional",
+      "label": "evaluate",
+      "to": "gate_eval_in"
+    },
+    {
+      "from": "supervisor",
+      "id": "e-supervisor-plan",
+      "kind": "conditional",
+      "label": "plan",
+      "to": "gate_plan_in"
+    },
+    {
+      "from": "supervisor",
+      "id": "e-supervisor-sprints",
+      "kind": "conditional",
+      "label": "sprints",
+      "to": "fanout_sprints"
+    }
+  ],
+  "entry": "research_body",
+  "formatVersion": 1,
+  "graphId": "coding",
+  "graphVersion": "1.0.0",
+  "nodes": [
+    {
+      "doc": "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",
+      "effects": [
+        "git"
+      ],
+      "id": "commit",
+      "inputPorts": [],
+      "kind": "tool",
+      "outputPorts": [],
+      "reads": [
+        "messages"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Commit the working tree",
+      "toolRef": "git.commit",
+      "writes": [
+        "messages"
+      ]
+    },
+    {
+      "doc": "Runs at a superstep boundary when the message window crosses the compression threshold: summarises older messages to scratch and re-injects the digest.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "context_compact",
+      "inputPorts": [],
+      "kind": "tool",
+      "outputPorts": [],
+      "reads": [
+        "messages",
+        "refs"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Compact the conversation context",
+      "toolRef": "context.compact",
+      "writes": [
+        "counters",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "doc": "Turns the global evaluation into per-branch rework instructions.",
+      "effects": [],
+      "id": "critique",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "evaluator/critique",
+      "reads": [
+        "evaluations",
+        "messages"
+      ],
+      "role": "reviewer",
+      "subgraph": null,
+      "title": "Critique the failing run",
+      "writes": [
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Writes the sprint documentation and the progress summary for the completed work.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "documenter",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "documenter/summary",
+      "reads": [
+        "evaluations",
+        "messages",
+        "spec"
+      ],
+      "role": "documenter",
+      "subgraph": null,
+      "title": "Document the run",
+      "writes": [
+        "ledger",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "doc": "Grades the run against the spec's acceptance criteria rather than any single contract.",
+      "effects": [],
+      "id": "evaluate_global",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [
+        {
+          "key": "verdict",
+          "required": true,
+          "schemaRef": "SprintVerdict"
+        }
+      ],
+      "promptRef": "evaluator/global",
+      "reads": [
+        "branchStatus",
+        "evaluations",
+        "spec"
+      ],
+      "role": "terminal-evaluator",
+      "subgraph": null,
+      "title": "Evaluate the whole spec",
+      "writes": [
+        "evaluations",
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Emits one branch per admitted contract. The fan-out edge targets the single sprint subgraph with runtime-determined cardinality, so the topology checksum is invariant to contract count.",
+      "effects": [],
+      "id": "fanout_sprints",
+      "inputPorts": [
+        {
+          "key": "contracts",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "kind": "router",
+      "modelTier": "light",
+      "outputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "reads": [
+        "branchStatus",
+        "counters",
+        "sprintContracts"
+      ],
+      "role": "router",
+      "subgraph": null,
+      "targets": [
+        {
+          "label": "dispatch",
+          "to": "sprint_body"
+        },
+        {
+          "label": "drained",
+          "to": "supervisor"
+        }
+      ],
+      "title": "Sprint fan-out",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Emits the terminal artifacts, the pipeline-complete history event and the completion marker. Sole writer of the scalar verdict channel.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "finalize",
+      "inputPorts": [],
+      "kind": "tool",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus",
+        "evaluations",
+        "ledger"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Finalize the run",
+      "toolRef": "run.finalize",
+      "writes": [
+        "refs",
+        "verdict"
+      ]
+    },
+    {
+      "doc": "Re-runs the recorded anchor tests; a regression routes to the corrector regardless of the sprint's own verdict.",
+      "effects": [
+        "process-exec"
+      ],
+      "gate": {
+        "check": "anchor-tests-still-green",
+        "onFail": "sprint_correct"
+      },
+      "id": "gate_anchor_regression",
+      "inputPorts": [
+        {
+          "key": "verdict",
+          "required": true,
+          "schemaRef": "SprintVerdict"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "verdict",
+          "required": true,
+          "schemaRef": "SprintVerdict"
+        }
+      ],
+      "reads": [
+        "testAnchors"
+      ],
+      "role": "utility",
+      "subgraph": "sprint",
+      "title": "Anchor regression gate",
+      "writes": [
+        "branchStatus"
+      ]
+    },
+    {
+      "doc": "Admits the run into global evaluation once every sprint branch has settled.",
+      "effects": [],
+      "gate": {
+        "check": "all-sprints-settled",
+        "onFail": "graceful_failure"
+      },
+      "id": "gate_eval_in",
+      "inputPorts": [],
+      "kind": "gate",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus",
+        "evaluations"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Evaluation entry gate",
+      "writes": []
+    },
+    {
+      "doc": "Rejects a sprint whose declared boundaries are not covered by fixtures, sending it back to the mock curator.",
+      "effects": [
+        "process-exec"
+      ],
+      "gate": {
+        "check": "mock-coverage-threshold",
+        "onFail": "sprint_curate_mocks"
+      },
+      "id": "gate_mock_coverage",
+      "inputPorts": [],
+      "kind": "gate",
+      "outputPorts": [],
+      "reads": [
+        "refs"
+      ],
+      "role": "utility",
+      "subgraph": "sprint",
+      "title": "Mock coverage gate",
+      "writes": []
+    },
+    {
+      "doc": "Admits the run into planning only when a research digest exists and the spec is absent or stale.",
+      "effects": [],
+      "gate": {
+        "check": "research-digest-present",
+        "onFail": "graceful_failure"
+      },
+      "id": "gate_plan_in",
+      "inputPorts": [
+        {
+          "key": "brief",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "brief",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "reads": [
+        "spec"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Plan entry gate",
+      "writes": []
+    },
+    {
+      "doc": "Returns control to the supervisor once the spec and its contracts are on disk; fails closed when persistence did not happen.",
+      "effects": [],
+      "gate": {
+        "check": "spec-and-contracts-persisted",
+        "onFail": "graceful_failure"
+      },
+      "id": "gate_plan_out",
+      "inputPorts": [
+        {
+          "key": "contracts",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "contracts",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "reads": [
+        "spec",
+        "sprintContracts"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Plan exit gate",
+      "writes": []
+    },
+    {
+      "doc": "Boundary gate admitting the feature request into the research subgraph. Fails closed to graceful_failure when no feature request is present.",
+      "effects": [],
+      "gate": {
+        "check": "feature-request-present",
+        "onFail": "graceful_failure"
+      },
+      "id": "gate_research_in",
+      "inputPorts": [
+        {
+          "key": "request",
+          "required": true,
+          "schemaRef": "FeatureRequest"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "request",
+          "required": true,
+          "schemaRef": "FeatureRequest"
+        }
+      ],
+      "reads": [],
+      "role": "utility",
+      "subgraph": "research",
+      "title": "Research entry gate",
+      "writes": []
+    },
+    {
+      "doc": "Boundary gate returning the research digest to the supervisor; fails closed when no research document was produced.",
+      "effects": [],
+      "gate": {
+        "check": "research-document-written",
+        "onFail": "graceful_failure"
+      },
+      "id": "gate_research_out",
+      "inputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "reads": [],
+      "role": "utility",
+      "subgraph": "research",
+      "title": "Research exit gate",
+      "writes": []
+    },
+    {
+      "doc": "Boundary gate admitting one contract branch into the sprint subgraph; a non-admissible contract short-circuits to the branch exit.",
+      "effects": [],
+      "gate": {
+        "check": "contract-admissible",
+        "onFail": "sprint_exit"
+      },
+      "id": "gate_sprint_in",
+      "inputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "reads": [
+        "branchStatus",
+        "sprintContracts"
+      ],
+      "role": "utility",
+      "subgraph": "sprint",
+      "title": "Sprint entry gate",
+      "writes": []
+    },
+    {
+      "doc": "Boundary gate releasing ONE settled branch out of the sprint subgraph; the sprint subgraph's declared exit gate. It runs per branch, so it cannot itself be the join — it hands off to the root-level barrier reduce_sprints.",
+      "effects": [],
+      "gate": {
+        "check": "branch-verdicts-recorded",
+        "onFail": "graceful_failure"
+      },
+      "id": "gate_sprint_out",
+      "inputPorts": [],
+      "kind": "gate",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus"
+      ],
+      "role": "utility",
+      "subgraph": "sprint",
+      "title": "Sprint exit gate",
+      "writes": []
+    },
+    {
+      "doc": "Runs typecheck and lint under the sandbox policy; any failure routes straight to the corrector without spending an evaluation.",
+      "effects": [
+        "process-exec"
+      ],
+      "gate": {
+        "check": "typecheck-and-lint",
+        "onFail": "sprint_correct"
+      },
+      "id": "gate_syntax",
+      "inputPorts": [],
+      "kind": "gate",
+      "outputPorts": [],
+      "reads": [],
+      "role": "syntax",
+      "subgraph": "sprint",
+      "title": "Syntax gate",
+      "writes": [
+        "branchStatus"
+      ]
+    },
+    {
+      "doc": "The single failure terminal: records the failure classes per branch and the human-readable reason, then ends the run without a commit.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "graceful_failure",
+      "inputPorts": [],
+      "kind": "tool",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus",
+        "messages"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Fail gracefully",
+      "toolRef": "run.gracefulFailure",
+      "writes": [
+        "branchStatus",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Human-in-the-loop approval guarding the git commit. Effect-free by construction: the approval and the effectful commit are separate nodes.",
+      "effects": [],
+      "gate": {
+        "check": "human-approval",
+        "onFail": "graceful_failure"
+      },
+      "hitl": {
+        "checkpointId": "hitl-commit",
+        "onReject": "graceful_failure"
+      },
+      "id": "hitl_commit",
+      "inputPorts": [],
+      "kind": "gate",
+      "outputPorts": [],
+      "reads": [
+        "messages"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Commit approval",
+      "writes": [
+        "messages"
+      ]
+    },
+    {
+      "doc": "Human-in-the-loop interrupt collecting answers to the planner's open questions. Effect-free: the approval is a separate node from anything that writes.",
+      "effects": [],
+      "gate": {
+        "check": "clarifications-answered",
+        "onFail": "graceful_failure"
+      },
+      "hitl": {
+        "checkpointId": "plan-clarify",
+        "onReject": "graceful_failure"
+      },
+      "id": "plan_clarify",
+      "inputPorts": [
+        {
+          "key": "draft",
+          "required": true,
+          "schemaRef": "PlanSpec"
+        }
+      ],
+      "kind": "gate",
+      "outputPorts": [
+        {
+          "key": "draft",
+          "required": true,
+          "schemaRef": "PlanSpec"
+        }
+      ],
+      "reads": [
+        "messages"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Plan clarification interrupt",
+      "writes": [
+        "messages"
+      ]
+    },
+    {
+      "doc": "Routes to the human clarification interrupt while the draft still carries open questions and the clarification budget holds.",
+      "effects": [],
+      "id": "plan_clarify_check",
+      "inputPorts": [
+        {
+          "key": "draft",
+          "required": true,
+          "schemaRef": "PlanSpec"
+        }
+      ],
+      "kind": "router",
+      "loop": {
+        "counterKey": "planClarifyRounds",
+        "maxIterations": 3,
+        "onExhausted": "graceful_failure"
+      },
+      "modelTier": "light",
+      "outputPorts": [
+        {
+          "key": "draft",
+          "required": true,
+          "schemaRef": "PlanSpec"
+        }
+      ],
+      "reads": [
+        "counters",
+        "messages"
+      ],
+      "role": "router",
+      "subgraph": null,
+      "targets": [
+        {
+          "label": "clarify",
+          "to": "plan_clarify"
+        },
+        {
+          "label": "ok",
+          "to": "plan_materialize"
+        }
+      ],
+      "title": "Clarification check",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Produces a PlanSpec draft with sprint contracts and clarification questions from the research digest.",
+      "effects": [],
+      "id": "plan_draft",
+      "inputPorts": [
+        {
+          "key": "brief",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [
+        {
+          "key": "draft",
+          "required": true,
+          "schemaRef": "PlanSpec"
+        }
+      ],
+      "promptRef": "planner/draft",
+      "reads": [
+        "messages",
+        "spec"
+      ],
+      "role": "planner",
+      "subgraph": null,
+      "title": "Draft the plan",
+      "writes": [
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Persists the PlanSpec and every SprintContract under .bober/. Sole writer of the scalar spec channel.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "plan_materialize",
+      "inputPorts": [
+        {
+          "key": "draft",
+          "required": true,
+          "schemaRef": "PlanSpec"
+        }
+      ],
+      "kind": "tool",
+      "outputPorts": [
+        {
+          "key": "contracts",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "reads": [
+        "messages"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Materialize the plan",
+      "toolRef": "plan.materialize",
+      "writes": [
+        "refs",
+        "spec",
+        "sprintContracts"
+      ]
+    },
+    {
+      "doc": "The single join for the sprint fan-out: every branch leaves its subgraph through gate_sprint_out and converges here. Waits for every dispatched branch to settle, then makes ONE return to the supervisor. On a failed branch it routes back to the fan-out with jittered backoff (gate.onFail); the retry budget is the global supervisorRounds bound.",
+      "effects": [],
+      "gate": {
+        "check": "all-branches-settled",
+        "onFail": "fanout_sprints"
+      },
+      "id": "reduce_sprints",
+      "inputPorts": [],
+      "kind": "gate",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus",
+        "counters"
+      ],
+      "role": "utility",
+      "subgraph": null,
+      "title": "Sprint fan-in barrier",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Root-level call site for the research subgraph; the graph entry point. Holds the feature request and hands it to the research entry gate.",
+      "effects": [],
+      "id": "research_body",
+      "inputPorts": [],
+      "kind": "subgraph",
+      "outputPorts": [
+        {
+          "key": "request",
+          "required": true,
+          "schemaRef": "FeatureRequest"
+        }
+      ],
+      "reads": [],
+      "role": "utility",
+      "subgraph": null,
+      "subgraphRef": "research",
+      "title": "Research subgraph call site",
+      "writes": []
+    },
+    {
+      "doc": "Writes the consolidated research document under .bober/research/ and records its scratch ref.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "research_collect",
+      "inputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "tool",
+      "outputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "reads": [
+        "messages",
+        "refs"
+      ],
+      "role": "utility",
+      "subgraph": "research",
+      "title": "Collect the research document",
+      "toolRef": "research.collect",
+      "writes": [
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "cache": {
+        "scope": "run",
+        "ttlSeconds": 3600
+      },
+      "doc": "Grades the exploration for unanswered questions and unsupported claims. Effect-free, so it may declare a cache policy.",
+      "effects": [],
+      "id": "research_critique",
+      "inputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "llm",
+      "modelTier": "light",
+      "outputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "promptRef": "research/critique",
+      "reads": [
+        "messages",
+        "refs"
+      ],
+      "role": "reviewer",
+      "subgraph": "research",
+      "title": "Critique the research findings",
+      "writes": [
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Answers the reflexion questions against the real codebase and offloads oversized findings to scratch refs.",
+      "effects": [],
+      "id": "research_explore",
+      "inputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "promptRef": "research/explore",
+      "reads": [
+        "messages"
+      ],
+      "role": "researcher",
+      "subgraph": "research",
+      "title": "Explore the codebase",
+      "writes": [
+        "ledger",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "doc": "Turns the feature request into the exploration questions the explorer will answer, and records the reflexion round in counters.",
+      "effects": [],
+      "id": "research_reflect",
+      "inputPorts": [
+        {
+          "key": "request",
+          "required": true,
+          "schemaRef": "FeatureRequest"
+        }
+      ],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "promptRef": "research/reflect",
+      "reads": [
+        "messages"
+      ],
+      "role": "researcher",
+      "subgraph": "research",
+      "title": "Reflect on the research question",
+      "writes": [
+        "counters",
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Sends the critique back for another exploration round until the reflexion budget is spent, then collects what exists.",
+      "effects": [],
+      "id": "research_route",
+      "inputPorts": [
+        {
+          "key": "digest",
+          "required": true,
+          "schemaRef": "ResearchDigest"
+        }
+      ],
+      "kind": "router",
+      "loop": {
+        "counterKey": "researchReflexions",
+        "maxIterations": 3,
+        "onExhausted": "research_collect"
+      },
+      "modelTier": "light",
+      "outputPorts": [],
+      "reads": [
+        "counters"
+      ],
+      "role": "router",
+      "subgraph": "research",
+      "targets": [
+        {
+          "label": "done",
+          "to": "research_collect"
+        },
+        {
+          "label": "retry",
+          "to": "research_explore"
+        }
+      ],
+      "title": "Research reflexion router",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Re-dispatches the failed branches through the sprint subgraph while the rework budget holds, and fails gracefully once it is spent.",
+      "effects": [],
+      "id": "rework_route",
+      "inputPorts": [],
+      "kind": "router",
+      "loop": {
+        "counterKey": "reworkRounds",
+        "maxIterations": 2,
+        "onExhausted": "graceful_failure"
+      },
+      "modelTier": "light",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus",
+        "counters"
+      ],
+      "role": "router",
+      "subgraph": null,
+      "targets": [
+        {
+          "label": "exhausted",
+          "to": "graceful_failure"
+        },
+        {
+          "label": "rework",
+          "to": "sprint_body"
+        }
+      ],
+      "title": "Rework router",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Chooses between documenting a passing run, synthesising a partial one, reworking failed branches, and failing gracefully.",
+      "effects": [],
+      "id": "route_after_eval",
+      "inputPorts": [
+        {
+          "key": "verdict",
+          "required": true,
+          "schemaRef": "SprintVerdict"
+        }
+      ],
+      "kind": "router",
+      "modelTier": "light",
+      "outputPorts": [],
+      "reads": [
+        "counters",
+        "evaluations"
+      ],
+      "role": "router",
+      "subgraph": null,
+      "targets": [
+        {
+          "label": "exhausted",
+          "to": "graceful_failure"
+        },
+        {
+          "label": "partial",
+          "to": "synthesize"
+        },
+        {
+          "label": "pass",
+          "to": "documenter"
+        },
+        {
+          "label": "rework",
+          "to": "critique"
+        }
+      ],
+      "title": "Post-evaluation router",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Root-level call site for the sprint subgraph. Reached only through a fan-out edge, which is what puts the whole sprint region inside the fan-out region.",
+      "effects": [],
+      "id": "sprint_body",
+      "inputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "kind": "subgraph",
+      "outputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "reads": [],
+      "role": "utility",
+      "subgraph": null,
+      "subgraphRef": "sprint",
+      "title": "Sprint subgraph call site",
+      "writes": []
+    },
+    {
+      "doc": "Applies the evaluator's and the gates' feedback to the working tree, then hands back to the generator for the next attempt.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "sprint_correct",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "generator/correct",
+      "reads": [
+        "evaluations",
+        "messages",
+        "refs"
+      ],
+      "role": "generator",
+      "subgraph": "sprint",
+      "title": "Correct the sprint",
+      "writes": [
+        "ledger",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "cache": {
+        "scope": "run",
+        "ttlSeconds": 1800
+      },
+      "doc": "Selects the files this contract touches and explains them to the generator. Effect-free, so it may declare a cache policy.",
+      "effects": [],
+      "id": "sprint_curate_explain",
+      "inputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "kind": "llm",
+      "modelTier": "light",
+      "outputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "promptRef": "curator/explain",
+      "reads": [
+        "messages",
+        "spec",
+        "sprintContracts"
+      ],
+      "role": "curator",
+      "subgraph": "sprint",
+      "title": "Curate and explain context",
+      "writes": [
+        "ledger",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "doc": "Writes the fixtures and boundary mocks the sprint's tests need before any implementation exists.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "sprint_curate_mocks",
+      "inputPorts": [
+        {
+          "key": "contract",
+          "required": true,
+          "schemaRef": "SprintContract"
+        }
+      ],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "curator/mocks",
+      "reads": [
+        "messages",
+        "refs"
+      ],
+      "role": "curator",
+      "subgraph": "sprint",
+      "title": "Curate mock boundaries",
+      "writes": [
+        "ledger",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "doc": "Runs the sprint's evaluation strategies, executing the project test command under the sandbox policy and recording the anchor tests it observed green.",
+      "effects": [
+        "process-exec"
+      ],
+      "id": "sprint_evaluate",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [
+        {
+          "key": "verdict",
+          "required": true,
+          "schemaRef": "SprintVerdict"
+        }
+      ],
+      "promptRef": "evaluator/sprint",
+      "reads": [
+        "messages",
+        "refs",
+        "sprintContracts"
+      ],
+      "role": "terminal-evaluator",
+      "subgraph": "sprint",
+      "title": "Evaluate the sprint",
+      "writes": [
+        "evaluations",
+        "ledger",
+        "messages",
+        "testAnchors"
+      ]
+    },
+    {
+      "doc": "Records the branch verdict and flushes the contract's artifacts; the single per-branch termination point.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "sprint_exit",
+      "inputPorts": [],
+      "kind": "tool",
+      "outputPorts": [],
+      "reads": [
+        "evaluations"
+      ],
+      "role": "utility",
+      "subgraph": "sprint",
+      "title": "Exit the sprint branch",
+      "toolRef": "sprint.exit",
+      "writes": [
+        "branchStatus",
+        "sprintContracts"
+      ]
+    },
+    {
+      "doc": "Implements one sprint contract against the curated context, writing source and collocated tests into the working tree.",
+      "effects": [
+        "fs-write"
+      ],
+      "id": "sprint_generate",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "generator/sprint",
+      "reads": [
+        "messages",
+        "refs",
+        "spec",
+        "sprintContracts"
+      ],
+      "role": "generator",
+      "subgraph": "sprint",
+      "title": "Generate the sprint",
+      "writes": [
+        "branchStatus",
+        "ledger",
+        "messages",
+        "refs"
+      ]
+    },
+    {
+      "doc": "Advisory code review of a passing sprint diff against the contract and the anti-pattern catalogue.",
+      "effects": [],
+      "id": "sprint_review",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "reviewer/sprint",
+      "reads": [
+        "messages",
+        "refs"
+      ],
+      "role": "reviewer",
+      "subgraph": "sprint",
+      "title": "Review the sprint diff",
+      "writes": [
+        "evaluations",
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Retries the branch through the corrector while the iteration budget holds, passes to review on success, and exits the branch when the budget is spent.",
+      "effects": [],
+      "id": "sprint_route",
+      "inputPorts": [
+        {
+          "key": "verdict",
+          "required": true,
+          "schemaRef": "SprintVerdict"
+        }
+      ],
+      "kind": "router",
+      "loop": {
+        "counterKey": "sprintIterations",
+        "maxIterations": 3,
+        "onExhausted": "sprint_exit"
+      },
+      "modelTier": "light",
+      "outputPorts": [],
+      "reads": [
+        "counters",
+        "evaluations"
+      ],
+      "role": "router",
+      "subgraph": "sprint",
+      "targets": [
+        {
+          "label": "exhausted",
+          "to": "sprint_exit"
+        },
+        {
+          "label": "pass",
+          "to": "sprint_review"
+        },
+        {
+          "label": "retry",
+          "to": "sprint_correct"
+        }
+      ],
+      "title": "Sprint iteration router",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Fail-closed security review of the sprint diff; findings are recorded as evaluations before the terminal evaluator runs.",
+      "effects": [],
+      "id": "sprint_security",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "security/audit",
+      "reads": [
+        "messages",
+        "refs"
+      ],
+      "role": "reviewer",
+      "subgraph": "sprint",
+      "title": "Security audit the sprint diff",
+      "writes": [
+        "evaluations",
+        "ledger",
+        "messages"
+      ]
+    },
+    {
+      "doc": "Dispatches the next phase (plan, sprints, evaluate) and folds each subgraph result back into the run. Bounded so a phase cycle cannot spin forever.",
+      "effects": [],
+      "id": "supervisor",
+      "inputPorts": [],
+      "kind": "router",
+      "loop": {
+        "counterKey": "supervisorRounds",
+        "maxIterations": 12,
+        "onExhausted": "graceful_failure"
+      },
+      "modelTier": "light",
+      "outputPorts": [],
+      "reads": [
+        "branchStatus",
+        "counters",
+        "evaluations",
+        "spec"
+      ],
+      "role": "router",
+      "subgraph": null,
+      "targets": [
+        {
+          "label": "compact",
+          "to": "context_compact"
+        },
+        {
+          "label": "evaluate",
+          "to": "gate_eval_in"
+        },
+        {
+          "label": "plan",
+          "to": "gate_plan_in"
+        },
+        {
+          "label": "sprints",
+          "to": "fanout_sprints"
+        }
+      ],
+      "title": "Supervisor",
+      "writes": [
+        "counters"
+      ]
+    },
+    {
+      "doc": "Produces a qualified answer from the branches that did succeed when the run is only partially complete.",
+      "effects": [],
+      "id": "synthesize",
+      "inputPorts": [],
+      "kind": "llm",
+      "modelTier": "frontier",
+      "outputPorts": [],
+      "promptRef": "synthesizer/partial",
+      "reads": [
+        "branchStatus",
+        "evaluations",
+        "messages"
+      ],
+      "role": "documenter",
+      "subgraph": null,
+      "title": "Synthesize a partial result",
+      "writes": [
+        "ledger",
+        "messages"
+      ]
+    }
+  ],
+  "provenance": "authored",
+  "subgraphs": [
+    {
+      "depth": 1,
+      "entryGate": "gate_research_in",
+      "exitGate": "gate_research_out",
+      "graphId": "coding.research",
+      "id": "research",
+      "persistence": "inherit"
+    },
+    {
+      "depth": 1,
+      "entryGate": "gate_sprint_in",
+      "exitGate": "gate_sprint_out",
+      "graphId": "coding.sprint",
+      "id": "sprint",
+      "persistence": "inherit"
+    }
+  ]
+}

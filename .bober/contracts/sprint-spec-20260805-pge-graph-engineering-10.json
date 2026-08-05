@@ -1,0 +1,125 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-10",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 10,
+  "title": "Engram context layer — phase digests with non-scalar diagnoses, clean-context handoff, and threshold-driven compression with an auditable transcript",
+  "description": "Implement the persistent-archive-to-digest-to-fresh-context loop the source documents call Engram, mapped into the project-local .bober/ convention. On phase termination the terminating agent distills high-level insights, successful modelling choices, recommended next steps and specific failure diagnoses into one compact digest at .bober/handoff/<phase>-digest.md, validated by a schema that rejects a missing or empty section and requires at least one diagnosis carrying a hypothesis and its evidence — so a strategically better but temporarily regressing direction survives selection instead of being pruned by a bare score. The successor node launches with a fresh context that reads the digest first and imports no message id from the predecessor transcript. At superstep boundaries, message tokens above the configured fraction of the model's maximum input capacity trigger exactly one compression step producing a summary of active goals, completed tasks and the current workspace path, after which the baseline is that summary plus roughly the most recent tenth of the cap, with the full uncompressed transcript written to disk for auditability.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-7"
+  ],
+  "features": [
+    "feat-8"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-10-1",
+      "description": "On phase termination a digest is written to .bober/handoff/<phase>-digest.md containing all four required sections, and a validator test fails the run when any section is missing or empty.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-2",
+      "description": "The digest is asserted to be under a pinned token ceiling using the injected TokenEstimator, with the fixture sized well clear of the boundary so the assertion does not depend on estimator precision.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-3",
+      "description": "The digest schema requires at least one diagnosis entry carrying a non-empty hypothesis and non-empty evidence; a payload supplying only a numeric score fails validation with the failing Zod path reported.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-4",
+      "description": "A run whose score regressed but whose digest records a rationale is not auto-pruned by the selection logic, asserted against a fixture pair where the lower-scoring run carries a diagnosis and the higher-scoring one does not.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-5",
+      "description": "The successor's assembled prompt is captured in the trace; a test asserts it contains the digest text, contains zero message ids from the predecessor's transcript, and its estimated token count is at most the configured fraction of the predecessor's final context.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-6",
+      "description": "Driving message tokens to 84 percent of the configured cap fires no compression; driving to 86 percent fires exactly one compression step, and that step occurs at a superstep boundary rather than mid-node, asserted from the span ordering.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-7",
+      "description": "The emitted summary validates against a schema requiring non-empty activeGoals, completedTasks and workspacePath, and a fixture summary missing workspacePath fails validation.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-8",
+      "description": "The post-compression baseline token count is within tolerance of the summary plus one tenth of the cap, and .bober/logs/<runId>/messages-<n>.jsonl contains the pre-compression transcript recoverable byte for byte.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-9",
+      "description": "Archive directories under .bober/archive/<runId>/ exist per executed node and the set of directories equals the set of node ids in the trace, with each containing snapshot.json, stdout.log and outputs.json.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-10",
+      "description": "Every token threshold in this sprint is computed through an injectable TokenEstimator interface, and swapping the estimator implementation in a test changes the computed threshold, proving no threshold is hardcoded against a specific estimator.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-10-11",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not add a tokenizer dependency. Estimation stays behind the TokenEstimator interface with a chars-based default, and every acceptance band is set well clear of its boundary so estimator error cannot flip a test.",
+    "Do not use the absolute paths from the source documents. /Archive/agent_N/ maps to .bober/archive/<runId>/<nodeId>/, /research_digest.md maps to .bober/handoff/<phase>-digest.md and /workspace/scratch/ maps to .bober/scratch/<runId>/, because the CLI is symlinked into arbitrary projects and repo-external absolute paths would collide across them.",
+    "Do not make the archive grow without bound; wire it into the existing bounded retention mechanism, with immutability preserved within the retention window.",
+    "Do not replace or modify the existing src/orchestrator/compaction.ts used by the live imperative path; this is a second, graph-scoped compaction that fires at superstep boundaries.",
+    "Do not let compression fire mid-node or inside a fan-out branch.",
+    "Do not import the predecessor's raw transcript into the successor's context under any fallback path, including when the digest is missing — a missing digest is a failure, not a reason to fall back to the transcript."
+  ],
+  "stopConditions": [
+    "The digest schema rejects a score-only payload and a section-missing payload.",
+    "The 84-versus-86 percent pair demonstrates a single compression at a superstep boundary.",
+    "The pre-compression transcript is byte-recoverable from disk.",
+    "A criterion would require a real tokenizer to distinguish pass from fail, in which case the tolerance band must be widened rather than a dependency added."
+  ],
+  "definitionOfDone": "Phase digests carrying insights, choices, next steps and evidence-backed diagnoses are written and validated, successors launch from the digest with zero predecessor message ids, and compression fires exactly once at a superstep boundary above the configured threshold while the full transcript stays recoverable on disk. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the live imperative path's own compaction is untouched.",
+  "assumptions": [
+    "The 85 percent compression trigger, the 15 percent successor-context ratio and the 10 percent re-injection ratio come from the source documents and are configurable, with defaults set to those values.",
+    "The existing src/orchestrator/context-handoff.ts Zod-typed ProjectContext and Decision shapes are the model for the digest's structured sections rather than a new vocabulary.",
+    "The archive written in sprint 6 is the raw material the digest distills; this sprint reads sealed archives and never rewrites them."
+  ],
+  "outOfScope": [
+    "Cross-run memory or a long-term knowledge base; digests are per phase within a run.",
+    "Summarisation quality benchmarking — the tests assert schema conformance, ratios and auditability, not summary quality."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Compression is a node in the topology (context_compact) reached from the supervisor at a superstep boundary, exactly as the architecture blueprint shows, so the ordering assertion is available from the span sequence without instrumenting node internals. Write the pre-compression transcript BEFORE compressing and assert recoverability from the written file, not from memory. The successor's clean context is constructed by building its prompt from the digest plus the node's declared input ports only — never by filtering the predecessor's message list, because a filter can leak and a construction cannot. Follow the existing compaction module's fail-open posture only for the summarisation call itself; a missing or invalid digest must fail closed. Diagnosis entries need hypothesis, evidence and optionally a pointer to a ScratchRef for the raw evidence, so large evidence never inflates the digest past its ceiling.",
+  "evaluatorNotes": "Verify the zero-predecessor-message-ids assertion inspects the actual assembled prompt captured in the trace rather than the intended construction. Verify the 84 and 86 percent cases both use the same estimator and cap so the pair is a genuine boundary test. Verify the transcript recoverability assertion compares bytes, not parsed JSON. Verify the archive-set equality assertion uses the trace's executed node set rather than the topology's declared node set, since skipped and serialized nodes must not produce archive directories. Confirm src/orchestrator/compaction.ts is unmodified in the diff.",
+  "estimatedFiles": [
+    "src/pge/runtime/digest.ts",
+    "src/pge/runtime/digest.test.ts",
+    "src/pge/runtime/handoff.ts",
+    "src/pge/runtime/handoff.test.ts",
+    "src/pge/runtime/compactor.ts",
+    "src/pge/runtime/compactor.test.ts",
+    "src/pge/runtime/token-estimator.ts",
+    "src/pge/runtime/token-estimator.test.ts",
+    "src/pge/runtime/archive.ts",
+    "src/orchestrator/context-handoff.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

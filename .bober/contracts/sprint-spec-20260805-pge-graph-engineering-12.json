@@ -1,0 +1,145 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-12",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 12,
+  "title": "Node library part 2 — sprint subgraph with curator mock-test gate, syntax gate, test anchors, correction loop, selective verification and gated documenter/commit",
+  "description": "Implement the sprint subgraph as the topology declares it. The Curator explains each provided test's expected behaviour in natural language and generates 6 to 8 additional diverse mock tests covering boundary, empty, large and negative categories, enforced by a gate. Generated code passes a syntax and typecheck gate before reaching any downstream node, with compiler diagnostics attached verbatim to the rework payload on failure. The Evaluator maintains a registry of previously passed tests as anchors and rejects a self-healing edit that breaks an anchor even when it fixes the targeted test. On failure the correction payload carries raw stderr verbatim plus a brief critique and routes back to the generator, whose next prompt contains that payload, with the rework loop bounded by the topology's maxIterations. An evaluator that errors or returns malformed output routes to critique and never to success. Expensive suites run only when high-risk paths change or an intermediate quality score falls below threshold. A passing sprint reaches the documenter and produces a conventional commit behind the human-approval gate. Generated code and generated tests execute only through the sandbox runner.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-8",
+    "sprint-spec-20260805-pge-graph-engineering-9",
+    "sprint-spec-20260805-pge-graph-engineering-11"
+  ],
+  "features": [
+    "feat-9"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-12-1",
+      "description": "Curator output contains one expectedBehavior string per provided or existing test; a test asserts the explanation count equals the input-test count and each explanation exceeds a configured minimum length.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-2",
+      "description": "The mock-test gate asserts the generated count is within [6,8] and that the set covers at least the boundary, empty, large and negative categories; a 5-case fixture and a fixture missing one category both fail the gate.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-3",
+      "description": "A gate fed code that does not typecheck blocks traversal, the evaluator node is never reached, and the compiler diagnostics are attached verbatim to the rework payload.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-4",
+      "description": "An integration test injects a failing implementation and asserts raw stderr appears verbatim in the correction payload, a non-empty critique accompanies it, the trace shows a route back to the generator node, and the second iteration's prompt contains that payload.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-5",
+      "description": "State carries testAnchors and an iteration that fixes the targeted test while breaking a previously passed anchor is flagged as a regression and rejected by the evaluator rather than accepted.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-6",
+      "description": "An evaluator that throws and an evaluator that returns malformed output both route to the critique node and never to the success node, with failClosed true recorded in the trace for each case.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-7",
+      "description": "A failing sprint re-enters the sprint subgraph at most maxIterations times with the critique present in each re-entry's input, then terminates via the graceful-failure path from sprint 9.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-8",
+      "description": "Three selective-verification cases hold: a docs-only diff skips the expensive suite node, a diff touching a declared high-risk path runs it, and a low-risk diff whose intermediate quality score is below threshold runs it anyway.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-9",
+      "description": "A passing sprint reaches the documenter node, a sprint doc file is written, and a conventional commit of the form bober(sprint-N): ... is produced only when the approval gate from sprint 8 has an approval record; a failing sprint produces no commit.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-10",
+      "description": "A generated test invoking a denied binary is rejected by the sandbox and recorded, and a non-terminating generated test is killed by the configured timeout rather than hanging the run; both route to correction and never to pass.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-11",
+      "description": "A fixture suite of model outputs containing multiline TypeScript with embedded double quotes parses at or above the pinned recovery rate in src/providers/structured.test.ts, and a control run of the same fixtures through a strict escape-sensitive path reproduces the failure mode the offloading discipline removes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-12",
+      "description": "The sprint subgraph compiles independently from the committed artifact's subgraph declaration and executes end to end against stub providers, producing the same .bober/ artifact shapes the imperative sprint cycle produces.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-12-13",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not mandate YAML for structured output and do not add a YAML parser dependency. JSON stays canonical on the wire and on disk; the escape problem is removed structurally by writing generated source to the scratch store and carrying paths plus content hashes in the payload. A vendored block-scalar normaliser behind the existing Validator seam is the only fallback and adds no dependency.",
+    "Do not modify runCurator, runGenerator, runEvaluatorAgent, runCodeReviewer or runDocumenter; node bodies adapt them.",
+    "Do not re-point bober sprint or bober_sprint at this subgraph. Both re-implement the sprint loop without the security, curator, review and documenter stages; their disposition is decided in sprint 14, and changing them here would alter observable behaviour for workflows that depend on the leaner path.",
+    "Do not let the commit node run without an approval record in non-interactive mode, and do not add a bypass flag.",
+    "Do not execute generated code or generated tests outside SandboxRunner, including through the existing unguarded tool handler.",
+    "Do not change the security gate's fail-closed semantics while wiring the security node into the subgraph."
+  ],
+  "stopConditions": [
+    "The subgraph compiles from the committed artifact and runs end to end against stub providers.",
+    "Every gate in the subgraph rejects its negative fixture without invoking the downstream node.",
+    "The anchor regression case rejects an iteration that trades a fixed test for a broken one.",
+    "A criterion would require putting generated source code inside a JSON string field.",
+    "A criterion would require modifying an existing agent function."
+  ],
+  "definitionOfDone": "The sprint subgraph runs curate, mock-test gate, generate, syntax gate, security, evaluate, anchor-regression gate, route, correct, review, documenter and gated commit as registered node implementations compiled from the committed artifact, with generated code executing only in the sandbox and generated source travelling by scratch reference rather than inside JSON strings. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the live imperative sprint cycle is unchanged.",
+  "assumptions": [
+    "The existing SprintContract successCriteria verificationMethod enum is the vocabulary for selective verification; high-risk paths are declared in config rather than inferred.",
+    "The security node reuses the shipped fail-closed security gate rather than reimplementing it.",
+    "Test anchors are criterion ids or test names that previously passed within the same sprint's iteration history, stored in the setUnion testAnchors channel so concurrent branches cannot lose one."
+  ],
+  "outOfScope": [
+    "Improving generation quality; this sprint changes where the generator runs and what guards surround it.",
+    "Cross-sprint anchor persistence beyond a run."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "The syntax gate and the evaluator both shell out through SandboxRunner from sprint 6 with an explicit allowlist covering the project's configured typecheck, build, lint and test commands — never through orchestrator/tools/handlers.ts. Raw stderr goes to the scratch store and the correction payload carries the ScratchRef plus a bounded inline excerpt, so the verbatim assertion reads the scratch file while the inline state stays under the byte guard. The rework loop bound comes from the topology's sprint_route and rework_route loop declarations, so the counter is the same one sprint 9 enforces. The commit node declares effects git, which sprint 1's EffectfulNodeContainsHitl rule plus an inbound-edge rule already force to sit behind hitl_commit at the fan-in barrier. For the structured-output criterion, extend the existing fixture suite in src/providers/structured.test.ts rather than creating a parallel one, and add the block-scalar normaliser behind the existing Validator seam in src/providers/structured.ts as a tolerant inbound path only.",
+  "evaluatorNotes": "This sprint has the widest gate surface; check each negative fixture actually reaches the gate rather than failing earlier for an unrelated reason. Verify the verbatim stderr assertion compares the exact bytes captured from the failing process, not a reformatted message. Verify the anchor regression test constructs a genuine trade — target test fixed AND anchor broken in the same iteration — rather than only breaking an anchor. Verify the commit test asserts no git object was created in the fail-closed case. Verify the sandbox is the only execution path for generated code by grepping the sprint node modules for execa and child_process. Verify no existing agent file and no security-gate file appears in the diff except as an import.",
+  "estimatedFiles": [
+    "src/pge/nodes/sprint-curate.ts",
+    "src/pge/nodes/sprint-curate.test.ts",
+    "src/pge/nodes/sprint-generate.ts",
+    "src/pge/nodes/sprint-evaluate.ts",
+    "src/pge/nodes/sprint-evaluate.test.ts",
+    "src/pge/nodes/sprint-correct.ts",
+    "src/pge/nodes/sprint-review.ts",
+    "src/pge/nodes/documenter.ts",
+    "src/pge/nodes/commit.ts",
+    "src/pge/nodes/commit.test.ts",
+    "src/pge/nodes/gates.ts",
+    "src/pge/nodes/anchors.ts",
+    "src/pge/nodes/anchors.test.ts",
+    "src/providers/structured.ts",
+    "src/providers/structured.test.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

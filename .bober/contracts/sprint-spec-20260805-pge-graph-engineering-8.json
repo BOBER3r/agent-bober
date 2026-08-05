@@ -1,0 +1,131 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-8",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 8,
+  "title": "Filesystem checkpointer, cross-process resume, superstep-boundary HITL interrupts and fail-closed gating of git and deploy",
+  "description": "Make a run survivable and pausable. FsCheckpointer writes .bober/checkpoints/<runId>/<superstep>.json temp-file-plus-rename so a partial checkpoint is never readable, carrying state, pending tasks, completed task keys, an optional interrupt record and the graph identity so a resume against a changed topology fails loudly rather than replaying task keys into a different graph. InterruptController evaluates interrupts BEFORE a node executes, at a superstep boundary, so no node body ever re-runs on resume and the double-execution class simply does not exist. It delegates to the shipped checkpoint mechanism registry and audit writer rather than inventing a second approval path, so bober approve and bober reject keep working. Git commits and deploy actions are reachable only through a HITL gate and block fail-closed with an audit entry when no approval record exists. Ships the third blocking invariant suite (cross-process durability) plus an adversarial checkpointer conformance suite with kill-mid-write fault injection.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-7"
+  ],
+  "features": [
+    "feat-7"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-8-1",
+      "description": "A run is terminated after node 3 and restarted from the persisted checkpoint in a FRESH process; executor spies for nodes 1 to 3 record zero new invocations and the final artifact equals the uninterrupted run's artifact.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-2",
+      "description": "An adversarial checkpointer suite exercises put, get, latest, list and prune including kill-mid-write fault injection, and asserts no partially written checkpoint is ever readable and that list never yields a ref whose get fails.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-3",
+      "description": "A checkpoint carries graphId, graphVersion and checksum, and resume against an artifact whose checksum differs throws ChecksumMismatch rather than replaying completed task keys against a changed graph.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-4",
+      "description": "Resume skips dispatch of every taskKey present in completedTaskKeys before dispatch rather than after, asserted by a spy that records dispatch attempts and not merely executions.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-5",
+      "description": "Triggering an interrupt returns a result with status 'interrupted', the persisted checkpoint contains the pending payload, no further node executed, and resuming continues from exactly that node with the supplied human decision present in state.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-6",
+      "description": "A test asserts the interrupt is evaluated before the node handler is entered — the handler spy records zero invocations for the interrupted node before resume and exactly one after — proving no node body re-runs.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-7",
+      "description": "A commit node and a deploy node in non-interactive mode with no recorded approval are both blocked fail-closed and written to the audit log; with an approval record present both proceed, and the audit entry names the checkpoint id in both cases.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-8",
+      "description": "InterruptController resolves its mechanism through the shipped getCheckpointMechanismFor registry and records outcomes through runWithAudit, asserted by a test that configures the disk mechanism and observes the audit file the existing subsystem writes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-9",
+      "description": "A positive nesting test asserts a nested child subgraph resolves the parent's checkpointer handle identity, and a hand-edited artifact declaring its own persistence handle is rejected by validation with NestedCheckpointer.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-10",
+      "description": "With durability set to 'superstep' a checkpoint file exists per superstep and with 'exit' only at phase boundaries; both settings produce the same final artifact for the same golden fixture.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-11",
+      "description": ".gitignore gains .bober/checkpoints/ in the same change that creates it, and prune(runId, keep) retains exactly the requested number of most recent checkpoints.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-8-12",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement an in-process or in-memory checkpointer, not even as a test double alternative that could be selected in production; the cross-process criterion is the discriminator and an in-memory store cannot satisfy it.",
+    "Do not use better-sqlite3 or any database for checkpoints; a checkpoint must remain readable with cat and diffable with git diff, which is the debugging affordance the whole design rests on.",
+    "Do not allow an interrupt inside a fan-out branch; InterruptInsideFanOut must reject it at validation time, and per-branch approvals batch at the fan-in barrier so one interrupt covers N branches.",
+    "Do not create a second approval path, a second audit file or a second set of checkpoint ids; delegate to the shipped subsystem so bober approve, bober reject and the nine documented checkpoint ids keep working unchanged.",
+    "Do not implement retry, backoff or partial-failure recovery — sprint 9.",
+    "Do not implement the planner clarification loop node itself; sprint 11 builds the node on top of this interrupt mechanism."
+  ],
+  "stopConditions": [
+    "The fresh-process kill-and-resume test is green with zero re-invocations of completed nodes.",
+    "The adversarial checkpointer suite including kill-mid-write is green.",
+    "Every HITL path resolves through the existing mechanism registry and audit writer.",
+    "A criterion would require resuming inside a node body rather than at a superstep boundary."
+  ],
+  "definitionOfDone": "A run can be killed and resumed in a separate CLI process without re-executing a completed node, an interrupt freezes a single consistent snapshot and resumes with the human decision in state, and git and deploy actions are unreachable without an approval record. The third blocking invariant suite is green alongside an adversarial checkpointer conformance suite. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and no shipped execution path reaches the checkpointer.",
+  "assumptions": [
+    "The HITL round trip spans separate CLI invocations, which is why src/orchestrator/checkpoints/mechanisms/disk.ts already exists; the graph checkpointer complements it rather than replacing it.",
+    "durability defaults to 'superstep' for crash-safety parity with the per-contract flush discipline at flusher.ts:46-76, on the assumption that one JSON write per node is negligible against LLM latency. If measurement disagrees, 'exit' is the fallback at the cost of coarser resume.",
+    "Modelling every pause point as its own node inflates node count and forces some node-local values into refs; where an approval depends on a large intermediate result, that result is offloaded to ScratchStore rather than inlined, or the inline byte guard rejects the commit."
+  ],
+  "outOfScope": [
+    "Resuming a run whose topology artifact changed — that is a deliberate ChecksumMismatch failure, not a supported migration.",
+    "Multi-run concurrent HITL; the existing one-careful-run-at-a-time limitation is unchanged."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "createFsCheckpointer takes projectRoot as a required argument and there is no module-level instance, so worktree runs stay isolated. put() writes to a temp name in the same directory then renames, which is atomic on the same filesystem — do not write in place and do not write to the OS temp directory. CompiledGraph deliberately has no checkpointer field, so a nested checkpointer is unrepresentable in the compiled form; NestedCheckpointer exists only to catch hand-edited JSON. Generalise the skip-before-dispatch discipline at workflow/resume-cursor.ts:12 from sprint numbers to task keys rather than writing a new mechanism. InterruptController.maybeInterrupt is called by the interpreter BEFORE Scheduler.settle dispatches, and raiseSuspend throws GraphInterrupted which the interpreter converts into the interrupted result — the node handler must never see it. Model the adversarial suite on the published @langchain/langgraph-checkpoint-validation contract semantics for put, get, list and delete, without taking that package as a dependency.",
+  "evaluatorNotes": "Verify the kill-and-resume test genuinely uses a separate process (child process or spawned CLI) rather than a same-process simulation; a same-process test cannot distinguish this design from MemorySaver and would make the whole criterion vacuous. Verify the kill-mid-write injection truncates a real file rather than mocking the filesystem. Verify the interrupt-before-execution assertion inspects handler invocation counts rather than trace ordering alone. Verify the fail-closed test asserts the git operation did NOT happen, not merely that an error was returned. Verify no new checkpoint mechanism, audit path or approval CLI verb was introduced. Confirm .bober/checkpoints/ is in .gitignore in this diff.",
+  "estimatedFiles": [
+    "src/pge/runtime/checkpointer.ts",
+    "src/pge/runtime/checkpointer.test.ts",
+    "src/pge/runtime/__tests__/checkpointer.conformance.test.ts",
+    "src/pge/runtime/interrupt.ts",
+    "src/pge/runtime/interrupt.test.ts",
+    "src/pge/runtime/interpreter.ts",
+    "src/pge/runtime/__tests__/durability.invariant.test.ts",
+    "src/orchestrator/checkpoints/registry.ts",
+    "src/orchestrator/checkpoints/audit.ts",
+    ".gitignore"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

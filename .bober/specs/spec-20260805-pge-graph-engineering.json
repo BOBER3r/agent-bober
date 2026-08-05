@@ -1,0 +1,343 @@
+{
+  "specId": "spec-20260805-pge-graph-engineering",
+  "version": 1,
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z",
+  "title": "Prompt Graph Engineering (PGE) Execution Layer — serializable topology artifact plus a native TypeScript superstep runtime",
+  "description": "Make agent-bober's orchestration topology an explicit, Zod-validated, versioned, checksummed artifact under .bober/topology/, and execute that artifact with a native TypeScript superstep interpreter behind the existing private PipelineEngine seam. Layer A (topology) ships first and standalone: schema, 30-rule validator, hash, mermaid/dot render, structural diff, doc-drift check, state audit and an offline optimisation hook — zero new dependencies, zero runtime change. Layer B (runtime) then adds scheduling, dynamic routing, dependency- and file-conflict-aware fan-out, order-invariant fan-in reducers, filesystem checkpointing, superstep-boundary HITL interrupts, per-node tracing and cost accounting, bounded loops and graceful failure — default-off, with TsPipelineEngine retained permanently as the conformance oracle. Justification is structural, not latency: inspectable topology (G1), topology/content separation (G2), executable semantics (G3), and the graph as a versionable, CI-gateable, optimisable engineering artifact (G4).",
+  "mode": "brownfield",
+  "status": "draft",
+  "ambiguityScore": 4,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "D1-runtime-choice",
+      "answer": "Native TypeScript superstep interpreter in src/pge/runtime/**. Neither langgraph (Python) nor @langchain/langgraph (JS) becomes a dependency. LangGraph semantics are adopted by name only. See ADR-1.",
+      "resolvedAt": "2026-08-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D2-authoring-form",
+      "answer": "Plain typed object literal (export const CODING_GRAPH: TopologySpec) serialized by `bober pge dump` into a committed .bober/topology/<graphId>.json that the runtime loads. Not a builder DSL, not hand-edited JSON, not runtime introspection. See ADR-2.",
+      "resolvedAt": "2026-08-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D3-justification",
+      "answer": "Latency is not a design input. Measured over 34 specs / 175 sprints the dependsOn-aware parallel ceiling is 1.34x, 15 of 34 specs are pure linear chains, and in the 3.33x best case the concurrently-schedulable sprint pairs collide on the same files in 8 of 10 pairs. No acceptance criterion in this plan asserts a wall-clock speedup; fan-out concurrency defaults to 1 and is opt-in.",
+      "resolvedAt": "2026-08-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D4-source-document-contradictions",
+      "answer": "YAML mandate rejected (JSON stays canonical; escape collisions removed structurally by never putting source code inside a JSON string). Redis rejected (content-addressed filesystem stores). MemorySaver rejected (filesystem checkpointer). Pydantic rejected (Zod). Absolute /Archive and /workspace paths mapped into .bober/. Document code templates treated as pseudocode; trip_goal and files_to_edit are errata. See ADR-7 and contradictions C1-C10.",
+      "resolvedAt": "2026-08-05T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D5-migration-end-state",
+      "answer": "PgeEngine ships as a fifth PipelineEngineName, pipeline.engine keeps defaulting to 'ts', TsPipelineEngine is retained permanently as the conformance oracle. If conformance never goes green, PGE stays a permanently opt-in engine and nothing is deleted. See ADR-8.",
+      "resolvedAt": "2026-08-05T00:00:00Z",
+      "resolvedBy": "user"
+    }
+  ],
+  "assumptions": [
+    "The execution topology today exists only as imperative control flow in src/orchestrator/pipeline.ts (1,094 lines, sequential sprint loop at :976-987) and cannot be validated, rendered, diffed or versioned without running it.",
+    "A PGE-shaped runtime already exists but is dormant: src/orchestrator/workflow/ (34 files, ~189 green tests), gated off by eligibility.ts:10-12 returning hardcoded false and workflow-engine.ts:90-94 throwing unconditionally. Scheduler, Semaphore, Budget, retry.ts, reconciler.ts, synthesizer.ts and conformance.ts are reused and gain their first production callers.",
+    "SprintContract.dependsOn is declared at sprint-contract.ts:92 and read by no scheduler anywhere in the repo. FrontierPlanner is its first consumer.",
+    "The engine seam is private and already multi-engine: selectPipelineEngine / selectPipelineEngineForTeam (workflow/selector.ts:52,110), enum config.pipeline.engine at config/schema.ts:360 duplicated at :519 for teams.",
+    "src/chat/completion-tailer.ts:181 matches the 'pipeline-complete' history event and the <runId>.completed.json marker by untyped string literal; any engine that fails to emit both identically hangs that consumer forever with no type error and no failing test outside that module.",
+    "EngineConformanceHarness (workflow/conformance.ts:64-153) was built for exactly this comparison and has never been pointed at a real engine — its only non-self reference is its own test.",
+    "No command allowlist or denylist exists in the shipped tool layer: environment.ts:38 lists redis-cli inside CANDIDATE_TOOLS, which is a PATH probe surfaced to agents, and tools/handlers.ts:97 runs execa(\"sh\", [\"-c\", command]) unguarded. SandboxRunner is entirely net-new work.",
+    "There is no tokenizer dependency, so every token-derived threshold (R14 15%, R29 85%, R31 10%) rests on a chars/4 estimator behind a TokenEstimator interface with tolerance bands well clear of each boundary.",
+    ".bober/ already tracks 1,224 files and .gitignore excludes only snapshots/, medical/, chat/, memory/*.db and graph/.hook-queue.jsonl, so every new runtime subtree must be ignored in the same change that creates it.",
+    "Only .bober/topology/ and .bober/golden/ are version-controlled; checkpoints, scratch, traces, cache, archive and logs are ignored and pruned.",
+    "The ESLint no-restricted-imports idiom already enforces local-only telemetry (eslint.config.js:46-48) and zero-egress medical (:75-77); the topology module boundary reuses it verbatim, so zero-execution during validation is a property of the module graph rather than of an assertion.",
+    "compile() throws on both UnregisteredNodeImpl and OrphanNodeImpl, so the full committed artifact is not end-to-end compilable until every node implementation is registered. Node sprints therefore compile their own subgraph against fixture registries, and the first full-graph compile happens in sprint 13.",
+    "The in-flight spec-20260804-opus5-adaptation (8 proposed, unexecuted contracts) touches the same concurrency and evaluator-gate surface, in particular its sprint 8 parallel review chain.",
+    "The working tree is dirty on branch bober/graph-backend-choice with an unmerged pluggable-graph-backend feature; this plan assumes a fresh branch taken from a clean base."
+  ],
+  "outOfScope": [
+    "Adopting LangGraph in either language, in any sprint, including behind an adapter. If a GraphRuntime adapter is ever wanted, the topology artifact stays the contract and that is separate future work.",
+    "Any wall-clock speedup claim, latency benchmark, or acceptance criterion phrased in terms of elapsed time.",
+    "Per-node git worktree isolation. File conflicts are handled by serializing conflicting contracts in FrontierPlanner, not by isolating them.",
+    "An automated search strategy for the optimiser. The mutation, re-validation and per-variant scoring hook ships; picking variants stays an explicit human step (R10 is non-mandatory).",
+    "OS-level or container isolation for generated code. SandboxRunner is process-level containment: command allowlist, cwd confinement, wall-clock kill.",
+    "Deleting TsPipelineEngine or lowering the default pipeline.engine away from 'ts'.",
+    "Reworking bober sprint / bober_sprint into the sprint subgraph. Their disposition is decided and documented in the final sprint, not implemented.",
+    "Changing the frozen runPipeline signature (pipeline.ts:1074), the frozen PipelineResult field set (pipeline.ts:66) or any existing .bober/ artifact shape.",
+    "Migrating the medical-sop engine or the fleet orchestrator onto the graph runtime.",
+    "Adding a real tokenizer dependency."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Serializable topology artifact and structural validator",
+      "description": "A Zod TopologySpec with a discriminated node union, a 30-code validator that never imports an executor, a canonical form, a sha256 checksum, the authored CODING_GRAPH literal describing the shipped pipeline, and the `bober pge` CLI that dumps, checks and validates it.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Every node in the artifact declares a kind from llm|tool|gate|router|subgraph; every llm node carries a promptRef and no tool node carries one.",
+        "AC2: validateTopology returns a distinct named DiagnosticCode for each of 30 malformed fixtures and never throws.",
+        "AC3: An ESLint no-restricted-imports boundary makes it a lint error for src/pge/topology/** to import src/pge/runtime/**, src/pge/nodes/**, src/orchestrator/** or src/providers/**.",
+        "AC4: `bober pge dump --check` exits non-zero on any byte difference between the literal and the committed .bober/topology/coding.json.",
+        "AC5: Editing a prompt body leaves the topology checksum unchanged; adding an edge changes it."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Topology toolkit — render, structural diff, doc drift, state audit, optimisation hook",
+      "description": "Derive a mermaid or dot diagram, a structured node/edge/channel/route-label diff, a documentation-drift report, a state-mutation inventory and offline-mutated variants from the artifact alone, with no runtime present.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: `bober pge render --format mermaid` emits text a mermaid parser accepts, pinned by a snapshot that changes when a node is added.",
+        "AC2: `bober pge diff a.json b.json` reports exactly one nodeAdded and one edgeAdded for a one-node-one-edge change and an empty diff with exit 0 for identical inputs.",
+        "AC3: Route-label additions and removals appear in the diff, so a routing change is never an empty diff.",
+        "AC4: `bober pge audit-state` regenerates .bober/topology/state-audit.json deterministically and every OverallState key has at least one declared writer.",
+        "AC5: optimizeTopology returns a new spec that still passes validation, writes a per-variant score record and executes zero nodes."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-3",
+      "title": "Engine seam hardening and loop bounds on the shipped imperative path",
+      "description": "Widen the private PipelineEngine seam to a named RunOptions and a single exported PIPELINE_ENGINE_NAMES source, extract finalizePipelineRun so every engine emits an identical terminal side-effect set, and retrofit enforced retry counters onto the currently live cyclic paths.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: PIPELINE_ENGINE_NAMES is exported once and both Zod enums (pipeline.engine and teams[].pipelineShape) are derived from it, so adding an engine name is a one-place edit.",
+        "AC2: finalizePipelineRun is the single emitter of the pipeline-complete history event and the .completed.json marker, called by TsPipelineEngine and RunResultFlusher, with an end-to-end test asserting CompletionTailer yields the runId.",
+        "AC3: The sprint retry path and the pure-sprint iteration loop both read a configured maximum and emit a bounded-exit event; an always-failing evaluator terminates within max+1 iterations.",
+        "AC4: pipeline.engine still defaults to 'ts' and the existing suite is green with no engine reselected."
+      ],
+      "dependencies": [],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-4",
+      "title": "Three-scope state split, join-semilattice reducers and the topology compiler",
+      "description": "OverallState as exactly 14 snapshot-pinned public Zod keys bound to the existing SprintContract and PlanSpec contracts, per-node port schemas, node-local private state, a closed six-reducer registry whose signature takes whole batches, and a compiler that resolves every string reference to a typed binding.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A snapshot test pins the exact OverallState key set and a compile-time Exact guard fails tsc if sprintContracts drifts from z.infer<typeof SprintContractSchema>.",
+        "AC2: Each of the six reducers passes a property test over at least 200 randomized pairs for associativity, batching invariance, shuffle invariance and idempotence.",
+        "AC3: compile() throws UnregisteredNodeImpl for a topology node with no implementation and OrphanNodeImpl for an implementation absent from the topology.",
+        "AC4: compilerFidelity asserts CompiledGraph node keys equal spec node ids and adjacency equals spec edges, with the spec authoritative."
+      ],
+      "dependencies": [
+        "feat-1"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Runtime substrate — scratch, archive, semantic cache, trace, ledger, sandbox",
+      "description": "Content-addressed offload, sealed per-node archives, a filesystem semantic cache keyed exactly as mandated, a JSONL span trace, replay-idempotent per-node cost accounting, and a command-allowlisted wall-clock-bounded runner for generated code.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A 5 MB payload round-trips through ScratchStore byte-identically and is referenced by a ScratchRef carrying uri, sha256 and bytes.",
+        "AC2: A sealed archive rejects further writes with ArchiveImmutableError, and archive directories equal the executed node set.",
+        "AC3: The cache hits on an identical call and misses when any one of systemPrompt, userPrompt, contextFilesHash, model, temperature or toolsMask varies; TTL expiry is driven by an injected clock.",
+        "AC4: A denied binary returns status 'denied' and a non-terminating command is killed at the configured timeout, each recorded as a span.",
+        "AC5: Per-node ledger sums equal run totals across a retried attempt, and exceeding a configured USD ceiling throws a typed budget error."
+      ],
+      "dependencies": [
+        "feat-4"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-6",
+      "title": "Superstep interpreter, admission planner and single commit boundary (G3)",
+      "description": "Execute a compiled graph as plan-frontier, admit, execute, barrier, commit once, checkpoint, route. Nodes return a unified update-plus-destination Command. Fan-out is dynamic and cardinality-invariant; admission honours dependsOn and serializes file-set collisions; the commit boundary is the sole writer and sole clock.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: One integration trace shows the scheduled node order, at least one dynamic route, at least one loop re-entry and at least one shared-state merge.",
+        "AC2: A planner emitting 5 contracts produces 5 branch dispatches from one routing decision, and re-running with 3 leaves the topology checksum unchanged.",
+        "AC3: B.dependsOn=[A] is never dispatched before A completes, and two contracts sharing an estimatedFiles entry never run concurrently, with the trace recording serializedReason 'fileConflict' and both contract ids.",
+        "AC4: A write-counter spy over 8 concurrent branches records exactly one write per channel per superstep, and concurrency 1 and concurrency 8 produce byte-identical artifacts.",
+        "AC5: Private node keys are absent from merged state after the node returns while the trace shows they existed during execution."
+      ],
+      "dependencies": [
+        "feat-5"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-7",
+      "title": "Durability, superstep-boundary HITL and partial-failure resilience",
+      "description": "Filesystem checkpoints written temp-file-plus-rename, cross-process resume that re-invokes zero completed nodes, interrupts evaluated before node execution so no node body re-runs, fail-closed gating of git and deploy actions, per-branch retry with jittered exponential backoff, cached successful branches and a graceful failure terminal.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A run killed after node 3 and restarted in a fresh process re-invokes zero of nodes 1-3 and yields the uninterrupted run's artifact.",
+        "AC2: An interrupt returns status 'interrupted', persists the pending payload, executes no further node, and resuming continues at exactly that node with the supplied decision in state.",
+        "AC3: A commit node and a deploy node in non-interactive mode with no approval record are both blocked fail-closed and written to the audit log; with an approval record both proceed.",
+        "AC4: In a 3-branch fan-out where branch 2 throws, branches 1 and 3 persist, only branch 2 is retried on the configured jittered schedule, and a re-run reuses the cached results without re-invoking their executors.",
+        "AC5: A permanently failing node attempts exactly MAX_RETRIES times, routes to the graceful-failure terminal, writes a failure artifact and terminates with verdict 'partial' or 'failed' rather than an uncaught exception."
+      ],
+      "dependencies": [
+        "feat-6"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-8",
+      "title": "Engram context layer — digests, structured handoff, compression",
+      "description": "Distill each phase into a compact digest carrying insights, successful choices, next steps and named failure diagnoses; launch the successor with a fresh context that reads the digest instead of the predecessor transcript; compress message history at a threshold with an auditable full transcript on disk.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: A phase digest is written with all four required sections and fails validation when any section is missing or empty, and stays under a pinned token ceiling.",
+        "AC2: The digest schema requires at least one diagnosis entry carrying hypothesis and evidence; a score-only payload fails validation and a regressed-score run with a recorded rationale is not auto-pruned.",
+        "AC3: The successor's assembled prompt contains the digest text, zero message ids from the predecessor transcript, and at most a configured fraction of the predecessor's final context.",
+        "AC4: 84% of the configured cap fires no compression, 86% fires exactly one at a superstep boundary and not mid-node, and the post-compression baseline is the summary plus roughly the most recent 10% of tokens.",
+        "AC5: The pre-compression transcript is recoverable byte-for-byte from .bober/logs/<runId>/messages-<n>.jsonl."
+      ],
+      "dependencies": [
+        "feat-6"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-9",
+      "title": "Node library — research, plan, gates and the sprint subgraph",
+      "description": "Implement the topology's node bodies by reusing the existing agent functions unmodified: structured problem reflection, bounded researcher critique, planner clarification loop, schema and syntax gates that never merge invalid payloads, curator explanation plus 6-8 categorised mock tests, generator, evaluator with a test-anchor regression guard, correction loop carrying raw stderr, review, documenter and gated commit.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: Researcher output validates against a ProblemReflection schema with non-empty goal, inputs, outputs, rules and constraints, and a prose-only output is rejected with the failing Zod path.",
+        "AC2: The mock-test gate accepts only counts in [6,8] covering boundary, empty, large and negative, rejecting a 5-case fixture and a missing-category fixture.",
+        "AC3: A failing implementation puts raw stderr verbatim plus a non-empty critique into the correction payload, routes back to the generator, and the second iteration's prompt contains that payload.",
+        "AC4: An iteration that fixes the target test while breaking a previously passed anchor is flagged as a regression and rejected.",
+        "AC5: An evaluator that errors or returns malformed output routes to critique, never to success, with failClosed recorded in the trace; a gate failure leaves OverallState identical apart from the appended failure record."
+      ],
+      "dependencies": [
+        "feat-7"
+      ],
+      "estimatedComplexity": "high"
+    },
+    {
+      "featureId": "feat-10",
+      "title": "PGE engine dispatch, artifact equivalence and offline replay",
+      "description": "Ship PgeEngine as a fifth engine name behind the private seam with a downgrade path on compile failure, point EngineConformanceHarness at two real engines over an 11-field artifact set, and replay a recorded trace offline with the network stubbed to throw.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: EngineConformanceHarness reports equivalent true for 'ts' versus 'pge' across 11 artifact fields on the golden spec.",
+        "AC2: A TopologyCompileError logs one downgrade line and re-dispatches TsPipelineEngine rather than failing the run.",
+        "AC3: `bober trace replay <runId>` reproduces byte-identical artifacts after volatile-key stripping, with the network stubbed to throw.",
+        "AC4: The OTLP exporter is off by default and performs zero network calls when unconfigured."
+      ],
+      "dependencies": [
+        "feat-9",
+        "feat-3"
+      ],
+      "estimatedComplexity": "medium"
+    },
+    {
+      "featureId": "feat-11",
+      "title": "Golden dataset, blocking CI gates, documentation and migration disposition",
+      "description": "Commit 20-50 golden cases, run them on every pull request behind a pass-rate threshold, gate structural topology changes on a graphVersion bump plus a changelog entry, ship node-level documentation kept in sync by a drift check, and record the engine migration decision including the disposition of the dormant workflow subtree and the two divergent sprint entry points.",
+      "priority": "must-have",
+      "acceptanceCriteria": [
+        "AC1: .bober/golden/ holds between 20 and 50 files, each validating against a GoldenCase schema with input, pinned provider responses and expected artifacts.",
+        "AC2: A blocking pull_request CI job runs the graph regression runner with no continue-on-error, failing below the configured pass-rate threshold.",
+        "AC3: A non-empty topology diff without a graphVersion bump fails CI; the same diff with a bump and a changelog entry passes.",
+        "AC4: docs/pge-graph.md documents every node id in the artifact and adding a node without documenting it fails the drift test.",
+        "AC5: pipeline.engine still defaults to 'ts', TsPipelineEngine is retained, and the disposition of src/orchestrator/workflow/, bober sprint and bober_sprint is recorded in writing."
+      ],
+      "dependencies": [
+        "feat-2",
+        "feat-10"
+      ],
+      "estimatedComplexity": "medium"
+    }
+  ],
+  "techStack": [
+    "TypeScript 5 strict, ESM/NodeNext",
+    "Node 22",
+    "Zod (only validation layer)",
+    "Vitest 3.2.6",
+    "Filesystem-only state under .bober/",
+    "ESLint flat config with scoped no-restricted-imports module boundaries"
+  ],
+  "constraints": [
+    "runPipeline(userPrompt, projectRoot, config, opts) signature frozen (pipeline.ts:1074).",
+    "PipelineResult field set frozen (pipeline.ts:66).",
+    "Every engine must emit the pipeline-complete history event and the <runId>.completed.json marker identically or chat/completion-tailer.ts:181 hangs forever.",
+    "No second language runtime, no per-platform binary, no service the user must run — the CLI is symlinked into arbitrary user projects.",
+    "No SDK lock-in in the execution path.",
+    "Single-channel state values capped at 4 KiB; larger payloads offload by content hash.",
+    "Fan-out concurrency defaults to 1; parallelism is opt-in and always subordinate to dependsOn plus file-conflict serialization.",
+    "Every sprint leaves the repo shippable: typecheck clean, lint clean, full Vitest suite green."
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "correctness",
+      "requirement": "The same golden spec at concurrency 1 and concurrency 8 must produce byte-identical .bober/ artifacts.",
+      "verificationMethod": "Determinism invariant suite comparing canonicalised artifact trees across both concurrency settings."
+    },
+    {
+      "category": "correctness",
+      "requirement": "Each state channel is written exactly once per superstep regardless of branch count.",
+      "verificationMethod": "Write-counter spy on CommitBoundary across 8 concurrent branches asserting writesPerChannel[c] === 1."
+    },
+    {
+      "category": "reliability",
+      "requirement": "A run killed mid-flight and restarted in a fresh process must not re-execute a completed node and must not leave a readable partial checkpoint.",
+      "verificationMethod": "Cross-process kill-and-resume test plus an adversarial checkpointer suite with kill-mid-write fault injection."
+    },
+    {
+      "category": "safety",
+      "requirement": "Validation, dump, render, diff and audit must never execute a node or perform an effect.",
+      "verificationMethod": "ESLint no-restricted-imports boundary on src/pge/topology/** (module-graph enforcement) plus EffectRegistry.seal() invoked by dump."
+    },
+    {
+      "category": "compatibility",
+      "requirement": "The live imperative path must be unaffected until the graph path proves equivalence; pipeline.engine keeps defaulting to 'ts'.",
+      "verificationMethod": "Existing suite green with the PGE engine unselected, plus EngineConformanceHarness ts-versus-pge equivalence on the golden spec."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The committed topology artifact cannot silently diverge from the authored literal, from the documentation, or from the state audit.",
+      "verificationMethod": "One blocking CI job running dump --check, validate --mode full, docs --check, diff --require-version-bump and audit-state with git diff --exit-code, none with continue-on-error."
+    }
+  ],
+  "techNotes": {
+    "layering": "Layer A (src/contracts/topology.ts + src/pge/topology/**) has a one-way dependency: it may not import src/pge/runtime/**, src/pge/nodes/**, src/orchestrator/** or src/providers/**. Layer B loads the committed JSON artifact, never the TypeScript module, so the artifact stays load-bearing.",
+    "reusedComponents": "Scheduler/Semaphore (workflow/scheduler.ts), Budget (budget.ts), withRetry + classifyTransient (retry.ts), RunResultFlusher (flusher.ts), ResumeCursor (resume-cursor.ts), reconciler.ts, synthesizer.ts, EngineConformanceHarness (conformance.ts), getCheckpointMechanismFor (checkpoints/registry.ts:105), runWithAudit (checkpoints/audit.ts), and the existing agent functions runPlanner, runGenerator, runEvaluatorAgent, runCurator, runResearch, runCodeReviewer, runDocumenter as unmodified node bodies.",
+    "onDiskLayout": ".bober/topology/<graphId>.json, topology/state-audit.json, topology/variants/<variantId>.json, checkpoints/<runId>/<superstep>.json, traces/<runId>.jsonl, scratch/<runId>/<sha256>.<ext>, archive/<runId>/<nodeId>[.<branchKey>]/{snapshot.json,stdout.log,outputs.json,.sealed}, cache/<sha256>.json, logs/<runId>/messages-<n>.jsonl, handoff/<phase>-digest.md, failures/<runId>.json, golden/<caseId>.json.",
+    "namespacing": "The CLI verb is `bober pge` because `bober graph` is already the code-graph namespace (cli/commands/graph.ts:39). The directory is .bober/topology/ because .bober/graph/ already holds the code-graph index. Both rename cleanly before the CI job is written and expensively after.",
+    "securityConsiderations": [
+      "SandboxRunner is process-level containment only — a generated test can still read within cwd. This must be documented as delivered scope, not overstated as isolation.",
+      "Nodes tagged with the git effect are reachable only through a HITL gate, enforced by the EffectfulNodeContainsHitl validator rule plus an inbound-edge rule; in non-interactive mode with no approval record they block fail-closed with an audit entry.",
+      "Archive sealing defaults to a .sealed marker rather than chmod 0o444, so immutability is an API guarantee that does not break rm -rf, git clean or worktree cleanup."
+    ],
+    "existingPatterns": "Follow the flusher single-commit-boundary and single-clock discipline, the skip-completed-before-dispatch discipline of resume-cursor.ts:12, the pure-resolver shape of resolveCheckpointMechanismName, the selector.ts:29-31 downgrade-and-log pattern, and the scoped no-restricted-imports boundaries at eslint.config.js:46-48 and :75-77."
+  },
+  "sprints": [
+    "sprint-spec-20260805-pge-graph-engineering-1",
+    "sprint-spec-20260805-pge-graph-engineering-2",
+    "sprint-spec-20260805-pge-graph-engineering-3",
+    "sprint-spec-20260805-pge-graph-engineering-4",
+    "sprint-spec-20260805-pge-graph-engineering-5",
+    "sprint-spec-20260805-pge-graph-engineering-6",
+    "sprint-spec-20260805-pge-graph-engineering-7",
+    "sprint-spec-20260805-pge-graph-engineering-8",
+    "sprint-spec-20260805-pge-graph-engineering-9",
+    "sprint-spec-20260805-pge-graph-engineering-10",
+    "sprint-spec-20260805-pge-graph-engineering-11",
+    "sprint-spec-20260805-pge-graph-engineering-12",
+    "sprint-spec-20260805-pge-graph-engineering-13",
+    "sprint-spec-20260805-pge-graph-engineering-14"
+  ],
+  "metadata": {
+    "architectureRef": "arch-20260805-pge-graph-engineering",
+    "researchRef": "research-20260805-pge-langgraph-refactor",
+    "requirementRegisterSize": 75,
+    "criticalPathDepth": 10,
+    "riskLevel": "high",
+    "riskNotes": "A hand-owned Pregel is ~1,400 non-test lines across eight modules whose barrier, resume and commit bugs are silent and state-corrupting with no upstream maintainer. Sprints 7, 8 and 9 carry the three blocking invariant suites (determinism, exactly-once, cross-process durability) plus an adversarial checkpointer suite; treating any of them as optional invalidates ADR-1. Sprint 4 touches the live imperative path and is the only sprint before sprint 13 that can regress a shipping run.",
+    "justification": "G1 explicit inspectable serializable structure, G2 topology/content separation, G3 executable semantics, G4 versionable CI-gateable optimisable artifact — plus trace-driven debugging and structural diffing in CI. Latency is explicitly not a justification."
+  }
+}

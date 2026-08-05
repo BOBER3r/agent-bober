@@ -1,0 +1,116 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-2",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 2,
+  "title": "Authored CODING_GRAPH literal, `bober pge` CLI, and the committed checksummed topology artifact",
+  "description": "Author the shipped coding pipeline as a plain typed object literal (export const CODING_GRAPH: TopologySpec) covering every node in the architecture blueprint — research subgraph, planner with clarification loop, supervisor, sprint subgraph, gates, routers, evaluation, synthesis, documenter, gated commit, graceful failure and context compaction. Add the `bober pge` CLI with dump, validate and hash verbs, and commit the serialized artifact to .bober/topology/coding.json so it becomes the load-bearing contract the runtime will later read. Proves topology/content separation: a prompt edit leaves the checksum untouched, an edge addition changes it, and swapping model profiles produces an identical hash.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-1"
+  ],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "src/pge/topology/coding.graph.ts exports CODING_GRAPH typed as TopologySpec, it parses through TopologySpecSchema, and validateTopology in structural mode returns ok:true with zero error-severity diagnostics.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "The authored graph contains every node named in the architecture mermaid blueprint, asserted by a pinned node-id list covering the research, plan, sprint, evaluation, terminal and context-compaction regions, so a silently dropped node fails the test.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "`bober pge dump` writes .bober/topology/coding.json containing graphId, graphVersion matching the semver pattern, provenance 'authored', every node id, every node kind and every edge, and the file parses back through TopologySpecSchema.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "`bober pge dump --check` exits 0 when the committed artifact matches the canonicalised literal byte for byte and exits non-zero after a single-character mutation of the committed file.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "`bober pge validate` exits non-zero and prints the diagnostic code name for each of the 30 malformed fixtures from sprint 1, and exits 0 for the committed artifact.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-6",
+      "description": "A test substitutes a spy for every node executor lookup and asserts zero invocations across dump, validate and hash, complementing the sprint-1 lint boundary with a behavioural assertion.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-7",
+      "description": "Mutating a prompt body under the prompt store and recomputing `bober pge hash` leaves the topology checksum unchanged, while adding one edge to the literal changes it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-8",
+      "description": "Running dump under two different model configurations produces identical topology checksums while the resolved model ids recorded for the run differ, proving a model-profile swap is not a structural change.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-9",
+      "description": "checksumTopology recomputed from the committed artifact's canonicalised node and edge list equals the checksum field stored in that artifact, and a stale checksum surfaces as the ChecksumStale diagnostic rather than silently passing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-10",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement any node body, node registry or executor — this sprint produces data and a reader, nothing runnable.",
+    "Do not add render, diff, docs or audit-state verbs to the CLI; sprint 3 owns them and adding stubs now creates dead command surface.",
+    "Do not call EffectRegistry.seal() from dump in this sprint — the registry does not exist yet, and importing it would violate the sprint-1 boundary. Sprint 5 adds the seal call.",
+    "Do not add .bober/topology/ to .gitignore — this directory is deliberately version-controlled.",
+    "Do not change pipeline.engine, the engine seam, or any orchestrator file."
+  ],
+  "stopConditions": [
+    "The committed artifact round-trips: literal to canonical form to file to parse to identical checksum.",
+    "`bober pge dump --check` fails on a mutated artifact and passes on an untouched one.",
+    "A node in the architecture blueprint cannot be expressed under the sprint-1 schema without widening Goto to accept an arbitrary node id, which ADR-3 forbids.",
+    "Authoring the literal would require importing a runtime module."
+  ],
+  "definitionOfDone": "The coding pipeline exists as a typed literal, is serialized to a committed and checksummed .bober/topology/coding.json, and `bober pge dump|validate|hash` operate on it without any executor in the module graph. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the only user-visible change is a new `pge` subcommand that reads and writes topology data.",
+  "assumptions": [
+    "The CLI verb is `bober pge` and the directory is .bober/topology/, because `bober graph` and .bober/graph/ are already the code-graph namespace (cli/commands/graph.ts:39). A thin `bober graph topology <verb>` alias may be added later; both rename cleanly now and expensively after the CI job exists.",
+    "graphVersion starts at 1.0.0 and is bumped by hand; the CI gate that enforces the bump lands in sprint 14.",
+    "The authored literal describes the pipeline agent-bober already runs imperatively, so it is a description of shipped behaviour rather than a proposal for new behaviour."
+  ],
+  "outOfScope": [
+    "Optimiser-provenance variants under .bober/topology/variants/ — sprint 3.",
+    "Documenting the nodes in docs/pge-graph.md — sprint 14."
+  ],
+  "ambiguityScore": 4,
+  "generatorNotes": "Register the command in src/cli/index.ts following the existing pattern used by cli/commands/graph.ts. Keep src/cli/commands/pge.ts thin: parse args, call into src/pge/topology/**, map ValidationReport to an exit code and a printed code name. The literal must carry, per node: id, kind, promptRef for llm nodes, effects[], modelTier, optional cache policy, inputPorts/outputPorts with schemaRef, writes/reads channel lists, and for routers a closed targets[] of {label,to}. Loop-bearing routers (research_route, sprint_route, rework_route) must each declare counterKey, maxIterations and onExhausted or sprint 1's UnboundedCycle rule will fire. Every supervisor-to-subgraph transition needs a gate node on both sides (gate_research_in/out, gate_plan_in/out, gate_sprint_in/out, gate_eval_in) or BoundaryNotGated fires. The fan-out edge from fanout_sprints targets the single sprint subgraph with runtime-determined cardinality, so the checksum stays invariant to contract count.",
+  "evaluatorNotes": "Confirm .bober/topology/coding.json is committed to git and not ignored. Confirm the runtime-loads-JSON rule is respected in spirit: nothing outside src/pge/topology/ and the CLI imports coding.graph.ts. Verify the zero-execution assertion is a spy over the executor lookup path and not a tautology. Verify the two-model-configuration test genuinely varies resolved model ids rather than asserting on the same value twice. Confirm the mutated-artifact case for dump --check exits non-zero rather than silently rewriting the file.",
+  "estimatedFiles": [
+    "src/pge/topology/coding.graph.ts",
+    "src/pge/topology/coding.graph.test.ts",
+    "src/pge/topology/dump.ts",
+    "src/pge/topology/dump.test.ts",
+    "src/cli/commands/pge.ts",
+    "src/cli/commands/pge.test.ts",
+    "src/cli/index.ts",
+    ".bober/topology/coding.json"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

@@ -1,0 +1,121 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-1",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 1,
+  "title": "TopologySpec Zod contract, 30-code structural validator, and the module-graph execution boundary",
+  "description": "Add the topology data contract and its validator as net-new modules with zero wiring into any existing execution path. Defines the discriminated node union (llm|tool|gate|router|subgraph), edges, closed router outcome labels, ports, channels, loop bounds, effect tags, cache policies, model tiers and subgraph declarations as Zod. Implements validateTopology with 30 distinct named diagnostic codes plus one malformed fixture per code, canonicalize and checksumTopology. Installs an ESLint no-restricted-imports boundary so src/pge/topology/** cannot import any executor, making zero-execution-during-validation a property of the module graph rather than of an assertion.",
+  "status": "proposed",
+  "dependsOn": [],
+  "features": [
+    "feat-1"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-1-1",
+      "description": "TopologySpecSchema parses a well-formed fixture carrying formatVersion, graphId, graphVersion, description, provenance, entry, defaults, channels, nodes, edges, subgraphs and a sha256 checksum, and rejects each field's malformed variant with a Zod issue path.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-2",
+      "description": "NodeSchema is a discriminated union on kind; a table-driven test enumerates every node of a fixture graph and asserts each llm node carries a promptRef, no tool node carries a promptRef, and every router node declares at least one entry in targets.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-3",
+      "description": "validateTopology returns ok:false with exactly the expected DiagnosticCode for each of 30 malformed fixtures under src/pge/topology/__fixtures__/, covering at minimum EmptyGraph, DuplicateNodeId, DanglingEdge, UnreachableNode, NoTerminalPath, UndeclaredPort, PortTypeMismatch, UnboundedCycle, BoundaryNotGated, NestedCheckpointer, SubgraphDepthExceeded, SubgraphExitNotSupervisor, CacheOnEffectfulNode, InterruptInsideFanOut, ModelTierMismatch, UndeclaredRouteLabel and RouterTargetNotDeclared.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-4",
+      "description": "validateTopology never throws for any input including non-object, null and deeply malformed JSON; a fuzz-style table asserts it always returns a ValidationReport with an ok boolean and a diagnostics array.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-5",
+      "description": "PortTypeMismatch names both the source and target node ids and the offending field path, asserted against a fixture whose edge connects a producer output schema to an incompatible consumer input schema.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-6",
+      "description": "A static walk over a fixture topology enumerates every cycle via Tarjan strongly-connected components and asserts each cycle contains a node declaring counterKey and maxIterations; a fixture adding a cyclic edge without one produces UnboundedCycle.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-7",
+      "description": "Structural rules covering supervisor topology hold: max subgraph nesting depth is at most 2, every subgraph exit edge targets the supervisor node, every edge crossing a subgraph boundary passes through a node of kind gate, and subgraphs[].persistence is the literal 'inherit' so a nested checkpointer is unrepresentable.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-8",
+      "description": "canonicalize produces a stable string with sorted keys, arrays ordered by id and the checksum field elided, and checksumTopology over that string yields a value matching the sha256:<64 hex> pattern; two structurally identical specs with different key order produce the identical checksum.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-9",
+      "description": "Running `npm run lint` fails when a test file placed under src/pge/topology/ imports from src/pge/runtime/, src/pge/nodes/, src/orchestrator/ or src/providers/, proving the no-restricted-imports boundary is active for that directory.",
+      "verificationMethod": "lint",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-10",
+      "description": "npm run typecheck, npm run typecheck:tests and npm run build all complete with zero errors.",
+      "verificationMethod": "build",
+      "required": true
+    },
+    {
+      "criterionId": "sc-1-11",
+      "description": "The full Vitest suite passes with no failures versus the pre-sprint baseline of approximately 5,083 tests.",
+      "verificationMethod": "unit-test",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not author the real CODING_GRAPH literal for agent-bober's pipeline — that is sprint 2 and would make this sprint's fixtures indistinguishable from production data.",
+    "Do not register a `bober pge` CLI command or touch src/cli/index.ts; nothing in this sprint is reachable from a user-invocable entry point.",
+    "Do not add 'pge' to the pipeline.engine enum or touch src/config/schema.ts.",
+    "Do not implement render, diff, docs-drift, state-audit or optimize — sprint 3 owns the toolkit.",
+    "Do not create src/pge/runtime/, src/pge/nodes/ or src/pge/registry/ even as empty placeholders.",
+    "Do not modify src/orchestrator/pipeline.ts, src/orchestrator/workflow/** or any provider adapter."
+  ],
+  "stopConditions": [
+    "All 30 diagnostic codes have a dedicated malformed fixture and an assertion pinning that exact code.",
+    "The ESLint boundary is proven by a deliberately violating fixture that makes `npm run lint` exit non-zero.",
+    "A required criterion cannot be met without wiring the new modules into an existing execution path.",
+    "A rule would require importing an executor into src/pge/topology/, which the boundary forbids by design."
+  ],
+  "definitionOfDone": "src/contracts/topology.ts and src/pge/topology/{validate,canonical}.ts exist with paired test files and 30 malformed fixtures, the ESLint boundary block for src/pge/topology/** is in eslint.config.js and demonstrably fires, and the repository is shippable: npm run typecheck, npm run typecheck:tests, npm run build and npm run lint are clean and the full Vitest suite is green. No existing execution path changed — a diff of src/orchestrator/, src/cli/, src/config/ and src/providers/ is empty apart from a single additive export line in src/contracts/index.ts.",
+  "assumptions": [
+    "The 30 diagnostic codes are exactly those enumerated in the architecture's TopologyValidator section; adding a 31st is allowed only with a fixture.",
+    "validateTopology ships both modes now: 'structural' uses the artifact alone, 'full' additionally resolves schemaRef and promptRef through an injected SchemaCatalog and PromptRefSet. The CI diff gate will use 'structural' because a base-branch artifact may name refs absent on head."
+  ],
+  "outOfScope": [
+    "Any runtime execution of a topology.",
+    "Prompt store implementation — 'full' mode takes an injected PromptRefSet in this sprint."
+  ],
+  "ambiguityScore": 3,
+  "generatorNotes": "Copy the ESLint boundary idiom verbatim from eslint.config.js:46-48 (telemetry local-only) and :75-77 (medical zero-egress) — a files-scoped block with no-restricted-imports patterns. Reuse the existing __fixtures__ directory convention already used by src/orchestrator/__fixtures__ and src/orchestrator/workflow/__fixtures__. Model tiers are 'light' and 'frontier'; ModelTierMismatch fires when a router, classifier or syntax node declares the frontier tier or a planner, architect, generator or terminal-evaluator node declares the light tier. RouteTargetSchema is { label, to } and the router body is structurally unable to name a node id — this is what makes the structural diff of routing meaningful (ADR-3), so do not add an escape hatch that accepts an arbitrary node id. subgraphs[].persistence must be z.literal(\"inherit\") so ADR-5's single-checkpointer rule is unrepresentable rather than merely checked; NestedCheckpointer exists only to catch hand-edited JSON. Channel writers and readers are DERIVED from nodes[].writes/reads and must NOT be stored on channels[] — ChannelDeclMismatch guards the single remaining cross-reference.",
+  "evaluatorNotes": "Verify the boundary is real, not aspirational: temporarily add an import of src/orchestrator/pipeline.js inside src/pge/topology/ and confirm `npm run lint` exits non-zero, then remove it. Confirm no file under src/pge/topology/ transitively reaches an executor by inspecting the import graph, not by trusting the lint rule alone. Confirm validateTopology has no side effects at all — no fs writes, no process spawn, no network. Check that the 30 fixtures are genuinely 30 distinct codes and not duplicates with different names. Confirm src/contracts/index.ts gained only an export line.",
+  "estimatedFiles": [
+    "src/contracts/topology.ts",
+    "src/contracts/topology.test.ts",
+    "src/contracts/index.ts",
+    "src/pge/topology/validate.ts",
+    "src/pge/topology/validate.test.ts",
+    "src/pge/topology/canonical.ts",
+    "src/pge/topology/canonical.test.ts",
+    "src/pge/topology/__fixtures__/",
+    "eslint.config.js"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}

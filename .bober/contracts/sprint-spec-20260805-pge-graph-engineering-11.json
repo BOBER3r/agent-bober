@@ -1,0 +1,121 @@
+{
+  "contractId": "sprint-spec-20260805-pge-graph-engineering-11",
+  "specId": "spec-20260805-pge-graph-engineering",
+  "sprintNumber": 11,
+  "title": "Node library part 1 — research subgraph with bounded reflexion, planner clarification loop, supervisor router and fail-closed schema gates",
+  "description": "Implement the first half of the node library by wrapping the existing agent functions unmodified as node bodies. The Researcher emits a structured bullet-point problem reflection validated against a Zod schema with explicit goal, inputs, outputs, rules and constraints, and may critique and re-run itself a bounded number of times before collecting findings, with each re-entry receiving the prior critique. The Planner drafts, and when it needs clarification it surfaces questions, the run suspends through the sprint-8 interrupt mechanism, and supplying answers resumes the same planner node with those answers in its input — with no sprint contract materialised before the loop exits. The supervisor router coordinates phases as a two-level tree. Verification gates at every supervisor-to-subgraph boundary validate the traversing payload against the strict artifact schema and, on failure, do not merge the invalid payload into state, so bad intermediate data cannot propagate.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260805-pge-graph-engineering-7",
+    "sprint-spec-20260805-pge-graph-engineering-8"
+  ],
+  "features": [
+    "feat-9"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-11-1",
+      "description": "Researcher output validates against a ProblemReflection Zod schema requiring a non-empty goal and non-empty inputs, outputs, rules and constraints arrays; a prose-only fixture is rejected with the failing Zod path reported in the diagnostic.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-2",
+      "description": "The researcher re-enters itself at most maxReflexions times, each re-entry receives the prior critique in its declared input, and exceeding the bound routes to the collect-findings node rather than to the failure terminal.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-3",
+      "description": "Given an ambiguous feature request the planner emits clarification questions and the run suspends; supplying answers resumes the same planner node with those answers present in its input, and a test asserts zero sprint contracts were materialised before the loop exited.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-4",
+      "description": "A gate fed a sprint contract missing successCriteria returns a typed failure, the downstream node's executor is never invoked, and the failure record contains the Zod issue path naming the missing field.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-5",
+      "description": "A snapshot of OverallState before and after a gate failure is identical apart from the appended failure record, and the invalid payload appears nowhere in the merged state.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-6",
+      "description": "A structural test on the compiled research and plan subgraphs asserts maximum nesting depth is at most 2 and every subgraph exit edge targets the supervisor node.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-7",
+      "description": "The research subgraph and the plan subgraph each compile independently against the registries populated in this sprint and execute end to end against stub providers, producing the artifacts the existing pipeline produces for those phases.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-8",
+      "description": "The node bodies call the existing runResearch and runPlanner functions with no modification to those functions, asserted by a diff check that src/orchestrator/research-agent.ts and src/orchestrator/planner-agent.ts are unchanged.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-9",
+      "description": "The materialised sprint contracts produced by the plan subgraph parse through the existing SprintContractSchema with no parallel contract type introduced anywhere, enforced by the compile-time Exact guard from sprint 5.",
+      "verificationMethod": "typecheck",
+      "required": true
+    },
+    {
+      "criterionId": "sc-11-10",
+      "description": "npm run typecheck, npm run typecheck:tests, npm run build and npm run lint complete with zero errors and the full Vitest suite is green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Do not implement any sprint-subgraph node — curator, generator, syntax gate, evaluator, anchors, correction, review, documenter and commit are sprint 12.",
+    "Do not modify runResearch, runPlanner or any other existing agent function; node bodies are thin adapters over them, and changing an agent would change the live imperative path's behaviour too.",
+    "Do not introduce a second SprintContract, PlanSpec or clarification-question type. The source documents' sprint_id, goals, files_to_edit, verification_commands and trip_goal fields are errata and must not appear.",
+    "Do not place an interrupt inside a fan-out branch; the planner clarification interrupt is at the supervisor level between supersteps.",
+    "Do not wire the PGE engine into any shipped entry point; the subgraphs are exercised by tests only.",
+    "Do not allow a gate to merge a payload it rejected, not even partially, and not into a quarantine key inside OverallState."
+  ],
+  "stopConditions": [
+    "The research and plan subgraphs each compile and run standalone against stub providers.",
+    "The clarification loop suspends and resumes with answers in the planner's input and no contracts materialised.",
+    "Every boundary gate rejects an invalid payload without merging it and without invoking the downstream node.",
+    "A node cannot be expressed without modifying an existing agent function."
+  ],
+  "definitionOfDone": "The research subgraph with bounded reflexion, the planner with a suspend-and-resume clarification loop, the supervisor router and the schema-validating boundary gates are registered node implementations that compile and execute as independent subgraphs against stub providers, reusing existing agent functions unmodified. The repository is shippable: typecheck, typecheck:tests, build and lint clean, full Vitest suite green, and the live imperative path is unchanged.",
+  "assumptions": [
+    "compile() throws UnregisteredNodeImpl for the full coding artifact until every node has an implementation, so this sprint compiles the research and plan subgraphs individually using the subgraphs declared in the artifact. The first full-graph compile happens in sprint 13.",
+    "ProblemReflection is a new Zod schema in src/contracts/ because no equivalent exists; it is additive and does not replace any existing research artifact shape.",
+    "maxReflexions is declared in the topology as the research_route loop bound, so sprint 1's UnboundedCycle rule already guarantees it exists."
+  ],
+  "outOfScope": [
+    "Improving research or planning output quality; this sprint changes where those agents run, not what they produce.",
+    "Selective verification gates keyed on risk — sprint 12."
+  ],
+  "ambiguityScore": 5,
+  "generatorNotes": "Gate node bodies are pure validators plus a Command: they parse the payload with the artifact's real Zod schema from src/contracts/, and on failure they return a Command whose update appends only a failure record and whose goto routes to the rework or critique target — never to the downstream node. Because a gate returns a Command rather than throwing, the fail-closed behaviour is expressible in the topology and visible in the diff. The planner clarification loop uses the existing PlanSpec clarification vocabulary (ClarificationQuestionSchema, ResolvedClarificationSchema, resolveClarification, isPipelineReady at src/contracts/spec.ts) rather than inventing a parallel question type, and the suspend is raised through InterruptController at the supervisor boundary. Node bodies invoke providers through NodeContext.effects.invoke rather than importing a provider module directly, so the effect tags on the node stay meaningful.",
+  "evaluatorNotes": "Verify the gate failure test snapshots OverallState before and after and compares them structurally, not by asserting the absence of one known key. Verify the clarification test asserts contract materialisation count is zero BEFORE resume, not merely that contracts appear after. Verify the reflexion bound test asserts the exact re-entry count and the routing destination on exhaustion. Verify no existing agent file appears in the diff. Verify the subgraphs are compiled from the committed artifact's subgraph declarations rather than from a hand-built fixture graph, otherwise the artifact is not load-bearing.",
+  "estimatedFiles": [
+    "src/pge/nodes/research.ts",
+    "src/pge/nodes/research.test.ts",
+    "src/pge/nodes/plan.ts",
+    "src/pge/nodes/plan.test.ts",
+    "src/pge/nodes/supervisor.ts",
+    "src/pge/nodes/supervisor.test.ts",
+    "src/pge/nodes/gates.ts",
+    "src/pge/nodes/gates.test.ts",
+    "src/contracts/problem-reflection.ts",
+    "src/contracts/problem-reflection.test.ts",
+    "src/pge/registry/index.ts"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-05T00:00:00Z",
+  "updatedAt": "2026-08-05T00:00:00Z"
+}
