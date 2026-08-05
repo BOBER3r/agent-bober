@@ -44,11 +44,15 @@ import { getCheckpointMechanismFor } from "./checkpoints/index.js";
 // module and is exercised in its unit tests. This sprint replaces the plain
 // getCheckpointMechanism("noop") calls with getCheckpointMechanismFor so that
 // config overrides are honoured, which is the minimum-viable pipeline wiring.
-import { writeCompletionMarker } from "./checkpoints/feedback-router.js";
+// Sprint 4 (PGE): the terminal side-effect block (pipeline-complete history
+// event + .completed.json marker + end-of-pipeline checkpoint) now has ONE
+// owner shared by every engine — see src/orchestrator/finalize.ts.
+import { finalizePipelineRun } from "./finalize.js";
 // Sprint 13: audit wrapper — every checkpoint call site uses runWithAudit so
 // each outcome is appended to .bober/audits/<runId>.jsonl regardless of mechanism.
 import { runWithAudit, type MechanismName } from "./checkpoints/audit.js";
 import { emit } from "../telemetry/emit.js";
+import { emitLoopBoundExhausted } from "./loop-bounds.js";
 import {
   ensureBoberDir,
   updateContract,
@@ -168,6 +172,8 @@ export async function runSprintCycle(
   params: RunSprintCycleParams,
 ): Promise<SprintCycleResult> {
   const { contract, spec, completedContracts, projectRoot, config, projectContext, pipelineRunId } = params;
+  // The ONLY bound on this loop. Read from config — never a literal — so the
+  // enforced maximum and the configured maximum cannot drift apart.
   const maxIterations = config.evaluator.maxIterations;
   let currentContract = updateContractStatus(contract, "in-progress");
   await updateContract(projectRoot, currentContract);
@@ -180,6 +186,21 @@ export async function runSprintCycle(
   // Sprint 14: checkpointMechanism is now a real typed field in PipelineSection.
   const configuredMechanismName: MechanismName =
     (config.pipeline?.checkpointMechanism as MechanismName | undefined) ?? "noop";
+
+  /**
+   * Record that this retry loop exited because it hit `maxIterations` rather
+   * than because it converged. Awaited (not fire-and-forget) so the event is on
+   * disk before the bounded exit returns; emit() is a no-op when telemetry is
+   * disabled and swallows its own IO errors, so this can never fail the sprint.
+   */
+  const boundedExit = (iterationsUsed: number): Promise<void> =>
+    emitLoopBoundExhausted(projectRoot, config, {
+      loopId: "sprint-retry",
+      maxIterations,
+      iterationsUsed,
+      contractId: currentContract.contractId,
+      runId: sprintRunId,
+    });
 
   let lastEvaluation: EvaluationRunResult | undefined;
   let lastGeneratorResult: GeneratorResult | undefined;
@@ -361,6 +382,7 @@ export async function runSprintCycle(
       }
 
       // Max iterations reached, mark as needs-rework
+      await boundedExit(iteration);
       currentContract = updateContractStatus(currentContract, "needs-rework");
       currentContract = {
         ...currentContract,
@@ -511,6 +533,7 @@ export async function runSprintCycle(
           }
 
           if (iteration >= maxIterations) {
+            await boundedExit(iteration);
             currentContract = updateContractStatus(currentContract, "needs-rework");
             await updateContract(projectRoot, currentContract);
             return { contract: currentContract, evaluation, generatorResult: lastGeneratorResult };
@@ -687,6 +710,7 @@ export async function runSprintCycle(
       logger.error(
         `Sprint ${currentContract.contractId} exceeded max iterations (${maxIterations}).`,
       );
+      await boundedExit(iteration);
       currentContract = updateContractStatus(currentContract, "needs-rework");
       await updateContract(projectRoot, currentContract);
       return { contract: currentContract, evaluation };
@@ -1013,45 +1037,20 @@ export async function runTsPipeline(
     }
 
     // ── Phase 3: Results ─────────────────────────────────────────
-    logger.phase("Pipeline Complete");
-
-    const duration = Date.now() - startTime;
-    const success =
-      failedSprints.length === 0 && completedSprints.length > 0;
-
-    await appendHistory(projectRoot, {
-      timestamp: new Date().toISOString(),
-      event: "pipeline-complete",
-      phase: success ? "complete" : "failed",
-      details: {
-        completed: completedSprints.length,
-        failed: failedSprints.length,
-        durationMs: duration,
-      },
-    });
-
-    await runWithAudit({
+    //
+    // The terminal block that used to live inline here (logger.phase, the
+    // pipeline-complete history line, the end-of-pipeline checkpoint, the
+    // completion marker and the PipelineResult literal) moved VERBATIM into
+    // finalizePipelineRun so the flusher path emits the identical set.
+    return await finalizePipelineRun({
       projectRoot,
       runId: pipelineRunId,
-      checkpointId: "end-of-pipeline",
-      mechanism: pipelineMechanismName,
-      iteration: 1,
-      fn: () => getCheckpointMechanismFor("end-of-pipeline", config, "noop").request("end-of-pipeline", { success, completedSprints, failedSprints, duration, spec }),
-    });
-    // Write completion marker for successful runs (Sprint 12 — s12-c2).
-    await writeCompletionMarker(projectRoot, pipelineRunId, {
-      success,
-      completedSprints: completedSprints.length,
-      failedSprints: failedSprints.length,
-      duration,
-    });
-    return {
-      success,
+      config,
       spec,
       completedSprints,
       failedSprints,
-      duration,
-    };
+      startedAtMs: startTime,
+    });
   } finally {
     cleanup();
   }

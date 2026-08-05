@@ -103,6 +103,19 @@ import type { PgeIo } from "../cli/commands/pge.js";
 
 const FIXTURE_DIR = fileURLToPath(new URL("./topology/__fixtures__/", import.meta.url));
 
+/**
+ * What the probe had recorded by the time this module finished loading — captured
+ * BEFORE any `beforeEach` can clear it.
+ *
+ * The per-test reset is necessary (the probe-is-live test deliberately imports a mocked
+ * module), but on its own it hid the most important reading of all: the static import
+ * of `../cli/commands/pge.js` above runs every mock factory for every executor module
+ * that import graph touches, and those lookups are recorded at module-load time. A
+ * `beforeEach` that clears the array wipes exactly that evidence, so `lookups` would
+ * read empty inside every test even if importing the CLI pulled in a provider.
+ */
+const IMPORT_TIME_LOOKUPS = [...probe.lookups];
+
 let root = "";
 const sink: PgeIo = { out: () => undefined, err: () => undefined };
 
@@ -128,6 +141,15 @@ async function seedCodingPromptStore(): Promise<void> {
 }
 
 describe("topology production executes no node", () => {
+  /**
+   * The reading the `beforeEach` reset used to destroy: importing the `bober pge`
+   * command module must not resolve a single executor module. Asserted against the
+   * snapshot taken at load time, so no test-scoped clearing can make it vacuous.
+   */
+  it("resolves no executor while merely IMPORTING the pge command module", () => {
+    expect(IMPORT_TIME_LOOKUPS).toEqual([]);
+  });
+
   it("looks up no executor across dump, validate and hash", async () => {
     const originalFetch = globalThis.fetch;
     const fetchSpy = vi.fn(() => {
@@ -154,6 +176,15 @@ describe("topology production executes no node", () => {
   });
 
   it("looks up no executor while validating every malformed fixture", async () => {
+    // The full-mode fixtures need a prompt store that EXISTS: an absent one is a
+    // documented skip, not a verdict, so `UnknownPromptRef` would never fire.
+    await mkdir(join(root, ".bober", "prompts", "generator"), { recursive: true });
+    await writeFile(
+      join(root, ".bober", "prompts", "generator", "sprint.md"),
+      "generator sprint prompt\n",
+      "utf8",
+    );
+
     for (const code of DIAGNOSTIC_CODES) {
       const file = join(FIXTURE_DIR, `${code}.json`);
       const mode =

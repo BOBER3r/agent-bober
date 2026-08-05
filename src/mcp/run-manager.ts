@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import type { BoberConfig } from "../config/schema.js";
 import { runPipeline } from "../orchestrator/pipeline.js";
 import type { PipelineResult } from "../orchestrator/pipeline.js";
+import type { RunOptions } from "../orchestrator/workflow/engine.js";
 import { writeRunState, listRunStateFiles } from "../state/run-state.js";
 import { logger } from "../utils/logger.js";
 
@@ -175,6 +176,7 @@ export class RunManager {
       task: string,
       projectRoot: string,
       config: BoberConfig,
+      opts?: RunOptions,
     ) => Promise<PipelineResult> = runPipeline,
     opts: StartRunOptions = {},
   ): Promise<string> {

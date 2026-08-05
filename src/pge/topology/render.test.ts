@@ -193,7 +193,9 @@ describe("renderTopology mermaid", () => {
     const dotted = renderTopology(CODING_GRAPH, "mermaid")
       .split("\n")
       .filter((line) => line.includes("-.->"));
-    expect(routes.length).toBe(20);
+    // 23 = the 20 original policy endpoints plus the three loop bounds added to the
+    // retry cycles that bypass their region's router.
+    expect(routes.length).toBe(23);
     expect(dotted).toHaveLength(routes.length);
   });
 

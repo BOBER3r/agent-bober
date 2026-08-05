@@ -320,8 +320,19 @@ export function findCycles(spec: TopologySpec): StronglyConnectedComponent[] {
   return findCyclesFromIndex(index, spec);
 }
 
-function findCyclesFromIndex(index: GraphIndex, spec: TopologySpec): StronglyConnectedComponent[] {
-  const ids = spec.nodes.map((node) => node.id).filter((id, i, arr) => arr.indexOf(id) === i);
+/**
+ * @param scope  When given, only these node ids are traversed. Used by the cycle rule to
+ *               re-examine what still cycles once the bounded nodes are removed.
+ */
+function findCyclesFromIndex(
+  index: GraphIndex,
+  spec: TopologySpec,
+  scope?: ReadonlySet<string>,
+): StronglyConnectedComponent[] {
+  const ids = spec.nodes
+    .map((node) => node.id)
+    .filter((id, i, arr) => arr.indexOf(id) === i)
+    .filter((id) => scope === undefined || scope.has(id));
   const order = new Map<string, number>();
   const low = new Map<string, number>();
   const onStack = new Set<string>();
@@ -329,9 +340,13 @@ function findCyclesFromIndex(index: GraphIndex, spec: TopologySpec): StronglyCon
   const components: StronglyConnectedComponent[] = [];
   let counter = 0;
 
+  const inScope = (id: string): boolean => scope === undefined || scope.has(id);
+
   const selfLooped = new Set<string>();
   for (const edge of spec.edges) {
-    if (edge.from === edge.to && index.nodesById.has(edge.from)) selfLooped.add(edge.from);
+    if (edge.from === edge.to && index.nodesById.has(edge.from) && inScope(edge.from)) {
+      selfLooped.add(edge.from);
+    }
   }
 
   // Iterative Tarjan — a recursive walk would be bounded by node count, but an
@@ -351,6 +366,7 @@ function findCyclesFromIndex(index: GraphIndex, spec: TopologySpec): StronglyCon
       if (frame.edgeIndex < edges.length) {
         const next = edges[frame.edgeIndex].to;
         frame.edgeIndex += 1;
+        if (!inScope(next)) continue;
         if (!order.has(next)) {
           order.set(next, counter);
           low.set(next, counter);
@@ -837,26 +853,49 @@ function collectPortRules(
   });
 }
 
+/**
+ * `LoopBoundSchema`'s contract is "EVERY cycle in the graph must contain one" — every
+ * cycle, not every strongly connected component.
+ *
+ * Checking one bounded member per SCC is strictly weaker, and the gap is the shape this
+ * topology is actually built from: a retry route (`gate.onFail`) that re-enters an
+ * earlier node forms a cycle of its own INSIDE the supervisor's SCC, and that cycle
+ * never passes through the supervisor, so the supervisor's `supervisorRounds` bound
+ * does not bound it. A bounded member is therefore not a verdict on the component: it
+ * is a verdict on the cycles that pass THROUGH it. Removing every bounded node and
+ * re-running the search is exactly the documented contract — a cycle survives removal
+ * if and only if it contains no bounded node.
+ *
+ * Terminates: each recursion drops at least one node from a finite set.
+ */
 function collectCycleRules(
   spec: TopologySpec,
   index: GraphIndex,
   out: ValidationDiagnostic[],
 ): void {
-  for (const cycle of findCyclesFromIndex(index, spec)) {
-    const bounded = cycle.nodeIds.some((id) => {
-      const node = index.nodesById.get(id);
-      return Boolean(node?.loop && node.loop.counterKey && node.loop.maxIterations >= 1);
-    });
-    if (!bounded) {
-      out.push(
-        diag(
-          "UnboundedCycle",
-          `Cycle [${cycle.nodeIds.join(" -> ")}] contains no node declaring counterKey and maxIterations.`,
-          cycle.nodeIds,
-        ),
-      );
+  const isBounded = (id: string): boolean => {
+    const node = index.nodesById.get(id);
+    return Boolean(node?.loop && node.loop.counterKey && node.loop.maxIterations >= 1);
+  };
+
+  const examine = (scope: ReadonlySet<string> | undefined): void => {
+    for (const cycle of findCyclesFromIndex(index, spec, scope)) {
+      if (!cycle.nodeIds.some(isBounded)) {
+        out.push(
+          diag(
+            "UnboundedCycle",
+            `Cycle [${cycle.nodeIds.join(" -> ")}] contains no node declaring counterKey and maxIterations.`,
+            cycle.nodeIds,
+          ),
+        );
+        continue;
+      }
+      const unbounded = new Set(cycle.nodeIds.filter((id) => !isBounded(id)));
+      if (unbounded.size > 0) examine(unbounded);
     }
-  }
+  };
+
+  examine(undefined);
 }
 
 function collectRoutingRules(

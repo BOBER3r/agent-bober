@@ -1,10 +1,10 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { CHECKSUM_PATTERN } from "../../contracts/topology.js";
 import type { TopologySpec } from "../../contracts/topology.js";
 import { checksumTopology } from "./canonical.js";
-import { TOPOLOGY_DIR } from "./dump.js";
+import { TOPOLOGY_DIR, readIfPresent } from "./dump.js";
 
 /**
  * State audit: every declared channel key with the nodes that write it and read it.
@@ -109,7 +109,7 @@ export function serializeStateAudit(audit: StateAudit): string {
  * compared and nothing was written — drift is unknowable when the derivation itself is
  * not a state audit.
  */
-export type StateAuditDrift = "none" | "missing" | "content" | "invalid";
+export type StateAuditDrift = "none" | "missing" | "content" | "invalid" | "unreadable";
 
 /** Why a derived audit failed its own schema. */
 export interface StateAuditInvalid {
@@ -130,6 +130,11 @@ export interface StateAuditResult {
   written: boolean;
   /** Set only when `drift` is `"invalid"`. */
   invalid?: StateAuditInvalid;
+  /**
+   * Set only when `drift` is `"unreadable"`: the committed audit exists but could not be
+   * opened, so it was neither compared nor overwritten.
+   */
+  unreadable?: { code: string; message: string };
 }
 
 export interface WriteStateAuditOptions {
@@ -180,15 +185,22 @@ export async function writeStateAudit(
   // Serialize the PARSED value, so the bytes on disk are provably schema-conformant.
   const serialized = serializeStateAudit(validated.data);
 
-  let committed: string | undefined;
-  try {
-    committed = await readFile(path, "utf8");
-  } catch {
-    committed = undefined;
+  const committed = await readIfPresent(path);
+  if (committed.kind === "unreadable") {
+    // Existing but unopenable is NOT missing: overwriting a file we could not compare
+    // against would silently destroy whatever it holds.
+    return {
+      path,
+      audit,
+      serialized,
+      drift: "unreadable",
+      written: false,
+      unreadable: { code: committed.code, message: committed.message },
+    };
   }
 
   const drift: StateAuditDrift =
-    committed === undefined ? "missing" : committed === serialized ? "none" : "content";
+    committed.kind === "absent" ? "missing" : committed.text === serialized ? "none" : "content";
 
   if (opts.check || drift === "none") {
     return { path, audit, serialized, drift, written: false };

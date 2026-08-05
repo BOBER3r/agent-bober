@@ -11,12 +11,20 @@ vi.mock("./eligibility.js", () => ({
 
 import { logger } from "../../utils/logger.js";
 import { isWorkflowEligible } from "./eligibility.js";
-import { resolveEngineName, selectPipelineEngine, selectPipelineEngineForTeam } from "./selector.js";
+import {
+  resolveEngineName,
+  resolveEngineNameForTeam,
+  selectPipelineEngine,
+  selectPipelineEngineForTeam,
+} from "./selector.js";
+import { PIPELINE_ENGINE_NAMES } from "./engine.js";
+import type { PipelineEngineName } from "./engine.js";
 import { loadTeam } from "../../teams/registry.js";
-import { createDefaultConfig } from "../../config/schema.js";
+import { createDefaultConfig, PipelineSectionSchema, TeamConfigSchema } from "../../config/schema.js";
 import { TsPipelineEngine } from "./ts-engine.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import type { BoberConfig } from "../../config/schema.js";
+import type { Team } from "../../teams/types.js";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -42,6 +50,104 @@ function makeConfig(pipeline: Partial<BoberConfig["pipeline"]>): BoberConfig {
     },
   } as BoberConfig;
 }
+
+// ── sc-4-1: one tuple feeds both Zod enums ────────────────────────
+
+describe("PIPELINE_ENGINE_NAMES (sc-4-1)", () => {
+  it("is the exact reserved set, including 'pge'", () => {
+    expect([...PIPELINE_ENGINE_NAMES]).toEqual([
+      "ts",
+      "skill",
+      "workflow",
+      "medical-sop",
+      "pge",
+    ]);
+  });
+
+  it("pipeline.engine accepts every tuple member and rejects anything else", () => {
+    for (const name of PIPELINE_ENGINE_NAMES) {
+      const parsed = PipelineSectionSchema.parse({ engine: name });
+      expect(parsed.engine).toBe(name);
+    }
+    expect(PipelineSectionSchema.safeParse({ engine: "pgee" }).success).toBe(false);
+    expect(PipelineSectionSchema.safeParse({ engine: "" }).success).toBe(false);
+  });
+
+  it("teams[].pipelineShape accepts the SAME set — the two enums cannot drift", () => {
+    for (const name of PIPELINE_ENGINE_NAMES) {
+      const parsed = TeamConfigSchema.parse({ pipelineShape: name });
+      expect(parsed.pipelineShape).toBe(name);
+    }
+    expect(TeamConfigSchema.safeParse({ pipelineShape: "graph" }).success).toBe(false);
+
+    // Behavioural parity: for every candidate the two enums must AGREE, which
+    // is the property a single shared tuple buys and two hand-kept literal
+    // lists do not. A sixth name added to only one enum fails here.
+    const candidates = [
+      ...PIPELINE_ENGINE_NAMES,
+      "pge2",
+      "graph",
+      "TS",
+      "",
+      "medical",
+    ];
+    for (const candidate of candidates) {
+      const engineOk = PipelineSectionSchema.safeParse({ engine: candidate }).success;
+      const shapeOk = TeamConfigSchema.safeParse({ pipelineShape: candidate }).success;
+      expect(
+        { candidate, engineOk },
+        `engine and pipelineShape disagree on '${candidate}'`,
+      ).toEqual({ candidate, engineOk: shapeOk });
+      expect(engineOk).toBe(
+        (PIPELINE_ENGINE_NAMES as readonly string[]).includes(candidate),
+      );
+    }
+  });
+
+  it("pipeline.engine still defaults to 'ts' (sc-4-2)", () => {
+    expect(PipelineSectionSchema.parse({}).engine).toBe("ts");
+    expect(createDefaultConfig("test", "brownfield").pipeline.engine).toBe("ts");
+  });
+});
+
+// ── sc-4-2: 'pge' is reserved and downgrades, never throws ────────
+
+describe("resolveEngineName — reserved 'pge' (sc-4-2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("downgrades 'pge' to 'ts' with exactly one logged line and no throw", () => {
+    const config = makeConfig({ engine: "pge" });
+    expect(() => resolveEngineName(config)).not.toThrow();
+    expect(resolveEngineName(config)).toBe("ts");
+    // Two calls above → two lines; assert per-call it is exactly one.
+    vi.clearAllMocks();
+    resolveEngineName(config);
+    expect(logger.info).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(logger.info).mock.calls[0]![0]).toContain("'pge'");
+  });
+
+  it("never instantiates a PgeEngine — selection lands on TsPipelineEngine", () => {
+    const engine = selectPipelineEngine(makeConfig({ engine: "pge" }));
+    expect(engine).toBeInstanceOf(TsPipelineEngine);
+    expect(engine.name).toBe("ts");
+  });
+
+  it("downgrades a team whose pipelineShape is 'pge' the same way", () => {
+    const config = makeConfig({ engine: "ts" });
+    const team = { pipelineShape: "pge" as PipelineEngineName } as Team;
+
+    expect(resolveEngineNameForTeam(team, config)).toBe("ts");
+    expect(selectPipelineEngineForTeam(team, config)).toBeInstanceOf(TsPipelineEngine);
+  });
+
+  it("does NOT consult workflow eligibility on the 'pge' path", () => {
+    vi.mocked(isWorkflowEligible).mockClear();
+    resolveEngineName(makeConfig({ engine: "pge" }));
+    expect(isWorkflowEligible).not.toHaveBeenCalled();
+  });
+});
 
 // ── resolveEngineName branch tests ────────────────────────────────
 

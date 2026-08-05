@@ -71,7 +71,7 @@
       "scope": "public"
     }
   ],
-  "checksum": "sha256:c83eb2c1dd2869d85c907dea48cc2ee63348fd296e96a9f3e3266cc56eeaf188",
+  "checksum": "sha256:871b32e136c8e39b735a3e3ad827b05aa431c7af625d159281ce45d8481d8c57",
   "defaults": {
     "concurrency": 1,
     "durability": "superstep",
@@ -500,7 +500,7 @@
   "entry": "research_body",
   "formatVersion": 1,
   "graphId": "coding",
-  "graphVersion": "1.0.0",
+  "graphVersion": "1.1.0",
   "nodes": [
     {
       "doc": "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",
@@ -741,7 +741,7 @@
       "writes": []
     },
     {
-      "doc": "Rejects a sprint whose declared boundaries are not covered by fixtures, sending it back to the mock curator.",
+      "doc": "Rejects a sprint whose declared boundaries are not covered by fixtures, sending it back to the mock curator. The re-curation retry is a cycle of its own that never reaches sprint_route, so it carries its own bound rather than borrowing one.",
       "effects": [
         "process-exec"
       ],
@@ -752,14 +752,22 @@
       "id": "gate_mock_coverage",
       "inputPorts": [],
       "kind": "gate",
+      "loop": {
+        "counterKey": "mockCurationRounds",
+        "maxIterations": 2,
+        "onExhausted": "sprint_exit"
+      },
       "outputPorts": [],
       "reads": [
+        "counters",
         "refs"
       ],
       "role": "utility",
       "subgraph": "sprint",
       "title": "Mock coverage gate",
-      "writes": []
+      "writes": [
+        "counters"
+      ]
     },
     {
       "doc": "Admits the run into planning only when a research digest exists and the spec is absent or stale.",
@@ -1152,7 +1160,7 @@
       ]
     },
     {
-      "doc": "The single join for the sprint fan-out: every branch leaves its subgraph through gate_sprint_out and converges here. Waits for every dispatched branch to settle, then makes ONE return to the supervisor. On a failed branch it routes back to the fan-out with jittered backoff (gate.onFail); the retry budget is the global supervisorRounds bound.",
+      "doc": "The single join for the sprint fan-out: every branch leaves its subgraph through gate_sprint_out and converges here. Waits for every dispatched branch to settle, then makes ONE return to the supervisor. On a failed branch it routes back to the fan-out with jittered backoff (gate.onFail). That retry re-enters the fan-out WITHOUT passing through the supervisor, so supervisorRounds does not bound it and the barrier declares its own fanoutRetries budget; exhausting it degrades to graceful_failure rather than re-dispatching for ever.",
       "effects": [],
       "gate": {
         "check": "all-branches-settled",
@@ -1161,6 +1169,11 @@
       "id": "reduce_sprints",
       "inputPorts": [],
       "kind": "gate",
+      "loop": {
+        "counterKey": "fanoutRetries",
+        "maxIterations": 2,
+        "onExhausted": "graceful_failure"
+      },
       "outputPorts": [],
       "reads": [
         "branchStatus",
@@ -1473,17 +1486,23 @@
       "writes": []
     },
     {
-      "doc": "Applies the evaluator's and the gates' feedback to the working tree, then hands back to the generator for the next attempt.",
+      "doc": "Applies the evaluator's and the gates' feedback to the working tree, then hands back to the generator for the next attempt. Every route into the corrector is counted here, not only the router's: gate_syntax and gate_anchor_regression reach it directly through onFail, and those cycles never touch sprint_route. The counterKey is deliberately the SAME sprintIterations budget the router spends, so a branch gets three correction attempts in total however it got here.",
       "effects": [
         "fs-write"
       ],
       "id": "sprint_correct",
       "inputPorts": [],
       "kind": "llm",
+      "loop": {
+        "counterKey": "sprintIterations",
+        "maxIterations": 3,
+        "onExhausted": "sprint_exit"
+      },
       "modelTier": "frontier",
       "outputPorts": [],
       "promptRef": "generator/correct",
       "reads": [
+        "counters",
         "evaluations",
         "messages",
         "refs"
@@ -1492,6 +1511,7 @@
       "subgraph": "sprint",
       "title": "Correct the sprint",
       "writes": [
+        "counters",
         "ledger",
         "messages",
         "refs"

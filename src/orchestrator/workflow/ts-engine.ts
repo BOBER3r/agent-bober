@@ -1,7 +1,7 @@
 import type { BoberConfig } from "../../config/schema.js";
 import { runTsPipeline } from "../pipeline.js";
 import type { PipelineResult } from "../pipeline.js";
-import type { PipelineEngine, PipelineEngineName } from "./engine.js";
+import type { PipelineEngine, PipelineEngineName, RunOptions } from "./engine.js";
 
 // ── TsPipelineEngine ───────────────────────────────────────────────
 
@@ -17,7 +17,7 @@ export class TsPipelineEngine implements PipelineEngine {
     userPrompt: string,
     projectRoot: string,
     config: BoberConfig,
-    opts?: { runId?: string },
+    opts?: RunOptions,
   ): Promise<PipelineResult> {
     return runTsPipeline(userPrompt, projectRoot, config, opts);
   }

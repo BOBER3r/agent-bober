@@ -3,7 +3,7 @@
 import type { BoberConfig } from "../../config/schema.js";
 import type { PipelineResult } from "../pipeline.js";
 import { logger } from "../../utils/logger.js";
-import type { PipelineEngine, PipelineEngineName } from "./engine.js";
+import type { PipelineEngine, PipelineEngineName, RunOptions } from "./engine.js";
 import { isWorkflowEligible } from "./eligibility.js";
 import { ResumeCursorReconstructor } from "./resume-cursor.js";
 import { ArgsPayloadBuilder } from "./args-builder.js";
@@ -46,7 +46,7 @@ export class WorkflowEngine implements PipelineEngine {
     userPrompt: string,
     projectRoot: string,
     config: BoberConfig,
-    opts?: { runId?: string },
+    opts?: RunOptions,
   ): Promise<PipelineResult> {
     // ── STEP 1: Eligibility check FIRST (avoids MissingKnobError on downgrade path) ──
     if (!isWorkflowEligible(config)) {
@@ -71,7 +71,9 @@ export class WorkflowEngine implements PipelineEngine {
     // ── STEP 4: Invoke → flush; catch WorkflowUnavailableError → re-dispatch ───
     try {
       const result: WorkflowRunResult = await this.invoke(args);
-      return await new RunResultFlusher().flush(projectRoot, config, result);
+      // Thread opts so the flusher's terminal marker carries the caller's runId
+      // — the same id the TS engine would have used for this run.
+      return await new RunResultFlusher().flush(projectRoot, config, result, opts);
     } catch (e) {
       if (e instanceof WorkflowUnavailableError) {
         logger.info(

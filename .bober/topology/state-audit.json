@@ -1,7 +1,7 @@
 {
   "generatedFrom": {
     "graphId": "coding",
-    "checksum": "sha256:c83eb2c1dd2869d85c907dea48cc2ee63348fd296e96a9f3e3266cc56eeaf188"
+    "checksum": "sha256:871b32e136c8e39b735a3e3ad827b05aa431c7af625d159281ce45d8481d8c57"
   },
   "keys": [
     {
@@ -33,22 +33,26 @@
       "writers": [
         "context_compact",
         "fanout_sprints",
+        "gate_mock_coverage",
         "plan_clarify_check",
         "reduce_sprints",
         "research_reflect",
         "research_route",
         "rework_route",
         "route_after_eval",
+        "sprint_correct",
         "sprint_route",
         "supervisor"
       ],
       "readers": [
         "fanout_sprints",
+        "gate_mock_coverage",
         "plan_clarify_check",
         "reduce_sprints",
         "research_route",
         "rework_route",
         "route_after_eval",
+        "sprint_correct",
         "sprint_route",
         "supervisor"
       ],

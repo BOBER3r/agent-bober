@@ -36,7 +36,9 @@ export type TelemetryEventType =
   | "incident-resolved"
   | "incident-aborted"
   | "agent-spawn"
-  | "agent-error";
+  | "agent-error"
+  /** A bounded cyclic path exhausted its configured maximum and exited by bound. */
+  | "loop-bound-exhausted";
 
 /** Allowed payload fields. NO string values from user input. */
 export interface TelemetryEventData {
@@ -52,6 +54,8 @@ export interface TelemetryEventData {
   outcome?: string;      // ENUM only (e.g., "passed", "failed")
   retryCount?: number;
   errorKind?: string;    // ENUM only (e.g., "timeout", "rate-limit")
+  loopId?: string;       // ENUM only (e.g., "sprint-retry", "pure-sprint")
+  limit?: number;        // The configured maximum a bounded loop ran up against
 }
 
 const writeChain = new Map<string, Promise<void>>();

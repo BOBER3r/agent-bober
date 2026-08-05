@@ -20,11 +20,17 @@ export interface ResolvedModel {
  * Keys are the shorthand names users write in bober.config.json.
  */
 const SHORTHAND_MAP: Record<string, { provider: string; modelId: string }> = {
-  // Anthropic
-  opus: { provider: "anthropic", modelId: "claude-opus-4-8" },
-  "opus-4-8": { provider: "anthropic", modelId: "claude-opus-4-8" }, // symmetry alias
-  "opus-4-7": { provider: "anthropic", modelId: "claude-opus-4-7" }, // pinned previous GA
-  sonnet: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
+  // Anthropic — the bare `opus`/`sonnet` shorthands track the CURRENT
+  // generation and move when a new one ships. The `<family>-<version>`
+  // forms are pinned aliases for staying on a specific release
+  // deliberately (e.g. to hold a prompt tier, or to defer a migration).
+  opus: { provider: "anthropic", modelId: "claude-opus-5" },
+  "opus-5": { provider: "anthropic", modelId: "claude-opus-5" }, // symmetry alias
+  "opus-4-8": { provider: "anthropic", modelId: "claude-opus-4-8" }, // pinned previous GA
+  "opus-4-7": { provider: "anthropic", modelId: "claude-opus-4-7" }, // pinned
+  sonnet: { provider: "anthropic", modelId: "claude-sonnet-5" },
+  "sonnet-5": { provider: "anthropic", modelId: "claude-sonnet-5" }, // symmetry alias
+  "sonnet-4-6": { provider: "anthropic", modelId: "claude-sonnet-4-6" }, // pinned previous GA
   haiku: { provider: "anthropic", modelId: "claude-haiku-4-5" },
   // OpenAI
   "gpt-4.1": { provider: "openai", modelId: "gpt-4.1" },

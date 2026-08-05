@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+// The engine-name tuple is the SINGLE source for both engine enums below
+// (pipeline.engine and teams[].pipelineShape). engine.ts has zero runtime
+// imports of its own, so this is a leaf value import — no module cycle.
+import { PIPELINE_ENGINE_NAMES } from "../orchestrator/workflow/engine.js";
+
 // ── Enums & Primitives ──────────────────────────────────────────────
 
 export const ProjectModeSchema = z.enum(["greenfield", "brownfield"]);
@@ -356,8 +361,8 @@ export const PipelineSectionSchema = z.object({
    *  via `git worktree remove` after a successful pipeline run. On failure the
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
-  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines (sprint 6+). Default: 'ts'. */
-  engine: z.enum(["ts", "skill", "workflow", "medical-sop"]).default("ts"),
+  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines. 'pge' is reserved and downgrades to 'ts' until a PgeEngine exists. Values come from PIPELINE_ENGINE_NAMES. Default: 'ts'. */
+  engine: z.enum([...PIPELINE_ENGINE_NAMES]).default("ts"),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 
@@ -515,8 +520,8 @@ export const TeamConfigSchema = z.object({
   displayName: z.string().optional(),
   /** Memory namespace segment — restricted to a safe path segment. */
   memoryNamespace: z.string().regex(/^[a-z0-9_-]+$/i).optional(),
-  /** Orchestration engine shape for this team. Mirrors the z.enum in PipelineSectionSchema. */
-  pipelineShape: z.enum(["ts", "skill", "workflow", "medical-sop"]).optional(),
+  /** Orchestration engine shape for this team. Built from the SAME PIPELINE_ENGINE_NAMES tuple as PipelineSectionSchema.engine — the two enums can no longer drift apart. */
+  pipelineShape: z.enum([...PIPELINE_ENGINE_NAMES]).optional(),
   /** Partial role -> provider override. Keys SHOULD be RoleName values. */
   providers: z.record(z.string(), z.string()).optional(),
   roles: z.array(z.object({ name: z.string(), displayName: z.string() })).optional(),

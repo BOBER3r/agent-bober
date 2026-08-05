@@ -1,6 +1,7 @@
 import type { Dirent } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { join, posix } from "node:path";
+import { z } from "zod";
 import type { TopologySpec } from "../../contracts/topology.js";
 import { canonicalize, checksumTopology } from "./canonical.js";
 
@@ -29,11 +30,41 @@ export function topologyArtifactPath(projectRoot: string, graphId: string): stri
 /** Directory the `promptRef` strings in a topology resolve against. */
 export const PROMPT_DIR = join(".bober", "prompts");
 
-// ── Serialization ───────────────────────────────────────────────────
+// ── Filesystem reads ────────────────────────────────────────────────
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+/**
+ * The three distinguishable outcomes of reading a file that may legitimately be absent.
+ *
+ * `absent` is ONLY `ENOENT`. Every other errno — `EACCES`, `EISDIR`, `EPERM`, `ELOOP` —
+ * means the file may well exist and we could not look at it, which is a different fact
+ * with a different remedy. Collapsing them into "missing" told the operator to run
+ * `bober pge dump`, which would then fail on the same permission.
+ */
+export type FileRead =
+  | { kind: "present"; text: string }
+  | { kind: "absent" }
+  | { kind: "unreadable"; code: string; message: string };
+
+/** The `code` of a Node `SystemError`, or `undefined` for anything else. */
+function errnoCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
 }
+
+/** Read `path` as UTF-8, distinguishing "not there" from "there but unreadable". */
+export async function readIfPresent(path: string): Promise<FileRead> {
+  try {
+    return { kind: "present", text: await readFile(path, "utf8") };
+  } catch (error) {
+    const code = errnoCode(error);
+    const message = error instanceof Error ? error.message : String(error);
+    if (code === "ENOENT") return { kind: "absent" };
+    return { kind: "unreadable", code: code ?? "UNKNOWN", message };
+  }
+}
+
+// ── Serialization ───────────────────────────────────────────────────
 
 /**
  * The exact bytes `bober pge dump` writes.
@@ -55,13 +86,28 @@ export function serializeTopology(spec: TopologySpec): string {
 
 // ── Dump ────────────────────────────────────────────────────────────
 
-/** Why a committed artifact does not match the authored literal. */
-export type TopologyDrift = "none" | "missing" | "content";
+/**
+ * Why a committed artifact does not match the authored literal.
+ *
+ *  - `none` / `missing` / `content` — the committed file matched, was absent, or differed.
+ *  - `unreadable` — the file could not be read for a reason OTHER than absence
+ *    (`EACCES`, `EISDIR`, …). Never conflated with `missing`: the remedy differs.
+ *  - `stale` — the SPEC's stored checksum does not match its own canonical form, so
+ *    writing it would commit a permanently self-inconsistent artifact. Nothing is written.
+ */
+export type TopologyDrift = "none" | "missing" | "content" | "unreadable" | "stale";
 
 export interface DumpResult {
   /** Absolute path of the committed artifact. */
   path: string;
-  /** Checksum of the canonical form of the authored literal. */
+  /**
+   * The checksum CARRIED BY {@link DumpResult.serialized}.
+   *
+   * Single source: {@link dumpTopology} refuses to proceed unless the spec's stored
+   * checksum already equals `checksumTopology(spec)`, so this field, the `checksum` key
+   * inside `serialized`, and the canonical checksum are one value by construction. When
+   * `drift` is `"stale"` this is the CANONICAL checksum and `stale` reports both sides.
+   */
   checksum: `sha256:${string}`;
   /** The exact bytes the authored literal serializes to. */
   serialized: string;
@@ -69,6 +115,10 @@ export interface DumpResult {
   drift: TopologyDrift;
   /** True only when this call wrote the file. Always false in check mode. */
   written: boolean;
+  /** Set when and only when `drift` is `"unreadable"`. */
+  unreadable?: { code: string; message: string };
+  /** Set when and only when `drift` is `"stale"`. */
+  stale?: { stored: string; canonical: `sha256:${string}` };
 }
 
 export interface DumpOptions {
@@ -84,6 +134,13 @@ export interface DumpOptions {
  *
  * In check mode nothing is written and `drift` reports whether the committed artifact
  * is missing or differs by so much as one byte.
+ *
+ * Two refusals write nothing in either mode:
+ *  - a spec whose stored checksum is not its canonical checksum (`drift: "stale"`),
+ *    because the bytes would carry a checksum that contradicts their own content;
+ *  - a committed artifact that exists but cannot be read (`drift: "unreadable"`),
+ *    because overwriting a file we could not compare against is not a dump, it is a
+ *    guess.
  */
 export async function dumpTopology(
   projectRoot: string,
@@ -92,17 +149,37 @@ export async function dumpTopology(
 ): Promise<DumpResult> {
   const path = topologyArtifactPath(projectRoot, spec.graphId);
   const serialized = serializeTopology(spec);
-  const checksum = checksumTopology(spec);
+  const canonical = checksumTopology(spec);
 
-  let committed: string | undefined;
-  try {
-    committed = await readFile(path, "utf8");
-  } catch {
-    committed = undefined;
+  if (spec.checksum !== canonical) {
+    return {
+      path,
+      checksum: canonical,
+      serialized,
+      drift: "stale",
+      written: false,
+      stale: { stored: spec.checksum, canonical },
+    };
+  }
+
+  // From here `spec.checksum === canonical === the checksum inside `serialized``: one
+  // value, so the reported checksum cannot diverge from the bytes.
+  const checksum = spec.checksum;
+
+  const committed = await readIfPresent(path);
+  if (committed.kind === "unreadable") {
+    return {
+      path,
+      checksum,
+      serialized,
+      drift: "unreadable",
+      written: false,
+      unreadable: { code: committed.code, message: committed.message },
+    };
   }
 
   const drift: TopologyDrift =
-    committed === undefined ? "missing" : committed === serialized ? "none" : "content";
+    committed.kind === "absent" ? "missing" : committed.text === serialized ? "none" : "content";
 
   if (opts.check) {
     return { path, checksum, serialized, drift, written: false };
@@ -122,19 +199,24 @@ export async function dumpTopology(
 
 export type ReadArtifactResult =
   | { ok: true; raw: unknown; text: string }
-  | { ok: false; reason: "missing" | "unparseable"; message: string };
+  | { ok: false; reason: "missing" | "unreadable" | "unparseable"; message: string };
 
-/** Read a topology artifact as raw JSON. Never throws; a bad file is a typed result. */
+/**
+ * Read a topology artifact as raw JSON. Never throws; a bad file is a typed result.
+ *
+ * `missing` is `ENOENT` alone — a file that exists but cannot be opened reports
+ * `unreadable`, so "create it" is never suggested for a permissions failure.
+ */
 export async function readTopologyArtifact(path: string): Promise<ReadArtifactResult> {
-  let text: string;
-  try {
-    text = await readFile(path, "utf8");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, reason: "missing", message };
+  const read = await readIfPresent(path);
+  if (read.kind === "absent") {
+    return { ok: false, reason: "missing", message: `${path} does not exist` };
+  }
+  if (read.kind === "unreadable") {
+    return { ok: false, reason: "unreadable", message: `${read.code}: ${read.message}` };
   }
   try {
-    return { ok: true, raw: JSON.parse(text) as unknown, text };
+    return { ok: true, raw: JSON.parse(read.text) as unknown, text: read.text };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return { ok: false, reason: "unparseable", message };
@@ -144,6 +226,20 @@ export async function readTopologyArtifact(path: string): Promise<ReadArtifactRe
 // ── Prompt store ────────────────────────────────────────────────────
 
 /**
+ * The prompt store as found on disk.
+ *
+ * `available: false` means `.bober/prompts/` DOES NOT EXIST — which is not the same
+ * fact as "it exists and holds nothing". An empty-but-present store resolves no ref and
+ * every `promptRef` is genuinely unknown; an ABSENT store means this workspace has no
+ * prompt store at all and ref resolution cannot be performed, which the caller must
+ * report as its own outcome rather than as fifteen unknown refs (see
+ * `runPgeValidate`).
+ */
+export type PromptStore =
+  | { available: true; dir: string; refs: Set<string> }
+  | { available: false; dir: string };
+
+/**
  * Every `promptRef` resolvable under `.bober/prompts/`.
  *
  * A ref is the file's path below that directory with the `.md` extension removed and
@@ -151,39 +247,68 @@ export async function readTopologyArtifact(path: string): Promise<ReadArtifactRe
  * Prompt BODIES are deliberately not read: the topology checksum is a function of
  * structure alone, so editing a prompt body must not move it.
  */
-export async function readPromptRefs(projectRoot: string): Promise<Set<string>> {
-  const root = join(projectRoot, PROMPT_DIR);
+export async function readPromptStore(projectRoot: string): Promise<PromptStore> {
+  const dir = join(projectRoot, PROMPT_DIR);
+
+  try {
+    const info = await stat(dir);
+    if (!info.isDirectory()) return { available: false, dir };
+  } catch {
+    return { available: false, dir };
+  }
+
   const refs = new Set<string>();
 
-  const walk = async (dir: string, prefix: string): Promise<void> => {
+  /**
+   * @returns false when any directory could not be enumerated. A partially read store
+   *          must not be reported as available: the missing half would surface as
+   *          `UnknownPromptRef` on refs that are in fact perfectly resolvable.
+   */
+  const walk = async (from: string, prefix: string): Promise<boolean> => {
     let entries: Dirent[];
     try {
-      entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" });
+      entries = await readdir(from, { withFileTypes: true, encoding: "utf8" });
     } catch {
-      return;
+      return false;
     }
+    let complete = true;
     for (const entry of entries) {
-      const child = join(dir, entry.name);
+      const child = join(from, entry.name);
       if (entry.isDirectory()) {
-        await walk(child, prefix === "" ? entry.name : posix.join(prefix, entry.name));
+        const ok = await walk(child, prefix === "" ? entry.name : posix.join(prefix, entry.name));
+        complete = complete && ok;
         continue;
       }
       if (!entry.name.endsWith(".md")) continue;
       const base = entry.name.slice(0, -".md".length);
       refs.add(prefix === "" ? base : posix.join(prefix, base));
     }
+    return complete;
   };
 
-  await walk(root, "");
-  return refs;
+  return (await walk(dir, "")) ? { available: true, dir, refs } : { available: false, dir };
 }
 
 // ── Guards ──────────────────────────────────────────────────────────
 
 /**
- * True when `raw` at least LOOKS like a topology artifact — used to give a readable
- * error before Zod produces a wall of issues for, say, a JSON array.
+ * The minimum shape that makes a JSON document a CANDIDATE topology artifact.
+ *
+ * Zod, not a hand-rolled predicate: the project has one validation library and a
+ * second, hand-written notion of "object with a nodes array" would be free to drift
+ * away from `TopologySpecSchema`. Deliberately not `.min(1)` — an empty `nodes` array
+ * is a topology with a rule violation (`EmptyGraph`), not a non-topology.
+ */
+export const TopologyShapeSchema = z.object({ nodes: z.array(z.unknown()) });
+
+/**
+ * True when `raw` at least LOOKS like a topology artifact.
+ *
+ * This selects the ERROR MESSAGE, never whether the schema runs: every verb parses the
+ * document through `TopologySpecSchema` (directly, or via `validateTopology`) whatever
+ * this returns, so a malformed artifact can no longer skip schema validation by being
+ * the wrong shape.
  */
 export function looksLikeTopology(raw: unknown): boolean {
-  return isPlainObject(raw) && Array.isArray(raw.nodes);
+  return TopologyShapeSchema.safeParse(raw).success;
 }

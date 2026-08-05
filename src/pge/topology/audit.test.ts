@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -177,6 +177,24 @@ describe("writeStateAudit", () => {
     expect(result.drift).toBe("missing");
     expect(result.written).toBe(false);
     await expect(readFile(stateAuditPath(root), "utf8")).rejects.toThrow(/ENOENT/);
+  });
+
+  /**
+   * Regression: the committed-audit read was a bare `catch {}` mapping every failure to
+   * "missing", so an audit that existed but could not be opened was reported absent and
+   * then OVERWRITTEN. A directory in its place yields EISDIR without depending on the
+   * test user's privileges.
+   */
+  it("distinguishes an unreadable audit from a missing one and overwrites nothing", async () => {
+    await mkdir(stateAuditPath(root), { recursive: true });
+
+    const result = await writeStateAudit(root, CODING_GRAPH);
+    expect(result.drift).toBe("unreadable");
+    expect(result.drift).not.toBe("missing");
+    expect(result.written).toBe(false);
+    expect(result.unreadable?.code).toBe("EISDIR");
+    // Still a directory: nothing clobbered what it could not read.
+    await expect(readFile(stateAuditPath(root), "utf8")).rejects.toThrow(/EISDIR/);
   });
 
   it("check mode reports content drift and does NOT repair it", async () => {

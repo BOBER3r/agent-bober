@@ -19,7 +19,7 @@
  */
 import type { BoberConfig } from "../config/schema.js";
 import type { PipelineResult } from "../orchestrator/pipeline.js";
-import type { PipelineEngine, PipelineEngineName } from "../orchestrator/workflow/engine.js";
+import type { PipelineEngine, PipelineEngineName, RunOptions } from "../orchestrator/workflow/engine.js";
 import { createSpec } from "../contracts/spec.js";
 import { AuditLog } from "./audit.js";
 import { ConsentGate } from "./consent.js";
@@ -197,7 +197,7 @@ export class MedicalSopEngine implements PipelineEngine {
     userPrompt: string,
     projectRoot: string,
     config: BoberConfig,          // was _config — now consumed (EgressGuard.fromConfig)
-    opts?: { runId?: string; now?: string },
+    opts?: RunOptions,
   ): Promise<PipelineResult> {
     // All timestamps come from the injected `now` — never the wall clock.
     // bober: fallback ISO for ad-hoc manual runs only; tests must always inject `now`.

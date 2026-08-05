@@ -3,24 +3,32 @@ import { resolveProviderModel, resolveModel } from "./model-resolver.js";
 
 describe("resolveProviderModel", () => {
   describe("Anthropic shorthands", () => {
-    it("resolves opus to anthropic/claude-opus-4-8", () => {
+    // sc-1-1: bare shorthands track the current generation.
+    it("resolves opus to anthropic/claude-opus-5 (sc-1-1)", () => {
       expect(resolveProviderModel("opus")).toEqual({
         provider: "anthropic",
-        modelId: "claude-opus-4-8",
+        modelId: "claude-opus-5",
       });
     });
 
-    it("resolves opus-4-7 to anthropic/claude-opus-4-7 (pinned alias)", () => {
-      expect(resolveProviderModel("opus-4-7")).toEqual({
-        provider: "anthropic",
-        modelId: "claude-opus-4-7",
-      });
-    });
-
-    it("resolves sonnet to anthropic/claude-sonnet-4-6", () => {
+    it("resolves sonnet to anthropic/claude-sonnet-5 (sc-1-1)", () => {
       expect(resolveProviderModel("sonnet")).toEqual({
         provider: "anthropic",
-        modelId: "claude-sonnet-4-6",
+        modelId: "claude-sonnet-5",
+      });
+    });
+
+    // sc-1-2: pinned aliases let a project stay on a specific release.
+    it.each([
+      ["opus-5", "claude-opus-5"],
+      ["opus-4-8", "claude-opus-4-8"],
+      ["opus-4-7", "claude-opus-4-7"],
+      ["sonnet-5", "claude-sonnet-5"],
+      ["sonnet-4-6", "claude-sonnet-4-6"],
+    ])("resolves pinned alias %s to anthropic/%s (sc-1-2)", (alias, modelId) => {
+      expect(resolveProviderModel(alias)).toEqual({
+        provider: "anthropic",
+        modelId,
       });
     });
 
@@ -206,19 +214,31 @@ describe("resolveProviderModel", () => {
     it("sonnet still resolves to anthropic with no endpoint (sc-2-3)", () => {
       expect(resolveProviderModel("sonnet")).toEqual({
         provider: "anthropic",
-        modelId: "claude-sonnet-4-6",
+        modelId: "claude-sonnet-5",
       });
     });
+
+    // sc-1-3: rule 4 passthrough. bober.config.json relies on this to name
+    // literal model IDs that are deliberately absent from SHORTHAND_MAP.
+    it.each(["claude-opus-5", "claude-sonnet-5", "claude-fable-5", "some-future-model"])(
+      "passes unmapped model id %s through to anthropic unchanged (sc-1-3)",
+      (modelId) => {
+        expect(resolveProviderModel(modelId)).toEqual({
+          provider: "anthropic",
+          modelId,
+        });
+      },
+    );
   });
 });
 
 describe("resolveModel (backward compat)", () => {
   it("returns modelId for opus", () => {
-    expect(resolveModel("opus")).toBe("claude-opus-4-8");
+    expect(resolveModel("opus")).toBe("claude-opus-5");
   });
 
   it("returns modelId for sonnet", () => {
-    expect(resolveModel("sonnet")).toBe("claude-sonnet-4-6");
+    expect(resolveModel("sonnet")).toBe("claude-sonnet-5");
   });
 
   it("returns modelId for haiku", () => {

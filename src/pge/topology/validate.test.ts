@@ -239,6 +239,49 @@ describe("cycle analysis", () => {
     }
   });
 
+  /**
+   * Regression: the rule used to accept a strongly connected component as soon as ONE
+   * member declared a bound, which is weaker than `LoopBoundSchema`'s stated contract
+   * ("every cycle must contain one"). A retry route that re-enters an earlier node
+   * forms a cycle that never passes through the bounded router, so the router's budget
+   * does not bound it — and the shipped coding topology had three of exactly that
+   * shape.
+   */
+  it("reports UnboundedCycle for a retry cycle nested inside a bounded component", async () => {
+    const raw = (await loadFixture("valid")) as Record<string, unknown>;
+    const nodes = raw.nodes as Array<Record<string, unknown>>;
+    const edges = raw.edges as Array<Record<string, unknown>>;
+
+    // The fixture's largest bounded cycle: the component carrying a node with
+    // counterKey/maxIterations and enough other members to short-circuit between.
+    const boundedIds = new Set(nodes.filter((n) => n.loop !== undefined).map((n) => n.id));
+    if (boundedIds.size === 0) throw new Error("fixture drift: valid.json declares no loop bound");
+    const bounded = findCycles(TopologySpecSchema.parse(raw))
+      .filter((c) => c.nodeIds.some((id) => boundedIds.has(id)))
+      .sort((a, b) => b.nodeIds.length - a.nodeIds.length)[0];
+    if (!bounded) throw new Error("fixture drift: no bounded node is in a cycle");
+    const router = nodes.find(
+      (n) => boundedIds.has(n.id) && bounded.nodeIds.includes(n.id as string),
+    );
+    if (!router) throw new Error("fixture drift: the bounded node is in no cycle");
+
+    // Close a SHORT-CIRCUIT between two members of that same component, bypassing the
+    // bounded node. The component is unchanged; the new cycle inside it is unbounded.
+    const members = bounded.nodeIds.filter((id) => !boundedIds.has(id));
+    expect(members.length).toBeGreaterThanOrEqual(2);
+    const [first] = members;
+    const last = members[members.length - 1];
+    edges.push({ id: "e-shortcircuit", from: last, to: first, kind: "normal" });
+
+    const report = validateTopology(raw);
+    const cycle = report.diagnostics.find((d) => d.code === "UnboundedCycle");
+    expect(errorCodes(report)).toContain("UnboundedCycle");
+    expect(cycle?.nodeIds).not.toContain(router.id);
+    // Tarjan still sees ONE component here — the finding is strictly nested inside it.
+    const components = findCycles(TopologySpecSchema.parse(raw));
+    expect(components.some((c) => c.nodeIds.includes(router.id as string))).toBe(true);
+  });
+
   it("reports UnboundedCycle for a cyclic edge with no loop bound", async () => {
     const raw = await loadFixture("UnboundedCycle");
     const report = validateTopology(raw);

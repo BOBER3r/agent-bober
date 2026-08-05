@@ -91,7 +91,11 @@ const UNSEALED_CHECKSUM = `sha256:${"0".repeat(64)}`;
 const CODING_GRAPH_UNSEALED: TopologySpec = {
   formatVersion: 1,
   graphId: "coding",
-  graphVersion: "1.0.0",
+  // 1.1.0 — the retry cycles that bypass their region's router (gate_mock_coverage,
+  // sprint_correct, reduce_sprints) now declare explicit loop bounds. A structural
+  // change to a committed artifact moves graphVersion forward; `pge diff
+  // --require-version-bump` is the gate that says so.
+  graphVersion: "1.1.0",
   description:
     "The agent-bober coding pipeline: research reflexion loop, planner with a clarification loop, supervisor, bounded sprint subgraph with curator/security/evaluation gates, global evaluation with rework, synthesis, documentation, gated commit, graceful failure and context compaction.",
   provenance: "authored",
@@ -519,15 +523,16 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "gate_mock_coverage",
       kind: "gate",
       title: "Mock coverage gate",
-      doc: "Rejects a sprint whose declared boundaries are not covered by fixtures, sending it back to the mock curator.",
+      doc: "Rejects a sprint whose declared boundaries are not covered by fixtures, sending it back to the mock curator. The re-curation retry is a cycle of its own that never reaches sprint_route, so it carries its own bound rather than borrowing one.",
       subgraph: "sprint",
       role: "utility",
       inputPorts: [],
       outputPorts: [],
-      reads: ["refs"],
-      writes: [],
+      reads: ["refs", "counters"],
+      writes: ["counters"],
       effects: ["process-exec"],
       gate: { check: "mock-coverage-threshold", onFail: "sprint_curate_mocks" },
+      loop: { counterKey: "mockCurationRounds", maxIterations: 2, onExhausted: "sprint_exit" },
     },
     {
       id: "sprint_generate",
@@ -626,16 +631,17 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "sprint_correct",
       kind: "llm",
       title: "Correct the sprint",
-      doc: "Applies the evaluator's and the gates' feedback to the working tree, then hands back to the generator for the next attempt.",
+      doc: "Applies the evaluator's and the gates' feedback to the working tree, then hands back to the generator for the next attempt. Every route into the corrector is counted here, not only the router's: gate_syntax and gate_anchor_regression reach it directly through onFail, and those cycles never touch sprint_route. The counterKey is deliberately the SAME sprintIterations budget the router spends, so a branch gets three correction attempts in total however it got here.",
       subgraph: "sprint",
       role: "generator",
       modelTier: "frontier",
       promptRef: "generator/correct",
       inputPorts: [],
       outputPorts: [],
-      reads: ["evaluations", "messages", "refs"],
-      writes: ["messages", "refs", "ledger"],
+      reads: ["evaluations", "messages", "refs", "counters"],
+      writes: ["messages", "refs", "ledger", "counters"],
       effects: ["fs-write"],
+      loop: { counterKey: "sprintIterations", maxIterations: 3, onExhausted: "sprint_exit" },
     },
     {
       id: "sprint_review",
@@ -687,7 +693,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "reduce_sprints",
       kind: "gate",
       title: "Sprint fan-in barrier",
-      doc: "The single join for the sprint fan-out: every branch leaves its subgraph through gate_sprint_out and converges here. Waits for every dispatched branch to settle, then makes ONE return to the supervisor. On a failed branch it routes back to the fan-out with jittered backoff (gate.onFail); the retry budget is the global supervisorRounds bound.",
+      doc: "The single join for the sprint fan-out: every branch leaves its subgraph through gate_sprint_out and converges here. Waits for every dispatched branch to settle, then makes ONE return to the supervisor. On a failed branch it routes back to the fan-out with jittered backoff (gate.onFail). That retry re-enters the fan-out WITHOUT passing through the supervisor, so supervisorRounds does not bound it and the barrier declares its own fanoutRetries budget; exhausting it degrades to graceful_failure rather than re-dispatching for ever.",
       subgraph: null,
       role: "utility",
       inputPorts: [],
@@ -696,6 +702,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       writes: ["counters"],
       effects: [],
       gate: { check: "all-branches-settled", onFail: "fanout_sprints" },
+      loop: { counterKey: "fanoutRetries", maxIterations: 2, onExhausted: "graceful_failure" },
     },
 
     // ── Evaluation region ───────────────────────────────────────────

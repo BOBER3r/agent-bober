@@ -894,17 +894,20 @@ describe("BoberConfigSchema — repo's own bober.config.json parses byte-identic
         mode: "greenfield",
         stack: { language: "typescript", backend: "node" },
       },
-      planner: { maxClarifications: 5, model: "opus", provider: "anthropic" },
-      curator: { model: "opus", maxTurns: 25, enabled: true },
+      // spec-20260804 sprint 1: the repo pins literal Claude 5 model IDs
+      // rather than the bare shorthands, so a later change to SHORTHAND_MAP
+      // cannot silently move which model this repo dogfoods on.
+      planner: { maxClarifications: 5, model: "claude-opus-5", provider: "anthropic" },
+      curator: { model: "claude-opus-5", maxTurns: 25, enabled: true },
       generator: {
-        model: "sonnet",
+        model: "claude-opus-5",
         maxTurnsPerSprint: 50,
         autoCommit: true,
         branchPattern: "bober/{feature-name}",
         provider: "anthropic",
       },
       evaluator: {
-        model: "sonnet",
+        model: "claude-sonnet-5",
         strategies: [
           { type: "typecheck", required: true },
           { type: "lint", required: false },

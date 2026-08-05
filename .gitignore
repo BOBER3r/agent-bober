@@ -46,3 +46,12 @@ pnpm-debug.log*
 # Regenerable runtime state
 .bober/memory/*.db
 .bober/graph/.hook-queue.jsonl
+
+# PGE graph-runtime state (sprint 6) — written per run, never version-controlled.
+# Only the topology and golden-case artifacts stay tracked; a 40-node run would
+# otherwise commit its scratch payloads, per-node archives, spans and cache entries.
+.bober/scratch/
+.bober/traces/
+.bober/cache/
+.bober/archive/
+.bober/logs/

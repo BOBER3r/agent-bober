@@ -31,6 +31,16 @@ function reseal(spec: TopologySpec): TopologySpec {
   return { ...spec, checksum: checksumTopology(spec) };
 }
 
+/**
+ * A version strictly ahead of the shipped graph's, DERIVED rather than written out: a
+ * literal "1.1.0" silently stops testing a bump the moment the shipped graph reaches
+ * that version.
+ */
+function bumpedVersion(from: string = CODING_GRAPH.graphVersion): string {
+  const [major, minor] = from.split(".").map((part) => Number.parseInt(part, 10));
+  return `${major}.${minor + 1}.0`;
+}
+
 function extraGate(id: string): NodeSpec {
   return {
     id,
@@ -102,10 +112,14 @@ describe("diffTopology on identical inputs", () => {
   });
 
   it("reports empty:true when only graphVersion differs, and marks it bumped", () => {
-    const bumped = reseal({ ...clone(CODING_GRAPH), graphVersion: "1.1.0" });
+    const bumped = reseal({ ...clone(CODING_GRAPH), graphVersion: bumpedVersion() });
     const diff = diffTopology(CODING_GRAPH, bumped);
     expect(diff.empty).toBe(true);
-    expect(diff.graphVersion).toEqual({ from: "1.0.0", to: "1.1.0", bumped: true });
+    expect(diff.graphVersion).toEqual({
+      from: CODING_GRAPH.graphVersion,
+      to: bumpedVersion(),
+      bumped: true,
+    });
   });
 });
 
@@ -426,7 +440,7 @@ describe("diffTopology graph-level fields", () => {
   });
 
   it("leaves graphFieldsChanged empty for a version-only change, which is still not a diff", () => {
-    const bumped = reseal({ ...clone(CODING_GRAPH), graphVersion: "1.1.0" });
+    const bumped = reseal({ ...clone(CODING_GRAPH), graphVersion: bumpedVersion() });
     const diff = diffTopology(CODING_GRAPH, bumped);
     expect(diff.graphFieldsChanged).toEqual([]);
     expect(diff.empty).toBe(true);

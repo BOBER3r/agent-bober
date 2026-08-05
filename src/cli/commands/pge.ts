@@ -13,13 +13,16 @@ import {
 import { diffTopology, serializeTopologyDiff } from "../../pge/topology/diff.js";
 import { docDriftReport } from "../../pge/topology/docs.js";
 import {
+  PROMPT_DIR,
   dumpTopology,
   looksLikeTopology,
-  readPromptRefs,
+  readPromptStore,
   readTopologyArtifact,
   topologyArtifactPath,
 } from "../../pge/topology/dump.js";
 import { buildVariantRecord, optimizeTopology, writeVariantRecord } from "../../pge/topology/optimize.js";
+import { createEffectRegistry } from "../../pge/registry/effects.js";
+import type { EffectRegistry } from "../../pge/registry/effects.js";
 import { RENDER_FORMATS, isRenderFormat, renderTopology } from "../../pge/topology/render.js";
 import type { RenderFormat } from "../../pge/topology/render.js";
 import { validateTopology } from "../../pge/topology/validate.js";
@@ -101,6 +104,23 @@ export function promptRefSet(refs: ReadonlySet<string>): PromptRefSet {
 
 // ── Reporting ───────────────────────────────────────────────────────
 
+/**
+ * One line for a failed artifact read. `unreadable` is deliberately worded differently
+ * from `missing`: a file that exists but cannot be opened must never be reported as one
+ * that is not there, because the remedy is a permission, not a `dump`.
+ */
+function readArtifactFailureLine(
+  path: string,
+  reason: "missing" | "unreadable" | "unparseable",
+  message: string,
+): string {
+  if (reason === "missing") return `Cannot read topology artifact ${path}: ${message}`;
+  if (reason === "unreadable") {
+    return `Topology artifact ${path} exists but could not be read: ${message}`;
+  }
+  return `Topology artifact ${path} is not valid JSON: ${message}`;
+}
+
 function reportDiagnostics(report: ValidationReport, io: PgeIo): number {
   let errors = 0;
   for (const diagnostic of report.diagnostics) {
@@ -130,12 +150,27 @@ export interface PgeDumpOptions {
  * `--check` exits non-zero when the committed artifact is missing or differs by one
  * byte, and deliberately does NOT rewrite it — silently repairing drift would make the
  * CI gate decorative (ADR-2 risk).
+ *
+ * SEALS THE EFFECT CHANNEL FIRST. Topology production reads a typed literal and writes
+ * one JSON file; it must never perform a node's side effect. The ESLint module-graph
+ * boundary already makes an executor unreachable from `src/pge/topology/**`, and
+ * `effects.seal()` closes the remaining door at the level above it: after this call
+ * `EffectRegistry.invoke` throws `EffectChannelClosed` BEFORE resolving or running
+ * anything, so an effect attempted anywhere under `dump` does not happen. The registry
+ * is a parameter so a test can prove that, and it defaults to a fresh registry so a
+ * sealed one never leaks into a later run in the same process.
+ *
+ * `effects.js` is imported for its runtime `createEffectRegistry` alone: that module
+ * imports types only, so this command's import graph gains no store, no provider and no
+ * process spawner (`src/pge/zero-execution.test.ts` is what keeps that true).
  */
 export async function runPgeDump(
   projectRoot: string,
   opts: PgeDumpOptions,
   io: PgeIo,
+  effects: EffectRegistry = createEffectRegistry(),
 ): Promise<number> {
+  effects.seal();
   const graphId = opts.graphId ?? CODING_GRAPH_ID;
   const spec = authoredGraph(graphId);
   if (!spec) {
@@ -151,6 +186,24 @@ export async function runPgeDump(
   }
 
   const result = await dumpTopology(projectRoot, spec, { check: opts.check });
+
+  // Two refusals that are not drift and are not "the file is missing". The stale case
+  // is defence in depth — the `validateTopology` gate above already fails a stale
+  // literal with `ChecksumStale` — but without it a `"stale"` result would fall through
+  // to the success line below and print "unchanged … EXIT_OK" for a dump that never
+  // happened.
+  if (result.drift === "stale") {
+    io.err(
+      `error ChecksumStale: authored graph "${graphId}" stores ${result.stale?.stored ?? "<none>"} but canonicalises to ${result.checksum}. Nothing written.`,
+    );
+    return EXIT_FAILED;
+  }
+  if (result.drift === "unreadable") {
+    io.err(
+      `Cannot read the committed artifact ${result.path} (${result.unreadable?.code ?? "UNKNOWN"}): ${result.unreadable?.message ?? "unknown error"}. It exists but could not be opened, so it was neither compared nor overwritten.`,
+    );
+    return EXIT_USAGE;
+  }
 
   if (opts.check) {
     if (result.drift === "missing") {
@@ -183,6 +236,24 @@ export interface PgeValidateOptions {
 /**
  * Validate a topology artifact and print one line per diagnostic, each naming its
  * code. Exits non-zero when any diagnostic has error severity.
+ *
+ * Two behaviours are load-bearing and easy to get wrong:
+ *
+ * SHAPE. A document that is not even topology-shaped is still handed to
+ * `validateTopology`, which parses it through `TopologySpecSchema` and prints the real
+ * schema diagnostics. The shape guard only adds a readable leading line and selects the
+ * usage exit code; it never lets a malformed artifact skip the schema.
+ *
+ * PROMPTS. `mode: "full"` resolves `promptRef`s against `.bober/prompts/`. An ABSENT
+ * prompt store is a distinct, non-error outcome: prompt resolution is SKIPPED and said
+ * so out loud, because "this workspace has no prompt store" is not evidence that any
+ * particular ref is wrong. A store that EXISTS resolves refs with full strength — an
+ * empty one leaves every ref unknown and `UnknownPromptRef` fires exactly as before.
+ * Mapping the refs onto `agents/*.md` was rejected: those files are per-ROLE system
+ * prompts with no `<role>/<task>` granularity, so the mapping would resolve any ref
+ * whose role happens to exist — a weakening of `UnknownPromptRef` in all but name — and
+ * it would drag the orchestrator's agent loader into this command's import graph, which
+ * `src/pge/zero-execution.test.ts` exists to keep out.
  */
 export async function runPgeValidate(
   projectRoot: string,
@@ -194,37 +265,53 @@ export async function runPgeValidate(
 
   const artifact = await readTopologyArtifact(path);
   if (!artifact.ok) {
-    io.err(
-      artifact.reason === "missing"
-        ? `Cannot read topology artifact ${path}: ${artifact.message}`
-        : `Topology artifact ${path} is not valid JSON: ${artifact.message}`,
-    );
-    return EXIT_USAGE;
-  }
-
-  if (!looksLikeTopology(artifact.raw)) {
-    io.err(
-      `${path} is JSON but not a topology artifact: it declares no nodes array. Expected a TopologySpec.`,
-    );
+    io.err(readArtifactFailureLine(path, artifact.reason, artifact.message));
     return EXIT_USAGE;
   }
 
   const mode: ValidationMode = opts.mode ?? "structural";
+  const shaped = looksLikeTopology(artifact.raw);
+
+  let promptSkipped: string | undefined;
+  let prompts: PromptRefSet | undefined;
+  if (mode === "full") {
+    const store = await readPromptStore(projectRoot);
+    if (store.available) {
+      prompts = promptRefSet(store.refs);
+    } else {
+      promptSkipped = store.dir;
+    }
+  }
+
   const report =
     mode === "full"
       ? validateTopology(artifact.raw, {
           mode: "full",
           schemas: codingSchemaCatalog(),
-          prompts: promptRefSet(await readPromptRefs(projectRoot)),
+          prompts,
         })
       : validateTopology(artifact.raw, { mode: "structural" });
 
+  if (!shaped) {
+    io.err(
+      `${path} is JSON but not a topology artifact: it declares no nodes array. Expected a TopologySpec.`,
+    );
+    reportDiagnostics(report, io);
+    return EXIT_USAGE;
+  }
+
   const errors = reportDiagnostics(report, io);
+  if (promptSkipped !== undefined) {
+    io.out(
+      `note PromptResolutionSkipped: no prompt store at ${promptSkipped}, so no promptRef was resolved. This is not a verdict on any ref; create ${PROMPT_DIR}/ to resolve them.`,
+    );
+  }
   if (errors > 0) {
     io.err(`${path}: ${errors} error diagnostic${errors === 1 ? "" : "s"} (mode ${mode}).`);
     return EXIT_FAILED;
   }
-  io.out(`ok ${path} (mode ${mode}, ${report.diagnostics.length} diagnostics)`);
+  const suffix = promptSkipped === undefined ? "" : ", prompt resolution skipped";
+  io.out(`ok ${path} (mode ${mode}, ${report.diagnostics.length} diagnostics${suffix})`);
   return EXIT_OK;
 }
 
@@ -266,24 +353,19 @@ export async function runPgeHash(
 
   const artifact = await readTopologyArtifact(opts.file);
   if (!artifact.ok) {
-    io.err(
-      artifact.reason === "missing"
-        ? `Cannot read topology artifact ${opts.file}: ${artifact.message}`
-        : `Topology artifact ${opts.file} is not valid JSON: ${artifact.message}`,
-    );
+    io.err(readArtifactFailureLine(opts.file, artifact.reason, artifact.message));
     return EXIT_USAGE;
   }
 
-  if (!looksLikeTopology(artifact.raw)) {
-    io.err(
-      `${opts.file} is JSON but not a topology artifact: it declares no nodes array. Expected a TopologySpec.`,
-    );
-    return EXIT_USAGE;
-  }
-
+  // Zod first, shape second: the schema is what decides, and `looksLikeTopology` only
+  // picks which explanation to print.
   const parsed = TopologySpecSchema.safeParse(artifact.raw);
   if (!parsed.success) {
-    io.err(`Topology artifact ${opts.file} does not match TopologySpecSchema.`);
+    io.err(
+      looksLikeTopology(artifact.raw)
+        ? `Topology artifact ${opts.file} does not match TopologySpecSchema.`
+        : `${opts.file} is JSON but not a topology artifact: it declares no nodes array. Expected a TopologySpec.`,
+    );
     return EXIT_USAGE;
   }
 
@@ -313,21 +395,18 @@ type SpecLoad = { ok: true; spec: TopologySpec; path: string } | { ok: false; ex
 async function loadArtifactSpec(path: string, io: PgeIo): Promise<SpecLoad> {
   const artifact = await readTopologyArtifact(path);
   if (!artifact.ok) {
-    io.err(
-      artifact.reason === "missing"
-        ? `Cannot read topology artifact ${path}: ${artifact.message}`
-        : `Topology artifact ${path} is not valid JSON: ${artifact.message}`,
-    );
+    io.err(readArtifactFailureLine(path, artifact.reason, artifact.message));
     return { ok: false, exit: EXIT_USAGE };
   }
-  if (!looksLikeTopology(artifact.raw)) {
-    io.err(
-      `${path} is JSON but not a topology artifact: it declares no nodes array. Expected a TopologySpec.`,
-    );
-    return { ok: false, exit: EXIT_USAGE };
-  }
+  // Zod is always consulted; the shape guard only chooses the wording.
   const parsed = TopologySpecSchema.safeParse(artifact.raw);
   if (!parsed.success) {
+    if (!looksLikeTopology(artifact.raw)) {
+      io.err(
+        `${path} is JSON but not a topology artifact: it declares no nodes array. Expected a TopologySpec.`,
+      );
+      return { ok: false, exit: EXIT_USAGE };
+    }
     const issue = parsed.error.issues[0];
     const where = issue && issue.path.length > 0 ? issue.path.join(".") : "<root>";
     io.err(
@@ -505,6 +584,13 @@ export async function runPgeAuditState(
     );
     io.err(`Refusing to write ${result.path}. Fix the artifact and re-run.`);
     return EXIT_FAILED;
+  }
+
+  if (result.drift === "unreadable") {
+    io.err(
+      `Cannot read the committed state audit ${result.path} (${result.unreadable?.code ?? "UNKNOWN"}): ${result.unreadable?.message ?? "unknown error"}. It exists but could not be opened, so it was neither compared nor overwritten.`,
+    );
+    return EXIT_USAGE;
   }
 
   if (opts.check) {

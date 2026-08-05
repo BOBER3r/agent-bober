@@ -112,7 +112,8 @@ describe("CODING_GRAPH parses and validates", () => {
     expect(parsed.data.formatVersion).toBe(1);
     expect(parsed.data.provenance).toBe("authored");
     expect(parsed.data.graphVersion).toMatch(GRAPH_VERSION_PATTERN);
-    expect(parsed.data.graphVersion).toBe("1.0.0");
+    // Bumped from 1.0.0 when the bypassing retry cycles gained explicit loop bounds.
+    expect(parsed.data.graphVersion).toBe("1.1.0");
   });
 
   it("returns ok:true with zero diagnostics in structural mode", () => {
@@ -232,6 +233,46 @@ describe("structural invariants", () => {
         .map((id) => nodeById.get(id))
         .filter((n) => n?.loop !== undefined);
       expect(bounded.length, `cycle [${cycle.nodeIds.join(",")}] is unbounded`).toBeGreaterThan(0);
+    }
+  });
+
+  /**
+   * The retry routes declared through `gate.onFail` re-enter an earlier node WITHOUT
+   * passing through their region's router, so `supervisorRounds` / `sprintIterations`
+   * spent by that router do not bound them. Each therefore carries its own bound. This
+   * is the encoded decision for `reduce_sprints`: the global supervisor budget does NOT
+   * cover it, because its retry edge never reaches the supervisor.
+   */
+  it.each([
+    { id: "reduce_sprints", onFail: "fanout_sprints", counterKey: "fanoutRetries" },
+    { id: "gate_mock_coverage", onFail: "sprint_curate_mocks", counterKey: "mockCurationRounds" },
+  ])("bounds the $id retry route that bypasses the supervisor", ({ id, onFail, counterKey }) => {
+    const node = nodeOrThrow(id);
+    expect(node.kind).toBe("gate");
+    if (node.kind !== "gate") return;
+    expect(node.gate.onFail).toBe(onFail);
+    expect(node.loop?.counterKey).toBe(counterKey);
+    expect(node.loop?.maxIterations).toBeGreaterThanOrEqual(1);
+    const target = node.loop?.onExhausted ?? "";
+    expect(target === "END" || nodeById.has(target)).toBe(true);
+    // The retry increments a counter, so it must declare the channel it writes.
+    expect(node.writes).toContain("counters");
+  });
+
+  it("counts every route into sprint_correct against the branch's own iteration budget", () => {
+    const corrector = nodeOrThrow("sprint_correct");
+    const router = nodeOrThrow("sprint_route");
+    // Same counter as the router: three correction attempts per branch in total,
+    // whether the router or a gate's onFail sent the branch back.
+    expect(corrector.loop?.counterKey).toBe(router.loop?.counterKey);
+    expect(corrector.loop?.maxIterations).toBe(router.loop?.maxIterations);
+    expect(corrector.writes).toContain("counters");
+    // The gates that reach it directly, bypassing the router.
+    for (const gateId of ["gate_syntax", "gate_anchor_regression"]) {
+      const gate = nodeOrThrow(gateId);
+      expect(gate.kind).toBe("gate");
+      if (gate.kind !== "gate") continue;
+      expect(gate.gate.onFail).toBe("sprint_correct");
     }
   });
 

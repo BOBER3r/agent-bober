@@ -302,7 +302,8 @@ export interface EngineConformanceHarness { assertEquivalent(fixtureSpecId: stri
 ## Data Model
 
 ```typescript
-// (1) PUBLIC — src/pge/state/overall.ts. Exactly 14 keys, snapshot-pinned.
+// (1) PUBLIC — src/pge/state/overall.ts. Exactly 15 keys, snapshot-pinned (the enumeration below is
+// authoritative; an earlier draft of this comment said 14 and miscounted — no key was ever dropped).
 export const OverallStateSchema = z.object({
   runId: z.string(), projectRoot: z.string(), featureRequest: z.string(),
   specId: z.string().nullable(), currentPhase: PhaseSchema,

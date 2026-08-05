@@ -16,6 +16,7 @@ import { serializeTopology, topologyArtifactPath } from "../../pge/topology/dump
 import { VariantRecordSchema, variantsDir } from "../../pge/topology/optimize.js";
 import { renderTopology } from "../../pge/topology/render.js";
 import { DIAGNOSTIC_CODES } from "../../pge/topology/validate.js";
+import { loadConfig } from "../../config/loader.js";
 import { resolveProviderModel } from "../../orchestrator/model-resolver.js";
 import {
   EXIT_FAILED,
@@ -189,6 +190,22 @@ describe("bober pge dump --check", () => {
     expect(err.join("\n")).toContain("missing");
     await expect(readFile(topologyArtifactPath(root, "coding"), "utf8")).rejects.toThrow();
   });
+
+  /**
+   * Regression: an artifact that exists but cannot be read used to surface as
+   * "Topology artifact missing: … Run `bober pge dump`", which is advice that cannot
+   * work. It is now its own message and its own exit code.
+   */
+  it("reports an unreadable artifact as unreadable, not as missing", async () => {
+    await mkdir(topologyArtifactPath(root, "coding"), { recursive: true });
+
+    expect(await runPgeDump(root, { check: true }, io)).toBe(EXIT_USAGE);
+    const text = err.join("\n");
+    expect(text).toContain("could not be opened");
+    expect(text).toContain("EISDIR");
+    expect(text).not.toContain("Topology artifact missing");
+    expect(text).not.toContain("Run `bober pge dump`");
+  });
 });
 
 // ── sc-2-5: validate over every malformed fixture ───────────────────
@@ -212,19 +229,47 @@ describe("bober pge validate", () => {
     expect(DIAGNOSTIC_CODES).toHaveLength(32);
   });
 
+  /**
+   * The CLI's printed error lines, reduced to the set of diagnostic codes they name.
+   *
+   * Format is `error <Code>[ at <path>]: <message>` (`reportDiagnostics`); the trailing
+   * `N error diagnostics (mode …)` summary carries no code and is excluded.
+   */
+  function printedErrorCodes(lines: string[]): string[] {
+    const codes = lines
+      .map((line) => /^error ([A-Za-z]+)(?: at [^:]*)?:/.exec(line))
+      .filter((match): match is RegExpExecArray => match !== null)
+      .map((match) => match[1]);
+    return [...new Set(codes)].sort();
+  }
+
   it.each(DIAGNOSTIC_CODES.map((code) => ({ code })))(
-    "exits non-zero and prints the code name for the $code fixture",
+    "exits non-zero and prints EXACTLY that code for the $code fixture",
     async ({ code }) => {
       await seedPromptStore();
       const file = join(FIXTURE_DIR, `${code}.json`);
       const mode = FULL_MODE_CODES.has(code) ? ("full" as const) : ("structural" as const);
       const exit = await runPgeValidate(root, { file, mode }, io);
       expect(exit).toBe(EXIT_FAILED);
-      expect(err.join("\n")).toContain(code);
-      expect(err.join("\n")).toContain("error");
+      // The EXACT set, not `toContain(code)`: a fixture that also tripped four unrelated
+      // rules, or one whose code merely appeared inside another code's name, used to
+      // pass this assertion.
+      expect(printedErrorCodes(err)).toEqual([code]);
       expect(err.join("\n")).toContain("error diagnostic");
     },
   );
+
+  it("the exact-set assertion rejects a run that names an extra code", async () => {
+    // Guard on the guard: `printedErrorCodes` must not silently return [] (which would
+    // make every `toEqual([code])` above fail) nor swallow a second code.
+    expect(
+      printedErrorCodes([
+        "error DanglingEdge at edges.3.to: whatever",
+        "error UnboundedCycle: whatever",
+        "/tmp/x.json: 2 error diagnostics (mode structural).",
+      ]),
+    ).toEqual(["DanglingEdge", "UnboundedCycle"]);
+  });
 
   it("does not fire the full-mode codes in structural mode", async () => {
     for (const code of FULL_MODE_CODES) {
@@ -235,18 +280,39 @@ describe("bober pge validate", () => {
     }
   });
 
-  it("resolves promptRefs against the on-disk prompt store in full mode", async () => {
+  /**
+   * The prompt-store contract, in three states. Previously the first state produced one
+   * `UnknownPromptRef` per ref, which made `--mode full` red against any workspace that
+   * simply has no prompt store — including this repository — and said nothing true: an
+   * absent store is not evidence that a ref is wrong.
+   */
+  it("treats an ABSENT prompt store as a distinct non-error outcome, not as unknown refs", async () => {
     const file = join(FIXTURE_DIR, "UnknownPromptRef.json");
-    // Without a prompt store, even the legitimate refs are unresolved.
-    const withoutStore = await runPgeValidate(root, { file, mode: "full" }, io);
-    expect(withoutStore).toBe(EXIT_FAILED);
-    // Both the bogus ref AND the legitimate one are unresolved with no store on disk.
+    const exit = await runPgeValidate(root, { file, mode: "full" }, io);
+
+    expect(exit).toBe(EXIT_OK);
+    expect(err.filter((line) => line.startsWith("error UnknownPromptRef"))).toEqual([]);
+    // Silence would be worse than the false errors: the skip is stated.
+    expect(out.join("\n")).toContain("PromptResolutionSkipped");
+    expect(out.join("\n")).toContain(join(".bober", "prompts"));
+    expect(out.join("\n")).toContain("prompt resolution skipped");
+  });
+
+  it("keeps UnknownPromptRef at full strength once the store EXISTS but is empty", async () => {
+    const file = join(FIXTURE_DIR, "UnknownPromptRef.json");
+    await mkdir(join(root, ".bober", "prompts"), { recursive: true });
+
+    const exit = await runPgeValidate(root, { file, mode: "full" }, io);
+    expect(exit).toBe(EXIT_FAILED);
+    // An empty store resolves nothing, so BOTH refs are genuinely unknown.
+    expect(err.filter((line) => line.startsWith("error UnknownPromptRef"))).toHaveLength(2);
     expect(err.join("\n")).toContain("planner/absent");
     expect(err.join("\n")).toContain("generator/sprint");
-    expect(err.filter((line) => line.startsWith("error UnknownPromptRef"))).toHaveLength(2);
+    expect(out.join("\n")).not.toContain("PromptResolutionSkipped");
+  });
 
-    out = [];
-    err = [];
+  it("resolves promptRefs against a populated on-disk prompt store in full mode", async () => {
+    const file = join(FIXTURE_DIR, "UnknownPromptRef.json");
     await seedPromptStore();
     const withStore = await runPgeValidate(root, { file, mode: "full" }, io);
     expect(withStore).toBe(EXIT_FAILED);
@@ -282,18 +348,51 @@ describe("bober pge validate", () => {
   });
 
   it("consults the prompt store for the shipped graph's own refs in full mode", async () => {
-    await runPgeDump(root, {}, io);
-    out = [];
-    err = [];
-    // No prompt store: every promptRef the shipped topology names is unresolved.
-    const withoutStore = await runPgeValidate(root, { mode: "full" }, io);
-    expect(withoutStore).toBe(EXIT_FAILED);
-    const unresolved = err.filter((line) => line.startsWith("error UnknownPromptRef"));
     const shippedRefs = CODING_GRAPH.nodes
       .map((n) => n.promptRef)
       .filter((r): r is string => r !== undefined);
-    expect(unresolved).toHaveLength(shippedRefs.length);
+
+    await runPgeDump(root, {}, io);
+    out = [];
+    err = [];
+
+    // Store present but empty: every ref the shipped topology names is genuinely unknown.
+    await mkdir(join(root, ".bober", "prompts"), { recursive: true });
+    expect(await runPgeValidate(root, { mode: "full" }, io)).toBe(EXIT_FAILED);
+    expect(err.filter((line) => line.startsWith("error UnknownPromptRef"))).toHaveLength(
+      shippedRefs.length,
+    );
     expect(err.join("\n")).toContain("planner/draft");
+
+    // Store populated with exactly those refs: full mode is clean.
+    out = [];
+    err = [];
+    for (const ref of shippedRefs) {
+      const segments = ref.split("/");
+      const dir = join(root, ".bober", "prompts", ...segments.slice(0, -1));
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, `${segments.at(-1) as string}.md`), `body for ${ref}\n`, "utf8");
+    }
+    expect(await runPgeValidate(root, { mode: "full" }, io)).toBe(EXIT_OK);
+    expect(err).toEqual([]);
+    expect(out.join("\n")).not.toContain("PromptResolutionSkipped");
+  });
+
+  /**
+   * Regression for the shape guard: a document that is not topology-shaped used to
+   * return before `TopologySpecSchema` ever saw it, so the verb printed a bare sentence
+   * and not one diagnostic code. The schema now always runs.
+   */
+  it("still runs the schema on JSON that is not topology-shaped", async () => {
+    const file = join(root, "shapeless.json");
+    await writeFile(file, JSON.stringify({ graphId: "coding", edges: [] }), "utf8");
+
+    expect(await runPgeValidate(root, { file }, io)).toBe(EXIT_USAGE);
+    const text = err.join("\n");
+    expect(text).toContain("not a topology artifact");
+    // …and the real schema verdict is reported, not swallowed.
+    expect(err.some((line) => line.startsWith("error "))).toBe(true);
+    expect(text).toContain("nodes");
   });
 });
 
@@ -402,19 +501,30 @@ describe("bober pge hash", () => {
 // ── sc-2-8: a model-profile swap is not a structural change ─────────
 
 describe("model profile swaps do not move the topology checksum", () => {
-  /** Two genuinely different model configurations for the same three roles. */
+  /**
+   * Two genuinely different model configurations for the same three roles, written as
+   * the SHORTHANDS a user puts in bober.config.json. Nothing here names a resolved
+   * model id: `resolveProviderModel` owns that table, and pinning `claude-opus-5` in a
+   * topology test only guarantees this file breaks the next time the shorthand moves.
+   */
   const PROFILE_A = { planner: "opus", generator: "sonnet", evaluator: "haiku" };
   const PROFILE_B = { planner: "gpt-4.1", generator: "gemini-pro", evaluator: "deepseek" };
+  const ROLES = ["planner", "generator", "evaluator"] as const;
 
+  /**
+   * Write a config that the REAL loader accepts. The previous version of this test
+   * wrote `project.mode: "cli"`, which `ProjectModeSchema` rejects — proof that nothing
+   * ever loaded it, which is what made the config half of sc-2-8 inert.
+   */
   async function writeConfig(profile: Record<string, string>): Promise<void> {
     await writeFile(
       join(root, "bober.config.json"),
       `${JSON.stringify(
         {
-          project: { name: "pge-fixture", mode: "cli" },
+          project: { name: "pge-fixture", mode: "greenfield", stack: {} },
           planner: { model: profile.planner },
           generator: { model: profile.generator },
-          evaluator: { model: profile.evaluator },
+          evaluator: { model: profile.evaluator, strategies: [] },
         },
         null,
         2,
@@ -423,50 +533,60 @@ describe("model profile swaps do not move the topology checksum", () => {
     );
   }
 
+  /** The model each role actually binds to, taken through the real loader + resolver. */
+  async function boundModels(): Promise<Record<string, string>> {
+    const config = await loadConfig(root);
+    return {
+      planner: resolveProviderModel(config.planner.model).modelId,
+      generator: resolveProviderModel(config.generator.model).modelId,
+      evaluator: resolveProviderModel(config.evaluator.model).modelId,
+    };
+  }
+
   it("produces identical bytes and identical checksums under two model configurations", async () => {
     await writeConfig(PROFILE_A);
     expect(await runPgeDump(root, {}, io)).toBe(EXIT_OK);
     const underA = await readFile(topologyArtifactPath(root, "coding"), "utf8");
     const checksumA = out[0].split(" ").pop();
+    // The swap is exercised, not merely written: the config on disk is loaded through
+    // the real loader and its models resolved through the real resolver.
+    const boundA = await boundModels();
 
     out = [];
     await writeConfig(PROFILE_B);
     expect(await runPgeDump(root, {}, io)).toBe(EXIT_OK);
     const underB = await readFile(topologyArtifactPath(root, "coding"), "utf8");
     const checksumB = out[0].split(" ").pop();
+    const boundB = await boundModels();
 
-    // The config on disk really did change between the two dumps.
-    const configOnDisk = await readFile(join(root, "bober.config.json"), "utf8");
-    expect(configOnDisk).toContain("gpt-4.1");
-    expect(configOnDisk).not.toContain('"opus"');
-
+    // Every role really did bind to a different model across the two dumps…
+    for (const role of ROLES) {
+      expect(boundA[role], `${role} resolved model`).not.toBe(boundB[role]);
+    }
+    // …and the topology did not move by one byte.
     expect(underB).toBe(underA);
     expect(checksumB).toBe(checksumA);
     expect(checksumA).toBe(CODING_GRAPH.checksum);
   });
 
   it("resolves genuinely different model ids for the two profiles", () => {
-    for (const role of ["planner", "generator", "evaluator"] as const) {
+    for (const role of ROLES) {
       const a = resolveProviderModel(PROFILE_A[role]);
       const b = resolveProviderModel(PROFILE_B[role]);
       expect(a.modelId, `${role} profile A`).not.toBe(b.modelId);
       expect(a.provider === b.provider && a.modelId === b.modelId).toBe(false);
     }
-    expect(resolveProviderModel("opus").modelId).toBe("claude-opus-5");
-    expect(resolveProviderModel("gpt-4.1").modelId).toBe("gpt-4.1");
-    expect(resolveProviderModel("gemini-pro").modelId).toBe("gemini-2.5-pro");
   });
 
   it("records model TIERS, never resolved model ids, in the artifact", () => {
     const text = serializeTopology(CODING_GRAPH);
-    for (const modelId of [
-      "claude-opus-5",
-      "claude-sonnet-5",
-      "claude-haiku-4-5",
-      "gpt-4.1",
-      "gemini-2.5-pro",
-      "deepseek-v4-pro",
-    ]) {
+    // The forbidden strings are DERIVED from the resolver, so a new or renamed model id
+    // is covered here the day it lands rather than the day someone remembers this list.
+    const resolvedIds = [...Object.values(PROFILE_A), ...Object.values(PROFILE_B)].map(
+      (shorthand) => resolveProviderModel(shorthand).modelId,
+    );
+    expect(new Set(resolvedIds).size).toBe(resolvedIds.length);
+    for (const modelId of resolvedIds) {
       expect(text, `artifact leaks model id ${modelId}`).not.toContain(modelId);
     }
     const tiers = new Set(
@@ -492,6 +612,16 @@ async function writeArtifact(name: string, spec: TopologySpec): Promise<string> 
 
 function reseal(spec: TopologySpec): TopologySpec {
   return { ...spec, checksum: checksumTopology(spec) };
+}
+
+/**
+ * A version strictly ahead of the shipped graph's, DERIVED rather than written out: a
+ * literal "1.1.0" silently stops testing a bump the moment the shipped graph reaches
+ * that version.
+ */
+function bumpedVersion(from: string = CODING_GRAPH.graphVersion): string {
+  const [major, minor] = from.split(".").map((part) => Number.parseInt(part, 10));
+  return `${major}.${minor + 1}.0`;
 }
 
 function extraGate(id: string): NodeSpec {
@@ -651,7 +781,7 @@ describe("bober pge diff", () => {
     const a = await writeArtifact("base", CODING_GRAPH);
     const head = clone(CODING_GRAPH);
     head.entry = head.nodes.map((n) => n.id).find((id) => id !== CODING_GRAPH.entry) as string;
-    head.graphVersion = "1.1.0";
+    head.graphVersion = bumpedVersion();
     const b = await writeArtifact("head", reseal(head));
 
     expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_OK);
@@ -674,7 +804,7 @@ describe("bober pge diff", () => {
     const a = await writeArtifact("base", CODING_GRAPH);
     const head = clone(CODING_GRAPH);
     head.nodes.push(extraGate("extra_gate"));
-    head.graphVersion = "1.1.0";
+    head.graphVersion = bumpedVersion();
     const b = await writeArtifact("head", reseal(head));
 
     expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_OK);
@@ -820,7 +950,7 @@ describe("bober pge optimize", () => {
   /** A candidate variant: the shipped graph with one gate removed and rewired. */
   function candidate(): TopologySpec {
     const spec = clone(CODING_GRAPH);
-    spec.graphVersion = "1.1.0";
+    spec.graphVersion = bumpedVersion();
     const node = spec.nodes.find((n) => n.id === "plan_draft");
     if (!node) throw new Error("fixture drift: no plan_draft node");
     node.promptRef = "planner/draft-v2";

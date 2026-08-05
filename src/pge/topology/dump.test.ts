@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import {
   TOPOLOGY_DIR,
   dumpTopology,
   looksLikeTopology,
-  readPromptRefs,
+  readPromptStore,
   readTopologyArtifact,
   serializeTopology,
   topologyArtifactPath,
@@ -139,7 +139,10 @@ describe("dumpTopology", () => {
   it("check mode reports content drift after a single-character mutation and does NOT repair it", async () => {
     const { path } = await dumpTopology(root, CODING_GRAPH);
     const original = await readFile(path, "utf8");
-    const mutated = original.replace('"graphVersion": "1.0.0"', '"graphVersion": "1.0.1"');
+    const mutated = original.replace(
+      `"graphVersion": "${CODING_GRAPH.graphVersion}"`,
+      '"graphVersion": "9.9.9"',
+    );
     expect(mutated).not.toBe(original);
     await writeFile(path, mutated, "utf8");
 
@@ -174,6 +177,64 @@ describe("dumpTopology", () => {
     expect(result.written).toBe(true);
     expect(result.path).toBe(join(nested, ".bober", "topology", "coding.json"));
   });
+
+  /**
+   * Regression: the reported checksum used to be recomputed with `checksumTopology`
+   * while the BYTES carried `spec.checksum`, so a spec whose stored checksum had gone
+   * stale produced a dump whose reported checksum appeared nowhere in the file it
+   * wrote. There is now one value, and a stale spec is refused instead.
+   */
+  it("reports exactly the checksum carried by the bytes it produced", async () => {
+    const result = await dumpTopology(root, CODING_GRAPH);
+    const embedded = (JSON.parse(result.serialized) as { checksum: string }).checksum;
+    expect(embedded).toBe(result.checksum);
+    const onDisk = (JSON.parse(await readFile(result.path, "utf8")) as { checksum: string })
+      .checksum;
+    expect(onDisk).toBe(result.checksum);
+  });
+
+  it("refuses to write a spec whose stored checksum is not its canonical checksum", async () => {
+    const stale = clone(CODING_GRAPH);
+    stale.edges.push({
+      id: "e-extra",
+      from: "context_compact",
+      to: "graceful_failure",
+      kind: "normal",
+    });
+    // Deliberately NOT resealed.
+    const result = await dumpTopology(root, stale);
+    expect(result.drift).toBe("stale");
+    expect(result.written).toBe(false);
+    expect(result.stale).toEqual({
+      stored: CODING_GRAPH.checksum,
+      canonical: checksumTopology(stale),
+    });
+    expect(result.checksum).toBe(checksumTopology(stale));
+    await expect(readFile(result.path, "utf8")).rejects.toThrow();
+  });
+
+  /**
+   * Regression: the committed-artifact read used to be a bare `catch {}` that mapped
+   * EVERY failure to `drift: "missing"`, so a file that existed but could not be opened
+   * was reported as one that did not exist — and, outside check mode, was then
+   * overwritten. A directory in the artifact's place produces EISDIR deterministically
+   * and without depending on the test user's privileges.
+   */
+  it("distinguishes an unreadable artifact from a missing one and writes nothing", async () => {
+    const path = topologyArtifactPath(root, "coding");
+    await mkdir(path, { recursive: true });
+
+    const checked = await dumpTopology(root, CODING_GRAPH, { check: true });
+    expect(checked.drift).toBe("unreadable");
+    expect(checked.drift).not.toBe("missing");
+    expect(checked.unreadable?.code).toBe("EISDIR");
+
+    const written = await dumpTopology(root, CODING_GRAPH);
+    expect(written.drift).toBe("unreadable");
+    expect(written.written).toBe(false);
+    // Still a directory: nothing clobbered what it could not read.
+    await expect(readFile(path, "utf8")).rejects.toThrow();
+  });
 });
 
 // ── readTopologyArtifact ────────────────────────────────────────────
@@ -185,6 +246,16 @@ describe("readTopologyArtifact", () => {
     if (result.ok) return;
     expect(result.reason).toBe("missing");
     expect(result.message.length).toBeGreaterThan(0);
+  });
+
+  it("distinguishes unreadable from missing", async () => {
+    const path = join(root, "as-a-directory.json");
+    await mkdir(path, { recursive: true });
+    const result = await readTopologyArtifact(path);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe("unreadable");
+    expect(result.message).toContain("EISDIR");
   });
 
   it("returns a typed unparseable result for invalid JSON", async () => {
@@ -208,9 +279,45 @@ describe("readTopologyArtifact", () => {
 
 // ── Prompt store ────────────────────────────────────────────────────
 
-describe("readPromptRefs", () => {
-  it("returns an empty set when the prompt store does not exist", async () => {
-    expect(await readPromptRefs(root)).toEqual(new Set());
+describe("readPromptStore", () => {
+  it("reports an ABSENT store distinctly from an empty one", async () => {
+    const absent = await readPromptStore(root);
+    expect(absent.available).toBe(false);
+    expect(absent.dir).toBe(join(root, PROMPT_DIR));
+
+    // The same call once the directory exists and holds nothing: available, no refs.
+    await mkdir(join(root, PROMPT_DIR), { recursive: true });
+    const empty = await readPromptStore(root);
+    expect(empty.available).toBe(true);
+    if (!empty.available) return;
+    expect(empty.refs).toEqual(new Set());
+  });
+
+  it("reports a store path occupied by a FILE as unavailable", async () => {
+    await mkdir(join(root, ".bober"), { recursive: true });
+    await writeFile(join(root, PROMPT_DIR), "not a directory", "utf8");
+    expect((await readPromptStore(root)).available).toBe(false);
+  });
+
+  it("reports a store it could only PARTLY enumerate as unavailable", async () => {
+    // A nested directory that cannot be read leaves the ref set incomplete; claiming
+    // availability would report perfectly resolvable refs as UnknownPromptRef.
+    await mkdir(join(root, PROMPT_DIR, "planner"), { recursive: true });
+    await writeFile(join(root, PROMPT_DIR, "planner", "draft.md"), "draft", "utf8");
+    expect((await readPromptStore(root)).available).toBe(true);
+
+    await rm(join(root, PROMPT_DIR, "planner"), { recursive: true, force: true });
+    // A FILE where the walk expects to recurse is not reachable through readdir, so the
+    // unenumerable case is forced directly through a mode with no read permission.
+    await mkdir(join(root, PROMPT_DIR, "locked"), { recursive: true });
+    await chmod(join(root, PROMPT_DIR, "locked"), 0o000);
+    try {
+      const store = await readPromptStore(root);
+      // Root (uid 0) ignores the mode bits, so only assert where the mode can bite.
+      if (process.getuid?.() !== 0) expect(store.available).toBe(false);
+    } finally {
+      await chmod(join(root, PROMPT_DIR, "locked"), 0o755);
+    }
   });
 
   it("derives refs from nested paths with posix separators and drops the extension", async () => {
@@ -221,19 +328,22 @@ describe("readPromptRefs", () => {
     await writeFile(join(root, PROMPT_DIR, "top.md"), "top body", "utf8");
     await writeFile(join(root, PROMPT_DIR, "planner", "notes.txt"), "ignored", "utf8");
 
-    const refs = await readPromptRefs(root);
-    expect(refs).toEqual(new Set(["planner/draft", "generator/sprint", "top"]));
-    expect(refs.has("planner/notes")).toBe(false);
+    const store = await readPromptStore(root);
+    expect(store.available).toBe(true);
+    if (!store.available) return;
+    expect(store.refs).toEqual(new Set(["planner/draft", "generator/sprint", "top"]));
+    expect(store.refs.has("planner/notes")).toBe(false);
   });
 
   it("is unaffected by prompt BODY content", async () => {
     await mkdir(join(root, PROMPT_DIR, "planner"), { recursive: true });
     const file = join(root, PROMPT_DIR, "planner", "draft.md");
     await writeFile(file, "first body", "utf8");
-    const before = await readPromptRefs(root);
-    expect(before).toEqual(new Set(["planner/draft"]));
+    const before = await readPromptStore(root);
+    expect(before.available && before.refs).toEqual(new Set(["planner/draft"]));
     await writeFile(file, "a completely different body", "utf8");
-    expect(await readPromptRefs(root)).toEqual(before);
+    const after = await readPromptStore(root);
+    expect(after.available && after.refs).toEqual(before.available && before.refs);
   });
 
   it("reads under .bober/prompts and not under .bober/topology", () => {
@@ -258,5 +368,24 @@ describe("looksLikeTopology", () => {
 
   it("accepts the real artifact", () => {
     expect(looksLikeTopology(JSON.parse(serializeTopology(CODING_GRAPH)))).toBe(true);
+  });
+
+  /**
+   * Regression: the guard used to be a hand-rolled `isPlainObject(raw) &&
+   * Array.isArray(raw.nodes)` living beside — and free to drift from —
+   * `TopologySpecSchema`. It is now derived from a Zod schema, and nothing it accepts
+   * may escape the real schema: acceptance here is never a substitute for parsing.
+   */
+  it("never accepts a document the real schema would reject without the schema also running", () => {
+    const accepted = { nodes: [{ id: "x" }] };
+    expect(looksLikeTopology(accepted)).toBe(true);
+    expect(TopologySpecSchema.safeParse(accepted).success).toBe(false);
+  });
+
+  it("agrees with TopologySpecSchema on every rejection reason it claims", () => {
+    for (const value of [null, [], "x", 42, {}, { nodes: 1 }, { nodes: {} }]) {
+      expect(looksLikeTopology(value), JSON.stringify(value)).toBe(false);
+      expect(TopologySpecSchema.safeParse(value).success, JSON.stringify(value)).toBe(false);
+    }
   });
 });
