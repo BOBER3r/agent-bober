@@ -1,0 +1,228 @@
+import { z } from "zod";
+
+import type { SprintContract } from "../../contracts/sprint-contract.js";
+import type { TopologySpec } from "../../contracts/topology.js";
+import type { BranchStatus, GraphMessage, LedgerEntry, OverallState } from "../state/overall.js";
+import type { NodeContext, NodeImpl } from "../registry/nodes.js";
+import { EFFECTS } from "./effects.js";
+import type { ReviewResultSchema } from "./effects.js";
+import { branchRecord, isNodeRefusal, nodeSpecOf, portOf, resolveContract, soleSuccessor } from "./gates.js";
+import { iterationOf, provisionalEvaluation, sprintVerdict } from "./sprint-evaluate.js";
+
+/**
+ * The advisory reviewer and the single per-branch termination point.
+ *
+ * ── The review is advisory, and stays advisory ──
+ *
+ * `runCodeReviewer` runs after a passing evaluation and its findings "do NOT block sprint
+ * completion, do NOT trigger generator retry, and do NOT mutate contract status"
+ * (`code-reviewer-agent.ts:40-42`). The node keeps that contract: it records the review into
+ * `messages` and `evaluations` — the two channels its artifact declaration lists — and
+ * routes to `sprint_exit` whatever the review says. A node that downgraded the branch on a
+ * critical finding would silently promote an advisory stage into a blocking one.
+ *
+ * ── `attempts` is what makes a branch settled ──
+ *
+ * `sprint_exit` is the ONE node that writes a terminal `branchStatus`, and it writes
+ * `attempts >= 1`. That number is the ordering discriminator `lastWriteWinsByKey` resolves a
+ * branch's `running -> succeeded` transition by (`state/overall.ts:131-142`): a settled
+ * record must outrank the running one it replaces, and a `running` record that claimed a
+ * completed attempt would leave the branch looking permanently in flight. `gate_sprint_out`
+ * checks exactly this, which is what its declared `branch-verdicts-recorded` means.
+ *
+ * ── KNOWN LIMITATION: the `sprintContracts` channel cannot express a status TRANSITION ──
+ *
+ * `sprint_exit` declares `writes: ["branchStatus", "sprintContracts"]` and writes the settled
+ * contract to both. The `branchStatus` write lands. The `sprintContracts` write does NOT
+ * change the recorded status, and it cannot: `appendById` unions by `contractId` and resolves
+ * a duplicate id by CANONICAL ORDER (`registry/reducers.ts:182`), which is what makes it
+ * order-invariant under concurrency — and `"completed"` sorts before `"proposed"`, so the
+ * seeded copy outranks the settled one.
+ *
+ * `branchStatus` solves the identical problem with an explicit `attempts` discriminator
+ * (`state/overall.ts:131-142`). `SprintContract` has no equivalent monotone field, and adding
+ * one would change a shipped contract schema every part of this repository reads. So the
+ * settled contract reaches disk through the `sprint.exit` effect — the shipped `saveContract`,
+ * at the path the imperative pipeline writes — and the channel is left describing the plan
+ * rather than the outcome. `sprint-evaluate.test.ts` asserts BOTH facts, so neither can drift
+ * unnoticed. This is a finding about the artifact and the reducer set, reported rather than
+ * worked around: the fix belongs in a `SprintContract` revision, not in a node body.
+ */
+
+export const SPRINT_REVIEW_NODE_IDS = {
+  review: "sprint_review",
+  exit: "sprint_exit",
+} as const;
+
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function note(ctx: NodeContext, text: string): GraphMessage {
+  return {
+    id: `${ctx.nodeId}:${ctx.branchKey ?? "root"}:${String(ctx.superstep)}`,
+    seq: ctx.superstep,
+    role: "assistant",
+    nodeId: ctx.nodeId,
+    text,
+    tokens: text.length,
+  };
+}
+
+function charge(ctx: NodeContext): LedgerEntry {
+  const entry: LedgerEntry = {
+    nodeId: ctx.nodeId,
+    attempt: 0,
+    callIndex: 0,
+    calls: 1,
+    tokensIn: 0,
+    tokensOut: 0,
+    costUsd: 0,
+  };
+  ctx.ledger.charge(
+    { nodeId: entry.nodeId, attempt: entry.attempt, callIndex: entry.callIndex },
+    { calls: entry.calls, tokensIn: entry.tokensIn, tokensOut: entry.tokensOut, costUsd: entry.costUsd },
+  );
+  return entry;
+}
+
+// ── sprint_review ───────────────────────────────────────────────────
+
+/** Advisory code review of a passing sprint diff, through the shipped reviewer. */
+export function sprintReviewNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
+  const nodeId = SPRINT_REVIEW_NODE_IDS.review;
+  const node = nodeSpecOf(spec, nodeId);
+  const next = soleSuccessor(spec, nodeId);
+
+  return {
+    id: nodeId,
+    kind: "llm",
+    inputPort: portOf(node, "input"),
+    outputPort: portOf(node, "output"),
+    inputSchema: z.unknown(),
+    outputSchema: z.unknown(),
+    handler: async (input, state, ctx) => {
+      const contract = resolveContract(input, state, ctx);
+      if (contract === null) {
+        throw new Error(`Node "${nodeId}" ran for a branch with no contract in the channel.`);
+      }
+      const iteration = iterationOf(state, contract.contractId);
+
+      const review = (await ctx.effects.invoke(
+        EFFECTS.reviewerSprint,
+        {
+          contract,
+          evaluation: provisionalEvaluation(ctx, { success: true, notes: "sprint passed evaluation" }),
+          projectRoot: ctx.projectRoot,
+        },
+        ctx,
+      )) as z.infer<typeof ReviewResultSchema>;
+
+      const summary = `review ${review.reviewId}: ${String(review.critical.length)} critical, ${String(review.important.length)} important, ${String(review.minor.length)} minor`;
+
+      return {
+        update: {
+          messages: [note(ctx, summary)],
+          // `skipped`, not `pass`/`fail`: the review is advisory and a verdict of `fail`
+          // here would make an advisory finding change the branch's outcome.
+          evaluations: [
+            sprintVerdict({ ctx, contract, iteration, verdict: "skipped", summary }),
+          ],
+          ledger: [charge(ctx)],
+        },
+        phase: "evaluating",
+        goto: { kind: "node", node: next },
+        output: contract,
+      };
+    },
+  };
+}
+
+// ── sprint_exit ─────────────────────────────────────────────────────
+
+/**
+ * Whether this branch settled well, from the verdicts it recorded.
+ *
+ * A branch SUCCEEDS when its most recent non-advisory verdict is a pass. Advisory entries
+ * (`skipped` — the security note and the review) are ignored rather than counted, so a
+ * disabled security gate cannot make a failing branch look settled.
+ */
+export function branchOutcome(
+  state: Readonly<OverallState>,
+  contractId: string,
+): { settled: BranchStatus["state"]; summary: string } {
+  const decisive = state.evaluations.filter(
+    (entry) => entry.contractId === contractId && entry.verdict !== "skipped",
+  );
+  const last = decisive[decisive.length - 1];
+  if (last === undefined) {
+    return { settled: "failed", summary: "the branch recorded no decisive verdict" };
+  }
+  return { settled: last.verdict === "pass" ? "succeeded" : "failed", summary: last.summary };
+}
+
+/**
+ * Record the branch verdict and flush the contract (sc-12-12).
+ *
+ * Writes `branchStatus` and `sprintContracts`, the two channels the artifact declares for
+ * it, and persists the contract through the `sprint.exit` effect — the node's declared
+ * `toolRef`, and its declared `fs-write`. The `.bober/contracts/<id>.json` this produces is
+ * the file the imperative pipeline produces, because it is written by the same
+ * `saveContract`.
+ */
+export function sprintExitNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
+  const nodeId = SPRINT_REVIEW_NODE_IDS.exit;
+  const node = nodeSpecOf(spec, nodeId);
+  const next = soleSuccessor(spec, nodeId);
+
+  return {
+    id: nodeId,
+    kind: "tool",
+    inputPort: portOf(node, "input"),
+    outputPort: portOf(node, "output"),
+    inputSchema: z.unknown(),
+    outputSchema: z.unknown(),
+    handler: async (input, state, ctx) => {
+      const contract = resolveContract(input, state, ctx);
+      if (contract === null) {
+        throw new Error(`Node "${nodeId}" ran for a branch with no contract in the channel.`);
+      }
+      // A refusal reached the exit — from `gate_sprint_in` or from the curate step's
+      // short-circuit — so the branch is settled BADLY without ever having been evaluated.
+      const refused = isNodeRefusal(input);
+      const outcome = refused
+        ? { settled: "failed" as const, summary: `admission refused: ${input.check}` }
+        : branchOutcome(state, contract.contractId);
+
+      const attempts = Math.max(
+        1,
+        state.evaluations.filter(
+          (entry) => entry.contractId === contract.contractId && entry.verdict !== "skipped",
+        ).length,
+      );
+      const settled: SprintContract = {
+        ...contract,
+        status: outcome.settled === "succeeded" ? "completed" : "failed",
+        updatedAt: ctx.clock.nowIso(),
+      };
+
+      await ctx.effects.invoke(
+        EFFECTS.sprintExit,
+        { projectRoot: ctx.projectRoot, contract: settled },
+        ctx,
+      );
+
+      return {
+        update: {
+          // `attempts >= 1` — the record that must outrank the `running` one it replaces.
+          branchStatus: branchRecord(ctx, {
+            state: outcome.settled,
+            attempts,
+            ...(outcome.settled === "succeeded" ? {} : { errorClass: "SprintFailed" }),
+          } as BranchStatus),
+          sprintContracts: [settled],
+        },
+        goto: { kind: "node", node: next },
+        output: settled,
+      };
+    },
+  };
+}

@@ -808,6 +808,42 @@ export const SeoConfigSchema = z.object({
 });
 export type SeoConfig = z.infer<typeof SeoConfigSchema>;
 
+// ── PGE Section (prompt-graph engine, off the shipped execution path) ─
+
+/**
+ * Selective verification for the PGE sprint subgraph.
+ *
+ * Consumed only by `src/pge/nodes/verification.ts`, which nothing on a shipped execution
+ * path reaches (`src/pge/zero-execution.test.ts`). Both fields are optional and the
+ * defaults live in that module, so a config that omits this section — every config that
+ * exists today, including the one `createDefaultConfig` emits — behaves exactly as before.
+ */
+export const PgeSelectiveVerificationSchema = z.object({
+  /**
+   * Paths whose change always earns the expensive suite. Patterns support `*` (within one
+   * segment) and `**` (any remainder). Omitted means `["src/**"]`, i.e. every source
+   * change runs the suite, which is what the imperative pipeline already does.
+   */
+  highRiskPaths: z.array(z.string().min(1)).optional(),
+  /**
+   * An intermediate quality score below this earns the expensive suite even for a diff
+   * that touches no declared high-risk path. Omitted means 70.
+   */
+  qualityScoreThreshold: z.number().min(0).max(100).optional(),
+});
+export type PgeSelectiveVerification = z.infer<typeof PgeSelectiveVerificationSchema>;
+
+export const PgeSectionSchema = z.object({
+  selectiveVerification: PgeSelectiveVerificationSchema.optional(),
+  /**
+   * Wall-clock budget for one sandboxed command, in milliseconds. Omitted means the
+   * sandbox's own default (120000, `src/pge/runtime/sandbox.ts:117`). A generated test that
+   * does not terminate is killed at this bound rather than hanging the run.
+   */
+  sandboxTimeoutMs: z.number().int().positive().optional(),
+});
+export type PgeSection = z.infer<typeof PgeSectionSchema>;
+
 // ── Full Config ─────────────────────────────────────────────────────
 
 export const BoberConfigSchema = z.object({
@@ -851,6 +887,8 @@ export const BoberConfigSchema = z.object({
   research: ResearchSectionSchema.optional(),
   // ── Sprint 10 (agent-loop-capability-port): opt-in MCP tool bridge axis ──
   tools: ToolsSectionSchema.optional(),
+  // ── Sprint 12 (pge-graph-engineering): selective verification for the sprint subgraph ──
+  pge: PgeSectionSchema.optional(),
   // ── Security audit gate (opt-in, default-off) ──
   security: SecuritySectionSchema.optional(),
   // ── Sprint 1 (ultimate-seo-suite): SEO capability, default-off egress axes ──
