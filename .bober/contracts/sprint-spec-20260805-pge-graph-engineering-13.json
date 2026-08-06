@@ -4,7 +4,7 @@
   "sprintNumber": 13,
   "title": "PgeEngine behind the seam, ts-versus-pge artifact equivalence via EngineConformanceHarness, offline trace replay and an off-by-default exporter",
   "description": "Wire the graph runtime into the private PipelineEngine seam as the fifth engine, default-off, with a downgrade path that logs one line and re-dispatches the TypeScript engine when the topology fails to compile so a broken artifact cannot brick a run. This is the first sprint in which the full committed artifact compiles, because every node implementation now exists. Point EngineConformanceHarness — built for exactly this comparison and never yet aimed at a real engine — at 'ts' and 'pge' with a deterministic client, a frozen clock and a fixed run id, widened to an eleven-field artifact set with an order-tolerant structured diff. Add offline trace replay that re-executes a recorded run from its span file with the network stubbed to throw, reproducing byte-identical artifacts after volatile-key stripping. Add an OTLP exporter that is off by default and performs zero network calls when unconfigured.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260805-pge-graph-engineering-4",
     "sprint-spec-20260805-pge-graph-engineering-10",
@@ -125,7 +125,16 @@
     "src/cli/index.ts"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260805-pge-graph-engineering-13-1",
+      "result": "pass",
+      "timestamp": "2026-08-06T22:07:03.374Z"
+    }
+  ],
   "createdAt": "2026-08-05T00:00:00Z",
-  "updatedAt": "2026-08-05T00:00:00Z"
+  "updatedAt": "2026-08-06T22:07:03.374Z",
+  "completedAt": "2026-08-06T22:07:03.374Z",
+  "completionNote": "10 of 11 required criteria met. sc-13-2 resolved via stopConditions[3] (pre-authorised non-convergence), NOT by papering over: the two-engine comparison is genuine (TsPipelineEngine vs PgeEngine, one fresh mkdtemp root each, frozen clock, fixed runId, 9/11 fields non-empty on both sides) and report.equivalent is FALSE with exactly four pinned divergences - history, audits, contracts, pipelineResult. Zero volatile keys were added to shorten that set; the set is pinned so that a NEW divergence and a SILENTLY FIXED divergence both fail conformance.engines.test.ts. Consequence recorded: under the shipped autopilot config a pge run does NOT commit (git-effect commit node refused FAIL_CLOSED by the noop gate mechanism, sc-12-9 as designed) yet still reports success:true, because PipelineResult has no error channel and nonGoal 3 forbids adding one. Therefore pge ships permanently opt-in and pipeline.engine stays default ts. sc-13-1 was RED on arrival: 8 node impls declared by the committed artifact (context_compact, critique, evaluate_global, finalize, gate_eval_in, rework_route, route_after_eval, synthesize) existed nowhere in the repo; implemented in src/pge/nodes/root.ts, artifact untouched. Orchestrator fix post-agents: 3 literal U+0000 bytes in conformance.ts and otlp-exporter.ts made git treat both as binary and hid conformance.ts entire diff from review; replaced with escapes, behaviour identical."
 }

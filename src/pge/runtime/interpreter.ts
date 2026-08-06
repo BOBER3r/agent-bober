@@ -278,6 +278,16 @@ export interface RunContext {
   /** Runaway guard. Default {@link DEFAULT_MAX_SUPERSTEPS}. */
   readonly maxSupersteps?: number;
   /**
+   * The run's USD spend ceiling. ABSENT MEANS UNCAPPED — the same null-means-unlimited
+   * convention `src/orchestrator/workflow/budget.ts` uses.
+   *
+   * Checked at the superstep barrier, after the commit, and enforced by throwing
+   * `BudgetExceededError` out of the run loop. Held here rather than read from `config`
+   * inside the interpreter so the runtime keeps one place where a ceiling can come from
+   * and a test can set one without a whole config.
+   */
+  readonly budgetCeilingUsd?: number;
+  /**
    * Per-branch retry policy, and what an exhausted branch does to the run.
    *
    * OPTIONAL, and ABSENT MEANS ONE ATTEMPT AND NO GRACEFUL ROUTING — a failed task is
@@ -1193,8 +1203,19 @@ async function executeLoop(
 
     // Spans open in ADMISSION order and close at the barrier in the same order, so the
     // trace is a deterministic record of the superstep rather than a race-order log.
+    //
+    // ── `span.model` is the binding the node RAN UNDER, resolved here ──
+    //
+    // A topology names a TIER and never a model, and the tier is resolved to a provider and
+    // a model id by `ModelBinder` from the run's own config. Recording the resolved binding
+    // on the span is what makes "which model did this node use" answerable from the trace
+    // alone — the question sc-13-8 asks of every routing, classification and syntax node.
+    // Only a node that DECLARES a tier gets one: a gate or a tool has no model, and
+    // defaulting it to the graph's `defaults.modelTier` would put a model on a span that
+    // never had one and make the same assertion vacuous in the other direction.
     const handles = admitted.map((task) => {
       const node = nodeOf(task.nodeId);
+      const tier = node.spec.modelTier;
       return ctx.trace.begin({
         nodeId: node.spec.id,
         kind: node.spec.kind,
@@ -1202,6 +1223,7 @@ async function executeLoop(
         branchKey: task.branchKey,
         superstep,
         inputHash: task.taskKey,
+        ...(tier === undefined ? {} : { model: ctx.services.models.bind(tier) }),
       });
     });
 
@@ -1397,6 +1419,21 @@ async function executeLoop(
           ? entry.outcome
           : { ...entry.outcome, status: "failed", errorClass: refused[0].name },
       );
+    }
+
+    // ── THE SPEND CEILING, CHECKED AT THE BARRIER ──
+    //
+    // After the commit and after the spans are closed, so a run that stops here still has a
+    // complete account of the superstep that spent the money: the state it produced is
+    // durable and every span it opened is on disk.
+    //
+    // It ABORTS. `BudgetExceededError` is thrown out of the run loop and, because
+    // `PgeEngine.run` re-throws it unchanged, reaches the caller as the CLASS the ledger
+    // threw with its `kind` intact. The run is deliberately not finalized: a run that
+    // stopped because it ran out of money did not complete, and a completion marker would
+    // say it did.
+    if (ctx.budgetCeilingUsd !== undefined) {
+      ctx.ledger.assertWithinCeiling(ctx.budgetCeilingUsd);
     }
 
     // ── ROUTE ──

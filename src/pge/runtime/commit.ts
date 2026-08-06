@@ -435,9 +435,38 @@ export function createCommitBoundary(options: CommitBoundaryOptions = {}): Commi
     async finalize(state, ctx): Promise<PipelineResult> {
       if (state.spec === null) throw new FinalizeWithoutSpecError(state.runId);
 
-      // The same split `runTsPipeline` uses: a contract is completed iff it passed.
-      const completedSprints = state.sprintContracts.filter((c) => c.status === "passed");
-      const failedSprints = state.sprintContracts.filter((c) => c.status !== "passed");
+      // ── The split, and why the CONTRACT STATUS alone cannot express it ──
+      //
+      // `runTsPipeline` splits on `status === "passed"`, and that is the primary rule here
+      // too. It is not sufficient for a GRAPH run, and the reason is a documented property
+      // of the `sprintContracts` channel rather than a defect in any node:
+      // `appendById` unions by `contractId` and resolves a duplicate id by CANONICAL ORDER
+      // (`registry/reducers.ts`), which is what makes it order-invariant under concurrency.
+      // Every settled status — `passed`, `completed`, `failed` — sorts BEFORE the seeded
+      // `proposed`, so the settled copy can never outrank the planned one in the channel.
+      // `sprint_exit` says so in its own header and `sprint-evaluate.test.ts` pins it.
+      //
+      // The settled outcome is therefore read from the channel that CAN express it.
+      // `branchStatus` is keyed by `contractId` and carries an explicit `attempts`
+      // discriminator for exactly this reason, and `sprint_exit` is its only terminal
+      // writer. Without this, a graph run in which every sprint passed still reported
+      // `completedSprints: []` and `success: false` — the engine contradicting its own
+      // trace, which is precisely the class of divergence the conformance harness exists to
+      // surface.
+      //
+      // A branch that is `succeeded` is the same fact as a contract that is `passed`; a
+      // branch in any other state, or no branch at all, leaves the contract's own status to
+      // decide. Nothing here invents a pass: an absent `branchStatus` reduces this to the
+      // imperative engine's rule exactly.
+      const succeededBranches = new Set(
+        Object.entries(state.branchStatus)
+          .filter(([, status]) => status.state === "succeeded")
+          .map(([branchKey]) => branchKey),
+      );
+      const passed = (c: SprintContract): boolean =>
+        c.status === "passed" || succeededBranches.has(c.contractId);
+      const completedSprints = state.sprintContracts.filter((c) => passed(c));
+      const failedSprints = state.sprintContracts.filter((c) => !passed(c));
 
       // THE THIRD CALLER of finalizePipelineRun, alongside runTsPipeline and
       // RunResultFlusher.flush. Every engine must emit the identical terminal set — the

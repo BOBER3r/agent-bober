@@ -361,8 +361,17 @@ export const PipelineSectionSchema = z.object({
    *  via `git worktree remove` after a successful pipeline run. On failure the
    *  worktree is ALWAYS retained for debugging regardless of this flag. */
   cleanupWorktreeOnSuccess: z.boolean().default(true),
-  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines. 'pge' is reserved and downgrades to 'ts' until a PgeEngine exists. Values come from PIPELINE_ENGINE_NAMES. Default: 'ts'. */
+  /** Orchestration engine. 'ts' runs the built-in TypeScript pipeline (default). 'skill' and 'workflow' select alternative engines. 'pge' runs the graph engine and is an explicit opt-in that never becomes the default; a topology that does not compile downgrades to 'ts' inside PgeEngine.run. Values come from PIPELINE_ENGINE_NAMES. Default: 'ts'. */
   engine: z.enum([...PIPELINE_ENGINE_NAMES]).default("ts"),
+  /**
+   * Per-run USD spend ceiling for the whole pipeline.
+   *
+   * Optional, and ABSENT MEANS UNCAPPED — the same null-means-unlimited convention every
+   * other `budget` section in this file uses. The graph engine checks it at each superstep
+   * barrier and ABORTS with a typed `BudgetExceededError` when the run's ledger has passed
+   * it; the imperative engine has its own per-role budgets and is unaffected.
+   */
+  budget: BudgetSectionSchema.optional(),
 });
 export type PipelineSection = z.infer<typeof PipelineSectionSchema>;
 

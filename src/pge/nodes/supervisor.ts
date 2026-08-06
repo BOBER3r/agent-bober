@@ -12,6 +12,8 @@ import { describeRefusal, isNodeRefusal, nodeSpecOf, portOf } from "./gates.js";
 import type { NodeRefusal } from "./gates.js";
 import { GRACEFUL_FAILURE_NODE_ID } from "./regions.js";
 import { resolveResearchDigest } from "./research.js";
+import { globalVerdictId, reworkRoundsTaken } from "./root.js";
+import { dispatchableContracts } from "./sprint-fanout.js";
 
 /**
  * The supervisor router and the failure terminal — the two root-scope nodes every region
@@ -61,6 +63,24 @@ import { resolveResearchDigest } from "./research.js";
 /** The dispatch label the artifact declares for the planning phase (`coding.graph.ts:330`). */
 export const PLAN_LABEL = "plan";
 
+/** The dispatch label for the sprint fan-out (`supervisor -> fanout_sprints`). */
+export const SPRINTS_LABEL = "sprints";
+
+/** The dispatch label for global evaluation (`supervisor -> gate_eval_in`). */
+export const EVALUATE_LABEL = "evaluate";
+
+/**
+ * The declared label the shipped supervisor never selects.
+ *
+ * `supervisor -> context_compact` exists in the artifact, and the artifact ALSO declares
+ * `supervisor.reads` as `["branchStatus", "counters", "spec", "evaluations"]` — without
+ * `messages`. A supervisor cannot decide that a message window crossed a compression
+ * threshold without reading the messages, so selecting this label would mean reading a
+ * channel the artifact does not authorise. Recorded as artifact drift, exactly as the
+ * `refs` drift in this module's header is, rather than worked around.
+ */
+export const COMPACT_LABEL = "compact";
+
 // ── Supervisor ──────────────────────────────────────────────────────
 
 export interface SupervisorOptions {
@@ -70,6 +90,27 @@ export interface SupervisorOptions {
 /** True when the run still needs a plan it can plausibly execute sprints from. */
 function needsPlan(state: Readonly<OverallState>): boolean {
   return state.spec === null || !isPipelineReady(state.spec);
+}
+
+/**
+ * True when this rework round's global verdict has not been recorded yet.
+ *
+ * Two conditions, and both are load-bearing. There must be a settled fan-out to grade —
+ * `gate_eval_in` refuses an empty `branchStatus` and dispatching into a refusal would burn
+ * a superstep to reach the failure terminal the long way. And the round's verdict must be
+ * absent: `evaluate_global` writes `global:<round>` into `evaluations`, so re-entering the
+ * supervisor after an evaluation cannot dispatch the same evaluation again, while a
+ * completed REWORK round (which advances the counter `rework_route` declares) is graded
+ * afresh. That is what bounds the `supervisor -> evaluate -> rework -> supervisor` cycle by
+ * the artifact's own `loop.maxIterations` rather than by a rule written here.
+ */
+function needsGlobalEvaluation(
+  spec: TopologySpec,
+  state: Readonly<OverallState>,
+): boolean {
+  if (Object.keys(state.branchStatus).length === 0) return false;
+  const id = globalVerdictId(reworkRoundsTaken(spec, state));
+  return !state.evaluations.some((entry) => entry.id === id);
 }
 
 export function supervisorNode(options: SupervisorOptions): NodeImpl<unknown, unknown> {
@@ -111,6 +152,22 @@ export function supervisorNode(options: SupervisorOptions): NodeImpl<unknown, un
         if (brief !== null) {
           return { goto: { kind: "label", label: PLAN_LABEL }, output: brief };
         }
+      }
+
+      // ── The two phases after planning ──
+      //
+      // Both guards are the SAME predicate the destination itself applies, which is what
+      // makes the cycle `supervisor -> phase -> supervisor` terminate. `fanout_sprints`
+      // dispatches `dispatchableContracts` and drains back here when that set is empty, so
+      // a supervisor that used any other rule would re-dispatch a drained fan-out forever.
+      // `evaluate_global` writes one verdict per rework round under a deterministic id, so
+      // "this round has been graded" is a fact in `evaluations` rather than a flag.
+      if (dispatchable.has(SPRINTS_LABEL) && dispatchableContracts(state, state.sprintContracts).length > 0) {
+        return { goto: { kind: "label", label: SPRINTS_LABEL }, output: state.sprintContracts };
+      }
+
+      if (dispatchable.has(EVALUATE_LABEL) && needsGlobalEvaluation(spec, state)) {
+        return { goto: { kind: "label", label: EVALUATE_LABEL }, output: input };
       }
 
       return {

@@ -5,27 +5,8 @@ import { isWorkflowEligible } from "./eligibility.js";
 import { TsPipelineEngine } from "./ts-engine.js";
 import { WorkflowEngine } from "./workflow-engine.js";
 import { MedicalSopEngine } from "../../medical/engine.js";
+import { PgeEngine } from "../../pge/engine/pge-engine.js";
 import type { Team } from "../../teams/types.js";
-
-// ── Reserved-name downgrade ────────────────────────────────────────
-
-/**
- * `'pge'` is a reserved PipelineEngineName with no implementation behind it
- * (see engine.ts). Until a PgeEngine ships, a config that requests it must
- * silently and safely land on the TypeScript engine — one logged line, never a
- * throw, so a config typo or an early-adopter setting cannot brick a run.
- *
- * Shared by both resolvers so the log line is byte-identical on both paths.
- */
-function downgradeReservedEngine(
-  requested: PipelineEngineName,
-): PipelineEngineName | undefined {
-  if (requested !== "pge") return undefined;
-  logger.info(
-    "Engine 'pge' requested but no PgeEngine implementation exists; downgrading to 'ts'.",
-  );
-  return "ts";
-}
 
 // ── Resolver ───────────────────────────────────────────────────────
 
@@ -34,19 +15,20 @@ function downgradeReservedEngine(
  *
  * Resolution branches:
  *   - engine unset                        → 'ts'
- *   - engine === 'pge'                     → 'ts'  (one downgrade log line — reserved name)
  *   - engine === 'workflow' && ineligible  → 'ts'  (one downgrade log line)
  *   - engine === 'workflow' && mode === 'careful' → 'ts'  (one downgrade log line)
- *   - else                                → engine verbatim ('ts' | 'skill' | 'workflow')
+ *   - else                                → engine verbatim ('ts' | 'skill' | 'workflow' | 'pge')
+ *
+ * `'pge'` resolves VERBATIM and logs nothing. It used to downgrade here, because no
+ * PgeEngine existed; now one does, and the fallback it needs — a committed topology that
+ * fails to compile — is knowable only while running, so it lives in `PgeEngine.run`
+ * (sc-13-4). Selection-time silence is the point: a config that asks for 'pge' gets 'pge'.
  *
  * Mirrors the pure-resolver pattern of resolveCheckpointMechanismName
  * (src/orchestrator/checkpoints/registry.ts:65).
  */
 export function resolveEngineName(config: BoberConfig): PipelineEngineName {
   const requested: PipelineEngineName = config.pipeline?.engine ?? "ts";
-
-  const reserved = downgradeReservedEngine(requested);
-  if (reserved !== undefined) return reserved;
 
   if (requested === "workflow") {
     const eligible = isWorkflowEligible(config);
@@ -92,9 +74,10 @@ export function selectPipelineEngine(config: BoberConfig): PipelineEngine {
       // any programming-path behaviour.
       return new TsPipelineEngine();
     case "pge":
-      // UNREACHABLE — resolveEngineName downgrades 'pge' to 'ts' above. Kept so the
-      // switch stays exhaustive over PIPELINE_ENGINE_NAMES; a PgeEngine replaces it.
-      return new TsPipelineEngine();
+      // The graph runtime, opt-in and never the default. Its own `run` catches a
+      // TopologyCompileError, logs one line and re-dispatches TsPipelineEngine, so a
+      // topology that does not compile cannot brick a run (sc-13-4).
+      return new PgeEngine();
   }
 }
 
@@ -105,16 +88,14 @@ export function selectPipelineEngine(config: BoberConfig): PipelineEngine {
  * as the requested engine, then applying the SAME downgrade pipeline as
  * resolveEngineName (ineligible or mode='careful' → 'ts').
  *
- * The downgrade log line is byte-identical to resolveEngineName's (selector.ts:29-31).
+ * The downgrade log line is byte-identical to resolveEngineName's, because both resolvers
+ * hold the only remaining downgrade — workflow → ts — in the same shape.
  */
 export function resolveEngineNameForTeam(
   team: Team,
   config: BoberConfig,
 ): PipelineEngineName {
   const requested = team.pipelineShape;
-
-  const reserved = downgradeReservedEngine(requested);
-  if (reserved !== undefined) return reserved;
 
   if (requested === "workflow") {
     const eligible = isWorkflowEligible(config);
@@ -156,7 +137,7 @@ export function selectPipelineEngineForTeam(
       // Medical team path — returns a MedicalSopEngine stub (real SOP in S2/S3/S4/S6).
       return new MedicalSopEngine();
     case "pge":
-      // UNREACHABLE — resolveEngineNameForTeam downgrades 'pge' to 'ts' above.
-      return new TsPipelineEngine();
+      // Same engine, same in-run downgrade, as selectPipelineEngine above.
+      return new PgeEngine();
   }
 }

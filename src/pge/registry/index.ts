@@ -7,6 +7,23 @@ import {
   createResearchEffectRegistry,
   createSprintEffectRegistry,
   createTerminalEffectRegistry,
+  curatorBriefEffect,
+  curatorExplainEffect,
+  curatorMocksEffect,
+  documenterSummaryEffect,
+  evaluatorSprintEffect,
+  generatorSprintEffect,
+  gitCommitEffect,
+  gracefulFailureEffect,
+  planMaterializeEffect,
+  plannerDraftEffect,
+  researchCollectEffect,
+  researchCritiqueEffect,
+  researchExploreEffect,
+  researchReflectEffect,
+  reviewerSprintEffect,
+  securityAuditEffect,
+  sprintExitEffect,
 } from "../nodes/effects.js";
 import type {
   PlanBindings,
@@ -14,6 +31,8 @@ import type {
   SprintBindings,
   TerminalBindings,
 } from "../nodes/effects.js";
+import { createEffectRegistry } from "./effects.js";
+import type { EffectRegistry } from "./effects.js";
 import { commitNode, hitlCommitNode } from "../nodes/commit.js";
 import { documenterNode } from "../nodes/documenter.js";
 import {
@@ -29,6 +48,7 @@ import { registerPlanNodes } from "../nodes/plan.js";
 import { RESEARCH_REGION, PLAN_REGION, SPRINT_REGION, TERMINAL_REGION } from "../nodes/regions.js";
 import type { RegionId } from "../nodes/regions.js";
 import { registerResearchNodes } from "../nodes/research.js";
+import { registerRootNodes } from "../nodes/root.js";
 import { sprintCurateExplainNode, sprintCurateMocksNode } from "../nodes/sprint-curate.js";
 import { sprintEvaluateNode, sprintSecurityNode } from "../nodes/sprint-evaluate.js";
 import { fanoutSprintsNode, sprintBodyNode } from "../nodes/sprint-fanout.js";
@@ -289,6 +309,138 @@ export function terminalRegistries(spec: TopologySpec, bindings: RegionBindings)
     nodes: regionNodeRegistry(spec, TERMINAL_REGION, bindings),
     reducers: createReducerRegistry(),
     effects: createTerminalEffectRegistry(bindings),
+    schemas: codingSchemaCatalog(),
+  };
+}
+
+// ── Whole-artifact composition ──────────────────────────────────────
+
+/**
+ * What the four region builders require between them, in one bag.
+ *
+ * A whole-graph composition needs every region's required bindings simultaneously, which
+ * the per-region `Partial<SprintBindings>` in {@link RegionBindings} deliberately does not
+ * demand — a research-only composition has no business supplying an `Explainer`. Stating
+ * the whole-graph requirement as its own type is what makes a composition that forgets one
+ * a TYPE error at the call site instead of a throw at `sprintRegistries`.
+ */
+export interface CodingBindings extends RegionBindings {
+  explain: NonNullable<RegionBindings["explain"]>;
+  mocks: NonNullable<RegionBindings["mocks"]>;
+  runtime: NonNullable<RegionBindings["runtime"]>;
+}
+
+/**
+ * ONE effect registry for the whole artifact.
+ *
+ * The four `create*EffectRegistry` builders cannot be merged: each of them registers
+ * `gracefulFailureEffect` (every region keeps the failure terminal, so every region needs
+ * the effect it invokes), and {@link EffectRegistry.register} throws `DuplicateEffectError`
+ * on a repeated name. So the whole-graph registry is assembled from the individual effect
+ * FACTORIES — each exported from `../nodes/effects.js`, each called exactly once — rather
+ * than by folding four registries together.
+ *
+ * The set is the union of the four builders' sets, with the shared graceful-failure effect
+ * registered once. `../nodes/effects.ts` remains the only module that imports the five
+ * shipped agents, the security gate and the git primitive, so this composition adds no new
+ * route to any of them.
+ */
+export function createCodingEffectRegistry(bindings: CodingBindings): EffectRegistry {
+  const registry = createEffectRegistry();
+
+  // Research region.
+  registry.register(researchReflectEffect(bindings.reflect));
+  registry.register(researchExploreEffect(bindings.research));
+  registry.register(researchCritiqueEffect(bindings.critique));
+  registry.register(researchCollectEffect(bindings.writeResearch, bindings.listResearch));
+
+  // Plan region.
+  registry.register(plannerDraftEffect(bindings.planner));
+  registry.register(planMaterializeEffect(bindings.materialize));
+
+  // Sprint region.
+  registry.register(curatorBriefEffect(bindings.curator));
+  registry.register(curatorExplainEffect(bindings.explain));
+  registry.register(curatorMocksEffect(bindings.mocks));
+  registry.register(generatorSprintEffect(bindings.generator));
+  registry.register(securityAuditEffect(bindings.security));
+  registry.register(evaluatorSprintEffect(bindings.evaluator));
+  registry.register(reviewerSprintEffect(bindings.reviewer));
+  registry.register(sprintExitEffect(bindings.writeContract));
+
+  // Terminal region.
+  registry.register(documenterSummaryEffect(bindings.documenter));
+  registry.register(gitCommitEffect(bindings.committer));
+
+  // Shared by all four regions, and therefore registered exactly once.
+  registry.register(gracefulFailureEffect(bindings.writeFailure));
+
+  return registry;
+}
+
+/**
+ * ONE node registry covering every node the committed artifact declares.
+ *
+ * Assembled from the same four `register*Nodes` functions the region builders use, against
+ * the WHOLE artifact rather than a projection — which is the point: a region projection
+ * exists because a region has no implementations for the other regions' nodes, and a
+ * whole-graph composition has them all, so the projection would only narrow what the node
+ * bodies can see (`successorOrEnd` reads `spec.edges`, so a projected spec would resolve a
+ * node's successor to the reserved terminal wherever the real successor sits in another
+ * region).
+ *
+ * The four region registries cannot simply be MERGED for the same reason their effect
+ * registries cannot: `regionNodeRegistry` registers `supervisorNode` and
+ * `gracefulFailureNode` into every region, and `createNodeRegistry.register` throws
+ * `DuplicateNodeImplError` on a repeated id. So the two shared implementations are
+ * registered once, here.
+ */
+function codingNodeRegistry(spec: TopologySpec, bindings: CodingBindings): NodeRegistry {
+  const registry = createNodeRegistry();
+
+  registerResearchNodes(registry, spec);
+  registerPlanNodes(registry, spec);
+  registerSprintNodes(registry, spec, bindings.runtime);
+  registerTerminalNodes(registry, spec);
+
+  // Shared by every region: the supervisor every region's exit edge targets, and the
+  // failure terminal every boundary gate's `gate.onFail` names.
+  registry.register(supervisorNode({ spec }));
+  registry.register(gracefulFailureNode({ spec }));
+
+  // ── THE ROOT-LEVEL NODES ──
+  //
+  // Eight nodes the committed artifact declares belong to no region — `gate_eval_in`,
+  // `evaluate_global`, `route_after_eval`, `critique`, `rework_route`, `synthesize`,
+  // `context_compact` and `finalize`. They are registered ONLY here, and never by
+  // `regionNodeRegistry`: a region projection legitimately lacks all eight, and
+  // registering one into a region would be `OrphanNodeImpl` there — exactly as fatal as a
+  // missing implementation.
+  //
+  // With them in place `compile()` reports zero `UnregisteredNodeImpl` and zero
+  // `OrphanNodeImpl` against the committed artifact, which is sc-13-1.
+  // `src/pge/registry/production.test.ts` proves it from the compiler's own diagnostics
+  // rather than from this list, so this comment cannot make the claim go stale.
+  registerRootNodes(registry, spec);
+
+  return overriding(registry, bindings);
+}
+
+/**
+ * The registries the WHOLE committed artifact compiles against.
+ *
+ * `compile()` is all-or-nothing in BOTH directions — `UnregisteredNodeImpl` for a declared
+ * node with no implementation and `OrphanNodeImpl` for an implementation the artifact does
+ * not declare — so this composition is the proof that the artifact and the registered
+ * implementations are the same graph, and not merely that each half exists.
+ *
+ * `schemas` and not `schemaModules`, for the reasons written out in this module's header.
+ */
+export function codingRegistries(spec: TopologySpec, bindings: CodingBindings): Registries {
+  return {
+    nodes: codingNodeRegistry(spec, bindings),
+    reducers: createReducerRegistry(),
+    effects: createCodingEffectRegistry(bindings),
     schemas: codingSchemaCatalog(),
   };
 }
