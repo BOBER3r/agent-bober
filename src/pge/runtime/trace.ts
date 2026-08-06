@@ -90,6 +90,24 @@ export const SpanSchema = z.object({
   status: SpanStatusSchema,
   errorClass: z.string().optional(),
   serializedReason: z.enum(SERIALIZED_REASONS).optional(),
+  /**
+   * What held this span back, when it did not run: the unmet dependency ids for
+   * `dependsOn`, the conflicting contract id for `fileConflict`, the blocking task ids for
+   * a deadlocked frontier.
+   *
+   * Without it a `serialized` span records THAT something was held back and not BY WHAT,
+   * which is the half of the fact an operator needs — and the file-conflict rule is only
+   * auditable if both sides of the collision are named.
+   */
+  blockedBy: z.array(z.string()).optional(),
+  /**
+   * The keys the node held in `NodeContext.priv` when its handler returned.
+   *
+   * Recorded so the three-scope split is AUDITABLE rather than merely asserted: the trace
+   * shows the private keys existed during the node's execution, and the committed state
+   * shows they never reached a channel.
+   */
+  privKeys: z.array(z.string()).optional(),
 });
 export type Span = z.infer<typeof SpanSchema>;
 
@@ -112,6 +130,8 @@ export type SpanEnd = Pick<Span, "status"> &
       | "route"
       | "failClosed"
       | "serializedReason"
+      | "blockedBy"
+      | "privKeys"
     >
   >;
 
@@ -284,6 +304,8 @@ export async function createTraceWriter(
             status: outcome.status,
             errorClass: outcome.errorClass,
             serializedReason: outcome.serializedReason,
+            blockedBy: outcome.blockedBy,
+            privKeys: outcome.privKeys,
           });
           enqueue(JSON.stringify(record) + "\n");
         },

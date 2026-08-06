@@ -115,23 +115,22 @@ describe("terminal side-effect set has exactly one owner", () => {
 
 describe(".gitignore / .bober runtime paths (sc-4-8)", () => {
   /**
-   * Directories no sprint writes YET.
+   * The rule this describe block encodes: a `.bober/` runtime directory is ignored in the
+   * SAME change that creates a writer for it — in both directions, not "never ignored".
    *
    * Sprint 6 (sc-6-10) shipped `ScratchStore`, `ArchiveWriter`, `SemanticCache` and
-   * `TraceWriter`, so `.bober/{scratch,cache,traces,archive}` left this list and moved
-   * into {@link SPRINT_6_DIRS} below — the rule this describe block encodes is "ignored
-   * in the same change that creates it", in BOTH directions, not "never ignored".
-   * `.bober/checkpoints` belongs to the FsCheckpointer in sprint 7 and stays here.
+   * `TraceWriter`, so `.bober/{scratch,cache,traces,archive,logs}` became required.
+   * Sprint 8 (sc-8-11) ships `FsCheckpointer`, so `.bober/checkpoints` joins them — the
+   * FUTURE list that held it is now empty and the entry moved down, which is exactly the
+   * transition the rule describes.
    */
-  const FUTURE_DIRS = [".bober/checkpoints"];
-
-  /** Created by sprint 6 and therefore required to be ignored as of that change. */
-  const SPRINT_6_DIRS = [
+  const WRITTEN_RUNTIME_DIRS = [
     ".bober/scratch",
     ".bober/cache",
     ".bober/traces",
     ".bober/archive",
     ".bober/logs",
+    ".bober/checkpoints",
   ];
 
   async function exists(path: string): Promise<boolean> {
@@ -151,26 +150,41 @@ describe(".gitignore / .bober runtime paths (sc-4-8)", () => {
       .filter((l) => l.length > 0 && !l.startsWith("#"));
   }
 
-  it("adds no ignore rule for a directory nothing writes yet", async () => {
+  it("carries an ignore rule for every .bober/ runtime directory a shipped component writes", async () => {
     const rules = await ignoreRules();
-    for (const dir of FUTURE_DIRS) {
-      const matching = rules.filter((r) => r.replace(/\/$/, "") === dir);
-      expect(matching, `.gitignore must not list ${dir} until the sprint that creates it`).toEqual([]);
-    }
-  });
-
-  it("carries an ignore rule for every directory sprint 6 does write", async () => {
-    const rules = await ignoreRules();
-    for (const dir of SPRINT_6_DIRS) {
+    for (const dir of WRITTEN_RUNTIME_DIRS) {
       const matching = rules.filter((r) => r.replace(/\/$/, "") === dir);
       expect(matching, `.gitignore must list ${dir}`).toEqual([`${dir}/`]);
     }
   });
 
-  it("those .bober/ directories are still absent from the working tree", async () => {
-    for (const dir of FUTURE_DIRS) {
-      expect(await exists(join(REPO_ROOT, dir)), `${dir} must not exist yet`).toBe(false);
-    }
+  it("ignores no .bober/ directory beyond the ones a shipped component writes", async () => {
+    // The other direction of the same rule: a speculative ignore rule for a directory
+    // nothing writes hides a future artifact from review the moment it appears.
+    const allowed = new Set([
+      ...WRITTEN_RUNTIME_DIRS,
+      // Pre-PGE runtime state, each with a shipped writer of its own.
+      ".bober/snapshots",
+      ".bober/medical",
+      ".bober/chat",
+    ]);
+    const boberRules = (await ignoreRules())
+      .filter((rule) => rule.startsWith(".bober/"))
+      // File-level rules (`.bober/memory/*.db`, `.bober/graph/.hook-queue.jsonl`) are not
+      // directory ignores and are out of this rule's scope.
+      .filter((rule) => rule.endsWith("/"))
+      .map((rule) => rule.replace(/\/$/, ""));
+
+    expect(boberRules.filter((rule) => !allowed.has(rule))).toEqual([]);
+  });
+
+  it("keeps the checkpoint tree out of the developer's own repository", async () => {
+    // Every checkpoint in the suite goes to a temp root, because `createFsCheckpointer`
+    // takes `projectRoot` as a required argument and there is no module-level instance.
+    expect(
+      await exists(join(REPO_ROOT, ".bober", "checkpoints")),
+      ".bober/checkpoints must never be written into the repo root",
+    ).toBe(false);
   });
 
   it("positive control: the sprint-1 topology artifact IS present and NOT ignored", async () => {

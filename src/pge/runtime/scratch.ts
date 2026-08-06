@@ -129,6 +129,52 @@ export async function atomicWriteFile(path: string, data: Buffer | string): Prom
   await rename(tmp, path);
 }
 
+// ── File reads ──────────────────────────────────────────────────────
+
+/**
+ * The three distinguishable outcomes of reading a file that may legitimately be absent.
+ *
+ * `absent` is ONLY `ENOENT`. Every other errno — `EACCES`, `EISDIR`, `EPERM`, `ELOOP` —
+ * means the file may well EXIST and we could not look at it, which is a different fact
+ * with a different remedy. A caller that collapses the two either tells the operator to
+ * create something that is already there, or — far worse, and the reason this lives in
+ * the runtime layer at all — DELETES an entry it merely failed to open.
+ *
+ * Deliberately the same shape and the same member names as `FileRead` in
+ * `../topology/dump.ts`, where the identical distinction was drawn first: one vocabulary
+ * for one fact. It is restated rather than imported because the semantic cache must not
+ * take a dependency on the topology serializer (and everything that module pulls in) for
+ * a filesystem primitive — the runtime's shared fs helpers live here, next to
+ * {@link atomicWriteFile}, for archive, cache and trace alike.
+ */
+export type FileRead =
+  | { kind: "present"; text: string }
+  | { kind: "absent" }
+  | { kind: "unreadable"; code: string; message: string };
+
+/** The `code` of a Node `SystemError`, or `undefined` for anything else. */
+export function errnoCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+/** The `message` of an `Error`, or its string form — never `[object Object]` in a report. */
+export function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Read `path` as UTF-8, distinguishing "not there" from "there but unreadable". */
+export async function readIfPresent(path: string): Promise<FileRead> {
+  try {
+    return { kind: "present", text: await readFile(path, "utf8") };
+  } catch (error) {
+    const code = errnoCode(error);
+    if (code === "ENOENT") return { kind: "absent" };
+    return { kind: "unreadable", code: code ?? "UNKNOWN", message: errorMessage(error) };
+  }
+}
+
 // ── Layout ──────────────────────────────────────────────────────────
 
 /** File extension per payload class. Extensions are cosmetic; the sha256 is the address. */

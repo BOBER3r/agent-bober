@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, unlink } from "node:fs/promises";
+import { readdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 
@@ -11,7 +11,14 @@ import type {
   CacheKeyParts,
   SemanticCache as NodeContextSemanticCache,
 } from "../registry/nodes.js";
-import { assertSafePathSegment, atomicWriteFile, resolveWithin } from "./scratch.js";
+import {
+  assertSafePathSegment,
+  atomicWriteFile,
+  errnoCode,
+  errorMessage,
+  readIfPresent,
+  resolveWithin,
+} from "./scratch.js";
 import type { Implements } from "./scratch.js";
 
 /**
@@ -129,6 +136,21 @@ export const CacheFileSchema = z.object({
 });
 export type CacheFile = z.infer<typeof CacheFileSchema>;
 
+/**
+ * The outcome of reading one entry: the three `FileRead` cases from `./scratch.ts`,
+ * plus `corrupt`.
+ *
+ * `corrupt` is the ONLY one of the four that means "this file is junk". Keeping it
+ * separate from `unreadable` is the whole point of the type — the previous shape
+ * returned `undefined` for all of absent, denied and malformed, so `prune` deleted
+ * files it had merely been refused permission to open.
+ */
+type CacheRead =
+  | { kind: "present"; entry: CacheFile }
+  | { kind: "absent" }
+  | { kind: "unreadable"; code: string; message: string }
+  | { kind: "corrupt"; message: string };
+
 // ── Layout ──────────────────────────────────────────────────────────
 
 /** The two namespaces a {@link CachePolicy} can select. `"run"` is the schema default. */
@@ -183,6 +205,36 @@ export function cachePathForKey(
   return path;
 }
 
+// ── Prune report ────────────────────────────────────────────────────
+
+/**
+ * One entry `prune` walked past without removing, and why.
+ *
+ *  - `unreadable` — the file EXISTS and could not be read (`EACCES`, `EISDIR`, …). It is
+ *    left exactly where it is: an entry that cannot be opened is not an entry that is
+ *    known to be junk, and deleting it would destroy a perfectly valid cached answer on
+ *    the strength of a permission bit.
+ *  - `unremovable` — the entry was due for removal and `unlink` itself failed. Reported
+ *    rather than thrown, so one locked file cannot abort the whole sweep and lose the
+ *    removals it had already made.
+ *
+ * A file that is simply GONE is neither: see {@link SemanticCache.pruneWithReport}.
+ */
+export interface PruneProblem {
+  path: string;
+  kind: "unreadable" | "unremovable";
+  code: string;
+  message: string;
+}
+
+/** What one sweep did, and what it declined to touch. */
+export interface PruneReport {
+  /** Entries actually unlinked — expired ones plus genuinely corrupt ones. */
+  removed: number;
+  /** Entries left on disk because acting on them was not safe. Empty on a clean sweep. */
+  problems: PruneProblem[];
+}
+
 // ── Cache ───────────────────────────────────────────────────────────
 
 /**
@@ -205,9 +257,25 @@ export interface SemanticCache {
   ): Promise<void>;
   /**
    * Remove every entry whose `expiresAt` has passed, in BOTH namespaces and across every
-   * run directory. Returns how many were removed.
+   * run directory. Returns how many were removed — {@link SemanticCache.pruneWithReport}
+   * for the removals PLUS what the sweep refused to touch.
    */
   prune(now: number): Promise<number>;
+  /**
+   * The same sweep, reporting what it declined to remove.
+   *
+   * `prune` deletes files, so the three ways a read can fail are three different facts
+   * and it must tell them apart:
+   *
+   *  - ABSENT (`ENOENT`) — listed by `readdir`, gone by the time it was opened. Another
+   *    sweep or an external `rm` won the race; there is nothing to delete, and nothing
+   *    THIS call removed, so it is not counted and not a problem.
+   *  - UNREADABLE (any other errno) — the file is there and could not be opened. NOT
+   *    deleted, NOT counted, and reported as a {@link PruneProblem}.
+   *  - CORRUPT — read fine, and is not a cache entry (bad JSON, or JSON the schema
+   *    rejects). Nothing can ever be served from it, so it is removed and counted.
+   */
+  pruneWithReport(now: number): Promise<PruneReport>;
   /** The directory this cache writes into — asserted by the worktree-isolation test. */
   root(): string;
   /** The run this cache namespaces `scope: "run"` entries under. */
@@ -233,20 +301,95 @@ export function createSemanticCache(projectRoot: string, runId: string): Semanti
   assertSafePathSegment("runId", runId);
   const root = cacheRoot(projectRoot);
 
-  async function readFileEntry(path: string): Promise<CacheFile | undefined> {
-    let raw: string;
-    try {
-      raw = await readFile(path, "utf8");
-    } catch {
-      return undefined;
+  /**
+   * Read one entry into the four-way {@link CacheRead}.
+   *
+   * `get` collapses all four outcomes to a miss because a cache must never fail a run;
+   * `prune` does not, because `prune` deletes.
+   */
+  async function readEntry(path: string): Promise<CacheRead> {
+    const read = await readIfPresent(path);
+    if (read.kind === "absent") return { kind: "absent" };
+    if (read.kind === "unreadable") {
+      return { kind: "unreadable", code: read.code, message: read.message };
     }
     try {
-      // A corrupt or half-written entry is a MISS, never a throw: the cache is an
-      // optimisation and must not be able to fail a run.
-      return CacheFileSchema.parse(JSON.parse(raw));
-    } catch {
-      return undefined;
+      return { kind: "present", entry: CacheFileSchema.parse(JSON.parse(read.text)) };
+    } catch (error) {
+      return { kind: "corrupt", message: errorMessage(error) };
     }
+  }
+
+  async function pruneWithReport(now: number): Promise<PruneReport> {
+    const problems: PruneProblem[] = [];
+    let removed = 0;
+
+    /** Unlink one doomed entry. A file some other sweep already took is not a failure. */
+    async function remove(path: string): Promise<void> {
+      try {
+        await unlink(path);
+        removed += 1;
+      } catch (error) {
+        const code = errnoCode(error);
+        // Gone between the read and the unlink: the outcome we wanted, by another hand.
+        // Not counted — this call removed nothing.
+        if (code === "ENOENT") return;
+        problems.push({
+          path,
+          kind: "unremovable",
+          code: code ?? "UNKNOWN",
+          message: errorMessage(error),
+        });
+      }
+    }
+
+    /** Sweep one namespace directory. A missing directory removes nothing. */
+    async function pruneDir(dir: string): Promise<void> {
+      let names: string[];
+      try {
+        names = await readdir(dir);
+      } catch {
+        return;
+      }
+      for (const name of names) {
+        if (!name.endsWith(".json")) continue;
+        const path = join(dir, name);
+        const read = await readEntry(path);
+
+        // ABSENT — listed by readdir, gone when opened. Nothing to delete, and nothing
+        // this call removed, so it is neither counted nor reported.
+        if (read.kind === "absent") continue;
+
+        // UNREADABLE — the file IS there. Deleting what we could not even look at would
+        // throw away a valid entry over a permission bit, so it survives and is reported.
+        if (read.kind === "unreadable") {
+          problems.push({ path, kind: "unreadable", code: read.code, message: read.message });
+          continue;
+        }
+
+        // Live entry: keep.
+        if (read.kind === "present" && read.entry.expiresAt > now) continue;
+
+        // What remains is CORRUPT (opened, and not a cache entry — nothing can ever be
+        // served from it) or present-and-expired. Both are genuinely removable.
+        await remove(path);
+      }
+    }
+
+    // Both namespaces, and EVERY run directory rather than only this cache's own:
+    // an expired entry is expired whichever run wrote it, and a run whose cache
+    // object is long gone would otherwise leave its entries behind forever.
+    await pruneDir(join(root, CACHE_GLOBAL_DIR));
+    let runNames: string[];
+    try {
+      runNames = await readdir(join(root, CACHE_RUNS_DIR));
+    } catch {
+      return { removed, problems };
+    }
+    for (const name of runNames) {
+      await pruneDir(join(root, CACHE_RUNS_DIR, name));
+    }
+    return { removed, problems };
   }
 
   return {
@@ -255,8 +398,12 @@ export function createSemanticCache(projectRoot: string, runId: string): Semanti
     key: cacheKey,
 
     async get(key, now, scope = DEFAULT_CACHE_SCOPE): Promise<CacheEntry | undefined> {
-      const entry = await readFileEntry(cachePathForKey(projectRoot, key, scope, runId));
-      if (entry === undefined) return undefined;
+      const read = await readEntry(cachePathForKey(projectRoot, key, scope, runId));
+      // Absent, unreadable and corrupt are all one thing HERE — a miss, never a throw:
+      // the cache is an optimisation and must not be able to fail a run. `prune` is the
+      // caller that must tell them apart, because `prune` is the caller that deletes.
+      if (read.kind !== "present") return undefined;
+      const { entry } = read;
       // Expiry is inclusive of the instant itself: an entry stored with ttl 60 at t=0
       // has already expired at t=60_000.
       if (entry.expiresAt <= now) return undefined;
@@ -280,41 +427,10 @@ export function createSemanticCache(projectRoot: string, runId: string): Semanti
       );
     },
 
-    async prune(now): Promise<number> {
-      /** Sweep one namespace directory. A missing directory removes nothing. */
-      async function pruneDir(dir: string): Promise<number> {
-        let names: string[];
-        try {
-          names = await readdir(dir);
-        } catch {
-          return 0;
-        }
-        let removed = 0;
-        for (const name of names) {
-          if (!name.endsWith(".json")) continue;
-          const path = join(dir, name);
-          const entry = await readFileEntry(path);
-          if (entry !== undefined && entry.expiresAt > now) continue;
-          await unlink(path);
-          removed += 1;
-        }
-        return removed;
-      }
+    pruneWithReport,
 
-      // Both namespaces, and EVERY run directory rather than only this cache's own:
-      // an expired entry is expired whichever run wrote it, and a run whose cache
-      // object is long gone would otherwise leave its entries behind forever.
-      let removed = await pruneDir(join(root, CACHE_GLOBAL_DIR));
-      let runNames: string[];
-      try {
-        runNames = await readdir(join(root, CACHE_RUNS_DIR));
-      } catch {
-        return removed;
-      }
-      for (const name of runNames) {
-        removed += await pruneDir(join(root, CACHE_RUNS_DIR, name));
-      }
-      return removed;
+    async prune(now): Promise<number> {
+      return (await pruneWithReport(now)).removed;
     },
   };
 }

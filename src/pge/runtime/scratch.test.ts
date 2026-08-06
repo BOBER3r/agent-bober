@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
-import { mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -13,6 +13,8 @@ import {
   UnsafePathSegmentError,
   assertSafePathSegment,
   createScratchStore,
+  errnoCode,
+  readIfPresent,
   resolveWithin,
   scratchPathForRef,
   scratchRunDir,
@@ -38,6 +40,16 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+/** True when this process can still read `path` — uid 0 defeats every mode bit. */
+async function isReadable(path: string): Promise<boolean> {
+  try {
+    await readFile(path, "utf8");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** 5 MB of non-repeating bytes, so a truncating or re-encoding bug cannot pass. */
 function fiveMegabyteDiff(): string {
   const chunk: string[] = [];
@@ -48,6 +60,55 @@ function fiveMegabyteDiff(): string {
   expect(Buffer.byteLength(text, "utf8")).toBeGreaterThan(5 * 1024 * 1024);
   return text;
 }
+
+describe("readIfPresent tells absent from unreadable", () => {
+  it("returns present with the exact bytes", async () => {
+    const path = join(root, "present.json");
+    await writeFile(path, "hello ünïcødé", "utf8");
+    expect(await readIfPresent(path)).toEqual({ kind: "present", text: "hello ünïcødé" });
+  });
+
+  it("returns absent for ENOENT — and ONLY for ENOENT", async () => {
+    expect(await readIfPresent(join(root, "no-such-file.json"))).toEqual({ kind: "absent" });
+  });
+
+  it("returns unreadable, carrying the errno, for a directory", async () => {
+    // EISDIR (Linux/macOS): the path exists and is not a readable file. Reporting this
+    // as "absent" would tell the caller to create what is already there — and would tell
+    // a caller that DELETES the absent that it may delete this.
+    const read = await readIfPresent(root);
+    expect(read.kind).toBe("unreadable");
+    if (read.kind !== "unreadable") throw new Error("unreachable");
+    expect(read.code).not.toBe("ENOENT");
+    expect(read.message.length).toBeGreaterThan(0);
+  });
+
+  it("returns unreadable, not absent, for a file whose mode denies reading", async ({ skip }) => {
+    const path = join(root, "locked.json");
+    await writeFile(path, "secret", "utf8");
+    await chmod(path, 0o000);
+    try {
+      // uid 0 ignores mode bits, and a few filesystems ignore them too. Prove the mode
+      // bites in THIS process before asserting on it.
+      if (await isReadable(path)) skip("chmod 0o000 does not deny this process");
+      expect(await readIfPresent(path)).toEqual({
+        kind: "unreadable",
+        code: "EACCES",
+        message: expect.any(String),
+      });
+    } finally {
+      await chmod(path, 0o600);
+    }
+  });
+
+  it("errnoCode reads a SystemError's code and nothing else", () => {
+    expect(errnoCode(Object.assign(new Error("x"), { code: "EACCES" }))).toBe("EACCES");
+    expect(errnoCode(new Error("no code"))).toBeUndefined();
+    expect(errnoCode({ code: 13 })).toBeUndefined();
+    expect(errnoCode(null)).toBeUndefined();
+    expect(errnoCode("EACCES")).toBeUndefined();
+  });
+});
 
 describe("ScratchStore.put / get (sc-6-1)", () => {
   it("writes .bober/scratch/<runId>/<sha256>.<ext> and returns a 4-field ScratchRef", async () => {

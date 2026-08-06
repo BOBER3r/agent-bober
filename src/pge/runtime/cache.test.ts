@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -298,6 +298,156 @@ describe("TTL against an injected clock (sc-6-6)", () => {
     const key = cacheKey(BASE);
     await cache.put(key, { answer: 1 }, 60, 0, BASE);
     await writeFile(cachePathForKey(root, key, "run", RUN), "{ this is not json", "utf8");
+    expect(await cache.get(key, 0)).toBeUndefined();
+  });
+});
+
+describe("prune distinguishes absent, unreadable and corrupt (sc-6-6)", () => {
+  /**
+   * The carried-forward sprint-6 gap: `prune` unlinked and counted every entry it could
+   * not READ, so a permissions failure and a file that vanished mid-sweep were both
+   * treated as corruption and deleted. Three outcomes, three different actions:
+   *
+   *   absent      -> skip, count nothing, report nothing
+   *   unreadable  -> LEAVE IT ON DISK, count nothing, report it
+   *   corrupt     -> unlink and count
+   *
+   * The same distinction sprint 1 established for `readIfPresent` in `topology/dump.ts`.
+   */
+
+  /** True when this process can still read `path` — uid 0 defeats every mode bit. */
+  async function isReadable(path: string): Promise<boolean> {
+    try {
+      await readFile(path, "utf8");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  const keyFor = (prompt: string): { key: string; parts: CacheKeyParts } => {
+    const parts = { ...BASE, userPrompt: prompt };
+    return { key: cacheKey(parts), parts };
+  };
+
+  it("SKIPS an entry that vanished between readdir and open — absent is not corruption", async () => {
+    const cache = createSemanticCache(root, RUN);
+    const expired = keyFor("expired");
+    await cache.put(expired.key, "gone soon", 10, 0, expired.parts);
+
+    // A dangling symlink is listed by readdir and raises ENOENT when opened: exactly
+    // what a concurrent `rm` between the two syscalls looks like, without a real race.
+    const ghostName = `${"f".repeat(64)}.json`;
+    await symlink(join(root, "never-existed.json"), join(runDir(), ghostName));
+
+    const report = await cache.pruneWithReport(15_000);
+
+    // Only the genuinely expired entry was removed; the ghost was not counted...
+    expect(report.removed).toBe(1);
+    expect(report.problems).toEqual([]);
+    // ...and it was not unlinked either. There was nothing there to delete.
+    expect(await readdir(runDir())).toEqual([ghostName]);
+  });
+
+  it("does NOT delete an entry it cannot READ — EACCES is not corruption", async ({ skip }) => {
+    const cache = createSemanticCache(root, RUN);
+    const locked = keyFor("locked");
+    // Long-lived and perfectly valid: nothing but the read failure could select it.
+    await cache.put(locked.key, "still valid", 1_000, 0, locked.parts);
+    const lockedPath = cachePathForKey(root, locked.key, "run", RUN);
+
+    await chmod(lockedPath, 0o000);
+    try {
+      // uid 0 ignores mode bits entirely (as do a few filesystems), which would make
+      // this test assert nothing. Prove the mode bites in THIS process first.
+      if (await isReadable(lockedPath)) skip("chmod 0o000 does not deny this process");
+
+      const report = await cache.pruneWithReport(15_000);
+      expect(report.removed).toBe(0);
+      expect(report.problems).toEqual([
+        { path: lockedPath, kind: "unreadable", code: "EACCES", message: expect.any(String) },
+      ]);
+      // THE ASSERTION: the entry survived the sweep.
+      expect(await readdir(runDir())).toEqual([`${locked.key}.json`]);
+    } finally {
+      // Best-effort: under the defect this file is GONE, and a throwing cleanup would
+      // replace the assertion failure that actually diagnoses it.
+      await chmod(lockedPath, 0o600).catch(() => undefined);
+    }
+
+    // ...and it survived INTACT, not merely as a name: readable and servable again the
+    // moment the permission is back.
+    expect(await cache.get(locked.key, 15_000)).toMatchObject({ value: "still valid" });
+  });
+
+  it("an unreadable entry does not abort the sweep around it", async ({ skip }) => {
+    const cache = createSemanticCache(root, RUN);
+    const locked = keyFor("locked");
+    const expired = keyFor("expired");
+    const live = keyFor("live");
+    await cache.put(locked.key, "valid", 1_000, 0, locked.parts);
+    await cache.put(expired.key, "stale", 10, 0, expired.parts);
+    await cache.put(live.key, "fresh", 1_000, 0, live.parts);
+    const lockedPath = cachePathForKey(root, locked.key, "run", RUN);
+
+    await chmod(lockedPath, 0o000);
+    try {
+      if (await isReadable(lockedPath)) skip("chmod 0o000 does not deny this process");
+
+      const report = await cache.pruneWithReport(15_000);
+      expect(report.removed).toBe(1);
+      expect(report.problems.map((p) => p.kind)).toEqual(["unreadable"]);
+      expect((await readdir(runDir())).sort()).toEqual(
+        [`${locked.key}.json`, `${live.key}.json`].sort(),
+      );
+    } finally {
+      await chmod(lockedPath, 0o600).catch(() => undefined);
+    }
+  });
+
+  it("DOES delete an entry it read but could not parse — that is genuine corruption", async () => {
+    const cache = createSemanticCache(root, RUN);
+    const badJson = keyFor("bad-json");
+    const badShape = keyFor("bad-shape");
+    // ttl 1_000s from t=0: neither is expired at the prune instant below, so ONLY
+    // unparseability can select them.
+    await cache.put(badJson.key, 1, 1_000, 0, badJson.parts);
+    await cache.put(badShape.key, 2, 1_000, 0, badShape.parts);
+    await writeFile(cachePathForKey(root, badJson.key, "run", RUN), "{ this is not json", "utf8");
+    await writeFile(
+      cachePathForKey(root, badShape.key, "run", RUN),
+      JSON.stringify({ key: "not a sha256", parts: {}, value: 1 }),
+      "utf8",
+    );
+
+    const report = await cache.pruneWithReport(1);
+    expect(report.removed).toBe(2);
+    expect(report.problems).toEqual([]);
+    expect(await readdir(runDir())).toEqual([]);
+  });
+
+  it("prune returns exactly the removed count from the same sweep", async () => {
+    const cache = createSemanticCache(root, RUN);
+    const a = keyFor("a");
+    const b = keyFor("b");
+    await cache.put(a.key, 1, 10, 0, a.parts);
+    await cache.put(b.key, 2, 1_000, 0, b.parts);
+
+    expect(await cache.prune(15_000)).toBe(1);
+    expect(await cache.pruneWithReport(15_000)).toEqual({ removed: 0, problems: [] });
+    expect(await readdir(runDir())).toEqual([`${b.key}.json`]);
+  });
+
+  it("a corrupt entry is a miss for get and never fails the run", async () => {
+    const cache = createSemanticCache(root, RUN);
+    const key = cacheKey(BASE);
+    await cache.put(key, { answer: 1 }, 60, 0, BASE);
+    const path = cachePathForKey(root, key, "run", RUN);
+
+    await writeFile(path, "{ this is not json", "utf8");
+    expect(await cache.get(key, 0)).toBeUndefined();
+    // ...and so is one that is absent outright.
+    await rm(path);
     expect(await cache.get(key, 0)).toBeUndefined();
   });
 });

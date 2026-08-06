@@ -55,3 +55,8 @@ pnpm-debug.log*
 .bober/cache/
 .bober/archive/
 .bober/logs/
+
+# Resumable run checkpoints (sprint 8) — one JSON snapshot per superstep. A 40-node
+# run leaves ~40 of them, and they carry the whole run state; they are recovery
+# artifacts, not committed ones.
+.bober/checkpoints/
