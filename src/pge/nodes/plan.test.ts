@@ -46,17 +46,14 @@ import { PLAN_REGION } from "./regions.js";
  * `supervisor.test.ts` pins the artifact's own answer; this file compiles what the
  * artifact declares (`regionSpec(CODING_GRAPH, "plan")`) and never a hand-built graph.
  *
- * ── The checkpoint-id substitution ──
+ * ── The checkpoint id is the artifact's own ──
  *
- * `plan_clarify` declares `checkpointId: "plan-clarify"` (`coding.graph.ts:413`), which is
- * NOT one of the nine ids the shipped approval subsystem answers
- * (`src/orchestrator/checkpoints/types.ts:16-26`) — `assertKnownCheckpointId`
- * (`interrupt.ts:454`) throws on it, so the interrupt is unreachable against the artifact
- * as committed. {@link clarificationInterrupts} substitutes the shipped `"post-plan"` id
- * and delegates everything else to the real controller. The substitution is a FIXTURE
- * because neither `coding.graph.ts` (sealed, outside this sprint's `estimatedFiles`) nor
- * `CHECKPOINT_IDS` (the shipped nine-id subsystem) may be changed here; the mismatch is
- * reported as a finding.
+ * Nothing here adapts it. `plan_clarify` declared `checkpointId: "plan-clarify"` until
+ * graphVersion 1.2.0 — an id outside the nine the shipped approval subsystem answers
+ * (`src/orchestrator/checkpoints/types.ts`), so `assertKnownCheckpointId` threw and the
+ * interrupt was unreachable against the committed artifact. The artifact now names
+ * `"post-plan"`, {@link clarificationInterrupts} is the plain shipped controller in
+ * suspend mode, and these tests exercise the real subsystem answering the real id.
  */
 
 let root = "";

@@ -112,8 +112,9 @@ describe("CODING_GRAPH parses and validates", () => {
     expect(parsed.data.formatVersion).toBe(1);
     expect(parsed.data.provenance).toBe("authored");
     expect(parsed.data.graphVersion).toMatch(GRAPH_VERSION_PATTERN);
-    // Bumped from 1.0.0 when the bypassing retry cycles gained explicit loop bounds.
-    expect(parsed.data.graphVersion).toBe("1.1.0");
+    // Bumped from 1.1.0 when the two illegal checkpoint ids were corrected to shipped ones
+    // and the sandboxed verification nodes were retagged off the deploy effect.
+    expect(parsed.data.graphVersion).toBe("1.2.0");
   });
 
   it("returns ok:true with zero diagnostics in structural mode", () => {
@@ -393,7 +394,10 @@ describe("structural invariants", () => {
     expect(gitNodes.map((n) => n.id)).toEqual(["commit"]);
     const approvals = CODING_GRAPH.edges.filter((e) => e.to === "commit").map((e) => e.from);
     expect(approvals).toEqual(["hitl_commit"]);
-    expect(nodeOrThrow("hitl_commit").hitl?.checkpointId).toBe("hitl-commit");
+    // One of the nine ids the shipped checkpoint subsystem answers, so `bober approve` can
+    // actually reach this gate. It named "hitl-commit" until 1.2.0, which threw
+    // UnknownCheckpointIdError the moment the node was evaluated.
+    expect(nodeOrThrow("hitl_commit").hitl?.checkpointId).toBe("end-of-pipeline");
     expect(nodeOrThrow("hitl_commit").effects).toEqual([]);
   });
 

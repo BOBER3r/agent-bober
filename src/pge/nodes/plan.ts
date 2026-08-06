@@ -126,11 +126,11 @@ function charge(ctx: NodeContext, callIndex = 0): LedgerEntry {
  * The id prefix `applyResume` keys an injected decision under, derived from the shipped
  * function rather than spelled.
  *
- * Deriving it matters here: the artifact declares `checkpointId: "plan-clarify"`
- * (`coding.graph.ts:413`), which is NOT one of the nine ids the shipped approval
- * subsystem answers (`src/orchestrator/checkpoints/types.ts:16-26`), so a composition that
- * substitutes a shipped id changes the message id. Matching on the prefix plus the gate's
- * own node id finds the decision either way.
+ * Deriving it matters because `resumeMessageId` keys the message by CHECKPOINT ID, not by
+ * node id, so the exact message id depends on what the artifact declares — `plan_clarify`
+ * named `"plan-clarify"` before graphVersion 1.2.0 corrected it to the shipped
+ * `"post-plan"`. Matching on the shipped prefix plus the gate's own node id finds the
+ * decision whatever legal id the artifact carries, and keeps working if it is re-pointed.
  */
 const HITL_MESSAGE_PREFIX = resumeMessageId("");
 

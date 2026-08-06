@@ -83,7 +83,12 @@ flowchart TD
 **Responsibility:** Define, as Zod, every legal node kind, edge kind, port, channel, policy and route label a topology may contain.
 ```typescript
 // src/contracts/topology.ts
-export type NodeKind = "llm" | "tool" | "gate" | "router" | "subgraph";  export type EffectTag = "fs-write" | "git" | "network" | "process-exec";
+export type NodeKind = "llm" | "tool" | "gate" | "router" | "subgraph";  export type EffectTag = "fs-write" | "git" | "network" | "process-exec" | "sandbox-exec";
+// `sandbox-exec` (added at graphVersion 1.2.0) is a process run through SandboxRunner under a
+// config-derived allowlist, cwd confinement and a kill timeout — NOT the deploy path.
+// GATED_EFFECTS is UNCHANGED at ["git", "process-exec"]: those two still require a recorded
+// approval, and `sandbox-exec` is enforced instead by the ESLint spawner boundary on
+// src/pge/nodes/** plus the runner's own unconditional denylist.
 export const RouteTargetSchema = z.object({ label: z.string().min(1), to: EndpointSchema });   // closed outcome-label set — see ADR-3
 export const LoopBoundSchema = z.object({ counterKey: z.string(), maxIterations: z.number().int().min(1), onExhausted: z.string() });
 export const PortSchema = z.object({ key: z.string(), schemaRef: z.string(), required: z.boolean().default(true) });

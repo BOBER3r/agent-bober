@@ -13,11 +13,17 @@ import type { TraceWriter } from "../runtime/trace.js";
  *
  * ── The sandbox is the ONLY execution path (nonGoal 5) ──
  *
- * No module under `src/pge/nodes/` imports `execa` or `node:child_process`. Everything a
- * generated test or a compiler could run goes through {@link SandboxRunner}
- * (`runtime/sandbox.ts:180`), whose allow/deny/cwd checks are decided BEFORE a process could
- * exist and whose three failure modes — denied, timeout, output-truncated — are ordinary
- * union members rather than exceptions, so a gate ROUTES on them.
+ * No module under `src/pge/nodes/` imports `execa` or `node:child_process` — and that is
+ * enforced by the MODULE GRAPH rather than asserted in prose: `eslint.config.js` carries a
+ * `no-restricted-imports`/`no-restricted-syntax` boundary scoped to `src/pge/nodes/**`
+ * production files, proven to fire by `src/pge/lint-boundary.test.ts`. It is what the
+ * `sandbox-exec` effect tag rests on, since no type ties the tag to the runner.
+ *
+ * Everything a generated test or a compiler could run goes through {@link SandboxRunner}
+ * (`runtime/sandbox.ts`), whose deny/allow/cwd checks are decided BEFORE a process could
+ * exist — the default denylist now unconditionally, so a caller-supplied policy cannot
+ * open a shell — and whose three failure modes — denied, timeout, output-truncated — are
+ * ordinary union members rather than exceptions, so a gate ROUTES on them.
  *
  * The shipped `src/orchestrator/tools/handlers.ts` runs `execa("sh", ["-c", command])` with
  * no guard at all. That path is untouched and unreachable from here.

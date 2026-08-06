@@ -203,6 +203,13 @@ export function createSandboxRunner(
         return { status: "denied", binary, reason };
       };
 
+      // The default denylist is a property of the RUNNER, not of whatever policy object a
+      // caller happened to construct: `createSandboxPolicy` merely DEFAULTS `denyBinaries`
+      // to it, and a caller is free to pass `denyBinaries: []` (one already does). Checking
+      // it unconditionally, before the caller's list and before the allowlist, means a
+      // shell, an escalator or a network fetcher cannot be reached by handing the runner a
+      // permissive policy. A caller may only ever deny MORE than this, never less.
+      if (DEFAULT_DENY_BINARIES.includes(binary)) return denied("denylisted");
       if (policy.denyBinaries.includes(binary)) return denied("denylisted");
       if (!policy.allowBinaries.includes(binary)) return denied("not-allowlisted");
       const cwd = resolveWithin(projectRoot, policy.cwd);

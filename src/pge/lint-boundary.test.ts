@@ -169,3 +169,99 @@ describe("ADR-2 module-graph boundary — src/pge/topology/**", () => {
     expect(errors).toEqual([]);
   });
 });
+
+/**
+ * The spawner boundary on node BODIES — the enforcement behind the `sandbox-exec` tag.
+ *
+ * The topology's `sandbox-exec` effect asserts that a node's process execution goes
+ * through `SandboxRunner`. Nothing in the type system ties the tag to the runner, so this
+ * boundary is what makes the assertion true: with it, the only outbound execution route
+ * from a production node body is `../runtime/sandbox.js`. Same reasoning as above — `npm
+ * run lint` passing proves only that no current file violates the rule, so the rule is
+ * proven to FIRE here rather than assumed.
+ */
+
+/** A production node body: inside the guarded fileset. */
+const NODE_BODY = join(REPO_ROOT, "src/pge/nodes/__boundary_probe__.ts");
+/** A node TEST: deliberately exempted, because tests spawn real children on purpose. */
+const NODE_TEST = join(REPO_ROOT, "src/pge/nodes/__boundary_probe__.test.ts");
+
+/**
+ * The SPAWNER subset of {@link MUST_REJECT}.
+ *
+ * Deliberately narrower than the topology list: this boundary is about HOW a node body
+ * reaches a process, not about which layers it may see. A node body legitimately imports
+ * the orchestrator, a provider adapter and `../../utils/git.js` (the commit body does, and
+ * its node declares the gated `git` effect for exactly that reason), so listing those here
+ * would assert something false.
+ */
+const MUST_REJECT_SPAWNERS: Array<{ name: string; source: string }> = MUST_REJECT.filter(
+  ({ name }) =>
+    /execa|child_process|worker_threads|node:vm|node:cluster|cross-spawn|createRequire/.test(
+      name,
+    ) || name === "dynamic import behind a computed specifier",
+);
+
+describe("spawner boundary — src/pge/nodes/** (the sandbox-exec guarantee)", () => {
+  it("covers every spawning source the topology list names", () => {
+    // A filter that silently stopped matching would make the it.each below vacuous.
+    expect(MUST_REJECT_SPAWNERS.length).toBeGreaterThanOrEqual(11);
+  });
+
+  it.each(MUST_REJECT_SPAWNERS)("rejects $name in a node body", async ({ source }) => {
+    const errors = await boundaryErrors(source, NODE_BODY);
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it("does NOT restrict the layers a node body legitimately depends on", async () => {
+    // The commit node body imports utils/git; node bodies read orchestrator types. This
+    // boundary is about the spawner, and over-reaching would break the layer it guards.
+    const source = [
+      `import { gitStatus } from "../../utils/git.js";`,
+      `export const x = gitStatus;`,
+      ``,
+    ].join("\n");
+    const errors = await boundaryErrors(source, NODE_BODY);
+    expect(errors).toEqual([]);
+  });
+
+  it("rejects execa, this repo's actual spawner, with a message naming the sandbox", async () => {
+    const result = await lint(
+      `import { execa } from "execa";\nexport const x = execa;\n`,
+      NODE_BODY,
+    );
+    const message = result.messages.find((m) => m.ruleId === "no-restricted-imports");
+    expect(message?.severity).toBe(2);
+    expect(message?.message).toContain("SandboxRunner");
+  });
+
+  it("rejects dynamic import(), which no-restricted-imports cannot see", async () => {
+    const source = `export async function leak() {\n  return await import("execa");\n}\n`;
+    const errors = await boundaryErrors(source, NODE_BODY);
+    expect(errors).toContain("no-restricted-syntax");
+  });
+
+  it("exempts node tests, which legitimately spawn children and use dynamic import()", async () => {
+    // Not a weakening: the effect tag is declared by the production body, so that is what
+    // the boundary must bind. src/pge/nodes/research.test.ts imports node:child_process and
+    // several node tests use dynamic import(); without this exemption `npm run lint` would
+    // go red on files that are allowed to do exactly that.
+    const errors = await boundaryErrors(
+      `import { spawn } from "node:child_process";\nexport const x = spawn;\n`,
+      NODE_TEST,
+    );
+    expect(errors).toEqual([]);
+  });
+
+  it("allows the sandbox runner itself, which is the sanctioned route", async () => {
+    const source = [
+      `import { createSandboxRunner } from "../runtime/sandbox.js";`,
+      `import type { SandboxOutcome } from "../runtime/sandbox.js";`,
+      `export const x = createSandboxRunner;`,
+      `export type Y = SandboxOutcome;`,
+      ``,
+    ].join("\n");
+    const errors = await boundaryErrors(source, NODE_BODY);
+    expect(errors).toEqual([]);
+  });
+});

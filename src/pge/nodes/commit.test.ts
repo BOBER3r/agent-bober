@@ -23,7 +23,6 @@ import {
 } from "./documenter.js";
 import { TERMINAL_REGION, regionSpec, terminalTriple } from "./regions.js";
 import {
-  SUBSTITUTE_COMMIT_CHECKPOINT,
   registeredIds,
   runSprint,
   sprintConfig,
@@ -281,9 +280,13 @@ describe("the commit node behind a recorded approval (sc-12-9)", () => {
       contracts: [COMPLETED],
     });
 
-    // The gate was asked, through the shipped checkpoint subsystem, under the substituted
-    // legal id (see `sprint-harness.ts` for why `hitl-commit` cannot be used as-is).
-    expect(asked).toEqual([SUBSTITUTE_COMMIT_CHECKPOINT]);
+    // The gate was asked, through the shipped checkpoint subsystem, under the ARTIFACT's
+    // own checkpoint id — read off the graph here rather than compared against a fixture
+    // constant, so this asserts that what the subsystem received is verbatim what the
+    // committed topology declares, with nothing adapting it in between.
+    expect(asked).toEqual([
+      CODING_GRAPH.nodes.find((n) => n.id === "hitl_commit")?.hitl?.checkpointId,
+    ]);
 
     expect(run.handlerLog.calls[COMMIT_NODE_IDS.commit]).toBe(1);
     expect(await commitCount(root)).toBe(countBefore + 1);

@@ -496,6 +496,12 @@ export function computeFanOutRegion(spec: TopologySpec): Set<string> {
  * with a `hitl` policy has a DECLARED EDGE into it — the inbound-edge rule ADR-6 names.
  * Derived here rather than configured, so a topology diff that removes the gate edge is
  * visibly a change to what may run unattended.
+ *
+ * `sandbox-exec` is deliberately NOT in `GATED_EFFECTS`: it is the project's own configured
+ * verification commands running through `SandboxRunner` under an allowlist, not the deploy
+ * path, and demanding a human approval before every typecheck would empty the gate of
+ * meaning. What constrains it is the runner and the ESLint spawner boundary on
+ * `src/pge/nodes/**`, not this function.
  */
 export function computeEffectGates(spec: TopologySpec): Map<string, EffectGate> {
   const byId = new Map(spec.nodes.map((node) => [node.id, node] as const));

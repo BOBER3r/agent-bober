@@ -4,10 +4,8 @@ import { dirname, join } from "node:path";
 import type { BoberConfig } from "../../../config/schema.js";
 import { createDefaultConfig } from "../../../config/schema.js";
 import type { SprintContract } from "../../../contracts/sprint-contract.js";
-import type { NodeSpec, TopologySpec } from "../../../contracts/topology.js";
+import type { TopologySpec } from "../../../contracts/topology.js";
 import type { EvaluationRunResult } from "../../../evaluators/registry.js";
-import { isCheckpointId } from "../../../orchestrator/checkpoints/types.js";
-import type { CheckpointId } from "../../../orchestrator/checkpoints/types.js";
 import { compile } from "../../compile/compiler.js";
 import type { CompiledGraph } from "../../compile/compiler.js";
 import type { EffectRegistry } from "../../registry/effects.js";
@@ -22,7 +20,7 @@ import { createCommitBoundary } from "../../runtime/commit.js";
 import { createFrontierPlanner } from "../../runtime/frontier.js";
 import { createGraphInterpreter } from "../../runtime/interpreter.js";
 import type { GraphRunResult, RunContext } from "../../runtime/interpreter.js";
-import { createInterruptController, gatedEffectsOf } from "../../runtime/interrupt.js";
+import { createInterruptController } from "../../runtime/interrupt.js";
 import type { InterruptController } from "../../runtime/interrupt.js";
 import { createBudgetLedger } from "../../runtime/ledger.js";
 import { createSandboxRunner } from "../../runtime/sandbox.js";
@@ -60,111 +58,22 @@ import type { SprintRuntime } from "../verification.js";
  * `recordingCommitBoundary`, `countingNodeRegistry`, `countingReducerRegistry`,
  * `countingArtifactWriter`, `RecordingScheduler` and `createMonotonicClock` are all
  * IMPORTED, not re-implemented. What is new here is only what those cannot do: build a
- * {@link SprintRuntime} around a real {@link SandboxRunner}, count what that runner was
- * asked to execute, and answer the two artifact defects the sprint region hits at runtime
- * (see {@link sandboxEffectInterrupts} and {@link SUBSTITUTE_COMMIT_CHECKPOINT}).
+ * {@link SprintRuntime} around a real {@link SandboxRunner} and count what that runner was
+ * asked to execute.
+ *
+ * Through graphVersion 1.1.0 this file also carried two adapters that worked around
+ * artifact defects the sprint region hit at runtime: one stripped the `process-exec` tag
+ * from the four ungated verification nodes, the other substituted a legal checkpoint id for
+ * `hitl_commit`'s `"hitl-commit"`. Both defects are fixed in the artifact itself as of
+ * 1.2.0 — the verification nodes declare `sandbox-exec` (or nothing, for the one that
+ * executes nothing) and `hitl_commit` names `end-of-pipeline` — so the adapters are gone
+ * and the SHIPPED controller now decides every interrupt in this harness unmodified.
  *
  * Real temp directories, real `.bober/` writes, a real scratch store, a real trace file and
  * the real interpreter throughout. The only substituted collaborators are the agent
  * functions at the very edge, and they are substituted through the effect registry the
  * artifact already declares as the only way out.
  */
-
-// ── Artifact defect #1: `process-exec` is a GATED effect ────────────
-
-/**
- * Approve the sandbox-backed `process-exec` nodes the artifact leaves ungated.
- *
- * ── The defect ──
- *
- * `GATED_EFFECTS` is `["git", "process-exec"]` (`runtime/interrupt.ts:75`) — `process-exec`
- * was widened in for the DEPLOY path. Four sprint-subgraph nodes declare it with no HITL
- * gate anywhere upstream: `gate_mock_coverage` (`coding.graph.ts:533`), `gate_syntax`
- * (`:563`), `sprint_evaluate` (`:594` on `gate_anchor_regression`, `:607` on the evaluator).
- * `maybeInterrupt` does `if (gate === null) throw new UngatedEffectError(...)`
- * (`interrupt.ts:528`) and the interpreter re-throws anything that is not `GraphInterrupted`
- * (`interpreter.ts:1109-1110`), so `interpreter.run` on the sprint region throws BEFORE any
- * node body executes. No `InterruptController` OPTION avoids it: `options.decisions` is
- * consulted only after that throw.
- *
- * ── Why the substitution lives here, and what it does NOT relax ──
- *
- * Neither file can legitimately change in this sprint. `coding.graph.ts` is outside the
- * contract's `estimatedFiles`, is sealed by its own checksum and is pinned by 594 lines of
- * structural assertions; narrowing `GATED_EFFECTS` to `["git"]` would change the SHIPPED
- * fail-closed surface and break the deploy assertions in `hitl-graph.ts`. So the
- * substitution is confined to this fixture, exactly as sprint 11 confined its checkpoint-id
- * substitution, and it is as narrow as it can be: for a node with NO `hitl` policy whose
- * only gated effect is `process-exec`, the node spec is passed to the SHIPPED controller with
- * that one tag removed — so the shipped fast path (`hitl === undefined && gated.length === 0`)
- * answers, and every other decision the controller makes is untouched.
- *
- * `git` is never removed. `commit.test.ts`'s fail-closed case runs through the shipped
- * controller with the shipped rules, which is the point of that test.
- */
-export function sandboxEffectInterrupts(inner: InterruptController): InterruptController {
-  return {
-    maybeInterrupt(node: NodeSpec, payload, ctx, gate) {
-      const gated = gatedEffectsOf(node);
-      const onlyProcessExec =
-        node.hitl === undefined && gated.length === 1 && gated[0] === "process-exec";
-      if (!onlyProcessExec) return inner.maybeInterrupt(node, payload, ctx, gate);
-      const relaxed: NodeSpec = {
-        ...node,
-        effects: node.effects.filter((effect) => effect !== "process-exec"),
-      };
-      return inner.maybeInterrupt(relaxed, payload, ctx, gate);
-    },
-    raiseSuspend: (record) => inner.raiseSuspend(record),
-    applyResume: (cp, value) => inner.applyResume(cp, value),
-    decisions: () => inner.decisions(),
-    restore: (decisions) => {
-      inner.restore(decisions);
-    },
-  };
-}
-
-// ── Artifact defect #2: `hitl_commit`'s checkpoint id ───────────────
-
-/**
- * The shipped checkpoint id substituted for `hitl_commit`'s.
- *
- * `coding.graph.ts:837` declares `checkpointId: "hitl-commit"`, which is NOT one of the nine
- * ids `src/orchestrator/checkpoints/types.ts:16-26` publishes — `bober approve` and `bober
- * reject` cannot answer it, and `assertKnownCheckpointId` (`interrupt.ts:313`) throws
- * `UnknownCheckpointIdError` the moment the node is evaluated. The same defect exists on
- * `plan_clarify`'s `"plan-clarify"`, which sprint 11 reported and substituted the same way.
- *
- * `"post-sprint"` is the shipped id that semantically IS the post-sprint commit gate, and it
- * is the id `hitl-graph.ts` already uses for its own commit node.
- */
-export const SUBSTITUTE_COMMIT_CHECKPOINT: CheckpointId = "post-sprint";
-
-/** Substitute a legal checkpoint id for an artifact one the approval subsystem cannot answer. */
-export function substitutingCommitInterrupts(
-  inner: InterruptController,
-  substitute: CheckpointId = SUBSTITUTE_COMMIT_CHECKPOINT,
-): InterruptController {
-  return {
-    maybeInterrupt(node: NodeSpec, payload, ctx, gate) {
-      const fixedGate =
-        gate !== null && gate !== undefined && !isCheckpointId(gate.checkpointId)
-          ? { checkpointId: substitute, gateNodeId: gate.gateNodeId, onReject: gate.onReject }
-          : gate;
-      if (node.hitl === undefined || isCheckpointId(node.hitl.checkpointId)) {
-        return inner.maybeInterrupt(node, payload, ctx, fixedGate);
-      }
-      const substituted: NodeSpec = { ...node, hitl: { ...node.hitl, checkpointId: substitute } };
-      return inner.maybeInterrupt(substituted, payload, ctx, fixedGate);
-    },
-    raiseSuspend: (record) => inner.raiseSuspend(record),
-    applyResume: (cp, value) => inner.applyResume(cp, value),
-    decisions: () => inner.decisions(),
-    restore: (decisions) => {
-      inner.restore(decisions);
-    },
-  };
-}
 
 // ── Recording sandbox ───────────────────────────────────────────────
 
@@ -531,8 +440,9 @@ export async function runSprint(options: SprintRunOptions): Promise<SprintRun> {
   const scheduler = new RecordingScheduler({ maxConcurrent: compiled.spec.defaults.concurrency });
 
   const base = createInterruptController({ mode: "mechanism" });
-  const wrapped = options.interrupts === undefined ? base : options.interrupts(base);
-  const interrupts = sandboxEffectInterrupts(substitutingCommitInterrupts(wrapped));
+  // The SHIPPED controller, unadapted: the artifact's own checkpoint ids and effect tags
+  // are what it decides on. `options.interrupts` is a per-test hook, not a workaround.
+  const interrupts = options.interrupts === undefined ? base : options.interrupts(base);
 
   const ctx: RunContext = {
     runId,

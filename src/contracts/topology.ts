@@ -32,7 +32,23 @@ export const NODE_KINDS = ["llm", "tool", "gate", "router", "subgraph"] as const
 export const NodeKindSchema = z.enum(NODE_KINDS);
 export type NodeKind = z.infer<typeof NodeKindSchema>;
 
-export const EFFECT_TAGS = ["fs-write", "git", "network", "process-exec"] as const;
+/**
+ * What a node body may do to the world outside the graph.
+ *
+ * `sandbox-exec` is a process executed through `SandboxRunner` under a config-derived
+ * allowlist, with cwd confinement, a denylist enforced by the runner itself and a kill
+ * timeout — NOT the deploy path, which is `process-exec` and stays gated. The distinction
+ * exists because running the project's own configured typecheck/lint/test command and
+ * shipping to production are categorically different acts, and requiring a human approval
+ * before every typecheck would make the approval gate meaningless in the other direction.
+ */
+export const EFFECT_TAGS = [
+  "fs-write",
+  "git",
+  "network",
+  "process-exec",
+  "sandbox-exec",
+] as const;
 export const EffectTagSchema = z.enum(EFFECT_TAGS);
 export type EffectTag = z.infer<typeof EffectTagSchema>;
 

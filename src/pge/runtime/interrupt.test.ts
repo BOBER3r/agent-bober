@@ -179,8 +179,12 @@ describe("what is gated", () => {
     expect([...GATED_EFFECTS].sort()).toEqual(["git", "process-exec"]);
   });
 
-  it("does not gate fs-write or network, because every node writes files", () => {
-    const node = { effects: ["fs-write", "network"] } as unknown as NodeSpec;
+  it("does not gate fs-write, network or sandbox-exec", () => {
+    // `sandbox-exec` sits with these two rather than with the gated pair: it is the
+    // project's own configured verification commands run through SandboxRunner under an
+    // allowlist, not the deploy path. Gating it would demand a human approval before every
+    // typecheck, which empties the gate of meaning from the other direction.
+    const node = { effects: ["fs-write", "network", "sandbox-exec"] } as unknown as NodeSpec;
     expect(gatedEffectsOf(node)).toEqual([]);
   });
 

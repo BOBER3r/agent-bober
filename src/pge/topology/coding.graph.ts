@@ -91,11 +91,16 @@ const UNSEALED_CHECKSUM = `sha256:${"0".repeat(64)}`;
 const CODING_GRAPH_UNSEALED: TopologySpec = {
   formatVersion: 1,
   graphId: "coding",
-  // 1.1.0 — the retry cycles that bypass their region's router (gate_mock_coverage,
-  // sprint_correct, reduce_sprints) now declare explicit loop bounds. A structural
-  // change to a committed artifact moves graphVersion forward; `pge diff
-  // --require-version-bump` is the gate that says so.
-  graphVersion: "1.1.0",
+  // 1.2.0 — two corrections that made the artifact unrunnable. (1) plan_clarify and
+  // hitl_commit named checkpoint ids ("plan-clarify", "hitl-commit") that are not among
+  // the nine the shipped subsystem answers, so evaluating either node threw
+  // UnknownCheckpointIdError; they now name post-plan and end-of-pipeline. (2) The four
+  // sprint verification nodes declared "process-exec" — the DEPLOY tag, which requires a
+  // recorded approval — so the sprint subgraph could not run at all; the three that
+  // really do execute now declare "sandbox-exec" and gate_mock_coverage, which executes
+  // nothing, declares no effect. A structural change to a committed artifact moves
+  // graphVersion forward; `pge diff --require-version-bump` is the gate that says so.
+  graphVersion: "1.2.0",
   description:
     "The agent-bober coding pipeline: research reflexion loop, planner with a clarification loop, supervisor, bounded sprint subgraph with curator/security/evaluation gates, global evaluation with rework, synthesis, documentation, gated commit, graceful failure and context compaction.",
   provenance: "authored",
@@ -410,7 +415,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       writes: ["messages"],
       effects: [],
       gate: { check: "clarifications-answered", onFail: "graceful_failure" },
-      hitl: { checkpointId: "plan-clarify", onReject: "graceful_failure" },
+      hitl: { checkpointId: "post-plan", onReject: "graceful_failure" },
     },
     {
       id: "plan_materialize",
@@ -530,7 +535,9 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       outputPorts: [],
       reads: ["refs", "counters"],
       writes: ["counters"],
-      effects: ["process-exec"],
+      // Effect-free: the handler reads the mock manifest and compares counts. It executes
+      // no process at all, so neither the deploy tag nor the sandbox tag is the truth here.
+      effects: [],
       gate: { check: "mock-coverage-threshold", onFail: "sprint_curate_mocks" },
       loop: { counterKey: "mockCurationRounds", maxIterations: 2, onExhausted: "sprint_exit" },
     },
@@ -560,7 +567,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       outputPorts: [],
       reads: [],
       writes: ["branchStatus"],
-      effects: ["process-exec"],
+      effects: ["sandbox-exec"],
       gate: { check: "typecheck-and-lint", onFail: "sprint_correct" },
     },
     {
@@ -591,7 +598,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       outputPorts: [{ key: "verdict", schemaRef: "SprintVerdict", required: true }],
       reads: ["sprintContracts", "refs", "messages"],
       writes: ["evaluations", "messages", "testAnchors", "ledger"],
-      effects: ["process-exec"],
+      effects: ["sandbox-exec"],
     },
     {
       id: "gate_anchor_regression",
@@ -604,7 +611,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       outputPorts: [{ key: "verdict", schemaRef: "SprintVerdict", required: true }],
       reads: ["testAnchors"],
       writes: ["branchStatus"],
-      effects: ["process-exec"],
+      effects: ["sandbox-exec"],
       gate: { check: "anchor-tests-still-green", onFail: "sprint_correct" },
     },
     {
@@ -825,7 +832,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "hitl_commit",
       kind: "gate",
       title: "Commit approval",
-      doc: "Human-in-the-loop approval guarding the git commit. Effect-free by construction: the approval and the effectful commit are separate nodes.",
+      doc: "Human-in-the-loop approval guarding the git commit. Effect-free by construction: the approval and the effectful commit are separate nodes. It answers the shipped end-of-pipeline checkpoint, which in the imperative pipeline fires one step later — after finalize writes its completion marker. The id names the DECISION being taken ('the run is done, may it be committed and finalised?'), not the instruction pointer, and the gate must precede the commit it authorises.",
       subgraph: null,
       role: "utility",
       inputPorts: [],
@@ -834,7 +841,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       writes: ["messages"],
       effects: [],
       gate: { check: "human-approval", onFail: "graceful_failure" },
-      hitl: { checkpointId: "hitl-commit", onReject: "graceful_failure" },
+      hitl: { checkpointId: "end-of-pipeline", onReject: "graceful_failure" },
     },
     {
       id: "commit",

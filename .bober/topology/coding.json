@@ -71,7 +71,7 @@
       "scope": "public"
     }
   ],
-  "checksum": "sha256:871b32e136c8e39b735a3e3ad827b05aa431c7af625d159281ce45d8481d8c57",
+  "checksum": "sha256:95c40948ffb8d27f1f7bd1846f1efbcb6d8a9c7ff2daa6300558bd1bfe857c80",
   "defaults": {
     "concurrency": 1,
     "durability": "superstep",
@@ -500,7 +500,7 @@
   "entry": "research_body",
   "formatVersion": 1,
   "graphId": "coding",
-  "graphVersion": "1.1.0",
+  "graphVersion": "1.2.0",
   "nodes": [
     {
       "doc": "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",
@@ -688,7 +688,7 @@
     {
       "doc": "Re-runs the recorded anchor tests; a regression routes to the corrector regardless of the sprint's own verdict.",
       "effects": [
-        "process-exec"
+        "sandbox-exec"
       ],
       "gate": {
         "check": "anchor-tests-still-green",
@@ -742,9 +742,7 @@
     },
     {
       "doc": "Rejects a sprint whose declared boundaries are not covered by fixtures, sending it back to the mock curator. The re-curation retry is a cycle of its own that never reaches sprint_route, so it carries its own bound rather than borrowing one.",
-      "effects": [
-        "process-exec"
-      ],
+      "effects": [],
       "gate": {
         "check": "mock-coverage-threshold",
         "onFail": "sprint_curate_mocks"
@@ -944,7 +942,7 @@
     {
       "doc": "Runs typecheck and lint under the sandbox policy; any failure routes straight to the corrector without spending an evaluation.",
       "effects": [
-        "process-exec"
+        "sandbox-exec"
       ],
       "gate": {
         "check": "typecheck-and-lint",
@@ -985,14 +983,14 @@
       ]
     },
     {
-      "doc": "Human-in-the-loop approval guarding the git commit. Effect-free by construction: the approval and the effectful commit are separate nodes.",
+      "doc": "Human-in-the-loop approval guarding the git commit. Effect-free by construction: the approval and the effectful commit are separate nodes. It answers the shipped end-of-pipeline checkpoint, which in the imperative pipeline fires one step later — after finalize writes its completion marker. The id names the DECISION being taken ('the run is done, may it be committed and finalised?'), not the instruction pointer, and the gate must precede the commit it authorises.",
       "effects": [],
       "gate": {
         "check": "human-approval",
         "onFail": "graceful_failure"
       },
       "hitl": {
-        "checkpointId": "hitl-commit",
+        "checkpointId": "end-of-pipeline",
         "onReject": "graceful_failure"
       },
       "id": "hitl_commit",
@@ -1017,7 +1015,7 @@
         "onFail": "graceful_failure"
       },
       "hitl": {
-        "checkpointId": "plan-clarify",
+        "checkpointId": "post-plan",
         "onReject": "graceful_failure"
       },
       "id": "plan_clarify",
@@ -1589,7 +1587,7 @@
     {
       "doc": "Runs the sprint's evaluation strategies, executing the project test command under the sandbox policy and recording the anchor tests it observed green.",
       "effects": [
-        "process-exec"
+        "sandbox-exec"
       ],
       "id": "sprint_evaluate",
       "inputPorts": [],

@@ -548,11 +548,10 @@ export function mockCoverageIssues(manifest: MockManifest | null): SchemaIssue[]
  * refuses back to `sprint_curate_mocks`, which is what makes re-curation a declared cycle
  * with its own `mockCurationRounds` bound rather than an ad-hoc retry.
  *
- * KNOWN ARTIFACT DRIFT, reported rather than worked around: the node declares
- * `effects: ["process-exec"]` (`coding.graph.ts:533`) and this body executes nothing —
- * checking a manifest is a pure comparison. The declaration is the artifact's, the artifact
- * is outside this sprint's scope, and honouring it by spawning a process to answer a
- * question that needs no process would be worse than reporting it.
+ * The node declares no effects, which is the truth about this body: checking a manifest is
+ * a pure comparison and nothing here executes a process. It declared `["process-exec"]`
+ * until graphVersion 1.2.0, which was both false and fatal — `process-exec` is gated, so
+ * the node could not run at all.
  */
 export function mockCoverageGate(spec: TopologySpec): NodeImpl<unknown, unknown> {
   const { check, onFail } = gatePolicyOf(spec, SPRINT_GATE_IDS.mockCoverage);

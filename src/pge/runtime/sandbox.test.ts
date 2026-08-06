@@ -193,6 +193,22 @@ describe("SandboxRunner — denial happens BEFORE spawn (sc-6-9)", () => {
     expect(outcome).toEqual({ status: "denied", binary: "sh", reason: "denylisted" });
   });
 
+  it("denies a default-denylisted binary even when the caller's policy denies nothing", async () => {
+    // The denylist belongs to the RUNNER, not to the policy object it is handed.
+    // `createSandboxPolicy` only DEFAULTS `denyBinaries` to DEFAULT_DENY_BINARIES, and a
+    // caller can pass `denyBinaries: []` — so without the unconditional check a permissive
+    // policy naming `sh` in its allowlist would spawn a shell. This is the assertion that
+    // makes "a node body cannot reach a shell" a property of the runner.
+    const runner = createSandboxRunner(root, RUN, trace);
+    const outcome = await runner.run(
+      "sh",
+      ["-c", "echo pwned"],
+      policyAllowingNode({ allowBinaries: ["sh", NODE], denyBinaries: [] }),
+      scratch,
+    );
+    expect(outcome).toEqual({ status: "denied", binary: "sh", reason: "denylisted" });
+  });
+
   it("denies every shell and network client in the default denylist", async () => {
     const runner = createSandboxRunner(root, RUN, trace);
     expect(DEFAULT_DENY_BINARIES).toContain("sh");

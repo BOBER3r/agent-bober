@@ -4,9 +4,7 @@ import type { ProblemReflection, ResearchDigest } from "../../../contracts/probl
 import { createSpec } from "../../../contracts/spec.js";
 import type { ClarificationQuestion, PlanSpec } from "../../../contracts/spec.js";
 import type { SprintContract } from "../../../contracts/sprint-contract.js";
-import type { NodeSpec, TopologySpec } from "../../../contracts/topology.js";
-import { isCheckpointId } from "../../../orchestrator/checkpoints/types.js";
-import type { CheckpointId } from "../../../orchestrator/checkpoints/types.js";
+import type { TopologySpec } from "../../../contracts/topology.js";
 import type { ResearchDoc } from "../../../orchestrator/research-agent.js";
 import { compile } from "../../compile/compiler.js";
 import type { CompiledGraph } from "../../compile/compiler.js";
@@ -164,61 +162,17 @@ export function recordingCommitBoundary(inner: CommitBoundary): {
 // ── Interrupt-controller adapter ────────────────────────────────────
 
 /**
- * An interrupt controller that substitutes a SHIPPED checkpoint id for an artifact one the
- * approval subsystem cannot answer.
+ * A suspend-mode controller for the planner clarification gate.
  *
- * ── Why this exists, and why it is confined to a fixture ──
- *
- * `plan_clarify` declares `hitl: { checkpointId: "plan-clarify" }`
- * (`coding.graph.ts:413`), and `"plan-clarify"` is NOT one of the nine ids
- * `src/orchestrator/checkpoints/types.ts:16-26` publishes — `bober approve` and `bober
- * reject` cannot answer it. `InterruptController.maybeInterrupt` calls
- * `assertKnownCheckpointId` (`interrupt.ts:454`) and throws `UnknownCheckpointIdError` the
- * moment the node is dispatched, so the clarification interrupt is UNREACHABLE against the
- * committed artifact as it stands. The same defect exists on `hitl_commit`'s
- * `"hitl-commit"` (`coding.graph.ts:837`).
- *
- * Neither file can legitimately be changed by this sprint: `coding.graph.ts` is outside the
- * contract's `estimatedFiles`, is sealed by its own checksum and is pinned by 594 lines of
- * structural assertions, and `CHECKPOINT_IDS` is the shipped nine-id approval subsystem.
- * So the substitution lives HERE, in a fixture, where it is visible and scoped to tests.
- *
- * Everything else is the SHIPPED mechanism: `GraphInterrupted`, the checkpoint write,
- * `interpreter.resume`, `applyResume`, `resumeMessageId`, the audit line. Only the id
- * changes, and it changes to `"post-plan"` — the shipped id that semantically IS the
- * planner gate. A `noop` autopilot controller was deliberately not used instead:
- * `interrupt.ts:520-523` does not record an autopilot approval as a grant, so it would
- * prove nothing about the suspend-and-resume round trip.
+ * Nothing is adapted. Until graphVersion 1.2.0 this wrapped the shipped controller to
+ * substitute a legal checkpoint id, because `plan_clarify` declared `"plan-clarify"` —
+ * an id outside the nine `src/orchestrator/checkpoints/types.ts` publishes, which made
+ * `assertKnownCheckpointId` throw the moment the node was dispatched. The artifact now
+ * names `"post-plan"`, so the shipped controller answers the artifact's own id directly
+ * and the adapter has nothing left to do.
  */
-export const SUBSTITUTE_CHECKPOINT_ID: CheckpointId = "post-plan";
-
-export function substitutingInterrupts(
-  inner: InterruptController,
-  substitute: CheckpointId = SUBSTITUTE_CHECKPOINT_ID,
-): InterruptController {
-  return {
-    maybeInterrupt(node: NodeSpec, payload, ctx, gate) {
-      if (node.hitl === undefined || isCheckpointId(node.hitl.checkpointId)) {
-        return inner.maybeInterrupt(node, payload, ctx, gate);
-      }
-      const substituted: NodeSpec = {
-        ...node,
-        hitl: { ...node.hitl, checkpointId: substitute },
-      };
-      return inner.maybeInterrupt(substituted, payload, ctx, gate);
-    },
-    raiseSuspend: (record) => inner.raiseSuspend(record),
-    applyResume: (cp, value) => inner.applyResume(cp, value),
-    decisions: () => inner.decisions(),
-    restore: (decisions) => {
-      inner.restore(decisions);
-    },
-  };
-}
-
-/** A suspend-mode controller with the substitution applied. */
 export function clarificationInterrupts(): InterruptController {
-  return substitutingInterrupts(createInterruptController({ mode: "suspend" }));
+  return createInterruptController({ mode: "suspend" });
 }
 
 // ── Stub providers ──────────────────────────────────────────────────
