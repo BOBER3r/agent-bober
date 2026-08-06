@@ -15,6 +15,7 @@ import { createReducerRegistry } from "../../registry/reducers.js";
 import type { Registries } from "../../compile/compiler.js";
 import { initialOverallState } from "../../state/overall.js";
 import type { GraphMessage, OverallState, SprintVerdict } from "../../state/overall.js";
+import { FAILURE_ARTIFACT_FORMAT_VERSION, writeFailureArtifact } from "../graceful-failure.js";
 
 /**
  * The GOLDEN topology and its stub node bodies.
@@ -535,8 +536,28 @@ export interface GoldenBehaviour {
   contracts: SprintContract[];
   /** Branch keys that fail their first evaluation and take the rework route once. */
   reworkBranches?: readonly string[];
-  /** Branch keys whose generator throws, so a sibling failure is observable. */
+  /**
+   * Branch keys whose generator throws a NON-TRANSIENT error, so a sibling failure is
+   * observable. `classifyTransient` rejects the message this raises, which is deliberate:
+   * a retry policy must leave these branches at exactly one attempt.
+   */
   failingBranches?: readonly string[];
+  /**
+   * Branch key -> how many times its generator throws a TRANSIENT provider error before
+   * succeeding. A budget larger than the retry policy's `maxAttempts` is a permanently
+   * failing node.
+   */
+  transientFailures?: Readonly<Record<string, number>>;
+  /**
+   * Make the graceful-failure terminal write `.bober/failures/<runId>.json` and record its
+   * branches in `messages` instead of declaring a run verdict.
+   *
+   * Off by default, so the deadlock fixture keeps the terminal body it was written
+   * against. On, it is the shape `coding.graph.ts` prescribes in prose: `finalize` owns
+   * the terminal verdict and the failure path records what failed, which is also what
+   * stops the two terminals from disagreeing about a control key in one superstep.
+   */
+  recordFailureArtifact?: boolean;
   /** Called when a node inside the fan-out region starts and finishes. */
   onBranchNode?: (event: "start" | "end", nodeId: string, branchKey: string) => void;
   /**
@@ -559,6 +580,44 @@ export interface GoldenBehaviour {
 async function yieldTimes(n: number): Promise<void> {
   for (let i = 0; i < n; i += 1) await Promise.resolve();
 }
+
+/**
+ * What an overloaded provider looks like to `classifyTransient`.
+ *
+ * Carries a real HTTP 503, so the SHARED classifier in
+ * `src/orchestrator/workflow/retry.ts` decides it is retryable on its own terms. A
+ * fixture error that the classifier had to be taught about would prove the test's
+ * arrangement rather than the policy.
+ */
+export class TransientProviderError extends Error {
+  readonly status = 503;
+  readonly branchKey: string;
+
+  constructor(branchKey: string, attempt: number) {
+    super(
+      `golden fixture: branch ${branchKey} hit an overloaded provider on attempt ${String(attempt)}`,
+    );
+    this.name = "TransientProviderError";
+    this.branchKey = branchKey;
+  }
+}
+
+/** What the graceful-failure terminal is told, when the interpreter routes to it. */
+const GracefulFailureInputSchema = z.object({
+  reason: z.string().min(1).default("Unknown"),
+  branches: z
+    .array(
+      z.object({
+        branchKey: z.string().min(1),
+        contractId: z.string().min(1).optional(),
+        nodeId: z.string().min(1),
+        attempts: z.number().int().min(1),
+        errorClass: z.string().min(1),
+        message: z.string(),
+      }),
+    )
+    .default([]),
+});
 
 function message(id: string, seq: number, nodeId: string, text: string): GraphMessage {
   return { id, seq, role: "assistant", nodeId, text, tokens: text.length };
@@ -617,6 +676,9 @@ export function goldenNodeRegistry(behaviour: GoldenBehaviour): NodeRegistry {
   const rework = new Set(behaviour.reworkBranches ?? []);
   const failing = new Set(behaviour.failingBranches ?? []);
   const stagger = behaviour.stagger ?? ((): number => 0);
+  const transientBudget = behaviour.transientFailures ?? {};
+  /** Transient throws already spent per branch. Per REGISTRY, so a fresh run starts over. */
+  const transientSpent = new Map<string, number>();
 
   const branchNode =
     (nodeId: string, body: Handler): Handler =>
@@ -701,7 +763,10 @@ export function goldenNodeRegistry(behaviour: GoldenBehaviour): NodeRegistry {
         const contract = SprintContractSchema.parse(input);
         return {
           update: {
-            branchStatus: { [contract.contractId]: { state: "running", attempts: 1 } },
+            // `attempts: 0` — no attempt has COMPLETED yet, and that is what makes the
+            // later `succeeded`/`failed` record win the per-key join. See the ordering
+            // contract on `BranchStatusSchema`.
+            branchStatus: { [contract.contractId]: { state: "running", attempts: 0 } },
           },
           goto: { kind: "node", node: N.sprintIn },
           output: contract,
@@ -725,6 +790,15 @@ export function goldenNodeRegistry(behaviour: GoldenBehaviour): NodeRegistry {
       handler: branchNode(N.generate, async (input, state, ctx) => {
         const key = ctx.branchKey ?? "";
         if (failing.has(key)) throw new Error(`golden fixture: branch ${key} failed generation`);
+        // Thrown INSIDE the branch wrapper, so `onBranchNode` has already recorded this
+        // execution: a retried attempt is a real second entry into the body, not a
+        // bookkeeping increment somewhere above it.
+        const budget = transientBudget[key] ?? 0;
+        const spent = transientSpent.get(key) ?? 0;
+        if (spent < budget) {
+          transientSpent.set(key, spent + 1);
+          throw new TransientProviderError(key, spent + 1);
+        }
         // PRIVATE state: a working buffer that must never reach a channel.
         ctx.priv.set("goldenPrivateDraft", `draft for ${key}`);
         ctx.priv.set("goldenPrivateTokenCount", 42);
@@ -861,15 +935,47 @@ export function goldenNodeRegistry(behaviour: GoldenBehaviour): NodeRegistry {
 
     [N.gracefulFailure]: {
       kind: "tool",
-      handler: async (input) => ({
-        update: {
-          messages: [message("m-graceful", 300, N.gracefulFailure, "run failed gracefully")],
-          verdict: "failed" as const,
-        },
-        phase: "failed",
-        goto: { kind: "node", node: "END" },
-        output: { failed: true, echo: input },
-      }),
+      handler: behaviour.recordFailureArtifact
+        ? async (input, _state, ctx) => {
+            const parsed = GracefulFailureInputSchema.safeParse(input);
+            const reason = parsed.success ? parsed.data.reason : "Unknown";
+            const branches = parsed.success ? parsed.data.branches : [];
+            // The terminal's ONE effect: the failure artifact, written through the
+            // runtime's atomic primitive, timed by the node's injected clock. It declares
+            // no verdict — `finalize` owns that control key, and the failure path records
+            // its branches instead, exactly as `coding.graph.ts` prescribes.
+            await writeFailureArtifact(ctx.projectRoot, {
+              formatVersion: FAILURE_ARTIFACT_FORMAT_VERSION,
+              runId: ctx.runId,
+              reason,
+              supersteps: ctx.superstep,
+              createdAt: ctx.clock.nowIso(),
+              branches,
+            });
+            return {
+              update: {
+                messages: [
+                  message(
+                    "m-graceful",
+                    300,
+                    N.gracefulFailure,
+                    `recorded ${String(branches.length)} failed branch(es) for ${reason}`,
+                  ),
+                ],
+              },
+              goto: { kind: "node", node: "END" },
+              output: { failed: true, reason, branches: branches.map((b) => b.branchKey) },
+            };
+          }
+        : async (input) => ({
+            update: {
+              messages: [message("m-graceful", 300, N.gracefulFailure, "run failed gracefully")],
+              verdict: "failed" as const,
+            },
+            phase: "failed",
+            goto: { kind: "node", node: "END" },
+            output: { failed: true, echo: input },
+          }),
     },
   };
 

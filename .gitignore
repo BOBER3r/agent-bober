@@ -60,3 +60,11 @@ pnpm-debug.log*
 # run leaves ~40 of them, and they carry the whole run state; they are recovery
 # artifacts, not committed ones.
 .bober/checkpoints/
+
+# Graceful-failure artifacts (sprint 9) — one per run that exhausted a branch's retries.
+.bober/failures/
+
+# Engram phase digests (sprint 10) — regenerated per phase on every run. This is the
+# SINGULAR directory owned by the graph runtime; the tracked plural `.bober/handoffs/`
+# holds the skill-driven pipeline's ContextHandoff documents and stays version-controlled.
+.bober/handoff/

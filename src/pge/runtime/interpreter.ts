@@ -39,6 +39,7 @@ import type { AdmissionReason, DeferredTask, FrontierPlanner, PendingTask } from
 import { GraphInterrupted, createInterruptController, isApproved } from "./interrupt.js";
 import type { EffectGate, InterruptController } from "./interrupt.js";
 import type { BudgetLedger } from "./ledger.js";
+import type { RetryPolicy } from "./retry-planner.js";
 import type { SpanEnd, SpanHandle, TraceWriter } from "./trace.js";
 
 /**
@@ -196,6 +197,29 @@ export class CheckpointerRequiredError extends Error {
   }
 }
 
+/**
+ * A graph that declares a bounded cycle but binds its counter channel to a reducer that
+ * is not a per-key maximum.
+ *
+ * ADR-4's stated elimination of the alternative state design is that "a non-idempotent
+ * counter reducer over-counts on replay, so a bounded loop can exhaust early or never".
+ * A loop bound folded through `+` is therefore not a weaker bound — it is not a bound at
+ * all once a superstep is replayed, so this is a load error rather than a warning.
+ */
+export class NonIdempotentCounterChannelError extends Error {
+  readonly channel: string;
+  readonly reducerId: string;
+
+  constructor(channel: string, reducerId: string) {
+    super(
+      `Channel "${channel}" carries the declared loop counters but is bound to reducer "${reducerId}". A loop bound survives a replayed superstep only under an idempotent per-key maximum ("maxNumber"); under any other reducer a re-executed superstep can exhaust the cycle early or never.`,
+    );
+    this.name = "NonIdempotentCounterChannelError";
+    this.channel = channel;
+    this.reducerId = reducerId;
+  }
+}
+
 /** The loop ran past its bound. A guard against a routing bug, never an expected outcome. */
 export class SuperstepLimitExceededError extends Error {
   readonly limit: number;
@@ -253,6 +277,24 @@ export interface RunContext {
   readonly durability?: Durability;
   /** Runaway guard. Default {@link DEFAULT_MAX_SUPERSTEPS}. */
   readonly maxSupersteps?: number;
+  /**
+   * Per-branch retry policy, and what an exhausted branch does to the run.
+   *
+   * OPTIONAL, and ABSENT MEANS ONE ATTEMPT AND NO GRACEFUL ROUTING — a failed task is
+   * recorded, its branch is released so the join can still fire, and nothing else
+   * happens. That is exactly the behaviour every superstep-loop test written before this
+   * policy existed was written against, so an absent policy is not a degraded mode: it is
+   * the previous semantics, unchanged byte for byte.
+   *
+   * Supplying one turns on three things at once, because they are one decision: failed
+   * tasks are retried in isolation on the shared jittered schedule, the branch's
+   * `branchStatus` record gains its attempt count and error class, and a branch that has
+   * spent every attempt routes the run to the artifact's graceful-failure terminal.
+   *
+   * Note what is NOT gated on it: the loop bounds each cycle declares in the topology are
+   * enforced unconditionally. A bound that had to be switched on is not a bound.
+   */
+  readonly retry?: RetryPolicy;
 }
 
 /** The clock shape both the interpreter and the commit boundary consume. */
@@ -341,6 +383,48 @@ export const FAIL_CLOSED_ERROR_CLASS = "FailClosed";
 
 /** `errorClass` of the span a node whose HITL gate was rejected writes. */
 export const HITL_REJECTED_ERROR_CLASS = "HitlRejected";
+
+/** `errorClass` recorded when a branch has spent every attempt {@link RunContext.retry} allows. */
+export const RETRIES_EXHAUSTED_ERROR_CLASS = "RetriesExhausted";
+
+/**
+ * `errorClass` of the BOUNDED-EXIT span: a cycle reached the `maxIterations` its topology
+ * declares and was routed to that loop's `onExhausted` instead of round again.
+ *
+ * A `failed` span with a distinguishing error class rather than a sixth
+ * {@link SPAN_STATUSES} member, exactly like {@link DEADLOCK_ERROR_CLASS} and
+ * {@link FAIL_CLOSED_ERROR_CLASS} — the trace schema does not move for a new outcome that
+ * the existing vocabulary already describes.
+ */
+export const LOOP_EXHAUSTED_ERROR_CLASS = "LoopExhausted";
+
+/** The channel every declared `loop.counterKey` is a KEY INSIDE. */
+export const COUNTER_CHANNEL = "counters";
+
+/** The channel a failed branch's state, attempt count and error class are recorded on. */
+export const BRANCH_STATUS_CHANNEL = "branchStatus";
+
+/** The only reducer under which a loop bound survives a replayed superstep (ADR-4). */
+export const COUNTER_REDUCER_ID = "maxNumber";
+
+/**
+ * The `counters` key one loop bound is actually counted on.
+ *
+ * A topology declares ONE `counterKey` per cycle, but a cycle inside a fan-out region is
+ * entered once PER BRANCH. Counting every branch on the same key would make the bound a
+ * function of the concurrency cap — at cap 8 the eight branches all write `prev + 1` and
+ * the counter reads 1, while at cap 1 they run in eight different supersteps and it reads
+ * 8 — so the same graph would exhaust in one schedule and not in another. Scoping by
+ * branch key makes the count a property of the GRAPH, which is what makes the
+ * concurrency-1-versus-8 artifact comparison decidable at all.
+ *
+ * A root-scope loop (`branchKey === null`) counts on the declared key unchanged, so a
+ * node body that maintains the same counter itself writes the same key with the same
+ * value.
+ */
+export function loopCounterKey(counterKey: string, branchKey: string | null): string {
+  return branchKey === null ? counterKey : `${counterKey}.${branchKey}`;
+}
 
 // ── State snapshots ─────────────────────────────────────────────────
 
@@ -636,6 +720,13 @@ function verdictFrom(state: OverallState, failures: readonly TaskFailure[]): Exc
   // downgrade a run that lost work reports "success".
   if (state.verdict !== "pending") {
     if (state.verdict === "success" && failures.length > 0) return passed > 0 ? "partial" : "failed";
+    // ...and it may not declare away the work that DID land, either. A run whose failure
+    // terminal fired while some branches completed is `partial`: reporting it `failed`
+    // tells an operator to redo work that is already committed, and a caller that has to
+    // reconcile "verdict failed" with "seven contracts passed" reconciles it by ignoring
+    // one of them. `success` is unreachable from here — every path below either sees a
+    // recorded failure or sees none.
+    if (state.verdict === "failed" && passed > 0) return "partial";
     return state.verdict;
   }
 
@@ -681,6 +772,26 @@ interface BlockedTask {
   readonly target: string | null;
 }
 
+/**
+ * A branch that spent every attempt {@link RunContext.retry} allowed.
+ *
+ * Carries `branchKey`, `contractId`, `attempts` and `errorClass` because those are the
+ * four facts the graceful-failure terminal needs in order to NAME the branch in its
+ * artifact without reading the trace file back.
+ */
+interface ExhaustedBranch {
+  readonly branchKey: string;
+  readonly contractId?: string;
+  readonly nodeId: string;
+  readonly attempts: number;
+  readonly errorClass: string;
+  readonly message: string;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 async function executeLoop(
   graph: CompiledGraph,
   seed: LoopSeed,
@@ -712,6 +823,20 @@ async function executeLoop(
     if (!compiled) throw new UnknownNodeInScopeError("<interpreter>", id, null);
     return compiled;
   };
+
+  // ── LOOP BOUNDS ARE A LOAD-TIME PRECONDITION ──
+  //
+  // Checked once, before the first node body, and only for a graph that actually declares
+  // a bounded cycle: a counter channel that is not a per-key maximum makes every bound in
+  // the artifact unenforceable the moment a superstep is replayed, and discovering that at
+  // the bound — after a crash, on the retry — is discovering it too late.
+  const countersChannel = graph.channels.get(COUNTER_CHANNEL);
+  if (spec.nodes.some((node) => node.loop !== undefined) && countersChannel !== undefined) {
+    if (countersChannel.reducer.id !== COUNTER_REDUCER_ID) {
+      throw new NonIdempotentCounterChannelError(COUNTER_CHANNEL, countersChannel.reducer.id);
+    }
+  }
+  const countersAreEnforceable = countersChannel !== undefined;
 
   /**
    * Persist the run.
@@ -802,11 +927,28 @@ async function executeLoop(
     };
 
     const input = node.impl.inputSchema.parse(task.input);
-    const returned = (await node.impl.handler(
-      input,
-      isolatedSnapshot(state),
-      nodeCtx,
-    )) as Command<Partial<OverallState>> & { output: unknown };
+
+    // ── RETRY WRAPS THE HANDLER CALL, AND NOTHING ELSE ──
+    //
+    // Not the schema parses on either side of it and not `resolveDestination` below: an
+    // input that does not match its port schema, an output that does not match its own, or
+    // a `goto` the artifact does not authorise are all DETERMINISTIC defects of this node,
+    // and retrying them spends the branch's whole budget on something that cannot succeed.
+    //
+    // And it is INSIDE the `Scheduler.settle` thunk, which is what makes two properties
+    // true at once. One thunk is one task is one branch, so "retry the failed branch only"
+    // needs no enforcement — there is nothing else in scope to retry. And the interrupt
+    // gate ran before any thunk was dispatched (ADR-6), so a transient 503 retried three
+    // times does not ask a human for approval three times.
+    const invoke = (): Promise<unknown> =>
+      Promise.resolve(node.impl.handler(input, isolatedSnapshot(state), nodeCtx));
+    const returned = (ctx.retry === undefined
+      ? await invoke()
+      : await ctx.retry.run(invoke, {
+          nodeId: node.spec.id,
+          branchKey: task.branchKey,
+          taskKey: task.taskKey,
+        })) as Command<Partial<OverallState>> & { output: unknown };
     const command = CommandSchema.parse({
       update: returned.update,
       goto: returned.goto,
@@ -824,6 +966,68 @@ async function executeLoop(
     // `priv` dies here. It was never a channel, was never handed to the boundary, and
     // the only trace of it that survives is the key list recorded on the span.
     return { task, command, destination, output, privKeys: [...priv.keys()].sort() };
+  };
+
+  /**
+   * Where a task goes once its node's DECLARED loop bound has had its say.
+   *
+   * Read off the artifact — `loop.counterKey`, `loop.maxIterations`, `loop.onExhausted` —
+   * and evaluated against the COMMITTED counter, which already includes this execution's
+   * own increment. So the check is "this node has now run `maxIterations` times", not "it
+   * is about to", and a cycle can be entered exactly as many times as the topology says
+   * and no more.
+   *
+   * A node already heading for the terminal or for its own `onExhausted` target is left
+   * alone: it is leaving the cycle of its own accord, and overriding a decision that
+   * agrees with us would put a spurious failure in the trace. Everything else is
+   * redirected, and the redirection is RECORDED — a `failed` span carrying
+   * {@link LOOP_EXHAUSTED_ERROR_CLASS} and the counter key that ran out, plus a
+   * {@link TaskFailure}, because a run that silently stopped iterating is a run whose
+   * result nobody can account for.
+   */
+  const boundedDestination = (result: TaskOutcome): Destination => {
+    const node = nodeOf(result.task.nodeId);
+    const loop = node.spec.loop;
+    if (loop === undefined || !countersAreEnforceable) return result.destination;
+
+    const key = loopCounterKey(loop.counterKey, result.task.branchKey);
+    const taken = state.counters[key] ?? 0;
+    if (taken < loop.maxIterations) return result.destination;
+
+    const exit: Destination =
+      loop.onExhausted === TERMINAL_ENDPOINT || !graph.nodes.has(loop.onExhausted)
+        ? { kind: "terminal" }
+        : { kind: "single", nodeId: loop.onExhausted };
+    if (
+      result.destination.kind === "terminal" ||
+      (result.destination.kind === "single" &&
+        exit.kind === "single" &&
+        result.destination.nodeId === exit.nodeId)
+    ) {
+      return result.destination;
+    }
+
+    const handle = ctx.trace.begin({
+      nodeId: node.spec.id,
+      kind: node.spec.kind,
+      phase: state.currentPhase,
+      branchKey: result.task.branchKey,
+      superstep,
+      inputHash: result.task.taskKey,
+    });
+    handle.end({
+      status: "failed",
+      errorClass: LOOP_EXHAUSTED_ERROR_CLASS,
+      blockedBy: [key],
+    });
+    failures.push({
+      nodeId: node.spec.id,
+      branchKey: result.task.branchKey,
+      superstep,
+      errorClass: LOOP_EXHAUSTED_ERROR_CLASS,
+      message: `loop counter "${key}" reached the declared bound of ${String(loop.maxIterations)}; routing to "${loop.onExhausted}" instead of re-entering the cycle`,
+    });
+    return exit;
   };
 
   while (pending.length > 0) {
@@ -1018,22 +1222,57 @@ async function executeLoop(
       refusalKey: string | null;
     }> = [];
 
+    /** Branches that spent every attempt this superstep, aggregated for ONE terminal task. */
+    const exhausted: ExhaustedBranch[] = [];
+
     settled.forEach((outcome, index) => {
       const task = admitted[index];
       const handle = handles[index];
       if (outcome.status === "rejected") {
+        const errorClass = errorClassOf(outcome.reason);
+        const message = errorMessageOf(outcome.reason);
+        // `attemptsFor` is what the policy actually SPENT — one for a non-transient error
+        // it refused to retry, `maxAttempts` for one it retried to exhaustion — so the
+        // number recorded is a fact about this execution rather than the configured cap.
+        const attempts = ctx.retry === undefined ? 1 : Math.max(1, ctx.retry.attemptsFor(task.taskKey));
         closing.push({
           handle,
-          outcome: { status: "failed", errorClass: errorClassOf(outcome.reason) },
+          outcome: { status: "failed", errorClass },
           refusalKey: null,
         });
         failures.push({
           nodeId: task.nodeId,
           branchKey: task.branchKey,
           superstep,
-          errorClass: errorClassOf(outcome.reason),
-          message: errorMessageOf(outcome.reason),
+          errorClass,
+          message,
         });
+        // The branch's own record, written to the branch's OWN key. `lastWriteWinsByKey`
+        // is sound over `branchStatus` precisely because the key domains are disjoint, so
+        // eight branches failing in one superstep merge into one write with eight keys and
+        // no branch can overwrite another's attempt count or error class.
+        if (
+          ctx.retry !== undefined &&
+          task.branchKey !== null &&
+          graph.channels.has(BRANCH_STATUS_CHANNEL)
+        ) {
+          batch.push({
+            channel: BRANCH_STATUS_CHANNEL,
+            nodeId: task.nodeId,
+            branchKey: task.branchKey,
+            value: { [task.branchKey]: { state: "failed", attempts, errorClass } },
+          });
+        }
+        if (ctx.retry?.onExhausted === "graceful" && task.branchKey !== null) {
+          exhausted.push({
+            branchKey: task.branchKey,
+            ...(task.contractId === undefined ? {} : { contractId: task.contractId }),
+            nodeId: task.nodeId,
+            attempts,
+            errorClass,
+            message,
+          });
+        }
         // A failed branch can contribute nothing, so it must stop holding the join
         // open — otherwise one rejecting branch deadlocks every sibling that finished.
         if (task.branchKey !== null) activeBranches.delete(task.branchKey);
@@ -1041,9 +1280,50 @@ async function executeLoop(
       }
       const result = outcome.value;
       succeeded.push(result);
+
+      // ── THE LOOP COUNTER IS THE INTERPRETER'S WRITE, CARRIED ON THE NODE'S OWN ──
+      //
+      // A bound that only advances when the node body remembers to advance it is not a
+      // bound: the body is the thing whose defect the bound exists to contain. So the
+      // increment is produced here, from the COMMITTED value plus one, and folded into
+      // the node's own `counters` update when it has one.
+      //
+      // Folded rather than appended because `batchSizePerChannel` is asserted elsewhere as
+      // a property of the GRAPH — how many writers a channel had this superstep. A second
+      // update for the same node and channel would make that number a function of the
+      // runtime instead. `maxNumber` makes the fold safe either way: the node's own value
+      // and the interpreter's join to their maximum, and a replayed superstep re-derives
+      // the same `prev + 1` from the same `prev`, so it can neither exhaust early nor gain
+      // an iteration.
+      const loop = nodeOf(task.nodeId).spec.loop;
+      const counterKey =
+        loop === undefined || !countersAreEnforceable
+          ? null
+          : loopCounterKey(loop.counterKey, task.branchKey);
+      const counterValue = counterKey === null ? 0 : (state.counters[counterKey] ?? 0) + 1;
+      let counterCarried = counterKey === null;
+
       for (const [channel, value] of Object.entries(result.command.update ?? {})) {
         if (value === undefined) continue;
+        if (counterKey !== null && channel === COUNTER_CHANNEL && isPlainRecord(value)) {
+          batch.push({
+            channel,
+            nodeId: task.nodeId,
+            branchKey: task.branchKey,
+            value: { ...value, [counterKey]: counterValue },
+          });
+          counterCarried = true;
+          continue;
+        }
         batch.push({ channel, nodeId: task.nodeId, branchKey: task.branchKey, value });
+      }
+      if (!counterCarried && counterKey !== null) {
+        batch.push({
+          channel: COUNTER_CHANNEL,
+          nodeId: task.nodeId,
+          branchKey: task.branchKey,
+          value: { [counterKey]: counterValue },
+        });
       }
       if (result.command.phase !== undefined) {
         batch.push({
@@ -1134,7 +1414,7 @@ async function executeLoop(
     for (const result of succeeded) {
       const task = result.task;
       done.add(task.taskKey);
-      const destination = result.destination;
+      const destination = boundedDestination(result);
 
       if (destination.kind === "terminal") {
         if (task.branchKey !== null) activeBranches.delete(task.branchKey);
@@ -1207,6 +1487,34 @@ async function executeLoop(
           contractId: task.contractId,
           dependsOn: task.dependsOn,
           files: task.files,
+        }),
+      );
+    }
+
+    // ── ROUTE THE EXHAUSTED ──
+    //
+    // ONE terminal task per superstep, however many branches spent their attempts in it.
+    // The graceful-failure terminal is the run's single account of why it could not
+    // proceed, not a per-branch notification, and N of them would race to write one
+    // artifact — so the branches are aggregated into one input, sorted by branch key so
+    // the terminal's own output does not depend on which branch rejected first.
+    //
+    // Built directly with `createPendingTask` rather than resolved, exactly as the
+    // deadlock path builds its own: a fan-out branch has no declared edge to a root-scope
+    // terminal and does not share its region, so `resolveDestination` would refuse the hop
+    // — correctly, because nothing in the artifact authorises it. The branch was already
+    // released from `activeBranches` at the barrier, so its siblings' join still fires.
+    if (exhausted.length > 0 && graph.nodes.has(GRACEFUL_FAILURE_NODE_ID)) {
+      enqueue(
+        createPendingTask({
+          nodeId: GRACEFUL_FAILURE_NODE_ID,
+          input: {
+            reason: RETRIES_EXHAUSTED_ERROR_CLASS,
+            superstep,
+            branches: [...exhausted].sort((a, b) =>
+              a.branchKey < b.branchKey ? -1 : a.branchKey > b.branchKey ? 1 : 0,
+            ),
+          },
         }),
       );
     }

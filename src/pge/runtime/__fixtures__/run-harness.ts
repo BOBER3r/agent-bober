@@ -22,6 +22,7 @@ import { createGraphInterpreter } from "../interpreter.js";
 import type { GraphRunResult, RunContext } from "../interpreter.js";
 import type { InterruptController } from "../interrupt.js";
 import { createBudgetLedger } from "../ledger.js";
+import type { RetryPolicy } from "../retry-planner.js";
 import { createScratchStore } from "../scratch.js";
 import { createTraceWriter, readSpans } from "../trace.js";
 import type { Span } from "../trace.js";
@@ -235,6 +236,11 @@ export interface RunGoldenOptions {
   /** Overrides the graph's own `defaults.durability`. */
   durability?: Durability;
   /**
+   * Per-branch retry policy. Absent means one attempt and no graceful routing — the
+   * behaviour every test written before the policy existed asserts against.
+   */
+  retry?: RetryPolicy;
+  /**
    * Continue from a persisted checkpoint instead of starting a run.
    *
    * `value` is the human decision, and is ignored when the checkpoint carries no pending
@@ -327,6 +333,7 @@ export async function runGolden(options: RunGoldenOptions): Promise<GoldenRun> {
     ...(options.checkpointer === undefined ? {} : { checkpointer: options.checkpointer }),
     ...(options.interrupts === undefined ? {} : { interrupts: options.interrupts }),
     ...(options.durability === undefined ? {} : { durability: options.durability }),
+    ...(options.retry === undefined ? {} : { retry: options.retry }),
     concurrency: options.concurrency,
     maxSupersteps: options.maxSupersteps,
   };

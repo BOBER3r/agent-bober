@@ -127,6 +127,19 @@ export type BranchState = z.infer<typeof BranchStateSchema>;
  * Per-branch progress. The `branchStatus` channel is a record keyed by branch key, and
  * `lastWriteWinsByKey` is sound there precisely because concurrent branches write
  * DISJOINT key domains — a branch only ever writes its own key.
+ *
+ * ── `attempts` is the ordering discriminator, not decoration ──
+ *
+ * Disjointness makes CONCURRENT writers commutative; it says nothing about the same key
+ * written twice at different supersteps, which is what a branch's own lifecycle is
+ * (`running` -> `succeeded`, or `running` -> `failed`). `lastWriteWinsByKey` resolves that
+ * pair by canonical order rather than by recency — there is no "last" in a join — so a
+ * transition is only expressible when the LATER value is the canonical-order maximum.
+ * Canonical form sorts keys, so `attempts` is compared first, and it is therefore the
+ * field that has to carry the order: a writer records the attempts a branch has
+ * COMPLETED, which is `0` while it is merely running and at least `1` once it has settled
+ * either way. A `running` record claiming an attempt it has not finished would outrank the
+ * outcome that follows it and the branch would appear to be running forever.
  */
 export const BranchStatusSchema = z.object({
   state: BranchStateSchema,

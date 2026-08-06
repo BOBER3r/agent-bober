@@ -123,6 +123,11 @@ describe(".gitignore / .bober runtime paths (sc-4-8)", () => {
    * Sprint 8 (sc-8-11) ships `FsCheckpointer`, so `.bober/checkpoints` joins them — the
    * FUTURE list that held it is now empty and the entry moved down, which is exactly the
    * transition the rule describes.
+   *
+   * Sprint 9 ships `writeFailureArtifact` (`.bober/failures`) and sprint 10 ships
+   * `writeDigest` (`.bober/handoff`), so both make the same move. Note the SINGULAR
+   * `.bober/handoff` — the plural `.bober/handoffs` is the skill-driven pipeline's
+   * version-controlled `ContextHandoff` store and stays tracked.
    */
   const WRITTEN_RUNTIME_DIRS = [
     ".bober/scratch",
@@ -131,6 +136,8 @@ describe(".gitignore / .bober runtime paths (sc-4-8)", () => {
     ".bober/archive",
     ".bober/logs",
     ".bober/checkpoints",
+    ".bober/failures",
+    ".bober/handoff",
   ];
 
   async function exists(path: string): Promise<boolean> {
