@@ -646,3 +646,75 @@ Scope: docs + npm metadata only — no src/ or *.test.ts changes, no git tags. V
 8. [completed] Docs (selection + both install paths + parity table) + deferred live-smoke + broken-link fix + final check -- PASSED iter 1 (7137bf0); suite 5083/0-fail byte-identical. feat-6 COMPLETE
 
 Decisions: auto-detect binary (tokensave wins if both) + optional graph.backend override; FULL parity incl. onboard; cr-graph installed locally -> capture real fixtures; fixtures now, live smoke deferred. Key asset: agent-bober's graph layer was ORIGINALLY built against code-review-graph (pre-remap catalog at 6ed3f77~1), so this partly RESTORES the original adapter. Only src/graph/client.ts carries tokensave tool names today; transport is already generic MCP-over-stdio.
+
+## Plan: Opus-5 Adaptation: Tiered Prompts, Deterministic Pre-Gate, Stronger Completion Gate
+- Spec: spec-20260804-opus5-adaptation
+- Created: 2026-08-04
+- Sprints: 8
+- Status: planned
+- Baseline to beat: median sprint 18.2 min, p90 46.5 min, 91% first-iteration pass (197 recorded sprints)
+
+### Sprint Breakdown
+1. [proposed] Current model aliases, per-role effort, and stage-level timing telemetry -- refresh SHORTHAND_MAP to Claude 5, set effort defaults, make per-stage latency measurable
+2. [proposed] Prompt-tier resolution and tier-aware agent loader -- model->tier table + promptTier override, byte-identical output until variants exist
+3. [proposed] Deterministic strategy runner (library and CLI) -- run typecheck/lint/test/build as a plain script, no pipeline wiring yet
+4. [proposed] Wire the strategy runner as a short-circuiting pre-gate -- required failure marks needs-rework without spawning the evaluator LLM
+5. [proposed] Completion gate: fail deferred and partial work -- finish-the-whole-task clause + completeness verdict; expected to raise retry rate
+6. [proposed] Lean prompt variants for generator, evaluator and curator -- ~89KB of the ~155KB per-sprint prompt load
+7. [proposed] Make the curator conditional on sprint size -- skip a full Opus subagent roundtrip on small sprints
+8. [proposed] Run the post-evaluator review chain concurrently -- two concurrent tracks, fail-closed security semantics unchanged
+
+## Plan: Prompt Graph Engineering (PGE) rework of the execution layer
+- Spec: spec-20260805-pge-graph-engineering
+- Architecture: arch-20260805-pge-graph-engineering (ADR-1..8)
+- Branch: bober/pge-graph-engineering (UNMERGED)
+- Created: 2026-08-05
+- Sprints: 14
+- Status: completed (14/14 sprints) — PLAN COMPLETE
+- Suite: 5083 -> 6851, zero failures. pipeline.engine still defaults to 'ts'.
+
+### Outcome (the point of the plan, decided by a gate rather than by opinion)
+Sprint 13 pointed EngineConformanceHarness at the two REAL engines — TsPipelineEngine vs
+PgeEngine, a fresh mkdtemp root each, frozen clock, fixed runId, 9 of 11 fields non-empty on
+both sides. It reported `equivalent: false`, with exactly four divergent fields: history,
+audits, contracts, pipelineResult. Conformance did NOT converge, so ADR-8's pre-authorised
+end state applies: **PGE is permanently opt-in, the default stays 'ts', TsPipelineEngine is
+retained permanently as the oracle, and nothing was deleted.** Reached honestly — no volatile
+key was added to shorten the divergence set, and the set is pinned so that a NEW divergence and
+a SILENTLY FIXED one both fail conformance.engines.test.ts.
+
+MOST CONSEQUENTIAL FINDING: under the shipped autopilot config a pge run DOES NOT COMMIT. The
+`commit` node carries a git effect, autopilot's gate mechanism is `noop`, and a noop mechanism
+grants nothing, so the node is refused FAIL_CLOSED before its body runs (sc-12-9 as designed).
+The run still reports success: true, because PipelineResult has no error channel. Flipping the
+default requires that error channel first, not merely green conformance.
+
+### Sprint Breakdown
+1-3.  [completed] Layer A: serializable Zod topology artifact, 32-code validator, `pge` CLI (7d33553)
+4-6.  [completed] Engine seam, OverallState split, runtime substrate (8e50f20)
+7-8.  [completed] Superstep interpreter, checkpointer, cross-process resume, HITL (0e423ea)
+9-10. [completed] Partial-failure resilience + the Engram context layer (e757a87)
+11-12.[completed] Node library: research/plan regions, sprint subgraph, gated commit (9f11bcb)
+      + (8cd2066) fixed the two committed-artifact defects that made the graph unrunnable
+13.   [completed] PgeEngine behind the seam, 11-field conformance, offline trace replay, OTLP (c2ab8c5)
+      10/11 required criteria met; sc-13-2 resolved via stopConditions[3] as above. sc-13-1 was RED
+      on arrival: 8 node impls the artifact declares existed nowhere in the repo (context_compact,
+      critique, evaluate_global, finalize, gate_eval_in, rework_route, route_after_eval, synthesize)
+      — implemented in src/pge/nodes/root.ts, artifact untouched. sc-13-8 required production work:
+      the interpreter never recorded span.model, so the frontier-tier assertion would have been
+      vacuously true. Suite 6553 -> 6645.
+14.   [completed] Golden dataset, blocking CI gates, node docs with drift enforcement, disposition (01632cb)
+      All 11 required criteria met. One blocking pge-graph-gate job on the EXISTING ci.yml, no
+      continue-on-error. 41 golden cases — but only 4 are enforcement="replay" and actually EXECUTED;
+      37 are enforcement="integrity" and make no runtime claim. Erosion blocked by
+      GOLDEN_MIN_REPLAY_CASES=4 (verified: relabelling one drops to 3 and exits 2). docs/pge-graph.md
+      documents all 44 nodes, 13 gates and 8 loop bounds, cross-checked field-by-field. Suite 6645 -> 6851.
+
+### Follow-ups
+- **Merge bober/pge-graph-engineering** (it is cut from bober/graph-backend-choice, also unmerged).
+- Add an error channel to PipelineResult before ever flipping the default engine — until then a
+  fail-closed refusal is reported as success.
+- Build `golden capture <runId>` to convert authored integrity cases into executed replay cases,
+  then raise the pass-rate threshold stepwise (80 -> 90 -> 95).
+- Coverage gaps in the dataset: gate_eval_in, gate_plan_in, gate_sprint_in, gate_sprint_out have no case.
+- `npm run update-all`.
