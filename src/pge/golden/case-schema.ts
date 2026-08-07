@@ -124,7 +124,7 @@ export type GoldenEnforcement = (typeof GOLDEN_ENFORCEMENTS)[number];
  * it must rise when the replay set grows, and `dataset.test.ts` asserts the committed count
  * against it so the two cannot drift silently.
  */
-export const GOLDEN_MIN_REPLAY_CASES = 4;
+export const GOLDEN_MIN_REPLAY_CASES = 5;
 
 /** Every file under `.bober/golden/` is one case, named for its `caseId`. */
 export const GOLDEN_CASE_FILE_EXTENSION = ".json";

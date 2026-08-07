@@ -4,9 +4,11 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { PlanSpec } from "../../contracts/spec.js";
+import { saveSpec } from "../../state/plan-state.js";
 import type { PgeRegistriesInput } from "../engine/pge-engine.js";
 import type { CodingBindings } from "../registry/index.js";
-import { wholeGraphBindings } from "../engine/__fixtures__/whole-graph.js";
+import { goldenPlanSpec, wholeGraphBindings } from "../engine/__fixtures__/whole-graph.js";
 import { GOLDEN_MIN_REPLAY_CASES, parseGoldenCase } from "./case-schema.js";
 import type { GoldenCase } from "./case-schema.js";
 import { captureGoldenCase, goldenCaseJson } from "./capture.js";
@@ -26,14 +28,19 @@ import { captureGoldenCase, goldenCaseJson } from "./capture.js";
  * statement "the artifacts these runs produce have changed, and here is how". A recapture
  * pushed without reading the diff defeats the gate as surely as deleting it.
  *
- * ── Why these four scenarios ──
+ * ── Why these scenarios ──
  *
  * Each is a DIFFERENT traversal of the committed graph, driven only through the
  * collaborator seam the artifact already declares — no node is overridden and no topology
- * is edited. Between them they exercise the sprint region's pass and rework branches, the
- * research reflexion cycle going round once, and the same cycle hitting the `maxIterations`
- * its topology declares and taking its `onExhausted` edge. A dataset of four copies of one
- * happy path would clear the same threshold while enforcing far less.
+ * is edited. Between them they exercise the sprint region's pass and failure branches, the
+ * research reflexion cycle going round once, the same cycle hitting the `maxIterations` its
+ * topology declares and taking its `onExhausted` edge, and the plan region's clarification
+ * gate. A dataset of five copies of one happy path would clear the same threshold while
+ * enforcing far less.
+ *
+ * WHICH NODES these traversals actually reach is not left to inspection: `coverage.test.ts`
+ * executes the committed cases and pins the executed set against the artifact, so a node
+ * that stops being covered fails a test rather than going quietly unexercised.
  */
 
 /**
@@ -65,6 +72,56 @@ interface Scenario {
   readonly featureRequest: string;
   /** A FRESH factory per capture: the counting scenarios below are stateful. */
   readonly makeBindings: () => BindingsFactory;
+}
+
+/**
+ * The planner asks a clarifying question for the first `rounds` drafts, then settles.
+ *
+ * `rounds` is deliberately SMALL. Nothing answers the question — under the autopilot config
+ * every golden run executes with, the `post-plan` checkpoint resolves to the `noop`
+ * mechanism and no resume message carrying answers is ever produced — so `plan_clarify`
+ * folds nothing in and the planner is simply asked again. With `rounds: 1` the second draft
+ * settles and the run completes, which is what puts `plan_clarify` on an executed path.
+ *
+ * A planner that NEVER settles cannot be captured today, and the reason is worth stating
+ * because it is a defect and not a limitation of this fixture: exhausting `planClarifyRounds`
+ * reaches `graceful_failure` with `state.spec` still null, and `commit.finalize` throws
+ * `FinalizeWithoutSpecError` rather than returning a failed `PipelineResult`. Recorded in
+ * docs/pge-graph.md. When that is fixed, a `clarifyingBindings(99)` scenario pins the bound.
+ *
+ * The spec is DERIVED from `goldenPlanSpec()` rather than rebuilt, so the clarifying case
+ * and the four settled cases disagree about exactly one thing: the open question.
+ */
+function clarifyingBindings(rounds: number): BindingsFactory {
+  let asked = 0;
+  return (input) => {
+    const base = wholeGraphBindings(input);
+    return {
+      ...base,
+      planner: async (...args) => {
+        asked += 1;
+        if (asked > rounds) return base.planner(...args);
+        const spec: PlanSpec = {
+          ...goldenPlanSpec(),
+          status: "needs-clarification",
+          clarificationQuestions: [
+            {
+              questionId: "q-retry-scope",
+              category: "scope",
+              question: "Should the retry block apply to every provider or only the default one?",
+              ambiguityWeight: 5,
+            },
+          ],
+          resolvedClarifications: [],
+        };
+        // The shipped planner persists whatever draft it produced, clarifying or not, and
+        // `.bober/specs/` is a compared artifact — so a fake that skipped this would report
+        // a divergence created by the fixture.
+        await saveSpec(input.projectRoot, spec);
+        return { kind: "needs-clarification" as const, spec };
+      },
+    };
+  };
 }
 
 /** `critique` answers with a finding for the first `rounds` calls, then accepts. */
@@ -128,6 +185,17 @@ const SCENARIOS: readonly Scenario[] = [
       "The count of `research.explore` calls in the pins is the bound the committed artifact declares for the researchReflexions counter. Raising or lowering that bound changes this case, which is exactly the drift a committed dataset exists to catch.",
     featureRequest: "Document the reflexion loop and its bound.",
     makeBindings: () => critiquingBindings(99),
+  },
+  {
+    caseId: "replay-plan-clarification-round",
+    title: "a plan that needs clarification goes round the clarify gate once",
+    intent:
+      "Pin the clarification cycle: a first draft carrying an open question must reach plan_clarify, re-draft, and then settle — so the gate is on the executed path rather than merely declared in the artifact.",
+    tags: ["replay", "region:plan", "loop:planClarifyRounds", "hitl"],
+    notes:
+      "The only committed case that executes plan_clarify, and the case that distinguishes the two ways a HITL gate behaves under an autopilot noop mechanism: plan_clarify declares NO gated effect, so noop lets it proceed, whereas the commit node declares a git effect and is refused outright (the sprint-13 divergence). A change that made noop grant gated effects would turn the commit refusal green and leave this case untouched, which is why both are pinned. NOTE the bound is NOT driven here: a planner that never stops asking exhausts planClarifyRounds and reaches graceful_failure with state.spec still null, which makes commit.finalize throw FinalizeWithoutSpecError instead of returning a failed PipelineResult. That path is a defect, recorded in docs/pge-graph.md, and it cannot be captured until it is fixed.",
+    featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
+    makeBindings: () => clarifyingBindings(1),
   },
 ];
 

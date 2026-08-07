@@ -466,6 +466,42 @@ the dataset check itself, so the only ways to make a failing case green are to f
 runtime or to re-capture it — and a re-capture is a visible diff that says which artifacts
 changed.
 
+### How much of the graph the executed cases reach
+
+The case count is the wrong number to judge this dataset by: five cases that walk the same
+happy path enforce one path. The number that matters is **node coverage**, and it is
+measured rather than asserted — `src/pge/golden/coverage.test.ts` executes every committed
+`replay` case, reads the node ids out of the resulting span files, and pins the executed
+set against the committed artifact.
+
+**39 of the 44 declared nodes execute.** The five that do not are pinned in
+`NEVER_EXECUTED`, and every one is a **structural block** rather than a missing scenario —
+no set of bindings can reach them:
+
+| node | why no case reaches it |
+| --- | --- |
+| `finalize` | its only edge in is `commit -> finalize`, and `commit` is refused FAIL_CLOSED under the autopilot `noop` mechanism — the sprint-13 divergence. Covering it needs a durable mechanism, and the executor pins one config so a case reproduces everywhere. |
+| `context_compact` | its only edge in is `supervisor -> context_compact` under the `compact` label, which the shipped supervisor never selects: `supervisor.reads` omits `messages`, so the decision would read a channel the artifact does not authorise. Recorded as artifact drift in `nodes/supervisor.ts`. |
+| `critique`, `rework_route`, `synthesize` | they sit behind `route_after_eval`'s `rework` and `partial` labels, which need `evaluate_global` to be reached with a non-pass verdict. Every failing path available through the collaborator seam settles earlier — the evaluation-fails case exhausts `fanoutRetries` at `reduce_sprints` and reaches `graceful_failure` without ever reaching the global evaluation. |
+
+The pin is **two-directional**, like the conformance divergence set: a node that stops being
+executed fails, and a node that *starts* being executed fails too — because each entry above
+is a claim about why something is unreachable, and a node leaving the list means one of
+those claims stopped being true and the explanation should be deleted deliberately.
+
+### A defect this coverage work surfaced
+
+A planner that keeps asking for clarification exhausts `planClarifyRounds` and reaches
+`graceful_failure` **with `state.spec` still null**, and `commit.finalize` then throws
+`FinalizeWithoutSpecError` instead of returning a failed `PipelineResult`. An unattended run
+whose plan never settles therefore crashes the engine rather than reporting a failure.
+
+It is not captured as a golden case precisely because it throws — `captureGoldenCase` cannot
+record a run that never produces a result. The committed
+`replay-plan-clarification-round` case drives one clarification round and settles, which is
+what puts `plan_clarify` on an executed path; a `clarifyingBindings(99)` scenario pinning the
+bound becomes possible once the terminal path returns a result instead of throwing.
+
 **A permanently-green golden dataset is not evidence of generation quality.** This is a
 limitation of the method, not a gap to be closed later. The runtime's own replay module
 (`src/pge/runtime/replay.ts`) states it exactly:
@@ -558,7 +594,8 @@ which is worse than no gate because it reads as coverage.
 The threshold arithmetic is pinned by unit tests at 79, 80 and 81 percent against a
 threshold of 80 — the comparison is strictly greater than, so 80 against 80 fails — and it
 is applied to the executed cases, with the log stating that denominator explicitly so a
-pass rate over four cases can never read as a pass rate over forty-one. The decision and
+pass rate over the executed cases can never read as a pass rate over the whole dataset —
+the runner prints both counts on every run. The decision and
 both of its branches live in `src/pge/golden/gate.ts`, under test in
 `src/pge/golden/gate.test.ts` and `src/pge/golden/executor.test.ts`, deliberately not in the
 `.mjs` script: a script is invisible to `tsc`, to ESLint and to Vitest, so a rule
