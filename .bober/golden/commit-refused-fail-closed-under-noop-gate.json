@@ -1,0 +1,91 @@
+{
+  "formatVersion": 1,
+  "caseId": "commit-refused-fail-closed-under-noop-gate",
+  "title": "The commit node is refused fail-closed under the shipped autopilot gate",
+  "intent": "Pin sprint 13's most consequential finding: under autopilot the gate mechanism is noop, noop grants nothing, the git-effect node is refused FAIL_CLOSED, and the run STILL reports success because PipelineResult has no error channel.",
+  "tags": [
+    "commit",
+    "fail-closed",
+    "hitl:end-of-pipeline",
+    "known-divergence"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "hitl_commit",
+    "config": {
+      "autopilot": true
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "documenter",
+      "branchKey": null,
+      "effectName": "documenter.summary",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 92,
+          "results": [
+            {
+              "evaluator": "agent",
+              "passed": true,
+              "score": 92,
+              "details": [
+                {
+                  "criterion": "sc-1-1",
+                  "passed": true,
+                  "message": "Covered by a unit test."
+                }
+              ]
+            }
+          ]
+        },
+        "projectRoot": "/tmp/golden-run",
+        "generatorResult": {
+          "success": true,
+          "notes": "Added the block schema and the typed error, plus tests for both branches.",
+          "filesChanged": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "turnsUsed": 7
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "sprintDocPath": "docs/sprints/sprint-1.md",
+        "relatedDocsUpdated": [
+          {
+            "path": "docs/config.md",
+            "reason": "documents the new block"
+          }
+        ],
+        "concerns": [],
+        "summary": "Documented the new config block and its typed error."
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "end-of-pipeline",
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "aborted"
+        }
+      ]
+    },
+    "notes": "git.commit is ABSENT from the pinned responses and that absence is the assertion: the interpreter refuses to dispatch a git-effect node without a recorded approval, and the noop mechanism records none. A future change that made autopilot commit would produce a git.commit call this case does not pin, and fail."
+  }
+}

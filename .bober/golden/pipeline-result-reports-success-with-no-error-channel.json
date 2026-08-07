@@ -1,0 +1,216 @@
+{
+  "formatVersion": 1,
+  "caseId": "pipeline-result-reports-success-with-no-error-channel",
+  "title": "PipelineResult reports success and cannot report why not",
+  "intent": "Pin sprint 13's structural gap: PipelineResult carries success, the two contract lists and the spec, and has NO error channel — so a run that was refused mid-way still returns success true.",
+  "tags": [
+    "pipeline-result",
+    "artifacts:pipelineResult",
+    "known-divergence",
+    "fail-closed"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "finalize",
+    "config": {
+      "autopilot": true
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "sprint_exit",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "sprint.exit",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "contract": {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "passed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "finalize",
+    "artifacts": {
+      "contracts": [
+        {
+          "ambiguityScore": 3,
+          "assumptions": [
+            "The parser already exists and only the new branch is added."
+          ],
+          "contractId": "spec-20260805-golden-fixture-1",
+          "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+          "dependsOn": [],
+          "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+          "estimatedDuration": "small",
+          "estimatedFiles": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+          "features": [
+            "feat-1"
+          ],
+          "generatorNotes": "Reuse the existing parser; do not fork it.",
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not change the public CLI surface."
+          ],
+          "outOfScope": [
+            "Performance tuning."
+          ],
+          "specId": "spec-20260805-golden-fixture",
+          "sprintNumber": 1,
+          "status": "passed",
+          "stopConditions": [
+            "Every success criterion has a passing test."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "Sprint 1's behaviour is covered by a unit test.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Fixture sprint 1"
+        }
+      ],
+      "pipelineResult": [
+        {
+          "completedSprints": [
+            {
+              "ambiguityScore": 3,
+              "assumptions": [
+                "The parser already exists and only the new branch is added."
+              ],
+              "contractId": "spec-20260805-golden-fixture-1",
+              "definitionOfDone": "The behaviour described by every success criterion is implemented, its tests are green, and the repository typechecks, lints and builds with no error.",
+              "dependsOn": [],
+              "description": "Sprint 1 of the fixture plan: implement the slice named in the title and prove it with tests.",
+              "estimatedDuration": "small",
+              "estimatedFiles": [
+                "src/fixture/sprint-1.ts",
+                "src/fixture/sprint-1.test.ts"
+              ],
+              "evaluatorNotes": "Verify the negative branch is driven, not only the happy path.",
+              "features": [
+                "feat-1"
+              ],
+              "generatorNotes": "Reuse the existing parser; do not fork it.",
+              "iterationHistory": [],
+              "nonGoals": [
+                "Do not change the public CLI surface."
+              ],
+              "outOfScope": [
+                "Performance tuning."
+              ],
+              "specId": "spec-20260805-golden-fixture",
+              "sprintNumber": 1,
+              "status": "passed",
+              "stopConditions": [
+                "Every success criterion has a passing test."
+              ],
+              "successCriteria": [
+                {
+                  "criterionId": "sc-1-1",
+                  "description": "Sprint 1's behaviour is covered by a unit test.",
+                  "required": true,
+                  "verificationMethod": "unit-test"
+                }
+              ],
+              "title": "Fixture sprint 1"
+            }
+          ],
+          "failedSprints": [],
+          "spec": {
+            "ambiguityScore": 3,
+            "assumptions": [
+              "The fixture repository is a TypeScript package with Vitest."
+            ],
+            "clarificationQuestions": [],
+            "constraints": [],
+            "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+            "features": [
+              {
+                "acceptanceCriteria": [
+                  "A malformed block produces a typed error rather than a crash."
+                ],
+                "dependencies": [],
+                "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+                "estimatedComplexity": "low",
+                "featureId": "feat-1",
+                "priority": "must-have",
+                "title": "Parse the new config block"
+              }
+            ],
+            "mode": "brownfield",
+            "nonFunctionalRequirements": [],
+            "outOfScope": [
+              "Migrating existing configs."
+            ],
+            "resolvedClarifications": [],
+            "specId": "spec-20260805-golden-fixture",
+            "status": "ready",
+            "techStack": [
+              "typescript",
+              "vitest"
+            ],
+            "title": "Fixture plan for the golden dataset",
+            "version": 1
+          },
+          "success": true
+        }
+      ]
+    },
+    "notes": "success is true and there is nowhere in this value to say that the commit node was refused. duration and totalCost are stripped as volatile. Any future field that DID carry a failure reason would change this expectation, which is the point of pinning the shape."
+  }
+}

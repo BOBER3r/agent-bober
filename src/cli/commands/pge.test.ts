@@ -19,6 +19,7 @@ import { DIAGNOSTIC_CODES } from "../../pge/topology/validate.js";
 import { loadConfig } from "../../config/loader.js";
 import { resolveProviderModel } from "../../orchestrator/model-resolver.js";
 import {
+  DEFAULT_DOC_PATH,
   EXIT_FAILED,
   EXIT_OK,
   EXIT_USAGE,
@@ -825,6 +826,197 @@ describe("bober pge diff", () => {
   });
 });
 
+/**
+ * sc-14-5 — BOTH branches of the structural-diff rule the CI job gates on, driven here
+ * rather than inferred from the workflow file. A workflow step proves only that a
+ * command is spelled; these prove what the command decides.
+ *
+ * The passing branch is the FULL scenario the contract describes — a bump PLUS a
+ * changelog entry — and the changelog lives in `docs/pge-graph.md` (contract
+ * assumption 3), the same document `pge docs --check` reads. So the second branch also
+ * drives the doc gate against the changed head, which is what makes "plus a changelog
+ * entry" a gated condition rather than narration: a head that added a node and wrote a
+ * changelog entry but did NOT document the node fails, and that is asserted too.
+ */
+describe("sc-14-5: a structural change needs a version bump", () => {
+  /** The head artifact: the shipped graph plus one gate. Non-empty diff by construction. */
+  function headWithExtraGate(version?: string): TopologySpec {
+    const head = clone(CODING_GRAPH);
+    head.nodes.push(extraGate("extra_gate"));
+    head.edges.push({ id: "e-extra", from: "supervisor", to: "extra_gate", kind: "normal" });
+    if (version !== undefined) head.graphVersion = version;
+    return reseal(head);
+  }
+
+  /**
+   * A document as `docs/pge-graph.md` carries it: a `pge:nodes` region listing the node
+   * ids, and a changelog section OUTSIDE the markers — inside them every backticked
+   * token would be read as a claimed node id.
+   */
+  function docWithChangelog(ids: readonly string[], version: string): string {
+    return [
+      docFor(ids),
+      "## Changelog",
+      "",
+      `### ${version}`,
+      "",
+      "- Added the extra gate and its edge from the supervisor.",
+      "",
+    ].join("\n");
+  }
+
+  it("FAILS when the topology changed and graphVersion did not move", async () => {
+    const a = await writeArtifact("base", CODING_GRAPH);
+    const b = await writeArtifact("head", headWithExtraGate());
+
+    expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_FAILED);
+    const diff = JSON.parse(out[0]) as TopologyDiff;
+    expect(diff.empty).toBe(false);
+    expect(diff.nodesAdded).toEqual(["extra_gate"]);
+    expect(diff.graphVersion.from).toBe(CODING_GRAPH.graphVersion);
+    expect(diff.graphVersion.to).toBe(CODING_GRAPH.graphVersion);
+    expect(diff.graphVersion.bumped).toBe(false);
+    expect(err.join("\n")).toContain("graphVersion did not move forward");
+  });
+
+  it("PASSES on the same change once graphVersion moved forward and the changelog records it", async () => {
+    const version = bumpedVersion();
+    const a = await writeArtifact("base", CODING_GRAPH);
+    const head = headWithExtraGate(version);
+    const b = await writeArtifact("head", head);
+
+    // Branch two of the diff rule.
+    expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_OK);
+    const diff = JSON.parse(out[0]) as TopologyDiff;
+    expect(diff.empty).toBe(false);
+    expect(diff.nodesAdded).toEqual(["extra_gate"]);
+    expect(diff.graphVersion.bumped).toBe(true);
+    expect(err).toEqual([]);
+
+    // …and the accompanying document: the new node documented, the changelog naming the
+    // new version. `pge docs` is what keeps that document honest.
+    const doc = join(root, "pge-graph.md");
+    const text = docWithChangelog(head.nodes.map((n) => n.id), version);
+    await writeFile(doc, text, "utf8");
+    expect(text).toContain(`### ${version}`);
+
+    out = [];
+    err = [];
+    expect(await runPgeDocs(root, { file: b, doc }, io)).toBe(EXIT_OK);
+    expect(err).toEqual([]);
+  });
+
+  /**
+   * NEGATIVE CONTROL for the doc half of the passing branch: bumping the version and
+   * writing a changelog entry is not enough if the change itself went undocumented.
+   */
+  it("still fails the doc gate when the bumped change was not documented", async () => {
+    const version = bumpedVersion();
+    const head = headWithExtraGate(version);
+    const b = await writeArtifact("head", head);
+
+    const doc = join(root, "pge-graph.md");
+    await writeFile(doc, docWithChangelog(CODING_GRAPH.nodes.map((n) => n.id), version), "utf8");
+
+    err = [];
+    expect(await runPgeDocs(root, { file: b, doc }, io)).toBe(EXIT_FAILED);
+    expect(err.join("\n")).toContain('node "extra_gate" is declared in the topology');
+  });
+
+  it("treats a version DOWNGRADE as no bump at all", async () => {
+    const a = await writeArtifact("base", CODING_GRAPH);
+    const [major, minor] = CODING_GRAPH.graphVersion.split(".").map((p) => Number.parseInt(p, 10));
+    const head = headWithExtraGate(`${major}.${Math.max(0, minor - 1)}.0`);
+    const b = await writeArtifact("head", head);
+
+    expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_FAILED);
+    expect((JSON.parse(out[0]) as TopologyDiff).graphVersion.bumped).toBe(false);
+  });
+});
+
+/**
+ * sc-14-6 — the diff gate is STRUCTURAL, so a base artifact naming a `promptRef` (or a
+ * `schemaRef`) that resolves nowhere on head does not produce a spurious failure.
+ *
+ * There is no `--mode` flag on `pge diff` and there does not need to be: `runPgeDiff`
+ * loads both sides through `TopologySpecSchema` alone and never calls `validateTopology`,
+ * so refs are COMPARED, never RESOLVED. The first test proves both halves of that in one
+ * run — the same file that `validate --mode full` rejects for an unresolvable ref diffs
+ * clean — which is stronger than asserting the diff passes and taking the ref's
+ * unresolvability on trust.
+ */
+describe("sc-14-6: the diff gate is structural", () => {
+  const UNKNOWN_PROMPT_FIXTURE = join(FIXTURE_DIR, "UnknownPromptRef.json");
+
+  it("does not fail a base artifact whose promptRef resolves nowhere", async () => {
+    await seedPromptStore();
+
+    // 1. The ref really is unresolvable — full-mode validation says so out loud.
+    expect(await runPgeValidate(root, { file: UNKNOWN_PROMPT_FIXTURE, mode: "full" }, io)).toBe(
+      EXIT_FAILED,
+    );
+    expect(err.join("\n")).toContain("UnknownPromptRef");
+
+    // 2. The diff gate still passes it, because it never resolves the ref.
+    out = [];
+    err = [];
+    const head = join(root, "head.json");
+    await writeFile(head, await readFile(UNKNOWN_PROMPT_FIXTURE, "utf8"), "utf8");
+
+    expect(
+      await runPgeDiff(root, { a: UNKNOWN_PROMPT_FIXTURE, b: head, requireVersionBump: true }, io),
+    ).toBe(EXIT_OK);
+    const diff = JSON.parse(out[0]) as TopologyDiff;
+    expect(diff.empty).toBe(true);
+    expect(err).toEqual([]);
+    // Not one word about the ref: a structural diff has no opinion on resolvability.
+    expect(out.join("\n")).not.toContain("UnknownPromptRef");
+  });
+
+  it("does not fail when head carries the unresolvable ref forward alongside a bumped change", async () => {
+    const base = TopologySpecSchema.parse(
+      JSON.parse(await readFile(UNKNOWN_PROMPT_FIXTURE, "utf8")) as unknown,
+    );
+    const unresolvable = base.nodes.find((n) => n.promptRef === "planner/absent");
+    expect(unresolvable, "fixture drift: no node with promptRef planner/absent").toBeDefined();
+
+    const a = await writeArtifact("base-unknown-ref", base);
+    const head = clone(base);
+    head.nodes.push(extraGate("extra_gate"));
+    head.edges.push({ id: "e-extra", from: base.entry, to: "extra_gate", kind: "normal" });
+    head.graphVersion = bumpedVersion(base.graphVersion);
+    const b = await writeArtifact("head-unknown-ref", reseal(head));
+
+    expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_OK);
+    const diff = JSON.parse(out[0]) as TopologyDiff;
+    // The unresolvable ref is untouched on both sides, so it contributes nothing.
+    expect(diff.nodesAdded).toEqual(["extra_gate"]);
+    expect(diff.nodesChanged).toEqual([]);
+    expect(err).toEqual([]);
+  });
+
+  /**
+   * The complement, so "structural mode tolerates refs" is not mistaken for "the gate
+   * is blind to refs": CHANGING a ref is a real structural change and still needs a bump.
+   */
+  it("does fail when head CHANGES the ref without a version bump", async () => {
+    const base = TopologySpecSchema.parse(
+      JSON.parse(await readFile(UNKNOWN_PROMPT_FIXTURE, "utf8")) as unknown,
+    );
+    const a = await writeArtifact("base-unknown-ref", base);
+    const head = clone(base);
+    const node = head.nodes.find((n) => n.promptRef === "planner/absent");
+    if (!node) throw new Error("fixture drift: no node with promptRef planner/absent");
+    node.promptRef = "planner/draft";
+    const b = await writeArtifact("head-resolved-ref", reseal(head));
+
+    expect(await runPgeDiff(root, { a, b, requireVersionBump: true }, io)).toBe(EXIT_FAILED);
+    const diff = JSON.parse(out[0]) as TopologyDiff;
+    expect(diff.nodesChanged).toEqual([{ id: node.id, fields: ["promptRef"] }]);
+    expect(err.join("\n")).toContain("graphVersion did not move forward");
+  });
+});
+
 describe("bober pge docs", () => {
   it("passes when the document names exactly the declared nodes", async () => {
     await runPgeDump(root, {}, io);
@@ -864,6 +1056,95 @@ describe("bober pge docs", () => {
     await runPgeDump(root, {}, io);
     expect(await runPgeDocs(root, { doc: join(root, "absent.md") }, io)).toBe(EXIT_USAGE);
     expect(err.join("\n")).toContain("Cannot read documentation file");
+  });
+});
+
+/**
+ * sc-14-4 — `bober pge docs --check`, the form the blocking CI job runs.
+ *
+ * The flag SELECTS THE DOCUMENT (`docs/pge-graph.md` under the project root); it is not
+ * a mode switch, because `runPgeDocs` never wrote anything and so has no write mode to
+ * switch off. What makes it more than a name is that both of its failing branches are
+ * reachable and asserted here: drift exits EXIT_FAILED, and an ABSENT default document
+ * exits EXIT_USAGE rather than passing a check that never happened. A flag whose
+ * failing branch no test drives is the decorative gate this sprint exists to prevent.
+ */
+describe("bober pge docs --check", () => {
+  /** Write `<root>/docs/pge-graph.md`, the document `--check` resolves. */
+  async function writeDefaultDoc(ids: readonly string[]): Promise<string> {
+    const dir = join(root, "docs");
+    await mkdir(dir, { recursive: true });
+    const path = join(dir, "pge-graph.md");
+    await writeFile(path, docFor(ids), "utf8");
+    return path;
+  }
+
+  it("checks docs/pge-graph.md under the project root and passes when it is complete", async () => {
+    await runPgeDump(root, {}, io);
+    const path = await writeDefaultDoc(CODING_GRAPH.nodes.map((n) => n.id));
+
+    out = [];
+    err = [];
+    expect(await runPgeDocs(root, { check: true }, io)).toBe(EXIT_OK);
+    expect(err).toEqual([]);
+    // The path is named in the output, so a check of the wrong file cannot look like a
+    // check of the right one.
+    expect(out[0]).toContain(path);
+    expect(out[0]).toContain(`${CODING_GRAPH.nodes.length} nodes documented`);
+  });
+
+  /** NEGATIVE CONTROL — the flag's failing branch, driven. */
+  it("exits non-zero when a declared node is missing from the default document", async () => {
+    await runPgeDump(root, {}, io);
+    await writeDefaultDoc(CODING_GRAPH.nodes.map((n) => n.id).filter((id) => id !== "supervisor"));
+
+    err = [];
+    expect(await runPgeDocs(root, { check: true }, io)).toBe(EXIT_FAILED);
+    expect(err.join("\n")).toContain('node "supervisor" is declared in the topology');
+  });
+
+  /** NEGATIVE CONTROL — drift in the other direction. */
+  it("exits non-zero when the default document names a node that does not exist", async () => {
+    await runPgeDump(root, {}, io);
+    await writeDefaultDoc([...CODING_GRAPH.nodes.map((n) => n.id), "ghost_node"]);
+
+    err = [];
+    expect(await runPgeDocs(root, { check: true }, io)).toBe(EXIT_FAILED);
+    expect(err.join("\n")).toContain('"ghost_node" is documented');
+  });
+
+  /** NEGATIVE CONTROL — an absent document is never a vacuous pass. */
+  it("exits non-zero when docs/pge-graph.md does not exist", async () => {
+    await runPgeDump(root, {}, io);
+    err = [];
+    expect(await runPgeDocs(root, { check: true }, io)).toBe(EXIT_USAGE);
+    expect(err.join("\n")).toContain("Cannot read documentation file");
+    expect(err.join("\n")).toContain(join("docs", "pge-graph.md"));
+  });
+
+  it("refuses when neither a document path nor --check is given", async () => {
+    await runPgeDump(root, {}, io);
+    await writeDefaultDoc(CODING_GRAPH.nodes.map((n) => n.id));
+
+    err = [];
+    // The relaxed arity of `docs [doc]` must not turn "no document named" into a pass:
+    // the default document exists and is correct here, and this still refuses.
+    expect(await runPgeDocs(root, {}, io)).toBe(EXIT_USAGE);
+    expect(err.join("\n")).toContain("needs a document");
+  });
+
+  it("still honours an explicit path, which wins over the default", async () => {
+    await runPgeDump(root, {}, io);
+    // The default document is WRONG; the explicit one is right. The explicit path wins,
+    // which is what makes `--check` a document selector rather than a global mode.
+    await writeDefaultDoc(["ghost_node"]);
+    const explicit = join(root, "explicit.md");
+    await writeFile(explicit, docFor(CODING_GRAPH.nodes.map((n) => n.id)), "utf8");
+
+    out = [];
+    err = [];
+    expect(await runPgeDocs(root, { doc: explicit, check: true }, io)).toBe(EXIT_OK);
+    expect(out[0]).toContain(explicit);
   });
 });
 
@@ -1063,6 +1344,21 @@ describe("registerPgeCommand", () => {
     const program = new Command();
     registerPgeCommand(program);
     expect(program.commands.map((c) => c.name())).toEqual(["pge"]);
+  });
+
+  it("exposes --check on docs and makes its positional optional", () => {
+    const docs = pgeCommand().commands.find((c) => c.name() === "docs");
+    expect(docs?.options.map((o) => o.long).sort()).toEqual(["--check", "--file", "--graph"]);
+    // `pge docs --check` must be a legal invocation: Commander would reject it before
+    // the verb ran if the positional were still required.
+    const positional = docs?.registeredArguments ?? [];
+    expect(positional).toHaveLength(1);
+    expect(positional[0]?.name()).toBe("doc");
+    expect(positional[0]?.required).toBe(false);
+  });
+
+  it("points --check at docs/pge-graph.md, the path the CI job documents", () => {
+    expect(DEFAULT_DOC_PATH).toBe(join("docs", "pge-graph.md"));
   });
 
   it("exposes --check on dump and --mode on validate", () => {

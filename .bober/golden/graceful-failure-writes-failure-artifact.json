@@ -1,0 +1,44 @@
+{
+  "formatVersion": 1,
+  "caseId": "graceful-failure-writes-failure-artifact",
+  "title": "graceful_failure records why the run stopped",
+  "intent": "Pin the failure writer's request: the artifact names the node that refused and the reason, so a stopped run is diagnosable from disk.",
+  "tags": [
+    "graceful-failure",
+    "diagnostics"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "graceful_failure"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "gate_syntax refused: the generated file does not parse",
+          "node": "gate_syntax",
+          "runId": "golden-run",
+          "detail": "The run stopped at gate_syntax: gate_syntax refused: the generated file does not parse."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {},
+    "notes": ".bober/failures/ is not one of the eleven conformance fields, so the artifact map is empty and the pinned REQUEST carries the assertion. A failure writer called with an empty reason would fail this case."
+  }
+}

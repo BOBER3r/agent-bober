@@ -4,7 +4,7 @@
   "sprintNumber": 14,
   "title": "Golden dataset, blocking CI structural-diff and regression gates, node-level documentation with drift enforcement, and the recorded engine migration disposition",
   "description": "Close the loop that makes the whole design pay: an artifact nobody gates on is an artifact nobody maintains. Commit a curated dataset of 20 to 50 golden cases with pinned provider responses and expected artifacts. Add one blocking pull-request CI job that runs the graph regression suite against that dataset behind a minimum pass-rate threshold, and in the same job runs pge dump --check, pge validate --mode full, pge docs --check, pge diff --require-version-bump against the base-branch artifact, and pge audit-state followed by git diff --exit-code — none with continue-on-error, so a stale artifact, an undocumented node or an unversioned structural change cannot merge regardless of review attention. Write docs/pge-graph.md covering every node, edge, gate and loop bound, kept in sync by the drift checker. Finally record the migration disposition in writing: PgeEngine remains opt-in with 'ts' as default, TsPipelineEngine is retained permanently as the oracle, the dormant src/orchestrator/workflow/ subtree's retention or conditional retirement is decided against the stated criteria, and the divergence of bober sprint and bober_sprint from the full sprint cycle is either resolved or formally documented as a deliberate escape hatch.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260805-pge-graph-engineering-3",
     "sprint-spec-20260805-pge-graph-engineering-13"
@@ -123,7 +123,16 @@
     "scripts/"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260805-pge-graph-engineering-14-1",
+      "result": "pass",
+      "timestamp": "2026-08-07T00:14:08.407Z"
+    }
+  ],
   "createdAt": "2026-08-05T00:00:00Z",
-  "updatedAt": "2026-08-05T00:00:00Z"
+  "updatedAt": "2026-08-07T00:14:08.407Z",
+  "completedAt": "2026-08-07T00:14:08.407Z",
+  "completionNote": "All 11 required criteria met. 41 golden cases (bounds [20,50]) under .bober/golden/, counted by readdir. Blocking pge-graph-gate job added to the EXISTING ci.yml with needs:build-and-test and NO continue-on-error, running the regression runner plus dump --check, validate --mode full, docs --check, diff --require-version-bump and audit-state + staged git diff. pge docs was widened from <doc> to [doc] with a REAL --check flag defaulting to docs/pge-graph.md, not a decorative flag. IMPORTANT SCOPE CAVEAT, disclosed by the runner itself and documented: only 4 of the 41 cases are enforcement=replay and actually EXECUTED against the engine; the other 37 are enforcement=integrity and make NO runtime claim. Erosion is blocked by GOLDEN_MIN_REPLAY_CASES=4, verified by the orchestrator: relabelling one replay case to integrity drops to 3 and exits 2. Orchestrator fix post-agents: the CI audit step ran a bare git diff --exit-code while its own negative control staged first, so a PR DELETING state-audit.json would have regenerated it untracked and merged green; CI now stages before diffing and the ci-gate parser test and negative control were updated to the same command. Disposition recorded and test-enforced: pge permanently opt-in, default ts, TsPipelineEngine retained as oracle, dormant subtree (interpreter.ts + pure-sprint.ts only, 16 of 18 modules have production callers) RETAINED, bober sprint / bober_sprint documented as a deliberate escape hatch."
 }

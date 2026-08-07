@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { Command } from "commander";
 
 import { TopologySpecSchema } from "../../contracts/topology.js";
@@ -501,12 +502,35 @@ export async function runPgeDiff(
 
 // ── docs ────────────────────────────────────────────────────────────
 
+/**
+ * The document `--check` selects, relative to the project root.
+ *
+ * It is the ONE document the graph's node inventory lives in, so a CI step can be
+ * written without repeating the path and cannot silently check a different file.
+ */
+export const DEFAULT_DOC_PATH = join("docs", "pge-graph.md");
+
 export interface PgeDocsOptions {
   graphId?: string;
   /** Check this artifact instead of the committed one for `graphId`. */
   file?: string;
-  /** Markdown document whose `pge:nodes` block declares the documented node ids. */
-  doc: string;
+  /**
+   * Markdown document whose `pge:nodes` block declares the documented node ids.
+   * Optional ONLY when `check` is set, which supplies {@link DEFAULT_DOC_PATH}.
+   */
+  doc?: string;
+  /**
+   * Check {@link DEFAULT_DOC_PATH} under the project root.
+   *
+   * The flag is not decorative and is not a mode switch — `runPgeDocs` never wrote
+   * anything, so there is no write mode to switch off. What it does is SELECT THE
+   * DOCUMENT: with it the verb resolves the project's node document and fails closed on
+   * drift, without it a document path is mandatory. Both failing branches are real:
+   * `--check` on a drifted document exits {@link EXIT_FAILED}, and `--check` when the
+   * default document does not exist exits {@link EXIT_USAGE} rather than passing an
+   * empty check.
+   */
+  check?: boolean;
 }
 
 /**
@@ -520,30 +544,40 @@ export async function runPgeDocs(
   opts: PgeDocsOptions,
   io: PgeIo,
 ): Promise<number> {
+  // Resolved BEFORE the artifact is read so "you named no document" is never reported as
+  // a topology problem.
+  const doc = opts.doc ?? (opts.check === true ? join(projectRoot, DEFAULT_DOC_PATH) : undefined);
+  if (doc === undefined) {
+    io.err(
+      `bober pge docs needs a document: pass a path, or pass --check to check ${DEFAULT_DOC_PATH}.`,
+    );
+    return EXIT_USAGE;
+  }
+
   const loaded = await loadArtifactSpec(artifactPathFor(projectRoot, opts), io);
   if (!loaded.ok) return loaded.exit;
 
   let text: string;
   try {
-    text = await readFile(opts.doc, "utf8");
+    text = await readFile(doc, "utf8");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    io.err(`Cannot read documentation file ${opts.doc}: ${message}`);
+    io.err(`Cannot read documentation file ${doc}: ${message}`);
     return EXIT_USAGE;
   }
 
   const report = docDriftReport(loaded.spec, text);
   for (const id of report.missing) {
-    io.err(`error DocDrift: node "${id}" is declared in the topology but absent from ${opts.doc}.`);
+    io.err(`error DocDrift: node "${id}" is declared in the topology but absent from ${doc}.`);
   }
   for (const id of report.extra) {
-    io.err(`error DocDrift: "${id}" is documented in ${opts.doc} but is not a declared node.`);
+    io.err(`error DocDrift: "${id}" is documented in ${doc} but is not a declared node.`);
   }
   if (report.drift.length > 0) {
-    io.err(`${opts.doc}: ${report.drift.length} documentation drift(s).`);
+    io.err(`${doc}: ${report.drift.length} documentation drift(s).`);
     return EXIT_FAILED;
   }
-  io.out(`ok ${opts.doc} (${report.declared.length} nodes documented)`);
+  io.out(`ok ${doc} (${report.declared.length} nodes documented)`);
   return EXIT_OK;
 }
 
@@ -756,19 +790,26 @@ export function registerPgeCommand(program: Command): void {
       );
     });
 
+  // The positional is OPTIONAL only because `--check` supplies it. Commander would
+  // otherwise reject `pge docs --check` for a missing argument before the verb ran, and
+  // `runPgeDocs` returns EXIT_USAGE when neither is given, so the relaxed arity cannot
+  // turn "no document named" into a silent pass.
   pge
-    .command("docs <doc>")
+    .command("docs [doc]")
     .description("Check a markdown document's pge:nodes block against the committed topology")
     .option("--graph <id>", "Graph id whose committed artifact to check against", CODING_GRAPH_ID)
     .option("--file <path>", "Check against this artifact instead of the committed one")
-    .action(async (doc: string, cmdOpts: { graph?: string; file?: string }) => {
-      const io = processIo();
-      process.exitCode = await runPgeDocs(
-        await resolveRoot(),
-        { graphId: cmdOpts.graph, file: cmdOpts.file, doc },
-        io,
-      );
-    });
+    .option("--check", `Check ${DEFAULT_DOC_PATH} when no document path is given`)
+    .action(
+      async (doc: string | undefined, cmdOpts: { graph?: string; file?: string; check?: boolean }) => {
+        const io = processIo();
+        process.exitCode = await runPgeDocs(
+          await resolveRoot(),
+          { graphId: cmdOpts.graph, file: cmdOpts.file, doc, check: cmdOpts.check },
+          io,
+        );
+      },
+    );
 
   pge
     .command("audit-state")

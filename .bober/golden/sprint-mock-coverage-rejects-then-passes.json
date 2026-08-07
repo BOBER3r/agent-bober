@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "caseId": "sprint-mock-coverage-rejects-then-passes",
+  "title": "gate_mock_coverage rejects thin mocks and the second round passes",
+  "intent": "Pin one mockCurationRounds iteration: the gate's rejection text must reach the second curator.mocks call as rejection.",
+  "tags": [
+    "sprint",
+    "gate:gate_mock_coverage",
+    "loop:mockCurationRounds",
+    "region:sprint"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "sprint_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "sprint_curate_mocks",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "curator.mocks",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "projectRoot": "/tmp/golden-run",
+        "explanations": [],
+        "round": 1,
+        "rejection": null,
+        "promptRef": "curator/mocks",
+        "model": "light-model"
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "tests": [
+          {
+            "testId": "t-1",
+            "category": "happy-path",
+            "intent": "A valid block parses.",
+            "path": "src/fixture/sprint-1.test.ts"
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_curate_mocks",
+      "branchKey": "spec-20260805-golden-fixture-1",
+      "effectName": "curator.mocks",
+      "callIndex": 1,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "projectRoot": "/tmp/golden-run",
+        "explanations": [],
+        "round": 2,
+        "rejection": "No negative case: every criterion needs a failing branch as well as a passing one.",
+        "promptRef": "curator/mocks",
+        "model": "light-model"
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "tests": [
+          {
+            "testId": "t-1",
+            "category": "happy-path",
+            "intent": "A valid block parses.",
+            "path": "src/fixture/sprint-1.test.ts"
+          },
+          {
+            "testId": "t-2",
+            "category": "negative",
+            "intent": "A malformed block throws.",
+            "path": "src/fixture/sprint-1.test.ts"
+          }
+        ]
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "sprint_generate",
+    "artifacts": {},
+    "notes": "A gate that only ever passes is decorative; this case is the proof it can reject. The round number and the rejection text are both pinned, so a runtime that re-curated without telling the curator why would fail here."
+  }
+}

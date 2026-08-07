@@ -1,0 +1,127 @@
+{
+  "formatVersion": 1,
+  "caseId": "research-gate-out-refuses-empty-digest",
+  "title": "gate_research_out refuses a digest with no findings",
+  "intent": "Pin the exit gate of the research region: a digest that parses but carries no findings is refused and routed to graceful_failure.",
+  "tags": [
+    "research",
+    "gate:gate_research_out",
+    "refusal",
+    "region:research"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "research_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "research_reflect",
+      "branchKey": null,
+      "effectName": "research.reflect",
+      "callIndex": 0,
+      "request": {
+        "featureRequest": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "promptRef": "research/reflect",
+        "model": "light-model"
+      },
+      "response": {
+        "coreProblem": "Config parsing rejects the new block instead of validating it.",
+        "assumptions": [
+          "The block is optional and absent in every existing config."
+        ],
+        "unknowns": [
+          "Whether the block may appear more than once."
+        ],
+        "successLooksLike": "A malformed block yields a typed error naming the offending key."
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "critique": null,
+        "reflexionRound": 0
+      },
+      "response": {
+        "id": "research-20260805-empty",
+        "timestamp": "2026-08-05T10:00:00.000Z",
+        "questions": [
+          "Where is the config parsed today?",
+          "What happens to an unknown block?",
+          "Which tests cover the parser?",
+          "Is there a typed error class already?"
+        ],
+        "findings": "",
+        "sections": {
+          "architecture": "One parse entry point, called from the CLI and from the library surface.",
+          "patterns": "Zod schemas per block, composed at the top level.",
+          "conventions": "Typed errors extend ConfigError and carry the offending key.",
+          "risks": "Silently dropping unknown blocks means a typo is invisible today."
+        },
+        "filesExplored": [],
+        "questionsAnswered": 0
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 0,
+      "request": {
+        "researchId": "research-20260805-empty",
+        "reflection": {
+          "coreProblem": "Config parsing rejects the new block instead of validating it.",
+          "assumptions": [
+            "The block is optional and absent in every existing config."
+          ],
+          "unknowns": [
+            "Whether the block may appear more than once."
+          ],
+          "successLooksLike": "A malformed block yields a typed error naming the offending key."
+        },
+        "questions": [],
+        "findings": "",
+        "questionsAnswered": 0,
+        "reflexionRound": 0,
+        "promptRef": "research/critique",
+        "model": "light-model"
+      },
+      "response": {
+        "critique": null
+      }
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "gate_research_out refused the digest: findings is empty",
+          "node": "gate_research_out",
+          "runId": "golden-run",
+          "detail": "The run stopped at gate_research_out: gate_research_out refused the digest: findings is empty."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {},
+    "notes": "An accepting critique is not enough: the region's exit gate is a separate check, and research.collect is never invoked. A runtime that collected the empty digest anyway would produce a fourth pinned call and fail this case."
+  }
+}

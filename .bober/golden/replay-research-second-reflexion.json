@@ -1,0 +1,1184 @@
+{
+  "formatVersion": 1,
+  "caseId": "replay-research-second-reflexion",
+  "title": "a critique sends the research region round a second time",
+  "intent": "Pin the reflexion cycle going round exactly once more: one non-null critique must produce a second explore/critique pair and then settle.",
+  "tags": [
+    "replay",
+    "region:research",
+    "loop:researchReflexions"
+  ],
+  "enforcement": "replay",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Document the reflexion loop and its bound.",
+    "entryNodeId": "research_body"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "research_reflect",
+      "branchKey": null,
+      "effectName": "research.reflect",
+      "callIndex": 0,
+      "request": {
+        "featureRequest": "Document the reflexion loop and its bound.",
+        "projectRoot": "<projectRoot>",
+        "promptRef": "research/reflect",
+        "model": "opus"
+      },
+      "response": {
+        "goal": "wire the research region onto the graph",
+        "inputs": [
+          "the feature request",
+          "the committed topology artifact"
+        ],
+        "outputs": [
+          "a research document under .bober/research/"
+        ],
+        "rules": [
+          "the shipped agents are not modified"
+        ],
+        "constraints": [
+          "the PGE layer stays unreachable from every shipped execution path"
+        ]
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Document the reflexion loop and its bound.\n\nGoal: wire the research region onto the graph",
+        "projectRoot": "<projectRoot>",
+        "critique": null,
+        "reflexionRound": 0
+      },
+      "response": {
+        "id": "research-20260805-region",
+        "timestamp": "2026-08-05T00:00:00.000Z",
+        "questions": [
+          "what does the interpreter forward to a successor?"
+        ],
+        "findings": "round 1 findings",
+        "sections": {
+          "architectureOverview": "superstep interpreter",
+          "existingPatterns": "commit boundary",
+          "keyFiles": "src/pge/runtime/interpreter.ts",
+          "integrationPoints": "src/pge/registry/index.ts",
+          "testCoverage": "src/pge/nodes/",
+          "riskAreas": "artifact drift"
+        },
+        "filesExplored": [
+          "src/pge/runtime/interpreter.ts"
+        ],
+        "questionsAnswered": 1
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 0,
+      "request": {
+        "researchId": "research-20260805-region",
+        "reflection": {
+          "goal": "wire the research region onto the graph",
+          "inputs": [
+            "the feature request",
+            "the committed topology artifact"
+          ],
+          "outputs": [
+            "a research document under .bober/research/"
+          ],
+          "rules": [
+            "the shipped agents are not modified"
+          ],
+          "constraints": [
+            "the PGE layer stays unreachable from every shipped execution path"
+          ]
+        },
+        "questions": [
+          "what does the interpreter forward to a successor?"
+        ],
+        "findings": "round 1 findings",
+        "questionsAnswered": 1,
+        "reflexionRound": 1,
+        "promptRef": "research/critique",
+        "model": "sonnet"
+      },
+      "response": {
+        "critique": "Round 1: the digest is still too thin."
+      }
+    },
+    {
+      "nodeId": "research_explore",
+      "branchKey": null,
+      "effectName": "research.explore",
+      "callIndex": 1,
+      "request": {
+        "userPrompt": "Document the reflexion loop and its bound.\n\nGoal: wire the research region onto the graph\n\nPrior critique to address:\nRound 1: the digest is still too thin.",
+        "projectRoot": "<projectRoot>",
+        "critique": "Round 1: the digest is still too thin.",
+        "reflexionRound": 1
+      },
+      "response": {
+        "id": "research-20260805-region",
+        "timestamp": "2026-08-05T00:00:00.000Z",
+        "questions": [
+          "what does the interpreter forward to a successor?"
+        ],
+        "findings": "round 1 findings",
+        "sections": {
+          "architectureOverview": "superstep interpreter",
+          "existingPatterns": "commit boundary",
+          "keyFiles": "src/pge/runtime/interpreter.ts",
+          "integrationPoints": "src/pge/registry/index.ts",
+          "testCoverage": "src/pge/nodes/",
+          "riskAreas": "artifact drift"
+        },
+        "filesExplored": [
+          "src/pge/runtime/interpreter.ts"
+        ],
+        "questionsAnswered": 1
+      }
+    },
+    {
+      "nodeId": "research_critique",
+      "branchKey": null,
+      "effectName": "research.critique",
+      "callIndex": 1,
+      "request": {
+        "researchId": "research-20260805-region",
+        "reflection": {
+          "goal": "wire the research region onto the graph",
+          "inputs": [
+            "the feature request",
+            "the committed topology artifact"
+          ],
+          "outputs": [
+            "a research document under .bober/research/"
+          ],
+          "rules": [
+            "the shipped agents are not modified"
+          ],
+          "constraints": [
+            "the PGE layer stays unreachable from every shipped execution path"
+          ]
+        },
+        "questions": [
+          "what does the interpreter forward to a successor?"
+        ],
+        "findings": "round 1 findings",
+        "questionsAnswered": 1,
+        "reflexionRound": 2,
+        "promptRef": "research/critique",
+        "model": "sonnet"
+      },
+      "response": {
+        "critique": null
+      }
+    },
+    {
+      "nodeId": "research_collect",
+      "branchKey": null,
+      "effectName": "research.collect",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "<projectRoot>",
+        "doc": {
+          "id": "research-20260805-region",
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "questions": [
+            "what does the interpreter forward to a successor?"
+          ],
+          "findings": "round 1 findings",
+          "sections": {
+            "architectureOverview": "superstep interpreter",
+            "existingPatterns": "commit boundary",
+            "keyFiles": "src/pge/runtime/interpreter.ts",
+            "integrationPoints": "src/pge/registry/index.ts",
+            "testCoverage": "src/pge/nodes/",
+            "riskAreas": "artifact drift"
+          },
+          "filesExplored": [
+            "src/pge/runtime/interpreter.ts"
+          ],
+          "questionsAnswered": 1
+        }
+      },
+      "response": {
+        "researchId": "research-20260805-region",
+        "documentId": "research-20260805-region"
+      }
+    },
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Document the reflexion loop and its bound.",
+        "projectRoot": "<projectRoot>",
+        "researchDoc": {
+          "id": "research-20260805-region",
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "questions": [
+            "what does the interpreter forward to a successor?"
+          ],
+          "findings": "round 1 findings",
+          "sections": {
+            "architectureOverview": "superstep interpreter",
+            "existingPatterns": "commit boundary",
+            "keyFiles": "src/pge/runtime/interpreter.ts",
+            "integrationPoints": "src/pge/registry/index.ts",
+            "testCoverage": "src/pge/nodes/",
+            "riskAreas": "artifact drift"
+          },
+          "filesExplored": [
+            "src/pge/runtime/interpreter.ts"
+          ],
+          "questionsAnswered": 1
+        },
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "ready",
+        "spec": {
+          "specId": "spec-20260805-pge-conformance",
+          "version": 1,
+          "title": "PGE conformance fixture",
+          "description": "The single golden spec both engines are compared on.",
+          "status": "ready",
+          "mode": "greenfield",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Wire the region",
+              "description": "Compile and run the plan region end to end.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": []
+            }
+          ],
+          "assumptions": [],
+          "outOfScope": [],
+          "clarificationQuestions": [],
+          "resolvedClarifications": [],
+          "techStack": [],
+          "nonFunctionalRequirements": [],
+          "constraints": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      }
+    },
+    {
+      "nodeId": "plan_materialize",
+      "branchKey": null,
+      "effectName": "plan.materialize",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "<projectRoot>",
+        "spec": {
+          "specId": "spec-20260805-pge-conformance",
+          "version": 1,
+          "title": "PGE conformance fixture",
+          "description": "The single golden spec both engines are compared on.",
+          "status": "ready",
+          "mode": "greenfield",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Wire the region",
+              "description": "Compile and run the plan region end to end.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": []
+            }
+          ],
+          "assumptions": [],
+          "outOfScope": [],
+          "clarificationQuestions": [],
+          "resolvedClarifications": [],
+          "techStack": [],
+          "nonFunctionalRequirements": [],
+          "constraints": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      },
+      "response": [
+        {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.",
+          "status": "proposed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "nodeId": "sprint_curate_explain",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "curator.brief",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.",
+          "status": "proposed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        },
+        "spec": {
+          "specId": "spec-20260805-pge-conformance",
+          "version": 1,
+          "title": "PGE conformance fixture",
+          "description": "The single golden spec both engines are compared on.",
+          "status": "ready",
+          "mode": "greenfield",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Wire the region",
+              "description": "Compile and run the plan region end to end.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": []
+            }
+          ],
+          "assumptions": [],
+          "outOfScope": [],
+          "clarificationQuestions": [],
+          "resolvedClarifications": [],
+          "techStack": [],
+          "nonFunctionalRequirements": [],
+          "constraints": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        },
+        "completedSprints": [],
+        "projectRoot": "<projectRoot>"
+      },
+      "response": {
+        "contractId": "sprint-spec-20260805-pge-conformance-01",
+        "timestamp": "2026-08-05T00:00:00.000Z",
+        "briefing": "# Wire the region\n\nBriefing for sprint-spec-20260805-pge-conformance-01.\n",
+        "filesAnalyzed": [],
+        "patternsFound": 1,
+        "utilsIdentified": 1
+      }
+    },
+    {
+      "nodeId": "sprint_curate_explain",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "curator.explain",
+      "callIndex": 1,
+      "request": {
+        "contractId": "sprint-spec-20260805-pge-conformance-01",
+        "testIds": [
+          "sc-1-1"
+        ],
+        "briefing": "# Wire the region\n\nBriefing for sprint-spec-20260805-pge-conformance-01.\n",
+        "promptRef": "curator/explain",
+        "model": "sonnet"
+      },
+      "response": {
+        "explanations": [
+          {
+            "testId": "sc-1-1",
+            "expectedBehavior": "sc-1-1 asserts the behaviour the contract names, and fails when that behaviour regresses."
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_curate_mocks",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "curator.mocks",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.",
+          "status": "proposed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        },
+        "projectRoot": "<projectRoot>",
+        "explanations": [
+          {
+            "testId": "sc-1-1",
+            "expectedBehavior": "sc-1-1 asserts the behaviour the contract names, and fails when that behaviour regresses."
+          }
+        ],
+        "round": 1,
+        "rejection": null,
+        "promptRef": "curator/mocks",
+        "model": "opus"
+      },
+      "response": {
+        "contractId": "sprint-spec-20260805-pge-conformance-01",
+        "tests": [
+          {
+            "testId": "mock-1",
+            "category": "boundary",
+            "intent": "exercises the boundary case",
+            "path": "tests/mock-1.test.ts"
+          },
+          {
+            "testId": "mock-2",
+            "category": "empty",
+            "intent": "exercises the empty case",
+            "path": "tests/mock-2.test.ts"
+          },
+          {
+            "testId": "mock-3",
+            "category": "large",
+            "intent": "exercises the large case",
+            "path": "tests/mock-3.test.ts"
+          },
+          {
+            "testId": "mock-4",
+            "category": "negative",
+            "intent": "exercises the negative case",
+            "path": "tests/mock-4.test.ts"
+          },
+          {
+            "testId": "mock-5",
+            "category": "boundary",
+            "intent": "exercises the boundary case",
+            "path": "tests/mock-5.test.ts"
+          },
+          {
+            "testId": "mock-6",
+            "category": "empty",
+            "intent": "exercises the empty case",
+            "path": "tests/mock-6.test.ts"
+          }
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_generate",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "generator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "from": "planner",
+          "to": "generator",
+          "projectContext": {
+            "name": "golden",
+            "type": "brownfield",
+            "techStack": [],
+            "entryPoints": [],
+            "currentBranch": ""
+          },
+          "spec": {
+            "specId": "spec-20260805-pge-conformance",
+            "version": 1,
+            "title": "PGE conformance fixture",
+            "description": "The single golden spec both engines are compared on.",
+            "status": "ready",
+            "mode": "greenfield",
+            "features": [
+              {
+                "featureId": "feat-1",
+                "title": "Wire the region",
+                "description": "Compile and run the plan region end to end.",
+                "priority": "must-have",
+                "acceptanceCriteria": [
+                  "the region compiles",
+                  "the region runs"
+                ],
+                "dependencies": []
+              }
+            ],
+            "assumptions": [],
+            "outOfScope": [],
+            "clarificationQuestions": [],
+            "resolvedClarifications": [],
+            "techStack": [],
+            "nonFunctionalRequirements": [],
+            "constraints": [],
+            "createdAt": "2026-08-05T00:00:00.000Z",
+            "updatedAt": "2026-08-05T00:00:00.000Z"
+          },
+          "currentContract": {
+            "contractId": "sprint-spec-20260805-pge-conformance-01",
+            "specId": "spec-20260805-pge-conformance",
+            "sprintNumber": 1,
+            "title": "Wire the region",
+            "description": "Compile and run the plan region end to end.",
+            "status": "proposed",
+            "dependsOn": [],
+            "features": [
+              "feat-1"
+            ],
+            "successCriteria": [
+              {
+                "criterionId": "sc-1-1",
+                "description": "The region compiles from the committed artifact and runs end to end.",
+                "verificationMethod": "unit-test",
+                "required": true
+              }
+            ],
+            "nonGoals": [
+              "Do not modify a shipped agent function."
+            ],
+            "stopConditions": [
+              "The region compiled from the artifact and the run reached its terminal."
+            ],
+            "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+            "assumptions": [],
+            "outOfScope": [],
+            "estimatedFiles": [],
+            "iterationHistory": [],
+            "createdAt": "2026-08-05T00:00:00.000Z",
+            "updatedAt": "2026-08-05T00:00:00.000Z"
+          },
+          "sprintHistory": [],
+          "instructions": "Implement sprint contract sprint-spec-20260805-pge-conformance-01: Wire the region.",
+          "changedFiles": [],
+          "decisions": [],
+          "issues": []
+        },
+        "projectRoot": "<projectRoot>"
+      },
+      "response": {
+        "success": true,
+        "notes": "generated sprint-spec-20260805-pge-conformance-01",
+        "filesChanged": [
+          "src/example.ts"
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_security",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "security.audit",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.",
+          "status": "proposed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 0,
+          "results": [],
+          "summary": "generated sprint-spec-20260805-pge-conformance-01",
+          "timestamp": "2026-08-05T00:00:00.000Z"
+        },
+        "projectRoot": "<projectRoot>"
+      },
+      "response": {
+        "blocked": false,
+        "reason": "disabled",
+        "findings": 0
+      }
+    },
+    {
+      "nodeId": "sprint_evaluate",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "evaluator.sprint",
+      "callIndex": 0,
+      "request": {
+        "handoff": {
+          "timestamp": "2026-08-05T00:00:00.000Z",
+          "from": "planner",
+          "to": "generator",
+          "projectContext": {
+            "name": "golden",
+            "type": "brownfield",
+            "techStack": [],
+            "entryPoints": [],
+            "currentBranch": ""
+          },
+          "spec": {
+            "specId": "spec-20260805-pge-conformance",
+            "version": 1,
+            "title": "PGE conformance fixture",
+            "description": "The single golden spec both engines are compared on.",
+            "status": "ready",
+            "mode": "greenfield",
+            "features": [
+              {
+                "featureId": "feat-1",
+                "title": "Wire the region",
+                "description": "Compile and run the plan region end to end.",
+                "priority": "must-have",
+                "acceptanceCriteria": [
+                  "the region compiles",
+                  "the region runs"
+                ],
+                "dependencies": []
+              }
+            ],
+            "assumptions": [],
+            "outOfScope": [],
+            "clarificationQuestions": [],
+            "resolvedClarifications": [],
+            "techStack": [],
+            "nonFunctionalRequirements": [],
+            "constraints": [],
+            "createdAt": "2026-08-05T00:00:00.000Z",
+            "updatedAt": "2026-08-05T00:00:00.000Z"
+          },
+          "currentContract": {
+            "contractId": "sprint-spec-20260805-pge-conformance-01",
+            "specId": "spec-20260805-pge-conformance",
+            "sprintNumber": 1,
+            "title": "Wire the region",
+            "description": "Compile and run the plan region end to end.",
+            "status": "proposed",
+            "dependsOn": [],
+            "features": [
+              "feat-1"
+            ],
+            "successCriteria": [
+              {
+                "criterionId": "sc-1-1",
+                "description": "The region compiles from the committed artifact and runs end to end.",
+                "verificationMethod": "unit-test",
+                "required": true
+              }
+            ],
+            "nonGoals": [
+              "Do not modify a shipped agent function."
+            ],
+            "stopConditions": [
+              "The region compiled from the artifact and the run reached its terminal."
+            ],
+            "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+            "assumptions": [],
+            "outOfScope": [],
+            "estimatedFiles": [],
+            "iterationHistory": [],
+            "createdAt": "2026-08-05T00:00:00.000Z",
+            "updatedAt": "2026-08-05T00:00:00.000Z"
+          },
+          "sprintHistory": [],
+          "instructions": "Implement sprint contract sprint-spec-20260805-pge-conformance-01: Wire the region.",
+          "changedFiles": [
+            "src/example.ts"
+          ],
+          "decisions": [],
+          "issues": []
+        },
+        "projectRoot": "<projectRoot>"
+      },
+      "response": {
+        "passed": true,
+        "score": 95,
+        "results": [
+          {
+            "evaluator": "unit-test",
+            "passed": true,
+            "score": 95,
+            "details": [
+              {
+                "criterion": "sc-1-1",
+                "passed": true,
+                "message": "ok",
+                "severity": "info"
+              }
+            ],
+            "summary": "unit-test summary",
+            "feedback": "unit-test feedback",
+            "timestamp": "2026-08-05T00:00:00.000Z"
+          }
+        ],
+        "summary": "all criteria met",
+        "timestamp": "2026-08-05T00:00:00.000Z"
+      }
+    },
+    {
+      "nodeId": "sprint_review",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "reviewer.sprint",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.",
+          "status": "proposed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 0,
+          "results": [],
+          "summary": "sprint passed evaluation",
+          "timestamp": "2026-08-05T00:00:00.000Z"
+        },
+        "projectRoot": "<projectRoot>"
+      },
+      "response": {
+        "reviewId": "review-sprint-spec-20260805-pge-conformance-01",
+        "contractId": "sprint-spec-20260805-pge-conformance-01",
+        "specId": "spec-20260805-pge-conformance",
+        "timestamp": "2026-08-05T00:00:00.000Z",
+        "summary": "no blocking findings",
+        "critical": [],
+        "important": [],
+        "minor": [],
+        "approvedAreas": [
+          "structure"
+        ]
+      }
+    },
+    {
+      "nodeId": "sprint_exit",
+      "branchKey": "sprint-spec-20260805-pge-conformance-01",
+      "effectName": "sprint.exit",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "<projectRoot>",
+        "contract": {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.",
+          "status": "completed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        }
+      },
+      "response": {
+        "contractId": "sprint-spec-20260805-pge-conformance-01"
+      }
+    },
+    {
+      "nodeId": "documenter",
+      "branchKey": null,
+      "effectName": "documenter.summary",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "title": "Wire the region",
+          "description": "Compile and run the plan region end to end.\n\nDo NOT run git add, git commit or any other git command. This node declares only the fs-write effect; the run's single commit happens later, behind the human-approval gate, and a commit from here would be an unapproved git object.",
+          "status": "proposed",
+          "dependsOn": [],
+          "features": [
+            "feat-1"
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "verificationMethod": "unit-test",
+              "required": true
+            }
+          ],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "assumptions": [],
+          "outOfScope": [],
+          "estimatedFiles": [],
+          "iterationHistory": [],
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "updatedAt": "2026-08-05T00:00:00.000Z"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 0,
+          "results": [],
+          "summary": "documenting 1 completed contract(s)",
+          "timestamp": "2026-08-05T00:00:00.000Z"
+        },
+        "projectRoot": "<projectRoot>"
+      },
+      "response": {
+        "contractId": "sprint-spec-20260805-pge-conformance-01",
+        "sprintDocPath": "docs/sprints/sprint-spec-20260805-pge-conformance-01.md",
+        "relatedDocsUpdated": [],
+        "concerns": [],
+        "summary": "documented sprint-spec-20260805-pge-conformance-01"
+      }
+    },
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "<projectRoot>",
+        "artifact": {
+          "formatVersion": 1,
+          "runId": "golden",
+          "reason": "Unknown",
+          "supersteps": 41,
+          "createdAt": "2026-08-05T00:00:00.000Z",
+          "branches": []
+        }
+      },
+      "response": {
+        "path": "<projectRoot>/.bober/failures/golden.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {
+      "audits": [
+        {
+          "checkpointId": "end-of-pipeline",
+          "editDeltaSummary": null,
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "approved"
+        },
+        {
+          "checkpointId": "end-of-pipeline",
+          "editDeltaSummary": null,
+          "feedbackText": "FAIL_CLOSED: node \"commit\" declares effects (git) and there is no recorded approval for checkpoint \"end-of-pipeline\". The node was not executed.",
+          "iteration": 2,
+          "mechanism": "noop",
+          "outcome": "rejected"
+        },
+        {
+          "checkpointId": "end-of-pipeline",
+          "editDeltaSummary": null,
+          "iteration": 1,
+          "mechanism": "noop",
+          "outcome": "approved"
+        }
+      ],
+      "briefings": [],
+      "completionMarker": [
+        {
+          "completedSprints": 1,
+          "failedSprints": 0,
+          "success": true
+        }
+      ],
+      "contracts": [
+        {
+          "assumptions": [],
+          "contractId": "sprint-spec-20260805-pge-conformance-01",
+          "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+          "dependsOn": [],
+          "description": "Compile and run the plan region end to end.",
+          "estimatedFiles": [],
+          "features": [
+            "feat-1"
+          ],
+          "iterationHistory": [],
+          "nonGoals": [
+            "Do not modify a shipped agent function."
+          ],
+          "outOfScope": [],
+          "specId": "spec-20260805-pge-conformance",
+          "sprintNumber": 1,
+          "status": "proposed",
+          "stopConditions": [
+            "The region compiled from the artifact and the run reached its terminal."
+          ],
+          "successCriteria": [
+            {
+              "criterionId": "sc-1-1",
+              "description": "The region compiles from the committed artifact and runs end to end.",
+              "required": true,
+              "verificationMethod": "unit-test"
+            }
+          ],
+          "title": "Wire the region"
+        }
+      ],
+      "evalResults": [],
+      "history": [
+        {
+          "details": {
+            "completed": 1,
+            "failed": 0
+          },
+          "event": "pipeline-complete",
+          "phase": "complete"
+        }
+      ],
+      "pipelineResult": [
+        {
+          "completedSprints": [
+            {
+              "assumptions": [],
+              "contractId": "sprint-spec-20260805-pge-conformance-01",
+              "definitionOfDone": "The plan region compiled from the committed artifact, materialised its contracts and returned control to the supervisor.",
+              "dependsOn": [],
+              "description": "Compile and run the plan region end to end.",
+              "estimatedFiles": [],
+              "features": [
+                "feat-1"
+              ],
+              "iterationHistory": [],
+              "nonGoals": [
+                "Do not modify a shipped agent function."
+              ],
+              "outOfScope": [],
+              "specId": "spec-20260805-pge-conformance",
+              "sprintNumber": 1,
+              "status": "proposed",
+              "stopConditions": [
+                "The region compiled from the artifact and the run reached its terminal."
+              ],
+              "successCriteria": [
+                {
+                  "criterionId": "sc-1-1",
+                  "description": "The region compiles from the committed artifact and runs end to end.",
+                  "required": true,
+                  "verificationMethod": "unit-test"
+                }
+              ],
+              "title": "Wire the region"
+            }
+          ],
+          "failedSprints": [],
+          "spec": {
+            "assumptions": [],
+            "clarificationQuestions": [],
+            "constraints": [],
+            "description": "The single golden spec both engines are compared on.",
+            "features": [
+              {
+                "acceptanceCriteria": [
+                  "the region compiles",
+                  "the region runs"
+                ],
+                "dependencies": [],
+                "description": "Compile and run the plan region end to end.",
+                "featureId": "feat-1",
+                "priority": "must-have",
+                "title": "Wire the region"
+              }
+            ],
+            "mode": "greenfield",
+            "nonFunctionalRequirements": [],
+            "outOfScope": [],
+            "resolvedClarifications": [],
+            "specId": "spec-20260805-pge-conformance",
+            "status": "ready",
+            "techStack": [],
+            "title": "PGE conformance fixture",
+            "version": 1
+          },
+          "success": true
+        }
+      ],
+      "progress": [],
+      "reviews": [],
+      "runState": [],
+      "specs": [
+        {
+          "assumptions": [],
+          "clarificationQuestions": [],
+          "constraints": [],
+          "description": "The single golden spec both engines are compared on.",
+          "features": [
+            {
+              "acceptanceCriteria": [
+                "the region compiles",
+                "the region runs"
+              ],
+              "dependencies": [],
+              "description": "Compile and run the plan region end to end.",
+              "featureId": "feat-1",
+              "priority": "must-have",
+              "title": "Wire the region"
+            }
+          ],
+          "mode": "greenfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-pge-conformance",
+          "status": "ready",
+          "techStack": [],
+          "title": "PGE conformance fixture",
+          "version": 1
+        }
+      ]
+    },
+    "notes": "The pinned response sequence IS the assertion here: a second `research.explore` and a second `research.critique` appear because the first critique was non-null. A runtime that stopped honouring the critique would replay with a call the recording does not hold and fail."
+  }
+}

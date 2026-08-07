@@ -6,7 +6,7 @@
   "title": "Prompt Graph Engineering (PGE) Execution Layer — serializable topology artifact plus a native TypeScript superstep runtime",
   "description": "Make agent-bober's orchestration topology an explicit, Zod-validated, versioned, checksummed artifact under .bober/topology/, and execute that artifact with a native TypeScript superstep interpreter behind the existing private PipelineEngine seam. Layer A (topology) ships first and standalone: schema, 30-rule validator, hash, mermaid/dot render, structural diff, doc-drift check, state audit and an offline optimisation hook — zero new dependencies, zero runtime change. Layer B (runtime) then adds scheduling, dynamic routing, dependency- and file-conflict-aware fan-out, order-invariant fan-in reducers, filesystem checkpointing, superstep-boundary HITL interrupts, per-node tracing and cost accounting, bounded loops and graceful failure — default-off, with TsPipelineEngine retained permanently as the conformance oracle. Justification is structural, not latency: inspectable topology (G1), topology/content separation (G2), executable semantics (G3), and the graph as a versionable, CI-gateable, optimisable engineering artifact (G4).",
   "mode": "brownfield",
-  "status": "draft",
+  "status": "completed",
   "ambiguityScore": 4,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -339,5 +339,6 @@
     "riskLevel": "high",
     "riskNotes": "A hand-owned Pregel is ~1,400 non-test lines across eight modules whose barrier, resume and commit bugs are silent and state-corrupting with no upstream maintainer. Sprints 7, 8 and 9 carry the three blocking invariant suites (determinism, exactly-once, cross-process durability) plus an adversarial checkpointer suite; treating any of them as optional invalidates ADR-1. Sprint 4 touches the live imperative path and is the only sprint before sprint 13 that can regress a shipping run.",
     "justification": "G1 explicit inspectable serializable structure, G2 topology/content separation, G3 executable semantics, G4 versionable CI-gateable optimisable artifact — plus trace-driven debugging and structural diffing in CI. Latency is explicitly not a justification."
-  }
+  },
+  "completedAt": "2026-08-07T00:14:08.407Z"
 }

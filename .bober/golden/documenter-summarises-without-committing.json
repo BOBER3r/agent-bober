@@ -1,0 +1,80 @@
+{
+  "formatVersion": 1,
+  "caseId": "documenter-summarises-without-committing",
+  "title": "The documenter writes docs and does not commit",
+  "intent": "Pin the documenter's effect tags: it declares fs-write and NOT git, so no commit object appears however the prompt is worded.",
+  "tags": [
+    "documenter",
+    "fail-closed",
+    "effects"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "documenter"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "documenter",
+      "branchKey": null,
+      "effectName": "documenter.summary",
+      "callIndex": 0,
+      "request": {
+        "contract": {
+          "contractId": "spec-20260805-golden-fixture-1"
+        },
+        "evaluation": {
+          "passed": true,
+          "score": 92,
+          "results": [
+            {
+              "evaluator": "agent",
+              "passed": true,
+              "score": 92,
+              "details": [
+                {
+                  "criterion": "sc-1-1",
+                  "passed": true,
+                  "message": "Covered by a unit test."
+                }
+              ]
+            }
+          ]
+        },
+        "projectRoot": "/tmp/golden-run",
+        "generatorResult": {
+          "success": true,
+          "notes": "Added the block schema and the typed error, plus tests for both branches.",
+          "filesChanged": [
+            "src/fixture/sprint-1.ts",
+            "src/fixture/sprint-1.test.ts"
+          ],
+          "turnsUsed": 7
+        }
+      },
+      "response": {
+        "contractId": "spec-20260805-golden-fixture-1",
+        "sprintDocPath": "docs/sprints/sprint-1.md",
+        "relatedDocsUpdated": [
+          {
+            "path": "docs/config.md",
+            "reason": "documents the new block"
+          }
+        ],
+        "concerns": [
+          "The migration note is still a TODO."
+        ],
+        "summary": "Documented the new config block and its typed error."
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "documenter",
+    "artifacts": {},
+    "notes": "The documenter's own prompt asks the model to commit the doc files; the node fences that instruction. A git.commit call appearing here would be a capability escalation, and the empty expectation is what makes it visible."
+  }
+}

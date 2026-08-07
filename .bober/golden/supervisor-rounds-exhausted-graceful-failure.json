@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "caseId": "supervisor-rounds-exhausted-graceful-failure",
+  "title": "The supervisor exhausts its round budget",
+  "intent": "Pin the supervisor's loop bound of 12 and its onExhausted target: a run that never converges ends at graceful_failure rather than spinning.",
+  "tags": [
+    "supervisor",
+    "loop:supervisorRounds",
+    "onExhausted"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Keep improving the config layer until it is perfect.",
+    "entryNodeId": "supervisor"
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "graceful_failure",
+      "branchKey": null,
+      "effectName": "run.gracefulFailure",
+      "callIndex": 0,
+      "request": {
+        "projectRoot": "/tmp/golden-run",
+        "artifact": {
+          "reason": "supervisorRounds exhausted after 12 rounds",
+          "node": "supervisor",
+          "runId": "golden-run",
+          "detail": "The run stopped at supervisor: supervisorRounds exhausted after 12 rounds."
+        }
+      },
+      "response": {
+        "path": ".bober/failures/golden-run.json"
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "graceful_failure",
+    "artifacts": {},
+    "notes": "The supervisor's budget is the outermost bound in the graph: 12 rounds, then graceful_failure. Without it an ambiguous request has no terminating condition at all."
+  }
+}

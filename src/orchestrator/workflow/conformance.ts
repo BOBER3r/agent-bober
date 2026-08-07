@@ -82,7 +82,7 @@ const VOLATILE_KEYS = new Set([
  * emit the same object with the keys in a different order are the same artifact, and a
  * byte comparison that said otherwise would report a divergence that does not exist.
  */
-function normalize(value: unknown): unknown {
+export function normalize(value: unknown): unknown {
   if (value === null || typeof value !== "object") {
     return value;
   }
@@ -101,8 +101,16 @@ function normalize(value: unknown): unknown {
   return result;
 }
 
-/** The canonical bytes of a normalized value. Two values are equal iff these match. */
-function canonical(value: unknown): string {
+/**
+ * The canonical bytes of a normalized value. Two values are equal iff these match.
+ *
+ * Exported (sprint 14) so the golden dataset can store its expected artifacts ALREADY
+ * stripped and sorted, and compare them the same way this harness does. A second
+ * normaliser in the golden runner would be free to disagree with this one about what
+ * "identical" means, and the disagreement would surface as a golden case that passes while
+ * conformance fails — so there is one definition and the golden layer imports it.
+ */
+export function canonical(value: unknown): string {
   return JSON.stringify(normalize(value) ?? null);
 }
 
@@ -445,6 +453,50 @@ async function collectFields(
   };
 }
 
+/**
+ * Replace `projectRoot` — and the path it resolves to — wherever it appears in `value`.
+ *
+ * Exported (sprint 14) for the golden capture step, which has the same problem the harness
+ * has and must solve it the same way: a recorded request or response carrying the throwaway
+ * root a capture happened to run in would make the committed case differ from the next
+ * capture for a reason that is not a behaviour change. One redactor, one placeholder.
+ */
+export async function redactProjectRoot(value: unknown, projectRoot: string): Promise<unknown> {
+  return redactRoots(value, await rootAliases(projectRoot));
+}
+
+/**
+ * The eleven artifact fields ONE finished run left behind, redacted and normalized.
+ *
+ * Exported (sprint 14) because the golden regression executor has to read a run's
+ * artifacts exactly the way this harness reads an engine's, and a second reader would be
+ * free to disagree with this one about what a run produced. {@link EngineConformanceHarness}
+ * itself goes through this function, so there is one collection path and not two that
+ * happen to look alike.
+ *
+ * Both transformations the harness applies are applied here, in the harness's order:
+ * the run's own project root is REDACTED wherever it appears in a string (a fresh temp
+ * root per run is the isolation the comparison rests on, so the root itself is never a
+ * finding), then the value is NORMALIZED — volatile keys stripped, object keys sorted.
+ * The result is therefore already in the canonical form a golden expectation is stored in.
+ */
+export async function collectRunArtifacts(
+  projectRoot: string,
+  pipelineResult?: void | PipelineResult,
+): Promise<Record<ConformanceField, unknown[]>> {
+  const raw = await collectFields(projectRoot, pipelineResult);
+  // Both the given root and its resolved form: on macOS `os.tmpdir()` yields
+  // `/var/folders/...` while anything that resolves the path writes
+  // `/private/var/folders/...`, and an artifact recording the second would otherwise
+  // survive redaction of the first.
+  const roots = await rootAliases(projectRoot);
+  const collected = {} as Record<ConformanceField, unknown[]>;
+  for (const field of CONFORMANCE_FIELDS) {
+    collected[field] = raw[field].map((value) => normalize(redactRoots(value, roots)));
+  }
+  return collected;
+}
+
 // ── EngineConformanceHarness ─────────────────────────────────────────
 
 /**
@@ -497,16 +549,14 @@ export class EngineConformanceHarness {
       );
 
       const pipelineResult = await runner(root);
-      const raw = await collectFields(root, pipelineResult);
-      // Both the given root and its resolved form: on macOS `os.tmpdir()` yields
-      // `/var/folders/...` while anything that resolves the path writes
-      // `/private/var/folders/...`, and an artifact recording the second would otherwise
-      // survive redaction of the first.
-      const roots = await rootAliases(root);
+      // ONE collection path, shared with the golden regression executor: redaction of
+      // this run's own root then normalization. `keyedCollection` re-canonicalises, which
+      // is a no-op on an already-normalized value — `normalize` is idempotent.
+      const raw = await collectRunArtifacts(root, pipelineResult);
 
       const collected = {} as Record<ConformanceField, KeyedCollection>;
       for (const spec of FIELD_SPECS) {
-        const values = raw[spec.field].map((value) => redactRoots(value, roots));
+        const values = raw[spec.field];
         collected[spec.field] = keyedCollection(values, spec.identityOf);
         counts[spec.field][engine] = values.length;
       }

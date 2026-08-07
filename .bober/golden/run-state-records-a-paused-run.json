@@ -1,0 +1,103 @@
+{
+  "formatVersion": 1,
+  "caseId": "run-state-records-a-paused-run",
+  "title": "A paused run leaves a resumable run state",
+  "intent": "Pin the run-state artifact: status, task, specId and progress survive, while runId, startedAt and completedAt are volatile and do not.",
+  "tags": [
+    "run-state",
+    "artifacts:runState",
+    "resume",
+    "hitl:post-plan"
+  ],
+  "enforcement": "integrity",
+  "graph": {
+    "graphId": "coding",
+    "graphVersion": "1.2.0"
+  },
+  "input": {
+    "featureRequest": "Accept a new optional config block and validate it.",
+    "entryNodeId": "plan_draft",
+    "config": {
+      "autopilot": false
+    }
+  },
+  "pinnedResponses": [
+    {
+      "nodeId": "plan_draft",
+      "branchKey": null,
+      "effectName": "planner.draft",
+      "callIndex": 0,
+      "request": {
+        "userPrompt": "Accept a new optional config block and validate it.",
+        "projectRoot": "/tmp/golden-run",
+        "resolvedClarifications": []
+      },
+      "response": {
+        "kind": "needs-clarification",
+        "spec": {
+          "ambiguityScore": 7,
+          "assumptions": [
+            "The fixture repository is a TypeScript package with Vitest."
+          ],
+          "clarificationQuestions": [
+            {
+              "questionId": "q-1",
+              "category": "data-model",
+              "question": "May the block appear more than once?",
+              "recommendation": "Assume at most once."
+            }
+          ],
+          "constraints": [],
+          "description": "A two-sprint fixture plan used by the golden dataset to pin the shape of a materialised plan.",
+          "features": [
+            {
+              "featureId": "feat-1",
+              "title": "Parse the new config block",
+              "description": "Accept the new block, validate it and surface a typed error when it is malformed.",
+              "priority": "must-have",
+              "acceptanceCriteria": [
+                "A malformed block produces a typed error rather than a crash."
+              ],
+              "dependencies": [],
+              "estimatedComplexity": "low"
+            }
+          ],
+          "mode": "brownfield",
+          "nonFunctionalRequirements": [],
+          "outOfScope": [
+            "Migrating existing configs."
+          ],
+          "resolvedClarifications": [],
+          "specId": "spec-20260805-golden-fixture",
+          "status": "needs-clarification",
+          "techStack": [
+            "typescript",
+            "vitest"
+          ],
+          "title": "Fixture plan for the golden dataset",
+          "version": 1
+        }
+      }
+    }
+  ],
+  "expected": {
+    "terminalNodeId": "plan_clarify",
+    "artifacts": {
+      "runState": [
+        {
+          "pendingCheckpointId": "post-plan",
+          "pendingPrompt": "May the block appear more than once?",
+          "progress": {
+            "completed": 0,
+            "total": 2
+          },
+          "projectRoot": "<projectRoot>",
+          "specId": "spec-20260805-golden-fixture",
+          "status": "input-required",
+          "task": "Accept a new optional config block and validate it."
+        }
+      ]
+    },
+    "notes": "projectRoot is the redaction placeholder the conformance harness substitutes, because two engines are handed two different roots by construction. Redaction, not stripping: an engine that wrote some OTHER path would still fail."
+  }
+}
