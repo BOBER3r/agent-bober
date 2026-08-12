@@ -633,7 +633,11 @@ answers "does this version bump invalidate the case's STRUCTURE" (major-only, by
 `capture.test.ts` answers "does this version bump invalidate the case's BYTES" (any bump, by
 construction) — a change to either check should read this paragraph first, because they are
 answering different questions on purpose and making them agree would remove one of the two
-signals.
+signals. **It recurred at `1.3.0 → 1.4.0`** (sprint 7, the `specDraft` channel), exactly as
+this paragraph predicts and with the same resolution: the five pre-existing `replay` cases
+were recaptured after verifying each diff was confined to the `graph.graphVersion` stamp,
+and the sixth case in that recapture is new rather than restamped. Expect this on every
+topology bump; it is a cost of the byte-exact gate, not a symptom of anything.
 
 **Growth plan.** The dataset ships at the low end of its 20-to-50 range because each case
 is hand-curated content, not generated. It grows on two triggers, and both are cheaper
@@ -728,6 +732,32 @@ proven by mutating an in-memory copy of the file and asserting the audit reports
 that violation. `continue-on-error` detection is additionally proven against real data:
 the shipped informational `kpi-gate` job sets the key, so reporting `false` for the graph
 gate is a measurement rather than a coincidence.
+
+### A negative control can stop biting as the dataset grows, and nothing fails when it does
+
+The two pass-rate controls in the table above — plus `src/pge/golden/dataset.test.ts`'s
+equivalent over the runner — inject failures as a **fixed fraction or a fixed count** of the
+executed cases, while the threshold they must miss is a fraction of the same growing
+denominator. So a control that fails today can be neutralised by nothing more than the dataset
+getting bigger. It happened at `1.4.0`. Adding the sixth `replay` case (`replay-plan-clarify-rounds-exhausted`) took
+`dataset.test.ts`'s and `gate.test.ts`'s "every fourth case regresses" injection from 1 failure
+in 5 — an exact 80 % pass rate, which the strictly-greater-than comparison refuses — to 1 in 6,
+a **83 % pass rate that clears the bar**; `executor.test.ts`'s single mutated case moved the same
+way. All three controls would have gone on passing while proving nothing, and no test anywhere
+would have reported it.
+
+Sprint 7 of spec-20260812-pge-real-workload-errors fixed all three in the same commit that
+grew the dataset, and the evaluator confirmed the fix by reverting each control and observing
+the pre-sprint version produce a **false pass** against the six-case set. Two now inject a third
+of the cases (`seen % 3`), which cannot clear 80 % at any count from the floor upward;
+`executor.test.ts` mutates two named cases.
+
+**The general rule, for anyone adding a case or a control:** a control whose failure injection
+does not scale with `replayCases.length` has a case count at which it silently stops being a
+control — compute that number and write it down, or make the injection a fraction. The dataset
+holds **6 `replay` cases** against a `GOLDEN_MIN_REPLAY_CASES` floor of 5 as of `1.4.0`, so this
+is live arithmetic, not a hypothetical: `executor.test.ts`'s two-case mutation is `(n-2)/n` and
+crosses 80 % at **n = 11**.
 
 ## The graph engine against a real workload
 
@@ -935,7 +965,9 @@ channel; captured instead from a real `PgeEngine` run's own `ChannelUpdate`s, th
 Every declared limit above is exactly `capForCorpusMax` (`src/pge/golden/workload.ts`) of
 that row's own corpus maximum — the next power of two at or above 2× the maximum, floored
 at 4,096 — pinned two-directionally in `src/pge/golden/workload.test.ts` (`1.3.0` changelog
-entry). `sc-2-2` (the maximum is computed with the commit boundary's OWN `byteSize`
+entry). The pin is written over EVERY declared channel rather than per channel, so a channel
+added later inherits it with no new test: that is how `specDraft` was caught at `1.4.0`
+(see that entry). `sc-2-2` (the maximum is computed with the commit boundary's OWN `byteSize`
 (`src/pge/runtime/commit.ts`), never a reimplementation) and `sc-2-4` (every declared channel
 has at least one entry, proven to bite by deleting one from a temp copy) are unit-tested in
 the same file. The `messages`/`evaluations`/`refs` maxima above are also recorded in the
@@ -1011,8 +1043,15 @@ diff is a sample shift before committing it.
 
 **`spec` and `sprintContracts` are sized from this corpus, as of `graphVersion 1.3.0`.** The
 other eight channels' declared limits already matched `capForCorpusMax` of their own corpus
-maximum before this sprint touched anything, which is what made it safe to pin all ten
-rather than only the two that moved (see the `1.3.0` changelog entry above).
+maximum before that sprint touched anything, which is what made it safe to pin all ten
+rather than only the two that moved (see the `1.3.0` changelog entry above). **`specDraft`,
+added at `1.4.0`, was sized the same way and is the case that shows the pin is not a
+formality**: because the pin is an EQUALITY over every declared channel, it applied to a
+channel that did not exist when it was written, and it rejected `131,072` — the value a
+reader reaches for by analogy, `specDraft` and `spec` being the same schema — before any
+test had to be added for the new channel (`src/pge/golden/workload.test.ts` is unchanged by
+that sprint). Sizing by analogy is not sizing from a corpus, and the pin cannot tell the
+difference between an analogy and a guess.
 
 ## Engine migration disposition
 
@@ -1226,7 +1265,8 @@ two at or above **2×** the corpus maximum, floored at `DEFAULT_MAX_INLINE_BYTES
   section linked above); the run reaches `graceful_failure` today. **That fix carries no
   changelog entry of its own and no version bump, because it changed no topology** — the
   ceiling is runtime configuration on the interpreter's `RunContext`, not a field of the
-  committed artifact, so `1.3.0` remains the current `graphVersion`.
+  committed artifact, so `1.3.0` stayed the current `graphVersion` through sprint 4, until
+  the `specDraft` channel moved it to `1.4.0` in sprint 7.
 - Node, edge, channel and subgraph counts are unchanged: 44 / 56 / 10 / 2.
 
 ### 1.2.0 — correcting two defects that made the graph unrunnable
