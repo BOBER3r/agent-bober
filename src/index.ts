@@ -28,8 +28,12 @@ export {
   MIN_CRITERION_DESCRIPTION_LENGTH,
   MIN_DEFINITION_OF_DONE_LENGTH,
   BANNED_VAGUE_PHRASES,
+  SETTLED_CONTRACT_STATUSES,
+  TERMINAL_CONTRACT_STATUSES,
   createContract,
   updateContractStatus,
+  isSettledContractStatus,
+  isTerminalContractStatus,
   findPrecisionIssues,
   isContractPrecise,
 } from "./contracts/sprint-contract.js";

@@ -2,13 +2,19 @@ import { describe, it, expect } from "vitest";
 
 import {
   SprintContractSchema,
+  ContractStatusSchema,
   createContract,
   updateContractStatus,
+  isSettledContractStatus,
+  isTerminalContractStatus,
+  SETTLED_CONTRACT_STATUSES,
+  TERMINAL_CONTRACT_STATUSES,
   findPrecisionIssues,
   isContractPrecise,
   MIN_CRITERION_DESCRIPTION_LENGTH,
   MIN_DEFINITION_OF_DONE_LENGTH,
   type SprintContract,
+  type ContractStatus,
 } from "./sprint-contract.js";
 
 // A reusable, schema-valid contract for tests that need a known-good base.
@@ -179,6 +185,67 @@ describe("updateContractStatus", () => {
     const contract = validContract({ startedAt: original });
     const next = updateContractStatus(contract, "in-progress");
     expect(next.startedAt).toBe(original);
+  });
+
+  it("agrees with isTerminalContractStatus for every status (so :216-219 cannot drift back)", () => {
+    // Pins the coupling between updateContractStatus's completedAt-stamping
+    // rule and the exported predicate — the whole point of generalising the
+    // inline rule into isTerminalContractStatus. If the two ever diverge,
+    // this is the test that fails.
+    for (const status of ContractStatusSchema.options) {
+      const contract = validContract();
+      const next = updateContractStatus(contract, status);
+      expect(Boolean(next.completedAt)).toBe(isTerminalContractStatus(status));
+    }
+  });
+});
+
+describe("isSettledContractStatus / isTerminalContractStatus", () => {
+  // The exact partition of ALL NINE ContractStatusSchema members, so adding a
+  // tenth status to the enum without deciding where it belongs fails this
+  // test loudly rather than silently defaulting to "not settled".
+  const EXPECTED_SETTLED = new Set<ContractStatus>(["passed", "completed"]);
+  const EXPECTED_TERMINAL = new Set<ContractStatus>(["passed", "failed", "completed"]);
+
+  it("SETTLED_CONTRACT_STATUSES is exactly {passed, completed}", () => {
+    expect(new Set(SETTLED_CONTRACT_STATUSES)).toEqual(EXPECTED_SETTLED);
+  });
+
+  it("TERMINAL_CONTRACT_STATUSES is exactly {passed, failed, completed}", () => {
+    expect(new Set(TERMINAL_CONTRACT_STATUSES)).toEqual(EXPECTED_TERMINAL);
+  });
+
+  it("TERMINAL_CONTRACT_STATUSES is a strict superset of SETTLED_CONTRACT_STATUSES", () => {
+    // The two sets are built one from the other in the source (adds
+    // "failed") specifically so they cannot silently diverge. Assert that
+    // relationship directly, not just the two memberships independently.
+    for (const s of SETTLED_CONTRACT_STATUSES) {
+      expect(TERMINAL_CONTRACT_STATUSES.has(s)).toBe(true);
+    }
+    expect(TERMINAL_CONTRACT_STATUSES.size).toBe(SETTLED_CONTRACT_STATUSES.size + 1);
+  });
+
+  it("partitions every member of ContractStatusSchema exactly as expected", () => {
+    expect(ContractStatusSchema.options.length).toBe(9); // liveness: the enum still has 9 members
+    for (const status of ContractStatusSchema.options) {
+      expect(isSettledContractStatus(status)).toBe(EXPECTED_SETTLED.has(status));
+      expect(isTerminalContractStatus(status)).toBe(EXPECTED_TERMINAL.has(status));
+    }
+  });
+
+  it("isSettledContractStatus excludes 'failed' (a failed sprint is over, not settled-good)", () => {
+    expect(isSettledContractStatus("failed")).toBe(false);
+    expect(isTerminalContractStatus("failed")).toBe(true);
+  });
+
+  it("every settled status is also terminal, but not vice versa", () => {
+    for (const status of ContractStatusSchema.options) {
+      if (isSettledContractStatus(status)) {
+        expect(isTerminalContractStatus(status)).toBe(true);
+      }
+    }
+    // "failed" is the witness that the converse does not hold.
+    expect(isTerminalContractStatus("failed") && !isSettledContractStatus("failed")).toBe(true);
   });
 });
 
