@@ -62,6 +62,16 @@ To check this document against the artifact locally, run the `pge docs` command 
 this file from the repository root; CI runs the same check on every pull request, as a
 blocking step.
 
+**This document, not the design record, is the current description.**
+`.bober/architecture/arch-20260805-pge-graph-engineering-architecture.md` is the dated `draft`
+design artifact the graph engine was built from, and it is deliberately left as written: it
+records what was designed on 2026-08-05, which is not the same question as what ships today. Two
+of its figures have since moved and are worth knowing before citing it — it states that
+`OverallState` has *"Exactly 15 keys"* (16 since the `specDraft` channel at `1.4.0`) and that
+channel values cap at 4 KiB (true of eight channels; `spec` is 131,072 and `sprintContracts`
+524,288 since `1.3.0`, both sized off a measured corpus). Nothing gates that file. Everything
+below is gated.
+
 ## What the pipeline does
 
 The graph is the agent-bober coding pipeline expressed as data. A run goes through five
@@ -476,10 +486,28 @@ outward call answered from the recording and compares the artifacts produced.
 Every case declares, in its own file, how it is **enforced** — there is no default,
 because both possible defaults are wrong:
 
-| `enforcement` | what happens to it | where its expectation came from |
-| --- | --- | --- |
-| `replay` | **executed** against the shipped `PgeEngine` over the committed artifact, and its artifacts compared with the expectation | captured from a real run by `src/pge/golden/capture.ts` |
-| `integrity` | checked for schema validity and against the committed graph; **not executed**, and it makes no runtime claim | hand-authored prose plus a partial pin set |
+| `enforcement` | what happens to it | where its expectation came from | what a behaviour change demands of it |
+| --- | --- | --- | --- |
+| `replay` | **executed** against the shipped `PgeEngine` over the committed artifact, and its artifacts compared with the expectation | captured from a real run by `src/pge/golden/capture.ts` | a **re-CAPTURE** — mechanical (`GOLDEN_CAPTURE=1`), and the resulting diff is the statement of what moved |
+| `integrity` | checked for schema validity and against the committed graph; **not executed**, and it makes no runtime claim | hand-authored prose plus a partial pin set | a **re-AUTHOR** — a judgement call, sentence by sentence; it **cannot be re-captured at all** |
+
+The last column is the one that gets forgotten, so it is stated here rather than only in the
+worked example below. A `replay` case that goes red is a question for the runtime, and the
+maintenance path is to re-record it. An `integrity` case that goes *false* is a question for a
+writer: replaying it would throw `MissingRecordingError` at the first call its partial pin set
+does not answer, so no rerun can repair its prose, and **nothing in CI can tell you it needs
+repairing** — nothing executes it, and English is not schema-checked. Its `title`, `intent`,
+`tags`, `notes` **and its caseId** are all claims, and only the pins are machine-checked.
+Sprints 5, 7 and 8 of `spec-20260812-pge-real-workload-errors` are the worked example of both
+halves: two recaptures, then two re-authorings of the cases the same change had falsified.
+
+**A caseId is a claim too, and correcting one is a rename, not an edit.** A case named for
+behaviour the runtime has falsified is worse than a stale comment, because the filename is what a
+reader greps for. `validateGoldenDataset` requires every file to be named `${caseId}.json`
+(`src/pge/golden/runner.ts:394-397` — *"a case whose id and filename disagree cannot be found from
+a failure message"*), so fixing one means a new file plus a deletion of the old, and the pinned
+artifact block should be verified byte-identical across the move or the rename has quietly become
+an unreviewed recapture.
 
 The split exists because the two kinds of case are not interchangeable. A hand-authored
 case pins the calls a reader would find interesting rather than the complete call sequence
@@ -488,6 +516,16 @@ did not think to write down — which says nothing whatsoever about the runtime.
 case is complete by construction. Running the hand-authored cases against a real engine
 would make the blocking job permanently red, and a permanently-red required job is waived
 within a week, taking the enforced half with it.
+
+**The guarantee is "an unpinned call cannot produce a passing case" — not "the executor
+throws".** Those stopped being the same sentence at `1.4.0`. The replay registry still raises
+`MissingRecordingError` at the call it cannot answer, but the interpreter treats that as a failed
+node and routes onwards, so what reaches the caller depends on how much of the pipeline the
+truncation left standing: truncated before `plan_draft` ever runs, `finalize` still throws
+`FinalizeWithoutSpecError`; truncated after it, sprint 7's `specDraft` fallback **resolves** with
+`success: false` instead. `src/pge/golden/executor.test.ts` therefore asserts `passed === false`
+through `runGoldenRegression` — the same per-case logic the CI job runs — rather than pinning a
+throw, which would have been pinning where a truncation happens to land.
 
 What stops the split from eroding is a **floor**: `GOLDEN_MIN_REPLAY_CASES` in
 `src/pge/golden/case-schema.ts`, checked as part of dataset validity. Relabelling a failing

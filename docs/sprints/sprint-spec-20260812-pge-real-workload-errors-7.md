@@ -140,7 +140,10 @@ graph had just reached).
   siblings switched to a modulo strategy that scales; `executor.test.ts` hardcodes two caseIds and
   will silently stop biting again at 11 replay cases — the same class of break this sprint had to
   fix at 6. Either correct the comment to state the real breakpoint or scale the mutation count with
-  `replayCases.length`.
+  `replayCases.length`. **(Closed by sprint 8:** the control now drifts `(index + 1) % 3 === 0` of
+  ALL replay cases and mutates `pipelineResult[0].success` — `contracts[0]` is undefined on
+  `replay-plan-clarify-rounds-exhausted`, so the old two-case selector was also narrower than it
+  looked. No control in the golden gate injects a fixed count any more.**)**
 - **The `1.3.0 → 1.4.0` recapture was the second run of a known tension**, not a surprise: a fresh
   capture embeds the current `graphVersion`, so every committed `replay` case fails
   `capture.test.ts`'s byte-exact check on any bump, MINOR included, while `case-schema.ts`'s

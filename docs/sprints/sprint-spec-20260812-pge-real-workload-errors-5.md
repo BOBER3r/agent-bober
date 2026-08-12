@@ -153,7 +153,10 @@ declared stop condition; it did not fire.
   this commit. They were left byte-unchanged on purpose: an `integrity` case is hand-authored
   prose plus a partial pin set, so fixing them is a re-**authoring** job requiring judgement, not
   a `GOLDEN_CAPTURE=1` rerun — and it is scoped to **sprint 8**. Until then, read those two files'
-  prose as historical.
+  prose as historical. **(Closed by sprint 8:** both were re-authored, and the first was **renamed**
+  to `.bober/golden/pipeline-result-omits-errors-key-on-a-clean-run.json` because its own caseId
+  asserted the falsehood — the filename above no longer exists. Its pinned artifact is byte-identical
+  across the rename.**)**
 - **Two source comments still repeat the same stale claim**, and were out of this sprint's scope:
   `src/pge/engine/pge-engine.ts:504` (in the budget-abort `catch`) and
   `src/orchestrator/workflow/conformance.engines.test.ts:385` both still say "`PipelineResult` has
