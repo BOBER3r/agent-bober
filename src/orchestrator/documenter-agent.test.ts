@@ -6,8 +6,8 @@
  *     generator result) after the evaluator returns pass — verified by running
  *     runSprintCycle with a passing evaluator stub.
  * (b) when runDocumenter throws, runSprintCycle does NOT throw, the returned
- *     contract status is still "passed", and logger.warn was called — covers the
- *     advisory try/catch in pipeline.ts.
+ *     contract status is still settled ("completed"), and logger.warn was called —
+ *     covers the advisory try/catch in pipeline.ts.
  * (c) config.documenter.enabled === false skips the documenter entirely.
  * (d) parseDocumentationResult is resilient to fenced / noisy / unparseable output.
  *
@@ -235,10 +235,10 @@ describe("documenter pipeline integration", () => {
       projectContext: testProjectContext,
     });
 
-    expect(result.contract.status).toBe("passed");
+    expect(result.contract.status).toBe("completed");
     expect(documenterSpy).toHaveBeenCalledTimes(1);
     expect(documenterSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ contractId: "test-contract", status: "passed" }),
+      expect.objectContaining({ contractId: "test-contract", status: "completed" }),
       expect.objectContaining({ passed: true, score: 91 }),
       expect.objectContaining({ success: true }),
       tmpRoot,
@@ -273,7 +273,7 @@ describe("documenter pipeline integration", () => {
       })(),
     ).resolves.toBeUndefined();
 
-    expect(result!.contract.status).toBe("passed");
+    expect(result!.contract.status).toBe("completed");
     const warnCalls = warnSpy.mock.calls.map((args) => args[0] as string);
     const skippedWarn = warnCalls.find((msg) => msg.includes("Documentation skipped"));
     expect(skippedWarn).toBeDefined();
@@ -305,7 +305,7 @@ describe("documenter pipeline integration", () => {
       projectContext: testProjectContext,
     });
 
-    expect(result.contract.status).toBe("passed");
+    expect(result.contract.status).toBe("completed");
     expect(documenterSpy).not.toHaveBeenCalled();
   });
 });

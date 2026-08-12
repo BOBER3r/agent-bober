@@ -363,7 +363,7 @@ describe("runSprintCycle — bounded by config.evaluator.maxIterations (sc-4-7)"
       pipelineRunId: "run-no-bound",
     });
 
-    expect(result.contract.status).toBe("passed");
+    expect(result.contract.status).toBe("completed");
     expect(vi.mocked(runGenerator)).toHaveBeenCalledTimes(1);
     expect(
       (await readTelemetry(root)).filter((e) => e["eventType"] === "loop-bound-exhausted"),

@@ -60,7 +60,7 @@ export class RunResultFlusher {
     for (const sprint of result.perSprint) {
       const contractStatus =
         sprint.outcome === "passed"
-          ? "passed"
+          ? "completed"
           : sprint.outcome === "needs-rework"
             ? "needs-rework"
             : "failed";
@@ -73,7 +73,7 @@ export class RunResultFlusher {
 
       // Accumulate before updateProgress so the progress file always reflects
       // all contracts flushed so far
-      if (contractStatus === "passed") {
+      if (contractStatus === "completed") {
         completedSprints.push(stamped);
       } else {
         failedSprints.push(stamped);

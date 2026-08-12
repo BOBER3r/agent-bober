@@ -317,7 +317,7 @@ describe("security audit gate — pipeline integration", () => {
     });
 
     // Sprint eventually passes on the retry (iteration 2, audit clean).
-    expect(result.contract.status).toBe("passed");
+    expect(result.contract.status).toBe("completed");
 
     const events = vi.mocked(appendHistory).mock.calls.map((c) => (c[1] as { event: string }).event);
     const sprintPassedCount = events.filter((e) => e === "sprint-passed").length;
@@ -439,7 +439,7 @@ describe("security audit gate — pipeline integration", () => {
       projectContext: testProjectContext,
     });
 
-    expect(result.contract.status).toBe("passed");
+    expect(result.contract.status).toBe("completed");
 
     const events = vi.mocked(appendHistory).mock.calls.map((c) => (c[1] as { event: string }).event);
     expect(events).toContain("security-audit-clean");

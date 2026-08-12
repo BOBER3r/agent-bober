@@ -30,10 +30,13 @@ import { describe, it, expect } from "vitest";
  * sprint's five named readers (src/mcp/tools/sprint.ts,
  * src/mcp/tools/eval.ts, src/cli/commands/sprint.ts,
  * src/cli/commands/eval.ts, src/state/history.ts's "Passed" row) and
- * outside its `estimatedFiles`: orchestrator/pipeline.ts and six
- * PGE runtime/node files. The contract's own description promises "no
- * writer changes here, so no conformance field moves" for this sprint, and
- * migrating those files would touch machinery shared with sprint 6
+ * outside its `estimatedFiles`: five PGE runtime/node files (originally six
+ * entries including orchestrator/pipeline.ts:1052, which sprint 5 of
+ * spec-20260812-terminal-vocabulary migrated to `isSettledContractStatus`
+ * alongside the write it was reading — see the "six migrated readers" test
+ * below). The contract's own description promises "no writer changes here,
+ * so no conformance field moves" for this sprint, and migrating the
+ * remaining PGE files would touch machinery shared with sprint 6
  * (commit.ts, sprint-review.ts) and the imperative/graph conformance
  * harness. They are allowlisted WITH A REASON per entry, not silently
  * skipped — see ALLOWLIST.
@@ -187,24 +190,26 @@ const ALLOWLIST: AllowedOffender[] = [
   // ── §3: genuine contract-terminal-shaped reads, outside the five named readers ──
   // and outside estimatedFiles. The contract's description promises "no writer changes
   // here, so no conformance field moves" for this sprint; migrating these touches
-  // orchestrator/pipeline.ts and src/pge/{runtime,nodes}/** — machinery shared with
-  // sprint 6 (commit.ts, sprint-review.ts) and the imperative/graph conformance
-  // harness. Deferred, not missed — flagged by file:line for whichever future sprint
-  // migrates them.
-  {
-    location: "src/orchestrator/pipeline.ts:1052",
-    reason:
-      "Genuine contract-terminal split (completed vs failed sprints in runTsPipeline) — same shape as the five named readers, but not one of them and not in estimatedFiles; deferred to keep this sprint's diff to reader convergence only.",
-  },
+  // src/pge/{runtime,nodes}/** — machinery shared with sprint 6 (commit.ts,
+  // sprint-review.ts) and the imperative/graph conformance harness. Deferred, not
+  // missed — flagged by file:line for whichever future sprint migrates them.
+  //
+  // src/orchestrator/pipeline.ts:1052 USED to be allowlisted here with the same
+  // reasoning ("deferred to keep this sprint's diff to reader convergence only"). Sprint
+  // 5 of spec-20260812-terminal-vocabulary migrated it to `isSettledContractStatus`
+  // in the SAME step it flipped the write at :589 (deferring the reader while
+  // changing the writer would have landed every passing sprint in `failedSprints` —
+  // see that sprint's briefing §1), so the entry is gone and pipeline.ts joined the
+  // "six migrated readers" test below.
   {
     location: "src/pge/runtime/interpreter.ts:728",
     reason:
       "Graph-engine verdict computation over the sprintContracts channel; PGE writes 'completed' not 'passed', so this counter is a live instance of the same bug class this sprint fixes elsewhere — but migrating it changes PGE runtime verdict math, outside estimatedFiles and this sprint's 'no conformance field moves' promise.",
   },
   {
-    location: "src/pge/runtime/commit.ts:533",
+    location: "src/pge/runtime/commit.ts:539",
     reason:
-      "Has its own documented rationale at :502-526 for why contract status alone still cannot decide the completed/failed split, even after sprint 4 of spec-20260812-terminal-vocabulary made the channel join rank-aware: sprint_exit writes the word 'completed'/'failed', never 'passed', so this literal comparison stays permanently false for a graph-committed contract — read the header before ever touching this line.",
+      "Has its own documented rationale at :502-519 for why contract status alone still cannot decide the completed/failed split. Sprint 4 of spec-20260812-terminal-vocabulary made the channel join rank-aware; sprint 5 changed the WRITER too — runSprintCycle now writes 'completed', not 'passed' — so this literal now compares against a word NEITHER engine's settled-sprint writer produces, for any run. Migrating it would change GRAPH completedSprints/failedSprints math and move golden cases, which sc-5-4's stop condition forbids — read the header before ever touching this line.",
   },
   {
     location: "src/pge/nodes/sprint-curate.ts:254",
@@ -270,15 +275,20 @@ describe("no production module outside the predicate compares a contract status 
     expect(unexplained).toEqual([]);
   });
 
-  it("the five migrated readers no longer contain the literal comparison", async () => {
+  it("the six migrated readers no longer contain the literal comparison", async () => {
     // Positive evidence the migration happened, beyond "the scan found nothing new" —
-    // these five specific lines used to match OFFENDER_PATTERN and now must not.
+    // these six specific lines used to match OFFENDER_PATTERN and now must not. The sixth,
+    // src/orchestrator/pipeline.ts, joined the list at sprint 5 of
+    // spec-20260812-terminal-vocabulary, when its :1052 split (`result.contract.status
+    // === "passed"`) was migrated to `isSettledContractStatus` in the same step as the
+    // write it reads (:589) flipped from "passed" to "completed".
     const migrated = [
       "src/mcp/tools/sprint.ts",
       "src/mcp/tools/eval.ts",
       "src/cli/commands/sprint.ts",
       "src/cli/commands/eval.ts",
       "src/orchestrator/workflow/resume-cursor.ts",
+      "src/orchestrator/pipeline.ts",
     ];
     for (const rel of migrated) {
       const content = await readFile(join(REPO_ROOT, rel), "utf-8");

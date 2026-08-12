@@ -14,7 +14,7 @@ import type { BoberConfig } from "../config/schema.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { isPipelineReady } from "../contracts/spec.js";
 import type { SprintContract } from "../contracts/sprint-contract.js";
-import { updateContractStatus } from "../contracts/sprint-contract.js";
+import { updateContractStatus, isSettledContractStatus } from "../contracts/sprint-contract.js";
 import { materializeContracts } from "./contract-materialization.js";
 import type { EvaluationRunResult } from "../evaluators/registry.js";
 import { persistEvalResult } from "./eval-persist.js";
@@ -586,7 +586,7 @@ export async function runSprintCycle(
 
       logger.success(`Sprint ${currentContract.contractId} passed all evaluations!`);
 
-      currentContract = updateContractStatus(currentContract, "passed");
+      currentContract = updateContractStatus(currentContract, "completed");
       currentContract = {
         ...currentContract,
         evaluatorFeedback: evaluation.summary,
@@ -1049,7 +1049,7 @@ export async function runTsPipeline(
         pipelineRunId,
       });
 
-      if (result.contract.status === "passed") {
+      if (isSettledContractStatus(result.contract.status)) {
         completedSprints.push(result.contract);
       } else {
         failedSprints.push(result.contract);

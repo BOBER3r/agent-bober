@@ -206,7 +206,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     await flusher.flush(tmpDir, config, result);
 
     const loaded = await loadContract(tmpDir, contract.contractId);
-    expect(loaded.status).toBe("passed");
+    expect(loaded.status).toBe("completed");
     expect(typeof loaded.completedAt).toBe("string");
     // completedAt must be a valid ISO 8601 datetime
     expect(() => new Date(loaded.completedAt!).toISOString()).not.toThrow();
@@ -342,7 +342,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
 
       // Contract must still be loadable and valid
       const loaded = await loadContract(tmpDir, contract.contractId);
-      expect(loaded.status).toBe("passed");
+      expect(loaded.status).toBe("completed");
       expect(loaded.contractId).toBe(contract.contractId);
     });
 
@@ -406,7 +406,7 @@ describe("RunResultFlusher.flush (C3 + C4)", () => {
     expect(pipelineResult.failedSprints).toHaveLength(1);
 
     const loaded1 = await loadContract(tmpDir, contract1.contractId);
-    expect(loaded1.status).toBe("passed");
+    expect(loaded1.status).toBe("completed");
 
     const loaded2 = await loadContract(tmpDir, contract2.contractId);
     expect(loaded2.status).toBe("failed");

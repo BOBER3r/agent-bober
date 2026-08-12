@@ -7,8 +7,8 @@
  * (b) renderReviewMarkdown produces all 6 required H1/H2 sections in order — unit test
  *     of the renderer directly.
  * (c) when runCodeReviewer throws, runSprintCycle does NOT throw, the returned contract
- *     status is still "passed", and logger.warn was called — real coverage of
- *     pipeline.ts lines 370-382 (the advisory try/catch).
+ *     status is still settled ("completed"), and logger.warn was called — real coverage
+ *     of pipeline.ts lines 370-382 (the advisory try/catch).
  *
  * Colocated with code-reviewer-agent.ts per the project convention:
  * src/orchestrator/agent-loader.test.ts and src/orchestrator/model-resolver.test.ts
@@ -235,16 +235,16 @@ describe("code-reviewer pipeline integration (s5-c6)", () => {
       projectContext: testProjectContext,
     });
 
-    // Pipeline returned a passed contract
-    expect(result.contract.status).toBe("passed");
+    // Pipeline returned a settled contract
+    expect(result.contract.status).toBe("completed");
 
     // runCodeReviewer was called once — inside the if (evaluation.passed) branch
     expect(reviewerSpy).toHaveBeenCalledTimes(1);
 
-    // Assert it was called with the contract the pipeline updated (status=passed)
+    // Assert it was called with the contract the pipeline updated (status=completed)
     // and with the EvaluationRunResult that runEvaluatorAgent returned (passed:true)
     expect(reviewerSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ contractId: "test-contract", status: "passed" }),
+      expect.objectContaining({ contractId: "test-contract", status: "completed" }),
       expect.objectContaining({ passed: true, score: 91 }),
       tmpRoot,
       expect.objectContaining({ codeReview: expect.objectContaining({ enabled: true }) }),
@@ -341,8 +341,8 @@ describe("code-reviewer pipeline integration (s5-c6)", () => {
       })(),
     ).resolves.toBeUndefined();
 
-    // (1) Sprint status is still "passed" — reviewer failure doesn't downgrade it
-    expect(result!.contract.status).toBe("passed");
+    // (1) Sprint status is still settled ("completed") — reviewer failure doesn't downgrade it
+    expect(result!.contract.status).toBe("completed");
 
     // (2) logger.warn was called with the "Code review skipped:" message
     const warnCalls = warnSpy.mock.calls.map((args) => args[0] as string);

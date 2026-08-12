@@ -239,11 +239,16 @@ describe("runWorkflow → RunResultFlusher.flush", () => {
     const config = createDefaultConfig("test-project", "brownfield");
     const pipelineResult = await new RunResultFlusher().flush(tmpDir, config, result);
 
-    // Two contracts were written with statuses matching their outcomes.
+    // Two contracts were written with statuses matching their outcomes. A "passed" OUTCOME
+    // (the SprintOutcomeKind fed in above) becomes a "completed" contract STATUS once
+    // flushed — sprint 5 of spec-20260812-terminal-vocabulary's flip at flusher.ts:63. This
+    // assertion was found reading the literal "passed" during that sprint's verification
+    // even though it was not on the sprint's own worklist — it is a genuine SprintContract
+    // .status read through the SHIPPED flusher, not an outcome-enum comparison.
     const contracts = await listContracts(tmpDir);
     expect(contracts).toHaveLength(2);
     const byNumber = new Map(contracts.map((c) => [c.sprintNumber, c.status]));
-    expect(byNumber.get(1)).toBe("passed");
+    expect(byNumber.get(1)).toBe("completed");
     expect(byNumber.get(2)).toBe("needs-rework");
 
     // History was stamped + appended (timestamps added by the flusher).
