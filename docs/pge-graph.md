@@ -698,13 +698,13 @@ go red the moment they stop being true, and the diff is the statement that they 
 
 A cap sized from a fixture is a cap sized from nothing, and a plan-and-contracts measurement
 alone does not say whether the OTHER eight channels are anywhere near their limit. Both gaps
-are closed by a corpus of real payloads, committed at **`.bober/workload/`** (never
+are closed by a corpus of **123 real payloads**, committed at **`.bober/workload/`** (never
 `.bober/golden/` — a workload entry is not a golden case, and the two directories are enforced
 by disjoint gates) and read at test time by `src/pge/golden/workload.ts`.
 
 Every entry is `{ entryId, channel, provenance, value }`, one file per entry, named for its
 own `entryId` — the same "the directory is the truth, not a list" discipline
-[The committed golden dataset](#the-committed-golden-dataset) uses. `provenance` says where the
+[The golden dataset](#the-golden-dataset-what-it-proves-and-what-it-does-not) uses. `provenance` says where the
 value came from: `"file"` (a byte-exact copy of one committed file's parsed value), `"file-group"`
 (assembled from several files — the whole `SprintContract[]` one spec's `sprints` resolves to),
 or `"observed"` (no committed file anywhere in the repository carries a payload for this
@@ -745,6 +745,17 @@ MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
 ```
 
 in that order — the second command reads the corpus the first one just wrote.
+
+**A regeneration is only partly pinned, and the asymmetry is worth knowing before you read the
+diff.** The `spec` and `sprintContracts` entries take *every* file that parses and are keyed to
+committed filenames, so a new spec adds an entry rather than displacing one. The
+`messages`/`evaluations` entries are a six-item representative sample drawn from a **live
+`readdir`** of `.bober/handoffs/` and `.bober/eval-results/` — deterministic for a given
+directory listing, but the listing is not pinned to a commit, so regenerating once more run
+artifacts have accumulated silently swaps committed entries for different real ones. The sample
+always keeps the genuine maximum, so the numbers above stay honest; the churn is in *which*
+payloads are held, not in whether the largest one is. Check a large `messages`/`evaluations`
+diff is a sample shift before committing it.
 
 **Nothing above is fixed either.** No cap in the committed artifact was raised by this corpus;
 sizing the caps from it is the next sprint's work.
