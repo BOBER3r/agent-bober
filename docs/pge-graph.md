@@ -34,6 +34,7 @@ Graph defaults: `concurrency: 1`, `durability: "superstep"`, `maxInlineBytes: 40
 - [Edges](#edges)
 - [Channels](#channels)
 - [The golden dataset: what it proves and what it does not](#the-golden-dataset-what-it-proves-and-what-it-does-not)
+- [The graph engine against a real workload](#the-graph-engine-against-a-real-workload)
 - [Engine migration disposition](#engine-migration-disposition)
 - [Changelog](#changelog)
 
@@ -437,6 +438,14 @@ The `counters` channel is where every loop counter listed in
 monotonic under concurrent branch writes, so two branches incrementing the same key cannot
 lose an increment and under-count a budget.
 
+Every one of the ten channels declares the graph default `maxInlineBytes: 4096`, and the
+commit boundary measures a write against that cap in **canonical** bytes — `canonicalJson`,
+`src/pge/runtime/commit.ts` — not in the bytes the value happens to occupy on disk. A write
+over the cap is refused with `StateBloatError` and the run continues with the channel
+unwritten. That number has now been measured against a real plan rather than a fixture, and
+it does not survive contact with one: see
+[The graph engine against a real workload](#the-graph-engine-against-a-real-workload).
+
 ## The golden dataset: what it proves and what it does not
 
 `.bober/golden/` holds regression cases: an input, the **pinned provider responses** for
@@ -501,6 +510,14 @@ record a run that never produces a result. The committed
 `replay-plan-clarification-round` case drives one clarification round and settles, which is
 what puts `plan_clarify` on an executed path; a `clarifyingBindings(99)` scenario pinning the
 bound becomes possible once the terminal path returns a result instead of throwing.
+
+**The clarification path is not the only route to it, and not the common one.** A separate
+measurement against a real plan — [The graph engine against a real
+workload](#the-graph-engine-against-a-real-workload) — reaches the identical terminal, with
+`state.spec` null and the identical throw, on a planner that settles on its first answer: the
+spec is simply too large for the channel to accept. Read the two together, the crash is a
+property of any run that arrives at `graceful_failure` before `spec` is written, not an edge
+case of a pathological planner.
 
 **A permanently-green golden dataset is not evidence of generation quality.** This is a
 limitation of the method, not a gap to be closed later. The runtime's own replay module
@@ -625,6 +642,57 @@ proven by mutating an in-memory copy of the file and asserting the audit reports
 that violation. `continue-on-error` detection is additionally proven against real data:
 the shipped informational `kpi-gate` job sets the key, so reporting `false` for the graph
 gate is a measurement rather than a coincidence.
+
+## The graph engine against a real workload
+
+Everything the golden dataset enforces, it enforces against fixtures, and fixtures are small:
+the largest `PlanSpec`-shaped object anywhere in the committed cases is **1,181 bytes**, so no
+case puts a plan-sized value anywhere near the 4,096-byte cap. A green regression job
+therefore says nothing at all about what a real plan does to the channels.
+
+That gap is now measured rather than argued. `src/pge/engine/real-workload.test.ts` drives a
+real `PgeEngine` over the committed `.bober/topology/coding.json` with this repository's own
+committed 14-sprint `PlanSpec` — `spec-20260805-pge-graph-engineering`, the plan that built
+this engine — as the planner's output, every effect answered from a stub and `fetch` replaced
+by a throwing implementation. Only the planner and materialize collaborators are re-pointed at
+the real artifacts; every node body, the reducers, the commit boundary and the trace writer
+are the shipped ones. What the run does is committed as data in
+`.bober/topology/measurements/real-workload.json`.
+
+**As committed at `graphVersion 1.2.0`, the engine does not execute that plan.**
+
+| measured | value |
+| --- | --- |
+| `spec` write by `plan_materialize`, superstep 12 | **29,214** canonical bytes against a declared limit of **4,096** — REJECTED |
+| `sprintContracts` write by `plan_materialize`, superstep 12 | **135,106** canonical bytes, being the 14 contracts, against **4,096** — REJECTED |
+| failures recorded | two, both `StateBloatError` |
+| `state.spec` at the finalize boundary | `null` |
+| terminal node reached | `graceful_failure` |
+| run status / verdict | `completed` / `failed` |
+| what `PgeEngine.run` returned | nothing — its own `commit.finalize` threw `FinalizeWithoutSpecError` |
+
+Three consequences a reader should not have to derive:
+
+- **The `FinalizeWithoutSpecError` crash recorded in
+  [A defect this coverage work surfaced](#a-defect-this-coverage-work-surfaced) is not
+  confined to a planner that never settles.** A plan of ordinary size reaches the same terminal
+  node with `state.spec` still null, for an unrelated reason, on the first attempt.
+- **`plan_materialize` is the sole writer of `spec`** ([Channels](#channels)), so a rejected
+  write there is not recoverable further down: no other node may supply the value, and the run
+  carries on with the channel unwritten.
+- **The rejections are in the run's own record but not in what the caller gets back.** They are
+  task failures on the interpreter's `GraphRunResult`, whose verdict and failures
+  `PgeEngine.run` discards before returning a `PipelineResult` — the recorded limitation named
+  in [Engine migration disposition](#engine-migration-disposition). The harness reads the
+  interpreter's result through the engine's own `interpreterFactory` seam for exactly that
+  reason; a harness that inspected the returned `PipelineResult` would have observed nothing.
+
+**Nothing above is fixed.** This section records a measurement, not a remedy: no cap in the
+committed artifact was raised, and no golden case was added or re-captured. Re-deriving the
+measurement is a deliberate act — `MEASURE_REAL_WORKLOAD=1 npx vitest run
+src/pge/engine/real-workload.test.ts` rewrites the committed file, and every other run of that
+test re-derives it and asserts the committed bytes are unchanged. The numbers above therefore
+go red the moment they stop being true, and the diff is the statement that they changed.
 
 ## Engine migration disposition
 
