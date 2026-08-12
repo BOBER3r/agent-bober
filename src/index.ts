@@ -155,9 +155,12 @@ export type {
 
 export {
   ensureBoberDir,
+  type ContractListing,
+  type SkippedContractFile,
   saveContract,
   loadContract,
   listContracts,
+  listContractsWithSkips,
   updateContract,
   saveSpec,
   loadSpec,

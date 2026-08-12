@@ -17,7 +17,7 @@ import type { Command } from "commander";
 
 import { findProjectRoot } from "../../utils/fs.js";
 import { loadHistory } from "../../state/history.js";
-import { listContracts } from "../../state/sprint-state.js";
+import { listContractsWithSkips } from "../../state/sprint-state.js";
 import {
   appendLesson,
   loadLessonIndex,
@@ -30,7 +30,7 @@ import {
 import { pruneLessons } from "../../orchestrator/memory/hygiene.js";
 import type { PrunableLesson } from "../../orchestrator/memory/hygiene.js";
 import { distill } from "../../orchestrator/memory/distill.js";
-import { loadEvalResults } from "../../orchestrator/memory/eval-source.js";
+import { loadEvalResultsWithSkips } from "../../orchestrator/memory/eval-source.js";
 import { loadConfig } from "../../config/loader.js";
 import { loadTeam } from "../../teams/registry.js";
 
@@ -74,8 +74,10 @@ export function registerMemoryCommand(program: Command): void {
       try {
         const ns = await resolveDefaultNamespace(projectRoot);
         const history = await loadHistory(projectRoot);
-        const contracts = await listContracts(projectRoot);
-        const evalResults = await loadEvalResults(projectRoot);
+        const { contracts, skipped: skippedContracts } =
+          await listContractsWithSkips(projectRoot);
+        const { results: evalResults, skipped: skippedEvals } =
+          await loadEvalResultsWithSkips(projectRoot);
         const drafts = distill(history, contracts, evalResults);
 
         // Stamp createdAt at persist time — never inside the pure distill fn
@@ -98,6 +100,23 @@ export function registerMemoryCommand(program: Command): void {
         process.stdout.write(
           chalk.green(`distilled ${drafts.length} lessons (${added} new)\n`),
         );
+
+        // Distillation is only as complete as its input. A file that could not
+        // be read produces no lesson, which from the outside is identical to
+        // there being no lesson to draw — so say what was missed rather than
+        // report a short read as a complete one.
+        for (const [label, dir, skipped] of [
+          ["contract", ".bober/contracts", skippedContracts],
+          ["eval-result", ".bober/eval-results", skippedEvals],
+        ] as const) {
+          if (skipped.length === 0) continue;
+          process.stderr.write(
+            chalk.yellow(
+              `warning: ${skipped.length} ${label} file(s) in ${dir} could not be read and were ` +
+                `NOT distilled: ${skipped.map((s) => s.file).join(", ")}\n`,
+            ),
+          );
+        }
       } catch (err) {
         process.stderr.write(
           chalk.red(

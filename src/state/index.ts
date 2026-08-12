@@ -2,9 +2,12 @@ import { join } from "node:path";
 import { ensureDir } from "./helpers.js";
 
 export {
+  type ContractListing,
+  type SkippedContractFile,
   saveContract,
   loadContract,
   listContracts,
+  listContractsWithSkips,
   updateContract,
   clearContractsForSpec,
 } from "./sprint-state.js";
