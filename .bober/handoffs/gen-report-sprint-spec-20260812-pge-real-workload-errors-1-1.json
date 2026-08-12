@@ -1,0 +1,6 @@
+{"contractId":"sprint-spec-20260812-pge-real-workload-errors-1","status":"complete","iteration":1,
+"commits":["5190f7d - bober(sprint-1): observe what the real 29 KB PlanSpec does to the graph engine"],
+"filesChanged":["src/pge/engine/__fixtures__/real-workload.ts (created)","src/pge/engine/real-workload.test.ts (created)",".bober/topology/measurements/real-workload.json (created)",".bober/specs/spec-20260812-pge-real-workload-errors.json (modified: assumptions[5] corrected 138284 -> 135106)"],
+"testsAdded":["src/pge/engine/real-workload.test.ts"],
+"blockers":[],
+"notes":"sc-1-5 CONTRADICTION FOUND AND CORRECTED: spec assumptions[5] said the 14 contracts total 138,284 bytes; measured canonical (the metric commit.ts:257-259 uses) is 135,106. The MEASUREMENT was committed unchanged; only the spec prose was corrected, in the same commit. All STRUCTURAL claims held: both spec and sprintContracts writes rejected with limit 4096 at superstep 12 by plan_materialize, state.spec null at the finalize boundary, terminal node graceful_failure, status completed / verdict failed, and commit.finalize throws FinalizeWithoutSpecError. Suite 6856 -> 6860 (+4 new tests), zero regressions."}

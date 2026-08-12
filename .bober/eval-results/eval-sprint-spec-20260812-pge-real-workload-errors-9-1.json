@@ -1,0 +1,112 @@
+{
+  "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-9-1",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-9",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T13:49:26Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "coverageVerified": "38 of 44, independently re-derived",
+  "synthesizeVerdictAgreement": "agree",
+  "score": {
+    "criteriaTotal": 6,
+    "criteriaPassed": 6,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 6,
+    "requiredFailed": 0,
+    "requiredTotal": 6
+  },
+  "strategyResults": [
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "6902 passed / 2 skipped / 0 failed",
+      "details": "6897 + 5 new mutation tests"
+    },
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "both tsconfigs"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors",
+      "details": "2 pre-existing warnings, unrelated"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "clean"
+    },
+    {
+      "strategy": "custom",
+      "required": true,
+      "result": "pass",
+      "output": "five pge gates green; pge diff EMPTY at 1.4.0; golden 6/6",
+      "details": "no topology change, scope confirmed"
+    },
+    {
+      "strategy": "custom",
+      "required": true,
+      "result": "pass",
+      "output": "evaluator mutated the REAL coverage.test.ts in both directions",
+      "details": "dropping the status check failed 5 tests including the real executor-driven pin; removing 'commit' from NEVER_EXECUTED failed 2 with 'expected 39 to be 38'. Both reverted, file restored byte-identical."
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-9-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "executedNodeIdsFromSpans requires span.status === 'ok'. Evaluator re-ran the real executor and confirmed commit's four spans (status 'interrupted', errorClass FailClosed) are correctly excluded."
+    },
+    {
+      "criterionId": "sc-9-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "Proven both ways on the REAL file, not only the synthetic block: dropping the status check failed 5 tests; a stale NEVER_EXECUTED failed 2 with 'expected 39 to be 38'."
+    },
+    {
+      "criterionId": "sc-9-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "NEVER_EXECUTED matches the evaluator's independently derived missing set exactly. Reasons rewritten, and the blanket 'structural block' claim corrected to distinguish missing-scenario entries."
+    },
+    {
+      "criterionId": "sc-9-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "docs carry 38 of 44, the previous 39, and the plain statement that the old rule counted reached-but-refused nodes as covered \u2014 all three verbatim, and the figure matches what the test enforces."
+    },
+    {
+      "criterionId": "sc-9-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator traced the synthesize chain through gates.ts:952-970, sprint-fanout.ts:51-65, supervisor.ts:165, the committed artifact and interpreter.ts:1004-1046 \u2014 and confirmed the rewritten reason holds. Also confirmed 'abandoned' is never written anywhere in src/pge/nodes, so the exclusion that actually bites is 'succeeded'."
+    },
+    {
+      "criterionId": "sc-9-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "All five commands executed by the evaluator independently."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "low",
+      "category": "quality",
+      "file": "src/pge/golden/coverage.test.ts",
+      "description": "Positive confirmation rather than a defect: the pre-existing blanket claim that every NEVER_EXECUTED entry is a structural block was already inaccurate for critique and rework_route before this sprint. The generator corrected it in place rather than leaving it standing or adding a golden case (which nonGoal 1 forbids). Right call.",
+      "expected": "No action."
+    }
+  ],
+  "summary": "All six criteria verified independently. The coverage figure was re-derived from scratch, commit's true span status measured rather than assumed, and the synthesize dead-code claim traced through seven modules and confirmed. The pin was mutated in both directions on the real file and restored byte-identical."
+}

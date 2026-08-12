@@ -3,8 +3,8 @@
   "specId": "spec-20260812-pge-real-workload-errors",
   "sprintNumber": 8,
   "title": "Reconcile the golden dataset, deliberately and diff-first",
-  "description": "The error channel changes every terminal artifact, so all five replay cases must be re-captured -- and two hand-authored integrity cases now state things that are false and must be RE-AUTHORED, not re-captured. This is the sprint where the temptation to run GOLDEN_CAPTURE=1 and commit without reading the diff is strongest, and where doing so would defeat the gate as surely as deleting it.",
-  "status": "proposed",
+  "description": "The replay RE-CAPTURE this sprint was written to do already happened \u2014 sprint 5 recaptured for the errors key and sprint 7 recaptured again for the 1.4.0 stamp, each with its diff verified. What remains is the work a capture can never do: two hand-authored integrity cases now assert things the runtime has made FALSE, and they must be RE-AUTHORED by judgement. Plus the executor's throws-expectation, which sprint 7 made obsolete, and a negative control that will silently stop biting as the dataset grows.",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-pge-real-workload-errors-7"
   ],
@@ -14,37 +14,37 @@
   "successCriteria": [
     {
       "criterionId": "sc-8-1",
-      "description": "All five enforcement \"replay\" cases are re-captured via GOLDEN_CAPTURE=1 and pass; the commit message describes the diff field by field rather than merely stating that cases were re-captured.",
-      "verificationMethod": "unit-test",
+      "description": "pipeline-result-reports-success-with-no-error-channel.json is RE-AUTHORED. Its caseId, title ('PipelineResult reports success and cannot report why not') and intent ('has NO error channel') are now false \u2014 PipelineResult gained errors in sprint 5. A re-capture cannot fix a hand-authored case: replaying a partial pin set throws MissingRecordingError. The prose must be rewritten to state what is true now, and if the caseId itself asserts the falsehood, the case must be renamed (which means a new file and deleting the old one).",
+      "verificationMethod": "manual",
       "required": true
     },
     {
       "criterionId": "sc-8-2",
-      "description": "pipeline-result-reports-success-with-no-error-channel.json is RE-AUTHORED -- its prose asserted behaviour the error channel has now removed, so a re-capture would preserve a false statement.",
+      "description": "commit-refused-fail-closed-under-noop-gate.json is RE-AUTHORED to state what a fail-closed refusal now produces, including the errors array and the exit-code/RunState consequences sprint 6 added.",
       "verificationMethod": "manual",
       "required": true
     },
     {
       "criterionId": "sc-8-3",
-      "description": "commit-refused-fail-closed-under-noop-gate.json is RE-AUTHORED to state what a fail-closed refusal now produces, including the errors array.",
-      "verificationMethod": "manual",
+      "description": "src/pge/golden/executor.test.ts's expectation that a truncated run THROWS is re-expressed as 'the case does not pass' \u2014 sprint 7 made the spec-less path RESOLVE, so a test still asserting a throw is asserting removed behaviour.",
+      "verificationMethod": "unit-test",
       "required": true
     },
     {
       "criterionId": "sc-8-4",
-      "description": "The replay-case count stays at or above GOLDEN_MIN_REPLAY_CASES, which is 5, and no case anywhere in this spec is relabelled from replay to integrity.",
+      "description": "executor.test.ts's negative control is made to scale with the dataset. Its 2-of-n mutation currently claims safety 'regardless of how many more cases the replay set grows to hold', which is false: (n-2)/n crosses the 80% threshold at n=11. Either adopt the modulo strategy its two siblings (dataset.test.ts, gate.test.ts) already use, or state the real breakpoint. The control must still be proven to bite by mutation.",
       "verificationMethod": "unit-test",
       "required": true
     },
     {
       "criterionId": "sc-8-5",
-      "description": "src/pge/golden/executor.test.ts's expectation that a truncated run THROWS is re-expressed as 'the case does not pass', since the spec-less path now resolves.",
+      "description": "The replay count stays at or above GOLDEN_MIN_REPLAY_CASES and no case anywhere is relabelled from replay to integrity. The integrity/replay split is verified by reading the files, not by trusting a count.",
       "verificationMethod": "unit-test",
       "required": true
     },
     {
       "criterionId": "sc-8-6",
-      "description": "The blocking golden regression job passes end to end, dataset half and runtime half, against the reconciled dataset.",
+      "description": "The blocking golden regression job passes end to end, both halves, against the reconciled dataset.",
       "verificationMethod": "unit-test",
       "required": true
     },
@@ -56,16 +56,23 @@
     }
   ],
   "nonGoals": [
-    "Relabelling any failing replay case as integrity to get a green build -- the floor has zero slack at exactly 5 and this is explicitly forbidden.",
-    "Deleting a case to make the count work.",
-    "Adding new scenarios beyond the one sprint 7 captured."
+    "Re-capturing replay cases \u2014 already done by sprints 5 and 7, with both diffs verified. Do not recapture again unless a criterion here forces it, and say why if it does.",
+    "Relabelling any case from replay to integrity to make a count work.",
+    "Touching the coverage rule \u2014 that is sprint 9.",
+    "Changing runtime behaviour of any kind. This sprint reconciles the dataset and its tests to the runtime that already shipped."
   ],
   "stopConditions": [
-    "A replay case cannot be made to pass by re-capture and the reason is a runtime defect rather than an expected artifact change -- stop and report the defect; do not re-author around it.",
-    "The dataset drops below the replay floor -- stop."
+    "Re-authoring a case would require asserting something you cannot verify against the shipped runtime \u2014 stop and report.",
+    "The dataset drops below the replay floor.",
+    "Making sc-8-3 or sc-8-4 pass would require weakening what the test catches \u2014 stop; NFR0 forbids it."
   ],
   "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
-  "assumptions": [],
+  "assumptions": [
+    "VERIFIED: sprint 5 recaptured all five replay cases for the errors key (52 insertions, 0 deletions). Sprint 7 recaptured again for the 1.4.0 graphVersion stamp and added a sixth case. The golden gate is currently 6/6.",
+    "The distinction that IS this sprint: a replay case's expectation is CAPTURED from a real run, so a behaviour change legitimately rewrites it. An integrity case is hand-authored prose plus a PARTIAL pin set \u2014 replaying one throws MissingRecordingError at the first unpinned call, so it cannot be re-captured at all. Its prose must be rewritten by an act of judgement.",
+    "EVALUATOR FINDING carried from sprint 7 (medium): executor.test.ts's fixed 2-case mutation will silently stop biting at n=11 replay cases. Its siblings dataset.test.ts and gate.test.ts already switched to a scaling modulo strategy.",
+    "DOCUMENTER FINDING carried from sprint 5: the first case's own FILENAME and caseId assert the falsehood ('pipeline-result-reports-success-with-no-error-channel'). Renaming means a new file plus deleting the old one \u2014 a caseId that contradicts the runtime is worse than a stale comment, because the dataset validity check ties caseId to filename."
+  ],
   "outOfScope": [],
   "ambiguityScore": 3,
   "generatorNotes": "The distinction between re-CAPTURE and re-AUTHOR is the whole sprint. A replay case's expectation is captured from a real run, so a behaviour change legitimately rewrites it. An integrity case is hand-authored prose plus a partial pin set: when the behaviour it describes changes, the PROSE is now false and must be rewritten by a human-equivalent act of judgement -- re-capturing it is not even possible, since replaying a partial pin set throws MissingRecordingError at the first unpinned call. Read the two named files and rewrite what they claim. When you re-capture the five, read the resulting diff before committing and write down what moved.",
@@ -76,7 +83,16 @@
     "src/pge/golden/capture.test.ts"
   ],
   "estimatedDuration": "large",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-8-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T13:18:40Z"
+    }
+  ],
   "createdAt": "2026-08-12T00:00:00Z",
-  "updatedAt": "2026-08-12T00:00:00Z"
+  "updatedAt": "2026-08-12T13:18:40Z",
+  "completedAt": "2026-08-12T13:18:40Z",
+  "completionNote": "All 7 criteria met on iteration 1. The falsified case was RENAMED (git recorded R079) from pipeline-result-reports-success-with-no-error-channel to pipeline-result-omits-errors-key-on-a-clean-run and re-authored; its pinned artifact was verified programmatically byte-identical, so only prose moved. commit-refused-fail-closed-under-noop-gate re-authored with a pinned errors array whose FAIL_CLOSED message the evaluator matched VERBATIM against interrupt.ts:543, plus prose on the sprint-6 CLI and MCP consequences checked against run.ts:251 and run-manager.ts:229. executor.test.ts's throws-expectation re-expressed as 'does not pass' (sprint 7 made that path resolve) and proven non-vacuous by live mutation. The last fixed-count negative control now scales by modulo like its two siblings; evaluator verdict STRENGTHENED \u2014 the field switch to pipelineResult[0].success is a strict generalization, since the old contracts[0].title selector would have been undefined on the case whose contracts array is empty. 43 cases: 6 replay / 37 integrity, read from the files at both HEAD and HEAD~1 \u2014 no relabelling. Golden 6/6. Suite unchanged at 6897. No runtime behaviour changed; pge diff empty at 1.4.0."
 }

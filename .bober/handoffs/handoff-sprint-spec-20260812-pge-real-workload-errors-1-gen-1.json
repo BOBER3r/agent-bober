@@ -1,0 +1,126 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-pge-real-workload-errors-1-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-1",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T00:00:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Make PgeEngine able to execute a realistic plan at all \u2014 today every channel caps at 4,096 bytes while this repository's own PlanSpec is 29,247, so plan_materialize's writes are silently dropped and the run proceeds with state.spec null. Then give the engine a way to report that a run did not do what it claims: a fail-closed refusal of the git-effect commit node currently returns success: true because PipelineResult has no error channel.",
+    "completedSprints": [],
+    "currentBranch": "bober/pge-graph-engineering",
+    "relevantFiles": [
+      "src/pge/engine/real-workload.test.ts",
+      "src/pge/engine/__fixtures__/real-workload.ts",
+      ".bober/topology/measurements/real-workload.json",
+      "src/pge/golden/executor.ts",
+      "src/pge/runtime/commit.ts",
+      "src/pge/runtime/interpreter.ts",
+      "src/pge/engine/pge-engine.ts",
+      ".bober/topology/coding.json"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-pge-real-workload-errors-1",
+    "specId": "spec-20260812-pge-real-workload-errors",
+    "sprintNumber": 1,
+    "title": "Observe what a real 29 KB plan actually does to the graph engine",
+    "description": "Stop deriving and start observing. Build a harness that runs PgeEngine over this repository's own committed 29,247-byte PlanSpec with every effect stubbed and the network disabled, and commit what happens as data: every StateBloatError raised, the terminal node reached, and the run verdict. Nothing is fixed in this sprint. Its entire value is that the next four sprints act on a measurement rather than on a chain of inferences.",
+    "status": "in-progress",
+    "dependsOn": [],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-1-1",
+        "description": "A committed test constructs a real PgeEngine over the committed .bober/topology/coding.json and runs it with .bober/specs/spec-20260805-pge-graph-engineering.json as the planner's output, with every effect answered from stubs and fetch replaced by a throwing implementation.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-2",
+        "description": "The run's rejected updates are collected and written to a committed measurement artifact recording, per rejection: channel id, nodeId, serialised bytes, and the channel's declared limit.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-3",
+        "description": "The measurement artifact records the terminal node the run reached and the run verdict, read from the interpreter's own GraphRunResult rather than from the PipelineResult PgeEngine.run returns.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-4",
+        "description": "A test asserts the measurement is reproducible: re-running the harness against unchanged inputs produces byte-identical measurement output.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-5",
+        "description": "If the observation contradicts the spec's assumptions -- for example if the writes are not rejected, or the terminal node differs from the derivation -- the measurement is committed unchanged and the SPEC's assumptions are corrected in the same commit. The measurement is never adjusted to match the prediction.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-1-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Raising any cap or changing any channel declaration -- that is sprint 3.",
+      "Fixing FinalizeWithoutSpecError, adding an error channel, or touching PipelineResult.",
+      "Adding or re-capturing any golden case."
+    ],
+    "stopConditions": [
+      "The harness cannot construct a PgeEngine over the committed artifact without editing shipped code -- stop and report what blocks it.",
+      "The observed behaviour contradicts the derivation in a way that invalidates the remaining eight sprints -- stop, commit the measurement, and report."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+    "assumptions": [],
+    "outOfScope": [],
+    "ambiguityScore": 3,
+    "generatorNotes": "Reuse the existing machinery rather than inventing a parallel one. src/pge/golden/executor.ts already builds `new PgeEngine(...)` over the committed artifact copied into a throwaway root, installs withNetworkDisabled, and binds every collaborator to a throwing function -- read it first and follow its shape. The rejections you need are on CommitResult.rejected (src/pge/runtime/commit.ts) and surface as TaskFailure entries with errorClass StateBloatError (src/pge/runtime/interpreter.ts:322-328, :1400-1412). Note carefully that PgeEngine.run DISCARDS GraphRunResult.verdict and .failures at :461-475, so a harness that only inspects the returned PipelineResult will see nothing -- you must observe the interpreter's result, which may mean driving the interpreter directly rather than through PgeEngine.run. Say in the code which one you drove and why. Do NOT put the measurement behind an env var that defaults to skipping; a measurement nobody runs is not a measurement.",
+    "evaluatorNotes": "The central risk is a harness that passes for the wrong reason. Verify the run genuinely used the committed .bober/topology/coding.json and not a fixture: golden-graph.ts raises spec to 8192 and sprintContracts to 65536, so a harness that accidentally picked it up would show FEWER rejections and look healthier. Check the graph actually loaded. Second: confirm the spec fed in is the real 29,247-byte file, not a truncated copy -- measure it in the test. Third: confirm the network and collaborator doors are genuinely shut by asserting a reached collaborator fails the run by name. Finally, re-run the harness twice and diff the measurement output yourself; sc-1-4 is only meaningful if you executed it.",
+    "estimatedFiles": [
+      "src/pge/engine/real-workload.test.ts",
+      "src/pge/engine/__fixtures__/real-workload.ts",
+      ".bober/topology/measurements/real-workload.json"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T00:00:00Z",
+    "updatedAt": "2026-08-12T00:00:00Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    },
+    "packageScripts": {
+      "build": "tsc",
+      "dev": "tsc --watch",
+      "lint": "eslint src/",
+      "typecheck": "tsc --noEmit",
+      "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
+      "test": "vitest",
+      "update-all": "node scripts/update-all.mjs",
+      "update-all:check": "node scripts/update-all.mjs --check",
+      "prepublishOnly": "npm run build"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

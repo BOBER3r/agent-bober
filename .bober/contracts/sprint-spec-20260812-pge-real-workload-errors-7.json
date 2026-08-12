@@ -4,7 +4,7 @@
   "sprintNumber": 7,
   "title": "A plan that never settles reports failure instead of crashing",
   "description": "A planner that keeps asking for clarification exhausts planClarifyRounds and reaches the terminal boundary with state.spec still null, and commit.finalize throws FinalizeWithoutSpecError instead of returning a failed result. Fix it with a NEW scalar channel rather than a second writer on spec -- replaceIfNewer is scalar and the validator emits MultipleWritersOnScalarChannel at severity error, so adding spec to plan_clarify.writes is structurally illegal, not merely costly.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-pge-real-workload-errors-6"
   ],
@@ -65,7 +65,14 @@
     "The new golden case cannot be captured because the run still throws -- stop; sc-7-3 is then unmet and the sprint is not done."
   ],
   "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
-  "assumptions": [],
+  "assumptions": [
+    "VERIFIED: the spec channel's reducer replaceIfNewer is declared scalar at src/contracts/topology.ts:133, and the shipped validator emits MultipleWritersOnScalarChannel at severity error for any scalar channel with more than one writer (src/pge/topology/validate.ts:704-716). plan_materialize writes ['refs','spec','sprintContracts']; plan_clarify writes only ['messages']. So adding spec to a second writer is STRUCTURALLY ILLEGAL, not merely costly \u2014 hence the new specDraft channel.",
+    "VERIFIED: commit.finalize is a boundary METHOD called unconditionally at the end of PgeEngine.run, and is DISTINCT from the unreachable `finalize` NODE (whose only edge in is commit -> finalize). This sprint is about the METHOD. Conflating them produces false tests.",
+    "VERIFIED: FinalizeWithoutSpecError is thrown at src/pge/runtime/commit.ts:436 when state.spec === null.",
+    "SPRINT 3 PRECEDENT, expect it again: a graphVersion bump makes capture.test.ts's byte-exact 'fresh capture equals committed' check fail for all replay cases on the embedded graph.graphVersion stamp alone. Adding a channel IS a topology change, so this sprint bumps to 1.4.0 and MUST re-capture. That is authorised here for the same narrow reason as in sprint 3 \u2014 verify the diff is confined to the version stamp plus whatever this sprint's own behaviour change legitimately moves.",
+    "SPRINT 3 PRECEDENT: src/pge/topology/coding.graph.test.ts pins graphVersion (now '1.3.0') and src/pge/topology/docs.test.ts pins the changelog list (now ['1.3.0','1.2.0','1.1.0','1.0.0']) with a DERIVED negative-control fixture (versionTheChangelogDoesNotMention). Both must move deliberately. The render fixtures src/pge/topology/__fixtures__/coding.mermaid and coding.dot are byte-pinned on the version header and need regenerating.",
+    "SPRINT 5 CONTEXT: PipelineResult now carries errors?: readonly PipelineFailure[], layered in PgeEngine.run via a conditional spread. A spec-less terminal should RESOLVE with success false, a populated errors array and needsClarification true \u2014 the machinery to report it already exists."
+  ],
   "outOfScope": [],
   "ambiguityScore": 4,
   "generatorNotes": "The illegality of the obvious fix is verified, so do not re-litigate it: replaceIfNewer is declared scalar at src/contracts/topology.ts:133 and the validator emits MultipleWritersOnScalarChannel at severity error at src/pge/topology/validate.ts:704-716. plan_materialize is the sole writer of spec today; plan_clarify writes only messages. Add specDraft as its own scalar channel with one writer. Remember commit.finalize is the boundary METHOD called unconditionally by PgeEngine.run -- this sprint is about that method, not about reaching the finalize NODE, which stays unreachable. Capture the new golden case with GOLDEN_CAPTURE=1 against the real bindings, per the existing two-run capture design.",
@@ -73,14 +80,28 @@
   "estimatedFiles": [
     "src/pge/topology/coding.graph.ts",
     ".bober/topology/coding.json",
+    ".bober/topology/state-audit.json",
     "src/pge/runtime/commit.ts",
     "src/pge/runtime/commit.test.ts",
     "src/pge/golden/capture.ts",
     ".bober/golden/",
-    "docs/pge-graph.md"
+    "docs/pge-graph.md",
+    "src/pge/topology/coding.graph.test.ts",
+    "src/pge/topology/docs.test.ts",
+    "src/pge/topology/__fixtures__/coding.mermaid",
+    "src/pge/topology/__fixtures__/coding.dot"
   ],
   "estimatedDuration": "large",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-7-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T12:51:20Z"
+    }
+  ],
   "createdAt": "2026-08-12T00:00:00Z",
-  "updatedAt": "2026-08-12T00:00:00Z"
+  "updatedAt": "2026-08-12T12:51:20Z",
+  "completedAt": "2026-08-12T12:51:20Z",
+  "completionNote": "All 7 criteria met on iteration 1. New scalar specDraft channel (sole writer plan_draft, cap 65,536 derived by capForCorpusMax from a measured 29,214-byte corpus entry), graphVersion 1.4.0, 11 channels, OverallState 15 -> 16 keys. commit.finalize falls back to specDraft and RESOLVES with success:false + needsClarification:true; FinalizeWithoutSpecError narrowed, not deleted \u2014 the evaluator mutated commit.ts in BOTH directions to prove each branch's test genuinely bites. New golden case replay-plan-clarify-rounds-exhausted with exactly 3 plan_draft calls, matching planClarifyRounds maxIterations 3. Five cases recaptured, diffs confined to graphVersion. Golden 6/6. Suite 6894 -> 6897. NOTABLE: the generator first sized specDraft at 131,072 by analogy \u2014 sprint 3's equality pin REJECTED it \u2014 then at the 4,096 default, which reproduced the exact defect sprint 3 had fixed. It resolved this by adding a measured corpus entry and letting capForCorpusMax derive the value. The two-directional pin did precisely the job it was built for. NEGATIVE CONTROLS: three gate tests were modified because the replay count grew 5 -> 6. Evaluator verdict STRENGTHENED \u2014 it reverted each to its pre-sprint logic and confirmed the old versions produced FALSE PASSES against the 6-case dataset, so the changes were a required fix rather than a threshold accommodation."
 }

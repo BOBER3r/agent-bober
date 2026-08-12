@@ -1,0 +1,111 @@
+{
+  "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-7-1",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-7",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T12:51:20Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "negativeControlVerdict": "strengthened",
+  "score": {
+    "criteriaTotal": 7,
+    "criteriaPassed": 7,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 0,
+    "requiredPassed": 7,
+    "requiredFailed": 0,
+    "requiredTotal": 7
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "both tsconfigs"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "clean"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": "unrelated"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "6897 passed / 2 skipped / 0 failed",
+      "details": "+3 over 6894. The reported worktree.test.ts ENOTEMPTY flake did not reproduce in three isolated runs."
+    },
+    {
+      "strategy": "custom",
+      "required": true,
+      "result": "pass",
+      "output": "pge validate --mode full: 0 diagnostics; pge docs --check: ok (44 nodes); golden 6/6",
+      "details": "no MultipleWritersOnScalarChannel"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-7-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator computed writers-by-channel from the REGENERATED artifact (not the authored literal): specDraft ['plan_draft'], spec unchanged ['plan_materialize']. pge validate --mode full reports 0 diagnostics."
+    },
+    {
+      "criterionId": "sc-7-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "1.3.0 -> 1.4.0 with a '### 1.4.0' changelog section, a specDraft channel-table row, counts updated 10->11 throughout, and the plan_draft inventory row updated. pge docs --check green."
+    },
+    {
+      "criterionId": "sc-7-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator MUTATED commit.ts to force the specDraft branch to throw and confirmed the test then failed \u2014 proving it is not vacuous. Also ran the real end-to-end pge-engine test with a planner that never settles: success false, needsClarification true, errors carrying a LoopExhausted at plan_clarify_check."
+    },
+    {
+      "criterionId": "sc-7-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator mutated the neither-present throw to `if (false)` and confirmed the test failed by receiving a resolved object instead of a rejection \u2014 so a silent deletion of the narrowed error would be caught. Both branches proved by separate tests."
+    },
+    {
+      "criterionId": "sc-7-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator read the pinned case directly: exactly 3 plan_draft responses, all needs-clarification, sequence ending [...plan_draft x3, graceful_failure] with no 4th call and no plan_materialize \u2014 the bound terminates the loop rather than early settlement or overshoot."
+    },
+    {
+      "criterionId": "sc-7-6",
+      "required": true,
+      "result": "pass",
+      "evidence": "The recorded-defect section now opens 'Fixed at 1.4.0.' and is past tense throughout; no sentence asserts the defect is still open."
+    },
+    {
+      "criterionId": "sc-7-7",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator ran all five commands independently."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [
+    {
+      "priority": "medium",
+      "category": "quality",
+      "file": "src/pge/golden/executor.test.ts",
+      "line": "234",
+      "description": "CARRY FORWARD TO SPRINT 8. The negative control's new comment claims mutating 2 cases is safe 'regardless of how many more cases the replay set grows to hold'. That is false for a FIXED mutation count against a GROWING denominator: (n-2)/n crosses the 80% threshold at n=11 (9/11 = 81.8%). dataset.test.ts and gate.test.ts switched to a modulo strategy that scales; executor.test.ts hardcodes two caseIds. Not a defect today \u2014 mutation-tested and correctly failing at n=6 \u2014 but it will silently stop biting at 11 replay cases, the same class of break this sprint had to fix at 6.",
+      "expected": "Either correct the comment to state the real breakpoint (n=11), or switch to a mutation count that scales with replayCases.length, matching the other two files."
+    }
+  ],
+  "summary": "All seven criteria verified with runnable evidence including two-directional mutation of commit.ts. The three modified negative controls were verified STRENGTHENED by reverting each and confirming the pre-sprint versions produced false passes at the new case count."
+}

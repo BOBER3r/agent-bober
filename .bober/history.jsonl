@@ -967,3 +967,25 @@
 {"event":"plan-completed","specId":"spec-20260805-pge-graph-engineering","sprintsCompleted":14,"timestamp":"2026-08-07T00:14:08.407Z"}
 {"event":"plan-created","specId":"spec-20260812-pge-real-workload-errors","title":"PGE real-workload viability and an error channel on PipelineResult","sprintCount":9,"timestamp":"2026-08-12T00:00:00Z"}
 {"event":"pipeline-started","timestamp":"2026-08-12T00:00:00Z","task":"spec-20260812-pge-real-workload-errors — PGE real-workload viability and an error channel on PipelineResult"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-1","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T00:00:00Z"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-1","iteration":1,"timestamp":"2026-08-12T00:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-1","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T04:13:08Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-2","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T04:30:00Z","note":"estimatedFiles corrected: corpus moved from .bober/golden/workload/ to .bober/workload/ — the golden runner rejects non-case files in its directory"}
+{"event":"sprint-iteration-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-2","iteration":1,"timestamp":"2026-08-12T04:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-2","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T05:08:44Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-3","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T05:30:00Z"}
+{"event":"sprint-iteration-failed","contractId":"sprint-spec-20260812-pge-real-workload-errors-3","iteration":1,"failedCriteria":["sc-3-7"],"timestamp":"2026-08-12T05:55:00Z","note":"suite red: 5x capture.test.ts byte-exact vs graphVersion stamp; 1x workload corpus self-reference staleness"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-3","specId":"spec-20260812-pge-real-workload-errors","iteration":2,"timestamp":"2026-08-12T06:17:53Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-4","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T06:40:00Z","note":"contract re-scoped: sprint 3 revealed SuperstepLimitExceededError; sprint 4 now diagnoses ceiling-vs-non-convergence before fixing anything"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-4","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T07:03:29Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-5","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T07:30:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-5","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T11:26:23Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-6","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T11:40:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-6","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T11:46:48Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-7","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T12:00:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-7","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T12:51:20Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-8","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T13:10:00Z","note":"re-scoped: recapture already done by sprints 5 and 7; what remains is re-AUTHORING plus two obsolete test expectations"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-8","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T13:18:40Z"}
+{"event":"sprint-started","contractId":"sprint-spec-20260812-pge-real-workload-errors-9","specId":"spec-20260812-pge-real-workload-errors","timestamp":"2026-08-12T13:35:00Z"}
+{"event":"sprint-completed","contractId":"sprint-spec-20260812-pge-real-workload-errors-9","specId":"spec-20260812-pge-real-workload-errors","iteration":1,"timestamp":"2026-08-12T13:49:26Z"}
+{"event":"plan-completed","specId":"spec-20260812-pge-real-workload-errors","sprintsCompleted":9,"timestamp":"2026-08-12T13:49:26Z"}

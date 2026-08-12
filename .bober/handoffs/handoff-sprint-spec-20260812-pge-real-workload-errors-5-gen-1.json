@@ -1,0 +1,171 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-pge-real-workload-errors-5-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-5",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T07:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Make PgeEngine able to execute a realistic plan at all \u2014 today every channel caps at 4,096 bytes while this repository's own PlanSpec is 29,247, so plan_materialize's writes are silently dropped and the run proceeds with state.spec null. Then give the engine a way to report that a run did not do what it claims: a fail-closed refusal of the git-effect commit node currently returns success: true because PipelineResult has no error channel.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-1",
+        "title": "Observe what a real 29 KB plan actually does to the graph engine",
+        "summary": "All 6 required criteria met on iteration 1. Harness drives a real PgeEngine over the committed coding.json (all 10 channels confirmed at 4096, not the golden-graph fixture's 8192/65536) and captures the interpreter's GraphRunResult through the interpreterFactory seam that PgeEngine.run discards. MEASURED: spec 29,214 canonical bytes and sprintContracts 135,106 both REJECTED at superstep 12 by plan_materialize against limit 4096; terminal node graceful_failure; status completed / verdict failed; commit.finalize throws FinalizeWithoutSpecError. sc-1-5 fired: spec assumptions[5] corrected 138,284 -> 135,106 (canonicalJson vs naive JSON.stringify); the measurement was committed unchanged. Suite 6856 -> 6860, zero regressions."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+        "title": "A committed workload corpus, and the measurement extended to every channel",
+        "summary": "All 6 required criteria met on iteration 1. Corpus of 123 entries at .bober/workload/ (tracked, nothing leaked into .bober/golden/). byteSize EXPORTED from commit.ts and imported by the corpus helper; sprint 1's duplicate deleted. MEASURED corpus maxima (canonical bytes): spec 48,097 | sprintContracts 135,106 | messages 1,292 | evaluations 1,067 | refs 283 | ledger 221 | testAnchors 114 | branchStatus 102 | counters 64 | verdict 8 \u2014 ONLY spec and sprintContracts exceed the 4,096 cap. 60/250 contracts and 1/53 specs fail schema and are skipped by safeParse, deliberately and visibly. refs/counters/branchStatus/ledger have no committed payload and were sourced by OBSERVING a real run through a RunContext.commit spy, provenance {kind:'observed'}. Suite 6860 -> 6871."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-3",
+        "title": "Size the caps to the corpus, regenerate the artifact, pin both directions",
+        "summary": "All 7 criteria met on iteration 2. spec 4,096 -> 131,072 and sprintContracts 4,096 -> 524,288; other eight unchanged. graphVersion 1.3.0 + changelog. Caps pinned as EQUALITY to capForCorpusMax = next power of two at or above 2x corpus max \u2014 proven non-tautological by the evaluator's own standalone mutation script in both directions for both channels. StateBloatError re-sized, not removed. 5 golden replay cases recaptured, diff verified as exactly graph.graphVersion and nothing else. In-flight specs excluded from the corpus (keyed on PlanSpecStatus) after the corpus was found to invalidate itself mid-run. Suite 6877/0 failed. MAJOR FINDING carried to sprint 4: with the caps raised the run now reaches the 14-contract fan-out and throws SuperstepLimitExceededError at DEFAULT_MAX_SUPERSTEPS=200 before any terminal node. The byte cap was masking a second wall; the two defects only looked like one symptom."
+      },
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-4",
+        "title": "Diagnose why a real plan still does not terminate, and fix it only if the cause is a ceiling",
+        "summary": "8 of 9 criteria met, 1 skipped by its own mutually-exclusive trigger (sc-4-6 applies only to verdict b). VERDICT: (a) INSUFFICIENT CEILING, independently re-derived by the evaluator at FIVE contract counts \u2014 1:39, 4:84, 7:129, 10:174, 14:234 supersteps \u2014 exactly 15 supersteps marginal per contract at every interval. The evaluator also read the raw trace to confirm sprint_body's 1,272 spans are 14 status-ok executions plus 1,258 status-serialized deferral records under concurrency 1 on a real dependsOn DAG, falsifying non-convergence. Fix: PGE_ENGINE_MAX_SUPERSTEPS = supersepsForMeasuredCost(234) = 512, wired into PgeEngine.run's RunContext and pinned two-directionally (a hand-edited literal breaks it; lowering to 200 reproduces the original throw). The interpreter's own DEFAULT_MAX_SUPERSTEPS=200 and throw site were NOT touched. MILESTONE: PgeEngine now executes this repository's own real 29 KB PlanSpec and its 14 real contracts END TO END, terminating at graceful_failure \u2014 explicitly not finalize, because commit remains FAIL_CLOSED-refused under the autopilot noop mechanism. No topology change (pge diff empty, graphVersion still 1.3.0). Suite 6877 -> 6879."
+      }
+    ],
+    "currentBranch": "bober/pge-graph-engineering",
+    "relevantFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/pge/engine/pge-engine.ts",
+      "src/pge/engine/pge-engine.test.ts",
+      "docs/pge-graph.md",
+      "src/orchestrator/workflow/flusher.ts",
+      "src/orchestrator/finalize.ts",
+      "src/orchestrator/finalize.test.ts",
+      "src/pge/runtime/interpreter.ts",
+      "src/orchestrator/workflow/conformance.engines.test.ts",
+      "src/orchestrator/workflow/oracle-retention.test.ts"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-pge-real-workload-errors-5",
+    "specId": "spec-20260812-pge-real-workload-errors",
+    "sprintNumber": 5,
+    "title": "PipelineResult gains an error channel, layered in the engine",
+    "description": "A run whose commit was refused must not report that it succeeded. Add errors to PipelineResult and populate it from the interpreter's failures -- which PgeEngine.run currently discards, with a comment saying so. This deliberately revises a surface the previous spec froze; that revision is authorised, and the docs/pge-graph.md disposition it changes is updated in the same commit.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260812-pge-real-workload-errors-4"
+    ],
+    "features": [
+      "feat-3"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-5-1",
+        "description": "PipelineResult declares errors?: readonly PipelineFailure[]; PipelineFailure carries nodeId, branchKey, errorClass and message, mapped 1:1 from TaskFailure minus superstep.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-2",
+        "description": "The array is layered in PgeEngine.run, NOT inside finalizePipelineRun, by removing the discard at src/pge/engine/pge-engine.ts:461-475 -- mirroring how RunResultFlusher.flush layers needsClarification with a spread after finalization.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-3",
+        "description": "The frozen key-order test in src/orchestrator/finalize.test.ts stays green, unmodified.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-4",
+        "description": "A PgeEngine run whose git-effect commit node is refused FAIL_CLOSED under the autopilot noop mechanism returns a non-empty errors array whose first entry has nodeId \"commit\" and an errorClass naming the refusal.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-5",
+        "description": "A TsPipelineEngine run returns a result with no errors key, and `success` keeps the shared deriveRunSuccess formula on both engines -- Option A semantics, per the spec's D3 decision.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-6",
+        "description": "docs/pge-graph.md's engine-migration disposition and the sprint-13 recorded limitation are rewritten to state that the error channel now exists, in this commit.",
+        "verificationMethod": "manual",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-7",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+        "verificationMethod": "build",
+        "required": true
+      },
+      {
+        "criterionId": "sc-5-8",
+        "description": "Two drive-by corrections in code this spec already shipped: the public export supersepsForMeasuredCost (src/pge/engine/pge-engine.ts) is renamed to fix the missing 't' in 'supersteps' across its declaration and both call sites; and the stale comments at src/pge/topology/coding.graph.ts:108 ('123 real payloads') and :191 ('52 committed PlanSpecs that parse') are corrected to 120 and 50, the values since sprint 3's in-flight-spec exclusion. Neither may change behaviour \u2014 the artifact checksum must not move.",
+        "verificationMethod": "unit-test",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Setting success:false on a fail-closed refusal -- explicitly Option B, out of scope, and it would add completionMarker to the divergence set.",
+      "Changing deriveRunSuccess, the runPipeline signature, or the completion marker.",
+      "Surfacing the errors in the CLI or MCP layers -- that is sprint 6.",
+      "Re-capturing golden cases -- that is sprint 8, deliberately separated so the diff is read on its own."
+    ],
+    "stopConditions": [
+      "Adding the optional field breaks a consumer that cannot be fixed within this sprint -- stop, list the consumers, and report.",
+      "conformance.engines.test.ts's divergence set changes as a side effect -- stop; a change to that pin must be deliberate and separately justified."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+    "assumptions": [
+      "VERIFIED: PgeEngine.run discards GraphRunResult.verdict and .failures at src/pge/engine/pge-engine.ts:461-482, and its own comment states closing it needs a PipelineResult revision, which sprint-13 nonGoal 3 forbade. That authorisation now exists (spec resolvedClarifications D2).",
+      "VERIFIED: TaskFailure carries { nodeId, branchKey, superstep, errorClass, message } at src/pge/runtime/interpreter.ts:322-328.",
+      "VERIFIED: RunResultFlusher.flush layers needsClarification onto the finalized result with a spread AFTER finalizePipelineRun returns (src/orchestrator/workflow/flusher.ts:113-127), precisely so the two engines cannot disagree about shared fields. This is the pattern to mirror.",
+      "VERIFIED by sprint 4, on REAL data: the committed measurement .bober/topology/measurements/real-workload.json now records engineOutcome {kind:'resolved', success:true} alongside verdict 'failed' and failures [{nodeId:'commit', errorClass:'FailClosed', superstep:232}]. The defect this sprint fixes is now demonstrable on a real 14-contract workload, not only on a fixture.",
+      "D3 (spec resolvedClarifications): Option A semantics. `success` keeps the frozen deriveRunSuccess formula shared with the imperative engine; callers treat a non-empty `errors` as failure. Option B (success:false on a FAIL_CLOSED refusal) is OUT OF SCOPE here \u2014 it moves the completion marker and the pipeline-complete history phase and would add completionMarker to the divergence set."
+    ],
+    "outOfScope": [],
+    "ambiguityScore": 4,
+    "generatorNotes": "Read src/orchestrator/workflow/flusher.ts:113-127 first -- it is the exact pattern, and its comment explains WHY engine-specific fields are layered after finalizePipelineRun rather than inside it: so the two engines cannot disagree about the shared fields. Follow it literally. The discard you are removing is at src/pge/engine/pge-engine.ts:461-475 and its own comment tells you what it was waiting for. Keep errors OPTIONAL so every existing consumer of PipelineResult keeps compiling; enumerate those consumers before you start. Do not widen the sprint split to absorb a terminal-node failure -- that would invent a failed sprint that did not happen, which the discarded comment warns against explicitly.",
+    "evaluatorNotes": "Two things to check hard. First, that the field really is layered in the engine and not in finalize: read finalizePipelineRun and confirm it is untouched, and confirm finalize.test.ts's key-order pin was not edited. Second, that the ts engine is genuinely unaffected -- run one and assert 'errors' in result is false, not merely that it is undefined. Then check the conformance divergence set is still exactly the four fields; if a fifth appeared, that is a stop condition and must be reported, not accepted. Finally verify the docs update actually replaces the old claim rather than appending a contradicting paragraph next to it.",
+    "estimatedFiles": [
+      "src/orchestrator/pipeline.ts",
+      "src/pge/engine/pge-engine.ts",
+      "src/pge/engine/pge-engine.test.ts",
+      "docs/pge-graph.md"
+    ],
+    "estimatedDuration": "large",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T00:00:00Z",
+    "updatedAt": "2026-08-12T07:30:00Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    },
+    "packageScripts": {
+      "build": "tsc",
+      "dev": "tsc --watch",
+      "lint": "eslint src/",
+      "typecheck": "tsc --noEmit",
+      "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
+      "test": "vitest",
+      "update-all": "node scripts/update-all.mjs",
+      "update-all:check": "node scripts/update-all.mjs --check",
+      "prepublishOnly": "npm run build"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}

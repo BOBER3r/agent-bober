@@ -2,11 +2,11 @@
   "specId": "spec-20260812-pge-real-workload-errors",
   "version": 1,
   "createdAt": "2026-08-12T00:00:00Z",
-  "updatedAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T13:49:26Z",
   "title": "PGE real-workload viability and an error channel on PipelineResult",
   "description": "Make PgeEngine able to execute a realistic plan at all \u2014 today every channel caps at 4,096 bytes while this repository's own PlanSpec is 29,247, so plan_materialize's writes are silently dropped and the run proceeds with state.spec null. Then give the engine a way to report that a run did not do what it claims: a fail-closed refusal of the git-effect commit node currently returns success: true because PipelineResult has no error channel.",
   "mode": "brownfield",
-  "status": "draft",
+  "status": "completed",
   "ambiguityScore": 3,
   "clarificationQuestions": [],
   "resolvedClarifications": [
@@ -218,5 +218,6 @@
     "estimatedTotalDuration": "14-22 hours",
     "riskLevel": "high",
     "riskNotes": "Two artifact revisions with version bumps, one frozen-surface revision (PipelineResult), and a mandatory re-capture of all five replay golden cases against a blocking CI job whose replay floor has zero slack. The highest risk is a re-capture pushed without reading the diff, which defeats the gate as surely as deleting it \u2014 feat-5 AC1 exists to make that visible. The second risk is that sprint 1's observation contradicts the derivation; the spec is written so that outcome corrects the assumptions rather than the measurement."
-  }
+  },
+  "completedAt": "2026-08-12T13:49:26Z"
 }

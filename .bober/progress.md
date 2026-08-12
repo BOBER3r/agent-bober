@@ -723,16 +723,16 @@ default requires that error channel first, not merely green conformance.
 - Spec: spec-20260812-pge-real-workload-errors
 - Created: 2026-08-12
 - Sprints: 9
-- Status: planned
+- Status: completed (9/9 sprints)
 - Source analysis: .bober/research/research-20260812-pge-next-iterations.md
 
 ### Sprint Breakdown
 1. [proposed] Observe what a real 29 KB plan actually does to the graph engine -- measurement harness, committed as data
-2. [proposed] A committed workload corpus, and the measurement extended to every channel
-3. [proposed] Size the caps to the corpus, regenerate the artifact, pin both directions
-4. [proposed] A real plan runs end to end on the graph engine -- the viability exit criterion
-5. [proposed] PipelineResult gains an error channel, layered in the engine
-6. [proposed] An operator can see the refusal -- CLI exit code and MCP run state
-7. [proposed] A plan that never settles reports failure instead of crashing -- the specDraft channel
+2. [completed] A committed workload corpus, and the measurement extended to every channel -- Passed on iteration 1; 123 entries, only spec (48,097) and sprintContracts (135,106) exceed the 4,096 cap
+3. [completed] Size the caps to the corpus, regenerate the artifact, pin both directions -- Passed on iteration 2; spec->131,072 sprintContracts->524,288, graphVersion 1.3.0. FINDING: run now hits SuperstepLimitExceededError at 200
+4. [completed] Diagnose why a real plan still does not terminate, and fix it only if the cause is a ceiling -- Passed on iteration 1; verdict INSUFFICIENT CEILING (15 supersteps/contract, 234 for 14), ceiling 200->512. PGE NOW RUNS A REAL PLAN END TO END
+5. [completed] PipelineResult gains an error channel, layered in the engine -- Passed on iteration 1; conditional spread in PgeEngine.run, all 5 replay cases recaptured (52 insertions, 0 deletions), golden 0/5 -> 5/5
+6. [completed] An operator can see the refusal -- Passed on iteration 1; exit code 1 + 'Refused:' block naming node/errorClass, MCP status failed. Strictly additive
+7. [completed] A plan that never settles reports failure instead of crashing -- Passed on iteration 1; specDraft channel at 1.4.0, FinalizeWithoutSpecError narrowed not deleted, new golden case, negative controls STRENGTHENED
 8. [proposed] Reconcile the golden dataset, deliberately and diff-first
-9. [proposed] Node coverage counts a node only when it actually ran
+9. [completed] Node coverage counts a node only when it actually ran -- Passed on iteration 1; 39/44 -> 38/44 honest figure, commit added to NEVER_EXECUTED, synthesize reason corrected

@@ -4,7 +4,7 @@
   "sprintNumber": 1,
   "title": "Observe what a real 29 KB plan actually does to the graph engine",
   "description": "Stop deriving and start observing. Build a harness that runs PgeEngine over this repository's own committed 29,247-byte PlanSpec with every effect stubbed and the network disabled, and commit what happens as data: every StateBloatError raised, the terminal node reached, and the run verdict. Nothing is fixed in this sprint. Its entire value is that the next four sprints act on a measurement rather than on a chain of inferences.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [],
   "features": [
     "feat-1"
@@ -68,7 +68,16 @@
     ".bober/topology/measurements/real-workload.json"
   ],
   "estimatedDuration": "medium",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-1-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T04:13:08Z"
+    }
+  ],
   "createdAt": "2026-08-12T00:00:00Z",
-  "updatedAt": "2026-08-12T00:00:00Z"
+  "updatedAt": "2026-08-12T04:13:08Z",
+  "completedAt": "2026-08-12T04:13:08Z",
+  "completionNote": "All 6 required criteria met on iteration 1. Harness drives a real PgeEngine over the committed coding.json (all 10 channels confirmed at 4096, not the golden-graph fixture's 8192/65536) and captures the interpreter's GraphRunResult through the interpreterFactory seam that PgeEngine.run discards. MEASURED: spec 29,214 canonical bytes and sprintContracts 135,106 both REJECTED at superstep 12 by plan_materialize against limit 4096; terminal node graceful_failure; status completed / verdict failed; commit.finalize throws FinalizeWithoutSpecError. sc-1-5 fired: spec assumptions[5] corrected 138,284 -> 135,106 (canonicalJson vs naive JSON.stringify); the measurement was committed unchanged. Suite 6856 -> 6860, zero regressions."
 }

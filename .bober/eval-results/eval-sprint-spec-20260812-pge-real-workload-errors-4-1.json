@@ -1,0 +1,114 @@
+{
+  "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-4-1",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-4",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T07:03:29Z",
+  "iteration": 1,
+  "overallResult": "pass",
+  "verdictAgreement": "agree",
+  "score": {
+    "criteriaTotal": 9,
+    "criteriaPassed": 8,
+    "criteriaFailed": 0,
+    "criteriaSkipped": 1,
+    "requiredPassed": 8,
+    "requiredFailed": 0,
+    "requiredTotal": 9
+  },
+  "strategyResults": [
+    {
+      "strategy": "typecheck",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "both tsconfigs clean"
+    },
+    {
+      "strategy": "build",
+      "required": true,
+      "result": "pass",
+      "output": "exit 0",
+      "details": "clean"
+    },
+    {
+      "strategy": "lint",
+      "required": true,
+      "result": "pass",
+      "output": "0 errors, 2 pre-existing warnings",
+      "details": "unrelated file"
+    },
+    {
+      "strategy": "unit-test",
+      "required": true,
+      "result": "pass",
+      "output": "6879 passed / 2 skipped / 0 failed",
+      "details": "baseline 6877, net +2 matching the two new pin tests"
+    },
+    {
+      "strategy": "custom",
+      "required": true,
+      "result": "pass",
+      "output": "five pge gates green; pge diff empty, graphVersion 1.3.0 unchanged",
+      "details": "golden gate 32/32"
+    }
+  ],
+  "criteriaResults": [
+    {
+      "criterionId": "sc-4-1",
+      "required": true,
+      "result": "pass",
+      "evidence": "rejections: [] in the committed measurement; evaluator regenerated it and diffed byte-identical."
+    },
+    {
+      "criterionId": "sc-4-2",
+      "required": true,
+      "result": "pass",
+      "evidence": "specChannelNullAtBoundary false; state.spec non-null; sprintContracts length 14; evaluator's own script confirmed branchKeyCount 14."
+    },
+    {
+      "criterionId": "sc-4-3",
+      "required": true,
+      "result": "pass",
+      "evidence": "Committed contractCountScaling holds 1:39 and 14:234. The evaluator wrote its OWN harness driving PgeEngine directly and measured FIVE points \u2014 1:39, 4:84, 7:129, 10:174, 14:234 \u2014 deltas exactly 15 supersteps per contract at every interval. Genuine linear scaling, neither flat nor unbounded."
+    },
+    {
+      "criterionId": "sc-4-4",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator wrote a second harness reading the raw trace independently of the sprint's assertions: sprint_body has 1,272 spans of which only 14 are status ok (one per branch) and 1,258 are status serialized \u2014 deferral bookkeeping written by recordDeferral once per superstep a task stays blocked on dependsOn. Every other per-branch node appears exactly 14 times with zero repeats; the branch set fully drains; the only failure is commit/FailClosed at superstep 232. Non-convergence is falsified."
+    },
+    {
+      "criterionId": "sc-4-5",
+      "required": true,
+      "result": "pass",
+      "evidence": "Evaluator mutated the pin in BOTH directions itself: hand-editing the constant to 999 failed the test with 'expected 999 to be 512' (not tautological), and the shipped lowering test reproduces SuperstepLimitExceededError at 200 over the identical workload. interpreter.ts:386 and the throw at :1060 confirmed byte-identical to sprint 3's state. Terminal graceful_failure, asserted not.toBe('finalize'); commit still FailClosed."
+    },
+    {
+      "criterionId": "sc-4-6",
+      "required": true,
+      "result": "skipped",
+      "evidence": "Trigger condition not met \u2014 verdict is (a), and sc-4-5/sc-4-6 are contract-authored as mutually exclusive branches. No ceiling was raised to paper over a convergence bug; the evaluator independently confirmed no such bug exists."
+    },
+    {
+      "criterionId": "sc-4-7",
+      "required": true,
+      "result": "pass",
+      "evidence": "Diff shows the six null fields flipping to populated values and engineOutcome moving from threw/SuperstepLimitExceededError to resolved. Evaluator regenerated the artifact itself and diffed byte-identical."
+    },
+    {
+      "criterionId": "sc-4-8",
+      "required": true,
+      "result": "pass",
+      "evidence": "117 insertions / 49 deletions across two EXISTING sections of a 1,113-line file \u2014 edited in place, not appended. Every claim in the new prose independently checked true."
+    },
+    {
+      "criterionId": "sc-4-9",
+      "required": true,
+      "result": "pass",
+      "evidence": "All five commands run by the evaluator; suite 6879/0 failed."
+    }
+  ],
+  "regressions": [],
+  "generatorFeedback": [],
+  "summary": "Verdict (a) independently re-derived at five contract counts confirming an exact 15-superstep marginal cost, with the raw trace inspected to prove the high sprint_body span volume is deferral bookkeeping rather than repeated execution. The ceiling pin is genuine in both directions, the interpreter's own guard is untouched, and the engine now runs the real plan end to end to graceful_failure."
+}

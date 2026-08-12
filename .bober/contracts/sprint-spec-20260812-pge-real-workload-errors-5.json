@@ -4,7 +4,7 @@
   "sprintNumber": 5,
   "title": "PipelineResult gains an error channel, layered in the engine",
   "description": "A run whose commit was refused must not report that it succeeded. Add errors to PipelineResult and populate it from the interpreter's failures -- which PgeEngine.run currently discards, with a comment saying so. This deliberately revises a surface the previous spec froze; that revision is authorised, and the docs/pge-graph.md disposition it changes is updated in the same commit.",
-  "status": "proposed",
+  "status": "completed",
   "dependsOn": [
     "sprint-spec-20260812-pge-real-workload-errors-4"
   ],
@@ -53,20 +53,42 @@
       "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
       "verificationMethod": "build",
       "required": true
+    },
+    {
+      "criterionId": "sc-5-8",
+      "description": "Two drive-by corrections in code this spec already shipped: the public export supersepsForMeasuredCost (src/pge/engine/pge-engine.ts) is renamed to fix the missing 't' in 'supersteps' across its declaration and both call sites; and the stale comments at src/pge/topology/coding.graph.ts:108 ('123 real payloads') and :191 ('52 committed PlanSpecs that parse') are corrected to 120 and 50, the values since sprint 3's in-flight-spec exclusion. Neither may change behaviour \u2014 the artifact checksum must not move.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-9",
+      "description": "A change that alters every terminal artifact must carry its own blast radius. The replay golden cases that gain an `errors` key are re-captured IN THIS SPRINT via GOLDEN_CAPTURE=1, and the diff is verified to be confined to the errors key and its direct consequences \u2014 any other field moving is a stop condition. The replay count stays at or above GOLDEN_MIN_REPLAY_CASES (5, zero slack) and no case is relabelled from replay to integrity.",
+      "verificationMethod": "unit-test",
+      "required": true
     }
   ],
   "nonGoals": [
     "Setting success:false on a fail-closed refusal -- explicitly Option B, out of scope, and it would add completionMarker to the divergence set.",
     "Changing deriveRunSuccess, the runPipeline signature, or the completion marker.",
     "Surfacing the errors in the CLI or MCP layers -- that is sprint 6.",
-    "Re-capturing golden cases -- that is sprint 8, deliberately separated so the diff is read on its own."
+    "RE-AUTHORING the two hand-authored integrity cases (pipeline-result-reports-success-with-no-error-channel.json, commit-refused-fail-closed-under-noop-gate.json) \u2014 those need judgement, not a recapture, and stay in sprint 8. Re-CAPTURING the replay cases is now IN scope for this sprint; re-AUTHORING is not."
   ],
   "stopConditions": [
     "Adding the optional field breaks a consumer that cannot be fixed within this sprint -- stop, list the consumers, and report.",
     "conformance.engines.test.ts's divergence set changes as a side effect -- stop; a change to that pin must be deliberate and separately justified."
   ],
   "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
-  "assumptions": [],
+  "assumptions": [
+    "VERIFIED: PgeEngine.run discards GraphRunResult.verdict and .failures at src/pge/engine/pge-engine.ts:461-482, and its own comment states closing it needs a PipelineResult revision, which sprint-13 nonGoal 3 forbade. That authorisation now exists (spec resolvedClarifications D2).",
+    "VERIFIED: TaskFailure carries { nodeId, branchKey, superstep, errorClass, message } at src/pge/runtime/interpreter.ts:322-328.",
+    "VERIFIED: RunResultFlusher.flush layers needsClarification onto the finalized result with a spread AFTER finalizePipelineRun returns (src/orchestrator/workflow/flusher.ts:113-127), precisely so the two engines cannot disagree about shared fields. This is the pattern to mirror.",
+    "VERIFIED by sprint 4, on REAL data: the committed measurement .bober/topology/measurements/real-workload.json now records engineOutcome {kind:'resolved', success:true} alongside verdict 'failed' and failures [{nodeId:'commit', errorClass:'FailClosed', superstep:232}]. The defect this sprint fixes is now demonstrable on a real 14-contract workload, not only on a fixture.",
+    "D3 (spec resolvedClarifications): Option A semantics. `success` keeps the frozen deriveRunSuccess formula shared with the imperative engine; callers treat a non-empty `errors` as failure. Option B (success:false on a FAIL_CLOSED refusal) is OUT OF SCOPE here \u2014 it moves the completion marker and the pipeline-complete history phase and would add completionMarker to the divergence set.",
+    "MEASURED BY THE CURATOR by executing all five replay cases through dist/: four of the five (all but replay-full-run-evaluation-fails) have a FailClosed commit span and therefore gain an `errors` key, producing exactly one pipelineResult[0] diff each \u2014 three failures at src/pge/golden/executor.test.ts:61-72 and a 1/5 golden pass rate against an 80% CI threshold. sc-5-7 (green suite) is therefore UNSATISFIABLE without the recapture, which is why the orchestrator moved it into this sprint.",
+    "CURATOR CORRECTION: the discard in PgeEngine.run is at src/pge/engine/pge-engine.ts:512-548, not 461-489 as earlier assumptions said. Trust the curator's line numbers.",
+    "CURATOR FINDING: the ONLY PipelineResult consumer that enumerates keys is normalize() at src/orchestrator/workflow/conformance.ts:96. The field must therefore be layered with a CONDITIONAL spread in PgeEngine.run, and finalize.ts / finalize.test.ts must not be touched at all. PipelineFailure belongs in pipeline.ts as a PURE TYPE \u2014 no ESLint rule restricts orchestrator<->pge either way, but a runtime export would create a real cycle and break pge-engine.test.ts's whole-module vi.mock.",
+    "CURATOR VERIFIED: the conformance and oracle-retention pins are provably unaffected \u2014 pipelineResult already diverges and the harness records one diff per field. And the coding.graph.ts comment edits CANNOT move the artifact checksum (sha256:e4909da6...45a5), because canonicalize hashes the runtime object value only, never comments. No re-dump or version bump follows from sc-5-8."
+  ],
   "outOfScope": [],
   "ambiguityScore": 4,
   "generatorNotes": "Read src/orchestrator/workflow/flusher.ts:113-127 first -- it is the exact pattern, and its comment explains WHY engine-specific fields are layered after finalizePipelineRun rather than inside it: so the two engines cannot disagree about the shared fields. Follow it literally. The discard you are removing is at src/pge/engine/pge-engine.ts:461-475 and its own comment tells you what it was waiting for. Keep errors OPTIONAL so every existing consumer of PipelineResult keeps compiling; enumerate those consumers before you start. Do not widen the sprint split to absorb a terminal-node failure -- that would invent a failed sprint that did not happen, which the discarded comment warns against explicitly.",
@@ -78,7 +100,16 @@
     "docs/pge-graph.md"
   ],
   "estimatedDuration": "large",
-  "iterationHistory": [],
+  "iterationHistory": [
+    {
+      "iteration": 1,
+      "evalId": "eval-sprint-spec-20260812-pge-real-workload-errors-5-1",
+      "result": "pass",
+      "timestamp": "2026-08-12T11:26:23Z"
+    }
+  ],
   "createdAt": "2026-08-12T00:00:00Z",
-  "updatedAt": "2026-08-12T00:00:00Z"
+  "updatedAt": "2026-08-12T11:26:23Z",
+  "completedAt": "2026-08-12T11:26:23Z",
+  "completionNote": "All 9 criteria met on iteration 1. errors?: readonly PipelineFailure[] added to PipelineResult as a PURE TYPE and layered in PgeEngine.run via a CONDITIONAL spread after commit.finalize returns \u2014 finalize.ts and finalize.test.ts hash-verified byte-identical before and after. A clean run carries no errors KEY at all (proven with `in`, not an undefined check). success keeps deriveRunSuccess (Option A). All five replay cases re-captured: 52 insertions, ZERO deletions, every added key inside a new errors array and no superstep field \u2014 the 1:1-minus-superstep mapping visible in the data. Golden regression 0/5 -> 5/5. Conformance divergence set UNCHANGED at [audits,contracts,history,pipelineResult] with equivalent:false; oracle-retention unmodified. Topology checksum unmoved (sha256:e4909da6...45a5) despite the comment fixes. Suite 6879 -> 6883. NOTE: the curator predicted 4 of 5 cases affected; the fifth (replay-full-run-evaluation-fails) also gained errors, from three LoopExhausted TaskFailures rather than a FailClosed refusal \u2014 judged in scope because the layering is generic over any non-empty result.failures, not scoped to one errorClass."
 }

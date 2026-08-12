@@ -1,0 +1,141 @@
+{
+  "handoffId": "handoff-sprint-spec-20260812-pge-real-workload-errors-2-gen-1",
+  "type": "to-generator",
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "timestamp": "2026-08-12T04:30:00Z",
+  "iteration": 1,
+  "context": {
+    "projectOverview": "Make PgeEngine able to execute a realistic plan at all \u2014 today every channel caps at 4,096 bytes while this repository's own PlanSpec is 29,247, so plan_materialize's writes are silently dropped and the run proceeds with state.spec null. Then give the engine a way to report that a run did not do what it claims: a fail-closed refusal of the git-effect commit node currently returns success: true because PipelineResult has no error channel.",
+    "completedSprints": [
+      {
+        "contractId": "sprint-spec-20260812-pge-real-workload-errors-1",
+        "title": "Observe what a real 29 KB plan actually does to the graph engine",
+        "summary": "All 6 required criteria met on iteration 1. Harness drives a real PgeEngine over the committed coding.json (all 10 channels confirmed at 4096, not the golden-graph fixture's 8192/65536) and captures the interpreter's GraphRunResult through the interpreterFactory seam that PgeEngine.run discards. MEASURED: spec 29,214 canonical bytes and sprintContracts 135,106 both REJECTED at superstep 12 by plan_materialize against limit 4096; terminal node graceful_failure; status completed / verdict failed; commit.finalize throws FinalizeWithoutSpecError. sc-1-5 fired: spec assumptions[5] corrected 138,284 -> 135,106 (canonicalJson vs naive JSON.stringify); the measurement was committed unchanged. Suite 6856 -> 6860, zero regressions."
+      }
+    ],
+    "currentBranch": "bober/pge-graph-engineering",
+    "relevantFiles": [
+      ".bober/workload/",
+      "src/pge/golden/workload.ts",
+      "src/pge/golden/workload.test.ts",
+      "src/pge/runtime/commit.ts",
+      "src/pge/engine/real-workload.test.ts",
+      "src/pge/engine/__fixtures__/real-workload.ts",
+      ".bober/topology/measurements/real-workload.json",
+      "src/pge/golden/runner.ts",
+      "src/orchestrator/repo-invariants.test.ts",
+      ".gitignore"
+    ]
+  },
+  "contract": {
+    "contractId": "sprint-spec-20260812-pge-real-workload-errors-2",
+    "specId": "spec-20260812-pge-real-workload-errors",
+    "sprintNumber": 2,
+    "title": "A committed workload corpus, and the measurement extended to every channel",
+    "description": "Sprint 1 measured the plan channels. Real generator and evaluator payloads flow through messages, evaluations and refs, and those are unbounded strings today. Extend the measurement to every channel, and commit a corpus of real payloads that the caps will be derived from and pinned against for ever after -- so that a fixture can never again be the only evidence.",
+    "status": "in-progress",
+    "dependsOn": [
+      "sprint-spec-20260812-pge-real-workload-errors-1"
+    ],
+    "features": [
+      "feat-1"
+    ],
+    "successCriteria": [
+      {
+        "criterionId": "sc-2-1",
+        "description": "A committed workload corpus holds real PlanSpec and SprintContract payloads drawn from .bober/specs/ and .bober/contracts/, plus representative generator and evaluator payloads, each labelled with the channel it exercises.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-2",
+        "description": "A function computes, from the corpus, the maximum serialised byte size per channel using the SAME byteSize function the commit boundary uses -- not a reimplementation.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-3",
+        "description": "The measurement from sprint 1 is extended to messages, evaluations and refs under corpus-sized payloads, and the results are committed.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-4",
+        "description": "A test asserts the corpus is non-empty for every channel the artifact declares, so a channel cannot silently escape measurement by having no corpus entry.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-5",
+        "description": "The corpus is committed under version control and its location is documented; a test asserts it is read from disk at test time rather than inlined into the test file.",
+        "verificationMethod": "unit-test",
+        "required": true
+      },
+      {
+        "criterionId": "sc-2-6",
+        "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+        "verificationMethod": "build",
+        "required": true
+      }
+    ],
+    "nonGoals": [
+      "Changing any cap -- sprint 3 does that, using this corpus.",
+      "Trimming the corpus to make a number look better."
+    ],
+    "stopConditions": [
+      "A channel has no plausible real payload to measure -- record that fact explicitly rather than inventing one."
+    ],
+    "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+    "assumptions": [
+      "CORRECTED BY THE SPRINT-2 CURATOR, verified by the orchestrator: the corpus must NOT live under .bober/golden/. src/pge/golden/runner.ts treats every file in that directory as one golden case and reports any non-.json entry as a stray, which feeds the BLOCKING CI golden gate; a workload/ subdirectory there also causes EISDIR in the gate, executor, coverage and capture tests, and fails dataset.test.ts. The corpus lives at .bober/workload/ instead.",
+      "byteSize (src/pge/runtime/commit.ts:257-259) is NOT exported \u2014 verified against the module's export list. Nothing pins that module's export surface, so adding `export` is the least invasive way to satisfy sc-2-2's ban on reimplementation. Sprint 1 left a duplicate copy of it in src/pge/engine/real-workload.test.ts which must be deleted in the same change.",
+      "60 of 250 files in .bober/contracts/ and 1 of 53 in .bober/specs/ FAIL schema parse, so a naive corpus loader that parses every file will throw. The loader must handle this deliberately and say what it does with unparseable files.",
+      "Four channels \u2014 refs, counters, branchStatus, ledger \u2014 have no committed real payload anywhere in the repository. sc-2-4 still requires a non-empty corpus entry for every declared channel, so these are the hard part; the curator identified a RunContext.commit spy as the technique for observing them from a real run."
+    ],
+    "outOfScope": [],
+    "ambiguityScore": 3,
+    "generatorNotes": "Import byteSize's behaviour rather than reimplementing it: the boundary uses Buffer.byteLength(canonicalJson(value), 'utf8') (src/pge/runtime/commit.ts:257-259). If byteSize is not exported, export it or expose an equivalent through a named helper -- do not hand-roll JSON.stringify, which will disagree with canonical form. GeneratorResult.notes is an unbounded z.string() and real ones run 1,100-1,900 chars, so evaluations is the channel to look at after spec. Draw corpus entries from files already in the repository so the corpus is real rather than synthetic, and record where each entry came from.",
+    "evaluatorNotes": "Check that the corpus is genuinely real: spot-check that entries correspond to actual files in .bober/specs/ and .bober/contracts/. Check the byte measurement matches the boundary's -- construct a value, run it through both the corpus helper and the real commit boundary, and confirm they agree; a divergence here silently mis-sizes every cap in sprint 3. Verify sc-2-4 bites by deleting a channel's corpus entry and confirming the test fails.",
+    "estimatedFiles": [
+      ".bober/workload/",
+      "src/pge/golden/workload.ts",
+      "src/pge/golden/workload.test.ts",
+      "src/pge/runtime/commit.ts",
+      "src/pge/engine/real-workload.test.ts"
+    ],
+    "estimatedDuration": "medium",
+    "iterationHistory": [],
+    "createdAt": "2026-08-12T00:00:00Z",
+    "updatedAt": "2026-08-12T04:30:00Z"
+  },
+  "config": {
+    "commands": {
+      "build": "npm run build",
+      "typecheck": "npm run typecheck",
+      "typecheckTests": "npm run typecheck:tests",
+      "lint": "npm run lint",
+      "test": "npx vitest run"
+    },
+    "generator": {
+      "model": "claude-opus-5",
+      "maxTurnsPerSprint": 50,
+      "autoCommit": true,
+      "branchPattern": "bober/{feature-name}",
+      "provider": "anthropic"
+    },
+    "packageScripts": {
+      "build": "tsc",
+      "dev": "tsc --watch",
+      "lint": "eslint src/",
+      "typecheck": "tsc --noEmit",
+      "typecheck:tests": "tsc --noEmit -p tsconfig.test.json",
+      "test": "vitest",
+      "update-all": "node scripts/update-all.mjs",
+      "update-all:check": "node scripts/update-all.mjs --check",
+      "prepublishOnly": "npm run build"
+    }
+  },
+  "principles": "# Project Principles\n\n> These principles guide all planning, generation, and evaluation in the Bober pipeline.\n> Updated: 2026-04-16\n\n## Mission\n\nAgent-bober is a multi-agent harness that builds applications autonomously using any LLM. It orchestrates a pipeline of specialized agents (Researcher, Planner, Curator, Generator, Evaluator) and supports Claude, GPT, Gemini, and Ollama. It ships as an npm CLI + MCP server for Claude Code, Cursor, and Windsurf.\n\n## Users\n\n- **Primary:** Developers using Claude Code, Cursor, or Windsurf who want autonomous feature generation with quality gates\n- **Secondary:** Teams integrating agent-bober programmatically via the TypeScript API or MCP server\n- Technical level: intermediate to advanced \u2014 users understand LLMs, CI/CD, and modern JS tooling\n\n## Quality Standards\n\n- **Type safety:** TypeScript strict mode with all strict flags (`noUnusedLocals`, `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `isolatedModules`). Zero type errors is a hard gate.\n- **Lint compliance:** ESLint flat config with `consistent-type-imports` enforced, `no-explicit-any` warned, unused vars errored (with `_` prefix escape). Zero lint errors is a hard gate.\n- **Test coverage:** Vitest for unit tests. Tests are collocated with source (`*.test.ts` next to `*.ts`). Tests run against the real project when practical (e.g., scanner tests scan agent-bober itself).\n- **Build integrity:** `tsc` must produce clean output. Build is a required evaluator strategy.\n\n## Technical Principles\n\n### Follow\n\n- **ESM everywhere.** `\"type\": \"module\"` in package.json. All imports use `.js` extensions for NodeNext resolution. No CommonJS.\n- **Provider-agnostic interfaces.** All LLM interaction goes through `providers/types.ts` \u2014 provider-specific SDKs are wrapped by adapters (`anthropic.ts`, `openai.ts`, `google.ts`). Never leak SDK types outside adapter files.\n- **Zod for config validation.** All configuration schemas are Zod schemas in `config/schema.ts`. Runtime config loading uses `z.parse()`. No hand-rolled validation.\n- **Contract-based architecture.** PlanSpecs, SprintContracts, and EvalResults are the communication protocol between agents. They live in `contracts/` and are JSON files on disk in `.bober/`.\n- **Filesystem state.** All mutable state (specs, contracts, handoffs, eval results, history) is stored as JSON files in `.bober/`. No database, no in-memory global state.\n- **Section comments.** Use unicode box-drawing section headers: `// -- Section Name ------` to organize long files.\n- **Small utility modules.** Utils in `utils/` are focused single-purpose files (`fs.ts`, `git.ts`, `logger.ts`). Keep them small.\n- **Conventional commits.** Format: `type: description` where type is `feat`, `fix`, `docs`, `release`, `refactor`, `test`, `chore`. Sprint-generated commits use `bober(sprint-N): description`.\n- **Use `type` imports.** ESLint enforces `consistent-type-imports` -- import types with `import type { ... }` syntax.\n- **Prefix unused params with `_`.** The `_` prefix is the only escape hatch for unused variables/parameters.\n\n### Avoid\n\n- **No `any` without justification.** `no-explicit-any` is a warning; aim for zero. Use `unknown` + type narrowing instead.\n- **No SDK lock-in.** Never import `@anthropic-ai/sdk` or `openai` outside of their respective adapter files in `providers/`.\n- **No synchronous filesystem ops.** All fs operations use `node:fs/promises`. No `fs.readFileSync` etc.\n- **No barrel re-exports for deep internals.** `src/index.ts` exports the public API only. Internal modules import directly.\n- **No test mocks for filesystem.** Tests that need filesystem state create temp directories and clean up. The scanner tests run against the real codebase.\n\n## Design Principles\n\nN/A -- no user interface. Agent-bober is a CLI tool and programmatic library. The MCP server exposes tools, not UI.\n",
+  "evaluatorFeedback": null
+}
