@@ -3,7 +3,7 @@
   "specId": "spec-20260604-docs-correction",
   "sprintNumber": 1,
   "title": "CHANGELOG [0.16.0] + npm metadata",
-  "status": "pending",
+  "status": "completed",
   "description": "Cut a dated [0.16.0] CHANGELOG entry covering all features shipped after 0.15.0 (plus the previously-undocumented auto-filter feature), and bump package.json release metadata.",
   "filesInScope": ["CHANGELOG.md", "package.json"],
   "successCriteria": [

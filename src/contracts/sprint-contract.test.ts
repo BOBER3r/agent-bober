@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 
 import {
   SprintContractSchema,
@@ -16,6 +16,20 @@ import {
   type SprintContract,
   type ContractStatus,
 } from "./sprint-contract.js";
+
+// ── corpus guard (sc-2-2 / sc-2-3 / sc-2-4) ─────────────────────────
+// Extra imports for the real-corpus status guard below. Kept separate from
+// the pure in-memory imports above so the existing unit tests stay
+// untouched — see sprint-spec-20260812-terminal-vocabulary-2's briefing §1
+// for why this reads .bober/contracts/ at run time instead of going through
+// `listContracts` (which silently drops schema-invalid files, the very
+// files this guard exists to catch) or validating the whole file against
+// `SprintContractSchema` (60 of 256 committed contracts fail that for
+// reasons unrelated to `status` — see the same briefing §1.3).
+import { copyFile, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // A reusable, schema-valid contract for tests that need a known-good base.
 function validContract(overrides: Partial<SprintContract> = {}): SprintContract {
@@ -314,5 +328,129 @@ describe("isContractPrecise", () => {
         "The dashboard works correctly and renders the right widgets.",
     });
     expect(isContractPrecise(c)).toBe(false);
+  });
+});
+
+// ── corpus guard (sc-2-2 / sc-2-3 / sc-2-4) ─────────────────────────
+//
+// Reads every committed contract in `.bober/contracts/` at run time and
+// asserts its `status` field alone parses against `ContractStatusSchema` —
+// deliberately NOT the whole-contract `SprintContractSchema`. 60 of the
+// corpus's 256 committed files fail the whole schema for reasons unrelated
+// to `status` (legacy `successCriteria` shape, missing `nonGoals` /
+// `stopConditions` / `definitionOfDone`, etc.); a whole-schema test would
+// fail on all 60 and could only be made green by rewriting fields this
+// sprint's nonGoals forbid touching. sc-2-2's own wording asks only that
+// "its status parses against ContractStatusSchema" — read literally.
+
+const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const CONTRACTS_DIR = join(REPO_ROOT, ".bober", "contracts");
+
+interface ContractStatusEntry {
+  /** File name only (not a full path) — enough to identify the offender. */
+  file: string;
+  status: unknown;
+}
+
+/**
+ * Pure — takes in-memory {file, status} entries, never touches disk. This is
+ * what the in-memory mutation-control test below drives directly with
+ * synthetic entries, so "the guard bites" is proven without depending on
+ * filesystem state at all (the same rationale as
+ * status-vocabulary.invariant.test.ts's findOffenders split).
+ */
+function findIllegalStatuses(entries: ContractStatusEntry[]): string[] {
+  const offenders: string[] = [];
+  for (const entry of entries) {
+    if (!ContractStatusSchema.safeParse(entry.status).success) {
+      offenders.push(`${entry.file}: ${JSON.stringify(entry.status)}`);
+    }
+  }
+  return offenders;
+}
+
+/** Reads {file, status} for every *.json contract in `dir`, at run time. */
+async function readContractStatusEntries(dir: string): Promise<ContractStatusEntry[]> {
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
+  const entries: ContractStatusEntry[] = [];
+  for (const file of files) {
+    const raw = await readFile(join(dir, file), "utf-8");
+    const parsed = JSON.parse(raw) as { status?: unknown };
+    entries.push({ file, status: parsed.status });
+  }
+  return entries;
+}
+
+describe("every committed contract's status is a legal ContractStatusSchema member (sc-2-2)", () => {
+  it("the walk actually happens against the real corpus (liveness — today it is 256 files)", async () => {
+    // Not hardcoded to 256: a `toBeGreaterThan` threshold so a newly added
+    // contract (sc-2-4's whole point) does not force an edit here.
+    const entries = await readContractStatusEntries(CONTRACTS_DIR);
+    expect(entries.length).toBeGreaterThan(200);
+  });
+
+  it("no committed contract carries a status outside ContractStatusSchema", async () => {
+    const entries = await readContractStatusEntries(CONTRACTS_DIR);
+    expect(findIllegalStatuses(entries)).toEqual([]);
+  });
+
+  // ── Mutation control: proves the guard actually fires (sc-2-3) ──────
+
+  it("bites: a synthetic illegal status is reported (in-memory, no disk involved)", () => {
+    const entries: ContractStatusEntry[] = [
+      { file: "sprint-fake-1.json", status: "pending" },
+      { file: "sprint-fake-2.json", status: "completed" },
+    ];
+    expect(findIllegalStatuses(entries)).toEqual(['sprint-fake-1.json: "pending"']);
+  });
+
+  it("does not bite on any legal ContractStatusSchema member", () => {
+    const entries: ContractStatusEntry[] = ContractStatusSchema.options.map((status, i) => ({
+      file: `sprint-fake-${i}.json`,
+      status,
+    }));
+    expect(findIllegalStatuses(entries)).toEqual([]);
+  });
+
+  describe("mutation control: an illegal status introduced in a temp copy of the real corpus (sc-2-3, sc-2-4)", () => {
+    // A writable copy under os.tmpdir(), never the committed corpus. A
+    // crashed run leaves nothing behind under .bober/ — same rationale as
+    // src/pge/golden/dataset.test.ts's copyDataset().
+    const tempDirs: string[] = [];
+
+    afterEach(async () => {
+      while (tempDirs.length > 0) {
+        const dir = tempDirs.pop();
+        if (dir !== undefined) await rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("the directory-reading scan reports exactly the one file whose status was rewritten", async () => {
+      const dir = await mkdtemp(join(tmpdir(), "contracts-status-"));
+      tempDirs.push(dir);
+
+      const files = (await readdir(CONTRACTS_DIR)).filter((f) => f.endsWith(".json"));
+      for (const file of files) await copyFile(join(CONTRACTS_DIR, file), join(dir, file));
+
+      // Confirm the committed corpus starts clean under this same scan
+      // before mutating, so the failure below is attributable to the
+      // mutation and not to a pre-existing offender.
+      expect(findIllegalStatuses(await readContractStatusEntries(dir))).toEqual([]);
+
+      const target = files[0];
+      const draft = JSON.parse(await readFile(join(dir, target), "utf-8")) as Record<
+        string,
+        unknown
+      >;
+      draft.status = "pending";
+      await writeFile(join(dir, target), JSON.stringify(draft), "utf-8");
+
+      const entries = await readContractStatusEntries(dir);
+      expect(findIllegalStatuses(entries)).toEqual([`${target}: "pending"`]);
+
+      // The committed corpus itself is untouched by this test.
+      const committedEntries = await readContractStatusEntries(CONTRACTS_DIR);
+      expect(findIllegalStatuses(committedEntries)).toEqual([]);
+    });
   });
 });

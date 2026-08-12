@@ -3,7 +3,7 @@
   "specId": "spec-20260604-docs-correction",
   "sprintNumber": 3,
   "title": "Ancillary docs (COMMANDS.md, VISION.md, docs/providers.md)",
-  "status": "pending",
+  "status": "completed",
   "description": "Add the DeepSeek env var to the CLI reference, extend the VISION config reference with the panel and engine fields, and verify the provider guide is accurate.",
   "filesInScope": ["COMMANDS.md", "VISION.md", "docs/providers.md"],
   "successCriteria": [
