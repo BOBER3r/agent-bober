@@ -534,7 +534,11 @@ the dataset check itself, so the only ways to make a failing case green are to f
 runtime or to re-capture it — and a re-capture is a visible diff that says which artifacts
 changed.
 
-### How much of the graph the executed cases reach
+### How much of the graph the committed cases execute
+
+(The heading used to read *"…the executed cases reach"*. Since sprint 9 of
+`spec-20260812-pge-real-workload-errors` this section turns on the difference between
+REACHED and EXECUTED, so the word that names the figure had to stop being the wrong one.)
 
 The case count is the wrong number to judge this dataset by: five cases that walk the same
 happy path enforce one path. The number that matters is **node coverage**, and it is
@@ -988,9 +992,12 @@ Five consequences a reader should not have to derive:
   `DEFAULT_MAX_SUPERSTEPS` (200) reproduces `SuperstepLimitExceededError` over the identical
   workload — so the fix is provably necessary, not merely sufficient. `finalize` is still
   not reached — `commit` is still FAIL_CLOSED-refused under the autopilot `noop` mechanism,
-  the sprint-13 divergence covered in [How much of the graph the executed cases
-  reach](#how-much-of-the-graph-the-executed-cases-reach) — closing that is a durable
-  checkpoint mechanism's territory, a later sprint's, not this one's.
+  the sprint-13 divergence covered in [How much of the graph the committed cases
+  execute](#how-much-of-the-graph-the-committed-cases-execute) — closing that is a durable
+  checkpoint mechanism's territory, a later sprint's, not this one's. `commit` itself is
+  REACHED on this workload and, since sprint 9 of the same spec, no longer counted as
+  covered: its span ends `{ status: "interrupted", errorClass: "FailClosed" }`, never
+  `"ok"`.
 - **The `commit` refusal now reaches the caller — `success` still does not account for it.**
   `GraphRunResult.verdict` reads `"failed"` (it accounts for the `FailClosed`
   `TaskFailure`), and `PgeEngine.run`'s returned `PipelineResult.success` is still `true`,
@@ -1200,6 +1207,12 @@ callers this repository ships — the `bober run` CLI and the MCP run manager �
 is visible to an operator and fails a CI job. `success` itself still cannot say a
 fail-closed refusal happened, by the same Option-A decision, so a flip still requires every
 *remaining* caller that decides on `success` alone to be migrated to check `errors` too.
+
+`spec-20260812-pge-real-workload-errors` closed at its sprint 9 **without moving this
+disposition**. It made the engine able to run a real workload at all and gave a refused run
+a channel to say so, but the divergence set is still exactly `history`, `audits`,
+`contracts`, `pipelineResult` at `equivalent: false` — none of the four was in its scope —
+so PGE remains opt-in and `TsPipelineEngine` remains the oracle.
 
 **This decision is enforced, not just recorded.**
 `src/orchestrator/workflow/oracle-retention.test.ts` asserts that the schema still defaults
