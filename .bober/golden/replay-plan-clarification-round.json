@@ -939,7 +939,7 @@
           "sprintNumber": 1,
           "title": "Wire the region",
           "description": "Compile and run the plan region end to end.\n\nDo NOT run git add, git commit or any other git command. This node declares only the fs-write effect; the run's single commit happens later, behind the human-approval gate, and a commit from here would be an unapproved git object.",
-          "status": "proposed",
+          "status": "completed",
           "dependsOn": [],
           "features": [
             "feat-1"
@@ -963,6 +963,7 @@
           "outOfScope": [],
           "estimatedFiles": [],
           "iterationHistory": [],
+          "version": 1,
           "createdAt": "2026-08-05T00:00:00.000Z",
           "updatedAt": "2026-08-05T00:00:00.000Z"
         },
@@ -1064,7 +1065,7 @@
           "outOfScope": [],
           "specId": "spec-20260805-pge-conformance",
           "sprintNumber": 1,
-          "status": "proposed",
+          "status": "completed",
           "stopConditions": [
             "The region compiled from the artifact and the run reached its terminal."
           ],
@@ -1076,7 +1077,8 @@
               "verificationMethod": "unit-test"
             }
           ],
-          "title": "Wire the region"
+          "title": "Wire the region",
+          "version": 1
         }
       ],
       "evalResults": [],
@@ -1110,7 +1112,7 @@
               "outOfScope": [],
               "specId": "spec-20260805-pge-conformance",
               "sprintNumber": 1,
-              "status": "proposed",
+              "status": "completed",
               "stopConditions": [
                 "The region compiled from the artifact and the run reached its terminal."
               ],
@@ -1122,7 +1124,8 @@
                   "verificationMethod": "unit-test"
                 }
               ],
-              "title": "Wire the region"
+              "title": "Wire the region",
+              "version": 1
             }
           ],
           "errors": [

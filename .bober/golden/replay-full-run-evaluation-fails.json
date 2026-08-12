@@ -1073,7 +1073,7 @@
           "sprintNumber": 1,
           "title": "Wire the region",
           "description": "Compile and run the plan region end to end.",
-          "status": "proposed",
+          "status": "failed",
           "dependsOn": [],
           "features": [
             "feat-1"
@@ -1097,6 +1097,7 @@
           "outOfScope": [],
           "estimatedFiles": [],
           "iterationHistory": [],
+          "version": 2,
           "createdAt": "2026-08-05T00:00:00.000Z",
           "updatedAt": "2026-08-05T00:00:00.000Z"
         },
@@ -1191,9 +1192,9 @@
           "outOfScope": [],
           "estimatedFiles": [],
           "iterationHistory": [],
+          "version": 2,
           "createdAt": "2026-08-05T00:00:00.000Z",
-          "updatedAt": "2026-08-05T00:00:00.000Z",
-          "version": 2
+          "updatedAt": "2026-08-05T00:00:00.000Z"
         }
       },
       "response": {
@@ -1259,7 +1260,7 @@
           "outOfScope": [],
           "specId": "spec-20260805-pge-conformance",
           "sprintNumber": 1,
-          "status": "proposed",
+          "status": "failed",
           "stopConditions": [
             "The region compiled from the artifact and the run reached its terminal."
           ],
@@ -1271,7 +1272,8 @@
               "verificationMethod": "unit-test"
             }
           ],
-          "title": "Wire the region"
+          "title": "Wire the region",
+          "version": 2
         }
       ],
       "evalResults": [],
@@ -1326,7 +1328,7 @@
               "outOfScope": [],
               "specId": "spec-20260805-pge-conformance",
               "sprintNumber": 1,
-              "status": "proposed",
+              "status": "failed",
               "stopConditions": [
                 "The region compiled from the artifact and the run reached its terminal."
               ],
@@ -1338,7 +1340,8 @@
                   "verificationMethod": "unit-test"
                 }
               ],
-              "title": "Wire the region"
+              "title": "Wire the region",
+              "version": 2
             }
           ],
           "spec": {
