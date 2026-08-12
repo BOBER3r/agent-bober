@@ -69,7 +69,7 @@ import { runPlanner } from "./planner-agent.js";
 import { materializeContracts } from "./contract-materialization.js";
 import { runEvaluatorAgent } from "./evaluator-agent.js";
 import { CompletionTailer } from "../chat/completion-tailer.js";
-import { COMPLETION_MARKER_SUFFIX, PIPELINE_COMPLETE_EVENT } from "./finalize.js";
+import { COMPLETION_MARKER_SUFFIX, PIPELINE_COMPLETE_EVENT, deriveRunSuccess } from "./finalize.js";
 import { createDefaultConfig } from "../config/schema.js";
 
 // ── Fixtures ─────────────────────────────────────────────────────────
@@ -442,5 +442,56 @@ describe("TsPipelineEngine vs RunResultFlusher — identical terminal artifacts"
     expect(events).toHaveLength(1);
     expect(events[0]!.runId).toBe("run-flush-tailed");
     expect(events[0]!.phase).toBe("complete");
+  });
+});
+
+// ── sc-5-5: the TS engine never carries the pge-only `errors` channel ──
+//
+// `PipelineFailure`/`errors` (sprint 5 of spec-20260812-pge-real-workload-errors) is
+// populated ONLY by `PgeEngine.run`, from the interpreter's own `TaskFailure` records —
+// `runTsPipeline` (which both `TsPipelineEngine.run` and, transitively, this file's real
+// runs above go through) was not touched by that sprint and has no interpreter to source
+// one from. This is checked with `in`, not `=== undefined`, because sc-5-5 is a claim about
+// the KEY, exactly as `finalize.test.ts`'s `needsClarification` absence pin is.
+describe("TsPipelineEngine / RunResultFlusher — no `errors` channel (sc-5-5)", () => {
+  it("a real TsPipelineEngine run has no `errors` key, and `success` is deriveRunSuccess of the sprint split", async () => {
+    const result = await new TsPipelineEngine().run(
+      "extract the terminal block",
+      tsRoot,
+      makeConfig(),
+      { runId: "run-e2e-no-errors" },
+    );
+
+    expect("errors" in result).toBe(false);
+    expect(result.completedSprints).toHaveLength(1);
+    expect(result.failedSprints).toHaveLength(0);
+    expect(result.success).toBe(
+      deriveRunSuccess(result.completedSprints.length, result.failedSprints.length),
+    );
+  });
+
+  it("RunResultFlusher.flush also has no `errors` key — it only ever layers `needsClarification`", async () => {
+    const flushResult: WorkflowRunResult = {
+      spec: makeSpec(),
+      perSprint: [
+        {
+          contract: makeContract(),
+          finalVerdict: makeEvalResult(true),
+          iterationsUsed: 1,
+          outcome: "passed",
+          lensVerdicts: [makeEvalResult(true)],
+        },
+      ],
+      needsClarification: false,
+      pendingHistory: [],
+    };
+    const result = await new RunResultFlusher().flush(flushRoot, makeConfig(), flushResult, {
+      runId: "run-flush-no-errors",
+    });
+
+    expect("errors" in result).toBe(false);
+    expect(result.success).toBe(
+      deriveRunSuccess(result.completedSprints.length, result.failedSprints.length),
+    );
   });
 });

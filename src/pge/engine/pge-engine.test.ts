@@ -39,7 +39,7 @@ vi.mock("../../orchestrator/pipeline.js", () => ({
 
 import { logger } from "../../utils/logger.js";
 import { runTsPipeline } from "../../orchestrator/pipeline.js";
-import type { PipelineResult } from "../../orchestrator/pipeline.js";
+import type { PipelineFailure, PipelineResult } from "../../orchestrator/pipeline.js";
 import { TsPipelineEngine } from "../../orchestrator/workflow/ts-engine.js";
 import type { PipelineEngine, RunOptions } from "../../orchestrator/workflow/engine.js";
 import { createDefaultConfig } from "../../config/schema.js";
@@ -62,6 +62,7 @@ import { createEffectRegistry } from "../registry/effects.js";
 import { BudgetExceededError } from "../runtime/ledger.js";
 import { createFixedClock } from "../runtime/commit.js";
 import { tracePath } from "../runtime/trace.js";
+import { FAIL_CLOSED_ERROR_CLASS } from "../runtime/interpreter.js";
 import type { GraphInterpreter, GraphRunResult } from "../runtime/interpreter.js";
 import {
   GOLDEN_GRAPH_ID,
@@ -70,6 +71,12 @@ import {
   goldenSchemaCatalog,
   goldenSpec,
 } from "../runtime/__fixtures__/golden-graph.js";
+import {
+  CODING_GRAPH_ID as WHOLE_GRAPH_CODING_GRAPH_ID,
+  conformanceConfig,
+  seedCommittedArtifact,
+  wholeGraphBindings,
+} from "./__fixtures__/whole-graph.js";
 
 // ── Temp roots ──────────────────────────────────────────────────────
 
@@ -335,6 +342,76 @@ describe("PgeEngine — a real graph run finalizes through the single owner", ()
     ).rejects.toBeInstanceOf(BudgetExceededError);
 
     expect(inner.run).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── The error channel (sprint 5 of spec-20260812-pge-real-workload-errors) ──
+//
+// sc-5-1  PipelineFailure is a 1:1 map of TaskFailure minus `superstep`.
+// sc-5-2  the array is layered onto the single owner's result, not inside it.
+// sc-5-4  a FAIL_CLOSED refusal of the git-effect `commit` node is reported through it.
+// sc-5-5's TS-engine half lives in `src/orchestrator/finalize.e2e.test.ts` — this file's
+// whole-module mock of `pipeline.js` (see the header) makes a genuine `TsPipelineEngine`
+// assertion impossible here.
+
+describe("PgeEngine — the `errors` channel (sc-5-1, sc-5-2, sc-5-4)", () => {
+  it("a FAIL_CLOSED refusal of the git-effect `commit` node populates `errors`, mapped 1:1 from TaskFailure minus `superstep`", async () => {
+    const root = await mkTmp();
+    await seedCommittedArtifact(root);
+
+    const result = await new PgeEngine({
+      graphId: WHOLE_GRAPH_CODING_GRAPH_ID,
+      bindings: (input) => wholeGraphBindings(input),
+    }).run("Wire the error channel onto the engine.", root, conformanceConfig(), {
+      runId: "run-errors",
+    });
+
+    // sc-5-2: the array is present on the RETURNED PipelineResult, layered after
+    // finalization — not something `finalizePipelineRun` itself ever produces (proven
+    // separately by `finalize.test.ts`'s untouched frozen-key-order pin).
+    expect("errors" in result).toBe(true);
+    const errors = result.errors as readonly PipelineFailure[];
+    expect(errors.length).toBeGreaterThan(0);
+
+    const commitFailure = errors.find((failure) => failure.nodeId === "commit");
+    expect(commitFailure).toBeDefined();
+    expect(commitFailure!.errorClass).toBe(FAIL_CLOSED_ERROR_CLASS);
+    // The root-level `commit` node has no branch, measured in the curator's briefing.
+    expect(commitFailure!.branchKey).toBeNull();
+    expect(typeof commitFailure!.message).toBe("string");
+    expect(commitFailure!.message.length).toBeGreaterThan(0);
+
+    // sc-5-1: exactly the four mapped fields — `superstep` did NOT survive the map.
+    expect(Object.keys(commitFailure!).sort()).toEqual([
+      "branchKey",
+      "errorClass",
+      "message",
+      "nodeId",
+    ]);
+    expect("superstep" in commitFailure!).toBe(false);
+
+    // Option A (D3): `success` still follows the frozen sprint-split formula and does not
+    // flip for a terminal-node refusal that is not a sprint.
+    expect(result.success).toBe(true);
+  });
+
+  it("does not add an `errors` key to a run with no interpreter failures", async () => {
+    const root = await rootWithGoldenArtifact();
+
+    const result = await new PgeEngine({
+      graphId: GOLDEN_GRAPH_ID,
+      registries: () => goldenRegistries({ contracts: goldenContracts(1) }),
+      clock: createFixedClock(FIXED_CLOCK_ISO),
+    }).run("Exercise the superstep interpreter end to end.", root, config(), {
+      runId: "run-no-errors",
+    });
+
+    // Checked with `in`, not `=== undefined`: sc-5-5's twin claim, on the pge side —
+    // a clean run's `PipelineResult` keeps exactly the frozen five keys.
+    expect("errors" in result).toBe(false);
+    expect(Object.keys(result).sort()).toEqual(
+      ["completedSprints", "duration", "failedSprints", "spec", "success"].sort(),
+    );
   });
 });
 

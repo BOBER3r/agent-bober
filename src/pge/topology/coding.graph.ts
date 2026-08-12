@@ -105,7 +105,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
   // 1,181 bytes) and silently dropped `plan_materialize`'s writes against this
   // repository's own 29 KB PlanSpec and its 14 SprintContracts. `spec` and
   // `sprintContracts` are raised to `capForCorpusMax` of their committed workload-corpus
-  // maximum (`src/pge/golden/workload.ts`, `.bober/workload/`, 123 real payloads) — see
+  // maximum (`src/pge/golden/workload.ts`, `.bober/workload/`, 120 real payloads) — see
   // the two channel declarations below and docs/pge-graph.md's changelog entry for the
   // measured basis. The other eight channels already satisfied the same rule at 4,096 and
   // are unchanged. A structural change to a committed artifact moves graphVersion
@@ -188,7 +188,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       // error, which is why only plan_materialize writes it.
       //
       // 1.3.0: capForCorpusMax(48_097) = 131_072 — the committed workload corpus's
-      // largest spec entry (52 committed PlanSpecs that parse) is 48,097 canonical bytes;
+      // largest spec entry (50 committed PlanSpecs that parse) is 48,097 canonical bytes;
       // two-times headroom rounded up to the next power of two. Pinned two-directionally
       // against the corpus in src/pge/golden/workload.test.ts.
       id: "spec",

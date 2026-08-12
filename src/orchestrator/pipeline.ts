@@ -67,6 +67,22 @@ import { waitWhilePaused } from "../state/pause.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
+/**
+ * A single node failure the interpreter recorded, projected onto the imperative-engine
+ * surface (sprint 5 of spec-20260812-pge-real-workload-errors).
+ *
+ * Mapped 1:1 from `src/pge/runtime/interpreter.ts`'s `TaskFailure`, minus `superstep` — a
+ * superstep number is a graph-engine execution detail with no imperative-engine analogue,
+ * so it is dropped at this seam rather than carried into a field no TS-engine caller could
+ * ever populate.
+ */
+export interface PipelineFailure {
+  readonly nodeId: string;
+  readonly branchKey: string | null;
+  readonly errorClass: string;
+  readonly message: string;
+}
+
 export interface PipelineResult {
   success: boolean;
   spec: PlanSpec;
@@ -81,6 +97,21 @@ export interface PipelineResult {
    * `spec.clarificationQuestions` to the user in this case.
    */
   needsClarification?: boolean;
+  /**
+   * Node failures the interpreter recorded, absent whenever there are none.
+   *
+   * OPTION A (spec-20260812-pge-real-workload-errors, resolvedClarifications D3):
+   * `success` keeps the frozen `deriveRunSuccess` formula — sprint-split based, and shared
+   * with the imperative engine so the two cannot disagree — regardless of what `errors`
+   * carries. A non-empty `errors` array (e.g. a FAIL_CLOSED refusal of a git-effect `commit`
+   * node) is therefore possible ALONGSIDE `success: true`; callers that need to know a run
+   * did not do everything it claims must check `errors`, not `success`, for that fact.
+   *
+   * Only `PgeEngine.run` ever populates this — the imperative `TsPipelineEngine` has no
+   * interpreter to source `TaskFailure` records from, so a TS-engine `PipelineResult` never
+   * carries this key at all (checked with `"errors" in result`, not `=== undefined`).
+   */
+  errors?: readonly PipelineFailure[];
 }
 
 export interface SprintCycleResult {

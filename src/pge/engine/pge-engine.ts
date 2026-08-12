@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { BoberConfig } from "../../config/schema.js";
 import type { TopologySpec } from "../../contracts/topology.js";
-import type { PipelineResult } from "../../orchestrator/pipeline.js";
+import type { PipelineFailure, PipelineResult } from "../../orchestrator/pipeline.js";
 import type {
   PipelineEngine,
   PipelineEngineName,
@@ -181,7 +181,7 @@ export const MEASURED_REAL_WORKLOAD_SUPERSTEPS = 234;
  * the runaway guard below the interpreter's own baseline — it only ever raises it, and only
  * when a measurement justifies the raise.
  */
-export function supersepsForMeasuredCost(measuredSupersteps: number): number {
+export function superstepsForMeasuredCost(measuredSupersteps: number): number {
   let cap = 1;
   while (cap < measuredSupersteps * SUPERSTEP_HEADROOM_FACTOR) cap *= 2;
   return Math.max(cap, DEFAULT_MAX_SUPERSTEPS);
@@ -190,14 +190,14 @@ export function supersepsForMeasuredCost(measuredSupersteps: number): number {
 /**
  * The ceiling `PgeEngine.run` configures for every run, through `ctx.maxSupersteps`.
  *
- * `supersepsForMeasuredCost(234) === 512` — comfortably above the measured 234-superstep
+ * `superstepsForMeasuredCost(234) === 512` — comfortably above the measured 234-superstep
  * natural cost of this repository's own real workload, and still a guard: a graph that
  * genuinely fails to converge trips it just as `SuperstepLimitExceededError` always did,
  * only at 512 instead of 200. `src/pge/golden/executor.ts`'s fixtures are all well under
  * 200 already, so this raise changes nothing about the golden dataset (no `graphVersion`
  * bump follows from it — this is a runtime configuration, not a topology artifact change).
  */
-export const PGE_ENGINE_MAX_SUPERSTEPS = supersepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS);
+export const PGE_ENGINE_MAX_SUPERSTEPS = superstepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS);
 
 // ── Deps ────────────────────────────────────────────────────────────
 
@@ -522,30 +522,54 @@ export class PgeEngine implements PipelineEngine {
     // reports is derived from the SPRINT SPLIT and from nothing else — the frozen formula
     // `failedSprints.length === 0 && completedSprints.length > 0` (`deriveRunSuccess`),
     // shared with the imperative engine precisely so the two cannot disagree about the same
-    // facts.
+    // facts. `errors` is layered AFTER finalization returns, exactly as
+    // `RunResultFlusher.flush` layers `needsClarification` onto `finalizePipelineRun`'s
+    // result (`workflow/flusher.ts:113-127`) — so the shared fields stay produced in
+    // exactly one place and the two engines cannot disagree about them either.
     //
-    // ── RECORDED LIMITATION: `GraphRunResult.verdict` and `.failures` do not reach here ──
+    // ── The error channel, sourced from the interpreter's own richer verdict ──
     //
-    // The interpreter computes its own richer verdict (`verdictFrom`, `runtime/interpreter.ts`)
-    // which DOES account for task failures, and it is discarded at this boundary. So a run
-    // in which a fail-closed gate refused the `git`-effect `commit` node — the shipped
-    // sc-12-9 behaviour under an autopilot `noop` mechanism, which grants nothing — still
-    // reports `success: true` and writes a completion marker saying so, because every
-    // sprint did pass and the terminal commit is not a sprint.
+    // `result` is narrowed to `completed | aborted` by the `interrupted` throw above, and
+    // both variants declare `readonly failures: readonly TaskFailure[]`
+    // (`runtime/interpreter.ts`) — the interpreter's own `verdictFrom` DOES account for task
+    // failures, unlike the sprint-split-only formula `finalize.ts` uses. So a run in which a
+    // fail-closed gate refused the `git`-effect `commit` node — the shipped sc-12-9
+    // behaviour under an autopilot `noop` mechanism, which grants nothing — still reports
+    // `success: true` from the sprint-split formula (every sprint did pass; the terminal
+    // commit is not a sprint), but now ALSO reports that refusal through `errors`.
     //
-    // Not corrected here, and deliberately: `PipelineResult` has no error channel, and
-    // nonGoal 3 of this sprint forbids adding a field to it. Widening the sprint split to
-    // absorb a terminal-node failure would instead invent a FAILED SPRINT that did not
-    // happen, and would put the two engines' shared success formula back into disagreement.
-    // `conformance.engines.test.ts` records the fact end to end so it cannot drift; closing
-    // it needs a `PipelineResult` revision, which is a spec-level change.
-    return commit.finalize(result.state, {
+    // The spread is CONDITIONAL, not unconditional: `errors` is present only when
+    // `result.failures` is non-empty, so a clean run's `PipelineResult` keeps exactly the
+    // frozen five keys `finalizePipelineRun` returns (sc-5-5) and `Object.keys()` on it is
+    // unaffected.
+    //
+    // Widening the sprint split to absorb a terminal-node failure remains deliberately NOT
+    // done: it would invent a FAILED SPRINT that did not happen, and would put the two
+    // engines' shared success formula back into disagreement (spec-20260812-pge-real-
+    // workload-errors, resolvedClarifications D3 — Option A). `conformance.engines.test.ts`
+    // still records the divergence end to end.
+    const finalized = await commit.finalize(result.state, {
       runId,
       projectRoot,
       config,
       superstep: result.supersteps,
       startedAtMs,
     });
+    return {
+      ...finalized,
+      ...(result.failures.length === 0
+        ? {}
+        : {
+            errors: result.failures.map(
+              (failure): PipelineFailure => ({
+                nodeId: failure.nodeId,
+                branchKey: failure.branchKey,
+                errorClass: failure.errorClass,
+                message: failure.message,
+              }),
+            ),
+          }),
+    };
   }
 
   private defaultRegistries(): PgeRegistriesFactory {

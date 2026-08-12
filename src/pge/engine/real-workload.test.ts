@@ -83,7 +83,7 @@ import {
   PgeEngine,
   SUPERSTEP_HEADROOM_FACTOR,
   readValidatedTopologySpec,
-  supersepsForMeasuredCost,
+  superstepsForMeasuredCost,
 } from "./pge-engine.js";
 import type { PgeRegistriesInput } from "./pge-engine.js";
 import { CODING_GRAPH_ID, REPO_ROOT, conformanceConfig, seedCommittedArtifact } from "./__fixtures__/whole-graph.js";
@@ -691,19 +691,19 @@ describe("the harness reads each channel's own declared limit", () => {
 
 describe("the superstep ceiling has a measured basis, pinned two-directionally (sc-4-5)", () => {
   it("PGE_ENGINE_MAX_SUPERSTEPS equals a pure function of the measured cost, never a hand-picked literal", () => {
-    expect(PGE_ENGINE_MAX_SUPERSTEPS).toBe(supersepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS));
+    expect(PGE_ENGINE_MAX_SUPERSTEPS).toBe(superstepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS));
     // HEADROOM: comfortably above the measured cost, by the declared factor.
     expect(PGE_ENGINE_MAX_SUPERSTEPS).toBeGreaterThanOrEqual(
       MEASURED_REAL_WORKLOAD_SUPERSTEPS * SUPERSTEP_HEADROOM_FACTOR,
     );
     // FLOOR: the function never lowers the interpreter's own runaway guard, proven by a
     // measured cost small enough that only the floor could produce the result.
-    expect(supersepsForMeasuredCost(1)).toBe(DEFAULT_MAX_SUPERSTEPS);
+    expect(superstepsForMeasuredCost(1)).toBe(DEFAULT_MAX_SUPERSTEPS);
     // SENSITIVITY: the function is not a constant wearing a parameter — two different
     // measured costs the shipped headroom factor pushes across a power-of-two boundary
     // produce two different ceilings.
-    expect(supersepsForMeasuredCost(1000)).not.toBe(PGE_ENGINE_MAX_SUPERSTEPS);
-    expect(supersepsForMeasuredCost(1000)).toBeGreaterThan(PGE_ENGINE_MAX_SUPERSTEPS);
+    expect(superstepsForMeasuredCost(1000)).not.toBe(PGE_ENGINE_MAX_SUPERSTEPS);
+    expect(superstepsForMeasuredCost(1000)).toBeGreaterThan(PGE_ENGINE_MAX_SUPERSTEPS);
   });
 
   it(

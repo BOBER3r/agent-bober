@@ -776,7 +776,7 @@ configures, and it is a MEASURED-basis function, never a hand-picked literal —
 | --- | --- |
 | `MEASURED_REAL_WORKLOAD_SUPERSTEPS` | **234** — the natural completion cost above, pinned in `real-workload.test.ts` against a fresh measurement |
 | `SUPERSTEP_HEADROOM_FACTOR` | **2**, the same factor and the same discipline as `CAP_HEADROOM_FACTOR` |
-| `PGE_ENGINE_MAX_SUPERSTEPS` | **512** — `supersepsForMeasuredCost(234)`: next power of two at or above `234 × 2`, floored at the interpreter's own `DEFAULT_MAX_SUPERSTEPS` (200) so the function can only ever raise the guard, never lower it |
+| `PGE_ENGINE_MAX_SUPERSTEPS` | **512** — `superstepsForMeasuredCost(234)`: next power of two at or above `234 × 2`, floored at the interpreter's own `DEFAULT_MAX_SUPERSTEPS` (200) so the function can only ever raise the guard, never lower it |
 | failures recorded | exactly one: `{nodeId: "commit", errorClass: "FailClosed", superstep: 232}` |
 | `state.spec` / `state.sprintContracts.length` at the boundary | non-null / **14** |
 | terminal node reached | `graceful_failure` — **explicitly NOT `finalize`** |
@@ -804,7 +804,7 @@ Four consequences a reader should not have to derive:
 - **The measured, function-derived ceiling closed it.** `PGE_ENGINE_MAX_SUPERSTEPS = 512`
   comfortably covers the measured 234-superstep cost with the same two-directional-pin
   discipline the channel caps use: `real-workload.test.ts` proves the shipped value equals
-  `supersepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS)` (never a hand-picked
+  `superstepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS)` (never a hand-picked
   literal) and separately proves that LOWERING it back to the interpreter's own
   `DEFAULT_MAX_SUPERSTEPS` (200) reproduces `SuperstepLimitExceededError` over the identical
   workload — so the fix is provably necessary, not merely sufficient. `finalize` is still
@@ -812,20 +812,24 @@ Four consequences a reader should not have to derive:
   the sprint-13 divergence covered in [How much of the graph the executed cases
   reach](#how-much-of-the-graph-the-executed-cases-reach) — closing that is a durable
   checkpoint mechanism's territory, a later sprint's, not this one's.
-- **Neither the `commit` refusal nor the interpreter's own richer verdict is in what the
-  caller gets back.** `GraphRunResult.verdict` reads `"failed"` (it accounts for the
-  `FailClosed` `TaskFailure`), while `PgeEngine.run`'s returned `PipelineResult.success` is
-  `true`, computed from the frozen `deriveRunSuccess` formula shared with the imperative
-  engine — sprint-split based, and blind to a terminal-node failure that is not a sprint.
-  This is the recorded limitation named in [Engine migration
-  disposition](#engine-migration-disposition), unaffected by this sprint's nonGoals (adding
-  an error channel to `PipelineResult` is a later sprint's, not this one's). The harness
-  reads the interpreter's own outcome through the engine's own `interpreterFactory` seam for
-  exactly that reason; a harness that inspected only the returned `PipelineResult` would
-  have observed a bare `success: true` and nothing else. The committed measurement now carries
-  both halves of the divergence in one file, on real-workload data for the first time:
+- **The `commit` refusal now reaches the caller — `success` still does not account for it.**
+  `GraphRunResult.verdict` reads `"failed"` (it accounts for the `FailClosed`
+  `TaskFailure`), and `PgeEngine.run`'s returned `PipelineResult.success` is still `true`,
+  still computed from the frozen `deriveRunSuccess` formula shared with the imperative
+  engine — sprint-split based, and blind to a terminal-node failure that is not a sprint
+  (Option A, spec-20260812-pge-real-workload-errors resolvedClarifications D3). What
+  changed in sprint 5 of that spec: `PipelineResult` now carries an optional `errors` field
+  populated from the SAME `TaskFailure` records this measurement's `failures` array reads,
+  so `success: true` and a non-empty `errors` can now both be true on the SAME
+  `PipelineResult` — the caller no longer has to reach through the engine's own
+  `interpreterFactory` seam to learn a run refused its commit. This closes the recorded
+  limitation named in [Engine migration
+  disposition](#engine-migration-disposition). The committed measurement carries both
+  halves of the divergence in one file, on real-workload data:
   `failures: [{nodeId: "commit", errorClass: "FailClosed", superstep: 232}]` and
-  `verdict: "failed"` sitting next to `engineOutcome: {kind: "resolved", success: true}`.
+  `verdict: "failed"` sitting next to `engineOutcome: {kind: "resolved", success: true}`; the
+  returned `PipelineResult` now additionally carries
+  `errors: [{nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: "..."}]`.
 
 Re-deriving the measurement is a deliberate act —
 `MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts` rewrites the
@@ -964,8 +968,12 @@ serves both.
 - The most consequential divergence: **under the shipped autopilot configuration a PGE run
   does not commit.** The git-effect node `commit` is refused `FAIL_CLOSED` because the
   autopilot gate mechanism is `noop` and a noop mechanism grants nothing. The run
-  nevertheless reports `success: true`, because `PipelineResult` has no error channel.
-  Both engines report success; only the artifacts differ.
+  nevertheless reports `success: true` — `deriveRunSuccess` stays sprint-split based by
+  deliberate decision (Option A, spec-20260812-pge-real-workload-errors
+  resolvedClarifications D3) — but as of that spec's sprint 5, `PipelineResult` carries an
+  optional `errors` array populated from the refusal, so the fact is no longer invisible to
+  a caller that checks it. Both engines still report `success: true`; the artifacts differ,
+  and now so does the presence of `errors`.
 
 ### The decision
 
@@ -980,8 +988,10 @@ serves both.
   state.
 
 Flipping the default is a separate decision that requires sustained green conformance
-across real runs, plus an error channel on `PipelineResult` so a fail-closed refusal
-cannot be reported as success.
+across real runs. `PipelineResult` gained the error channel this paragraph used to say was
+missing (spec-20260812-pge-real-workload-errors, sprint 5) — `success` itself still cannot
+say a fail-closed refusal happened, by the same Option-A decision, so a flip still requires
+every caller that decides on `success` alone to be migrated to check `errors` too.
 
 **This decision is enforced, not just recorded.**
 `src/orchestrator/workflow/oracle-retention.test.ts` asserts that the schema still defaults

@@ -1286,6 +1286,26 @@
       "pipelineResult": [
         {
           "completedSprints": [],
+          "errors": [
+            {
+              "branchKey": "sprint-spec-20260805-pge-conformance-01",
+              "errorClass": "LoopExhausted",
+              "message": "loop counter \"sprintIterations.sprint-spec-20260805-pge-conformance-01\" reached the declared bound of 3; routing to \"sprint_exit\" instead of re-entering the cycle",
+              "nodeId": "sprint_route"
+            },
+            {
+              "branchKey": "sprint-spec-20260805-pge-conformance-01",
+              "errorClass": "LoopExhausted",
+              "message": "loop counter \"mockCurationRounds.sprint-spec-20260805-pge-conformance-01\" reached the declared bound of 2; routing to \"sprint_exit\" instead of re-entering the cycle",
+              "nodeId": "gate_mock_coverage"
+            },
+            {
+              "branchKey": "sprint-spec-20260805-pge-conformance-01",
+              "errorClass": "LoopExhausted",
+              "message": "loop counter \"fanoutRetries.sprint-spec-20260805-pge-conformance-01\" reached the declared bound of 2; routing to \"graceful_failure\" instead of re-entering the cycle",
+              "nodeId": "reduce_sprints"
+            }
+          ],
           "failedSprints": [
             {
               "assumptions": [],

@@ -1182,6 +1182,14 @@
               "title": "Wire the region"
             }
           ],
+          "errors": [
+            {
+              "branchKey": null,
+              "errorClass": "FailClosed",
+              "message": "FAIL_CLOSED: node \"commit\" declares effects (git) and there is no recorded approval for checkpoint \"end-of-pipeline\". The node was not executed.",
+              "nodeId": "commit"
+            }
+          ],
           "failedSprints": [],
           "spec": {
             "assumptions": [],
