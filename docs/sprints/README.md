@@ -2661,15 +2661,17 @@ oracle.
 
 ## One terminal vocabulary for `SprintContract` + the rank-aware channel join — **COMPLETE (6 of 6)**
 
-`spec-20260812-terminal-vocabulary` closes two of the four conformance divergences pinned at
-`equivalent: false` in `src/orchestrator/workflow/conformance.engines.test.ts`. Two engines pick
-different words out of the same nine-member `ContractStatusSchema` for the same outcome —
-`runSprintCycle` writes `"passed"`, PGE's `sprint_review` writes `"completed"` — five production
-readers each hardcoded one of the two, and the four that picked `"passed"` returned **empty**
-against this repository's own corpus of 256 contracts holding **zero** of that word. The spec
-standardises what the writers write, gives the readers a shared predicate so a third word cannot
-break them again, and replaces the channel reducer's canonical-order duplicate resolution with the
-rank-aware join already shipping beside it.
+`spec-20260812-terminal-vocabulary` set out to close two of the four conformance divergences
+pinned at `equivalent: false` in `src/orchestrator/workflow/conformance.engines.test.ts` — **it
+did not, and its own sprint 6 measured and recorded that rather than letting this paragraph
+stand uncorrected; see "Closing the spec." below for what actually happened to the divergence
+set.** Two engines pick different words out of the same nine-member `ContractStatusSchema` for
+the same outcome — `runSprintCycle` wrote `"passed"`, PGE's `sprint_review` wrote `"completed"` —
+five production readers each hardcoded one of the two, and the four that picked `"passed"`
+returned **empty** against this repository's own corpus of 256 contracts holding **zero** of that
+word. The spec standardises what the writers write, gives the readers a shared predicate so a
+third word cannot break them again, and replaces the channel reducer's canonical-order duplicate
+resolution with the rank-aware join already shipping beside it.
 
 Sprint 1 is **pure reader convergence — no writer changes, so no conformance field moves** — and
 is immediately valuable on its own, because it closes the live bug. The vocabulary now has **one
