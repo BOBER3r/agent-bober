@@ -941,6 +941,43 @@ function assertDispositionCitesEvidence(doc: string): void {
 }
 
 /**
+ * sc-6-4 (`spec-20260812-terminal-vocabulary` sprint 6) — the four things a flip would still
+ * require BEYOND this spec, phrase-tolerant like {@link assertDispositionCitesEvidence}: this
+ * guards that the four SUBJECTS sc-6-4 names are still addressed, not that any particular
+ * sentence survives a later edit.
+ */
+function assertFlipPrerequisitesStated(doc: string): void {
+  // (a) history and audits are recommended for PERMANENT ACCEPTANCE, not merely open work —
+  // the ADR-6 fan-out validation error is audits' architectural ground.
+  expect(
+    doc,
+    "the permanent-acceptance disposition for history/audits must be stated",
+  ).toContain("permanent acceptance");
+  expect(doc, "audits' ADR-6 fan-out ground must be named").toContain("InterruptInsideFanOut");
+
+  // (b) Option B success semantics — the term of art, named as such, with its consequence.
+  expect(doc, "Option B success semantics must be named").toContain("Option B");
+  expect(
+    doc,
+    "the completionMarker consequence of taking Option B must be stated",
+  ).toContain("completionMarker");
+
+  // (c) a durable checkpoint mechanism for commit and finalize.
+  expect(
+    doc,
+    "the durable-checkpoint gap for commit/finalize must be stated",
+  ).toContain("durable checkpoint");
+  expect(doc, "the autopilot mechanism that leaves the gap must be named").toContain("noop");
+
+  // (d) an explicit re-specification of the bar itself.
+  expect(doc, "re-specifying the bar must be named as a prerequisite").toMatch(/re-specif/i);
+  expect(
+    doc,
+    "the bar must be stated as unsatisfiable by design given (a)-(c)",
+  ).toMatch(/unsatisfiable/i);
+}
+
+/**
  * The dormant-subtree decision, module by module. Retention with a written criterion is a
  * correct outcome; naming the modules without saying what was decided is not.
  */
@@ -1049,6 +1086,42 @@ describe("the document's changelog, disposition and stated limitations", () => {
     expect(gutted).not.toBe(shippedDoc);
     expect(() => {
       assertSubtreeDispositionRecorded(gutted);
+    }).toThrow();
+  });
+
+  it("states what a flip would still require beyond this spec (sc-6-4)", () => {
+    assertFlipPrerequisitesStated(shippedDoc);
+  });
+
+  it("FAILS when the permanent-acceptance disposition for history/audits is edited out", () => {
+    const gutted = shippedDoc.split("permanent acceptance").join("open work");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when Option B success semantics is no longer named", () => {
+    const gutted = shippedDoc.split("Option B").join("the alternative");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when the durable-checkpoint gap for commit/finalize is edited out", () => {
+    const gutted = shippedDoc.split("durable checkpoint").join("a mechanism");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
+    }).toThrow();
+  });
+
+  it("FAILS when re-specifying the bar is no longer named as a prerequisite", () => {
+    const gutted = shippedDoc.split("re-specif").join("xxxxxxxx");
+    expect(gutted).not.toBe(shippedDoc);
+    expect(() => {
+      assertFlipPrerequisitesStated(gutted);
     }).toThrow();
   });
 });

@@ -1191,8 +1191,8 @@ serves both.
   did *not* move — the status word, closed at sprint 5.** The two engines used to pick
   different words out of the same nine-member `ContractStatusSchema` for the same outcome:
   `runSprintCycle` wrote `"passed"`, the graph's `sprint_review` wrote `"completed"`
-  (`src/pge/nodes/sprint-review.ts:205`; the persisted value is pinned at
-  `src/pge/nodes/sprint-evaluate.test.ts:765`). Sprint 1 converged the **readers** on the
+  (`src/pge/nodes/sprint-review.ts:215`; the persisted value is pinned at
+  `src/pge/nodes/sprint-evaluate.test.ts:776`). Sprint 1 converged the **readers** on the
   split rather than the writers: `src/contracts/sprint-contract.ts` is the single definition
   site, exposing `isSettledContractStatus` (`passed | completed` — *finished successfully*)
   and `isTerminalContractStatus` (adds `failed` — *stopped at all*, derived from the settled
@@ -1203,16 +1203,16 @@ serves both.
   the same step, so the write and its own consumer never went out of sync. The `status`
   field of the `contracts` divergence is CLOSED: both engines now write the identical word
   for a settled sprint, pinned by asserting `tsContract.status` against `pgeContract.status`
-  directly (`src/orchestrator/workflow/conformance.engines.test.ts:417-419`) rather than
+  directly (`src/orchestrator/workflow/conformance.engines.test.ts:435-437`) rather than
   against a literal, so the claim pinned is the convergence itself.
 - **The `contracts` divergence went from three field deltas to FOUR at sprint 3, and back
   down to THREE at sprint 5 — but `contracts` stays in the diverged set, because the other
   three do not close by a vocabulary change.** The original three were `status`,
   `evaluatorFeedback` and `generatorNotes` (the graph populates neither of the latter two).
   Sprint 3 added a fourth: `sprint_exit` writes a monotone `version: attempts` on the
-  settled contract (`src/pge/nodes/sprint-review.ts:215`), the ordering discriminator
+  settled contract (`src/pge/nodes/sprint-review.ts:222`), the ordering discriminator
   `versionRank` (`src/pge/registry/reducers.ts:366-393`) reads, and `runSprintCycle` writes
-  none — pinned at `src/orchestrator/workflow/conformance.engines.test.ts:417-426`.
+  none — pinned at `src/orchestrator/workflow/conformance.engines.test.ts:435-444`.
   `conformance.ts`'s comparison strips a **10-key** `VOLATILE_KEYS` list (`:65-76`) and
   `version` is deliberately **not** on it: stripping it would hide a genuine difference in
   what the two engines write, which is the one thing this harness exists to find. Sprint 5
@@ -1265,7 +1265,7 @@ serves both.
   `"completed" < "proposed"`), AND no settled contract ever wrote the word `"passed"`. Sprint
   4 fixed the first: `mergeEntries` (`src/pge/registry/reducers.ts`) now resolves a duplicate
   id by RANK (`rankIsGreater`), reading the monotone `SprintContract.version`
-  (`src/contracts/sprint-contract.ts:213`, optional and **never defaulted**) `sprint_exit`
+  (`src/contracts/sprint-contract.ts:214`, optional and **never defaulted**) `sprint_exit`
   writes as `attempts`. The channel now holds the SETTLED copy — `status: "completed"`, not
   `"proposed"` — pinned positively at `src/pge/nodes/sprint-evaluate.test.ts` (flipped from
   the sprint-3 known limitation) and end to end at
@@ -1303,6 +1303,129 @@ disposition**. It made the engine able to run a real workload at all and gave a 
 a channel to say so, but the divergence set is still exactly `history`, `audits`,
 `contracts`, `pipelineResult` at `equivalent: false` — none of the four was in its scope —
 so PGE remains opt-in and `TsPipelineEngine` remains the oracle.
+
+**`spec-20260812-terminal-vocabulary` closed at its sprint 6 having NOT moved this
+disposition either — and its own description said it would.** That description read "closes
+two of the four conformance divergences"; a real run of both engines, driven exactly as
+`conformance.engines.test.ts` drives them, still reports `equivalent: false` with the
+identical four field names it reported before this spec's first sprint. **The set never
+shrank.** What the spec's six sprints actually did was close two things one level *below*
+the field: the `pipelineResult` MECHANISM (sprint 4 — the channel reducer stopped keeping
+the seeded `"proposed"` copy of a settled contract), and the `contracts` STATUS DELTA
+(sprint 5 — both engines write `"completed"` for a settled sprint, pinned by asserting one
+engine's answer against the other's, `conformance.engines.test.ts:435-437`). Neither closure
+removed a field from the pinned set: `pipelineResult` remains, because
+`PipelineResult.completedSprints`/`failedSprints` are containers of whole `SprintContract`
+objects, so its divergence REDUCES to `contracts`'s and cannot close independently of it
+(`conformance.engines.test.ts:435-444`); `contracts` remains, because three deltas still sit
+inside it — `evaluatorFeedback`, `generatorNotes` (PGE has no writer for either anywhere in
+`src/pge/`) and `version` (deliberately excluded from the ten-key `VOLATILE_KEYS`,
+`conformance.ts:65-76`, because stripping it would hide a real difference rather than close
+one). This is exactly this sprint's own stop condition, applied to itself: *"The divergence
+set is not what this spec predicted — record what it actually is and why, rather than
+adjusting anything to match the prediction."* No test and no production source were changed
+to make "two closed" come true; `conformance.engines.test.ts`'s pinned array
+(`:318-323`) is the same four literals it was before sprint 1.
+
+**What a flip would still require beyond everything this spec did — four things, none of
+them this spec's to do (`nonGoals`):**
+
+1. **`history` and `audits` are recommended for permanent acceptance, not open work.** Both
+   rest on architectural grounds this spec's own `outOfScope[0]` states and this document did
+   not previously spell out. `history`: there is no curator node to emit a `curator-start`/
+   `curator-complete` pair from — a graph run's history has exactly one writer,
+   `finalizePipelineRun`, and `grep -rn "appendHistory\|history.jsonl" src/pge
+   --include="*.ts"` (non-test) returns zero hits. `audits`: five of the eight checkpoint ids
+   the imperative pipeline records sit inside the sprint fan-out region, where
+   `InterruptInsideFanOut` (`src/pge/topology/validate.ts:1089-1099`) is a BLOCKING
+   validation error (`severity: "error"`) by ADR-6
+   (`.bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md`) — they cannot be
+   declared there at any sprint's discretion, only by revisiting the ADR. A correction folded
+   in with this record: the committed artifact declares **two** HITL checkpoint ids, not
+   one — `hitl_commit -> end-of-pipeline` and `plan_clarify -> post-plan`
+   (`src/pge/topology/coding.graph.ts:483`) — but only `end-of-pipeline` is ever *evaluated*
+   on the golden fixture, because a settled plan takes `e-plan-ok`, never the
+   `e-plan-clarify` edge that reaches `post-plan`. Closing either field is nonGoal 3's
+   territory anyway ("closing history or audits"); permanent acceptance is the disposition
+   this record now states.
+2. **Option B success semantics.** The term of art, defined at
+   `spec-20260812-pge-real-workload-errors.json`'s `resolvedClarifications` D3: making
+   `PipelineResult.success` false when a gated-effect node is refused FAIL_CLOSED, instead of
+   the frozen `deriveRunSuccess` formula both engines share today (Option A, the one this
+   repository ships — a run whose `commit` was refused still reports `success: true`). Option
+   B was rejected for that spec and remains out of this one's `outOfScope[3]` for the same
+   reason: it moves `.bober/runs/<runId>.completed.json` and the `pipeline-complete` history
+   phase, which would add `completionMarker` to the divergence set — the one field currently
+   asserted IDENTICAL across both engines
+   (`conformance.engines.test.ts`, "is EQUIVALENT on every field outside the recorded
+   divergence set") and the one the chat layer tails. Taking it trades one open divergence for
+   another; it does not close anything by itself.
+3. **A durable checkpoint mechanism for `commit` and `finalize`.** Four mechanisms are
+   registered — `cli`, `disk`, `pr`, `noop` (`src/pge/runtime/interrupt.ts:318`) — but nothing
+   in this repository ever runs `commit`/`finalize` under a non-`noop` one: the shipped
+   `conformanceConfig()` is autopilot by construction, and the golden executor pins that one
+   config on purpose so a case reproduces everywhere. `noop` is documented as the mechanism
+   that grants nothing (`interrupt.ts:38-46`, enforced at `:523`,
+   `if (mechanismName !== "noop") granted.set(key, outcome);`), so a gated-effect node
+   proceeds only under a DURABLE record of approval — a disk marker, a PR review, an
+   interactive CLI answer — and `commit`/`finalize` never receive one today. Consequence,
+   already recorded: both are two of the six `NEVER_EXECUTED` entries
+   (`src/pge/golden/coverage.test.ts:139-146`), and `commit`'s span status is always
+   `"interrupted"`/`errorClass: "FailClosed"`, never `"ok"`.
+4. **An explicit re-specification of the bar itself.** The bar as written above —
+   *"requires sustained green conformance across real runs"*, operationally `equivalent:
+   true` — is now UNSATISFIABLE BY DESIGN: two of the four fields (`history`, `audits`) are
+   recommended for permanent acceptance (point 1), and the other two (`contracts`,
+   `pipelineResult`) cannot close without a PGE-node writer for `evaluatorFeedback` and
+   `generatorNotes` that no sprint in this spec added, plus a `version` delta this harness
+   deliberately keeps visible. `diffs` can therefore never become empty under the bar's
+   current wording, so a flip is not "closer" for two divergences having narrowed below the
+   field level — the bar itself has to be re-specified, on purpose, before "flip the
+   default" is a live question again. Doing that re-specification is explicitly this spec's
+   `nonGoals`/`outOfScope[2]`, not this record's to perform.
+
+**Two carried-forward facts, unchanged since sprint 5, worth restating here because a
+closing record is where a reader looks for them.** `verdictFrom`
+(`src/pge/runtime/interpreter.ts:728`) is now structurally dead for BOTH engines: no writer
+anywhere produces the literal `"passed"` for a settled sprint any more, so its counter is
+permanently zero and its downgrade paths are unreachable; every affected transition moves
+toward a MORE severe verdict, never a less severe one, so the direction is conservative
+(allowlisted at `src/contracts/status-vocabulary.invariant.test.ts:205-208`). And
+`src/orchestrator/workflow/flusher.ts:76` decides the completed/failed split against a bare
+local variable rather than the shared predicate, invisible to the sc-1-4 source scan by
+construction (it keys on the `.status` member-access spelling); the ternary above it bounds
+the value today, so this is safe, not silently wrong — recorded, not fixed, because fixing
+it changes nothing sc-6 was scoped to change.
+
+**A recurring hazard this spec's own history demonstrates, worth naming rather than
+repeating quietly a sixth time:** sprints 3, 4 and 5 each had to correct a stale `path:line`
+citation a prior sprint's edit had shifted, and this sprint fixed four more in the very
+section above (`sprint-review.ts:205→215` and `:215→222`, `sprint-evaluate.test.ts:765→776`,
+`sprint-contract.ts:213→214`) plus two that this sprint's OWN prose edit shifted
+(`conformance.engines.test.ts:417-419→435-437`, `:417-426→435-444`). Nothing in CI validates
+a `path:line` citation — `pge docs --check` diffs node ids inside the node-inventory
+regions only ("How to read this document" above; `src/pge/topology/docs.ts:66-105`, the
+literal marker text deliberately not reproduced here for the same reason that section
+gives) and cannot see prose citations at all, so a stale one ages silently until a reader
+follows it and finds the wrong line. **Weighed and
+declined for this sprint:** a general citation-freshness guard would need to parse
+free-text `path:line` and `path:line-range` references out of prose reliably — distinguishing
+them from version strings, code spans and ordinary punctuation — and check each cited range
+against the live file, across a ~1,500-line document with dozens of citations in varying
+shorthand. That is a real capability, not a cheap addition bolted onto a closing record, and
+building it under this sprint's docs-only, four-file scope risks exactly the scope creep
+`nonGoals` exists to prevent. Recorded here as a follow-up worth its own sprint, not
+performed.
+
+**A related, unrelated-to-fix repo hazard also worth recording here, because a closing
+record is exactly where an unusual hazard belongs:** `src/pge/topology/docs.test.ts` — the
+file that gates this very section — carries two literal NUL bytes at its own line 308, used
+as deliberate key separators inside a `join()` call. Plain `grep` silently skips the file as
+binary; `grep -a` or a direct read is required to see its contents at all. The same hazard
+was found pre-existing in `src/pge/registry/reducers.ts` and `src/pge/runtime/frontier.ts`
+by an earlier sprint's security audit and spawned as its own task; it is not this sprint's to
+fix, but a document whose own gate is invisible to `grep` is worth one sentence in the
+record that names it.
 
 **This decision is enforced, not just recorded.**
 `src/orchestrator/workflow/oracle-retention.test.ts` asserts that the schema still defaults
