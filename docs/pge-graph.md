@@ -516,13 +516,19 @@ record a run that never produces a result. The committed
 what puts `plan_clarify` on an executed path; a `clarifyingBindings(99)` scenario pinning the
 bound becomes possible once the terminal path returns a result instead of throwing.
 
-**The clarification path is not the only route to it, and not the common one.** A separate
-measurement against a real plan — [The graph engine against a real
-workload](#the-graph-engine-against-a-real-workload) — reaches the identical terminal, with
-`state.spec` null and the identical throw, on a planner that settles on its first answer: the
-spec is simply too large for the channel to accept. Read the two together, the crash is a
-property of any run that arrives at `graceful_failure` before `spec` is written, not an edge
-case of a pathological planner.
+**The clarification path is not the only route to it, and not the common one.** As
+originally observed, a separate measurement against a real plan — [The graph engine against a
+real workload](#the-graph-engine-against-a-real-workload) — reached the identical terminal,
+with `state.spec` null and the identical throw, on a planner that settled on its first
+answer: the spec was simply too large for the channel to accept. Read the two together, the
+crash was a property of any run that arrived at `graceful_failure` before `spec` was written,
+not an edge case of a pathological planner. **That specific route is now closed**: sprint 3 of
+spec-20260812-pge-real-workload-errors sized the `spec`/`sprintContracts` caps off a real
+corpus, so the real-workload measurement's `spec` write is admitted and `state.spec` is no
+longer null at the boundary — see the linked section for the ceiling sprint 3's fix
+uncovered next, and how sprint 4 resolved it. `FinalizeWithoutSpecError` itself is untouched
+and the `planClarifyRounds` route to it above still throws; only the real-workload
+measurement's OWN route to the identical symptom closed.
 
 **A permanently-green golden dataset is not evidence of generation quality.** This is a
 limitation of the method, not a gap to be closed later. The runtime's own replay module
@@ -692,8 +698,18 @@ are the shipped ones. What the run does is committed as data in
 **As committed at `graphVersion 1.2.0`, the engine did not execute that plan** — both writes
 were rejected. Sprint 3 of spec-20260812-pge-real-workload-errors raised `spec` and
 `sprintContracts` off the corpus (see the changelog entry for `1.3.0` and the corpus table
-below) and re-ran this exact harness. The rejections are gone, but the run still does not
-reach a terminal node — for a different reason.
+below) and re-ran this exact harness. The rejections were gone, but the run still did not
+reach a terminal node — for a different reason: a SECOND, independent ceiling on the
+interpreter's own superstep loop. **Sprint 4 diagnosed that ceiling BY MEASUREMENT before
+touching it** — running the same harness at two different contract counts (1 and 14) to
+distinguish "the ceiling is simply too low for real work" from "something in the fan-out
+does not converge" — and found the former: node activity kept advancing through all 14
+distinct contracts, every dispatched branch settled `"succeeded"` on its first attempt, and
+the cost scaled with the declared cross-contract `dependsOn` graph under
+`defaults.concurrency: 1`, not with a stuck loop. `PGE_ENGINE_MAX_SUPERSTEPS`
+(`src/pge/engine/pge-engine.ts`) now raises the ceiling `PgeEngine.run` configures to a
+measured basis, and **the engine executes this repository's own real plan end to end** —
+though not all the way to `finalize` (see below).
 
 | measured, as committed at `graphVersion 1.2.0` (before sprint 3) | value |
 | --- | --- |
@@ -705,46 +721,96 @@ reach a terminal node — for a different reason.
 | run status / verdict | `completed` / `failed` |
 | what `PgeEngine.run` returned | nothing — its own `commit.finalize` threw `FinalizeWithoutSpecError` |
 
-| measured, as committed at `graphVersion 1.3.0` (after sprint 3) | value |
+| measured, as committed at `graphVersion 1.3.0` (after sprint 3, before sprint 4) | value |
 | --- | --- |
 | `spec` write by `plan_materialize`, superstep 12 | **29,214** canonical bytes against a declared limit of **131,072** — admitted |
 | `sprintContracts` write by `plan_materialize`, superstep 12 | **135,106** canonical bytes against **524,288** — admitted |
 | failures recorded | none — the interpreter itself never returns a result (next row) |
 | `GraphRunResult` | never produced: the interpreter throws `SuperstepLimitExceededError` at `DEFAULT_MAX_SUPERSTEPS = 200` (`src/pge/runtime/interpreter.ts:386`, thrown at `:1060`) before reaching a terminal node |
 | what `PgeEngine.run` returned | nothing — the same interpreter throw propagates out of `PgeEngine.run` |
-| how the committed file records it | `engineOutcome: {kind: "threw", errorClass: "SuperstepLimitExceededError"}`, and `rejections` / `failures` / `terminalNodeId` / `status` / `verdict` / `specChannelNullAtBoundary` all **`null`** — there is no `GraphRunResult` to read them off. The `verdict: null` is load-bearing beyond this table: see the corpus-rebuild hazard below |
+| how the committed file recorded it | `engineOutcome: {kind: "threw", errorClass: "SuperstepLimitExceededError"}`, and `rejections` / `failures` / `terminalNodeId` / `status` / `verdict` / `specChannelNullAtBoundary` all **`null`** — there was no `GraphRunResult` to read them off. `verdict: null` was load-bearing beyond this table: see the (now resolved) corpus-rebuild hazard below |
 
-Three consequences a reader should not have to derive:
+**Sprint 4 measured the ceiling at two contract counts before touching it** — the diagnostic
+question the sprint existed to answer, run through the SAME harness
+(`src/pge/engine/real-workload.test.ts`) with the interpreter's own `ctx.maxSupersteps`
+raised far enough to observe a run end to end:
+
+| contract count | supersteps consumed | terminal node | every branch settled |
+| --- | --- | --- | --- |
+| 1 (no `dependsOn`) | **39** | `graceful_failure` | 1 of 1, `"succeeded"`, first attempt |
+| 14 (this repository's real, `dependsOn`-linked contracts) | **234** | `graceful_failure` | 14 of 14, `"succeeded"`, first attempt |
+
+The relationship is the whole diagnosis: cost scales with declared work (14 real,
+cross-contract-dependent branches cost roughly 6× one trivial branch, not "the same
+regardless of count"), node activity advances through every distinct contract rather than
+repeating one, and the branch set fully drains rather than stalling. That is **INSUFFICIENT
+CEILING**, not NON-CONVERGENCE — the alternative verdict the sprint was equally prepared to
+record and stop at, unfixed, had the evidence pointed there. (The apparent "extra" trace
+volume — `sprint_body` alone racks up over a thousand spans in the 14-contract run — is
+`serialized`-status deferral bookkeeping the frontier planner writes once per superstep a
+task remains blocked on an unmet `dependsOn` entry, `src/pge/runtime/frontier.ts:216-227`;
+it is bookkeeping about waiting, not evidence of repeated execution — every OTHER per-branch
+node in the trace appears exactly once per branch, matching the 1-contract baseline.)
+
+`PGE_ENGINE_MAX_SUPERSTEPS` (`src/pge/engine/pge-engine.ts`) is now the ceiling `PgeEngine.run`
+configures, and it is a MEASURED-basis function, never a hand-picked literal — mirroring
+`capForCorpusMax`'s discipline exactly:
+
+| measured, as committed at `graphVersion 1.3.0` (after sprint 4, current) | value |
+| --- | --- |
+| `MEASURED_REAL_WORKLOAD_SUPERSTEPS` | **234** — the natural completion cost above, pinned in `real-workload.test.ts` against a fresh measurement |
+| `SUPERSTEP_HEADROOM_FACTOR` | **2**, the same factor and the same discipline as `CAP_HEADROOM_FACTOR` |
+| `PGE_ENGINE_MAX_SUPERSTEPS` | **512** — `supersepsForMeasuredCost(234)`: next power of two at or above `234 × 2`, floored at the interpreter's own `DEFAULT_MAX_SUPERSTEPS` (200) so the function can only ever raise the guard, never lower it |
+| failures recorded | exactly one: `{nodeId: "commit", errorClass: "FailClosed", superstep: 232}` |
+| `state.spec` / `state.sprintContracts.length` at the boundary | non-null / **14** |
+| terminal node reached | `graceful_failure` — **explicitly NOT `finalize`** |
+| run status / verdict | `completed` / `failed` (the interpreter's OWN richer verdict; see below) |
+| what `PgeEngine.run` returned | `success: true` — the recorded, still-open divergence: `commit`'s `FailClosed` refusal does not reach the returned `PipelineResult` (next paragraph) |
+
+Four consequences a reader should not have to derive:
 
 - **Raising the caps fixed exactly what it was scoped to fix, and nothing more.** The two
   `StateBloatError` rejections are gone — `byteSize(spec) < 131,072` and
   `byteSize(sprintContracts) < 524,288` both hold, proven directly in
-  `src/pge/engine/real-workload.test.ts`. What happens to the run AFTER `plan_materialize`
-  succeeds is a separate question this sprint did not set out to answer.
-- **Admitting the writes uncovers a second ceiling.** With `state.spec` no longer null, the
-  run proceeds into the fan-out across the real 14 sprint contracts through the sprint
-  subgraph, and that fan-out runs long enough to trip the interpreter's own runaway guard
-  before any terminal node is reached. The `FinalizeWithoutSpecError` crash recorded in
-  [A defect this coverage work surfaced](#a-defect-this-coverage-work-surfaced) and the
-  `SuperstepLimitExceededError` above are two DIFFERENT defects that happened to share one
-  symptom — "the engine never reaches a terminal node" — because the first one always cut
-  the run off before the second could ever be reached. This is the same class of gap the
-  4,096-byte cap itself was: a runaway guard's default sized for a workload nothing had ever
-  actually run.
-- **Neither failure is in what the caller gets back.** Both are facts on the interpreter's
-  own result (a thrown error, in the `1.3.0` case) or its `GraphRunResult`, which
-  `PgeEngine.run` does not surface through the returned `PipelineResult` — the recorded
-  limitation named in [Engine migration disposition](#engine-migration-disposition). The
-  harness reads the interpreter's own outcome through the engine's own `interpreterFactory`
-  seam for exactly that reason; a harness that inspected the returned `PipelineResult` would
-  have observed nothing either way.
+  `src/pge/engine/real-workload.test.ts`. What happened to the run AFTER `plan_materialize`
+  succeeded was a separate question sprint 3 did not set out to answer.
+- **Admitting the writes uncovered a second ceiling, and it was real work, not a bug.** With
+  `state.spec` no longer null, the run proceeded into the fan-out across the real 14 sprint
+  contracts through the sprint subgraph, and — under `defaults.concurrency: 1` and this
+  repository's own genuine cross-contract `dependsOn` graph — that fan-out ran long enough to
+  trip the interpreter's runaway guard before any terminal node was reached. The
+  `FinalizeWithoutSpecError` crash recorded in [A defect this coverage work
+  surfaced](#a-defect-this-coverage-work-surfaced) and the `SuperstepLimitExceededError`
+  above were two DIFFERENT defects that happened to share one symptom — "the engine never
+  reaches a terminal node" — because the first always cut the run off before the second
+  could ever be reached. Both were the same class of gap the 4,096-byte cap itself was: a
+  runaway guard's default sized for a workload nothing had ever actually run.
+- **The measured, function-derived ceiling closed it.** `PGE_ENGINE_MAX_SUPERSTEPS = 512`
+  comfortably covers the measured 234-superstep cost with the same two-directional-pin
+  discipline the channel caps use: `real-workload.test.ts` proves the shipped value equals
+  `supersepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS)` (never a hand-picked
+  literal) and separately proves that LOWERING it back to the interpreter's own
+  `DEFAULT_MAX_SUPERSTEPS` (200) reproduces `SuperstepLimitExceededError` over the identical
+  workload — so the fix is provably necessary, not merely sufficient. `finalize` is still
+  not reached — `commit` is still FAIL_CLOSED-refused under the autopilot `noop` mechanism,
+  the sprint-13 divergence covered in [How much of the graph the executed cases
+  reach](#how-much-of-the-graph-the-executed-cases-reach) — closing that is a durable
+  checkpoint mechanism's territory, a later sprint's, not this one's.
+- **Neither the `commit` refusal nor the interpreter's own richer verdict is in what the
+  caller gets back.** `GraphRunResult.verdict` reads `"failed"` (it accounts for the
+  `FailClosed` `TaskFailure`), while `PgeEngine.run`'s returned `PipelineResult.success` is
+  `true`, computed from the frozen `deriveRunSuccess` formula shared with the imperative
+  engine — sprint-split based, and blind to a terminal-node failure that is not a sprint.
+  This is the recorded limitation named in [Engine migration
+  disposition](#engine-migration-disposition), unaffected by this sprint's nonGoals (adding
+  an error channel to `PipelineResult` is a later sprint's, not this one's). The harness
+  reads the interpreter's own outcome through the engine's own `interpreterFactory` seam for
+  exactly that reason; a harness that inspected only the returned `PipelineResult` would
+  have observed a bare `success: true` and nothing else.
 
-**The `SuperstepLimitExceededError` ceiling is recorded, not fixed, here.** Sizing
-`maxInlineBytes` is this sprint's whole scope; `DEFAULT_MAX_SUPERSTEPS` is a different
-constant guarding a different resource, and chasing it here would be exactly the scope
-creep this project's harness exists to prevent. Re-deriving the measurement is a deliberate
-act — `MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts` rewrites
-the committed file, and every other run of that test re-derives it and asserts the committed
+Re-deriving the measurement is a deliberate act —
+`MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts` rewrites the
+committed file, and every other run of that test re-derives it and asserts the committed
 bytes are unchanged. The numbers above therefore go red the moment they stop being true, and
 the diff is the statement that they changed.
 
@@ -830,17 +896,19 @@ BUILD_WORKLOAD_CORPUS=1 npx vitest run src/pge/golden/workload.test.ts
 MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
 ```
 
-in that order — the second command reads the corpus the first one just wrote. **Known
-hazard as of `1.3.0` — the documented rebuild command above is currently unsafe to run.**
-The `verdict` channel's only corpus entry is sourced from the committed measurement's own
-`verdict`, and that field is now `null`: the run throws `SuperstepLimitExceededError` before
-reaching a terminal node, so there is no verdict to record (see the `engineOutcome` row in
-[The graph engine against a real workload](#the-graph-engine-against-a-real-workload)). A
-full rebuild right now would therefore drop the `verdict` channel's only entry and fail
-`sc-2-4`'s channel-coverage check. That is a consequence of the same superstep ceiling
-recorded as sprint 4's territory, not something the cap-sizing work created or fixed. Until
-that ceiling is addressed, prefer a surgical edit: sprint 3 needed to remove three entries
-and deleted those three files by name rather than rebuilding.
+in that order — the second command reads the corpus the first one just wrote. **The hazard
+recorded as of `1.3.0` (before sprint 4) is now RESOLVED, and is kept here as the record of
+why the two sprints stayed in that order.** The `verdict` channel's only corpus entry is
+sourced from the committed measurement's own `verdict`; while the superstep ceiling made the
+run throw before returning a `GraphRunResult`, that field was `null`, and a full
+`BUILD_WORKLOAD_CORPUS=1` rebuild would have dropped the `verdict` channel's only entry and
+failed `sc-2-4`'s channel-coverage check. Sprint 4's ceiling fix (see [The graph engine
+against a real workload](#the-graph-engine-against-a-real-workload)) makes the real-workload
+run reach a terminal node and record `verdict: "failed"` — non-null — so the rebuild command
+above is safe to run again. It was not re-run as part of sprint 4: this sprint's own scope
+was the measurement (`.bober/topology/measurements/real-workload.json`), not the corpus
+(`.bober/workload/`), and the corpus is unaffected by anything this sprint changed — a
+deliberate rebuild is left as a follow-up rather than bundled in here.
 
 **A regeneration is only partly pinned, and the asymmetry is worth knowing before you read the
 diff.** The `spec` and `sprintContracts` entries take *every* file that parses and are keyed to

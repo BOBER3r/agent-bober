@@ -23,15 +23,28 @@
     "testAnchors": 4096,
     "verdict": 4096
   },
-  "rejections": null,
-  "failures": null,
-  "terminalNodeId": null,
-  "status": null,
-  "verdict": null,
-  "specChannelNullAtBoundary": null,
+  "rejections": [],
+  "failures": [
+    {
+      "nodeId": "commit",
+      "branchKey": null,
+      "superstep": 232,
+      "errorClass": "FailClosed"
+    }
+  ],
+  "terminalNodeId": "graceful_failure",
+  "status": "completed",
+  "verdict": "failed",
+  "specChannelNullAtBoundary": false,
+  "supersteps": 234,
+  "superstepCeiling": {
+    "configured": 512,
+    "measuredBasis": 234,
+    "headroomFactor": 2
+  },
   "engineOutcome": {
-    "kind": "threw",
-    "errorClass": "SuperstepLimitExceededError"
+    "kind": "resolved",
+    "success": true
   },
   "corpusHeadroom": {
     "messages": {
@@ -49,5 +62,19 @@
       "declaredLimit": 4096,
       "wouldReject": false
     }
-  }
+  },
+  "contractCountScaling": [
+    {
+      "contractCount": 1,
+      "supersteps": 39,
+      "terminalNodeId": "graceful_failure",
+      "status": "completed"
+    },
+    {
+      "contractCount": 14,
+      "supersteps": 234,
+      "terminalNodeId": "graceful_failure",
+      "status": "completed"
+    }
+  ]
 }

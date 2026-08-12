@@ -22,7 +22,7 @@ import { createArchiveWriter } from "../runtime/archive.js";
 import { createSemanticCache } from "../runtime/cache.js";
 import { createCommitBoundary, createSystemClock } from "../runtime/commit.js";
 import { createFrontierPlanner } from "../runtime/frontier.js";
-import { createGraphInterpreter } from "../runtime/interpreter.js";
+import { DEFAULT_MAX_SUPERSTEPS, createGraphInterpreter } from "../runtime/interpreter.js";
 import type { GraphInterpreter, GraphRunResult, RunContext } from "../runtime/interpreter.js";
 import { createBudgetLedger } from "../runtime/ledger.js";
 import { createScratchStore } from "../runtime/scratch.js";
@@ -135,6 +135,69 @@ export class UnknownPromptRefError extends Error {
  */
 export const PGE_DOWNGRADE_LOG_LINE =
   "Engine 'pge' selected but the committed topology did not compile; downgrading to 'ts' for this run.";
+
+// ── The superstep ceiling ──────────────────────────────────────────
+//
+// Sprint 4 of spec-20260812-pge-real-workload-errors diagnosed why `PgeEngine` never
+// reached a terminal node over this repository's own committed 29 KB `PlanSpec` and its 14
+// real `SprintContract`s, once sprint 3 removed the byte-cap wall: `DEFAULT_MAX_SUPERSTEPS`
+// (`../runtime/interpreter.js`, 200) is the INTERPRETER's own conservative baseline for an
+// arbitrary graph, and this engine passed no override at all, so every run — including one
+// over a real 14-contract fan-out with `defaults.concurrency: 1` — inherited it.
+//
+// The diagnosis, run at two contract counts against the SAME committed workload
+// (`real-workload.test.ts`, sc-4-3/sc-4-4): a 1-contract slice completes in 39 supersteps;
+// the real 14-contract fan-out completes in 234, with every one of the 14 branches settling
+// `"succeeded"` on its first attempt (no `sprint_correct` retries anywhere) and the ONLY
+// recorded `TaskFailure` being the already-documented `commit` `FailClosed` refusal. That is
+// INSUFFICIENT CEILING, not non-convergence: node activity keeps advancing through distinct
+// contracts, the branch set drains completely, and the cost scales with the declared
+// cross-contract `dependsOn` graph (`../runtime/frontier.ts`) under `concurrency: 1` — real
+// work, not a stuck loop. See docs/pge-graph.md's "graph engine against a real workload"
+// section for the full measurement.
+//
+// The fix mirrors `capForCorpusMax` (`../golden/workload.ts`, sprint 3): a cap is not a
+// number someone picks, it is a deterministic FUNCTION of a measured cost with headroom,
+// pinned by a test that recomputes it — never a hand-picked literal.
+
+/** The headroom multiplier over the measured natural completion cost. Same discipline, same factor, as `../golden/workload.ts`'s `CAP_HEADROOM_FACTOR`. */
+export const SUPERSTEP_HEADROOM_FACTOR = 2;
+
+/**
+ * The supersteps this repository's own committed real workload —
+ * `spec-20260805-pge-graph-engineering` and its real 14 `SprintContract`s — takes to reach
+ * a terminal node, measured by `real-workload.test.ts` with the ceiling raised far enough to
+ * observe the run end to end. Pinned there: a fresh measurement that disagrees fails the
+ * test that derives it, exactly as `../golden/workload.ts`'s corpus maxima are pinned
+ * against a fresh read of the corpus.
+ */
+export const MEASURED_REAL_WORKLOAD_SUPERSTEPS = 234;
+
+/**
+ * The supersteps ceiling a measured natural cost justifies.
+ *
+ * Next power of two at or above `SUPERSTEP_HEADROOM_FACTOR * measuredSupersteps`, floored
+ * at the interpreter's own {@link DEFAULT_MAX_SUPERSTEPS} so this function can never LOWER
+ * the runaway guard below the interpreter's own baseline — it only ever raises it, and only
+ * when a measurement justifies the raise.
+ */
+export function supersepsForMeasuredCost(measuredSupersteps: number): number {
+  let cap = 1;
+  while (cap < measuredSupersteps * SUPERSTEP_HEADROOM_FACTOR) cap *= 2;
+  return Math.max(cap, DEFAULT_MAX_SUPERSTEPS);
+}
+
+/**
+ * The ceiling `PgeEngine.run` configures for every run, through `ctx.maxSupersteps`.
+ *
+ * `supersepsForMeasuredCost(234) === 512` — comfortably above the measured 234-superstep
+ * natural cost of this repository's own real workload, and still a guard: a graph that
+ * genuinely fails to converge trips it just as `SuperstepLimitExceededError` always did,
+ * only at 512 instead of 200. `src/pge/golden/executor.ts`'s fixtures are all well under
+ * 200 already, so this raise changes nothing about the golden dataset (no `graphVersion`
+ * bump follows from it — this is a runtime configuration, not a topology artifact change).
+ */
+export const PGE_ENGINE_MAX_SUPERSTEPS = supersepsForMeasuredCost(MEASURED_REAL_WORKLOAD_SUPERSTEPS);
 
 // ── Deps ────────────────────────────────────────────────────────────
 
@@ -395,6 +458,9 @@ export class PgeEngine implements PipelineEngine {
       trace,
       scheduler: new Scheduler({ maxConcurrent: graph.spec.defaults.concurrency }),
       ledger: createBudgetLedger(),
+      // The measured-basis ceiling above, not the interpreter's own conservative
+      // DEFAULT_MAX_SUPERSTEPS — see "The superstep ceiling" section of this file's header.
+      maxSupersteps: PGE_ENGINE_MAX_SUPERSTEPS,
       // Absent means UNCAPPED, which is the shipped default: `pipeline.budget` is optional
       // and `maxUsd` is nullable, and both spellings of "no ceiling" reach the interpreter
       // as `undefined` rather than as a zero that would abort every run instantly.
