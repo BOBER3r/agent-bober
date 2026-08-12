@@ -1,0 +1,222 @@
+{
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "version": 1,
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T00:00:00Z",
+  "title": "PGE real-workload viability and an error channel on PipelineResult",
+  "description": "Make PgeEngine able to execute a realistic plan at all \u2014 today every channel caps at 4,096 bytes while this repository's own PlanSpec is 29,247, so plan_materialize's writes are silently dropped and the run proceeds with state.spec null. Then give the engine a way to report that a run did not do what it claims: a fail-closed refusal of the git-effect commit node currently returns success: true because PipelineResult has no error channel.",
+  "mode": "brownfield",
+  "status": "draft",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "D1-cap-remedy",
+      "answer": "Size the channel caps to measured reality, keeping StateBloatError as a runaway guard. MINOR graphVersion bump, no node rewrites, golden dataset survives. Caps pinned two-directionally against a committed workload corpus so shrinking one fails as loudly as growing one. REJECTED: scratch offload with ScratchRefs \u2014 structurally purer and what commit.ts:80 tells node authors to do, but resolveContract (nodes/gates.ts) and other nodes read sprintContracts directly, making it a state-model rewrite, a MAJOR bump, and an invalidation of all 42 golden cases.",
+      "resolvedAt": "2026-08-12T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D2-programme-goal",
+      "answer": "Drive toward flipping config.pipeline.engine to \"pge\". Touching frozen surfaces and the two-directional conformance pins is therefore authorised, on the condition that each such edit is made deliberately, in the same commit as the docs/pge-graph.md disposition it changes \u2014 never as a side effect.",
+      "resolvedAt": "2026-08-12T00:00:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D3-success-semantics",
+      "answer": "Option A for this spec: `success` keeps the frozen deriveRunSuccess formula shared with the imperative engine, and callers treat a non-empty `errors` array as failure. Option B (success:false on a FAIL_CLOSED refusal) is deliberately NOT taken here \u2014 it moves .bober/runs/<runId>.completed.json and the pipeline-complete history phase, which adds completionMarker to the divergence set and breaks conformance.engines.test.ts:302-308 and :421-437. Evidence: deriveRunSuccess is described as the frozen shared formula at src/pge/engine/pge-engine.ts:455-460; the completionMarker field is asserted IDENTICAL across engines at conformance.engines.test.ts. Option B belongs to the later decision that re-specifies the conformance bar, not to this spec.",
+      "resolvedAt": "2026-08-12T00:00:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval",
+      "resolvedAt": "2026-08-12T00:00:00Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          ".bober/topology/coding.json (all ten channels declare maxInlineBytes 4096; finalize node distinct from the commit.finalize boundary method; plan_materialize is the sole writer of spec)",
+          "src/pge/topology/coding.graph.ts:113-190",
+          "src/pge/nodes/plan.ts:415-424",
+          "src/pge/runtime/interpreter.ts:1334-1346",
+          "src/pge/runtime/interpreter.ts:322-328 (TaskFailure shape)",
+          "src/pge/runtime/commit.ts:257-259, 357-369, 436",
+          "src/pge/runtime/commit.ts:80 (StateBloatError message)",
+          "src/pge/engine/pge-engine.ts:455-489 (the recorded discard of GraphRunResult.verdict and .failures)",
+          "src/orchestrator/workflow/flusher.ts:113-127 (needsClarification layering pattern)",
+          "src/orchestrator/pipeline.ts:66-84 (PipelineResult field set)",
+          "src/contracts/topology.ts:133 (replaceIfNewer is scalar)",
+          "src/pge/topology/validate.ts:704-716 (MultipleWritersOnScalarChannel at severity error)",
+          "src/pge/golden/coverage.test.ts:108-110 (no status check)",
+          "src/pge/golden/case-schema.ts:127 (GOLDEN_MIN_REPLAY_CASES = 5)",
+          "src/pge/runtime/__fixtures__/golden-graph.ts:360,366 (fixture raises exactly the two channels that would otherwise blow up)",
+          "src/mcp/run-manager.ts:39,46 (RunState.status and .error already exist)",
+          "src/cli/commands/run.ts:241-242 (existing exit-code branch)",
+          ".bober/specs/spec-20260805-pge-graph-engineering.json (29,247 bytes measured)",
+          ".bober/contracts/*.json (241 files, 229 over 4096, measured)",
+          ".bober/golden/*.json (largest PlanSpec-shaped object 1,181 bytes, measured)"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "Every channel in the committed artifact declares maxInlineBytes 4096 \u2014 all ten, including spec (schemaRef PlanSpec) and sprintContracts (schemaRef SprintContract). Verified in .bober/topology/coding.json, authored at src/pge/topology/coding.graph.ts:113-190.",
+    "planMaterializeNode returns update: { spec: input, sprintContracts: contracts, refs: {...} }, i.e. the whole PlanSpec object and the whole contract array as single values (src/pge/nodes/plan.ts:418-424).",
+    "The interpreter converts each key of command.update into ONE ChannelUpdate carrying that whole value \u2014 for (const [channel, value] of Object.entries(...)) batch.push({ channel, nodeId, branchKey, value }) (src/pge/runtime/interpreter.ts:1334-1346). No per-item splitting occurs for array-valued channels.",
+    "The commit boundary measures byteSize(update.value) = Buffer.byteLength(canonicalJson(value)) against the channel cap and, when over, pushes a StateBloatError onto `rejected` and `continue`s \u2014 so the write is DROPPED, not thrown (src/pge/runtime/commit.ts:257-259, 357-369).",
+    "There is no offload path at that site. maxInlineBytes appears only in schema defaults, the authored graph, fixtures, and that one check.",
+    "Measured against this repository's own artifacts: the PGE spec is 29,247 compact bytes; its 14 contracts total 138,284 bytes as one sprintContracts update; of 241 committed contracts the median is 7,479 and 229 individually exceed 4,096.",
+    "No existing test catches this because the largest PlanSpec-shaped object anywhere in the 42-case golden dataset is 1,181 bytes. The runtime's own fixture graph raises exactly the two channels that would otherwise blow up \u2014 sprintContracts to 65,536 and spec to 8,192 (src/pge/runtime/__fixtures__/golden-graph.ts:360,366) \u2014 while the shipped artifact keeps both at 4,096.",
+    "commit.finalize (the boundary METHOD) is called unconditionally at the end of PgeEngine.run (src/pge/engine/pge-engine.ts:476-483). It is distinct from the `finalize` NODE, whose only edge in is commit -> finalize and which no golden case executes. Fixing FinalizeWithoutSpecError is therefore about the boundary method, not about reaching the node.",
+    "PgeEngine.run explicitly discards GraphRunResult.verdict and .failures, and its own comment states that closing this needs a PipelineResult revision, which sprint-13 nonGoal 3 forbade (src/pge/engine/pge-engine.ts:461-475).",
+    "TaskFailure carries { nodeId, branchKey, superstep, errorClass, message } (src/pge/runtime/interpreter.ts:322-328).",
+    "RunResultFlusher.flush layers needsClarification onto the finalized result with a spread AFTER finalizePipelineRun returns, precisely so the two engines cannot disagree about the shared fields (src/orchestrator/workflow/flusher.ts:113-127). The error channel follows that pattern.",
+    "RunState already declares status \"failed\" and error?: string, so surfacing failure in the MCP layer needs no schema change (src/mcp/run-manager.ts:39,46).",
+    "src/cli/commands/run.ts already sets process.exitCode = 1 when !result.success (:241-242); the errors array needs an additional branch, not a new mechanism.",
+    "The spec channel's reducer replaceIfNewer is declared scalar (src/contracts/topology.ts:133) and the shipped validator emits MultipleWritersOnScalarChannel at severity error for any scalar channel with more than one writer (src/pge/topology/validate.ts:704-716). plan_materialize is the sole declared writer of spec; plan_clarify writes only messages. Adding spec to plan_clarify.writes is therefore structurally illegal, not merely costly.",
+    "There are exactly five enforcement:\"replay\" golden cases and GOLDEN_MIN_REPLAY_CASES is 5 (src/pge/golden/case-schema.ts:127), so the floor has zero slack \u2014 a replay case cannot be dropped or relabelled to get a green build.",
+    "src/pge/golden/coverage.test.ts:108-110 reads nodeId off each span and adds it to the executed set with NO status check, so a node whose span ended `failed` still counts as covered."
+  ],
+  "outOfScope": [
+    "Flipping config.pipeline.engine away from \"ts\". The default stays \"ts\" for the whole of this spec; oracle-retention.test.ts stays green throughout.",
+    "Option B success semantics \u2014 setting success:false on a FAIL_CLOSED refusal. It moves the completion marker and the pipeline-complete history phase, adding completionMarker to the divergence set. It belongs to the later decision that re-specifies the conformance bar.",
+    "Closing the history or audits conformance divergences. Both are recommended for permanent acceptance on architectural grounds and neither is touched here.",
+    "Closing the contracts or pipelineResult conformance divergences \u2014 the terminal-vocabulary work, the monotone version discriminator on SprintContract, and the rank-aware reducer join. That is the next spec.",
+    "Reaching the finalize NODE, critique, rework_route, synthesize or context_compact. Executing the terminal path under a durable (non-noop) checkpoint mechanism is the next spec; only the ok-status correction to the coverage pin lands here.",
+    "Scratch offload with ScratchRefs as the byte-cap remedy (decided against in D1).",
+    "Any wall-clock or throughput claim. The measured parallel ceiling is 1.34x and no criterion here is phrased in elapsed time.",
+    "The opus5-adaptation prompt- and agent-layer sprints. They run as an independent track and touch no pin in this spec.",
+    "Changing the frozen runPipeline signature, the deriveRunSuccess formula, or any existing .bober/ artifact shape other than the topology artifact and the golden cases named in feat-5."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "Observed real-workload failure and a permanent workload corpus",
+      "description": "Replace derivation with observation: run PgeEngine over this repository's own committed 29 KB spec with effects stubbed and record what actually happens, then commit a corpus of real specs and contracts that channel caps are measured against for ever after.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "AC1: A committed test runs PgeEngine over .bober/specs/spec-20260805-pge-graph-engineering.json with all effects stubbed and records, as data, every StateBloatError raised (channel, nodeId, bytes, limit), the terminal node reached, and the run verdict.",
+        "AC2: The recorded measurement shows at least the spec and sprintContracts channels rejecting writes, and state.spec null at the boundary \u2014 or, if observation contradicts the derivation, the measurement is committed as-is and the spec's assumptions are corrected rather than the measurement adjusted.",
+        "AC3: A committed workload corpus holds real PlanSpec and SprintContract payloads drawn from .bober/specs/ and .bober/contracts/, with a per-channel maximum measured from it.",
+        "AC4: The measurement is regenerable by a documented command, and re-running it against unchanged inputs reproduces the committed bytes."
+      ]
+    },
+    {
+      "featureId": "feat-2",
+      "title": "Channel caps sized to measured reality",
+      "description": "Raise the caps that block real work to values derived from the corpus, keep StateBloatError as a guard against genuinely runaway writes, and pin every cap two-directionally so neither shrinking nor inflating one can happen silently.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-1"
+      ],
+      "acceptanceCriteria": [
+        "AC1: .bober/topology/coding.json declares, for every channel the measurement implicates, a maxInlineBytes at least the corpus maximum for that channel, and graphVersion has a MINOR bump with a matching docs/pge-graph.md changelog entry.",
+        "AC2: `pge dump --check`, `pge validate --mode full`, `pge docs --check`, `pge diff --require-version-bump` and the committed state audit all pass against the regenerated artifact.",
+        "AC3: A test pins each cap two-directionally against the committed corpus: lowering a cap below its corpus maximum fails, and raising one without a corresponding corpus payload fails. Both directions are proven by mutation.",
+        "AC4: StateBloatError is still raised and still drops the write for a value above the new cap \u2014 the check is re-sized, never removed. A negative control proves it.",
+        "AC5: A PgeEngine run over the committed 29 KB spec and its 14 contracts produces zero StateBloatError failures and leaves state.spec non-null."
+      ]
+    },
+    {
+      "featureId": "feat-3",
+      "title": "An error channel on PipelineResult",
+      "description": "A run that was refused cannot report that it succeeded. Add errors to PipelineResult, populate it from the interpreter's failures at the engine boundary, and surface it where an operator will actually see it.",
+      "priority": "must-have",
+      "estimatedComplexity": "high",
+      "dependencies": [
+        "feat-2"
+      ],
+      "acceptanceCriteria": [
+        "AC1: PipelineResult declares errors?: readonly PipelineFailure[], with PipelineFailure mapped 1:1 from TaskFailure minus superstep.",
+        "AC2: The array is layered in PgeEngine.run \u2014 not inside finalizePipelineRun \u2014 mirroring how RunResultFlusher.flush layers needsClarification, and the frozen key-order test in src/orchestrator/finalize.test.ts stays green.",
+        "AC3: A PgeEngine run whose git-effect commit node is refused FAIL_CLOSED under the autopilot noop mechanism returns errors[0].nodeId === \"commit\" with an errorClass naming the refusal.",
+        "AC4: `bober run` sets a non-zero process exit code when errors is non-empty, and prints what was refused.",
+        "AC5: The MCP run manager sets RunState.status = \"failed\" and populates RunState.error when errors is non-empty.",
+        "AC6: A TsPipelineEngine run is unaffected \u2014 its result carries no errors key, and success keeps the shared deriveRunSuccess formula on both engines."
+      ]
+    },
+    {
+      "featureId": "feat-4",
+      "title": "A spec-less run reports failure instead of throwing",
+      "description": "A planner that never settles currently crashes the engine. Give the terminal boundary a spec to fall back on, through a new scalar channel rather than an illegal second writer.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-3"
+      ],
+      "acceptanceCriteria": [
+        "AC1: A new scalar channel specDraft is declared in the artifact with exactly one writer, and `pge validate --mode full` reports no MultipleWritersOnScalarChannel diagnostic. graphVersion takes a MINOR bump with a changelog entry.",
+        "AC2: commit.finalize falls back to specDraft when state.spec is null and RESOLVES with success:false, a populated errors array, and needsClarification true \u2014 instead of throwing FinalizeWithoutSpecError.",
+        "AC3: FinalizeWithoutSpecError still exists and is still thrown when neither spec nor specDraft is present, so the class is narrowed rather than deleted.",
+        "AC4: A golden case driving clarification to the planClarifyRounds bound is captured and passes \u2014 the case the old crash made impossible to record.",
+        "AC5: docs/pge-graph.md's recorded defect section is rewritten to describe the fixed behaviour, in the same commit."
+      ]
+    },
+    {
+      "featureId": "feat-5",
+      "title": "The golden dataset and the coverage gate tell the truth again",
+      "description": "The error channel changes what every terminal artifact looks like, so the dataset must be reconciled deliberately; and the coverage pin must stop counting a node whose span failed.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-4"
+      ],
+      "acceptanceCriteria": [
+        "AC1: All five enforcement:\"replay\" cases are re-captured through GOLDEN_CAPTURE=1, and the resulting diff is described in the commit message field by field rather than merely committed.",
+        "AC2: The two hand-authored integrity cases whose prose the error channel falsifies \u2014 pipeline-result-reports-success-with-no-error-channel.json and commit-refused-fail-closed-under-noop-gate.json \u2014 are RE-AUTHORED to state the new behaviour, not re-captured.",
+        "AC3: The replay-case count stays at or above GOLDEN_MIN_REPLAY_CASES, and no case is relabelled from replay to integrity anywhere in this spec.",
+        "AC4: coverage.test.ts counts a node as executed only when it has at least one span with status ok; a run in which a node's span ended failed no longer counts that node. Proven by mutation in both directions.",
+        "AC5: The node-coverage figure in docs/pge-graph.md is restated under the corrected ok-status rule, with the previous figure and the reason it overstated recorded in the changelog."
+      ]
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "No gate may be weakened to make this spec green. The six blocking pge-graph-gate checks, the golden replay floor and the oracle-retention assertions all stay in force throughout.",
+      "verificationMethod": "src/pge/topology/ci-gate.test.ts and src/orchestrator/workflow/oracle-retention.test.ts pass unmodified at every sprint boundary; any intended edit to a two-directional pin appears in the same commit as the docs/pge-graph.md disposition it changes."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Every claim this spec adds to docs/pge-graph.md is backed by a test that fails when the claim stops being true.",
+      "verificationMethod": "`pge docs --check` passes, and each new documented invariant is traceable to a named test."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "Channel caps are derived from a committed corpus, never hand-picked, so a future payload growth is a measurable event rather than a surprise.",
+      "verificationMethod": "The two-directional cap pin reads the corpus at test time; hardcoding a cap in the test fails it."
+    },
+    {
+      "category": "security",
+      "requirement": "The measurement and corpus tiers must not perform outward calls. Effects are stubbed and network is disabled, as in the existing golden executor.",
+      "verificationMethod": "The harness installs a throwing fetch and throwing collaborator bindings; a test asserts a reached collaborator fails the run by name."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "Ten declared channels in .bober/topology/coding.json, each with a reducerRef, a schemaRef and a maxInlineBytes. This spec revises maxInlineBytes on the implicated channels and adds one new scalar channel, specDraft. PipelineResult gains one optional field, errors, carrying PipelineFailure records mapped from the interpreter's TaskFailure.",
+    "securityConsiderations": [
+      "The golden executor's zero-egress guarantees (throwing fetch, throwing collaborator bindings) extend unchanged to the new measurement and workload tiers."
+    ],
+    "existingPatterns": "Layer engine-specific result fields in the engine, not in finalizePipelineRun \u2014 RunResultFlusher.flush is the reference (src/orchestrator/workflow/flusher.ts:113-127). Pin claims two-directionally, as conformance.engines.test.ts and coverage.test.ts already do. Prove every gate bites with a negative control, as src/cli/commands/pge.test.ts does for all 32 diagnostic codes."
+  },
+  "sprints": [
+    "sprint-spec-20260812-pge-real-workload-errors-1",
+    "sprint-spec-20260812-pge-real-workload-errors-2",
+    "sprint-spec-20260812-pge-real-workload-errors-3",
+    "sprint-spec-20260812-pge-real-workload-errors-4",
+    "sprint-spec-20260812-pge-real-workload-errors-5",
+    "sprint-spec-20260812-pge-real-workload-errors-6",
+    "sprint-spec-20260812-pge-real-workload-errors-7",
+    "sprint-spec-20260812-pge-real-workload-errors-8",
+    "sprint-spec-20260812-pge-real-workload-errors-9"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "14-22 hours",
+    "riskLevel": "high",
+    "riskNotes": "Two artifact revisions with version bumps, one frozen-surface revision (PipelineResult), and a mandatory re-capture of all five replay golden cases against a blocking CI job whose replay floor has zero slack. The highest risk is a re-capture pushed without reading the diff, which defeats the gate as surely as deleting it \u2014 feat-5 AC1 exists to make that visible. The second risk is that sprint 1's observation contradicts the derivation; the spec is written so that outcome corrects the assumptions rather than the measurement."
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-5",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 5,
+  "title": "PipelineResult gains an error channel, layered in the engine",
+  "description": "A run whose commit was refused must not report that it succeeded. Add errors to PipelineResult and populate it from the interpreter's failures -- which PgeEngine.run currently discards, with a comment saying so. This deliberately revises a surface the previous spec froze; that revision is authorised, and the docs/pge-graph.md disposition it changes is updated in the same commit.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-4"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-5-1",
+      "description": "PipelineResult declares errors?: readonly PipelineFailure[]; PipelineFailure carries nodeId, branchKey, errorClass and message, mapped 1:1 from TaskFailure minus superstep.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-2",
+      "description": "The array is layered in PgeEngine.run, NOT inside finalizePipelineRun, by removing the discard at src/pge/engine/pge-engine.ts:461-475 -- mirroring how RunResultFlusher.flush layers needsClarification with a spread after finalization.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-3",
+      "description": "The frozen key-order test in src/orchestrator/finalize.test.ts stays green, unmodified.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-4",
+      "description": "A PgeEngine run whose git-effect commit node is refused FAIL_CLOSED under the autopilot noop mechanism returns a non-empty errors array whose first entry has nodeId \"commit\" and an errorClass naming the refusal.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-5",
+      "description": "A TsPipelineEngine run returns a result with no errors key, and `success` keeps the shared deriveRunSuccess formula on both engines -- Option A semantics, per the spec's D3 decision.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-6",
+      "description": "docs/pge-graph.md's engine-migration disposition and the sprint-13 recorded limitation are rewritten to state that the error channel now exists, in this commit.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-5-7",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Setting success:false on a fail-closed refusal -- explicitly Option B, out of scope, and it would add completionMarker to the divergence set.",
+    "Changing deriveRunSuccess, the runPipeline signature, or the completion marker.",
+    "Surfacing the errors in the CLI or MCP layers -- that is sprint 6.",
+    "Re-capturing golden cases -- that is sprint 8, deliberately separated so the diff is read on its own."
+  ],
+  "stopConditions": [
+    "Adding the optional field breaks a consumer that cannot be fixed within this sprint -- stop, list the consumers, and report.",
+    "conformance.engines.test.ts's divergence set changes as a side effect -- stop; a change to that pin must be deliberate and separately justified."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "Read src/orchestrator/workflow/flusher.ts:113-127 first -- it is the exact pattern, and its comment explains WHY engine-specific fields are layered after finalizePipelineRun rather than inside it: so the two engines cannot disagree about the shared fields. Follow it literally. The discard you are removing is at src/pge/engine/pge-engine.ts:461-475 and its own comment tells you what it was waiting for. Keep errors OPTIONAL so every existing consumer of PipelineResult keeps compiling; enumerate those consumers before you start. Do not widen the sprint split to absorb a terminal-node failure -- that would invent a failed sprint that did not happen, which the discarded comment warns against explicitly.",
+  "evaluatorNotes": "Two things to check hard. First, that the field really is layered in the engine and not in finalize: read finalizePipelineRun and confirm it is untouched, and confirm finalize.test.ts's key-order pin was not edited. Second, that the ts engine is genuinely unaffected -- run one and assert 'errors' in result is false, not merely that it is undefined. Then check the conformance divergence set is still exactly the four fields; if a fifth appeared, that is a stop condition and must be reported, not accepted. Finally verify the docs update actually replaces the old claim rather than appending a contradicting paragraph next to it.",
+  "estimatedFiles": [
+    "src/orchestrator/pipeline.ts",
+    "src/pge/engine/pge-engine.ts",
+    "src/pge/engine/pge-engine.test.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T00:00:00Z"
+}

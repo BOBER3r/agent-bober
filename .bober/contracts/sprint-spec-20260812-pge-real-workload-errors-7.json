@@ -1,0 +1,86 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-7",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 7,
+  "title": "A plan that never settles reports failure instead of crashing",
+  "description": "A planner that keeps asking for clarification exhausts planClarifyRounds and reaches the terminal boundary with state.spec still null, and commit.finalize throws FinalizeWithoutSpecError instead of returning a failed result. Fix it with a NEW scalar channel rather than a second writer on spec -- replaceIfNewer is scalar and the validator emits MultipleWritersOnScalarChannel at severity error, so adding spec to plan_clarify.writes is structurally illegal, not merely costly.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-6"
+  ],
+  "features": [
+    "feat-4"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-7-1",
+      "description": "A new scalar channel specDraft is declared in the authored graph with exactly ONE writer, the artifact is regenerated, and `pge validate --mode full` reports no MultipleWritersOnScalarChannel diagnostic.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-2",
+      "description": "graphVersion takes a MINOR bump with a docs/pge-graph.md changelog entry, and the node inventory and channel table in that document are updated so `pge docs --check` passes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-3",
+      "description": "commit.finalize falls back to specDraft when state.spec is null and RESOLVES with success false, a populated errors array, and needsClarification true -- instead of rejecting with FinalizeWithoutSpecError.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-4",
+      "description": "FinalizeWithoutSpecError still exists and is still thrown when NEITHER spec nor specDraft is present, so the class is narrowed rather than deleted. A test proves both branches.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-5",
+      "description": "A golden case driving clarification to the planClarifyRounds bound is captured and passes -- the case the old crash made impossible to record.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-6",
+      "description": "docs/pge-graph.md's recorded-defect section is rewritten to describe the fixed behaviour, in this commit, rather than left describing a defect that no longer exists.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-7-7",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Adding spec to any second writer's `writes` -- structurally illegal, verified.",
+    "Deleting FinalizeWithoutSpecError.",
+    "Changing what planClarifyRounds bounds, or how clarification rounds are counted."
+  ],
+  "stopConditions": [
+    "Declaring specDraft trips a validator rule other than the writer count -- stop and report which diagnostic code.",
+    "The new golden case cannot be captured because the run still throws -- stop; sc-7-3 is then unmet and the sprint is not done."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 4,
+  "generatorNotes": "The illegality of the obvious fix is verified, so do not re-litigate it: replaceIfNewer is declared scalar at src/contracts/topology.ts:133 and the validator emits MultipleWritersOnScalarChannel at severity error at src/pge/topology/validate.ts:704-716. plan_materialize is the sole writer of spec today; plan_clarify writes only messages. Add specDraft as its own scalar channel with one writer. Remember commit.finalize is the boundary METHOD called unconditionally by PgeEngine.run -- this sprint is about that method, not about reaching the finalize NODE, which stays unreachable. Capture the new golden case with GOLDEN_CAPTURE=1 against the real bindings, per the existing two-run capture design.",
+  "evaluatorNotes": "Check sc-7-4 carefully -- it is the criterion most likely to be satisfied in appearance only. Construct a state with neither spec nor specDraft and confirm the error is still thrown; then construct one with only specDraft and confirm a resolved failed result. Verify the new channel really has one writer by reading the regenerated artifact, not the authored literal. Verify the captured golden case genuinely drives the bound rather than settling early, by reading its pinned responses. Confirm `pge docs --check` passes -- a new channel that is undocumented fails a blocking gate.",
+  "estimatedFiles": [
+    "src/pge/topology/coding.graph.ts",
+    ".bober/topology/coding.json",
+    "src/pge/runtime/commit.ts",
+    "src/pge/runtime/commit.test.ts",
+    "src/pge/golden/capture.ts",
+    ".bober/golden/",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "large",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T00:00:00Z"
+}

@@ -1,0 +1,76 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-4",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 4,
+  "title": "A real plan runs end to end on the graph engine",
+  "description": "The exit criterion of the viability work: prove that PgeEngine executing the committed 29 KB spec and its 14 contracts produces no StateBloatError, leaves state.spec non-null, and terminates at a declared terminal node. Note the terminal will NOT be the finalize node -- under the shipped autopilot noop mechanism the git-effect commit node is still refused FAIL_CLOSED, and reaching finalize needs a durable mechanism that is out of scope here.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-3"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-4-1",
+      "description": "A committed test runs PgeEngine over the committed artifact with the real 29,247-byte spec and its 14 contracts and asserts zero failures with errorClass StateBloatError.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-2",
+      "description": "The same run leaves state.spec non-null and state.sprintContracts holding all 14 contracts.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-3",
+      "description": "The run terminates at a node the artifact declares, and the test names which one and why -- explicitly recording that it is not `finalize` and that the commit refusal under the noop mechanism is the reason.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-4",
+      "description": "The sprint-1 measurement artifact is regenerated and its diff shows the rejections gone, so the fix is evidenced by the same instrument that found the defect.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-5",
+      "description": "docs/pge-graph.md records that the graph engine has been run against a real workload, with the payload sizes and the terminal reached, replacing any claim that rests only on fixtures.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-4-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Reaching the finalize node, or changing the checkpoint mechanism to reach it.",
+    "Making the run report failure correctly -- that is sprint 5.",
+    "Asserting anything about wall-clock time."
+  ],
+  "stopConditions": [
+    "The run still rejects writes after the cap change -- stop and report which channel, since it means the corpus missed a payload shape.",
+    "Reaching a declared terminal requires editing a node body -- stop and report rather than widening the sprint."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 2,
+  "generatorNotes": "This is the payoff sprint for sprints 1-3 and it should reuse their harness rather than build a third one. Be precise in the assertions about WHICH terminal is reached: PgeEngine.run always calls commit.finalize (the boundary METHOD, :476-483) regardless of whether the graph's finalize NODE executed, and those two are different things -- the node's only edge in is commit -> finalize and commit is refused. Conflating them will produce a test that asserts something false. If state.spec is non-null but commit.finalize still throws, that is sprint 7's defect appearing early: record it and do not paper over it.",
+  "evaluatorNotes": "The failure mode to hunt is a test that passes because it ran a smaller spec. Measure the spec's byte size inside the test and assert it. Confirm all 14 contracts landed rather than a subset -- a partial write would still satisfy a naive non-null check. Verify sc-4-3 names the real terminal by reading the run's spans yourself rather than trusting the assertion's label. Verify the regenerated measurement in sc-4-4 is genuinely regenerated, by diffing it against the sprint-1 version.",
+  "estimatedFiles": [
+    "src/pge/engine/real-workload.test.ts",
+    ".bober/topology/measurements/real-workload.json",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T00:00:00Z"
+}

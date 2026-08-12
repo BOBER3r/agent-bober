@@ -1,0 +1,73 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-9",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 9,
+  "title": "Node coverage counts a node only when it actually ran",
+  "description": "The coverage pin reads nodeId off each span and adds it to the executed set with no status check, so a node whose span ended failed still counts as covered -- and the commit node, refused FAIL_CLOSED under the shipped noop mechanism, is exactly such a node. The committed node-coverage figure is therefore true as REACHED and weaker than it reads as EXERCISED. Correct the rule and restate the figure.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-8"
+  ],
+  "features": [
+    "feat-5"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-9-1",
+      "description": "coverage.test.ts counts a node as executed only when it has at least one span with status ok.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-2",
+      "description": "The corrected rule is proven by mutation in both directions: a node whose only span ended failed no longer counts, and a node that gains an ok span begins to count -- both failing the pin when the NEVER_EXECUTED list is not updated to match.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-3",
+      "description": "The NEVER_EXECUTED list is updated to whatever the corrected rule actually yields, and each entry still carries a claim about WHY the node is unreachable, with any claim that stopped being true rewritten rather than left standing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-4",
+      "description": "docs/pge-graph.md restates the node-coverage figure under the corrected rule, records the previous figure, and states plainly that the previous rule counted reached-but-refused nodes as covered.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-5",
+      "description": "The recorded reason for each unreachable node is re-verified against the code rather than carried forward -- in particular the claim about why synthesize is unreachable, which the analysis behind this spec flagged as possibly misattributed.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-9-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Making any node newly reachable -- executing commit and finalize under a durable checkpoint mechanism is the next spec.",
+    "Lowering the coverage floor to accommodate the corrected, likely smaller number."
+  ],
+  "stopConditions": [
+    "The corrected figure falls far enough that the golden dataset no longer meaningfully covers the graph -- stop and report the number rather than adjusting the rule to protect it."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 3,
+  "generatorNotes": "The change itself is small: src/pge/golden/coverage.test.ts:108-110 reads nodeId and ignores status. The judgement is in sc-9-3 and sc-9-5. Each NEVER_EXECUTED entry is a CLAIM about why something cannot be reached, and the two-directional pin exists so a claim that dies fails the build rather than ageing into a lie -- so when the corrected rule moves a node into the list, write the real reason rather than reusing a neighbour's. Re-read the reason recorded for synthesize specifically: the analysis behind this spec found evidence that it is unreachable because rework_route's dispatch set is always empty, not because failing paths settle earlier. Verify which is true and record the true one.",
+  "evaluatorNotes": "Verify sc-9-2 by mutating in both directions yourself; a pin that only catches one direction is half a pin, and this repository's own standard says a gate that cannot fail is worse than no gate. For sc-9-5, do not accept a restated reason at face value -- trace it in the code. Check that the documented figure and the test's own floor agree; a document claiming a number the test does not enforce is the exact failure this sprint is correcting.",
+  "estimatedFiles": [
+    "src/pge/golden/coverage.test.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T00:00:00Z"
+}

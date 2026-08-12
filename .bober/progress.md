@@ -718,3 +718,21 @@ default requires that error channel first, not merely green conformance.
   then raise the pass-rate threshold stepwise (80 -> 90 -> 95).
 - Coverage gaps in the dataset: gate_eval_in, gate_plan_in, gate_sprint_in, gate_sprint_out have no case.
 - `npm run update-all`.
+
+## Plan: PGE real-workload viability and an error channel on PipelineResult
+- Spec: spec-20260812-pge-real-workload-errors
+- Created: 2026-08-12
+- Sprints: 9
+- Status: planned
+- Source analysis: .bober/research/research-20260812-pge-next-iterations.md
+
+### Sprint Breakdown
+1. [proposed] Observe what a real 29 KB plan actually does to the graph engine -- measurement harness, committed as data
+2. [proposed] A committed workload corpus, and the measurement extended to every channel
+3. [proposed] Size the caps to the corpus, regenerate the artifact, pin both directions
+4. [proposed] A real plan runs end to end on the graph engine -- the viability exit criterion
+5. [proposed] PipelineResult gains an error channel, layered in the engine
+6. [proposed] An operator can see the refusal -- CLI exit code and MCP run state
+7. [proposed] A plan that never settles reports failure instead of crashing -- the specDraft channel
+8. [proposed] Reconcile the golden dataset, deliberately and diff-first
+9. [proposed] Node coverage counts a node only when it actually ran

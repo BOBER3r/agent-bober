@@ -1,0 +1,70 @@
+{
+  "contractId": "sprint-spec-20260812-pge-real-workload-errors-6",
+  "specId": "spec-20260812-pge-real-workload-errors",
+  "sprintNumber": 6,
+  "title": "An operator can see the refusal",
+  "description": "An error channel nobody surfaces closes nothing. Make a non-empty errors array visible where a person or a CI job will actually encounter it: a non-zero exit from `bober run`, and a failed run state in the MCP run manager.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-pge-real-workload-errors-5"
+  ],
+  "features": [
+    "feat-3"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "`bober run` sets a non-zero process exit code when the result's errors array is non-empty, even when success is true under the Option A formula.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "`bober run` prints what was refused -- at minimum the nodeId and errorClass of each entry -- rather than a generic failure line.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "The MCP run manager sets RunState.status to \"failed\" and populates RunState.error when errors is non-empty; neither field needs a schema change.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "A run with an empty or absent errors array keeps today's exit code and today's run state exactly -- proven by a test, so the change is additive.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Changing the meaning of `success`.",
+    "Adding new fields to RunState -- status \"failed\" and error?: string already exist.",
+    "Reformatting unrelated CLI output."
+  ],
+  "stopConditions": [
+    "A CI wrapper in this repository depends on `bober run` exiting zero for a refused run -- stop and report it before changing the exit code."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build are green, and every documentation claim added is backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 2,
+  "generatorNotes": "src/cli/commands/run.ts already sets process.exitCode = 1 at :241-242 when !result.success; add a branch rather than restructuring the existing one, and make sure the two do not fight. src/mcp/run-manager.ts already declares status 'failed' (:39) and error?: string (:46) and sets status at :209 and :233 -- follow the existing assignment sites. sc-6-4 is the important one: this must be strictly additive for runs that produced no errors, so write that test first.",
+  "evaluatorNotes": "Verify the additive claim in sc-6-4 by actually running a clean pipeline and confirming the exit code and run state are unchanged from before the sprint. Verify the exit code genuinely changes for a refused run by executing one end to end, not by unit-testing the branch in isolation. Check the printed output names the refused node -- a message that says 'run failed' without saying what was refused fails sc-6-2.",
+  "estimatedFiles": [
+    "src/cli/commands/run.ts",
+    "src/cli/commands/run.test.ts",
+    "src/mcp/run-manager.ts",
+    "src/mcp/run-manager.test.ts"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T00:00:00Z",
+  "updatedAt": "2026-08-12T00:00:00Z"
+}
