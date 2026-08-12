@@ -499,21 +499,23 @@ export function createCommitBoundary(options: CommitBoundaryOptions = {}): Commi
         };
       }
 
-      // ── The split, and why the CONTRACT STATUS alone cannot express it ──
+      // ── The split, and why the CONTRACT STATUS alone still cannot decide it ──
       //
       // `runTsPipeline` splits on `status === "passed"`, and that is the primary rule here
-      // too. It is not sufficient for a GRAPH run, and the reason is a documented property
-      // of the `sprintContracts` channel rather than a defect in any node:
-      // `appendById` unions by `contractId` and resolves a duplicate id by CANONICAL ORDER
-      // (`registry/reducers.ts`), which is what makes it order-invariant under concurrency.
-      // Every settled status — `passed`, `completed`, `failed` — sorts BEFORE the seeded
-      // `proposed`, so the settled copy can never outrank the planned one in the channel.
-      // `sprint_exit` says so in its own header and `sprint-evaluate.test.ts` pins it.
+      // too. It is still not sufficient for a GRAPH run — but the reason changed at sprint 4
+      // of spec-20260812-terminal-vocabulary. `appendById` now resolves a duplicate
+      // `contractId` by RANK (`registry/reducers.ts`, `rankIsGreater`) rather than canonical
+      // order, so the settled copy DOES outrank the seeded `"proposed"` one and
+      // `state.sprintContracts` now holds it (`sprint-evaluate.test.ts` pins this). What still
+      // doesn't line up is the WORD: `sprint_exit` writes `"completed"` or `"failed"`
+      // (`sprint-review.ts`), never `"passed"` — closing that vocabulary gap is a writer
+      // change this sprint's nonGoals defer — so `c.status === "passed"` below is never true
+      // for a graph-committed contract, whichever copy the channel holds.
       //
-      // The settled outcome is therefore read from the channel that CAN express it.
-      // `branchStatus` is keyed by `contractId` and carries an explicit `attempts`
-      // discriminator for exactly this reason, and `sprint_exit` is its only terminal
-      // writer. Without this, a graph run in which every sprint passed still reported
+      // The settled outcome is therefore still read from the channel that unambiguously
+      // distinguishes PASS from FAIL today: `branchStatus`, keyed by `contractId`, carrying
+      // an explicit `attempts` discriminator, with `sprint_exit` as its only terminal writer.
+      // Without this, a graph run in which every sprint passed still reported
       // `completedSprints: []` and `success: false` — the engine contradicting its own
       // trace, which is precisely the class of divergence the conformance harness exists to
       // surface.

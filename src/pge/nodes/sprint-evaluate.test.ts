@@ -774,19 +774,17 @@ describe("the sprint subgraph, compiled from the committed artifact (sc-12-12)",
     // is the same path and the same shape the imperative pipeline writes.
     expect(run.artifactLog.contracts.some((id) => id === contract.contractId)).toBe(true);
 
-    // KNOWN LIMITATION, asserted so it cannot change unnoticed rather than hidden: the
-    // `sprintContracts` channel still carries `proposed`. `appendById` unions by
-    // `contractId` and resolves a duplicate by CANONICAL ORDER (`registry/reducers.ts:182`),
-    // and `"status"` sorts ahead of `"version"` in the canonical key order, so
-    // `"completed" < "proposed"` still decides and the settled copy cannot outrank the
-    // seeded one THROUGH THIS JOIN. `SprintContract` now carries the `version` field
-    // `versionRank` (`registry/reducers.ts:348-359`) would need to break that tie — this
-    // sprint supplies the field; switching `sprintContracts`'s join to consult it is a
-    // separate change (not made here).
+    // FORMER KNOWN LIMITATION, now fixed (sprint 4 of spec-20260812-terminal-vocabulary):
+    // the `sprintContracts` channel used to keep the seeded `proposed` copy because
+    // `appendById` resolved a duplicate `contractId` by CANONICAL ORDER, under which
+    // `"completed" < "proposed"` lexically. `mergeEntries` now resolves by RANK
+    // (`registry/reducers.ts`, `rankIsGreater`) instead: the settled copy's `version`
+    // (written just above) outranks the seeded copy, which carries no `version` at all, so
+    // the settled copy wins the channel regardless of what the two `status` strings sort as.
     expect(
       run.finalState.sprintContracts.find((entry) => entry.contractId === contract.contractId)
         ?.status,
-    ).toBe("proposed");
+    ).toBe("completed");
   }, 30_000);
 
   it("the written version is REPLAY-STABLE: two independent runs over the same input write the same value (sc-3-3)", async () => {

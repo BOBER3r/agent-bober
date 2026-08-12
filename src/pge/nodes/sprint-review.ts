@@ -30,25 +30,28 @@ import { iterationOf, provisionalEvaluation, sprintVerdict } from "./sprint-eval
  * completed attempt would leave the branch looking permanently in flight. `gate_sprint_out`
  * checks exactly this, which is what its declared `branch-verdicts-recorded` means.
  *
- * ── KNOWN LIMITATION: the `sprintContracts` channel still keeps the seeded copy ──
+ * ── The channel now carries the settled copy (sprint 4 of spec-20260812-terminal-vocabulary) ──
  *
  * `sprint_exit` declares `writes: ["branchStatus", "sprintContracts"]` and writes the settled
- * contract to both. The `branchStatus` write lands. The `sprintContracts` write does NOT
- * change the recorded status — not yet: `appendById` unions by `contractId` and resolves
- * a duplicate id by CANONICAL ORDER (`registry/reducers.ts:182`), which is what makes it
- * order-invariant under concurrency — and `"completed"` sorts before `"proposed"`, so the
- * seeded copy outranks the settled one.
+ * contract to both, and both writes now land. `appendById` unions by `contractId` and used to
+ * resolve a duplicate id by CANONICAL ORDER, under which `"completed"` sorted BEFORE
+ * `"proposed"` and the seeded copy always outranked the settled one. It now resolves by RANK
+ * (`registry/reducers.ts`, `rankIsGreater`/`mergeEntries`) instead: the settled copy's
+ * `version` (set to `attempts` above) outranks the seeded copy, which carries no `version` at
+ * all, so `versionRank` (`registry/reducers.ts:366-393`) decides before the two `status`
+ * strings are ever compared.
  *
- * `branchStatus` solves the identical problem with an explicit `attempts` discriminator
- * (`state/overall.ts:131-142`). `SprintContract` now has an equivalent monotone field,
- * `version` (set to `attempts` above), so `versionRank` (`registry/reducers.ts:348-359`) CAN
- * rank the settled copy ahead of the seeded one. The channel's reducer just doesn't consult
- * it yet — `appendById`/`joinByCanonicalOrder` still decide by canonical JSON, unchanged by
- * this file. Switching the join to read `version` is a separate change. Until then, the
- * settled contract reaches disk through the `sprint.exit` effect — the shipped `saveContract`,
- * at the path the imperative pipeline writes — and the channel is left describing the plan
- * rather than the outcome. `sprint-evaluate.test.ts` asserts BOTH facts, so neither can drift
- * unnoticed.
+ * `branchStatus` solved the identical problem earlier with its own explicit `attempts`
+ * discriminator (`state/overall.ts:146-157`); `SprintContract.version` is the same idea
+ * applied to this channel, and `rankIsGreater` is what now consults it.
+ *
+ * One gap remains, deliberately: the settled contract's `status` is `"completed"` or
+ * `"failed"`, never `"passed"` — the word `runTsPipeline` and `commit.ts`'s `passed()` compare
+ * literally (`commit.ts`, near its `succeededBranches` split) — so a reader that still checks
+ * `status === "passed"` sees no change from this. Unifying that word is a separate, later
+ * change (nonGoal here); this file's job was only to make the channel converge on the settled
+ * copy at all, and it now does. `sprint-evaluate.test.ts` asserts the settled status lands in
+ * the channel.
  */
 
 export const SPRINT_REVIEW_NODE_IDS = {
@@ -208,7 +211,7 @@ export function sprintExitNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
         // rebuilds identically), monotone across the seeded->settled transition (seeded has
         // no `version` at all, which `versionRank` ranks `0`; `attempts >= 1` always beats
         // that), and branch-local (filtered by `contractId`, immune to another branch's
-        // writes). See `versionRank`, `src/pge/registry/reducers.ts:348-359`.
+        // writes). See `versionRank`, `src/pge/registry/reducers.ts:366-393`.
         version: attempts,
       };
 

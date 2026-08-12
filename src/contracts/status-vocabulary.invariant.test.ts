@@ -44,7 +44,7 @@ import { describe, it, expect } from "vitest";
  * from a WRITE, not a `.status` member access — writer-adjacent, and
  * excluded because OFFENDER_PATTERN is keyed on the `.status` accessor
  * spelling every genuine reader in this repo uses.
- * `src/pge/nodes/sprint-review.ts:203`
+ * `src/pge/nodes/sprint-review.ts:208`
  * (`status: outcome.settled === "succeeded" ? "completed" : "failed"`) is a
  * WRITER assigning a new object's `status` field — nonGoal 1 forbids
  * touching writers this sprint — and its only `===` comparison is against
@@ -202,9 +202,9 @@ const ALLOWLIST: AllowedOffender[] = [
       "Graph-engine verdict computation over the sprintContracts channel; PGE writes 'completed' not 'passed', so this counter is a live instance of the same bug class this sprint fixes elsewhere — but migrating it changes PGE runtime verdict math, outside estimatedFiles and this sprint's 'no conformance field moves' promise.",
   },
   {
-    location: "src/pge/runtime/commit.ts:531",
+    location: "src/pge/runtime/commit.ts:533",
     reason:
-      "Has its own documented rationale at :502-522 for why contract status alone cannot express the completed/failed split (appendById's canonical-order duplicate resolution) — shared with sprint 6 (rank-aware channel join); read the header before ever touching this line.",
+      "Has its own documented rationale at :502-526 for why contract status alone still cannot decide the completed/failed split, even after sprint 4 of spec-20260812-terminal-vocabulary made the channel join rank-aware: sprint_exit writes the word 'completed'/'failed', never 'passed', so this literal comparison stays permanently false for a graph-committed contract — read the header before ever touching this line.",
   },
   {
     location: "src/pge/nodes/sprint-curate.ts:254",
