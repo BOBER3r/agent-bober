@@ -283,10 +283,13 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    executed — sc-12-9's shipped behaviour, pinned by `nodes/commit.test.ts` and
     //    `topology-invariants.test.ts`. Closing it would mean declaring the other seven
     //    checkpoint ids in `.bober/topology/coding.json`, which this sprint may not edit.
-    //  - `contracts`: THREE field deltas on the one contract, and `iterationHistory` is NOT
+    //  - `contracts`: FOUR field deltas on the one contract, and `iterationHistory` is NOT
     //    one of them — it is `[]` on both sides for this fixture. `sprint_exit` writes
     //    `status: "completed"` where `runSprintCycle` writes `"passed"`, and the graph never
-    //    populates `evaluatorFeedback` or `generatorNotes`. Closing it means changing what
+    //    populates `evaluatorFeedback` or `generatorNotes`. Since sprint-spec-20260812-
+    //    terminal-vocabulary-3, `sprint_exit` also writes `version` (the graph's monotone
+    //    ordering discriminator for `versionRank`, `registry/reducers.ts:348-359`) where the
+    //    imperative engine writes none. Closing any of these means changing what
     //    `sprint_exit` writes, which `nodes/sprint-evaluate.test.ts` pins deliberately.
     //  - `pipelineResult`: does NOT merely follow from `contracts` — it is worse, and it is
     //    the sprint-12 limitation `nodes/sprint-review.ts` documents. `commit.finalize` reads
@@ -389,7 +392,7 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsResult?.success).toBe(true);
     expect(pgeResult?.success).toBe(true);
 
-    // ── 3. contracts: three field deltas, and iterationHistory is NOT one of them ──
+    // ── 3. contracts: four field deltas, and iterationHistory is NOT one of them ──
     const tsContract = (await listContracts(tsRoot))[0];
     const pgeContract = (await listContracts(pgeRoot))[0];
     expect(tsContract.contractId).toBe(pgeContract.contractId);
@@ -400,6 +403,9 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(pgeContract.evaluatorFeedback).toBeUndefined();
     expect(tsContract.generatorNotes).toBeDefined();
     expect(pgeContract.generatorNotes).toBeUndefined();
+    // The fourth delta: `sprint_exit` writes a monotone `version`; `runSprintCycle` writes none.
+    expect(tsContract.version).toBeUndefined();
+    expect(pgeContract.version).toBeDefined();
     // Refutes the reading that the imperative engine accumulates iteration bookkeeping the
     // graph lacks: on a first-attempt pass neither engine writes any.
     expect(tsContract.iterationHistory).toEqual([]);

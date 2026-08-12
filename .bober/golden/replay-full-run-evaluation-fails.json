@@ -1053,7 +1053,8 @@
           "estimatedFiles": [],
           "iterationHistory": [],
           "createdAt": "2026-08-05T00:00:00.000Z",
-          "updatedAt": "2026-08-05T00:00:00.000Z"
+          "updatedAt": "2026-08-05T00:00:00.000Z",
+          "version": 2
         }
       },
       "response": {
@@ -1191,7 +1192,8 @@
           "estimatedFiles": [],
           "iterationHistory": [],
           "createdAt": "2026-08-05T00:00:00.000Z",
-          "updatedAt": "2026-08-05T00:00:00.000Z"
+          "updatedAt": "2026-08-05T00:00:00.000Z",
+          "version": 2
         }
       },
       "response": {

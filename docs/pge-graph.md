@@ -1208,7 +1208,7 @@ serves both.
   settled. **Migrating the literal alone would not fix it.** The same channel keeps the seeded
   `"proposed"` copy of each contract — `appendById` resolves a duplicate `contractId` by
   canonical order, and `"completed" < "proposed"` — asserted as a known limitation at
-  `src/pge/nodes/sprint-evaluate.test.ts:775-777`, and the same mechanism the `pipelineResult`
+  `src/pge/nodes/sprint-evaluate.test.ts:786-789`, and the same mechanism the `pipelineResult`
   divergence is blamed on (`src/orchestrator/workflow/conformance.engines.test.ts:291-297`). The rank-aware channel join is the other half. The site is
   carried, with that reason, in `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist,
   so it cannot be forgotten silently.
