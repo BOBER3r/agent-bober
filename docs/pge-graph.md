@@ -560,6 +560,27 @@ unchanged, so a case nobody can reproduce fails immediately. The resulting diff 
 statement "these artifacts changed, and here is how" — a recapture pushed without reading
 the diff defeats the gate as surely as deleting it.
 
+Sprint 5 of spec-20260812-pge-real-workload-errors is the worked example of reading one. Adding
+`errors` to `PipelineResult` changed the shape of a terminal artifact, so all five `replay` cases
+went red at once (**0 of 5**, against the CI gate's 80 % threshold) and the recapture was moved
+into the sprint that caused it rather than deferred. The diff was then checked to be exactly what
+the change predicted: **52 insertions, zero deletions**, every added key inside a new `errors`
+array in `pipelineResult[0]`, no other field moved, and the replay count still exactly
+`GOLDEN_MIN_REPLAY_CASES` with no case relabelled `integrity`. It also **corrected the prediction**
+— the blast-radius measurement expected four cases (those with a `FailClosed` `commit` span) and
+the fifth, `replay-full-run-evaluation-fails`, gained `errors` too, from three `LoopExhausted`
+failures, because the field is populated from *any* non-empty failure list rather than from one
+`errorClass`. Contrast this with sprint 3's recapture above: that one was a version **stamp**
+moving with no artifact change, this one is an artifact change with no version move.
+
+**Two `integrity` cases currently carry prose that is no longer true, knowingly.**
+`pipeline-result-reports-success-with-no-error-channel` and
+`commit-refused-fail-closed-under-noop-gate` state in their `title`/`intent` that `PipelineResult`
+has no error channel — a claim sprint 5 falsified. They were left byte-unchanged because an
+`integrity` case is hand-authored prose, so correcting one is a re-**authoring** job needing
+judgement rather than a `GOLDEN_CAPTURE=1` rerun, and that work is scoped to a later sprint of the
+same spec. Until it lands, read those two files' prose as historical; their pins are unaffected.
+
 **A MINOR `graphVersion` bump forces a recapture even though `checkCaseAgainstGraph`'s own
 integrity rule is deliberately MAJOR-only, and the two policies genuinely disagree.**
 `case-schema.ts`'s major-only rule (:348-357) exists specifically so a minor bump does not
@@ -781,7 +802,7 @@ configures, and it is a MEASURED-basis function, never a hand-picked literal —
 | `state.spec` / `state.sprintContracts.length` at the boundary | non-null / **14** |
 | terminal node reached | `graceful_failure` — **explicitly NOT `finalize`** |
 | run status / verdict | `completed` / `failed` (the interpreter's OWN richer verdict; see below) |
-| what `PgeEngine.run` returned | `success: true` — the recorded, still-open divergence: `commit`'s `FailClosed` refusal does not reach the returned `PipelineResult` (next paragraph) |
+| what `PgeEngine.run` returned | `success: true` — still, by the Option-A decision — **plus**, as of sprint 5, `errors: [{nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: …}]`, so the refusal does now reach the returned `PipelineResult` even though `success` does not account for it (next paragraph) |
 
 Four consequences a reader should not have to derive:
 
