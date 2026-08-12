@@ -271,18 +271,34 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    lives in the superstep trace, not in `history.jsonl`. Closing it means either
     //    deleting the imperative engine's event stream or giving nine node bodies a history
     //    writer through the commit boundary — and the boundary cannot reconstruct a
-    //    `curator-start`/`curator-complete` PAIR from one superstep commit. Larger than this
-    //    sprint may make.
+    //    `curator-start`/`curator-complete` PAIR from one superstep commit, because there is
+    //    NO CURATOR NODE to emit that pair from (`grep -rn "appendHistory\|history.jsonl"
+    //    src/pge --include="*.ts"`, non-test, is zero hits). RECOMMENDED FOR PERMANENT
+    //    ACCEPTANCE on that architectural ground — named by
+    //    `spec-20260812-terminal-vocabulary`'s own `outOfScope[0]`, not this sprint's
+    //    invention — so closing it is a topology decision, not something a later
+    //    vocabulary sprint can reach.
     //  - `audits`: NOT a duplicated checkpoint id. The imperative pipeline records EIGHT
-    //    checkpoints under eight distinct ids; the graph records three, all `end-of-pipeline`,
-    //    because that is the only checkpoint id the committed artifact declares. Two of the
-    //    three come from the artifact's `hitl_commit` gate and one from `finalizePipelineRun`.
-    //    The middle one is an `outcome: "rejected"` FAIL_CLOSED record: under autopilot the
-    //    gate mechanism is `noop`, a `noop` mechanism deliberately GRANTS nothing
+    //    checkpoints under eight distinct ids; the graph records three, all `end-of-pipeline`
+    //    — the only checkpoint id THIS FIXTURE EVER EVALUATES, not the only one the artifact
+    //    declares: `.bober/topology/coding.json` also declares `plan_clarify -> post-plan`
+    //    (`coding.graph.ts:483`), reachable only through the conditional edge
+    //    `e-plan-clarify` (label `clarify`) that a settled plan never takes — the router goes
+    //    `e-plan-ok -> plan_materialize` instead. Two of the three `end-of-pipeline` records
+    //    come from the artifact's `hitl_commit` gate and one from `finalizePipelineRun`. The
+    //    middle one is an `outcome: "rejected"` FAIL_CLOSED record: under autopilot the gate
+    //    mechanism is `noop`, a `noop` mechanism deliberately GRANTS nothing
     //    (`runtime/interrupt.ts`), so the `git`-effect `commit` node is refused and never
     //    executed — sc-12-9's shipped behaviour, pinned by `nodes/commit.test.ts` and
     //    `topology-invariants.test.ts`. Closing it would mean declaring the other seven
-    //    checkpoint ids in `.bober/topology/coding.json`, which this sprint may not edit.
+    //    checkpoint ids in `.bober/topology/coding.json` — and FIVE of those seven sit
+    //    inside the sprint fan-out region, where `InterruptInsideFanOut`
+    //    (`topology/validate.ts:1089-1099`) is a BLOCKING validation error
+    //    (`severity: "error"`) by ADR-6
+    //    (`.bober/architecture/arch-20260805-pge-graph-engineering-adr-6.md`): they cannot
+    //    be declared there AT ALL, not merely "this sprint may not edit them".
+    //    RECOMMENDED FOR PERMANENT ACCEPTANCE for that reason —
+    //    `spec-20260812-terminal-vocabulary`'s own `outOfScope[0]`.
     //  - `contracts`: THREE field deltas on the one contract (was four before sprint 5 of
     //    spec-20260812-terminal-vocabulary), and `iterationHistory` is NOT one of them — it
     //    is `[]` on both sides for this fixture. `status` is CLOSED: `runSprintCycle` now
@@ -376,8 +392,10 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     ]);
     expect(tsAudits.every((record) => record.outcome === "approved")).toBe(true);
 
-    // Every graph-side record is `end-of-pipeline` because that is the only checkpoint id
-    // the committed artifact declares — not because one id was recorded twice.
+    // Every graph-side record is `end-of-pipeline` — the only checkpoint id this fixture
+    // ever evaluates, not because one id was recorded twice, and not because it is the only
+    // id the artifact declares (it declares a second, `post-plan`, unreached on this
+    // fixture — see "THE RECORDED DIVERGENCE SET" above).
     expect(new Set(pgeAudits.map((record) => record.checkpointId))).toEqual(
       new Set(["end-of-pipeline"]),
     );
