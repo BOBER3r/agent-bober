@@ -965,15 +965,31 @@ function assertSubtreeDispositionRecorded(doc: string): void {
   }
 }
 
+/**
+ * A version strictly ahead of the shipped graph's, DERIVED rather than written out — a
+ * literal here rots the moment the shipped graph reaches it. It already happened once: this
+ * fixture used the literal `"1.3.0"` until sprint 3 of spec-20260812-pge-real-workload-errors
+ * bumped the shipped artifact to exactly that version, which would have silently turned this
+ * negative control into a false positive (the changelog DOES cover `"1.3.0"` now) instead of
+ * proving anything. Same idea as `bumpedVersion` in `src/cli/commands/pge.test.ts`.
+ */
+function versionTheChangelogDoesNotMention(from: string): string {
+  const [major, minor] = from.split(".").map((part) => Number.parseInt(part, 10));
+  return `${major}.${minor + 1}.0`;
+}
+
 describe("the document's changelog, disposition and stated limitations", () => {
   it("carries a changelog entry for the committed graphVersion", () => {
-    expect(committed.graphVersion).toBe("1.2.0");
+    expect(committed.graphVersion).toBe("1.3.0");
     assertChangelogCoversVersion(committed, shippedDoc);
-    expect(changelogVersions(shippedDoc)).toEqual(["1.2.0", "1.1.0", "1.0.0"]);
+    expect(changelogVersions(shippedDoc)).toEqual(["1.3.0", "1.2.0", "1.1.0", "1.0.0"]);
   });
 
   it("FAILS when the artifact is bumped to a version the changelog does not mention", () => {
-    const fixture: TopologySpec = { ...committed, graphVersion: "1.3.0" };
+    const fixture: TopologySpec = {
+      ...committed,
+      graphVersion: versionTheChangelogDoesNotMention(committed.graphVersion),
+    };
     expect(() => {
       assertChangelogCoversVersion(fixture, shippedDoc);
     }).toThrow();

@@ -44,14 +44,14 @@
     },
     {
       "id": "spec",
-      "maxInlineBytes": 4096,
+      "maxInlineBytes": 131072,
       "reducerRef": "replaceIfNewer",
       "schemaRef": "PlanSpec",
       "scope": "public"
     },
     {
       "id": "sprintContracts",
-      "maxInlineBytes": 4096,
+      "maxInlineBytes": 524288,
       "reducerRef": "appendById",
       "schemaRef": "SprintContract",
       "scope": "public"
@@ -71,7 +71,7 @@
       "scope": "public"
     }
   ],
-  "checksum": "sha256:95c40948ffb8d27f1f7bd1846f1efbcb6d8a9c7ff2daa6300558bd1bfe857c80",
+  "checksum": "sha256:e4909da6ef351939e507c320741e6e669d3268eaca0b76fe623a9aa3359b45a5",
   "defaults": {
     "concurrency": 1,
     "durability": "superstep",
@@ -500,7 +500,7 @@
   "entry": "research_body",
   "formatVersion": 1,
   "graphId": "coding",
-  "graphVersion": "1.2.0",
+  "graphVersion": "1.3.0",
   "nodes": [
     {
       "doc": "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",

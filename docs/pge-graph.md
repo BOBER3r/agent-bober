@@ -16,7 +16,7 @@ every loop runs out of budget.
 > CI goes red.** That is the point: an artifact nobody gates on is an artifact nobody
 > maintains.
 
-Artifact facts, as committed: `graphId: "coding"`, `graphVersion: "1.2.0"`,
+Artifact facts, as committed: `graphId: "coding"`, `graphVersion: "1.3.0"`,
 `formatVersion: 1`, `entry: "research_body"` — **44 nodes, 56 edges, 10 channels,
 2 subgraphs**. Node kinds: 15 `llm`, 13 `gate`, 7 `router`, 7 `tool`, 2 `subgraph`.
 Graph defaults: `concurrency: 1`, `durability: "superstep"`, `maxInlineBytes: 4096`,
@@ -438,13 +438,16 @@ The `counters` channel is where every loop counter listed in
 monotonic under concurrent branch writes, so two branches incrementing the same key cannot
 lose an increment and under-count a budget.
 
-Every one of the ten channels declares the graph default `maxInlineBytes: 4096`, and the
-commit boundary measures a write against that cap in **canonical** bytes — `canonicalJson`,
-`src/pge/runtime/commit.ts` — not in the bytes the value happens to occupy on disk. A write
-over the cap is refused with `StateBloatError` and the run continues with the channel
-unwritten. That number has now been measured against a real plan rather than a fixture, and
-it does not survive contact with one: see
-[The graph engine against a real workload](#the-graph-engine-against-a-real-workload).
+Eight of the ten channels declare the graph default `maxInlineBytes: 4096`; `spec` and
+`sprintContracts` declare 131,072 and 524,288, sized off the committed workload corpus (see
+the `1.3.0` changelog entry and [A committed workload corpus](#a-committed-workload-corpus)).
+The commit boundary measures a write against a channel's own cap in **canonical** bytes —
+`canonicalJson`, `src/pge/runtime/commit.ts` — not in the bytes the value happens to occupy
+on disk. A write over the cap is refused with `StateBloatError` and the run continues with
+the channel unwritten. The original 4,096-byte default on every channel was measured
+against a real plan rather than a fixture and did not survive contact with one; see
+[The graph engine against a real workload](#the-graph-engine-against-a-real-workload) for
+what raising `spec` and `sprintContracts` did, and did not, fix.
 
 ## The golden dataset: what it proves and what it does not
 
@@ -659,9 +662,13 @@ the real artifacts; every node body, the reducers, the commit boundary and the t
 are the shipped ones. What the run does is committed as data in
 `.bober/topology/measurements/real-workload.json`.
 
-**As committed at `graphVersion 1.2.0`, the engine does not execute that plan.**
+**As committed at `graphVersion 1.2.0`, the engine did not execute that plan** — both writes
+were rejected. Sprint 3 of spec-20260812-pge-real-workload-errors raised `spec` and
+`sprintContracts` off the corpus (see the changelog entry for `1.3.0` and the corpus table
+below) and re-ran this exact harness. The rejections are gone, but the run still does not
+reach a terminal node — for a different reason.
 
-| measured | value |
+| measured, as committed at `graphVersion 1.2.0` (before sprint 3) | value |
 | --- | --- |
 | `spec` write by `plan_materialize`, superstep 12 | **29,214** canonical bytes against a declared limit of **4,096** — REJECTED |
 | `sprintContracts` write by `plan_materialize`, superstep 12 | **135,106** canonical bytes, being the 14 contracts, against **4,096** — REJECTED |
@@ -671,28 +678,47 @@ are the shipped ones. What the run does is committed as data in
 | run status / verdict | `completed` / `failed` |
 | what `PgeEngine.run` returned | nothing — its own `commit.finalize` threw `FinalizeWithoutSpecError` |
 
+| measured, as committed at `graphVersion 1.3.0` (after sprint 3) | value |
+| --- | --- |
+| `spec` write by `plan_materialize`, superstep 12 | **29,214** canonical bytes against a declared limit of **131,072** — admitted |
+| `sprintContracts` write by `plan_materialize`, superstep 12 | **135,106** canonical bytes against **524,288** — admitted |
+| failures recorded | none — the interpreter itself never returns a result (next row) |
+| `GraphRunResult` | never produced: the interpreter throws `SuperstepLimitExceededError` at `DEFAULT_MAX_SUPERSTEPS = 200` (`src/pge/runtime/interpreter.ts`) before reaching a terminal node |
+| what `PgeEngine.run` returned | nothing — the same interpreter throw propagates out of `PgeEngine.run` |
+
 Three consequences a reader should not have to derive:
 
-- **The `FinalizeWithoutSpecError` crash recorded in
-  [A defect this coverage work surfaced](#a-defect-this-coverage-work-surfaced) is not
-  confined to a planner that never settles.** A plan of ordinary size reaches the same terminal
-  node with `state.spec` still null, for an unrelated reason, on the first attempt.
-- **`plan_materialize` is the sole writer of `spec`** ([Channels](#channels)), so a rejected
-  write there is not recoverable further down: no other node may supply the value, and the run
-  carries on with the channel unwritten.
-- **The rejections are in the run's own record but not in what the caller gets back.** They are
-  task failures on the interpreter's `GraphRunResult`, whose verdict and failures
-  `PgeEngine.run` discards before returning a `PipelineResult` — the recorded limitation named
-  in [Engine migration disposition](#engine-migration-disposition). The harness reads the
-  interpreter's result through the engine's own `interpreterFactory` seam for exactly that
-  reason; a harness that inspected the returned `PipelineResult` would have observed nothing.
+- **Raising the caps fixed exactly what it was scoped to fix, and nothing more.** The two
+  `StateBloatError` rejections are gone — `byteSize(spec) < 131,072` and
+  `byteSize(sprintContracts) < 524,288` both hold, proven directly in
+  `src/pge/engine/real-workload.test.ts`. What happens to the run AFTER `plan_materialize`
+  succeeds is a separate question this sprint did not set out to answer.
+- **Admitting the writes uncovers a second ceiling.** With `state.spec` no longer null, the
+  run proceeds into the fan-out across the real 14 sprint contracts through the sprint
+  subgraph, and that fan-out runs long enough to trip the interpreter's own runaway guard
+  before any terminal node is reached. The `FinalizeWithoutSpecError` crash recorded in
+  [A defect this coverage work surfaced](#a-defect-this-coverage-work-surfaced) and the
+  `SuperstepLimitExceededError` above are two DIFFERENT defects that happened to share one
+  symptom — "the engine never reaches a terminal node" — because the first one always cut
+  the run off before the second could ever be reached. This is the same class of gap the
+  4,096-byte cap itself was: a runaway guard's default sized for a workload nothing had ever
+  actually run.
+- **Neither failure is in what the caller gets back.** Both are facts on the interpreter's
+  own result (a thrown error, in the `1.3.0` case) or its `GraphRunResult`, which
+  `PgeEngine.run` does not surface through the returned `PipelineResult` — the recorded
+  limitation named in [Engine migration disposition](#engine-migration-disposition). The
+  harness reads the interpreter's own outcome through the engine's own `interpreterFactory`
+  seam for exactly that reason; a harness that inspected the returned `PipelineResult` would
+  have observed nothing either way.
 
-**Nothing above is fixed.** This section records a measurement, not a remedy: no cap in the
-committed artifact was raised, and no golden case was added or re-captured. Re-deriving the
-measurement is a deliberate act — `MEASURE_REAL_WORKLOAD=1 npx vitest run
-src/pge/engine/real-workload.test.ts` rewrites the committed file, and every other run of that
-test re-derives it and asserts the committed bytes are unchanged. The numbers above therefore
-go red the moment they stop being true, and the diff is the statement that they changed.
+**The `SuperstepLimitExceededError` ceiling is recorded, not fixed, here.** Sizing
+`maxInlineBytes` is this sprint's whole scope; `DEFAULT_MAX_SUPERSTEPS` is a different
+constant guarding a different resource, and chasing it here would be exactly the scope
+creep this project's harness exists to prevent. Re-deriving the measurement is a deliberate
+act — `MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts` rewrites
+the committed file, and every other run of that test re-derives it and asserts the committed
+bytes are unchanged. The numbers above therefore go red the moment they stop being true, and
+the diff is the statement that they changed.
 
 ### A committed workload corpus
 
@@ -713,8 +739,8 @@ channel; captured instead from a real `PgeEngine` run's own `ChannelUpdate`s, th
 
 | channel | corpus maximum (canonical bytes) | declared limit | source |
 | --- | --- | --- | --- |
-| `spec` | 48,097 | 4,096 | every `.bober/specs/*.json` that parses (52 of 53 — see below) |
-| `sprintContracts` | 135,106 | 4,096 | one entry per spec, the whole `SprintContract[]` its `sprints` resolve to |
+| `spec` | 48,097 | **131,072** | every `.bober/specs/*.json` that parses (52 of 53 — see below) |
+| `sprintContracts` | 135,106 | **524,288** | one entry per spec, the whole `SprintContract[]` its `sprints` resolve to |
 | `messages` | 1,292 | 4,096 | a representative sample of `.bober/handoffs/gen-report-*.json` `notes` |
 | `evaluations` | 1,067 | 4,096 | a representative sample of `.bober/eval-results/*.json` summaries |
 | `refs` | 283 | 4,096 | observed from a real run |
@@ -724,14 +750,18 @@ channel; captured instead from a real `PgeEngine` run's own `ChannelUpdate`s, th
 | `counters` | 64 | 4,096 | observed from a real run |
 | `verdict` | 8 | 4,096 | this section's own committed measurement's real `verdict` |
 
-`sc-2-2` (the maximum is computed with the commit boundary's OWN `byteSize`
+Every declared limit above is exactly `capForCorpusMax` (`src/pge/golden/workload.ts`) of
+that row's own corpus maximum — the next power of two at or above 2× the maximum, floored
+at 4,096 — pinned two-directionally in `src/pge/golden/workload.test.ts` (`1.3.0` changelog
+entry). `sc-2-2` (the maximum is computed with the commit boundary's OWN `byteSize`
 (`src/pge/runtime/commit.ts`), never a reimplementation) and `sc-2-4` (every declared channel
 has at least one entry, proven to bite by deleting one from a temp copy) are unit-tested in
-`src/pge/golden/workload.test.ts`. The `messages`/`evaluations`/`refs` maxima above are also
-recorded in the committed measurement itself, as `corpusHeadroom`, alongside the
-`spec`/`sprintContracts` rejections this section already documents — the same "corpus-sized
-payload against the declared limit" question, extended to the channels real generator and
-evaluator output flows through.
+the same file. The `messages`/`evaluations`/`refs` maxima above are also recorded in the
+committed measurement itself, as `corpusHeadroom` — the same "corpus-sized payload against
+the declared limit" question, extended to the channels real generator and evaluator output
+flows through, and (for `spec`/`sprintContracts`) the direct byte-vs-cap comparison
+[The graph engine against a real workload](#the-graph-engine-against-a-real-workload)
+documents.
 
 **60 of 250 committed contracts and 1 of 53 committed specs do not parse** under their own
 schema (an earlier contract/spec era) and are skipped rather than crashing the corpus build —
@@ -757,8 +787,10 @@ always keeps the genuine maximum, so the numbers above stay honest; the churn is
 payloads are held, not in whether the largest one is. Check a large `messages`/`evaluations`
 diff is a sample shift before committing it.
 
-**Nothing above is fixed either.** No cap in the committed artifact was raised by this corpus;
-sizing the caps from it is the next sprint's work.
+**`spec` and `sprintContracts` are sized from this corpus, as of `graphVersion 1.3.0`.** The
+other eight channels' declared limits already matched `capForCorpusMax` of their own corpus
+maximum before this sprint touched anything, which is what made it safe to pin all ten
+rather than only the two that moved (see the `1.3.0` changelog entry above).
 
 ## Engine migration disposition
 
@@ -872,6 +904,44 @@ ran them.
 Keyed by `graphVersion`. A structural change to the topology requires a version bump and
 an entry here; CI enforces the pairing, so this section is the changelog the version-bump
 gate reads.
+
+### 1.3.0 — sizing the channel caps to the committed corpus
+
+Sprint 3 of spec-20260812-pge-real-workload-errors sized the two implicated channels off
+the committed workload corpus (**A committed workload corpus** above) instead of the
+shipped default, using `capForCorpusMax` (`src/pge/golden/workload.ts`): the next power of
+two at or above **2×** the corpus maximum, floored at `DEFAULT_MAX_INLINE_BYTES` (4,096).
+
+- **`spec`: 4,096 → 131,072.** Corpus maximum **48,097** canonical bytes, the largest of
+  the 52 committed `.bober/specs/*.json` files that parse under their own schema. `2 ×
+  48,097 = 96,194`; the next power of two at or above that is 131,072 (2¹⁷).
+- **`sprintContracts`: 4,096 → 524,288.** Corpus maximum **135,106** canonical bytes, the
+  largest `SprintContract[]` one spec's `sprints` resolves to (this repository's own
+  14-sprint `spec-20260805-pge-graph-engineering`). `2 × 135,106 = 270,212`; the next
+  power of two at or above that is 524,288 (2¹⁹).
+- **The other eight channels are unchanged at 4,096** — each already satisfies
+  `capForCorpusMax` of its own corpus maximum (see the corpus table above), so raising them
+  would not be justified by anything this repository has ever actually committed.
+  `defaults.maxInlineBytes` also stays 4,096: it is the conservative value a brand-new
+  channel inherits before anyone has measured a corpus for it, not a value to track the two
+  channels this sprint raised.
+- Every cap is pinned two-directionally against the corpus in
+  `src/pge/golden/workload.test.ts`: lowering a cap below what `capForCorpusMax` of its
+  corpus maximum requires fails, and raising one with no corpus payload justifying it fails
+  too, because the pin is EQUALITY to the derived function rather than an inequality.
+  `StateBloatError` (`src/pge/runtime/commit.ts`) is unchanged — the check is re-sized, not
+  removed, proven by a negative control that still rejects a value above the new cap.
+- **What this does not fix.** Raising the two caps admits `plan_materialize`'s writes
+  against this repository's own real spec and its 14 contracts — the rejections recorded in
+  [The graph engine against a real workload](#the-graph-engine-against-a-real-workload) are
+  gone, re-measured with the same harness. The run does not reach a terminal node either
+  way: with the caps raised, the fan-out across 14 real sprint contracts now runs long
+  enough to trip the interpreter's own runaway guard, `SuperstepLimitExceededError` at
+  `DEFAULT_MAX_SUPERSTEPS = 200` (`src/pge/runtime/interpreter.ts`), before `commit.finalize`
+  is ever reached. That is a different, newly-surfaced fact from the old
+  `FinalizeWithoutSpecError`, recorded rather than chased here — it is out of a
+  `maxInlineBytes` sprint's scope.
+- Node, edge, channel and subgraph counts are unchanged: 44 / 56 / 10 / 2.
 
 ### 1.2.0 — correcting two defects that made the graph unrunnable
 

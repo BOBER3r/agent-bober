@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { z } from "zod";
 
+import { DEFAULT_MAX_INLINE_BYTES } from "../../contracts/topology.js";
 import { byteSize } from "../runtime/commit.js";
 
 /**
@@ -184,4 +185,48 @@ export function maxBytesPerChannel(corpus: WorkloadCorpus): Record<string, numbe
     if (current === undefined || bytes > current) max[entry.channel] = bytes;
   }
   return max;
+}
+
+// ── The two-directional cap pin ────────────────────────────────────
+
+/** The headroom multiplier over the measured corpus maximum. */
+export const CAP_HEADROOM_FACTOR = 2;
+
+/**
+ * The cap a channel whose corpus maximum is `corpusMaxBytes` must declare.
+ *
+ * sc-3-4 demands two things that pull apart: lowering a cap below its corpus maximum must
+ * FAIL, and raising a cap with no corpus payload justifying it must ALSO fail. A literal
+ * cap can satisfy at most one direction. The way to satisfy both at once is to make the cap
+ * a deterministic FUNCTION of the corpus and pin EQUALITY to that function rather than an
+ * inequality — then both shrinking and inflating break the equality, and the headroom
+ * itself is justified by the corpus rather than a round number someone liked.
+ *
+ * Two properties the two-directional pin needs at once, both delivered by "next power of
+ * two at or above `CAP_HEADROOM_FACTOR * corpusMaxBytes`":
+ *
+ * - HEADROOM: the result is always at least `CAP_HEADROOM_FACTOR` times the largest payload
+ *   this repository has ever committed, so the day a spec grows one field is not the day
+ *   the engine stops running.
+ * - STABILITY: the power-of-two bucket makes the cap a STEP function of the corpus, so a
+ *   corpus rebuild that moves the maximum by a few hundred bytes does not move the
+ *   artifact — which matters because the `messages`/`evaluations` corpus entries are a
+ *   representative sample drawn from a LIVE `readdir` of `.bober/handoffs/` and
+ *   `.bober/eval-results/` (`__fixtures__/workload-build.ts`), and a rebuild can shift
+ *   which files are sampled even though the corpus is committed and never re-read live by
+ *   the pin itself. `messages` needs a 59% jump and `evaluations` a 92% jump before either
+ *   crosses a bucket boundary, so ordinary resampling drift never moves the artifact. When
+ *   a channel's real payload size DOES grow enough to cross a bucket, the pin fails loudly,
+ *   the artifact is regenerated deliberately, and `pge diff --require-version-bump` forces
+ *   a version bump plus a changelog entry — a future payload growth is a measurable event,
+ *   not a silent one.
+ *
+ * The floor is `DEFAULT_MAX_INLINE_BYTES` so no channel's cap ever decreases from the
+ * shipped default: a corpus that happens to hold only tiny payloads for a channel must not
+ * become an argument for tightening it below what a brand-new channel would inherit.
+ */
+export function capForCorpusMax(corpusMaxBytes: number): number {
+  let cap = DEFAULT_MAX_INLINE_BYTES;
+  while (cap < corpusMaxBytes * CAP_HEADROOM_FACTOR) cap *= 2;
+  return cap;
 }

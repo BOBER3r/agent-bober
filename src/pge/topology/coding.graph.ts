@@ -98,9 +98,19 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
   // sprint verification nodes declared "process-exec" — the DEPLOY tag, which requires a
   // recorded approval — so the sprint subgraph could not run at all; the three that
   // really do execute now declare "sandbox-exec" and gate_mock_coverage, which executes
-  // nothing, declares no effect. A structural change to a committed artifact moves
-  // graphVersion forward; `pge diff --require-version-bump` is the gate that says so.
-  graphVersion: "1.2.0",
+  // nothing, declares no effect.
+  //
+  // 1.3.0 — the shipped 4096-byte cap was sized from nothing this repository had ever
+  // actually run (the largest PlanSpec-shaped object in the 42-case golden dataset is
+  // 1,181 bytes) and silently dropped `plan_materialize`'s writes against this
+  // repository's own 29 KB PlanSpec and its 14 SprintContracts. `spec` and
+  // `sprintContracts` are raised to `capForCorpusMax` of their committed workload-corpus
+  // maximum (`src/pge/golden/workload.ts`, `.bober/workload/`, 123 real payloads) — see
+  // the two channel declarations below and docs/pge-graph.md's changelog entry for the
+  // measured basis. The other eight channels already satisfied the same rule at 4,096 and
+  // are unchanged. A structural change to a committed artifact moves graphVersion
+  // forward; `pge diff --require-version-bump` is the gate that says so.
+  graphVersion: "1.3.0",
   description:
     "The agent-bober coding pipeline: research reflexion loop, planner with a clarification loop, supervisor, bounded sprint subgraph with curator/security/evaluation gates, global evaluation with rework, synthesis, documentation, gated commit, graceful failure and context compaction.",
   provenance: "authored",
@@ -110,6 +120,10 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
     modelTier: "light",
     concurrency: 1,
     durability: "superstep",
+    // Left at the schema default (DEFAULT_MAX_INLINE_BYTES, src/contracts/topology.ts)
+    // deliberately: this is the cap a brand-new channel inherits before anyone has
+    // measured a corpus for it, so it must stay conservative rather than track the two
+    // channels this sprint raised.
     maxInlineBytes: 4096,
   },
 
@@ -158,20 +172,30 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       maxInlineBytes: 4096,
     },
     {
+      // 1.3.0: capForCorpusMax(135_106) = 524_288 — the committed workload corpus's
+      // largest sprintContracts entry (this repository's own 14 contracts as one
+      // appendById update) is 135,106 canonical bytes; two-times headroom rounded up to
+      // the next power of two. Pinned two-directionally against the corpus in
+      // src/pge/golden/workload.test.ts.
       id: "sprintContracts",
       reducerRef: "appendById",
       schemaRef: "SprintContract",
       scope: "public",
-      maxInlineBytes: 4096,
+      maxInlineBytes: 524_288,
     },
     {
       // Scalar: `replaceIfNewer` makes a second writer a MultipleWritersOnScalarChannel
       // error, which is why only plan_materialize writes it.
+      //
+      // 1.3.0: capForCorpusMax(48_097) = 131_072 — the committed workload corpus's
+      // largest spec entry (52 committed PlanSpecs that parse) is 48,097 canonical bytes;
+      // two-times headroom rounded up to the next power of two. Pinned two-directionally
+      // against the corpus in src/pge/golden/workload.test.ts.
       id: "spec",
       reducerRef: "replaceIfNewer",
       schemaRef: "PlanSpec",
       scope: "public",
-      maxInlineBytes: 4096,
+      maxInlineBytes: 131_072,
     },
     {
       id: "ledger",

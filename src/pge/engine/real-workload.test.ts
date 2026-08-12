@@ -41,7 +41,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { TopologySpec } from "../../contracts/topology.js";
 import { TopologySpecSchema } from "../../contracts/topology.js";
 import { GoldenBindingInvokedError } from "../golden/executor.js";
-import { loadWorkloadCorpus, maxBytesPerChannel, WORKLOAD_DIR } from "../golden/workload.js";
+import { WORKLOAD_DIR, capForCorpusMax, loadWorkloadCorpus, maxBytesPerChannel } from "../golden/workload.js";
 import type { CodingBindings } from "../registry/index.js";
 import { byteSize, createFixedClock } from "../runtime/commit.js";
 import { createGraphInterpreter } from "../runtime/interpreter.js";
@@ -135,12 +135,18 @@ interface Measurement {
     readonly contractsCanonicalBytes: number;
   };
   readonly channelLimits: Record<string, number>;
-  readonly rejections: readonly RecordedRejection[];
-  readonly failures: readonly RecordedFailure[];
-  readonly terminalNodeId: string;
-  readonly status: GraphRunResult["status"];
+  /**
+   * `null` exactly when the INTERPRETER ITSELF threw before ever returning a
+   * `GraphRunResult` — see `engineOutcome` and the comment on `observeRealWorkload` below.
+   * There is no rejection list, terminal node, status or verdict to read off a result that
+   * was never produced.
+   */
+  readonly rejections: readonly RecordedRejection[] | null;
+  readonly failures: readonly RecordedFailure[] | null;
+  readonly terminalNodeId: string | null;
+  readonly status: GraphRunResult["status"] | null;
   readonly verdict: string | null;
-  readonly specChannelNullAtBoundary: boolean;
+  readonly specChannelNullAtBoundary: boolean | null;
   readonly engineOutcome: EngineOutcome;
   readonly corpusHeadroom: Record<string, CorpusHeadroom>;
 }
@@ -162,7 +168,7 @@ async function observeRealWorkload(
   runId: string,
   workload: Workload,
   bindings: (input: PgeRegistriesInput) => CodingBindings,
-): Promise<{ measurement: Measurement; observed: GraphRunResult }> {
+): Promise<{ measurement: Measurement; observed: GraphRunResult | null }> {
   const topology = await readValidatedTopologySpec(projectRoot, CODING_GRAPH_ID);
 
   let observed: GraphRunResult | null = null;
@@ -195,19 +201,6 @@ async function observeRealWorkload(
     engineOutcome = { kind: "threw", errorClass: (error as Error).name };
   }
 
-  // `observed` is populated by the recorder REGARDLESS of what PgeEngine.run did with the
-  // result afterwards — that is the whole point of driving it through this seam.
-  if (observed === null) {
-    throw new Error(`run "${runId}" never reached the interpreter's own result`);
-  }
-  const run: GraphRunResult = observed;
-
-  const spans = await readSpans(tracePath(projectRoot, runId));
-  const last = spans[spans.length - 1];
-  if (last === undefined) {
-    throw new Error(`run "${runId}" produced no spans; the run did not execute`);
-  }
-
   const channelLimits: Record<string, number> = {};
   for (const channel of [...topology.channels].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
     channelLimits[channel.id] = channel.maxInlineBytes;
@@ -231,6 +224,55 @@ async function observeRealWorkload(
     corpusHeadroom[channelId] = { corpusMaxBytes, declaredLimit, wouldReject: corpusMaxBytes > declaredLimit };
   }
 
+  const workloadFacts = {
+    specPath: relative(REPO_ROOT, REAL_SPEC_PATH),
+    specId: workload.spec.specId,
+    specCanonicalBytes: byteSize(workload.spec),
+    contractCount: workload.contracts.length,
+    contractsCanonicalBytes: byteSize(workload.contracts),
+  };
+
+  // `observed` is populated by the recorder REGARDLESS of what PgeEngine.run did with the
+  // result afterwards — that is the whole point of driving it through this seam. It stays
+  // `null` only when the INTERPRETER ITSELF throws before ever returning a `GraphRunResult`.
+  //
+  // sprint 3's own discovery, recorded rather than chased (this sprint's contract is
+  // `maxInlineBytes` only): raising `spec` and `sprintContracts` far enough that
+  // `plan_materialize`'s writes now fit under their caps lets this run proceed past the
+  // point that used to end it early (the old 4,096-byte cap rejected both writes at
+  // superstep 12, and the routing that followed reached `graceful_failure` within a
+  // handful of supersteps). With both writes admitted, the 14-contract fan-out through the
+  // sprint subgraph runs long enough to trip the interpreter's own runaway guard —
+  // `SuperstepLimitExceededError` at `DEFAULT_MAX_SUPERSTEPS = 200`
+  // (`src/pge/runtime/interpreter.ts`) — before reaching any terminal node. That is a
+  // materially different fact from `commit.finalize` throwing on a COMPLETED run: there is
+  // no `GraphRunResult` to read a rejection list, a terminal node or a verdict off, so
+  // those fields are `null` here rather than guessed at.
+  if (observed === null) {
+    const measurement: Measurement = {
+      formatVersion: 1,
+      graph: { graphId: topology.graphId, graphVersion: topology.graphVersion },
+      workload: workloadFacts,
+      channelLimits,
+      rejections: null,
+      failures: null,
+      terminalNodeId: null,
+      status: null,
+      verdict: null,
+      specChannelNullAtBoundary: null,
+      engineOutcome,
+      corpusHeadroom,
+    };
+    return { measurement, observed: null };
+  }
+  const run: GraphRunResult = observed;
+
+  const spans = await readSpans(tracePath(projectRoot, runId));
+  const last = spans[spans.length - 1];
+  if (last === undefined) {
+    throw new Error(`run "${runId}" produced no spans; the run did not execute`);
+  }
+
   const rejections: RecordedRejection[] = run.commits.flatMap((commit) =>
     commit.rejected.map((rejection) => ({
       channel: rejection.channel,
@@ -252,13 +294,7 @@ async function observeRealWorkload(
   const measurement: Measurement = {
     formatVersion: 1,
     graph: { graphId: topology.graphId, graphVersion: topology.graphVersion },
-    workload: {
-      specPath: relative(REPO_ROOT, REAL_SPEC_PATH),
-      specId: workload.spec.specId,
-      specCanonicalBytes: byteSize(workload.spec),
-      contractCount: workload.contracts.length,
-      contractsCanonicalBytes: byteSize(workload.contracts),
-    },
+    workload: workloadFacts,
     channelLimits,
     rejections,
     failures,
@@ -284,13 +320,23 @@ describe("PgeEngine over this repository's own real workload (feat-1)", () => {
       // Structural guard against the trap this sprint's briefing names: the runtime's OWN
       // fixture graph (src/pge/runtime/__fixtures__/golden-graph.ts:360,366) raises `spec`
       // to 8192 and `sprintContracts` to 65536, which would show FEWER rejections and look
-      // healthier. Assert the loaded graph is the COMMITTED one, with every channel still
-      // at the shipped 4096 — measured off the loaded artifact, never off a list here.
+      // healthier. Assert the loaded graph is the COMMITTED one, with every channel's cap
+      // equal to capForCorpusMax of ITS OWN corpus maximum — measured off the loaded
+      // artifact and the committed corpus, never off a hardcoded number here (sprint 3 of
+      // spec-20260812-pge-real-workload-errors: `spec` and `sprintContracts` moved off the
+      // shipped 4,096 default; the other eight channels did not).
       const topology = await readValidatedTopologySpec(projectRoot, CODING_GRAPH_ID);
       expect(topology.graphId).toBe("coding");
       expect(topology.channels.length).toBeGreaterThan(0);
+      const guardCorpus = await loadWorkloadCorpus(join(REPO_ROOT, WORKLOAD_DIR));
+      expect(guardCorpus.errors).toEqual([]);
+      const guardCorpusMax = maxBytesPerChannel(guardCorpus);
       for (const channel of topology.channels) {
-        expect(channel.maxInlineBytes, `channel "${channel.id}" cap`).toBe(4096);
+        const corpusMaxBytes = guardCorpusMax[channel.id];
+        expect(corpusMaxBytes, `no corpus entry for channel "${channel.id}"`).toBeDefined();
+        expect(channel.maxInlineBytes, `channel "${channel.id}" cap`).toBe(
+          capForCorpusMax(corpusMaxBytes as number),
+        );
       }
 
       const workload = await realWorkload();
@@ -308,42 +354,39 @@ describe("PgeEngine over this repository's own real workload (feat-1)", () => {
         (input) => realWorkloadBindings(input, workload),
       );
 
-      // Non-vacuity: plan_materialize genuinely ran, so an empty rejection list could not be
-      // an artefact of the node never being reached.
+      // Non-vacuity: plan_materialize genuinely ran, so a `null`/empty rejection list could
+      // not be an artefact of the node never being reached.
       const spans = await readSpans(tracePath(projectRoot, "run-real-workload"));
       expect(spans.some((span) => span.nodeId === "plan_materialize")).toBe(true);
 
       // sc-1-1: a real PgeEngine ran, over the committed artifact, with the real spec as the
-      // planner's output — proven by the interpreter having committed at least one superstep.
-      expect(observed.commits.length).toBeGreaterThan(0);
+      // planner's output — proven by the trace above. `observed` itself is `null` for THIS
+      // run (see `observeRealWorkload`'s own comment): the interpreter runs long enough past
+      // `plan_materialize` to trip `SuperstepLimitExceededError` before ever returning a
+      // `GraphRunResult`, so there is no `.commits` to inspect this time.
+      expect(observed).toBeNull();
+      expect(measurement.engineOutcome).toEqual({ kind: "threw", errorClass: "SuperstepLimitExceededError" });
 
-      // sc-1-2: every rejection carries the four required fields, read off StateBloatError.
-      expect(measurement.rejections.length).toBeGreaterThan(0);
-      for (const rejection of measurement.rejections) {
-        expect(rejection.limit).toBe(4096);
-        expect(rejection.bytes).toBeGreaterThan(rejection.limit);
-      }
-      const rejectedChannels = new Set(measurement.rejections.map((r) => r.channel));
-      expect(rejectedChannels.has("spec")).toBe(true);
-      expect(rejectedChannels.has("sprintContracts")).toBe(true);
+      // sc-1-2, restated for the corpus-derived caps this sprint ships: the exact comparison
+      // the commit boundary itself performs (byteSize vs the channel's declared cap,
+      // commit.ts:366-378), computed directly rather than read off a rejection list that no
+      // longer exists for this run. Both of this repository's own real writes now fit under
+      // their caps — plan_materialize's writes are no longer rejected, which is the fix this
+      // sprint ships. What happens to the run AFTER that (below) is a separate fact.
+      expect(byteSize(workload.spec)).toBeLessThan(measurement.channelLimits.spec as number);
+      expect(byteSize(workload.contracts)).toBeLessThan(measurement.channelLimits.sprintContracts as number);
 
-      // sc-1-3: terminal node and the boundary fact about `spec`, read off GraphRunResult
-      // and the trace — never off the PipelineResult PgeEngine.run returns.
-      expect(measurement.terminalNodeId).toBeTruthy();
-      expect(measurement.specChannelNullAtBoundary).toBe(true);
-
-      // sc-1-5: the derivation says a rejected `spec` write leaves state.spec null at the
-      // gate, which routes to graceful_failure, which is OVER (status "completed") with
-      // spec still null — so PgeEngine.run's own unconditional `commit.finalize` call is
-      // expected to REJECT with FinalizeWithoutSpecError (commit.ts:436). This assertion IS
-      // the observation: if a future run of this exact test observes something else, this
-      // line fails FIRST, loudly, before the measurement below is ever written — which is
-      // what makes it safe to commit the measurement unchanged rather than adjust it.
-      expect(measurement.status).toBe("completed");
-      expect(measurement.engineOutcome).toEqual({
-        kind: "threw",
-        errorClass: "FinalizeWithoutSpecError",
-      });
+      // sc-1-3 / sc-1-5, restated: no `GraphRunResult` exists for this run (see above), so
+      // there is no terminal node, status, verdict or `spec`-null-at-boundary fact to read.
+      // This IS the observation — a future run of this exact test that observes something
+      // else fails these lines FIRST, which is what makes it safe to commit the measurement
+      // unchanged rather than adjust it. See the generator's completion notes for why this
+      // is recorded rather than chased.
+      expect(measurement.rejections).toBeNull();
+      expect(measurement.failures).toBeNull();
+      expect(measurement.terminalNodeId).toBeNull();
+      expect(measurement.status).toBeNull();
+      expect(measurement.specChannelNullAtBoundary).toBeNull();
 
       // sc-2-3: the measurement extended to messages, evaluations and refs under
       // corpus-sized payloads. Every one of `CORPUS_HEADROOM_CHANNELS` must have been
@@ -427,8 +470,13 @@ describe("the collaborator doors are shut", () => {
         materialize: refuse("materialize"),
       }));
 
-      const named = observed.failures.find((failure) => failure.errorClass === "GoldenBindingInvokedError");
-      expect(named, JSON.stringify(observed.failures)).toBeDefined();
+      // The refusal happens INSIDE materialize's own node body, before any large write is
+      // ever attempted, so the interpreter completes (routing on the recorded failure)
+      // rather than running long enough to trip the runaway guard — unaffected by this
+      // sprint's cap change.
+      expect(observed, "the interpreter must have produced a result for this scenario").not.toBeNull();
+      const named = observed?.failures.find((failure) => failure.errorClass === "GoldenBindingInvokedError");
+      expect(named, JSON.stringify(observed?.failures)).toBeDefined();
       expect(named?.message).toContain("materialize");
     },
     120_000,
@@ -439,22 +487,30 @@ describe("the collaborator doors are shut", () => {
 
 describe("the harness reads each channel's own declared limit", () => {
   it(
-    "raising the spec channel's cap in a LOCAL COPY of the artifact removes exactly the spec rejection",
+    "LOWERING the spec channel's cap in a LOCAL COPY of the artifact re-introduces exactly the spec rejection",
     async () => {
       const workload = await realWorkload();
       const projectRoot = await seededRoot();
 
       // A mutation of a COPY inside a throwaway temp root — the committed
       // .bober/topology/coding.json is never touched, and no cap this sprint reports is
-      // raised (nonGoal 1). The checksum is recomputed through the shipped
-      // canonicalize/checksum helpers, exactly as `dumpTopology` would, so the mutated copy
-      // is a legitimately re-signed artifact rather than a stale one `readValidatedTopologySpec`
-      // would refuse for `ChecksumStale` before the engine ever sees it.
+      // lowered on the shipped artifact (nonGoal 1). The checksum is recomputed through the
+      // shipped canonicalize/checksum helpers, exactly as `dumpTopology` would, so the
+      // mutated copy is a legitimately re-signed artifact rather than a stale one
+      // `readValidatedTopologySpec` would refuse for `ChecksumStale` before the engine ever
+      // sees it.
+      //
+      // LOWERED rather than raised (sprint 3): the shipped `spec` cap already admits this
+      // repository's own real spec (proven above — byteSize < the declared cap) — raising it
+      // further would prove nothing new. Lowering it below the real spec's own byte size
+      // reproduces the pre-sprint-3 rejection deliberately: the same proof, "the harness
+      // reads each channel's OWN declared limit," and one that survives any future
+      // corpus-driven cap value without editing.
       const artifactPath = join(projectRoot, ".bober", "topology", "coding.json");
       const raw = JSON.parse(await readFile(artifactPath, "utf-8")) as Record<string, unknown>;
       const specBytes = byteSize(workload.spec);
       const channels = (raw.channels as Array<{ id: string; maxInlineBytes: number }>).map((channel) =>
-        channel.id === "spec" ? { ...channel, maxInlineBytes: specBytes + 1024 } : channel,
+        channel.id === "spec" ? { ...channel, maxInlineBytes: specBytes - 1 } : channel,
       );
       const parsed: TopologySpec = TopologySpecSchema.parse({ ...raw, channels });
       const resigned: TopologySpec = { ...parsed, checksum: checksumTopology(parsed) };
@@ -464,11 +520,16 @@ describe("the harness reads each channel's own declared limit", () => {
         realWorkloadBindings(input, workload),
       );
 
-      const rejectedChannels = new Set(measurement.rejections.map((r) => r.channel));
-      expect(rejectedChannels.has("spec")).toBe(false);
-      // sprintContracts' cap is untouched, so its rejection survives — proving this harness
-      // reads each channel's OWN declared limit rather than one constant shared by all ten.
-      expect(rejectedChannels.has("sprintContracts")).toBe(true);
+      // With `spec` rejected again, `state.spec` is null at the boundary gate the same way
+      // it was before this sprint, so the run completes quickly via the same short route
+      // rather than running long enough to trip the runaway guard.
+      expect(measurement.rejections, "the mutated run must complete for this control to mean anything").not.toBeNull();
+      const rejectedChannels = new Set((measurement.rejections ?? []).map((r) => r.channel));
+      expect(rejectedChannels.has("spec")).toBe(true);
+      // sprintContracts' cap is untouched and still admits the real 14 contracts, so its
+      // write does NOT reject here — proving this harness reads each channel's OWN declared
+      // limit rather than one constant shared by all ten.
+      expect(rejectedChannels.has("sprintContracts")).toBe(false);
     },
     120_000,
   );

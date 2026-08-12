@@ -112,9 +112,10 @@ describe("CODING_GRAPH parses and validates", () => {
     expect(parsed.data.formatVersion).toBe(1);
     expect(parsed.data.provenance).toBe("authored");
     expect(parsed.data.graphVersion).toMatch(GRAPH_VERSION_PATTERN);
-    // Bumped from 1.1.0 when the two illegal checkpoint ids were corrected to shipped ones
-    // and the sandboxed verification nodes were retagged off the deploy effect.
-    expect(parsed.data.graphVersion).toBe("1.2.0");
+    // Bumped from 1.2.0 when `spec` and `sprintContracts` were raised off the shipped
+    // 4,096-byte default to caps derived from the committed workload corpus
+    // (capForCorpusMax, src/pge/golden/workload.ts) — see docs/pge-graph.md's changelog.
+    expect(parsed.data.graphVersion).toBe("1.3.0");
   });
 
   it("returns ok:true with zero diagnostics in structural mode", () => {

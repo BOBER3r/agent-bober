@@ -20,7 +20,7 @@ import {
   goldenSpec,
 } from "../runtime/__fixtures__/golden-graph.js";
 import { buildWorkloadCorpus } from "./__fixtures__/workload-build.js";
-import { WORKLOAD_DIR, loadWorkloadCorpus, maxBytesPerChannel } from "./workload.js";
+import { WORKLOAD_DIR, capForCorpusMax, loadWorkloadCorpus, maxBytesPerChannel } from "./workload.js";
 import type { WorkloadCorpus, WorkloadEntry } from "./workload.js";
 
 /**
@@ -44,7 +44,14 @@ const TOPOLOGY_PATH = join(REPO_ROOT, ".bober", "topology", "coding.json");
 
 const BUILDING = process.env.BUILD_WORKLOAD_CORPUS === "1";
 
+interface DeclaredChannel {
+  readonly id: string;
+  readonly maxInlineBytes: number;
+}
+
 let declaredChannelIds: string[];
+/** Every declared channel, cap included — sc-3-4 reads the SHIPPED cap off this, never a literal. */
+let declaredChannels: DeclaredChannel[];
 let corpus: WorkloadCorpus;
 
 beforeAll(async () => {
@@ -53,8 +60,9 @@ beforeAll(async () => {
   }
 
   const artifact = JSON.parse(await readFile(TOPOLOGY_PATH, "utf-8")) as {
-    channels: { id: string }[];
+    channels: DeclaredChannel[];
   };
+  declaredChannels = artifact.channels;
   declaredChannelIds = artifact.channels.map((channel) => channel.id).sort();
 
   corpus = await loadWorkloadCorpus(WORKLOAD_DIR_ABS);
@@ -246,4 +254,131 @@ describe("the corpus covers every channel the artifact declares (sc-2-4)", () =>
     const missing = declaredChannelIds.filter((channelId) => !present.has(channelId));
     expect(missing).toContain(target);
   });
+});
+
+// ── sc-3-4: each declared cap is pinned two-directionally against the corpus ──────
+
+/**
+ * Every channel whose declared cap is not exactly what the corpus says it must be —
+ * `capForCorpusMax(corpusMax[channel.id])`. A channel absent from `corpusMax` is skipped
+ * here rather than treated as a violation: sc-2-4 already owns "every declared channel has
+ * a corpus entry," and conflating the two checks would make a coverage gap read as a cap
+ * violation instead of what it actually is.
+ *
+ * EQUALITY, not `>=`: an inequality would only ever catch shrinkage, and sc-3-4 requires a
+ * pin that also catches an unjustified raise.
+ */
+function capViolations(channels: readonly DeclaredChannel[], corpusMax: Record<string, number>): string[] {
+  const violations: string[] = [];
+  for (const channel of channels) {
+    const max = corpusMax[channel.id];
+    if (max === undefined) continue;
+    if (channel.maxInlineBytes !== capForCorpusMax(max)) violations.push(channel.id);
+  }
+  return violations;
+}
+
+describe("each declared cap equals capForCorpusMax of its own corpus maximum, two-directionally (sc-3-4)", () => {
+  it("the real committed artifact has zero cap violations", () => {
+    const max = maxBytesPerChannel(corpus);
+    expect(capViolations(declaredChannels, max)).toEqual([]);
+  });
+
+  it("FAILS when `spec`'s cap is LOWERED below its corpus maximum, on a CLONED channel array", () => {
+    const max = maxBytesPerChannel(corpus);
+    const specMax = max.spec;
+    expect(specMax, "no corpus entry for channel \"spec\"").toBeDefined();
+
+    const lowered = declaredChannels.map((channel) =>
+      channel.id === "spec" ? { ...channel, maxInlineBytes: (specMax as number) - 1 } : channel,
+    );
+    expect(capViolations(lowered, max)).toContain("spec");
+  });
+
+  it("FAILS when `spec`'s cap is RAISED with no corpus payload justifying it, on a CLONED channel array", () => {
+    const max = maxBytesPerChannel(corpus);
+    // capForCorpusMax(spec's corpus max) is 131_072 today (see docs/pge-graph.md's
+    // changelog); one bucket further up is 262_144. Nothing in the committed corpus grew
+    // to justify that, so the equality pin must reject it regardless of the exact numbers.
+    const inflated = declaredChannels.map((channel) =>
+      channel.id === "spec" ? { ...channel, maxInlineBytes: capForCorpusMax(max.spec as number) * 2 } : channel,
+    );
+    expect(capViolations(inflated, max)).toContain("spec");
+  });
+
+  it("FAILS when `sprintContracts`'s cap is LOWERED below its corpus maximum, on a CLONED channel array", () => {
+    const max = maxBytesPerChannel(corpus);
+    const contractsMax = max.sprintContracts;
+    expect(contractsMax, "no corpus entry for channel \"sprintContracts\"").toBeDefined();
+
+    const lowered = declaredChannels.map((channel) =>
+      channel.id === "sprintContracts" ? { ...channel, maxInlineBytes: (contractsMax as number) - 1 } : channel,
+    );
+    expect(capViolations(lowered, max)).toContain("sprintContracts");
+  });
+
+  it("FAILS when `sprintContracts`'s cap is RAISED with no corpus payload justifying it, on a CLONED channel array", () => {
+    const max = maxBytesPerChannel(corpus);
+    const inflated = declaredChannels.map((channel) =>
+      channel.id === "sprintContracts"
+        ? { ...channel, maxInlineBytes: capForCorpusMax(max.sprintContracts as number) * 2 }
+        : channel,
+    );
+    expect(capViolations(inflated, max)).toContain("sprintContracts");
+  });
+});
+
+// ── sc-3-5: StateBloatError still bites, re-sized rather than removed ─────────────
+
+describe("StateBloatError still bites at the new, corpus-derived cap (sc-3-5)", () => {
+  it(
+    "rejects a write above the SHIPPED spec cap (read off the committed artifact, never a literal) and drops it",
+    async () => {
+      const channel = "spec";
+      const shippedCap = declaredChannels.find((decl) => decl.id === channel)?.maxInlineBytes;
+      expect(shippedCap, `no declared cap for channel "${channel}" in the committed artifact`).toBeDefined();
+
+      // A fixture graph (its own channel set matches the shipped one) with its `spec` cap
+      // overridden to the SHIPPED cap — a COPY, the committed topology is never mutated —
+      // exactly the shape sc-2-2's negative control above uses for `messages`.
+      const base = goldenSpec();
+      const mutated: TopologySpec = {
+        ...base,
+        channels: base.channels.map((decl) =>
+          decl.id === channel ? { ...decl, maxInlineBytes: shippedCap as number } : decl,
+        ),
+      };
+      const graph = compile(mutated, goldenRegistries({ contracts: goldenContracts(1) }));
+
+      // A payload sized well above the shipped cap, derived from the cap itself rather than
+      // a hardcoded byte count — this control survives any future corpus-driven cap change.
+      const over = { probe: "x".repeat((shippedCap as number) + 1024) };
+      expect(byteSize(over)).toBeGreaterThan(shippedCap as number);
+
+      const root = await mkdtemp(join(tmpdir(), "workload-statebloat-"));
+      try {
+        const boundary = createCommitBoundary({ clock: createFixedClock("2026-08-12T00:00:00.000Z") });
+        const update: ChannelUpdate = { channel, nodeId: "workload-cap-probe", branchKey: null, value: over };
+        const result = await boundary.commit(graph, goldenInitialState("run-workload-statebloat", root), [update], {
+          runId: "run-workload-statebloat",
+          projectRoot: root,
+          config: createDefaultConfig("workload-statebloat", "brownfield"),
+          superstep: 0,
+          startedAtMs: 0,
+        });
+
+        expect(result.rejected).toHaveLength(1);
+        expect(result.rejected[0].channel).toBe(channel);
+        // The check re-sized to the new cap, not to a stale one and not removed.
+        expect(result.rejected[0].limit).toBe(shippedCap);
+        expect(result.rejected[0].bytes).toBeGreaterThan(shippedCap as number);
+        // The write was NOT applied: a rejected update does not reach the reducer.
+        expect(result.writesPerChannel[channel]).toBeUndefined();
+        expect(result.state.spec).toBeNull();
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
 });

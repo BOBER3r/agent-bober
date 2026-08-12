@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "graph": {
     "graphId": "coding",
-    "graphVersion": "1.2.0"
+    "graphVersion": "1.3.0"
   },
   "workload": {
     "specPath": ".bober/specs/spec-20260805-pge-graph-engineering.json",
@@ -18,50 +18,20 @@
     "ledger": 4096,
     "messages": 4096,
     "refs": 4096,
-    "spec": 4096,
-    "sprintContracts": 4096,
+    "spec": 131072,
+    "sprintContracts": 524288,
     "testAnchors": 4096,
     "verdict": 4096
   },
-  "rejections": [
-    {
-      "channel": "spec",
-      "nodeId": "plan_materialize",
-      "branchKey": null,
-      "bytes": 29214,
-      "limit": 4096,
-      "superstep": 12
-    },
-    {
-      "channel": "sprintContracts",
-      "nodeId": "plan_materialize",
-      "branchKey": null,
-      "bytes": 135106,
-      "limit": 4096,
-      "superstep": 12
-    }
-  ],
-  "failures": [
-    {
-      "nodeId": "plan_materialize",
-      "branchKey": null,
-      "superstep": 12,
-      "errorClass": "StateBloatError"
-    },
-    {
-      "nodeId": "plan_materialize",
-      "branchKey": null,
-      "superstep": 12,
-      "errorClass": "StateBloatError"
-    }
-  ],
-  "terminalNodeId": "graceful_failure",
-  "status": "completed",
-  "verdict": "failed",
-  "specChannelNullAtBoundary": true,
+  "rejections": null,
+  "failures": null,
+  "terminalNodeId": null,
+  "status": null,
+  "verdict": null,
+  "specChannelNullAtBoundary": null,
   "engineOutcome": {
     "kind": "threw",
-    "errorClass": "FinalizeWithoutSpecError"
+    "errorClass": "SuperstepLimitExceededError"
   },
   "corpusHeadroom": {
     "messages": {
