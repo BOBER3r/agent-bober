@@ -111,6 +111,16 @@ the graph engine write different ones for the same outcome, so a filter that acc
 `passed` silently handed the generator an empty history against a corpus recorded with the other
 word.
 
+That history is read through `listContracts` (`src/state/sprint-state.ts:132-144`), which
+**silently skips** any contract file that fails `SprintContractSchema` — by design, so one bad file
+cannot break listing for the rest. The consequence is that a schema-invalid contract is invisible
+to the generator, the evaluator and `.bober/progress.md` alike, with no warning anywhere (in this
+repository's own corpus, 60 of 256 files are skipped this way on legacy shape). `loadContract`
+(`:96-101`) is the opposite: it is strict and **throws** with the Zod issues formatted, so load a
+contract by id when you want to know why it does not appear. The narrower rule that no contract
+may carry a status outside `ContractStatusSchema` is pinned against the real corpus by
+`src/contracts/sprint-contract.test.ts`.
+
 ---
 
 ### `bober eval`

@@ -133,6 +133,7 @@ by the fleet head and threaded into each child's config (never re-derived from t
 
 | Store | Path | Schema / owner |
 |-------|------|----------------|
+| **Sprint contracts** | `.bober/contracts/<contractId>.json` | `SprintContractSchema` (`src/contracts/sprint-contract.ts`), managed by `src/state/sprint-state.ts`. **The two read paths fail differently, and the difference matters.** `loadContract` (`:96-101`) is **strict** — it `safeParse`s and **throws** with the Zod issues formatted. `listContracts` (`:132-144`) **silently skips** any file that fails validation (deliberate, so one bad file cannot break listing for the rest), which means a schema-invalid contract is invisible to every reader — generator history, evaluator history, `.bober/progress.md` — with no warning: 60 of this repository's own 256 files are skipped this way on legacy shape. If a contract does not appear where you expect it, `loadContract` it by id to see why. `src/contracts/sprint-contract.test.ts` reads the directory at run time and pins the narrower rule that every file's `status` is a legal `ContractStatusSchema` member. |
 | **Research jobs** | `.bober/research/jobs/<jobId>.json` | `ResearchJobSchema` (`src/research/types.ts`), managed by `research/job-store.ts`. See [`./research-scheduler.md`](./research-scheduler.md). |
 | **Loop sessions** | `.bober/sessions/<sessionId>.json` | `SessionRecordSchema` (`src/orchestrator/session-store.ts`), managed by `SessionStore` (same `safeParse`-both-ways / `null`-on-corrupt pattern as `job-store.ts`). The own agentic loop's provider-agnostic `Message[]` transcript + metadata, persisted per turn **only when opt-in** `AgenticLoopParams.session` is set — **no pipeline role auto-enables it**. `resumeSession` / `forkSession` (loop model-context continuity). **Distinct** from the chat `/resume` store (`.bober/chat/`) and do-bridge's `sessionId`. |
 | **Approval markers** | `.bober/` checkpoint marker files (`.pending.json` / `.approved.json` / `.rejected.json`) | `src/state/approval-state.ts`. Written by **both** the `approve` / `reject` CLI **and** the Telegram `/pending` inline buttons — **the same markers**, no separate mechanism. See [`./telegram.md`](./telegram.md). |
@@ -340,6 +341,7 @@ config file carries provider *selection*, never secrets.
 
 ```
 .bober/
+  contracts/<contractId>.json         # sprint contracts (SprintContractSchema; listContracts skips invalid files SILENTLY)
   memory/facts.db                     # FactStore — hub Findings, memory (default pool)
   memory/<namespace>/facts.db         # namespaced FactStore / fleet blackboard (WAL)
   research/jobs/<jobId>.json          # research job store
