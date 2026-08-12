@@ -63,6 +63,17 @@ export async function materializeContracts(
       contract.sprintNumber = i + 1;
       // bober: width-2 pad covers 1–99; widen to 3 if suite grows past 99.
       contract.contractId = `sprint-${spec.specId}-${String(i + 1).padStart(2, "0")}`;
+      // Security (sprint 4 of spec-20260812-terminal-vocabulary): strip a producer-supplied
+      // `version` on the seeded copy, alongside the four fields already normalized above.
+      // `SprintContractSchema.version` is bounded only by `.int().min(0)` — no upper bound —
+      // and as of this sprint the `sprintContracts` channel's join (`registry/reducers.ts`)
+      // consults it to decide which of two same-id contracts survives. An embedded contract
+      // is producer-supplied (an external/planner-authored spec's `spec.sprints`), so an
+      // inflated `version` here would permanently outrank the SETTLED copy `sprint_exit`
+      // writes (bounded by `sprintIterations.maxIterations`) — inverting exactly the
+      // ordering the rank-aware join exists to provide. The feature-derived branch below
+      // needs no equivalent strip: `createContract` never sets `version`.
+      delete contract.version;
       embedded.push(contract);
     }
 

@@ -265,6 +265,59 @@ describe("materializeContracts", () => {
     }
   });
 
+  it("sc-4 security directive: an embedded contract's producer-supplied `version` is stripped, not carried through", async () => {
+    // The rank-aware channel join (sprint 4 of spec-20260812-terminal-vocabulary) consults
+    // `SprintContract.version` — bounded only by `.int().min(0)`, no upper bound — to decide
+    // which of two same-id contracts wins in the `sprintContracts` channel. An embedded
+    // contract is producer-supplied (an external/planner-authored spec's `spec.sprints`), so
+    // without this guard a seeded copy carrying an inflated `version` would permanently
+    // outrank the settled copy `sprint_exit` writes, inverting the ordering the join exists
+    // to provide.
+    const { materializeContracts } = await import("./contract-materialization.js");
+    const cfg = { planner: { model: "x" } } as never;
+    const spec = specWith(1);
+
+    const embeddedEntry = {
+      contractId: "orig-id-1",
+      specId: "other-spec",
+      sprintNumber: 99,
+      title: "Embedded Sprint With Inflated Version",
+      description: "This embedded sprint carries an attacker-supplied version field.",
+      status: "agreed" as const,
+      version: 9999,
+      successCriteria: [
+        {
+          criterionId: "emb-1-c1",
+          description: "A criterion long enough to satisfy the schema's minimum length rule.",
+          verificationMethod: "unit-test" as const,
+          required: true,
+        },
+      ],
+      nonGoals: ["Do not implement anything unrelated to this fixture."],
+      stopConditions: ["The materialized contract carries no version field."],
+      definitionOfDone: "The embedded contract is materialized with version stripped.",
+      assumptions: [],
+      outOfScope: [],
+      dependsOn: [],
+      features: ["feat-x"],
+      iterationHistory: [],
+      lastEvalId: null,
+    };
+    expect(embeddedEntry.version).toBe(9999);
+    (spec as Record<string, unknown>).sprints = [embeddedEntry];
+
+    const out = await materializeContracts(spec, tmpDir, cfg);
+
+    expect(out).toHaveLength(1);
+    expect("version" in out[0]).toBe(false);
+    expect(out[0].version).toBeUndefined();
+
+    // And on disk: `saveContract` persists what materializeContracts returned, so the
+    // stripped-version guarantee survives the write, not merely the in-memory object.
+    const [listed] = await listContracts(tmpDir);
+    expect("version" in listed).toBe(false);
+  });
+
   it("S2-C3: malformed embedded entries fall back to feature-derived without throwing", async () => {
     const { materializeContracts } = await import("./contract-materialization.js");
     const cfg = { planner: { model: "x" } } as never;
