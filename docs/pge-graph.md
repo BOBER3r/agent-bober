@@ -1190,14 +1190,31 @@ serves both.
 - **What the `contracts` divergence IS, and what `spec-20260812-terminal-vocabulary` sprint 1
   did *not* move.** The two engines pick different words out of the same nine-member
   `ContractStatusSchema` for the same outcome: `runSprintCycle` writes `"passed"`, the graph's
-  `sprint_review` writes `"completed"` (`src/pge/nodes/sprint-review.ts:203`; the persisted
-  value is pinned at `src/pge/nodes/sprint-evaluate.test.ts:762`). That sprint converged the
+  `sprint_review` writes `"completed"` (`src/pge/nodes/sprint-review.ts:205`; the persisted
+  value is pinned at `src/pge/nodes/sprint-evaluate.test.ts:765`). That sprint converged the
   **readers** on the split rather than the writers: `src/contracts/sprint-contract.ts` is now
   the single definition site, exposing `isSettledContractStatus` (`passed | completed` —
   *finished successfully*) and `isTerminalContractStatus` (adds `failed` — *stopped at all*,
   derived from the settled set so the two cannot diverge), and six production readers call one
   of them. **No writer changed, so the divergence set above is unmoved** — `contracts` closes
-  when the two engines agree on the word, which is that spec's sprints 3 and 5.
+  when the two engines agree on the word.
+- **The `contracts` divergence went from three field deltas to FOUR at that spec's sprint 3, and
+  `contracts` will still be in the diverged set after sprint 5 closes the status word.** The
+  three were `status`, `evaluatorFeedback` and `generatorNotes` (the graph populates neither of
+  the latter two). Sprint 3 added a fourth: `sprint_exit` now writes a monotone
+  `version: attempts` on the settled contract (`src/pge/nodes/sprint-review.ts:212`), the
+  ordering discriminator `versionRank` (`src/pge/registry/reducers.ts:348-359`) reads, and
+  `runSprintCycle` writes none — pinned at
+  `src/orchestrator/workflow/conformance.engines.test.ts:406-408`. `conformance.ts`'s comparison
+  strips a **10-key** `VOLATILE_KEYS` list (`:65-76`) and `version` is deliberately **not** on it:
+  stripping it would hide a genuine difference in what the two engines write, which is the one
+  thing this harness exists to find. So closing the status delta at sprint 5 leaves **three** open
+  — `evaluatorFeedback`, `generatorNotes`, `version` — and `contracts` stays in the pinned
+  divergence set. Sprint 5's own contract pre-authorises exactly this: `sc-5-2` requires only that
+  the status delta be closed with the others "either closed too or **recorded with a stated
+  reason**", and its stop condition reads *"Closing the status delta does not close the contracts
+  divergence because another delta remains — that is a finding to record, not to force."* Full
+  record: [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-3.md).
 - **One graph-runtime reader was deliberately NOT migrated, and it is a live defect.**
   `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict from the count of
   `state.sprintContracts` entries whose status is the literal `"passed"` — a word no PGE run
@@ -1209,7 +1226,12 @@ serves both.
   `"proposed"` copy of each contract — `appendById` resolves a duplicate `contractId` by
   canonical order, and `"completed" < "proposed"` — asserted as a known limitation at
   `src/pge/nodes/sprint-evaluate.test.ts:786-789`, and the same mechanism the `pipelineResult`
-  divergence is blamed on (`src/orchestrator/workflow/conformance.engines.test.ts:291-297`). The rank-aware channel join is the other half. The site is
+  divergence is blamed on (`src/orchestrator/workflow/conformance.engines.test.ts:291-297`). The
+  rank-aware channel join is the other half, and as of `spec-20260812-terminal-vocabulary` sprint 3
+  it has a field to rank on: `SprintContract.version` (`src/contracts/sprint-contract.ts:213`,
+  optional and **never defaulted**) written as `attempts` at `sprint_exit`. Nothing consults it
+  yet — `mergeEntries` (`src/pge/registry/reducers.ts:183`) still resolves a duplicate id by
+  canonical order, so the seeded copy still wins and the assertion above still passes. The site is
   carried, with that reason, in `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist,
   so it cannot be forgotten silently.
 
