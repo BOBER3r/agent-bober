@@ -20,7 +20,9 @@ Artifact facts, as committed: `graphId: "coding"`, `graphVersion: "1.3.0"`,
 `formatVersion: 1`, `entry: "research_body"` — **44 nodes, 56 edges, 10 channels,
 2 subgraphs**. Node kinds: 15 `llm`, 13 `gate`, 7 `router`, 7 `tool`, 2 `subgraph`.
 Graph defaults: `concurrency: 1`, `durability: "superstep"`, `maxInlineBytes: 4096`,
-`modelTier: "light"`, `supervisorNodeId: "supervisor"`.
+`modelTier: "light"`, `supervisorNodeId: "supervisor"`. A default is what a channel inherits
+when it declares nothing of its own — as of `1.3.0` two channels declare their own
+`maxInlineBytes`, so do not read `4096` as the cap everywhere (see [Channels](#channels)).
 
 ## Contents
 
@@ -708,8 +710,9 @@ reach a terminal node — for a different reason.
 | `spec` write by `plan_materialize`, superstep 12 | **29,214** canonical bytes against a declared limit of **131,072** — admitted |
 | `sprintContracts` write by `plan_materialize`, superstep 12 | **135,106** canonical bytes against **524,288** — admitted |
 | failures recorded | none — the interpreter itself never returns a result (next row) |
-| `GraphRunResult` | never produced: the interpreter throws `SuperstepLimitExceededError` at `DEFAULT_MAX_SUPERSTEPS = 200` (`src/pge/runtime/interpreter.ts`) before reaching a terminal node |
+| `GraphRunResult` | never produced: the interpreter throws `SuperstepLimitExceededError` at `DEFAULT_MAX_SUPERSTEPS = 200` (`src/pge/runtime/interpreter.ts:386`, thrown at `:1060`) before reaching a terminal node |
 | what `PgeEngine.run` returned | nothing — the same interpreter throw propagates out of `PgeEngine.run` |
+| how the committed file records it | `engineOutcome: {kind: "threw", errorClass: "SuperstepLimitExceededError"}`, and `rejections` / `failures` / `terminalNodeId` / `status` / `verdict` / `specChannelNullAtBoundary` all **`null`** — there is no `GraphRunResult` to read them off. The `verdict: null` is load-bearing beyond this table: see the corpus-rebuild hazard below |
 
 Three consequences a reader should not have to derive:
 
@@ -806,7 +809,12 @@ completed in between and rewrote its own contract file. `src/pge/golden/__fixtur
 now excludes any spec whose `status` is not `"completed"` or `"abandoned"` (see
 `TERMINAL_SPEC_STATUSES` there) from both the `spec` and `sprintContracts` channels — a
 property of the spec, not a name, so a future spec that is mid-run when the corpus is
-rebuilt is excluded the same way automatically. **`messages` and `evaluations` do NOT share
+rebuilt is excluded the same way automatically. An exclusion is **not** a parse failure, so
+it is reported through its own `BuildReport` field, `excludedInFlightSpecs`, alongside
+`skippedSpecs` / `skippedContracts` rather than mixed into them. Applying it removed three
+committed entries — the corpus went from 123 to **120** (`spec` 52 → 50, `sprintContracts`
+28 → 27) — and **none of the three was its channel's maximum**, so no cap and no
+`graphVersion` follows from the removal. **`messages` and `evaluations` do NOT share
 this failure mode and were deliberately left alone**: their sources
 (`.bober/handoffs/gen-report-*.json`, `.bober/eval-results/*.json`) are written once per
 `(contract, iteration)` under an iteration-suffixed filename and are never rewritten in
@@ -823,13 +831,16 @@ MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts
 ```
 
 in that order — the second command reads the corpus the first one just wrote. **Known
-hazard as of `1.3.0`:** the committed measurement's `verdict` is currently `null` (the run
-now throws `SuperstepLimitExceededError` before reaching a terminal node — see the
-`corpusHeadroom`/`engineOutcome` discussion above), so a full rebuild right now would drop
-the `verdict` channel's only corpus entry and fail `sc-2-4`'s coverage check. That is a
-consequence of the same superstep ceiling recorded as sprint 4's territory, not something
-this sprint's cap-sizing work created or fixed; if you need to touch the corpus before that
-ceiling is addressed, prefer a surgical edit over `BUILD_WORKLOAD_CORPUS=1`.
+hazard as of `1.3.0` — the documented rebuild command above is currently unsafe to run.**
+The `verdict` channel's only corpus entry is sourced from the committed measurement's own
+`verdict`, and that field is now `null`: the run throws `SuperstepLimitExceededError` before
+reaching a terminal node, so there is no verdict to record (see the `engineOutcome` row in
+[The graph engine against a real workload](#the-graph-engine-against-a-real-workload)). A
+full rebuild right now would therefore drop the `verdict` channel's only entry and fail
+`sc-2-4`'s channel-coverage check. That is a consequence of the same superstep ceiling
+recorded as sprint 4's territory, not something the cap-sizing work created or fixed. Until
+that ceiling is addressed, prefer a surgical edit: sprint 3 needed to remove three entries
+and deleted those three files by name rather than rebuilding.
 
 **A regeneration is only partly pinned, and the asymmetry is worth knowing before you read the
 diff.** The `spec` and `sprintContracts` entries take *every* file that parses and are keyed to
