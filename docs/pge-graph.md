@@ -1202,10 +1202,10 @@ serves both.
   `contracts` will still be in the diverged set after sprint 5 closes the status word.** The
   three were `status`, `evaluatorFeedback` and `generatorNotes` (the graph populates neither of
   the latter two). Sprint 3 added a fourth: `sprint_exit` now writes a monotone
-  `version: attempts` on the settled contract (`src/pge/nodes/sprint-review.ts:212`), the
-  ordering discriminator `versionRank` (`src/pge/registry/reducers.ts:348-359`) reads, and
+  `version: attempts` on the settled contract (`src/pge/nodes/sprint-review.ts:215`), the
+  ordering discriminator `versionRank` (`src/pge/registry/reducers.ts:366-393`) reads, and
   `runSprintCycle` writes none — pinned at
-  `src/orchestrator/workflow/conformance.engines.test.ts:406-408`. `conformance.ts`'s comparison
+  `src/orchestrator/workflow/conformance.engines.test.ts:413-415`. `conformance.ts`'s comparison
   strips a **10-key** `VOLATILE_KEYS` list (`:65-76`) and `version` is deliberately **not** on it:
   stripping it would hide a genuine difference in what the two engines write, which is the one
   thing this harness exists to find. So closing the status delta at sprint 5 leaves **three** open
@@ -1215,25 +1215,42 @@ serves both.
   reason**", and its stop condition reads *"Closing the status delta does not close the contracts
   divergence because another delta remains — that is a finding to record, not to force."* Full
   record: [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-3.md).
-- **One graph-runtime reader was deliberately NOT migrated, and it is a live defect.**
+- **Sprint 4 closed the seeded-copy defect the `pipelineResult` bullet below used to blame, and
+  the divergence set stayed at four fields — because `pipelineResult`'s divergence REDUCES to
+  `contracts`'s, it does not close independently of it.**
+  `PipelineResult.completedSprints`/`failedSprints` carry whole `SprintContract` objects
+  (`src/orchestrator/pipeline.ts`), so once the channel join converges on the settled copy (this
+  sprint), what a caller sees inside `pipelineResult` is exactly what `listContracts` sees on
+  disk — no more, no less. The two engines' contracts still differ on the same four fields
+  (`status`, `evaluatorFeedback`, `generatorNotes`, `version`), so `pipelineResult` still diverges,
+  for the identical reason `contracts` does.
+  `src/orchestrator/workflow/conformance.engines.test.ts` pins this positively —
+  `pgeResult?.completedSprints[0]` now `toEqual`s the contract `listContracts` reads back off
+  disk — rather than merely dropping the field from the pinned set.
+- **One graph-runtime reader was deliberately NOT migrated, and it is a live defect — narrower
+  since `spec-20260812-terminal-vocabulary` sprint 4, but not closed.**
   `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict from the count of
   `state.sprintContracts` entries whose status is the literal `"passed"` — a word no PGE run
-  writes — so for a graph run that count is **zero**, and every consequence under-reports: a
+  writes — so for a graph run that count is still **zero**, and every consequence under-reports: a
   terminal-declared `success` that the interpreter downgrades because it recorded failures can
   only become `failed`, never `partial`; a declared `failed` never softens to `partial`; and a
   run that reaches a terminal without declaring a verdict is `failed` even when every branch
-  settled. **Migrating the literal alone would not fix it.** The same channel keeps the seeded
-  `"proposed"` copy of each contract — `appendById` resolves a duplicate `contractId` by
-  canonical order, and `"completed" < "proposed"` — asserted as a known limitation at
-  `src/pge/nodes/sprint-evaluate.test.ts:786-789`, and the same mechanism the `pipelineResult`
-  divergence is blamed on (`src/orchestrator/workflow/conformance.engines.test.ts:291-297`). The
-  rank-aware channel join is the other half, and as of `spec-20260812-terminal-vocabulary` sprint 3
-  it has a field to rank on: `SprintContract.version` (`src/contracts/sprint-contract.ts:213`,
-  optional and **never defaulted**) written as `attempts` at `sprint_exit`. Nothing consults it
-  yet — `mergeEntries` (`src/pge/registry/reducers.ts:183`) still resolves a duplicate id by
-  canonical order, so the seeded copy still wins and the assertion above still passes. The site is
-  carried, with that reason, in `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist,
-  so it cannot be forgotten silently.
+  settled. **Migrating the literal alone would still not fix it — but the reason changed.** Before
+  sprint 4, the channel had TWO independent problems: it kept the seeded `"proposed"` copy of each
+  contract (`appendById` resolved a duplicate `contractId` by canonical order, and
+  `"completed" < "proposed"`), AND no settled contract ever wrote the word `"passed"`. Sprint 4
+  fixed the first: `mergeEntries` (`src/pge/registry/reducers.ts`) now resolves a duplicate id by
+  RANK (`rankIsGreater`), reading the monotone `SprintContract.version`
+  (`src/contracts/sprint-contract.ts:213`, optional and **never defaulted**) `sprint_exit` writes
+  as `attempts`. The channel now holds the SETTLED copy — `status: "completed"`, not `"proposed"`
+  — pinned positively at `src/pge/nodes/sprint-evaluate.test.ts` (flipped from the sprint-3 known
+  limitation) and end to end at
+  `src/orchestrator/workflow/conformance.engines.test.ts` ("4. pipelineResult"). What remains is
+  the second problem alone: `"completed"` is still not the literal `"passed"` `verdictFrom`
+  compares against, so `passed` is still zero — the SAME vocabulary gap the `contracts` divergence
+  is made of, deferred to a later sprint by nonGoal 1 ("no writer changes"). The site stays in
+  `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist, now with an updated reason, so
+  it cannot be forgotten silently.
 
 ### The decision
 

@@ -288,16 +288,23 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     //    `status: "completed"` where `runSprintCycle` writes `"passed"`, and the graph never
     //    populates `evaluatorFeedback` or `generatorNotes`. Since sprint-spec-20260812-
     //    terminal-vocabulary-3, `sprint_exit` also writes `version` (the graph's monotone
-    //    ordering discriminator for `versionRank`, `registry/reducers.ts:348-359`) where the
+    //    ordering discriminator for `versionRank`, `registry/reducers.ts:366-393`) where the
     //    imperative engine writes none. Closing any of these means changing what
     //    `sprint_exit` writes, which `nodes/sprint-evaluate.test.ts` pins deliberately.
-    //  - `pipelineResult`: does NOT merely follow from `contracts` — it is worse, and it is
-    //    the sprint-12 limitation `nodes/sprint-review.ts` documents. `commit.finalize` reads
-    //    `state.sprintContracts`, and `appendById` resolves a duplicate `contractId` by
-    //    CANONICAL ORDER, under which every settled status sorts before the seeded
-    //    `"proposed"` — so the channel keeps the PLANNED copy and a pge run reports a
-    //    contract still marked `"proposed"` inside `completedSprints`. Closing it needs a
-    //    monotone discriminator on `SprintContract`, i.e. a shipped-schema revision.
+    //  - `pipelineResult`: NO LONGER the seeded-copy defect closed at sprint 4 of
+    //    spec-20260812-terminal-vocabulary. `appendById` now resolves a duplicate
+    //    `contractId` by RANK (`registry/reducers.ts`, `rankIsGreater`/`mergeEntries`)
+    //    instead of canonical order, so `commit.finalize` reads the SETTLED copy out of
+    //    `state.sprintContracts` and `completedSprints[0].status` is `"completed"`, not
+    //    `"proposed"` — the sprint-12 limitation `nodes/sprint-review.ts` used to document is
+    //    gone (verified below in "4. pipelineResult"). What remains is NOT independently
+    //    closable: `PipelineResult.completedSprints`/`failedSprints` carry whole
+    //    `SprintContract` objects, so `pipelineResult`'s divergence REDUCES EXACTLY to the
+    //    `contracts` divergence above (the same `status`/`evaluatorFeedback`/
+    //    `generatorNotes`/`version` deltas, none of them `VOLATILE_KEYS`,
+    //    `conformance.ts:65-76`) — it is a CONTAINER for the contract this sprint could not
+    //    change without violating nonGoal 1 ("no writer changes"). It closes exactly when
+    //    `contracts` closes, not before.
     //
     // Everything else — specs, evalResults, briefings, reviews, completionMarker — is
     // IDENTICAL across the two engines, which is the positive half of the claim and is
@@ -411,17 +418,26 @@ describe("EngineConformanceHarness against the REAL engines (sc-13-2)", () => {
     expect(tsContract.iterationHistory).toEqual([]);
     expect(pgeContract.iterationHistory).toEqual([]);
 
-    // ── 4. pipelineResult: the graph reports a contract still marked "proposed" ──
+    // ── 4. pipelineResult: the sprint-12 seeded-copy defect is CLOSED (sprint 4 of
+    // spec-20260812-terminal-vocabulary) — but the DIVERGENCE is not, because it reduces
+    // exactly to the `contracts` divergence above ──
     //
-    // The sprint-12 limitation `nodes/sprint-review.ts` documents, observed end to end for
-    // the first time: `commit.finalize` classifies the branch as completed from
-    // `branchStatus`, but the contract it REPORTS comes from `state.sprintContracts`, whose
-    // `appendById` reducer resolves the duplicate `contractId` by canonical order and keeps
-    // the seeded `"proposed"` copy. So the settled status reaches `.bober/contracts/` and
-    // never reaches the returned result.
+    // `appendById` now resolves the duplicate `contractId` by RANK
+    // (`registry/reducers.ts`, `rankIsGreater`) rather than canonical order, so
+    // `commit.finalize` reads the SETTLED copy out of `state.sprintContracts`: the contract
+    // inside `completedSprints` is no longer stuck at the seeded `"proposed"`.
     expect(tsResult?.completedSprints.map((c) => c.status)).toEqual(["passed"]);
-    expect(pgeResult?.completedSprints.map((c) => c.status)).toEqual(["proposed"]);
+    expect(pgeResult?.completedSprints.map((c) => c.status)).toEqual(["completed"]);
     expect(pgeResult?.failedSprints).toEqual([]);
+
+    // The positive half of the claim, and why sc-4-5's literal wording ("the divergence is
+    // CLOSED") rests on a false premise: `completedSprints[0]` is not merely "not proposed"
+    // any more, it is the IDENTICAL object `listContracts` reads back off disk —
+    // `PipelineResult.completedSprints` is a CONTAINER for `SprintContract` objects, so
+    // whatever still differs between the two engines' contracts (the four `contracts`
+    // deltas asserted above) is exactly what still differs here. A container cannot
+    // converge before its contents do.
+    expect(pgeResult?.completedSprints[0]).toEqual(pgeContract);
   }, 60_000);
 
   it("is EQUIVALENT on every field outside the recorded divergence set", async () => {
