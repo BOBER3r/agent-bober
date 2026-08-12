@@ -301,16 +301,18 @@ describe("the regression runner over the committed dataset", () => {
     });
   });
 
-  it("fails when a quarter of the executed cases stop reproducing their expectation", async () => {
+  it("fails when a third of the executed cases stop reproducing their expectation", async () => {
     let seen = 0;
     const report = await runGoldenRegressionFromDir({
       dir: GOLDEN_DIR,
       execute: (goldenCase) => {
         seen += 1;
-        // Every fourth case regresses. For any executed-case count of four or more that is
-        // a pass rate of at most 75 percent, so it cannot clear the default threshold of 80
-        // however many cases the replay set grows to.
-        return seen % 4 === 0
+        // Every third case regresses — a ~33 percent fail rate. At the dataset's floor of
+        // GOLDEN_MIN_REPLAY_CASES (5) that is one failure and an 80 percent pass rate,
+        // which the threshold's strict `>` already refuses; from six cases up it is at
+        // least two failures and a pass rate at or below 75 percent. Either way it cannot
+        // clear the default threshold of 80, however many cases the replay set grows to.
+        return seen % 3 === 0
           ? { contracts: [{ contractId: "drifted" }] }
           : goldenCase.expected.artifacts;
       },

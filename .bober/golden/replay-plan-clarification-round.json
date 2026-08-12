@@ -12,7 +12,7 @@
   "enforcement": "replay",
   "graph": {
     "graphId": "coding",
-    "graphVersion": "1.3.0"
+    "graphVersion": "1.4.0"
   },
   "input": {
     "featureRequest": "Accept an optional retry block in the pipeline config and validate it.",
@@ -1198,6 +1198,6 @@
         }
       ]
     },
-    "notes": "The only committed case that executes plan_clarify, and the case that distinguishes the two ways a HITL gate behaves under an autopilot noop mechanism: plan_clarify declares NO gated effect, so noop lets it proceed, whereas the commit node declares a git effect and is refused outright (the sprint-13 divergence). A change that made noop grant gated effects would turn the commit refusal green and leave this case untouched, which is why both are pinned. NOTE the bound is NOT driven here: a planner that never stops asking exhausts planClarifyRounds and reaches graceful_failure with state.spec still null, which makes commit.finalize throw FinalizeWithoutSpecError instead of returning a failed PipelineResult. That path is a defect, recorded in docs/pge-graph.md, and it cannot be captured until it is fixed."
+    "notes": "The case that distinguishes the two ways a HITL gate behaves under an autopilot noop mechanism: plan_clarify declares NO gated effect, so noop lets it proceed, whereas the commit node declares a git effect and is refused outright (the sprint-13 divergence). A change that made noop grant gated effects would turn the commit refusal green and leave this case untouched, which is why both are pinned. NOTE the bound is NOT driven here: a planner that settles on its second draft never spends the planClarifyRounds budget. See replay-plan-clarify-rounds-exhausted below for the planner that never settles at all."
   }
 }

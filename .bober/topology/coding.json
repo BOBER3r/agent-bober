@@ -50,6 +50,13 @@
       "scope": "public"
     },
     {
+      "id": "specDraft",
+      "maxInlineBytes": 65536,
+      "reducerRef": "replaceIfNewer",
+      "schemaRef": "PlanSpec",
+      "scope": "public"
+    },
+    {
       "id": "sprintContracts",
       "maxInlineBytes": 524288,
       "reducerRef": "appendById",
@@ -71,7 +78,7 @@
       "scope": "public"
     }
   ],
-  "checksum": "sha256:e4909da6ef351939e507c320741e6e669d3268eaca0b76fe623a9aa3359b45a5",
+  "checksum": "sha256:a1df4bf023618df2fe0b19817924986ec290841b113381f5652aa98da2dd9aea",
   "defaults": {
     "concurrency": 1,
     "durability": "superstep",
@@ -500,7 +507,7 @@
   "entry": "research_body",
   "formatVersion": 1,
   "graphId": "coding",
-  "graphVersion": "1.3.0",
+  "graphVersion": "1.4.0",
   "nodes": [
     {
       "doc": "Creates the run's commit. Reachable only behind the approval gate, which is what makes the git effect blockable fail-closed.",
@@ -1091,7 +1098,7 @@
       ]
     },
     {
-      "doc": "Produces a PlanSpec draft with sprint contracts and clarification questions from the research digest.",
+      "doc": "Produces a PlanSpec draft with sprint contracts and clarification questions from the research digest. Sole writer of the scalar specDraft channel.",
       "effects": [],
       "id": "plan_draft",
       "inputPorts": [
@@ -1120,7 +1127,8 @@
       "title": "Draft the plan",
       "writes": [
         "ledger",
-        "messages"
+        "messages",
+        "specDraft"
       ]
     },
     {

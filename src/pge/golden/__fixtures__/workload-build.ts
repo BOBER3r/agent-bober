@@ -15,6 +15,7 @@ import {
   seedCommittedArtifact,
   wholeGraphBindings,
 } from "../../engine/__fixtures__/whole-graph.js";
+import { REAL_SPEC_ID, REAL_SPEC_PATH, realPlanSpec } from "../../engine/__fixtures__/real-workload.js";
 import { anchorId } from "../../nodes/anchors.js";
 import type { ChannelUpdate } from "../../runtime/commit.js";
 import { createFixedClock } from "../../runtime/commit.js";
@@ -51,13 +52,15 @@ import type { WorkloadEntry, WorkloadProvenance } from "../workload.js";
  *  3. `testAnchors` / `verdict` — derived from one real committed contract's own
  *     `successCriteria` (via the real {@link anchorId}) and from sprint 1's own committed
  *     measurement's real `verdict`, respectively.
- *  4. `refs` / `counters` / `branchStatus` / `ledger` — no committed file anywhere in the
- *     repository carries one (see the spec's own assumptions). OBSERVED instead: a real
- *     `PgeEngine` run over `wholeGraphBindings`/`conformanceConfig()` (the same deterministic
- *     collaborator set the conformance harness runs), with `RunContext.commit` wrapped to
- *     record every `ChannelUpdate` the interpreter actually committed. `GraphRunResult`
- *     carries no per-write values — only the merged final state — so the spy is the only way
- *     to recover the genuine per-write payload.
+ *  4. `refs` / `counters` / `branchStatus` / `ledger` / `specDraft` — no committed file
+ *     anywhere in the repository carries one (see the spec's own assumptions; `specDraft`
+ *     was added sprint 7 and shares the same problem — it is a channel this checkout has
+ *     never written to any `.bober/` artifact). OBSERVED instead: a real `PgeEngine` run
+ *     over `wholeGraphBindings`/`conformanceConfig()` (the same deterministic collaborator
+ *     set the conformance harness runs), with `RunContext.commit` wrapped to record every
+ *     `ChannelUpdate` the interpreter actually committed. `GraphRunResult` carries no
+ *     per-write values — only the merged final state — so the spy is the only way to
+ *     recover the genuine per-write payload.
  */
 
 // ── Report ──────────────────────────────────────────────────────────
@@ -349,11 +352,42 @@ async function buildVerdictEntry(write: (entry: WorkloadEntry) => Promise<void>)
   });
 }
 
-// ── 4. refs, counters, branchStatus, ledger — observed from a real run ──
+// ── 3b. specDraft's real-workload-sized entry (sprint 7) ─────────────
+
+/**
+ * This repository's own real committed plan, restated under the `specDraft` channel.
+ *
+ * `spec` and `specDraft` share a schema, and — for a run whose clarification settles
+ * without a round trip, the common case, including this fixture — hold IDENTICAL bytes by
+ * construction: `plan_draft` (`src/pge/nodes/plan.ts`) writes its draft to `specDraft` on
+ * the SAME call whose output `plan_materialize` later writes to `spec` unchanged. So
+ * `REAL_SPEC_ID`'s own committed file — already `spec`'s corpus entry
+ * (`spec-${REAL_SPEC_ID}.json`) — is an equally real `specDraft` payload, not an invented
+ * one, and it is the SAME spec `real-workload.test.ts` plans with, so a `specDraft` cap
+ * sized off it is sized off the exact write that measurement makes. The small
+ * `specDraft-observed-*` entries below (a fixture-sized draft) are not enough on their own
+ * — see the `1.4.0` changelog entry in docs/pge-graph.md.
+ */
+export async function buildSpecDraftRealFixtureEntry(write: (entry: WorkloadEntry) => Promise<void>): Promise<void> {
+  const spec = await realPlanSpec();
+  await write({
+    entryId: `specDraft-${REAL_SPEC_ID}`,
+    channel: "specDraft",
+    provenance: { kind: "file", path: relative(REPO_ROOT, REAL_SPEC_PATH) },
+    value: spec,
+  });
+}
+
+// ── 4. refs, counters, branchStatus, ledger, specDraft — observed from a real run ──
 
 const OBSERVE_RUN_ID = "run-workload-observe";
 const OBSERVE_INSTANT = "2026-08-12T00:00:00.000Z";
-const OBSERVED_CHANNELS = ["refs", "counters", "branchStatus", "ledger"] as const;
+/**
+ * `specDraft` (sprint 7, spec-20260812-pge-real-workload-errors) joined this list rather
+ * than gaining a `spec`-style `"file"` entry: no committed `.bober/` artifact carries a
+ * plan DRAFT, only a materialised `spec`, so an observed run is the only real source.
+ */
+const OBSERVED_CHANNELS = ["refs", "counters", "branchStatus", "ledger", "specDraft"] as const;
 
 /**
  * Every `ChannelUpdate` a real `PgeEngine` run committed, captured through
@@ -409,7 +443,13 @@ async function observeChannelUpdates(): Promise<ChannelUpdate[]> {
   }
 }
 
-async function buildObservedEntries(write: (entry: WorkloadEntry) => Promise<void>): Promise<void> {
+/**
+ * Exported (sprint 7) so a SURGICAL corpus addition — one new channel's entries, without
+ * rebuilding the other three sources and risking the same "corpus invalidates itself
+ * mid-run" hazard sprint 3 hit (see {@link TERMINAL_SPEC_STATUSES}) — can call exactly this
+ * step rather than the whole {@link buildWorkloadCorpus}.
+ */
+export async function buildObservedEntries(write: (entry: WorkloadEntry) => Promise<void>): Promise<void> {
   const updates = await observeChannelUpdates();
   const wanted = new Set<string>(OBSERVED_CHANNELS);
 
@@ -458,6 +498,7 @@ export async function buildWorkloadCorpus(): Promise<BuildReport> {
   await buildMessageEntries(write);
   await buildAnchorEntry(write);
   await buildVerdictEntry(write);
+  await buildSpecDraftRealFixtureEntry(write);
   await buildObservedEntries(write);
 
   return { written, skippedSpecs, skippedContracts, excludedInFlightSpecs };

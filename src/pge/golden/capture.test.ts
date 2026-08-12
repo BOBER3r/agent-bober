@@ -75,22 +75,29 @@ interface Scenario {
 }
 
 /**
- * The planner asks a clarifying question for the first `rounds` drafts, then settles.
+ * The planner asks a clarifying question for the first `rounds` drafts, then settles —
+ * unless `rounds` is large enough that the run's own `planClarifyRounds` budget (3) is
+ * spent first, in which case it never settles at all.
  *
- * `rounds` is deliberately SMALL. Nothing answers the question — under the autopilot config
- * every golden run executes with, the `post-plan` checkpoint resolves to the `noop`
- * mechanism and no resume message carrying answers is ever produced — so `plan_clarify`
- * folds nothing in and the planner is simply asked again. With `rounds: 1` the second draft
- * settles and the run completes, which is what puts `plan_clarify` on an executed path.
+ * Nothing answers the question — under the autopilot config every golden run executes
+ * with, the `post-plan` checkpoint resolves to the `noop` mechanism and no resume message
+ * carrying answers is ever produced — so `plan_clarify` folds nothing in and the planner
+ * is simply asked again. With `rounds: 1` the second draft settles and the run completes,
+ * which is what puts `plan_clarify` on an executed path. With `rounds: 99` the planner
+ * never accepts, so `planClarifyRounds` runs out first — see
+ * `replay-plan-clarify-rounds-exhausted` below.
  *
- * A planner that NEVER settles cannot be captured today, and the reason is worth stating
- * because it is a defect and not a limitation of this fixture: exhausting `planClarifyRounds`
- * reaches `graceful_failure` with `state.spec` still null, and `commit.finalize` throws
- * `FinalizeWithoutSpecError` rather than returning a failed `PipelineResult`. Recorded in
- * docs/pge-graph.md. When that is fixed, a `clarifyingBindings(99)` scenario pins the bound.
+ * Until sprint 7 of spec-20260812-pge-real-workload-errors, a planner that never settled
+ * could not be captured at all: exhausting `planClarifyRounds` reached `graceful_failure`
+ * with `state.spec` still null, and `commit.finalize` threw `FinalizeWithoutSpecError`
+ * rather than returning a failed `PipelineResult` — `captureGoldenCase` cannot record a
+ * run that never produces a result. `commit.finalize` now falls back to `state.specDraft`
+ * (`plan_draft`'s own channel, written on every round) and resolves instead, which is what
+ * makes the `rounds: 99` scenario capturable. See docs/pge-graph.md's "A defect this
+ * coverage work surfaced" section.
  *
- * The spec is DERIVED from `goldenPlanSpec()` rather than rebuilt, so the clarifying case
- * and the four settled cases disagree about exactly one thing: the open question.
+ * The spec is DERIVED from `goldenPlanSpec()` rather than rebuilt, so every clarifying
+ * case and the settled cases disagree about exactly one thing: the open question.
  */
 function clarifyingBindings(rounds: number): BindingsFactory {
   let asked = 0;
@@ -193,9 +200,20 @@ const SCENARIOS: readonly Scenario[] = [
       "Pin the clarification cycle: a first draft carrying an open question must reach plan_clarify, re-draft, and then settle — so the gate is on the executed path rather than merely declared in the artifact.",
     tags: ["replay", "region:plan", "loop:planClarifyRounds", "hitl"],
     notes:
-      "The only committed case that executes plan_clarify, and the case that distinguishes the two ways a HITL gate behaves under an autopilot noop mechanism: plan_clarify declares NO gated effect, so noop lets it proceed, whereas the commit node declares a git effect and is refused outright (the sprint-13 divergence). A change that made noop grant gated effects would turn the commit refusal green and leave this case untouched, which is why both are pinned. NOTE the bound is NOT driven here: a planner that never stops asking exhausts planClarifyRounds and reaches graceful_failure with state.spec still null, which makes commit.finalize throw FinalizeWithoutSpecError instead of returning a failed PipelineResult. That path is a defect, recorded in docs/pge-graph.md, and it cannot be captured until it is fixed.",
+      "The case that distinguishes the two ways a HITL gate behaves under an autopilot noop mechanism: plan_clarify declares NO gated effect, so noop lets it proceed, whereas the commit node declares a git effect and is refused outright (the sprint-13 divergence). A change that made noop grant gated effects would turn the commit refusal green and leave this case untouched, which is why both are pinned. NOTE the bound is NOT driven here: a planner that settles on its second draft never spends the planClarifyRounds budget. See replay-plan-clarify-rounds-exhausted below for the planner that never settles at all.",
     featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
     makeBindings: () => clarifyingBindings(1),
+  },
+  {
+    caseId: "replay-plan-clarify-rounds-exhausted",
+    title: "a plan that never settles exhausts planClarifyRounds and reports failure",
+    intent:
+      "Pin the previously-uncapturable defect fixed by sprint 7 of spec-20260812-pge-real-workload-errors: a planner that never accepts an answer exhausts plan_clarify_check's planClarifyRounds bound of 3 and reaches graceful_failure with state.spec still null. commit.finalize now falls back to state.specDraft and resolves with success false, needsClarification true and a populated errors array, instead of throwing FinalizeWithoutSpecError.",
+    tags: ["replay", "region:plan", "loop:planClarifyRounds", "bounded-exit", "needsClarification"],
+    notes:
+      "Before sprint 7 this scenario could not be captured at all — captureGoldenCase cannot record a run that never produces a result, and this run used to throw. The pinned call count on plan_draft IS the assertion: exactly three planner calls, matching plan_clarify_check's declared bound; a fourth would mean the bound did not bite. See docs/pge-graph.md's 'A defect this coverage work surfaced' section for the full history.",
+    featureRequest: "Accept an optional retry block in the pipeline config and validate it.",
+    makeBindings: () => clarifyingBindings(99),
   },
 ];
 

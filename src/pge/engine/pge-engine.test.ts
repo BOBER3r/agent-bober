@@ -40,6 +40,8 @@ vi.mock("../../orchestrator/pipeline.js", () => ({
 import { logger } from "../../utils/logger.js";
 import { runTsPipeline } from "../../orchestrator/pipeline.js";
 import type { PipelineFailure, PipelineResult } from "../../orchestrator/pipeline.js";
+import type { PlanSpec } from "../../contracts/spec.js";
+import { saveSpec } from "../../state/plan-state.js";
 import { TsPipelineEngine } from "../../orchestrator/workflow/ts-engine.js";
 import type { PipelineEngine, RunOptions } from "../../orchestrator/workflow/engine.js";
 import { createDefaultConfig } from "../../config/schema.js";
@@ -62,8 +64,9 @@ import { createEffectRegistry } from "../registry/effects.js";
 import { BudgetExceededError } from "../runtime/ledger.js";
 import { createFixedClock } from "../runtime/commit.js";
 import { tracePath } from "../runtime/trace.js";
-import { FAIL_CLOSED_ERROR_CLASS } from "../runtime/interpreter.js";
+import { FAIL_CLOSED_ERROR_CLASS, LOOP_EXHAUSTED_ERROR_CLASS } from "../runtime/interpreter.js";
 import type { GraphInterpreter, GraphRunResult } from "../runtime/interpreter.js";
+import type { CodingBindings } from "../registry/index.js";
 import {
   GOLDEN_GRAPH_ID,
   goldenContracts,
@@ -74,6 +77,7 @@ import {
 import {
   CODING_GRAPH_ID as WHOLE_GRAPH_CODING_GRAPH_ID,
   conformanceConfig,
+  goldenPlanSpec,
   seedCommittedArtifact,
   wholeGraphBindings,
 } from "./__fixtures__/whole-graph.js";
@@ -412,6 +416,78 @@ describe("PgeEngine — the `errors` channel (sc-5-1, sc-5-2, sc-5-4)", () => {
     expect(Object.keys(result).sort()).toEqual(
       ["completedSprints", "duration", "failedSprints", "spec", "success"].sort(),
     );
+  });
+});
+
+// ── A plan that never settles (sprint 7 of spec-20260812-pge-real-workload-errors) ──
+//
+// sc-7-3  commit.finalize falls back to specDraft and RESOLVES instead of throwing
+//         FinalizeWithoutSpecError, with success false and needsClarification true.
+// sc-7-4  the narrowed FinalizeWithoutSpecError still exists — this file's OTHER branch
+//         (neither spec nor specDraft) is proved directly against the boundary in
+//         commit.test.ts; this describes the branch a real run actually takes.
+
+describe("PgeEngine — a plan that never settles (sc-7-3)", () => {
+  /** The planner asks the SAME open question on every round, and never accepts an answer. */
+  function neverSettlingPlannerBindings(input: PgeRegistriesInput): CodingBindings {
+    const base = wholeGraphBindings(input);
+    return {
+      ...base,
+      planner: async () => {
+        const spec: PlanSpec = {
+          ...goldenPlanSpec(),
+          status: "needs-clarification",
+          clarificationQuestions: [
+            {
+              questionId: "q-retry-scope",
+              category: "scope",
+              question: "Should the retry block apply to every provider or only the default one?",
+              ambiguityWeight: 5,
+            },
+          ],
+          resolvedClarifications: [],
+        };
+        // The shipped planner persists whatever draft it produced; a fake that skipped
+        // this would leave `.bober/specs/` disagreeing with a real run for a reason that
+        // is not a behaviour change.
+        await saveSpec(input.projectRoot, spec);
+        return { kind: "needs-clarification" as const, spec };
+      },
+    };
+  }
+
+  it("resolves with success false, needsClarification true and a populated errors array, instead of throwing FinalizeWithoutSpecError", async () => {
+    const root = await mkTmp();
+    await seedCommittedArtifact(root);
+
+    const result = await new PgeEngine({
+      graphId: WHOLE_GRAPH_CODING_GRAPH_ID,
+      bindings: (input) => neverSettlingPlannerBindings(input),
+    }).run(
+      "Accept an optional retry block in the pipeline config and validate it.",
+      root,
+      conformanceConfig(),
+      { runId: "run-clarify-exhausted" },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.needsClarification).toBe(true);
+    expect(result.spec.clarificationQuestions.length).toBeGreaterThan(0);
+    expect(result.completedSprints).toEqual([]);
+    expect(result.failedSprints).toEqual([]);
+
+    // sc-7-3: the machinery sprint 5 shipped populates `errors` once finalize stops
+    // throwing — the interpreter records a LoopExhausted TaskFailure by construction the
+    // moment `plan_clarify_check`'s declared bound reroutes to its onExhausted target.
+    expect("errors" in result).toBe(true);
+    const errors = result.errors as readonly PipelineFailure[];
+    expect(errors.length).toBeGreaterThan(0);
+    const exhausted = errors.find((failure) => failure.errorClass === LOOP_EXHAUSTED_ERROR_CLASS);
+    expect(exhausted).toBeDefined();
+    expect(exhausted!.nodeId).toBe("plan_clarify_check");
+
+    // No completion marker: this run never reached a terminal artifact set.
+    await expect(stat(completionMarkerPath(root, "run-clarify-exhausted"))).rejects.toThrow();
   });
 });
 

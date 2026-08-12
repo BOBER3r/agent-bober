@@ -526,11 +526,40 @@ describe("the commit boundary is the only clock source in the sprint's modules",
 // ── finalize ─────────────────────────────────────────────────────────
 
 describe("CommitBoundary.finalize", () => {
-  it("refuses to finalize a run that never produced a spec", async () => {
+  // sc-7-4 — FinalizeWithoutSpecError narrowed, not deleted: both branches proved.
+  it("refuses to finalize a run that produced NEITHER spec nor specDraft", async () => {
     const boundary = createCommitBoundary();
+    const state = goldenInitialState("run-commit", root);
+    expect(state.spec).toBeNull();
+    expect(state.specDraft).toBeNull();
+    await expect(boundary.finalize(state, ctxFor())).rejects.toBeInstanceOf(
+      FinalizeWithoutSpecError,
+    );
+  });
+
+  // sc-7-3 — falls back to specDraft and RESOLVES instead of throwing.
+  it("falls back to specDraft when spec is null, and resolves a failed PipelineResult instead of throwing", async () => {
+    const boundary = createCommitBoundary();
+    const draft = goldenPlanSpec();
+    const state = {
+      ...goldenInitialState("run-commit", root),
+      specDraft: draft,
+    };
+    expect(state.spec).toBeNull();
+
+    const result = await boundary.finalize(state, ctxFor());
+
+    expect(result.success).toBe(false);
+    expect(result.needsClarification).toBe(true);
+    expect(result.spec).toEqual(draft);
+    expect(result.completedSprints).toEqual([]);
+    expect(result.failedSprints).toEqual([]);
+    expect(typeof result.duration).toBe("number");
+    // No completion marker or pipeline-complete history line: this run never reached its
+    // terminal artifact set, unlike a finalizePipelineRun-backed success or failure.
     await expect(
-      boundary.finalize(goldenInitialState("run-commit", root), ctxFor()),
-    ).rejects.toBeInstanceOf(FinalizeWithoutSpecError);
+      readFile(join(root, ".bober", "runs", "run-commit.completed.json"), "utf-8"),
+    ).rejects.toThrow();
   });
 
   it("splits contracts into completed and failed by status", async () => {

@@ -231,6 +231,13 @@ describe("runGoldenGate with its own default executor", () => {
   /**
    * THE negative control this sprint owes: a case that stops reproducing its artifacts
    * fails the gate the CI job runs, with no executor injected by the test.
+   *
+   * Mutates the two `replay-full-run-evaluation-*` cases specifically — both are whole
+   * runs that materialise sprint contracts, so both are guaranteed a non-empty
+   * `expected.artifacts.contracts` to drift. One mutated case out of six is a pass rate
+   * of ~83 percent, which now CLEARS the 80 percent threshold (it did not at five); two
+   * mutated cases (~67 percent pass) is comfortably below it regardless of how many more
+   * cases the replay set grows to hold.
    */
   it(
     "exits non-zero when a committed replay case stops reproducing its expectation",
@@ -239,18 +246,22 @@ describe("runGoldenGate with its own default executor", () => {
       const files = (await readdir(GOLDEN_DIR)).sort();
       for (const file of files) await copyFile(join(GOLDEN_DIR, file), join(dir, file));
 
-      const target = join(dir, `${replayCases[0].caseId}.json`);
-      const draft = JSON.parse(await readFile(target, "utf-8")) as GoldenCase;
-      const contracts = draft.expected.artifacts.contracts as Record<string, unknown>[];
-      contracts[0].title = "a title no run produces";
-      await writeFile(target, JSON.stringify(draft, null, 2), "utf-8");
-      // Still a valid case — only its expectation changed, which is what a runtime
-      // regression looks like from the dataset's side.
-      expect(parseGoldenCase(draft, target).ok).toBe(true);
+      const drifted = replayCases.filter((c) => c.caseId.startsWith("replay-full-run-evaluation-"));
+      expect(drifted.length).toBe(2);
+      for (const goldenCase of drifted) {
+        const target = join(dir, `${goldenCase.caseId}.json`);
+        const draft = JSON.parse(await readFile(target, "utf-8")) as GoldenCase;
+        const contracts = draft.expected.artifacts.contracts as Record<string, unknown>[];
+        contracts[0].title = "a title no run produces";
+        await writeFile(target, JSON.stringify(draft, null, 2), "utf-8");
+        // Still a valid case — only its expectation changed, which is what a runtime
+        // regression looks like from the dataset's side.
+        expect(parseGoldenCase(draft, target).ok).toBe(true);
+      }
 
       const result = await runGoldenGate({ projectRoot: REPO_ROOT, dir });
       expect(result.exitCode).toBe(GOLDEN_EXIT.belowThreshold);
-      expect(result.lines.join("\n")).toContain(`FAIL ${replayCases[0].caseId}`);
+      expect(result.lines.join("\n")).toContain(`FAIL ${drifted[0].caseId}`);
     },
     180_000,
   );

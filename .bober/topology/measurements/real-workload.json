@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "graph": {
     "graphId": "coding",
-    "graphVersion": "1.3.0"
+    "graphVersion": "1.4.0"
   },
   "workload": {
     "specPath": ".bober/specs/spec-20260805-pge-graph-engineering.json",
@@ -19,6 +19,7 @@
     "messages": 4096,
     "refs": 4096,
     "spec": 131072,
+    "specDraft": 65536,
     "sprintContracts": 524288,
     "testAnchors": 4096,
     "verdict": 4096

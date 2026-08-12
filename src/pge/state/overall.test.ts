@@ -29,11 +29,12 @@ import {
 // ── sc-5-1: the pinned key set ──────────────────────────────────────
 
 /**
- * The fifteen public channels, sorted.
+ * The sixteen public channels, sorted.
  *
  * Amending this list is a deliberate act: the architecture's prose says "Exactly 14
- * keys" over a schema that enumerates fifteen, and the enumeration wins — every one of
- * these has a writer in the shipped `coding` topology.
+ * keys" over a schema that enumerates sixteen (as of sprint 7 of
+ * spec-20260812-pge-real-workload-errors, which added `specDraft`), and the enumeration
+ * wins — every one of these has a writer in the shipped `coding` topology.
  */
 const PINNED_OVERALL_STATE_KEYS = [
   "branchStatus",
@@ -47,6 +48,7 @@ const PINNED_OVERALL_STATE_KEYS = [
   "refs",
   "runId",
   "spec",
+  "specDraft",
   "specId",
   "sprintContracts",
   "testAnchors",
@@ -58,8 +60,8 @@ describe("OverallState key snapshot", () => {
     expect(overallStateKeys()).toEqual(PINNED_OVERALL_STATE_KEYS);
   });
 
-  it("pins the key-count budget at 15, matching the key set", () => {
-    expect(OVERALL_STATE_KEY_BUDGET).toBe(15);
+  it("pins the key-count budget at 16, matching the key set", () => {
+    expect(OVERALL_STATE_KEY_BUDGET).toBe(16);
     expect(PINNED_OVERALL_STATE_KEYS).toHaveLength(OVERALL_STATE_KEY_BUDGET);
     expect(overallStateKeys()).toHaveLength(OVERALL_STATE_KEY_BUDGET);
   });
@@ -235,6 +237,7 @@ describe("initialOverallState", () => {
       specId: null,
       currentPhase: "init",
       spec: null,
+      specDraft: null,
       sprintContracts: [],
       evaluations: [],
       messages: [],

@@ -55,6 +55,18 @@ import type { OverallState } from "../state/overall.js";
  * construction, which is the property a "last writer wins" rule would quietly lose. Three
  * further keys — `runId`, `projectRoot`, `featureRequest` — are run identity and are
  * refused outright.
+ *
+ * ── `finalize` is a boundary METHOD, distinct from the unreachable `finalize` NODE ──
+ *
+ * `PgeEngine.run` calls {@link CommitBoundary.finalize} unconditionally at the end of
+ * every run, whatever terminal node the interpreter actually reached — it is not the
+ * graph's own `finalize` tool node (whose only inbound edge is `commit -> finalize`, and
+ * which stays unreachable while `commit` is FAIL_CLOSED-refused under the shipped
+ * autopilot mechanism). Sprint 7 of spec-20260812-pge-real-workload-errors taught this
+ * method to fall back to `state.specDraft` when `state.spec` is null, so a plan whose
+ * clarification never converges RESOLVES with a failed `PipelineResult` instead of
+ * throwing {@link FinalizeWithoutSpecError} — see that class and this method for the
+ * narrowed condition.
  */
 
 // ── Errors ──────────────────────────────────────────────────────────
@@ -127,13 +139,23 @@ export class ImmutableStateKeyError extends Error {
   }
 }
 
-/** `finalize` on a run that never produced a spec. */
+/**
+ * `finalize` on a run that never produced EITHER a committed spec or a plan draft.
+ *
+ * NARROWED at sprint 7 of spec-20260812-pge-real-workload-errors, not deleted: before
+ * that sprint this threw whenever `state.spec` was null, including a planner that never
+ * stopped asking clarifying questions — a run whose plan never settled crashed the
+ * engine instead of reporting a failure. `finalize` (below) now falls back to
+ * `state.specDraft` (`plan_draft`'s own channel, written on every round) when `spec` is
+ * null, so this error is reachable only when NEITHER `spec` NOR `specDraft` was ever
+ * written — a run that never dispatched `plan_draft` at all.
+ */
 export class FinalizeWithoutSpecError extends Error {
   readonly runId: string;
 
   constructor(runId: string) {
     super(
-      `Run "${runId}" cannot be finalized: state.spec is null, and the terminal artifact set is built from the plan spec.`,
+      `Run "${runId}" cannot be finalized: neither state.spec nor state.specDraft is set, and the terminal artifact set is built from the plan spec.`,
     );
     this.name = "FinalizeWithoutSpecError";
     this.runId = runId;
@@ -441,7 +463,41 @@ export function createCommitBoundary(options: CommitBoundaryOptions = {}): Commi
     },
 
     async finalize(state, ctx): Promise<PipelineResult> {
-      if (state.spec === null) throw new FinalizeWithoutSpecError(state.runId);
+      // ── The specDraft fallback (sprint 7 of spec-20260812-pge-real-workload-errors) ──
+      //
+      // `state.spec` is null exactly when `plan_materialize` never ran — most commonly a
+      // planner whose `planClarifyRounds` budget ran out before the plan converged, which
+      // routes straight to `graceful_failure` without ever reaching `plan_materialize`.
+      // Throwing here used to crash the whole engine run for that case. `state.specDraft`
+      // is `plan_draft`'s OWN channel (`src/pge/topology/coding.graph.ts`), written on
+      // EVERY round — clarifying or settled — so it survives exactly when `plan_draft`
+      // ran at least once, which a `spec`-less run that reached this boundary always did.
+      //
+      // The literal below MIRRORS the imperative engine's own needs-clarification return
+      // (`runTsPipeline`, `src/orchestrator/pipeline.ts`) rather than routing through
+      // `finalizePipelineRun`: that function's completion marker and pipeline-complete
+      // history line assert a run that reached its terminal artifact set, which a plan
+      // that never left the clarification loop did not — there are no sprint contracts to
+      // split into completed/failed and no commit to record. `errors` is deliberately NOT
+      // set here: it is layered onto the RETURNED PipelineResult by `PgeEngine.run`, from
+      // the interpreter's OWN `TaskFailure` records (sprint 5's machinery, unmodified) —
+      // and the interpreter already records one for this exact case, because exhausting a
+      // declared loop bound and being rerouted to `onExhausted` is a `LoopExhausted`
+      // `TaskFailure` by construction (`src/pge/runtime/interpreter.ts`). `finalize` here
+      // has no interpreter trace to draw one from — it sees only `state` — so inventing an
+      // `errors` entry would be fabricating a `nodeId` this boundary does not actually
+      // know.
+      if (state.spec === null) {
+        if (state.specDraft === null) throw new FinalizeWithoutSpecError(state.runId);
+        return {
+          success: false,
+          spec: state.specDraft,
+          completedSprints: [],
+          failedSprints: [],
+          duration: clock.nowMs() - ctx.startedAtMs,
+          needsClarification: true,
+        };
+      }
 
       // ── The split, and why the CONTRACT STATUS alone cannot express it ──
       //

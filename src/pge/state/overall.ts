@@ -21,16 +21,31 @@ import { PhaseSchema } from "../../state/history.js";
  *     the handler returns, so node-local scratch is structurally incapable of reaching
  *     the committed artifact.
  *
- * ── The key count is 15, and the architecture's prose is the error ──
+ * ── The key count is 16, and the architecture's prose is the error ──
  *
  * `arch-20260805-pge-graph-engineering-architecture.md:305` comments "Exactly 14 keys"
- * above a schema that enumerates FIFTEEN: runId, projectRoot, featureRequest, specId,
- * currentPhase, spec, sprintContracts, evaluations, messages, refs, counters,
- * branchStatus, testAnchors, verdict, ledger. The enumeration is authoritative and the
- * comment is a miscount — no key is dropped to reach 14, because every enumerated key
- * has a writer in the shipped `coding` topology. {@link OVERALL_STATE_KEY_BUDGET} pins
- * the real number, and `overall.test.ts` pins the sorted key set so neither can move
- * without the whitelist and the budget being amended in the same change.
+ * above a schema that enumerated FIFTEEN at graphVersion 1.3.0 and now enumerates
+ * SIXTEEN: runId, projectRoot, featureRequest, specId, currentPhase, spec, specDraft,
+ * sprintContracts, evaluations, messages, refs, counters, branchStatus, testAnchors,
+ * verdict, ledger. The enumeration is authoritative and the comment is a miscount — no
+ * key is dropped to reach 14, because every enumerated key has a writer in the shipped
+ * `coding` topology. {@link OVERALL_STATE_KEY_BUDGET} pins the real number, and
+ * `overall.test.ts` pins the sorted key set so neither can move without the whitelist
+ * and the budget being amended in the same change.
+ *
+ * ── `specDraft`, added sprint 7 of spec-20260812-pge-real-workload-errors ──
+ *
+ * A SECOND scalar `PlanSpec` channel, sole writer `plan_draft`, holding the latest plan
+ * draft — clarifying or settled — on every round of the plan region. `spec`'s sole
+ * writer stays `plan_materialize`, so adding `specDraft` is what lets a run whose
+ * `planClarifyRounds` never converges still leave a draft behind: `state.spec` stays
+ * `null` (the plan never reached `plan_materialize`) but `state.specDraft` does not, and
+ * `commit.finalize` (`src/pge/runtime/commit.ts`) falls back to it instead of throwing
+ * `FinalizeWithoutSpecError`. Adding `spec` itself to a second node's `writes` was
+ * verified structurally illegal before this channel was added: `replaceIfNewer` is
+ * declared scalar (`src/contracts/topology.ts:133`) and the validator emits
+ * `MultipleWritersOnScalarChannel` at severity `error` for any scalar channel with more
+ * than one writer (`src/pge/topology/validate.ts:704-716`).
  *
  * ── Binding, not redefining ──
  *
@@ -198,6 +213,7 @@ export const OverallStateSchema = z.object({
   specId: z.string().nullable(),
   currentPhase: PhaseSchema,
   spec: PlanSpecSchema.nullable(),
+  specDraft: PlanSpecSchema.nullable(),
   sprintContracts: z.array(SprintContractSchema),
   evaluations: z.array(SprintVerdictSchema),
   messages: z.array(GraphMessageSchema),
@@ -227,6 +243,7 @@ export const OVERALL_STATE_KEYS = [
   "refs",
   "runId",
   "spec",
+  "specDraft",
   "specId",
   "sprintContracts",
   "testAnchors",
@@ -238,10 +255,11 @@ export type OverallStateKey = (typeof OVERALL_STATE_KEYS)[number];
  * The pinned key-count budget.
  *
  * State growth is the failure mode ADR-4 is guarding against, so the number is written
- * down rather than derived: a sprint that adds a sixteenth channel must justify the new
- * number in the same diff.
+ * down rather than derived: a sprint that adds a seventeenth channel must justify the
+ * new number in the same diff. Sprint 7 of spec-20260812-pge-real-workload-errors moved
+ * this from 15 to 16 by adding `specDraft` — see the module header.
  */
-export const OVERALL_STATE_KEY_BUDGET = 15;
+export const OVERALL_STATE_KEY_BUDGET = 16;
 
 /** The schema's own key set, sorted. The snapshot test compares this to the whitelist. */
 export function overallStateKeys(): string[] {
@@ -274,6 +292,9 @@ export const _contractsAreExact: Exact<
 /** sc-5-2 — `spec` is the real `PlanSpec` or `null`, and nothing else. */
 export const _specIsExact: Exact<OverallState["spec"], PlanSpec | null> = true;
 
+/** Sprint 7 — `specDraft` is the real `PlanSpec` or `null`, same guard as `spec`. */
+export const _specDraftIsExact: Exact<OverallState["specDraft"], PlanSpec | null> = true;
+
 /** The whitelist and the schema cannot drift apart without failing `tsc`. */
 export const _keysAreExact: Exact<OverallStateKey, keyof OverallState> = true;
 
@@ -300,6 +321,7 @@ export function initialOverallState(input: InitialStateInput): OverallState {
     specId: null,
     currentPhase: "init",
     spec: null,
+    specDraft: null,
     sprintContracts: [],
     evaluations: [],
     messages: [],

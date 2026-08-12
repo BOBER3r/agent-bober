@@ -112,10 +112,11 @@ describe("CODING_GRAPH parses and validates", () => {
     expect(parsed.data.formatVersion).toBe(1);
     expect(parsed.data.provenance).toBe("authored");
     expect(parsed.data.graphVersion).toMatch(GRAPH_VERSION_PATTERN);
-    // Bumped from 1.2.0 when `spec` and `sprintContracts` were raised off the shipped
-    // 4,096-byte default to caps derived from the committed workload corpus
-    // (capForCorpusMax, src/pge/golden/workload.ts) — see docs/pge-graph.md's changelog.
-    expect(parsed.data.graphVersion).toBe("1.3.0");
+    // Bumped from 1.3.0 when the new scalar `specDraft` channel was added, sole writer
+    // `plan_draft` — commit.finalize now falls back to it instead of throwing
+    // FinalizeWithoutSpecError when a plan's clarification never converges — see
+    // docs/pge-graph.md's changelog.
+    expect(parsed.data.graphVersion).toBe("1.4.0");
   });
 
   it("returns ok:true with zero diagnostics in structural mode", () => {
@@ -455,6 +456,7 @@ describe("structural invariants", () => {
       expect(writersByChannel.get(channel.id), `scalar channel ${channel.id}`).toHaveLength(1);
     }
     expect(writersByChannel.get("spec")).toEqual(["plan_materialize"]);
+    expect(writersByChannel.get("specDraft")).toEqual(["plan_draft"]);
     expect(writersByChannel.get("verdict")).toEqual(["finalize"]);
   });
 

@@ -233,13 +233,16 @@ describe("runGoldenGate's pass-rate half", () => {
   });
 
   /** NEGATIVE CONTROL — the pass-rate branch, below the bar. */
-  it("exits non-zero when a quarter of the dataset stops reproducing its expectation", async () => {
+  it("exits non-zero when a third of the dataset stops reproducing its expectation", async () => {
     let seen = 0;
     const result = await runGoldenGate({
       projectRoot: REPO_ROOT,
       execute: (goldenCase) => {
         seen += 1;
-        return seen % 4 === 0
+        // ~33 percent fail rate — see dataset.test.ts's identical control for why this
+        // clears the 80 percent threshold at any replay count from GOLDEN_MIN_REPLAY_CASES
+        // (5) upward, where a quarter no longer reliably did.
+        return seen % 3 === 0
           ? { contracts: [{ contractId: "drifted" }] }
           : goldenCase.expected.artifacts;
       },

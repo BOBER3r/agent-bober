@@ -282,6 +282,12 @@ export function planDraftNode(spec: TopologySpec): NodeImpl<ResearchDigest | Pla
         update: {
           messages: [note(ctx, `drafted ${draft.specId} (${result.kind})`)],
           ledger: [charge(ctx)],
+          // Written on EVERY round, clarifying or settled — the sole writer of the scalar
+          // specDraft channel (sprint 7 of spec-20260812-pge-real-workload-errors). A run
+          // whose planClarifyRounds never converges never reaches plan_materialize, so
+          // `spec` stays null; this is what commit.finalize falls back to instead of
+          // throwing FinalizeWithoutSpecError.
+          specDraft: draft,
         },
         phase: "planning",
         goto: { kind: "node", node: next },

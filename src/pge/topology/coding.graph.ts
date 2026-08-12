@@ -110,7 +110,18 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
   // measured basis. The other eight channels already satisfied the same rule at 4,096 and
   // are unchanged. A structural change to a committed artifact moves graphVersion
   // forward; `pge diff --require-version-bump` is the gate that says so.
-  graphVersion: "1.3.0",
+  //
+  // 1.4.0 — a planner that never stops asking clarifying questions exhausted
+  // planClarifyRounds and reached graceful_failure with `spec` still null, and
+  // commit.finalize threw FinalizeWithoutSpecError instead of returning a failed
+  // PipelineResult. Adding `spec` to a second writer's `writes` is structurally illegal
+  // (`spec`'s reducer `replaceIfNewer` is scalar; a second writer is
+  // MultipleWritersOnScalarChannel at severity error), so this bump adds a NEW scalar
+  // channel, `specDraft`, sole writer `plan_draft`, holding the latest plan draft on
+  // every round of the plan region regardless of whether clarification ever converges.
+  // `commit.finalize` now falls back to it when `spec` is null. See the channel
+  // declaration below and docs/pge-graph.md's changelog entry.
+  graphVersion: "1.4.0",
   description:
     "The agent-bober coding pipeline: research reflexion loop, planner with a clarification loop, supervisor, bounded sprint subgraph with curator/security/evaluation gates, global evaluation with rework, synthesis, documentation, gated commit, graceful failure and context compaction.",
   provenance: "authored",
@@ -196,6 +207,36 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       schemaRef: "PlanSpec",
       scope: "public",
       maxInlineBytes: 131_072,
+    },
+    {
+      // Scalar: `replaceIfNewer` makes a second writer a MultipleWritersOnScalarChannel
+      // error, which is why only plan_draft writes it — added 1.4.0.
+      //
+      // The LATEST plan draft, clarifying or settled, written on every plan_draft round.
+      // Its purpose is narrow: a run whose planClarifyRounds never converges reaches
+      // graceful_failure with `spec` still null (plan_materialize never ran), and
+      // commit.finalize (src/pge/runtime/commit.ts) falls back to this channel instead of
+      // throwing FinalizeWithoutSpecError.
+      //
+      // capForCorpusMax(29_214) = 65_536 — same discipline as `spec` and `sprintContracts`
+      // above, NOT sized by analogy to `spec`'s own 131,072 despite the shared schema. The
+      // corpus's specDraft maximum is `spec-20260805-pge-graph-engineering`'s own real
+      // committed plan (`.bober/workload/specDraft-spec-20260805-pge-graph-engineering.json`,
+      // provenance "file") — 29,214 canonical bytes, the SAME spec real-workload.test.ts
+      // plans with. It is a real specDraft payload rather than an invented one because
+      // `spec` and `specDraft` hold IDENTICAL bytes by construction whenever clarification
+      // settles without a round trip (the common case, including that measurement):
+      // plan_draft writes the draft to specDraft on the same call whose output
+      // plan_materialize later writes to spec unchanged. Left at the graph's default 4,096
+      // this cap would have silently dropped that exact real write — the sc-4-1 zero-
+      // rejections guarantee `real-workload.test.ts` pins would have gone false the moment
+      // this channel started being written, reproducing for specDraft the identical defect
+      // 1.3.0 fixed for spec. Pinned two-directionally in src/pge/golden/workload.test.ts.
+      id: "specDraft",
+      reducerRef: "replaceIfNewer",
+      schemaRef: "PlanSpec",
+      scope: "public",
+      maxInlineBytes: 65_536,
     },
     {
       id: "ledger",
@@ -396,7 +437,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       id: "plan_draft",
       kind: "llm",
       title: "Draft the plan",
-      doc: "Produces a PlanSpec draft with sprint contracts and clarification questions from the research digest.",
+      doc: "Produces a PlanSpec draft with sprint contracts and clarification questions from the research digest. Sole writer of the scalar specDraft channel.",
       subgraph: null,
       role: "planner",
       modelTier: "frontier",
@@ -404,7 +445,7 @@ const CODING_GRAPH_UNSEALED: TopologySpec = {
       inputPorts: [{ key: "brief", schemaRef: "ResearchDigest", required: true }],
       outputPorts: [{ key: "draft", schemaRef: "PlanSpec", required: true }],
       reads: ["messages", "spec"],
-      writes: ["messages", "ledger"],
+      writes: ["messages", "ledger", "specDraft"],
       effects: [],
     },
     {

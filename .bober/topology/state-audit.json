@@ -1,7 +1,7 @@
 {
   "generatedFrom": {
     "graphId": "coding",
-    "checksum": "sha256:e4909da6ef351939e507c320741e6e669d3268eaca0b76fe623a9aa3359b45a5"
+    "checksum": "sha256:a1df4bf023618df2fe0b19817924986ec290841b113381f5652aa98da2dd9aea"
   },
   "keys": [
     {
@@ -199,6 +199,14 @@
         "sprint_generate",
         "supervisor"
       ],
+      "reducer": "replaceIfNewer"
+    },
+    {
+      "key": "specDraft",
+      "writers": [
+        "plan_draft"
+      ],
+      "readers": [],
       "reducer": "replaceIfNewer"
     },
     {

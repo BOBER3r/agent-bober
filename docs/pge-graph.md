@@ -16,13 +16,14 @@ every loop runs out of budget.
 > CI goes red.** That is the point: an artifact nobody gates on is an artifact nobody
 > maintains.
 
-Artifact facts, as committed: `graphId: "coding"`, `graphVersion: "1.3.0"`,
-`formatVersion: 1`, `entry: "research_body"` — **44 nodes, 56 edges, 10 channels,
+Artifact facts, as committed: `graphId: "coding"`, `graphVersion: "1.4.0"`,
+`formatVersion: 1`, `entry: "research_body"` — **44 nodes, 56 edges, 11 channels,
 2 subgraphs**. Node kinds: 15 `llm`, 13 `gate`, 7 `router`, 7 `tool`, 2 `subgraph`.
 Graph defaults: `concurrency: 1`, `durability: "superstep"`, `maxInlineBytes: 4096`,
 `modelTier: "light"`, `supervisorNodeId: "supervisor"`. A default is what a channel inherits
-when it declares nothing of its own — as of `1.3.0` two channels declare their own
-`maxInlineBytes`, so do not read `4096` as the cap everywhere (see [Channels](#channels)).
+when it declares nothing of its own — as of `1.4.0` three channels (`spec`, `specDraft`,
+`sprintContracts`) declare a cap ABOVE the default, so do not read `4096` as the cap
+everywhere (see [Channels](#channels)).
 
 ## Contents
 
@@ -139,7 +140,7 @@ appears exactly once across them.
 | `supervisor` | router | Dispatches the next phase (plan, sprints, evaluate) and folds each subgraph result back into the run. |
 | `context_compact` | tool | Runs at a superstep boundary when the message window crosses the compression threshold: summarises older messages to scratch and re-injects the digest. |
 | `gate_plan_in` | gate | Admits the run into planning only when a research digest exists and the spec is absent or stale. |
-| `plan_draft` | llm | Produces a plan-spec draft with sprint contracts and clarification questions from the research digest. |
+| `plan_draft` | llm | Produces a plan-spec draft with sprint contracts and clarification questions from the research digest. Sole writer of the scalar specDraft channel. |
 | `plan_clarify_check` | router | Routes to the human clarification interrupt while the draft still carries open questions and the clarification budget holds. |
 | `plan_clarify` | gate | Human-in-the-loop interrupt collecting answers to the planner's open questions. Effect-free by construction. |
 | `plan_materialize` | tool | Persists the plan spec and every sprint contract under the project state directory. Sole writer of the scalar spec channel. |
@@ -414,11 +415,11 @@ under-states reachability; the failure routes are in those two tables.
 
 ## Channels
 
-State is not a blob passed from node to node; it is ten typed channels, each with a
+State is not a blob passed from node to node; it is eleven typed channels, each with a
 declared reducer that merges concurrent writes deterministically. `scope: public` means
 the channel is visible across regions; the one `private` channel is per-branch bookkeeping.
-Two channels are **scalar** — exactly one node may write them — which is what makes the
-spec and the run verdict single-sourced.
+Three channels are **scalar** — exactly one node may write them — which is what makes the
+spec, the latest plan draft and the run verdict single-sourced.
 
 <!-- pge:channels -->
 | channel | scope | reducer | schema | written by |
@@ -430,6 +431,7 @@ spec and the run verdict single-sourced.
 | `messages` | public | appendById | GraphMessage | commit, context_compact, critique, documenter, evaluate_global, graceful_failure, hitl_commit, plan_clarify, plan_draft, research_collect, research_critique, research_explore, research_reflect, sprint_correct, sprint_curate_explain, sprint_curate_mocks, sprint_evaluate, sprint_generate, sprint_review, sprint_security, synthesize |
 | `refs` | public | appendById | ScratchRef | context_compact, documenter, finalize, plan_materialize, research_collect, research_explore, sprint_correct, sprint_curate_explain, sprint_curate_mocks, sprint_generate |
 | `spec` | public | replaceIfNewer | PlanSpec | plan_materialize |
+| `specDraft` | public | replaceIfNewer | PlanSpec | plan_draft |
 | `sprintContracts` | public | appendById | SprintContract | plan_materialize, sprint_exit |
 | `testAnchors` | public | setUnion | TestAnchors | sprint_evaluate |
 | `verdict` | public | replaceIfNewer | RunVerdict | finalize |
@@ -440,9 +442,23 @@ The `counters` channel is where every loop counter listed in
 monotonic under concurrent branch writes, so two branches incrementing the same key cannot
 lose an increment and under-count a budget.
 
-Eight of the ten channels declare the graph default `maxInlineBytes: 4096`; `spec` and
-`sprintContracts` declare 131,072 and 524,288, sized off the committed workload corpus (see
-the `1.3.0` changelog entry and [A committed workload corpus](#a-committed-workload-corpus)).
+`specDraft`, added `1.4.0`, holds the LATEST plan draft — clarifying or settled — written
+by `plan_draft` on every round of the plan region, regardless of whether clarification ever
+converges. `commit.finalize` (`src/pge/runtime/commit.ts`) falls back to it when `spec` is
+still null at the finalize boundary; see [A defect this coverage work
+surfaced](#a-defect-this-coverage-work-surfaced) for what that fixed.
+
+Eight of the eleven channels declare the graph default `maxInlineBytes: 4096`; `spec`
+declares 131,072, `sprintContracts` declares 524,288 and `specDraft` declares 65,536 — all
+three sized off the committed workload corpus, none by analogy to a schema-identical
+sibling (see the `1.3.0` and `1.4.0` changelog entries and [A committed workload
+corpus](#a-committed-workload-corpus)). `specDraft`'s corpus maximum is this repository's
+own real committed plan restated under the `specDraft` channel — a real payload rather than
+an invented one, because `spec` and `specDraft` hold IDENTICAL bytes by construction
+whenever clarification settles without a round trip, the common case. Leaving it at the
+graph's brand-new-channel default of 4,096 would have silently dropped that exact real
+write the moment this channel started being written — the identical defect `1.3.0` fixed
+for `spec` itself.
 The commit boundary measures a write against a channel's own cap in **canonical** bytes —
 `canonicalJson`, `src/pge/runtime/commit.ts` — not in the bytes the value happens to occupy
 on disk. A write over the cap is refused with `StateBloatError` and the run continues with
@@ -505,30 +521,43 @@ those claims stopped being true and the explanation should be deleted deliberate
 
 ### A defect this coverage work surfaced
 
-A planner that keeps asking for clarification exhausts `planClarifyRounds` and reaches
-`graceful_failure` **with `state.spec` still null**, and `commit.finalize` then throws
+**Fixed at `1.4.0`.** A planner that kept asking for clarification exhausted `planClarifyRounds` and reached
+`graceful_failure` **with `state.spec` still null**, and `commit.finalize` then threw
 `FinalizeWithoutSpecError` instead of returning a failed `PipelineResult`. An unattended run
-whose plan never settles therefore crashes the engine rather than reporting a failure.
+whose plan never settled therefore crashed the engine rather than reporting a failure. This
+was not the clarification path's only route to the symptom: a separate measurement against a
+real plan — [The graph engine against a real workload](#the-graph-engine-against-a-real-workload) —
+reached the identical terminal, with `state.spec` null and the identical throw, on a planner
+that settled on its first answer but whose spec was too large for the channel to accept.
+Sprint 3 of spec-20260812-pge-real-workload-errors closed that second route by sizing the
+`spec`/`sprintContracts` caps off a real corpus; the `planClarifyRounds` route above was the
+one still open, and the obvious fix for it — adding `spec` to a second node's `writes` — is
+**structurally illegal**: `spec`'s reducer `replaceIfNewer` is declared scalar
+(`src/contracts/topology.ts:133`) and the validator emits `MultipleWritersOnScalarChannel` at
+severity `error` for any scalar channel with more than one writer
+(`src/pge/topology/validate.ts:704-716`).
 
-It is not captured as a golden case precisely because it throws — `captureGoldenCase` cannot
-record a run that never produces a result. The committed
-`replay-plan-clarification-round` case drives one clarification round and settles, which is
-what puts `plan_clarify` on an executed path; a `clarifyingBindings(99)` scenario pinning the
-bound becomes possible once the terminal path returns a result instead of throwing.
+**Sprint 7 of spec-20260812-pge-real-workload-errors fixed it with a new channel instead.**
+`specDraft` (`1.4.0`, see [Channels](#channels)) is a second scalar `PlanSpec` channel, sole
+writer `plan_draft`, written on EVERY round of the plan region — clarifying or settled — so a
+run whose `planClarifyRounds` budget runs out still leaves a draft behind even though
+`plan_materialize` never ran. `commit.finalize` (`src/pge/runtime/commit.ts`) now falls back
+to `state.specDraft` when `state.spec` is null: the run RESOLVES with `success: false`,
+`needsClarification: true` and a populated `errors` array (layered onto the returned
+`PipelineResult` by `PgeEngine.run` from the interpreter's own `LoopExhausted` `TaskFailure`
+— sprint 5's machinery, unmodified) instead of throwing. `FinalizeWithoutSpecError` is
+NARROWED, not deleted: it is reachable only when NEITHER `spec` NOR `specDraft` was ever
+written — a run that never dispatched `plan_draft` at all.
 
-**The clarification path is not the only route to it, and not the common one.** As
-originally observed, a separate measurement against a real plan — [The graph engine against a
-real workload](#the-graph-engine-against-a-real-workload) — reached the identical terminal,
-with `state.spec` null and the identical throw, on a planner that settled on its first
-answer: the spec was simply too large for the channel to accept. Read the two together, the
-crash was a property of any run that arrived at `graceful_failure` before `spec` was written,
-not an edge case of a pathological planner. **That specific route is now closed**: sprint 3 of
-spec-20260812-pge-real-workload-errors sized the `spec`/`sprintContracts` caps off a real
-corpus, so the real-workload measurement's `spec` write is admitted and `state.spec` is no
-longer null at the boundary — see the linked section for the ceiling sprint 3's fix
-uncovered next, and how sprint 4 resolved it. `FinalizeWithoutSpecError` itself is untouched
-and the `planClarifyRounds` route to it above still throws; only the real-workload
-measurement's OWN route to the identical symptom closed.
+**The case the old crash made impossible to record is now captured.** The committed
+`replay-plan-clarification-round` case still drives one clarification round and settles,
+which is what puts `plan_clarify` on an executed path; the NEW committed
+`replay-plan-clarify-rounds-exhausted` case is the `clarifyingBindings(99)`-style scenario
+this section used to say was blocked — a planner that never accepts an answer, driving
+`planClarifyRounds` to its declared bound of 3 and reaching `graceful_failure` with a
+resolved, failed `PipelineResult` rather than a thrown error. Both cases together put every
+node the plan region's clarification loop touches on an executed path, at both ends of the
+loop: settling early, and exhausting the bound.
 
 **A permanently-green golden dataset is not evidence of generation quality.** This is a
 limitation of the method, not a gap to be closed later. The runtime's own replay module
@@ -793,7 +822,7 @@ tables here, it is not pinned by a committed artifact.)
 configures, and it is a MEASURED-basis function, never a hand-picked literal — mirroring
 `capForCorpusMax`'s discipline exactly:
 
-| measured, as committed at `graphVersion 1.3.0` (after sprint 4, current) | value |
+| measured, as committed at `graphVersion 1.4.0` (after sprint 4, current — the ceiling and every number below are unchanged by sprint 7's `specDraft` channel, which added no node and no edge) | value |
 | --- | --- |
 | `MEASURED_REAL_WORKLOAD_SUPERSTEPS` | **234** — the natural completion cost above, pinned in `real-workload.test.ts` against a fresh measurement |
 | `SUPERSTEP_HEADROOM_FACTOR` | **2**, the same factor and the same discipline as `CAP_HEADROOM_FACTOR` |
@@ -875,8 +904,8 @@ the diff is the statement that they changed.
 ### A committed workload corpus
 
 A cap sized from a fixture is a cap sized from nothing, and a plan-and-contracts measurement
-alone does not say whether the OTHER eight channels are anywhere near their limit. Both gaps
-are closed by a corpus of **120 real payloads**, committed at **`.bober/workload/`** (never
+alone does not say whether the OTHER nine channels are anywhere near their limit. Both gaps
+are closed by a corpus of **122 real payloads**, committed at **`.bober/workload/`** (never
 `.bober/golden/` — a workload entry is not a golden case, and the two directories are enforced
 by disjoint gates) and read at test time by `src/pge/golden/workload.ts`.
 
@@ -893,6 +922,7 @@ channel; captured instead from a real `PgeEngine` run's own `ChannelUpdate`s, th
 | --- | --- | --- | --- |
 | `spec` | 48,097 | **131,072** | every `.bober/specs/*.json` that parses AND is at a terminal status (50 of 53 — see below) |
 | `sprintContracts` | 135,106 | **524,288** | one entry per terminal-status spec, the whole `SprintContract[]` its `sprints` resolve to (27) |
+| `specDraft` | 29,214 | **65,536** | `spec-20260805-pge-graph-engineering`'s own real committed plan, restated under this channel — the same spec `real-workload.test.ts` plans with — plus one small observed entry; added `1.4.0` (see that changelog entry) |
 | `messages` | 1,292 | 4,096 | a representative sample of `.bober/handoffs/gen-report-*.json` `notes` |
 | `evaluations` | 1,067 | 4,096 | a representative sample of `.bober/eval-results/*.json` summaries |
 | `refs` | 283 | 4,096 | observed from a real run |
@@ -1107,6 +1137,53 @@ ran them.
 Keyed by `graphVersion`. A structural change to the topology requires a version bump and
 an entry here; CI enforces the pairing, so this section is the changelog the version-bump
 gate reads.
+
+### 1.4.0 — a new scalar channel so a plan that never settles can report failure
+
+Sprint 7 of spec-20260812-pge-real-workload-errors fixed the defect recorded in [A defect
+this coverage work surfaced](#a-defect-this-coverage-work-surfaced): a planner that never
+converges exhausts `planClarifyRounds`, reaches `graceful_failure` with `state.spec` still
+null, and `commit.finalize` used to throw `FinalizeWithoutSpecError` instead of returning a
+failed `PipelineResult`.
+
+- **A new scalar channel, `specDraft`.** `PlanSpec`-schemaed, reducer `replaceIfNewer`, sole
+  writer `plan_draft`. Adding `spec` itself to a second node's `writes` was verified
+  structurally illegal rather than merely costly: `spec`'s reducer is declared scalar
+  (`src/contracts/topology.ts:133`) and the validator emits
+  `MultipleWritersOnScalarChannel` at severity `error` for any scalar channel with more than
+  one writer (`src/pge/topology/validate.ts:704-716`) — `plan_materialize` already writes
+  `spec`, and `plan_clarify` writes only `messages`.
+- **`plan_draft` writes it on EVERY round**, clarifying or settled, so a run whose
+  `planClarifyRounds` budget runs out still leaves a draft behind even though
+  `plan_materialize` never ran and `state.spec` stays null.
+- **`maxInlineBytes: 65,536` — `capForCorpusMax(29,214)`**, MEASURED rather than sized by
+  analogy to `spec`'s own 131,072, even though the two channels share a schema:
+  `capForCorpusMax` is a function of a corpus, never a value someone picks because a sibling
+  channel happens to be PlanSpec-shaped too. The corpus's `specDraft` maximum
+  (`.bober/workload/specDraft-spec-20260805-pge-graph-engineering.json`, provenance "file",
+  29,214 canonical bytes — see [A committed workload corpus](#a-committed-workload-corpus))
+  is this repository's OWN real committed plan, restated under the `specDraft` channel — a
+  real payload rather than an invented one, because `spec` and `specDraft` hold IDENTICAL
+  bytes by construction whenever clarification settles without a round trip (the common
+  case, including the very measurement `real-workload.test.ts` makes). Leaving this channel
+  at the graph's brand-new-channel default of 4,096 would have silently dropped that exact
+  real write, reproducing for `specDraft` the identical defect `1.3.0` fixed for `spec`
+  itself — caught by `real-workload.test.ts`'s own zero-`StateBloatError`-rejections
+  guarantee (sc-4-1) going false the moment this channel started being written. Pinned
+  two-directionally in `src/pge/golden/workload.test.ts` exactly like every other channel.
+- **`commit.finalize` (`src/pge/runtime/commit.ts`) falls back to `state.specDraft`** when
+  `state.spec` is null: the run now RESOLVES with `success: false`, `needsClarification:
+  true` and a populated `errors` array (layered onto the returned `PipelineResult` by
+  `PgeEngine.run` from the interpreter's own `LoopExhausted` `TaskFailure` — sprint 5's
+  machinery, unmodified) instead of throwing. `FinalizeWithoutSpecError` is NARROWED, not
+  deleted: it still throws when NEITHER `spec` NOR `specDraft` was ever written.
+- **The case the old crash made impossible to record is now captured**: the committed
+  `replay-plan-clarify-rounds-exhausted` golden case drives a planner that never accepts an
+  answer to the `planClarifyRounds` bound of 3 and reaches `graceful_failure` with a
+  resolved, failed `PipelineResult`. All six committed `replay` cases were recaptured for
+  the `graphVersion` bump; the diff outside the new case is confined to the
+  `graph.graphVersion` stamp, the same discipline `1.3.0`'s recapture used.
+- Node, edge and subgraph counts are unchanged: 44 / 56 / 2. Channel count moves 10 → 11.
 
 ### 1.3.0 — sizing the channel caps to the committed corpus
 
