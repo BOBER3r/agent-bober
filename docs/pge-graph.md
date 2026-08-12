@@ -740,17 +740,33 @@ raised far enough to observe a run end to end:
 | 1 (no `dependsOn`) | **39** | `graceful_failure` | 1 of 1, `"succeeded"`, first attempt |
 | 14 (this repository's real, `dependsOn`-linked contracts) | **234** | `graceful_failure` | 14 of 14, `"succeeded"`, first attempt |
 
-The relationship is the whole diagnosis: cost scales with declared work (14 real,
-cross-contract-dependent branches cost roughly 6× one trivial branch, not "the same
-regardless of count"), node activity advances through every distinct contract rather than
-repeating one, and the branch set fully drains rather than stalling. That is **INSUFFICIENT
-CEILING**, not NON-CONVERGENCE — the alternative verdict the sprint was equally prepared to
-record and stop at, unfixed, had the evidence pointed there. (The apparent "extra" trace
-volume — `sprint_body` alone racks up over a thousand spans in the 14-contract run — is
-`serialized`-status deferral bookkeeping the frontier planner writes once per superstep a
-task remains blocked on an unmet `dependsOn` entry, `src/pge/runtime/frontier.ts:216-227`;
-it is bookkeeping about waiting, not evidence of repeated execution — every OTHER per-branch
-node in the trace appears exactly once per branch, matching the 1-contract baseline.)
+Those two rows are the committed data — `contractCountScaling` in
+`.bober/topology/measurements/real-workload.json`, which also gained the run's own
+`supersteps` and a `superstepCeiling` `{configured, measuredBasis, headroomFactor}` record of
+the shipped constants in the table below.
+
+The relationship is the whole diagnosis: cost scales with declared work — `(234 − 39) / 13` is
+exactly **15 supersteps of marginal cost per additional contract**, not "the same regardless of
+count" — node activity advances through every distinct contract rather than repeating one, and
+the branch set fully drains rather than stalling. That is **INSUFFICIENT CEILING**, not
+NON-CONVERGENCE — the alternative verdict the sprint was equally prepared to record and stop at,
+unfixed, had the evidence pointed there. Evaluation re-derived the same relationship
+independently at five contract counts rather than two — 1: 39, 4: 84, 7: 129, 10: 174,
+14: 234, a marginal 15 at every interval — which is linear in declared work, neither flat (the
+signature NON-CONVERGENCE would show) nor unbounded; only the two end points are committed as
+data.
+
+(The apparent "extra" trace volume is bookkeeping about waiting, not repeated execution.
+`sprint_body` accounts for **1,272** spans in the 14-contract run: **14** with status `ok`, one
+per branch, and **1,258** with status `serialized`. A `serialized` span is written once per
+deferral — the frontier planner defers a task whose `dependsOn` is unmet before it ever
+considers the concurrency cap (`src/pge/runtime/frontier.ts:216-227`), and the interpreter
+records that deferral as a span (`recordDeferral`, `src/pge/runtime/interpreter.ts:898`, called
+at `:1068` for every deferral whose reason is not `concurrencyCap`), so under
+`defaults.concurrency: 1` a blocked task writes one per superstep it stays blocked. Every OTHER
+per-branch node in the trace appears exactly once per branch, matching the 1-contract baseline.
+That span decomposition was read off the raw trace during evaluation; unlike the numbers in the
+tables here, it is not pinned by a committed artifact.)
 
 `PGE_ENGINE_MAX_SUPERSTEPS` (`src/pge/engine/pge-engine.ts`) is now the ceiling `PgeEngine.run`
 configures, and it is a MEASURED-basis function, never a hand-picked literal — mirroring
@@ -806,7 +822,10 @@ Four consequences a reader should not have to derive:
   an error channel to `PipelineResult` is a later sprint's, not this one's). The harness
   reads the interpreter's own outcome through the engine's own `interpreterFactory` seam for
   exactly that reason; a harness that inspected only the returned `PipelineResult` would
-  have observed a bare `success: true` and nothing else.
+  have observed a bare `success: true` and nothing else. The committed measurement now carries
+  both halves of the divergence in one file, on real-workload data for the first time:
+  `failures: [{nodeId: "commit", errorClass: "FailClosed", superstep: 232}]` and
+  `verdict: "failed"` sitting next to `engineOutcome: {kind: "resolved", success: true}`.
 
 Re-deriving the measurement is a deliberate act —
 `MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts` rewrites the
@@ -1066,16 +1085,21 @@ two at or above **2×** the corpus maximum, floored at `DEFAULT_MAX_INLINE_BYTES
   too, because the pin is EQUALITY to the derived function rather than an inequality.
   `StateBloatError` (`src/pge/runtime/commit.ts`) is unchanged — the check is re-sized, not
   removed, proven by a negative control that still rejects a value above the new cap.
-- **What this does not fix.** Raising the two caps admits `plan_materialize`'s writes
-  against this repository's own real spec and its 14 contracts — the rejections recorded in
-  [The graph engine against a real workload](#the-graph-engine-against-a-real-workload) are
-  gone, re-measured with the same harness. The run does not reach a terminal node either
-  way: with the caps raised, the fan-out across 14 real sprint contracts now runs long
-  enough to trip the interpreter's own runaway guard, `SuperstepLimitExceededError` at
-  `DEFAULT_MAX_SUPERSTEPS = 200` (`src/pge/runtime/interpreter.ts`), before `commit.finalize`
-  is ever reached. That is a different, newly-surfaced fact from the old
-  `FinalizeWithoutSpecError`, recorded rather than chased here — it is out of a
-  `maxInlineBytes` sprint's scope.
+- **What this did not fix, and what closed it afterwards.** Raising the two caps admits
+  `plan_materialize`'s writes against this repository's own real spec and its 14 contracts —
+  the rejections recorded in [The graph engine against a real
+  workload](#the-graph-engine-against-a-real-workload) are gone, re-measured with the same
+  harness. It did not, on its own, make the run reach a terminal node: with the caps raised,
+  the fan-out across 14 real sprint contracts ran long enough to trip the interpreter's own
+  runaway guard, `SuperstepLimitExceededError` at `DEFAULT_MAX_SUPERSTEPS = 200`
+  (`src/pge/runtime/interpreter.ts`), before `commit.finalize` was ever reached — a
+  different, newly-surfaced fact from the old `FinalizeWithoutSpecError`, recorded rather
+  than chased inside a `maxInlineBytes` sprint's scope. Sprint 4 then measured that ceiling
+  and raised the one `PgeEngine` itself configures (`PGE_ENGINE_MAX_SUPERSTEPS`, see the
+  section linked above); the run reaches `graceful_failure` today. **That fix carries no
+  changelog entry of its own and no version bump, because it changed no topology** — the
+  ceiling is runtime configuration on the interpreter's `RunContext`, not a field of the
+  committed artifact, so `1.3.0` remains the current `graphVersion`.
 - Node, edge, channel and subgraph counts are unchanged: 44 / 56 / 10 / 2.
 
 ### 1.2.0 — correcting two defects that made the graph unrunnable
