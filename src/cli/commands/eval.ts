@@ -1,6 +1,7 @@
 import chalk from "chalk";
 
 import { loadConfig } from "../../config/loader.js";
+import { isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import { createHandoff } from "../../orchestrator/context-handoff.js";
 import type { ProjectContext } from "../../orchestrator/context-handoff.js";
 import { runEvaluatorAgent } from "../../orchestrator/evaluator-agent.js";
@@ -123,8 +124,8 @@ export async function runEvalCommand(
   }
 
   // Build handoff for evaluator
-  const completedContracts = contracts.filter(
-    (c) => c.status === "passed",
+  const completedContracts = contracts.filter((c) =>
+    isSettledContractStatus(c.status),
   );
 
   const handoff = createHandoff({

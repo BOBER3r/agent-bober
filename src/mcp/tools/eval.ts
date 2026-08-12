@@ -9,6 +9,7 @@ import { cwd } from "node:process";
 import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 
 import { configExists, loadConfig } from "../../config/loader.js";
+import { isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import { createHandoff } from "../../orchestrator/context-handoff.js";
 import type { ProjectContext } from "../../orchestrator/context-handoff.js";
 import { runEvaluatorAgent } from "../../orchestrator/evaluator-agent.js";
@@ -136,7 +137,7 @@ export function registerEvalTool(): void {
         changedFiles = [];
       }
 
-      const completedContracts = contracts.filter((c) => c.status === "passed");
+      const completedContracts = contracts.filter((c) => isSettledContractStatus(c.status));
 
       const handoff = createHandoff({
         from: "generator",

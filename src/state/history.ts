@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 
 import type { SprintContract } from "../contracts/sprint-contract.js";
+import { isSettledContractStatus } from "../contracts/sprint-contract.js";
 import type { PlanSpec } from "../contracts/spec.js";
 import { ensureDir } from "./helpers.js";
 import { rotateIfNeeded, historyArchivePath } from "./history-rotation.js";
@@ -190,7 +191,11 @@ export async function updateProgress(
     lines.push("No sprints yet.");
     lines.push("");
   } else {
-    const passed = contracts.filter((c) => c.status === "passed").length;
+    // "Passed" row: sprints that settled successfully (passed OR completed —
+    // the two engines' words for the same outcome). "Failed" stays a
+    // SEPARATE, literal count below — folding it into the settled predicate
+    // would double-count every failed sprint in this table.
+    const passed = contracts.filter((c) => isSettledContractStatus(c.status)).length;
     const failed = contracts.filter((c) => c.status === "failed").length;
     const inProgress = contracts.filter(
       (c) => c.status === "in-progress" || c.status === "evaluating",

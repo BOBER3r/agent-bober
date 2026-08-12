@@ -1,5 +1,6 @@
 // ── ResumeCursorReconstructor ───────────────────────────────────────
 
+import { isSettledContractStatus } from "../../contracts/sprint-contract.js";
 import { listContracts } from "../../state/sprint-state.js";
 import { loadHistory } from "../../state/history.js";
 import type { ResumeCursor } from "./types.js";
@@ -19,7 +20,7 @@ export class ResumeCursorReconstructor {
     await loadHistory(projectRoot);
 
     const completed = contracts
-      .filter((c) => c.status === "passed" || c.status === "completed")
+      .filter((c) => isSettledContractStatus(c.status))
       .map((c) => c.sprintNumber);
 
     const allNumbers = contracts.map((c) => c.sprintNumber);
