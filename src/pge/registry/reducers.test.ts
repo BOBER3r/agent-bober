@@ -83,6 +83,17 @@ function times<T>(rng: Rng, maxLength: number, make: () => T): T[] {
   return Array.from({ length }, make);
 }
 
+/** Every ordering of a small fixed array, deterministic — the sc-4-4 arrival-order sweep. */
+function permutations<T>(items: readonly T[]): T[][] {
+  if (items.length <= 1) return [items.slice()];
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const rest = [...items.slice(0, i), ...items.slice(i + 1)];
+    for (const perm of permutations(rest)) out.push([items[i], ...perm]);
+  }
+  return out;
+}
+
 // ── Generators, one per channel shape ───────────────────────────────
 
 const MESSAGE_IDS = ["m0", "m1", "m2", "m3"] as const;
@@ -118,14 +129,29 @@ function refsValue(rng: Rng): unknown {
 
 const CONTRACT_IDS = ["contract-1", "contract-2", "contract-3"] as const;
 
+// sc-4-4: small pools so `version`/`updatedAt` tie CONSTANTLY across the generated batch —
+// exercising the fall-through to `canonicalJson` (the tie case order-invariance depends
+// on), not just the deterministic case where `version` alone decides.
+const CONTRACT_VERSIONS = [undefined, 0, 1, 2] as const;
+const CONTRACT_UPDATED_ATS = [undefined, "2026-08-01T00:00:00.000Z", "2026-08-02T00:00:00.000Z"] as const;
+
 function sprintContractsValue(rng: Rng): unknown {
   // Identified by `contractId`, not `id` — the same reducer must union a contract list
   // as happily as a message list, which is why `intrinsicId` consults several fields.
-  return times(rng, 3, () => ({
-    contractId: rng.pick(CONTRACT_IDS),
-    sprintNumber: rng.int(4) + 1,
-    status: rng.pick(["proposed", "passed", "failed"] as const),
-  }));
+  return times(rng, 3, () => {
+    const version = rng.pick(CONTRACT_VERSIONS);
+    const updatedAt = rng.pick(CONTRACT_UPDATED_ATS);
+    return {
+      contractId: rng.pick(CONTRACT_IDS),
+      sprintNumber: rng.int(4) + 1,
+      status: rng.pick(["proposed", "passed", "failed"] as const),
+      // `version`/`updatedAt` deliberately absent as often as present — the seeded copy of
+      // a real contract carries neither (sc-3's absence guarantee), the settled copy
+      // carries both.
+      ...(version !== undefined ? { version } : {}),
+      ...(updatedAt !== undefined ? { updatedAt } : {}),
+    };
+  });
 }
 
 const COUNTER_KEYS = ["researchReflexions", "supervisorRounds", "sprintAttempts"] as const;
@@ -147,7 +173,9 @@ function branchStatusValue(rng: Rng): unknown {
     if (rng.float() < 0.45) continue;
     out[key] = {
       state: rng.pick(["pending", "running", "succeeded", "failed"] as const),
-      attempts: rng.int(4),
+      // sc-4-3: drawn up to 12 (not 4), so the property suite crosses the single-digit /
+      // two-digit boundary that made canonical order pick the wrong winner.
+      attempts: rng.int(13),
     };
   }
   return out;
@@ -402,6 +430,111 @@ describe("sc-5-5 messages channel monotonicity", () => {
     }
 
     expect(seenIds.size).toBeGreaterThan(0);
+  });
+});
+
+// ── sc-4: the channel join becomes rank-aware ────────────────────────
+
+describe("sc-4-1: mergeEntries resolves a duplicate id by rank, not canonical order", () => {
+  it("a case where rank order and canonical order DISAGREE is decided by rank", () => {
+    const seeded = { id: "x", text: "proposed" };
+    const settled = { id: "x", text: "completed", version: 1 };
+    // Canonical order alone would pick `seeded`: comparing the JSON strings, `"proposed"`
+    // sorts lexically AFTER `"completed"`, and both objects share the same leading keys, so
+    // the comparison is dominated by `text`.
+    expect(canonicalJson(seeded) > canonicalJson(settled)).toBe(true);
+    // The rank-aware join picks `settled` regardless, in BOTH arrival orders: `version: 1`
+    // outranks the absent version (rank 0) on the FIRST rank term, before `canonicalJson`
+    // is ever consulted.
+    expect(appendById.merge([], [[seeded], [settled]])).toEqual([settled]);
+    expect(appendById.merge([], [[settled], [seeded]])).toEqual([settled]);
+  });
+
+  it("a same-canonical-id conflict with NEITHER side carrying version/updatedAt still falls through to canonical order (regression guard for the messages/evaluations/refs channels)", () => {
+    // This is `reducers.test.ts:430-437`'s existing case restated as a fact about the NEW
+    // mechanism: with neither `version` nor `updatedAt` present, `rankIsGreater` collapses
+    // to a `canonicalJson` comparison byte-for-byte, so appendById behaves exactly as before
+    // for `messages`/`evaluations`/`refs`.
+    const left = { id: "a", seq: 0, text: "aaa" };
+    const right = { id: "a", seq: 0, text: "zzz" };
+    expect(appendById.merge([], [[left], [right]])).toEqual([right]);
+    expect(appendById.merge([], [[right], [left]])).toEqual([right]);
+  });
+});
+
+describe("sc-4-2: the settled contract outranks the seeded 'proposed' one", () => {
+  it("a settled sprintContracts entry wins the channel over the seeded 'proposed' copy, in both arrival orders", () => {
+    const seeded = { contractId: "sprint-x-01", status: "proposed" as const };
+    // The seeded copy carries no `version` key at all — what `plan_materialize` actually
+    // produces (sc-3-1's absence guarantee), not `version: 0`.
+    expect("version" in seeded).toBe(false);
+    const settled = { ...seeded, status: "completed" as const, version: 1 };
+    expect(appendById.merge([], [[seeded], [settled]])).toEqual([settled]);
+    expect(appendById.merge([], [[settled], [seeded]])).toEqual([settled]);
+  });
+
+  it("control: with version absent from BOTH copies, the seeded copy wins instead — proving the row above is `version` deciding, not an accident of canonicalJson", () => {
+    const seeded = { contractId: "sprint-x-01", status: "proposed" as const };
+    const settledNoVersion = { ...seeded, status: "completed" as const };
+    expect(appendById.merge([], [[seeded], [settledNoVersion]])).toEqual([seeded]);
+    expect(appendById.merge([], [[settledNoVersion], [seeded]])).toEqual([seeded]);
+  });
+});
+
+describe("sc-4-3: attempts:10 outranks attempts:9 — the canonical-order defect, fixed", () => {
+  it("the ten-attempt record wins over the nine-attempt one, in both arrival orders", () => {
+    const nine = { "branch-a": { state: "running" as const, attempts: 9 } };
+    const ten = { "branch-a": { state: "succeeded" as const, attempts: 10 } };
+    // The defect, restated as a fact: canonical order got this backwards. `"10"` sorts
+    // lexically BEFORE `"9"`.
+    expect(canonicalJson(nine["branch-a"]) > canonicalJson(ten["branch-a"])).toBe(true);
+    expect(lastWriteWinsByKey.merge({}, [nine, ten])).toEqual(ten);
+    expect(lastWriteWinsByKey.merge({}, [ten, nine])).toEqual(ten);
+  });
+
+  it("holds across the two-digit boundary generally, not just for 9 vs 10", () => {
+    for (const [lower, higher] of [[8, 11], [9, 12], [1, 10], [0, 11]] as const) {
+      const a = { k: { state: "running" as const, attempts: lower } };
+      const b = { k: { state: "succeeded" as const, attempts: higher } };
+      expect(lastWriteWinsByKey.merge({}, [a, b])).toEqual(b);
+      expect(lastWriteWinsByKey.merge({}, [b, a])).toEqual(b);
+    }
+  });
+});
+
+describe("sc-4-4: order-invariance is preserved under the rank-aware join", () => {
+  it("appendById: every arrival order of a rank-DECIDED batch converges on the same canonical result", () => {
+    const a = { contractId: "c", status: "proposed" as const };
+    const b = { ...a, status: "completed" as const, version: 1 };
+    const c = { ...a, status: "failed" as const, version: 2 };
+    const results = permutations([[a], [b], [c]]).map((perm) =>
+      canonicalJson(appendById.merge([], perm)),
+    );
+    expect(new Set(results).size).toBe(1);
+    expect(results[0]).toBe(canonicalJson([c]));
+  });
+
+  it("appendById: every arrival order of a batch TIED on rank still converges — the case a ranking change could silently break", () => {
+    // Equal `version` AND equal `updatedAt`: rankIsGreater returns false in BOTH
+    // directions, so this is the pure-tie case that falls through to `canonicalJson` —
+    // exactly the shipped join's own tie condition (`reducers.ts:127`-equivalent).
+    const updatedAt = "2026-08-05T00:00:00.000Z";
+    const left = { contractId: "c", status: "proposed" as const, version: 1, updatedAt, note: "aaa" };
+    const right = { contractId: "c", status: "proposed" as const, version: 1, updatedAt, note: "zzz" };
+    const results = permutations([[left], [right]]).map((perm) =>
+      canonicalJson(appendById.merge([], perm)),
+    );
+    expect(new Set(results).size).toBe(1);
+  });
+
+  it("lastWriteWinsByKey: every arrival order of a rank-DECIDED branchStatus batch converges", () => {
+    const nine = { "branch-a": { state: "running" as const, attempts: 9 } };
+    const ten = { "branch-a": { state: "succeeded" as const, attempts: 10 } };
+    const results = permutations([nine, ten]).map((perm) =>
+      canonicalJson(lastWriteWinsByKey.merge({}, perm)),
+    );
+    expect(new Set(results).size).toBe(1);
+    expect(results[0]).toBe(canonicalJson(ten));
   });
 });
 

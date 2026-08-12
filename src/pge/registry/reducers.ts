@@ -39,14 +39,22 @@
  *
  * ── Conflict resolution ──
  *
- * Where two updates claim the same key with DIFFERENT content, the survivor is the one
- * whose {@link canonicalJson} sorts greater. A join needs a deterministic winner or it
- * is not commutative; "whichever arrived last" is precisely the non-commutative answer.
- * In the shipped topology this tie-break is unreachable — `appendById` keys are
- * content-derived, `lastWriteWinsByKey` keys are per-branch disjoint, `mergeLedger`
- * keys identify one call, and scalar channels are single-writer by
- * `MultipleWritersOnScalarChannel` — so it exists to make each reducer a TOTAL join
- * rather than to encode a policy.
+ * Where two updates claim the same key with DIFFERENT content, `appendById` and
+ * `lastWriteWinsByKey` resolve to the higher-ranked value: {@link rankIsGreater}'s total
+ * order over `(version, updatedAt, canonicalJson(value))`. The `canonicalJson` term is
+ * what keeps that order deterministic ON A TIE — two values that agree on `version` and
+ * `updatedAt` still need a defined winner, or the join is not commutative; "whichever
+ * arrived last" is precisely the non-commutative answer a total order rules out.
+ * `mergeLedger` still resolves by {@link canonicalJson} alone via `joinByCanonicalOrder`:
+ * `LedgerEntry` carries neither `version` nor `updatedAt`, so the two resolvers agree
+ * there, and its key — `(nodeId, attempt, callIndex)` — identifies one call, so the
+ * tie-break stays unreachable exactly as before. Scalar channels stay single-writer by
+ * `MultipleWritersOnScalarChannel`, so `replaceIfNewer`'s identical rank-aware join never
+ * meets a real conflict either. The collision this section describes IS real, by design,
+ * for `appendById`'s `sprintContracts` (a seeded and a settled copy of the same contract,
+ * distinguished by `version`) and for `lastWriteWinsByKey`'s `branchStatus` (successive
+ * writes to the same branch key across supersteps, distinguished by `attempts`) — which is
+ * exactly why both needed a total order richer than `canonicalJson` alone.
  */
 
 // ── Reducer ─────────────────────────────────────────────────────────
@@ -184,7 +192,9 @@ function mergeEntries(containers: readonly unknown[]): Map<string, unknown> {
   const merged = new Map<string, unknown>();
   for (const container of containers) {
     for (const [id, item] of collectionEntries(container)) {
-      merged.set(id, merged.has(id) ? joinByCanonicalOrder(merged.get(id), item) : item);
+      // rank-aware join (sc-4-1): a duplicate id survives as the higher-ranked value, not
+      // merely the canonically-greater one — see `higherRanked` and the module header.
+      merged.set(id, merged.has(id) ? higherRanked(merged.get(id), item) : item);
     }
   }
   return merged;
@@ -278,10 +288,18 @@ export type KeyedRecord = Readonly<Record<string, unknown>>;
  * Per-key replacement over DISJOINT key domains — the `branchStatus` shape, where a
  * branch only ever writes its own key.
  *
- * Disjointness is what makes "last write wins" commutative: with no two writers on a
- * key there is no last. The canonical-order tie-break below is the total-join
- * completion of that partial rule, so the reducer stays lawful on inputs the topology
- * would never actually produce.
+ * Disjointness across CONCURRENT writers is what makes this commutative within one
+ * batch: two different branches never contend for the same key in the same call. It says
+ * nothing about the SAME key written twice at different supersteps, which is exactly a
+ * branch's own lifecycle (`running` -> `succeeded`/`failed`) — `current` (the previously
+ * committed value) and a later write for the same branch collide on every settling
+ * transition, and that collision is real, not merely a total-join completion of an
+ * unreachable case (sc-4-3 fixed a real bug found there: canonical order sorted
+ * `attempts: 10` lexically BEFORE `attempts: 9`). The tie-break below is now
+ * {@link rankIsGreater} rather than {@link joinByCanonicalOrder}: `attempts` is the
+ * ordering discriminator (`state/overall.ts:146-157`), and `versionRank`'s widened first
+ * term (`reducers.ts` above) reads it directly, so the later attempt wins regardless of
+ * digit count.
  */
 export const lastWriteWinsByKey: Reducer<KeyedRecord> = defineReducer<KeyedRecord>({
   id: "lastWriteWinsByKey",
@@ -296,7 +314,7 @@ export const lastWriteWinsByKey: Reducer<KeyedRecord> = defineReducer<KeyedRecor
       if (!isPlainObject(container)) continue;
       for (const key of Object.keys(container)) {
         const value = container[key];
-        merged.set(key, merged.has(key) ? joinByCanonicalOrder(merged.get(key), value) : value);
+        merged.set(key, merged.has(key) ? higherRanked(merged.get(key), value) : value);
       }
     }
     return recordFromEntries(merged);
@@ -351,7 +369,23 @@ function versionRank(value: unknown): [number, string, string] {
   let updatedAt = "";
   if (isPlainObject(value)) {
     const rawVersion = value.version;
-    if (typeof rawVersion === "number" && Number.isFinite(rawVersion)) version = rawVersion;
+    if (typeof rawVersion === "number" && Number.isFinite(rawVersion)) {
+      version = rawVersion;
+    } else {
+      // bober: widened first-rank term (sc-4-3) — a value with no `version` field at all
+      // ranks on `attempts` instead, when it has one. This is the `branchStatus` shape
+      // (`state/overall.ts:159-163`: `{ state, attempts, errorClass? }`), whose own doc
+      // block calls `attempts` "the ordering discriminator, not decoration". Before this,
+      // `lastWriteWinsByKey`'s fallback to `canonicalJson` sorted `attempts` as a STRING —
+      // "10" lexically before "9" — so a branch's tenth attempt could lose a conflict to
+      // its ninth. Ranking the number directly fixes that for every value shaped this way.
+      // Safe elsewhere: no other value domain in the topology carries a numeric `attempts`
+      // field (`LedgerEntry` uses `attempt`, singular; `SprintVerdict` uses `iteration`) —
+      // verified by `reducers.test.ts`'s property suite, which now draws `attempts` for
+      // `branchStatus` from a two-digit-capable pool specifically to exercise this.
+      const rawAttempts = value.attempts;
+      if (typeof rawAttempts === "number" && Number.isFinite(rawAttempts)) version = rawAttempts;
+    }
     const rawUpdatedAt = value.updatedAt;
     if (typeof rawUpdatedAt === "string") updatedAt = rawUpdatedAt;
   }
@@ -364,6 +398,19 @@ function rankIsGreater(candidate: unknown, incumbent: unknown): boolean {
   if (av !== bv) return av > bv;
   if (au !== bu) return au > bu;
   return aj > bj;
+}
+
+/**
+ * The higher-ranked of two conflicting values, by {@link rankIsGreater}'s total order.
+ *
+ * Shared by `appendById` (`sprintContracts`, sc-4-1/sc-4-2) and `lastWriteWinsByKey`
+ * (`branchStatus`, sc-4-3): both resolve a same-key conflict this way now, in place of
+ * `joinByCanonicalOrder`. `mergeLedger` keeps `joinByCanonicalOrder` directly — see its
+ * own section for why switching it would be no-op churn on a channel this sprint does not
+ * touch.
+ */
+function higherRanked(incumbent: unknown, candidate: unknown): unknown {
+  return rankIsGreater(candidate, incumbent) ? candidate : incumbent;
 }
 
 /**
