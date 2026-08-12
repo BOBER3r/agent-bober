@@ -196,12 +196,13 @@ export const SprintContractSchema = z.object({
   /**
    * ── `version` is the ordering discriminator, not decoration ──
    *
-   * Read by `versionRank` (`src/pge/registry/reducers.ts:348-359`), the
-   * `replaceIfNewer` reducer's rank function: a missing/non-finite `version`
-   * ranks `0`, so any settled contract with `version >= 1` outranks a seeded
-   * one without a fight over `updatedAt` (which the golden harness's fixed
-   * clock can make byte-identical between seeded and settled copies, making
-   * it useless as a tiebreak on its own).
+   * Read by `versionRank` (`src/pge/registry/reducers.ts:366-393`), the shared rank
+   * function `appendById` (the `sprintContracts` channel, since sprint 4 of
+   * spec-20260812-terminal-vocabulary) and `replaceIfNewer` both resolve a conflict
+   * through: a missing/non-finite `version` ranks `0`, so any settled contract with
+   * `version >= 1` outranks a seeded one without a fight over `updatedAt` (which the
+   * golden harness's fixed clock can make byte-identical between seeded and settled
+   * copies, making it useless as a tiebreak on its own).
    *
    * DELIBERATELY `.optional()`, never `.default(...)`. A default would
    * materialise `version` on the SEEDED copy too (every parse, including

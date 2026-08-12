@@ -460,7 +460,7 @@ describe("every committed contract's status is a legal ContractStatusSchema memb
 // ── SprintContractSchema.version (sc-3-1) ───────────────────────────
 //
 // `version` is optional, never defaulted (see the field's JSDoc in
-// sprint-contract.ts and versionRank at src/pge/registry/reducers.ts:348-359).
+// sprint-contract.ts and versionRank at src/pge/registry/reducers.ts:366-393).
 // A `.default(...)` would stamp a value onto every contract that lacks one —
 // including all ~250 committed contracts and the seeded copy `sprint_exit`
 // must outrank — so the anti-default assertion below is the load-bearing one.
