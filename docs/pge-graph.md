@@ -1187,70 +1187,96 @@ serves both.
   error class, and the MCP run manager reports `RunState.status = "failed"` with `error`
   populated. Both engines still report `success: true`; the artifacts differ, and now so
   does the presence of `errors`.
-- **What the `contracts` divergence IS, and what `spec-20260812-terminal-vocabulary` sprint 1
-  did *not* move.** The two engines pick different words out of the same nine-member
-  `ContractStatusSchema` for the same outcome: `runSprintCycle` writes `"passed"`, the graph's
-  `sprint_review` writes `"completed"` (`src/pge/nodes/sprint-review.ts:205`; the persisted
-  value is pinned at `src/pge/nodes/sprint-evaluate.test.ts:765`). That sprint converged the
-  **readers** on the split rather than the writers: `src/contracts/sprint-contract.ts` is now
-  the single definition site, exposing `isSettledContractStatus` (`passed | completed` —
-  *finished successfully*) and `isTerminalContractStatus` (adds `failed` — *stopped at all*,
-  derived from the settled set so the two cannot diverge), and six production readers call one
-  of them. **No writer changed, so the divergence set above is unmoved** — `contracts` closes
-  when the two engines agree on the word.
-- **The `contracts` divergence went from three field deltas to FOUR at that spec's sprint 3, and
-  `contracts` will still be in the diverged set after sprint 5 closes the status word.** The
-  three were `status`, `evaluatorFeedback` and `generatorNotes` (the graph populates neither of
-  the latter two). Sprint 3 added a fourth: `sprint_exit` now writes a monotone
-  `version: attempts` on the settled contract (`src/pge/nodes/sprint-review.ts:215`), the
-  ordering discriminator `versionRank` (`src/pge/registry/reducers.ts:366-393`) reads, and
-  `runSprintCycle` writes none — pinned at
-  `src/orchestrator/workflow/conformance.engines.test.ts:413-415`. `conformance.ts`'s comparison
-  strips a **10-key** `VOLATILE_KEYS` list (`:65-76`) and `version` is deliberately **not** on it:
-  stripping it would hide a genuine difference in what the two engines write, which is the one
-  thing this harness exists to find. So closing the status delta at sprint 5 leaves **three** open
-  — `evaluatorFeedback`, `generatorNotes`, `version` — and `contracts` stays in the pinned
-  divergence set. Sprint 5's own contract pre-authorises exactly this: `sc-5-2` requires only that
-  the status delta be closed with the others "either closed too or **recorded with a stated
-  reason**", and its stop condition reads *"Closing the status delta does not close the contracts
-  divergence because another delta remains — that is a finding to record, not to force."* Full
-  record: [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-3.md).
-- **Sprint 4 closed the seeded-copy defect the `pipelineResult` bullet below used to blame, and
-  the divergence set stayed at four fields — because `pipelineResult`'s divergence REDUCES to
-  `contracts`'s, it does not close independently of it.**
+- **What the `contracts` divergence WAS, and what `spec-20260812-terminal-vocabulary` sprint 1
+  did *not* move — the status word, closed at sprint 5.** The two engines used to pick
+  different words out of the same nine-member `ContractStatusSchema` for the same outcome:
+  `runSprintCycle` wrote `"passed"`, the graph's `sprint_review` wrote `"completed"`
+  (`src/pge/nodes/sprint-review.ts:205`; the persisted value is pinned at
+  `src/pge/nodes/sprint-evaluate.test.ts:765`). Sprint 1 converged the **readers** on the
+  split rather than the writers: `src/contracts/sprint-contract.ts` is the single definition
+  site, exposing `isSettledContractStatus` (`passed | completed` — *finished successfully*)
+  and `isTerminalContractStatus` (adds `failed` — *stopped at all*, derived from the settled
+  set so the two cannot diverge), and six production readers call one of them. **Sprint 5
+  changed the WRITER**: `runSprintCycle` now writes `"completed"` at `pipeline.ts:589` —
+  exactly what `sprint_review` already wrote — and its own reader at `pipeline.ts:1052`
+  (the `completedSprints`/`failedSprints` split) was migrated to `isSettledContractStatus` in
+  the same step, so the write and its own consumer never went out of sync. The `status`
+  field of the `contracts` divergence is CLOSED: both engines now write the identical word
+  for a settled sprint, pinned by asserting `tsContract.status` against `pgeContract.status`
+  directly (`src/orchestrator/workflow/conformance.engines.test.ts:417-419`) rather than
+  against a literal, so the claim pinned is the convergence itself.
+- **The `contracts` divergence went from three field deltas to FOUR at sprint 3, and back
+  down to THREE at sprint 5 — but `contracts` stays in the diverged set, because the other
+  three do not close by a vocabulary change.** The original three were `status`,
+  `evaluatorFeedback` and `generatorNotes` (the graph populates neither of the latter two).
+  Sprint 3 added a fourth: `sprint_exit` writes a monotone `version: attempts` on the
+  settled contract (`src/pge/nodes/sprint-review.ts:215`), the ordering discriminator
+  `versionRank` (`src/pge/registry/reducers.ts:366-393`) reads, and `runSprintCycle` writes
+  none — pinned at `src/orchestrator/workflow/conformance.engines.test.ts:417-426`.
+  `conformance.ts`'s comparison strips a **10-key** `VOLATILE_KEYS` list (`:65-76`) and
+  `version` is deliberately **not** on it: stripping it would hide a genuine difference in
+  what the two engines write, which is the one thing this harness exists to find. Sprint 5
+  closed `status`, leaving exactly **three** open — `evaluatorFeedback`, `generatorNotes`,
+  `version` — and `contracts` stays in the pinned divergence set for that reason. Sprint 5's
+  own contract pre-authorised exactly this outcome: `sc-5-2` required only that the status
+  delta be closed with the others "either closed too or **recorded with a stated reason**",
+  and its stop condition read *"Closing the status delta does not close the contracts
+  divergence because another delta remains — that is a finding to record, not to force."*
+  The reason recorded for the remaining three: `evaluatorFeedback`/`generatorNotes` have no
+  PGE writer anywhere in `src/pge/` (a `grep -rn 'evaluatorFeedback' src/pge/` outside tests
+  returns zero hits) — closing either means adding a writer to a PGE node body, which is a
+  graph-node change, not a vocabulary change, and outside this sprint's scope; `version` is
+  deliberately excluded from `VOLATILE_KEYS` for the reason above. Full record:
+  [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-3.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-3.md)
+  and
+  [`docs/sprints/sprint-spec-20260812-terminal-vocabulary-5.md`](./sprints/sprint-spec-20260812-terminal-vocabulary-5.md).
+- **Sprint 4 closed the seeded-copy defect the `pipelineResult` bullet below used to blame,
+  and the divergence set stayed at four fields — because `pipelineResult`'s divergence
+  REDUCES to `contracts`'s, it does not close independently of it. Sprint 5 narrowed what it
+  reduces to from four field deltas to three, for the identical reason `contracts` narrowed.**
   `PipelineResult.completedSprints`/`failedSprints` carry whole `SprintContract` objects
-  (`src/orchestrator/pipeline.ts`), so once the channel join converges on the settled copy (this
-  sprint), what a caller sees inside `pipelineResult` is exactly what `listContracts` sees on
-  disk — no more, no less. The two engines' contracts still differ on the same four fields
-  (`status`, `evaluatorFeedback`, `generatorNotes`, `version`), so `pipelineResult` still diverges,
-  for the identical reason `contracts` does.
-  `src/orchestrator/workflow/conformance.engines.test.ts` pins this positively —
-  `pgeResult?.completedSprints[0]` now `toEqual`s the contract `listContracts` reads back off
-  disk — rather than merely dropping the field from the pinned set.
-- **One graph-runtime reader was deliberately NOT migrated, and it is a live defect — narrower
-  since `spec-20260812-terminal-vocabulary` sprint 4, but not closed.**
-  `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict from the count of
-  `state.sprintContracts` entries whose status is the literal `"passed"` — a word no PGE run
-  writes — so for a graph run that count is still **zero**, and every consequence under-reports: a
-  terminal-declared `success` that the interpreter downgrades because it recorded failures can
-  only become `failed`, never `partial`; a declared `failed` never softens to `partial`; and a
-  run that reaches a terminal without declaring a verdict is `failed` even when every branch
-  settled. **Migrating the literal alone would still not fix it — but the reason changed.** Before
-  sprint 4, the channel had TWO independent problems: it kept the seeded `"proposed"` copy of each
+  (`src/orchestrator/pipeline.ts`), so once the channel join converges on the settled copy
+  (sprint 4) and the two engines agree on the status word inside it (sprint 5), what a caller
+  sees inside `pipelineResult` is exactly what `listContracts` sees on disk — no more, no
+  less. The two engines' contracts now differ on three fields (`evaluatorFeedback`,
+  `generatorNotes`, `version`), so `pipelineResult` still diverges, for the identical reason
+  `contracts` does. `src/orchestrator/workflow/conformance.engines.test.ts` pins this
+  positively — `pgeResult?.completedSprints[0]` `toEqual`s the contract `listContracts` reads
+  back off disk, and `tsResult?.completedSprints.map((c) => c.status)` now equals
+  `pgeResult?.completedSprints.map((c) => c.status)` — rather than merely dropping the field
+  from the pinned set.
+- **One graph-runtime reader was deliberately NOT migrated, and it is a live defect — now
+  dead for BOTH engines, not narrower for one, as of `spec-20260812-terminal-vocabulary`
+  sprint 5.** `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict
+  from the count of `state.sprintContracts` entries whose status is the literal `"passed"`
+  — before sprint 5 that was "a word no PGE run writes", i.e. a defect that only ever
+  affected graph runs; **as of sprint 5, `runSprintCycle` does not write `"passed"` for a
+  settled sprint either**, so the literal `verdictFrom` compares against is now a word
+  *neither* engine's settled-sprint writer produces. That is a strictly stronger statement of
+  the same defect, not a new one: for a graph run the count was already permanently zero, and
+  it stays permanently zero, for one more reason than before. Every consequence
+  under-reports exactly as it did before: a terminal-declared `success` that the interpreter
+  downgrades because it recorded failures can only become `failed`, never `partial`; a
+  declared `failed` never softens to `partial`; and a run that reaches a terminal without
+  declaring a verdict is `failed` even when every branch settled. **Migrating the literal
+  alone would still not fix it — the reason has not changed since sprint 4.** Before sprint
+  4, the channel had TWO independent problems: it kept the seeded `"proposed"` copy of each
   contract (`appendById` resolved a duplicate `contractId` by canonical order, and
-  `"completed" < "proposed"`), AND no settled contract ever wrote the word `"passed"`. Sprint 4
-  fixed the first: `mergeEntries` (`src/pge/registry/reducers.ts`) now resolves a duplicate id by
-  RANK (`rankIsGreater`), reading the monotone `SprintContract.version`
-  (`src/contracts/sprint-contract.ts:213`, optional and **never defaulted**) `sprint_exit` writes
-  as `attempts`. The channel now holds the SETTLED copy — `status: "completed"`, not `"proposed"`
-  — pinned positively at `src/pge/nodes/sprint-evaluate.test.ts` (flipped from the sprint-3 known
-  limitation) and end to end at
-  `src/orchestrator/workflow/conformance.engines.test.ts` ("4. pipelineResult"). What remains is
-  the second problem alone: `"completed"` is still not the literal `"passed"` `verdictFrom`
-  compares against, so `passed` is still zero — the SAME vocabulary gap the `contracts` divergence
-  is made of, deferred to a later sprint by nonGoal 1 ("no writer changes"). The site stays in
-  `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist, now with an updated reason, so
-  it cannot be forgotten silently.
+  `"completed" < "proposed"`), AND no settled contract ever wrote the word `"passed"`. Sprint
+  4 fixed the first: `mergeEntries` (`src/pge/registry/reducers.ts`) now resolves a duplicate
+  id by RANK (`rankIsGreater`), reading the monotone `SprintContract.version`
+  (`src/contracts/sprint-contract.ts:213`, optional and **never defaulted**) `sprint_exit`
+  writes as `attempts`. The channel now holds the SETTLED copy — `status: "completed"`, not
+  `"proposed"` — pinned positively at `src/pge/nodes/sprint-evaluate.test.ts` (flipped from
+  the sprint-3 known limitation) and end to end at
+  `src/orchestrator/workflow/conformance.engines.test.ts` ("4. pipelineResult"). What remains
+  is the second problem alone: `"completed"` is still not the literal `"passed"`
+  `verdictFrom` compares against, so `passed` is still zero — sprint 5 did not touch this
+  site (nonGoal 1: "changing what the evaluator DECIDES" is out of scope; migrating this
+  literal changes `partial`/`failed` verdict math, which sc-5-4's stop condition would treat
+  as an out-of-scope golden-case move). The site stays in
+  `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist, with an unchanged reason,
+  so it cannot be forgotten silently.
 
 ### The decision
 

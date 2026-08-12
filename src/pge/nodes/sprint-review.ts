@@ -45,13 +45,20 @@ import { iterationOf, provisionalEvaluation, sprintVerdict } from "./sprint-eval
  * discriminator (`state/overall.ts:146-157`); `SprintContract.version` is the same idea
  * applied to this channel, and `rankIsGreater` is what now consults it.
  *
- * One gap remains, deliberately: the settled contract's `status` is `"completed"` or
- * `"failed"`, never `"passed"` — the word `runTsPipeline` and `commit.ts`'s `passed()` compare
- * literally (`commit.ts`, near its `succeededBranches` split) — so a reader that still checks
- * `status === "passed"` sees no change from this. Unifying that word is a separate, later
- * change (nonGoal here); this file's job was only to make the channel converge on the settled
- * copy at all, and it now does. `sprint-evaluate.test.ts` asserts the settled status lands in
- * the channel.
+ * One gap remains, deliberately, but it narrowed at sprint 5 of
+ * spec-20260812-terminal-vocabulary: the settled contract's `status` is `"completed"` or
+ * `"failed"`, never `"passed"`. Before that sprint, `runTsPipeline` AND `commit.ts`'s
+ * `passed()` both compared the literal `"passed"` (`commit.ts`, near its
+ * `succeededBranches` split) — sprint 5 migrated `runTsPipeline`'s own reader
+ * (`pipeline.ts:1052`) to `isSettledContractStatus` in the same step it stopped WRITING
+ * `"passed"` at all (`pipeline.ts:589` now writes `"completed"`, the same word this file
+ * writes). `commit.ts`'s `passed()` still compares the literal, deliberately: migrating it
+ * would change which contracts land in a GRAPH run's `completedSprints`, which moves golden
+ * cases and is exactly what sc-5-4's stop condition forbids — so a reader that still checks
+ * `status === "passed"` there sees no change from this file. This node's job was only to
+ * make the channel converge on the settled copy at all, and it now does; unifying the
+ * WRITTEN word across engines was sprint 5's job, not this one's.
+ * `sprint-evaluate.test.ts` asserts the settled status lands in the channel.
  */
 
 export const SPRINT_REVIEW_NODE_IDS = {

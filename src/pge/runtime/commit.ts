@@ -501,16 +501,22 @@ export function createCommitBoundary(options: CommitBoundaryOptions = {}): Commi
 
       // ── The split, and why the CONTRACT STATUS alone still cannot decide it ──
       //
-      // `runTsPipeline` splits on `status === "passed"`, and that is the primary rule here
-      // too. It is still not sufficient for a GRAPH run — but the reason changed at sprint 4
-      // of spec-20260812-terminal-vocabulary. `appendById` now resolves a duplicate
-      // `contractId` by RANK (`registry/reducers.ts`, `rankIsGreater`) rather than canonical
-      // order, so the settled copy DOES outrank the seeded `"proposed"` one and
-      // `state.sprintContracts` now holds it (`sprint-evaluate.test.ts` pins this). What still
-      // doesn't line up is the WORD: `sprint_exit` writes `"completed"` or `"failed"`
-      // (`sprint-review.ts`), never `"passed"` — closing that vocabulary gap is a writer
-      // change this sprint's nonGoals defer — so `c.status === "passed"` below is never true
-      // for a graph-committed contract, whichever copy the channel holds.
+      // `runTsPipeline` used to split on `status === "passed"`, the same literal as below —
+      // as of sprint 5 of spec-20260812-terminal-vocabulary it splits on
+      // `isSettledContractStatus(result.contract.status)` instead (`pipeline.ts:1052`), and
+      // `runSprintCycle` no longer WRITES `"passed"` at all: it writes `"completed"`
+      // (`pipeline.ts:589`), the identical word `sprint_review` has always written. So
+      // `c.status === "passed"` below is no longer merely insufficient for a GRAPH run — it
+      // is now a comparison against a word NEITHER engine's settled-sprint writer produces,
+      // for any run, imperative or graph. (`appendById` resolving a duplicate `contractId` by
+      // RANK rather than canonical order — sprint 4, `registry/reducers.ts`, `rankIsGreater`
+      // — is the separate, already-fixed reason the settled copy reaches this channel at all;
+      // `sprint-evaluate.test.ts` pins that.) Migrating this comparison to
+      // `isSettledContractStatus` would change which contracts land in `completedSprints`
+      // for a GRAPH run specifically, which moves golden cases and is exactly what sc-5-4's
+      // stop condition (spec-20260812-terminal-vocabulary sprint 5) forbids — so this
+      // comparison stays a live, documented, deliberately-deferred defect rather than a
+      // migrated reader.
       //
       // The settled outcome is therefore still read from the channel that unambiguously
       // distinguishes PASS from FAIL today: `branchStatus`, keyed by `contractId`, carrying
