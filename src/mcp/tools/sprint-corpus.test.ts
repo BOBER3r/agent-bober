@@ -91,4 +91,27 @@ describe("bober_sprint / bober_eval settled-contract list against the real corpu
     expect(sprintSource).toMatch(/isSettledContractStatus\(c\.status\)/);
     expect(evalSource).toMatch(/isSettledContractStatus\(c\.status\)/);
   });
+
+  // ── sprint 5 of spec-20260812-terminal-vocabulary: the two WRITERS ────
+  //
+  // The four assertions above pin READERS (the settled-list filters). Separately,
+  // `bober_sprint`'s (mcp/tools/sprint.ts) and `bober sprint`'s (cli/commands/sprint.ts)
+  // OWN sprint loops each WRITE a contract status on a passing evaluation — a site the
+  // sprint-1 predicate migration did not touch because a writer is not a reader. Sprint 1
+  // through 4 left both writing the literal "passed", which meant the repo still had two
+  // paths that could reintroduce the word this whole spec exists to retire. Migrated here
+  // so "One terminal vocabulary" is true of every ts-side writer, not just the imperative
+  // pipeline's.
+
+  it("mcp/tools/sprint.ts's own sprint-loop writer no longer writes the literal 'passed' status", async () => {
+    const source = await readFile(join(REPO_ROOT, "src/mcp/tools/sprint.ts"), "utf-8");
+    expect(source).not.toMatch(/updateContractStatus\(currentContract, "passed"\)/);
+    expect(source).toMatch(/updateContractStatus\(currentContract, "completed"\)/);
+  });
+
+  it("cli/commands/sprint.ts's own sprint-loop writer no longer writes the literal 'passed' status", async () => {
+    const source = await readFile(join(REPO_ROOT, "src/cli/commands/sprint.ts"), "utf-8");
+    expect(source).not.toMatch(/updateContractStatus\(currentContract, "passed"\)/);
+    expect(source).toMatch(/updateContractStatus\(currentContract, "completed"\)/);
+  });
 });

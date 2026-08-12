@@ -252,7 +252,7 @@ export function registerSprintTool(): void {
           lastEvalScore = evaluation.score;
 
           if (evaluation.passed) {
-            currentContract = updateContractStatus(currentContract, "passed");
+            currentContract = updateContractStatus(currentContract, "completed");
             currentContract = {
               ...currentContract,
               evaluatorFeedback: evaluation.summary,

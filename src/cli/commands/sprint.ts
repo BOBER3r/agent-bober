@@ -282,7 +282,7 @@ export async function runSprintCommand(
 
       if (evaluation.passed) {
         logger.success(`Sprint passed! Score: ${evaluation.score}/100`);
-        currentContract = updateContractStatus(currentContract, "passed");
+        currentContract = updateContractStatus(currentContract, "completed");
         currentContract = {
           ...currentContract,
           evaluatorFeedback: evaluation.summary,
