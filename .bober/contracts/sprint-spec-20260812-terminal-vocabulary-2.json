@@ -1,0 +1,70 @@
+{
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-2",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "sprintNumber": 2,
+  "title": "No committed contract carries a status the schema forbids",
+  "description": "Four contracts carry \"pending\", which ContractStatusSchema does not permit \u2014 they load only because loadContract parses non-strictly. Migrate them and add the guard that would have caught it when it happened.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-terminal-vocabulary-1"
+  ],
+  "features": [
+    "feat-2"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-2-1",
+      "description": "The four contracts from spec-20260604-docs-correction carrying \"pending\" are migrated to a legal member of ContractStatusSchema, with the chosen value justified in the commit message.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-2",
+      "description": "A test reads every committed contract in .bober/contracts/ and asserts its status parses against ContractStatusSchema, failing on any value outside the enum.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-3",
+      "description": "The test is proven to bite by mutation: an illegal status introduced in a temp copy fails it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-4",
+      "description": "The test reads the directory at run time rather than a hardcoded file list, so a newly added contract is covered automatically.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-2-5",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build are green.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Adding \"pending\" to the enum \u2014 the decision was to fix the data, not widen the schema.",
+    "Rewriting any other field of those four contracts."
+  ],
+  "stopConditions": [
+    "Migrating a status would change what a completed spec's history claims \u2014 if so, report which and pick the value that preserves the record."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 2,
+  "generatorNotes": "The four are sprint-spec-20260604-docs-correction-{1,2,3,4}.json. They belong to a long-finished spec, so the stakes are low \u2014 pick the legal value that best preserves what actually happened and say why. Note the guard test overlaps in spirit with the golden dataset-integrity checks; look at how those read a directory at run time and follow that shape rather than inventing one.",
+  "evaluatorNotes": "Verify all four migrated files parse strictly. Verify sc-2-2 reads the directory rather than a list by adding a temp contract with a bad status and confirming it is caught. Check nothing else in those four files changed.",
+  "estimatedFiles": [
+    ".bober/contracts/sprint-spec-20260604-docs-correction-1.json",
+    ".bober/contracts/sprint-spec-20260604-docs-correction-2.json",
+    ".bober/contracts/sprint-spec-20260604-docs-correction-3.json",
+    ".bober/contracts/sprint-spec-20260604-docs-correction-4.json",
+    "src/contracts/sprint-contract.test.ts"
+  ],
+  "estimatedDuration": "small",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T14:30:00Z",
+  "updatedAt": "2026-08-12T14:30:00Z"
+}

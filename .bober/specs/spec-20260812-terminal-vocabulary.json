@@ -1,0 +1,221 @@
+{
+  "specId": "spec-20260812-terminal-vocabulary",
+  "version": 1,
+  "createdAt": "2026-08-12T14:30:00Z",
+  "updatedAt": "2026-08-12T14:30:00Z",
+  "title": "One terminal vocabulary for SprintContract, and the rank-aware channel join",
+  "description": "Two engines pick different words from the same enum for the same outcome \u2014 runSprintCycle writes \"passed\", PGE's sprint_exit writes \"completed\" \u2014 and five production readers filter for only one of them, so both MCP sprint tools return empty against a corpus of 250 contracts holding zero \"passed\". Standardise the word, give the readers a shared predicate so a third word cannot silently break them again, and replace the channel reducer's canonical-order duplicate resolution with the rank-aware join already shipping beside it. Closes two of the four conformance divergences.",
+  "mode": "brownfield",
+  "status": "draft",
+  "ambiguityScore": 3,
+  "clarificationQuestions": [],
+  "resolvedClarifications": [
+    {
+      "questionId": "D1-vocabulary",
+      "answer": "Standardise on \"completed\", and add a shared isSettled() predicate for readers. The ts engine's runSprintCycle changes to write \"completed\"; PGE already does. Rationale: \"completed\" matches the on-disk majority (218 of 250 committed contracts), so nothing already written goes stale, and updateContractStatus (sprint-contract.ts:216-219) already treats it as terminal. A predicate alone was rejected because it fixes the readers without making the two engines agree, which leaves the `contracts` divergence open.",
+      "resolvedAt": "2026-08-12T14:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D2-discriminator",
+      "answer": "Add version?: number to SprintContractSchema. versionRank (reducers.ts:348-359) already reads a `version` number, so no reducer logic is invented. Optional, so all 250 existing contracts stay valid. Rejected: riding as an unknown key, because loadContract parses through a non-strict schema that strips unknown keys, so the discriminator would vanish on any load round-trip.",
+      "resolvedAt": "2026-08-12T14:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D3-illegal-status",
+      "answer": "Migrate the four contracts carrying \"pending\" (all from spec-20260604-docs-correction) to a legal status, and add a test asserting no committed contract carries a status outside ContractStatusSchema \u2014 so this class of drift is caught rather than accumulating.",
+      "resolvedAt": "2026-08-12T14:30:00Z",
+      "resolvedBy": "user"
+    },
+    {
+      "questionId": "D4-updatedAt-rejected",
+      "answer": "updatedAt cannot serve as the discriminator even though versionRank already reads it: the replay harness runs on a fixed clock, so the seeded and settled copies stamp identically and the comparison falls through to the canonical-order tiebreak \u2014 exactly the defect being fixed. Established by the planner during scoping.",
+      "resolvedAt": "2026-08-12T14:30:00Z",
+      "resolvedBy": "planner"
+    },
+    {
+      "questionId": "gate-design-approval",
+      "answer": "Autonomous self-approval",
+      "resolvedAt": "2026-08-12T14:30:00Z",
+      "resolvedBy": "planner",
+      "metadata": {
+        "approvalEvidence": [
+          "src/mcp/tools/sprint.ts:147 and src/mcp/tools/eval.ts:139 (filter status === \"passed\")",
+          "src/cli/commands/sprint.ts:160 and src/cli/commands/eval.ts:127 (same filter)",
+          "src/state/history.ts:193 (counts only \"passed\")",
+          "src/orchestrator/pipeline.ts:589 (ts engine writes \"passed\"), :1052 (splits on it)",
+          "src/pge/nodes/sprint-review.ts:203 (PGE writes \"completed\")",
+          "src/pge/nodes/documenter.ts:83, sprint-curate.ts:254, sprint-generate.ts:133 (read \"completed\")",
+          "src/pge/runtime/commit.ts:504,531 and src/pge/runtime/interpreter.ts:728 (read \"passed\")",
+          "src/orchestrator/workflow/resume-cursor.ts:22 (already reads BOTH \u2014 the shape isSettled should take)",
+          "src/contracts/sprint-contract.ts:38-49 (ContractStatusSchema enum), :216-219 (updateContractStatus already treats passed|failed|completed as terminal)",
+          "src/pge/registry/reducers.ts:187 (mergeEntries resolves duplicates by joinByCanonicalOrder \u2014 the defect)",
+          "src/pge/registry/reducers.ts:348-367 (versionRank and rankIsGreater already exist and already read `version` then `updatedAt`)",
+          ".bober/contracts/*.json measured on main: 218 completed, 28 proposed, 4 pending, 0 passed",
+          "The four pending contracts are sprint-spec-20260604-docs-correction-{1,2,3,4}.json"
+        ]
+      }
+    }
+  ],
+  "assumptions": [
+    "MEASURED on main: the 250 committed contracts hold 218 \"completed\", 28 \"proposed\", 4 \"pending\" and ZERO \"passed\". Both MCP sprint tools filter status === \"passed\" (mcp/tools/sprint.ts:147, mcp/tools/eval.ts:139) and therefore return empty today. So do the two CLI equivalents (cli/commands/sprint.ts:160, cli/commands/eval.ts:127) and the history counter (state/history.ts:193).",
+    "\"pending\" is not a member of ContractStatusSchema (contracts/sprint-contract.ts:38-49), so four committed contracts carry a status the schema does not permit. All four belong to spec-20260604-docs-correction.",
+    "The two writers disagree: runSprintCycle writes \"passed\" (orchestrator/pipeline.ts:589), PGE's sprint_exit writes \"completed\" (pge/nodes/sprint-review.ts:203). This is a pre-existing ambiguity the conformance harness surfaced, not one PGE introduced.",
+    "A shared predicate is already half-present: orchestrator/workflow/resume-cursor.ts:22 filters on BOTH words, and updateContractStatus (contracts/sprint-contract.ts:216-219) already treats passed|failed|completed as terminal. isSettled() should generalise what those two already do.",
+    "mergeEntries resolves a duplicate id by joinByCanonicalOrder (pge/registry/reducers.ts:187). Every settled status sorts before the seeded \"proposed\" under canonical order, so the channel keeps the PLANNED copy \u2014 which is why a pge run reports a contract still marked \"proposed\" inside completedSprints.",
+    "versionRank (reducers.ts:348-359) and rankIsGreater (:361-367) ALREADY EXIST and already rank by `version` number, then `updatedAt`, then canonical JSON. They are used by keepHighestRanked for the spec and verdict channels. Switching mergeEntries to rankIsGreater therefore invents no new ranking logic.",
+    "The same canonical-order resolution is the latent defect in lastWriteWinsByKey (reducers.ts around :288-297) where attempts:10 sorts below attempts:9. The rank-aware join fixes both call sites.",
+    "updatedAt cannot be the discriminator: the replay harness uses a fixed clock, so the seeded and settled copies stamp identically and rankIsGreater falls through to canonical order \u2014 reproducing the defect. A monotone `version` written at sprint_exit is required for replay stability.",
+    "Persistence asymmetry: saveContract writes the raw object (state/sprint-state.ts) while loadContract parses through a NON-STRICT schema that strips unknown keys. So a discriminator lands on disk regardless; schema membership decides only whether it survives a load round-trip.",
+    "CERTAIN BLAST RADIUS: the two-directional pins in orchestrator/workflow/conformance.engines.test.ts (both the divergence-set list and the per-field records) and oracle-retention.test.ts fail when a divergence is FIXED as well as when one is added. pge/nodes/sprint-evaluate.test.ts pins the current \"completed\" write. Each must be edited deliberately, in the same commit as the docs/pge-graph.md disposition it changes.",
+    "The golden dataset holds 6 enforcement:\"replay\" cases against a floor of 5 (GOLDEN_MIN_REPLAY_CASES) \u2014 zero slack. Any change to what a contract's status or version field holds moves recorded artifacts and forces a re-capture.",
+    "The just-completed spec-20260812-pge-real-workload-errors established the discipline this spec inherits: caps and ceilings pinned as functions of measured data, negative controls that scale with the dataset, and every change carrying its own blast radius rather than deferring it to a later sprint."
+  ],
+  "outOfScope": [
+    "Closing the `history` or `audits` conformance divergences. Both are recommended for permanent acceptance on architectural grounds \u2014 there is no curator node to emit a start/complete pair from, and five of eight checkpoint ids sit inside the fan-out region where HITL is a frozen ADR-6 error.",
+    "Flipping config.pipeline.engine to \"pge\". The default stays \"ts\" and oracle-retention.test.ts stays green throughout.",
+    "Re-specifying the conformance bar. This spec closes two divergences; deciding what the remaining bar should be is a separate, stated decision.",
+    "Option B success semantics (success:false on a fail-closed refusal).",
+    "Executing the commit or finalize nodes under a durable checkpoint mechanism.",
+    "Adding a golden case to reach critique and rework_route (worth ~40/44 coverage, recorded as a follow-up by the previous spec).",
+    "Renaming or restructuring ContractStatusSchema beyond what D3 requires.",
+    "Any change to how the evaluator decides pass or fail. This spec changes the WORD recorded for an outcome, never the outcome itself."
+  ],
+  "features": [
+    {
+      "featureId": "feat-1",
+      "title": "A shared settled-status predicate, and the MCP tools work again",
+      "description": "Five production readers each hardcode one of two words. Give them one predicate, and the live bug \u2014 both MCP sprint tools returning empty against a 250-contract corpus \u2014 closes immediately.",
+      "priority": "must-have",
+      "estimatedComplexity": "low",
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "AC1: A single exported predicate decides whether a contract's status is terminal, and it generalises what updateContractStatus (sprint-contract.ts:216-219) and resume-cursor.ts:22 already do independently.",
+        "AC2: Every production reader that hardcoded status === \"passed\" or status === \"completed\" for a terminal check uses the predicate instead \u2014 mcp/tools/sprint.ts, mcp/tools/eval.ts, cli/commands/sprint.ts, cli/commands/eval.ts, state/history.ts.",
+        "AC3: A test drives both MCP sprint tools against the committed 250-contract corpus and asserts a NON-EMPTY settled list \u2014 the live bug, closed and pinned.",
+        "AC4: A test asserts no production module outside the predicate compares a contract status to a status literal for a terminal check, so a sixth reader cannot reintroduce the bug."
+      ]
+    },
+    {
+      "featureId": "feat-2",
+      "title": "No contract carries a status the schema forbids",
+      "description": "Four committed contracts carry \"pending\", which ContractStatusSchema does not permit. Migrate them and add the guard that would have caught it.",
+      "priority": "must-have",
+      "estimatedComplexity": "low",
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "AC1: The four contracts from spec-20260604-docs-correction carrying \"pending\" are migrated to a legal status, with the chosen value justified in the commit.",
+        "AC2: A test reads every committed contract and asserts its status parses against ContractStatusSchema; it fails if any file carries a value outside the enum.",
+        "AC3: The test is proven to bite by mutation \u2014 introducing an illegal status in a temp copy fails it."
+      ]
+    },
+    {
+      "featureId": "feat-3",
+      "title": "A monotone discriminator that survives replay",
+      "description": "appendById keeps the seeded copy over the settled one because canonical order puts every settled status first. Give the contract a version the existing rank-aware join can read, and write it replay-stably.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-1"
+      ],
+      "acceptanceCriteria": [
+        "AC1: SprintContractSchema declares version?: number, optional so all 250 committed contracts stay valid.",
+        "AC2: sprint_exit writes a monotone version, and the value is REPLAY-STABLE \u2014 a replayed run produces the same version as the recorded run, proven by a golden case rather than argued.",
+        "AC3: A test asserts the settled copy outranks the seeded one under versionRank, and that the ordering does not depend on updatedAt (which a fixed clock makes identical).",
+        "AC4: A round-trip test proves the version survives saveContract followed by loadContract \u2014 the asymmetry that made the unknown-key option unworkable."
+      ]
+    },
+    {
+      "featureId": "feat-4",
+      "title": "The channel join is rank-aware, and pipelineResult converges",
+      "description": "Replace mergeEntries' canonical-order duplicate resolution with the rank-aware join already shipping beside it, which also fixes the latent attempts-ordering defect in lastWriteWinsByKey.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-3"
+      ],
+      "acceptanceCriteria": [
+        "AC1: mergeEntries resolves a duplicate id with rankIsGreater rather than joinByCanonicalOrder, and no new ranking logic is introduced \u2014 versionRank and rankIsGreater are reused as they ship.",
+        "AC2: A test proves the settled contract now outranks the seeded \"proposed\" one, so a pge run no longer reports a contract still marked \"proposed\" inside completedSprints.",
+        "AC3: The latent lastWriteWinsByKey defect is fixed and pinned: attempts:10 must outrank attempts:9, which canonical order got backwards.",
+        "AC4: Order-invariance is preserved \u2014 the property appendById exists for. A test asserts the merge result is identical regardless of the order the containers arrive in.",
+        "AC5: The `pipelineResult` conformance divergence is closed, and the two-directional pin in conformance.engines.test.ts is edited DELIBERATELY in the same commit as the docs/pge-graph.md disposition it changes."
+      ]
+    },
+    {
+      "featureId": "feat-5",
+      "title": "Both engines write the same word, and contracts converges",
+      "description": "The ts engine changes to write \"completed\", matching PGE and the on-disk majority. This is the change that makes the two engines agree about what happened.",
+      "priority": "must-have",
+      "estimatedComplexity": "medium",
+      "dependencies": [
+        "feat-4"
+      ],
+      "acceptanceCriteria": [
+        "AC1: runSprintCycle writes \"completed\" where it wrote \"passed\", and every ts-side reader of that write follows.",
+        "AC2: The `contracts` conformance divergence is closed \u2014 the status delta is gone, and the two remaining field deltas (evaluatorFeedback, generatorNotes) are either closed or recorded with a stated reason.",
+        "AC3: pge/nodes/sprint-evaluate.test.ts, which pins the current write, is edited deliberately rather than incidentally.",
+        "AC4: The six replay golden cases are re-captured and the diff is verified confined to the status word, the version field and their direct consequences \u2014 anything else moving is a stop condition.",
+        "AC5: The replay count stays at or above GOLDEN_MIN_REPLAY_CASES and no case is relabelled from replay to integrity."
+      ]
+    },
+    {
+      "featureId": "feat-6",
+      "title": "The convergence record",
+      "description": "State honestly what the divergence set is now, what closing the rest would take, and what a default flip would still require. A spec that closes two divergences should say so in the place the last one recorded them.",
+      "priority": "must-have",
+      "estimatedComplexity": "low",
+      "dependencies": [
+        "feat-5"
+      ],
+      "acceptanceCriteria": [
+        "AC1: conformance.engines.test.ts pins the divergence set to exactly what a real run now produces, with the per-field records updated to match, and still fails in BOTH directions.",
+        "AC2: docs/pge-graph.md's engine-migration disposition records which divergences closed, which remain, and why the remaining ones are recommended for permanent acceptance.",
+        "AC3: oracle-retention.test.ts still asserts the default is \"ts\" and TsPipelineEngine is still both selected and the fallback \u2014 this spec does not flip anything.",
+        "AC4: The document states plainly what a flip would still require beyond this spec, so nobody reads two closed divergences as a green light."
+      ]
+    }
+  ],
+  "nonFunctionalRequirements": [
+    {
+      "category": "reliability",
+      "requirement": "No gate may be weakened to make this spec green. Every two-directional pin edited must still fail in both directions afterwards.",
+      "verificationMethod": "Each edited pin is mutation-tested in both directions by the evaluator, and the negative controls in the golden suite are re-verified to still bite at the current case count."
+    },
+    {
+      "category": "reliability",
+      "requirement": "Order-invariance of the channel reducers is preserved. appendById exists to be order-invariant under concurrency and must remain so.",
+      "verificationMethod": "A test merges the same containers in several different orders and asserts an identical result."
+    },
+    {
+      "category": "reliability",
+      "requirement": "The version discriminator must be replay-stable. A value derived from wall-clock time or run order would make every golden case irreproducible.",
+      "verificationMethod": "A captured golden case replays byte-identically, and a test asserts the version does not vary between two runs over the same input."
+    },
+    {
+      "category": "maintainability",
+      "requirement": "The terminal-status decision lives in exactly one place. A sixth reader must not be able to reintroduce the bug by hardcoding a literal.",
+      "verificationMethod": "A test scans production modules for status-literal comparisons used as terminal checks and fails on any outside the predicate."
+    }
+  ],
+  "techNotes": {
+    "integrationPoints": [],
+    "dataModel": "SprintContract gains an optional monotone `version: number`. ContractStatusSchema is unchanged in membership; what changes is which member the ts engine writes. The sprintContracts channel keeps appendById, but its duplicate resolution moves from joinByCanonicalOrder to the rank-aware rankIsGreater that already ships in the same module.",
+    "securityConsiderations": [],
+    "existingPatterns": "Reuse rather than invent: versionRank and rankIsGreater already exist and already read `version`. Generalise resume-cursor.ts:22 and updateContractStatus rather than writing a third terminal-status rule. Follow the previous spec's discipline \u2014 pin claims two-directionally, prove every gate bites by mutation, and make each change carry its own golden blast radius in its own sprint."
+  },
+  "sprints": [
+    "sprint-spec-20260812-terminal-vocabulary-1",
+    "sprint-spec-20260812-terminal-vocabulary-2",
+    "sprint-spec-20260812-terminal-vocabulary-3",
+    "sprint-spec-20260812-terminal-vocabulary-4",
+    "sprint-spec-20260812-terminal-vocabulary-5",
+    "sprint-spec-20260812-terminal-vocabulary-6"
+  ],
+  "metadata": {
+    "estimatedTotalDuration": "8-13 hours",
+    "riskLevel": "medium",
+    "riskNotes": "Lower risk than its predecessor: no topology change, no new channel, no frozen-surface revision. The risk concentrates in two places \u2014 the deliberate edits to two-directional conformance pins, where the danger is editing one incidentally rather than deliberately, and the replay-stability of the version discriminator, where a wall-clock-derived value would silently make every golden case irreproducible. Both are addressed by dedicated criteria rather than left to care."
+  }
+}

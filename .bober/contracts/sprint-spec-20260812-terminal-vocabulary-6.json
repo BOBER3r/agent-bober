@@ -1,0 +1,75 @@
+{
+  "contractId": "sprint-spec-20260812-terminal-vocabulary-6",
+  "specId": "spec-20260812-terminal-vocabulary",
+  "sprintNumber": 6,
+  "title": "The convergence record, and what a flip would still need",
+  "description": "Two divergences closed, two remaining and recommended for permanent acceptance. State that honestly in the place the previous spec recorded the original four, and say plainly what a default flip would still require \u2014 so nobody reads two closed divergences as a green light.",
+  "status": "proposed",
+  "dependsOn": [
+    "sprint-spec-20260812-terminal-vocabulary-5"
+  ],
+  "features": [
+    "feat-6"
+  ],
+  "successCriteria": [
+    {
+      "criterionId": "sc-6-1",
+      "description": "conformance.engines.test.ts pins the divergence set to exactly what a real run now produces, with the per-field records updated to match, and STILL FAILS IN BOTH DIRECTIONS \u2014 a new divergence and a silently fixed one both break it.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-2",
+      "description": "docs/pge-graph.md's engine-migration disposition records which divergences closed in this spec, which remain, and why history and audits are recommended for permanent acceptance rather than left as open work.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-3",
+      "description": "oracle-retention.test.ts still asserts pipeline.engine defaults to \"ts\", that TsPipelineEngine is what the default config selects, and that it is still the fallback. This spec flips nothing.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-4",
+      "description": "The document states plainly what a flip would STILL require beyond this spec \u2014 at minimum the remaining divergences' disposition, Option B success semantics, a durable checkpoint mechanism for commit and finalize, and an explicit re-specification of the bar itself.",
+      "verificationMethod": "manual",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-5",
+      "description": "Every claim the document adds is backed by a test that fails when the claim stops being true, and `pge docs --check` passes.",
+      "verificationMethod": "unit-test",
+      "required": true
+    },
+    {
+      "criterionId": "sc-6-6",
+      "description": "Full suite, typecheck, typecheck:tests, lint and build green; golden gate passes.",
+      "verificationMethod": "build",
+      "required": true
+    }
+  ],
+  "nonGoals": [
+    "Re-specifying the conformance bar \u2014 that is a stated decision, not a sprint.",
+    "Flipping the default.",
+    "Closing history or audits."
+  ],
+  "stopConditions": [
+    "The divergence set is not what this spec predicted \u2014 record what it actually is and why, rather than adjusting anything to match the prediction."
+  ],
+  "definitionOfDone": "All required criteria met, the full suite plus typecheck, typecheck:tests, lint and build green, the golden gate passing, and every documentation claim added backed by a test that fails when the claim stops being true.",
+  "assumptions": [],
+  "outOfScope": [],
+  "ambiguityScore": 2,
+  "generatorNotes": "This is the spec's closing record and should read like one. The previous spec's disposition section is the model: it stated the outcome, named what was enforced by which test, and said what stayed unproven. Do the same. The most valuable sentence you can write is the one that stops a future reader treating 'two of four closed' as progress toward an automatic flip \u2014 the remaining two are recommended for permanent acceptance, which means the bar itself has to change before a flip is possible.",
+  "evaluatorNotes": "Verify sc-6-1 by mutation in both directions \u2014 add a fake divergence and remove a real one, and confirm each fails. Verify sc-6-3 by reading oracle-retention.test.ts and confirming it is unmodified or only strengthened. For sc-6-2 and sc-6-4, check the prose against reality: every divergence it claims closed should be absent from a real harness run you perform yourself.",
+  "estimatedFiles": [
+    "src/orchestrator/workflow/conformance.engines.test.ts",
+    "src/orchestrator/workflow/oracle-retention.test.ts",
+    "docs/pge-graph.md"
+  ],
+  "estimatedDuration": "medium",
+  "iterationHistory": [],
+  "createdAt": "2026-08-12T14:30:00Z",
+  "updatedAt": "2026-08-12T14:30:00Z"
+}

@@ -736,3 +736,18 @@ default requires that error channel first, not merely green conformance.
 7. [completed] A plan that never settles reports failure instead of crashing -- Passed on iteration 1; specDraft channel at 1.4.0, FinalizeWithoutSpecError narrowed not deleted, new golden case, negative controls STRENGTHENED
 8. [proposed] Reconcile the golden dataset, deliberately and diff-first
 9. [completed] Node coverage counts a node only when it actually ran -- Passed on iteration 1; 39/44 -> 38/44 honest figure, commit added to NEVER_EXECUTED, synthesize reason corrected
+
+## Plan: One terminal vocabulary for SprintContract, and the rank-aware channel join
+- Spec: spec-20260812-terminal-vocabulary
+- Created: 2026-08-12
+- Sprints: 6
+- Status: planned
+- Follows: spec-20260812-pge-real-workload-errors (9/9, merged to main)
+
+### Sprint Breakdown
+1. [proposed] One settled-status predicate, and the MCP sprint tools work again -- fixes the live bug on its own
+2. [proposed] No committed contract carries a status the schema forbids -- migrate the four `pending`, add the guard
+3. [proposed] A monotone version the rank-aware join can read, stable under replay
+4. [proposed] The channel join becomes rank-aware, and pipelineResult converges
+5. [proposed] Both engines write the same word, and contracts converges
+6. [proposed] The convergence record, and what a flip would still need
