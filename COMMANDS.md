@@ -104,6 +104,13 @@ questions and the resolution hint
 If no contract matches the active plan, the error points you at `plan` (to re-materialize
 contracts) or `run` (the full pipeline).
 
+The prior-sprint history the generator receives is every contract that **settled** — status
+`passed` **or** `completed`, decided by the single `isSettledContractStatus` predicate in
+`src/contracts/sprint-contract.ts`. Both words appear on disk because the imperative pipeline and
+the graph engine write different ones for the same outcome, so a filter that accepted only
+`passed` silently handed the generator an empty history against a corpus recorded with the other
+word.
+
 ---
 
 ### `bober eval`
@@ -114,7 +121,8 @@ Evaluate the current sprint output independently (without running the generator)
 bober eval
 ```
 
-Useful for re-evaluating after a manual fix.
+Useful for re-evaluating after a manual fix. It builds the evaluator's sprint history with the
+same settled-status rule as `bober sprint` above.
 
 ---
 

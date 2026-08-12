@@ -1187,6 +1187,31 @@ serves both.
   error class, and the MCP run manager reports `RunState.status = "failed"` with `error`
   populated. Both engines still report `success: true`; the artifacts differ, and now so
   does the presence of `errors`.
+- **What the `contracts` divergence IS, and what `spec-20260812-terminal-vocabulary` sprint 1
+  did *not* move.** The two engines pick different words out of the same nine-member
+  `ContractStatusSchema` for the same outcome: `runSprintCycle` writes `"passed"`, the graph's
+  `sprint_review` writes `"completed"` (`src/pge/nodes/sprint-review.ts:203`; the persisted
+  value is pinned at `src/pge/nodes/sprint-evaluate.test.ts:762`). That sprint converged the
+  **readers** on the split rather than the writers: `src/contracts/sprint-contract.ts` is now
+  the single definition site, exposing `isSettledContractStatus` (`passed | completed` —
+  *finished successfully*) and `isTerminalContractStatus` (adds `failed` — *stopped at all*,
+  derived from the settled set so the two cannot diverge), and six production readers call one
+  of them. **No writer changed, so the divergence set above is unmoved** — `contracts` closes
+  when the two engines agree on the word, which is that spec's sprints 3 and 5.
+- **One graph-runtime reader was deliberately NOT migrated, and it is a live defect.**
+  `verdictFrom` (`src/pge/runtime/interpreter.ts:728`) derives a run's verdict from the count of
+  `state.sprintContracts` entries whose status is the literal `"passed"` — a word no PGE run
+  writes — so for a graph run that count is **zero**, and every consequence under-reports: a
+  terminal-declared `success` that the interpreter downgrades because it recorded failures can
+  only become `failed`, never `partial`; a declared `failed` never softens to `partial`; and a
+  run that reaches a terminal without declaring a verdict is `failed` even when every branch
+  settled. **Migrating the literal alone would not fix it.** The same channel keeps the seeded
+  `"proposed"` copy of each contract — `appendById` resolves a duplicate `contractId` by
+  canonical order, and `"completed" < "proposed"` — asserted as a known limitation at
+  `src/pge/nodes/sprint-evaluate.test.ts:775-777`, and the same mechanism the `pipelineResult`
+  divergence is blamed on (`src/orchestrator/workflow/conformance.engines.test.ts:291-297`). The rank-aware channel join is the other half. The site is
+  carried, with that reason, in `src/contracts/status-vocabulary.invariant.test.ts`'s allowlist,
+  so it cannot be forgotten silently.
 
 ### The decision
 

@@ -478,8 +478,8 @@ Add to your Windsurf MCP configuration:
 |------|------|-------------|
 | `bober_init` | sync | Initialize project config and `.bober/` directory |
 | `bober_plan` | sync | Plan a feature, create sprint contracts |
-| `bober_sprint` | sync | Execute the next sprint (generator + evaluator loop) |
-| `bober_eval` | sync | Evaluate a sprint independently |
+| `bober_sprint` | sync | Execute the next sprint (generator + evaluator loop). The prior-sprint history it hands the generator is every contract that **settled** — status `passed` **or** `completed` (`isSettledContractStatus`) — because the two engines write different words for the same outcome; filtering on `passed` alone silently returned an empty history against a contract corpus recorded with the other word |
+| `bober_eval` | sync | Evaluate a sprint independently. Same settled-history rule as `bober_sprint` |
 | `bober_architect` | sync | Solution architecture -- 5-checkpoint flow producing docs + ADRs |
 | `bober_research` | sync | Two-phase codebase research -- fact-only analysis |
 | `bober_run` | async | Full autonomous pipeline (returns immediately, poll with status) |
