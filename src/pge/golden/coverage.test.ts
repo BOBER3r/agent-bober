@@ -44,28 +44,100 @@ const GOLDEN_DIR = join(REPO_ROOT, ".bober", "golden");
 const ARTIFACT = join(REPO_ROOT, ".bober", "topology", "coding.json");
 
 /**
- * The nodes no committed case reaches, each with the reason it cannot be reached.
+ * The nodes no committed case executes, each with the reason it does not.
  *
- * Every entry is a STRUCTURAL block, not a missing scenario. None of them can be closed by
- * writing another set of bindings, which is exactly why they are recorded here rather than
+ * "Executes" means at least one span with `status: "ok"` (see {@link executedNodeIdsFromSpans}) —
+ * a node that opens a span and is then refused, interrupted or fails is REACHED, not
+ * executed, and does not belong on the opposite side of this list. Sprint 9 of
+ * spec-20260812-pge-real-workload-errors corrected the rule to say that (it previously read
+ * `nodeId` off a span with no status check at all) and `commit` is the entry that rule
+ * change added: it opens a span on every run that reaches it, and that span's status is
+ * always `"interrupted"`, never `"ok"` — see its own bullet below. The other five entries
+ * are unchanged in MEMBERSHIP by the corrected rule; three of their REASONS were re-verified
+ * against the code for this sprint and one of those three was rewritten, because the
+ * previous prose attributed `synthesize`'s block to the same cause as `critique`'s and
+ * `rework_route`'s, and that attribution does not survive tracing the interpreter's own loop
+ * enforcement (see its bullet).
+ *
+ * `critique` and `rework_route` are genuinely a **missing scenario**, not a structural
+ * block — nothing here claims otherwise for them specifically. `commit`, `context_compact`,
+ * `finalize` and `synthesize` ARE structural: no set of bindings, however imaginative, can
+ * make case authoring close them, which is exactly why they are recorded here rather than
  * left as a to-do:
  *
  *  - `commit` is refused FAIL_CLOSED under the autopilot `noop` mechanism (the sprint-13
- *    divergence), and `finalize`'s only edge in is `commit -> finalize`. Covering it needs a
- *    durable mechanism, and the golden executor pins ONE config on purpose so a case
- *    produces the same artifacts everywhere.
+ *    divergence): `InterruptController` raises `GraphInterrupted` for the git effect
+ *    BEFORE the node body is ever entered, because `noop` grants no durable approval, and
+ *    the interpreter converts that into `{ status: "interrupted", errorClass: "FailClosed"
+ *    }` (`src/pge/runtime/interpreter.ts:1183-1188`) — not `"failed"`, and never `"ok"`.
+ *    The golden executor pins ONE config on purpose so a case produces the same artifacts
+ *    everywhere, and covering this needs a durable mechanism instead.
+ *  - `finalize`'s only edge in is `commit -> finalize`, and `commit` never completes with
+ *    status `"ok"` (previous bullet), so this edge is never crossed. Same root cause as
+ *    `commit`'s own entry, not a second, independent block.
  *  - `context_compact`'s only edge in is `supervisor -> context_compact` under the `compact`
- *    label, and the shipped supervisor never selects that label: the artifact declares
- *    `supervisor.reads` without `messages`, so deciding a window crossed a compression
- *    threshold would mean reading a channel the artifact does not authorise. Recorded as
- *    artifact drift in `nodes/supervisor.ts`.
- *  - `critique`, `rework_route` and `synthesize` sit behind `route_after_eval`'s `rework`
- *    and `partial` labels, which require reaching `evaluate_global` with a non-pass verdict.
- *    Every failing path available through the collaborator seam settles earlier — the
- *    evaluation-fails case exhausts `fanoutRetries` at `reduce_sprints` and lands in
- *    `graceful_failure` without ever reaching the global evaluation.
+ *    label, and the shipped supervisor never selects that label: the committed artifact
+ *    declares `supervisor.reads` as exactly `["branchStatus", "counters", "evaluations",
+ *    "spec"]` — no `messages` — so deciding a window crossed a compression threshold would
+ *    mean reading a channel the artifact does not authorise. Re-checked directly against
+ *    `.bober/topology/coding.json` for this sprint (unchanged since `1.2.0`, and unmoved by
+ *    the `specDraft` channel `1.4.0` added). Recorded as artifact drift in
+ *    `nodes/supervisor.ts`.
+ *  - `critique` sits behind `route_after_eval`'s `rework` label, chosen whenever
+ *    `evaluate_global` returns a non-pass verdict while `reworkRoundsTaken` is still under
+ *    budget. `reduce_sprints`'s own gate (`all-branches-settled`) refuses to admit the run
+ *    into evaluation at all while any branch is `failed`/`abandoned` — it re-dispatches
+ *    such a branch through `fanout_sprints` instead (bounded by `fanoutRetries`) — so
+ *    `evaluate_global` is only ever reached once EVERY dispatched branch has already
+ *    settled `"succeeded"`. The only way it can still return a non-pass verdict there is
+ *    `gradeContracts` grading a contract `"fail"` (or leaving it `"ungraded"`) despite its
+ *    branch succeeding — which happens for real whenever a branch needed even one
+ *    correction round: `gradeContracts` reduces EVERY recorded verdict for a contract, and
+ *    a single `"fail"` row anywhere in that history outweighs a later `"pass"` permanently
+ *    (`nodes/root.ts`, `gradeContracts`). None of the six committed `replay` cases drives
+ *    this — the one case whose branch fails outright is caught by `reduce_sprints` before
+ *    reaching `evaluate_global` at all (see `rework_route`'s bullet), and the one case that
+ *    exercises `sprint_correct` does so through `gate_syntax`/`gate_anchor_regression`,
+ *    neither of which writes a `SprintVerdict`. This is a genuine gap in the dataset, not a
+ *    wall: a case pinning a corrected-but-recorded-fail sprint alongside an otherwise
+ *    passing run would exercise it.
+ *  - `rework_route` is reached only immediately after `critique`, so it inherits `critique`'s
+ *    gap — but even in that missing scenario it would not do useful work. Its dispatch rule,
+ *    `dispatchableContracts`, re-offers a branch only while its `branchStatus` is not
+ *    `"succeeded"`/`"abandoned"` (`nodes/sprint-fanout.ts`), and by the time `rework_route`
+ *    can run at all every dispatched branch's status IS `"succeeded"` — `reduce_sprints`'s
+ *    gate guarantees it, per `critique`'s bullet. So `rework_route`'s own first (and, see
+ *    `synthesize`'s bullet, only ever) invocation would choose the `"exhausted"` label, not
+ *    `"rework"`, and still produce a `status: "ok"` span — it is a missing-scenario node
+ *    like `critique`, and the case that would exercise `critique` exercises this node too.
+ *  - `synthesize` is the one entry whose recorded reason changed this sprint, and it is a
+ *    genuine STRUCTURAL block, unlike its two neighbours above. It sits behind
+ *    `route_after_eval`'s `partial` label, selected only when `reworkRoundsTaken(spec,
+ *    state) >= maxIterations` (2) at a SECOND invocation of `route_after_eval` — which
+ *    never happens. `route_after_eval` and `rework_route` read the identical counter and
+ *    the identical `maxIterations` off the SAME artifact loop bound
+ *    (`loopBoundOf(spec, "rework_route")`), and the interpreter enforces that bound
+ *    independently, at `rework_route` itself, using the counter value already including
+ *    this execution's own increment (`boundedDestination`, `src/pge/runtime/
+ *    interpreter.ts:1004-1044`). Because `rework_route`'s dispatch set is always empty when
+ *    it runs (previous bullet), it never selects its own `"rework"` fan-out — the only edge
+ *    that would loop back through the sprint subgraph and return to `evaluate_global` a
+ *    second time — so it always exits to `graceful_failure` on its first and only
+ *    invocation per run, and `reworkRounds` can reach at most 1, never the bound of 2.
+ *    `route_after_eval` is therefore invoked AT MOST ONCE per run, and its own
+ *    `reworkRoundsTaken >= maxIterations` branch — `"partial"` and, for that matter, its
+ *    `"exhausted"` sibling — can never fire. No golden case, however constructed, can close
+ *    this: it is dead code by construction, not a missing recording. An EARLIER analysis
+ *    (recorded against sprint 7) attributed this to `rework_route`'s dispatch set being
+ *    always empty "because nothing ever writes `abandoned`" — the CONCLUSION (dispatch set
+ *    always empty) is right, but that mechanism is not: no branch is ever `"abandoned"` in
+ *    this shipped graph, but that is beside the point, because `dispatchableContracts`
+ *    already excludes `"succeeded"` branches, and `reduce_sprints`'s gate guarantees every
+ *    branch IS `"succeeded"` by the time `rework_route` can run at all (`critique`'s
+ *    bullet). `"succeeded"`, not `"abandoned"`, is the exclusion that actually bites.
  */
 const NEVER_EXECUTED = [
+  "commit",
   "context_compact",
   "critique",
   "finalize",
@@ -90,7 +162,35 @@ async function loadReplayCases(): Promise<GoldenCase[]> {
   return cases;
 }
 
-/** Every `nodeId` that appears in a run root's span file. */
+/**
+ * The `nodeId` one parsed trace line is evidence of, if and only if its span shows the
+ * node's body actually ran.
+ *
+ * `status: "ok"` is the only status that means that. A node can open a span and never
+ * enter its handler at all — `commit`'s FailClosed refusal under the autopilot `noop`
+ * mechanism ends `"interrupted"` — or open one and have its handler throw or exhaust a
+ * loop bound, ending `"failed"`; `"skipped"` and `"serialized"` (`SPAN_STATUSES`,
+ * `src/pge/runtime/trace.ts`) are further ways a span exists without the node's body
+ * running. Reading `nodeId` off a span with no status check — this file's rule before
+ * sprint 9 of spec-20260812-pge-real-workload-errors — counted every one of those as
+ * "executed", which is how the committed figure counted `commit` as covered when its own
+ * only span was a refusal.
+ *
+ * Exported and pure — parsed spans in, node ids out — so {@link NEVER_EXECUTED}'s
+ * two-directional pin can be proven by mutation without driving the real golden executor;
+ * see the "mutated in both directions" describe block below.
+ */
+export function executedNodeIdsFromSpans(
+  spans: readonly { readonly nodeId?: unknown; readonly status?: unknown }[],
+): Set<string> {
+  const executed = new Set<string>();
+  for (const span of spans) {
+    if (typeof span.nodeId === "string" && span.status === "ok") executed.add(span.nodeId);
+  }
+  return executed;
+}
+
+/** Every `nodeId` a run root's span file has at least one `status: "ok"` span for. */
 async function executedNodeIds(runRootParent: string): Promise<Set<string>> {
   const executed = new Set<string>();
   for (const dir of await readdir(runRootParent)) {
@@ -103,12 +203,12 @@ async function executedNodeIds(runRootParent: string): Promise<Set<string>> {
     } catch {
       continue;
     }
+    const spans: { nodeId?: unknown; status?: unknown }[] = [];
     for (const line of text.split("\n")) {
       if (line.trim() === "") continue;
-      const span: unknown = JSON.parse(line);
-      const nodeId = (span as { nodeId?: unknown }).nodeId;
-      if (typeof nodeId === "string") executed.add(nodeId);
+      spans.push(JSON.parse(line) as { nodeId?: unknown; status?: unknown });
     }
+    for (const nodeId of executedNodeIdsFromSpans(spans)) executed.add(nodeId);
   }
   return executed;
 }
@@ -180,5 +280,80 @@ describe("what the committed replay cases execute", () => {
         true,
       );
     }
+  });
+});
+
+describe("the status-ok rule, mutated in both directions", () => {
+  // sc-9-2: the corrected rule has to be proven to bite BOTH ways, independent of the real
+  // golden executor — driving it per mutation would be slow and would still only exercise
+  // whichever statuses the six committed cases happen to produce today. These tests instead
+  // mutate synthetic spans directly against {@link executedNodeIdsFromSpans}, the exact
+  // function `executedNodeIds` (and therefore the describe block above) delegates to.
+
+  it("a node whose only span ended failed does not count as executed", () => {
+    const executed = executedNodeIdsFromSpans([{ nodeId: "commit", status: "failed" }]);
+    expect(executed.has("commit")).toBe(false);
+  });
+
+  it("a node whose only span was interrupted does not count as executed", () => {
+    // The status `commit` actually ends with under the noop mechanism — see its
+    // NEVER_EXECUTED bullet above. Distinct from "failed" and worth its own case: a rule
+    // that special-cased "failed" and missed "interrupted" would still misclassify commit.
+    const executed = executedNodeIdsFromSpans([{ nodeId: "commit", status: "interrupted" }]);
+    expect(executed.has("commit")).toBe(false);
+  });
+
+  it("a node that gains a span with status ok begins to count as executed", () => {
+    const executed = executedNodeIdsFromSpans([
+      { nodeId: "commit", status: "failed" },
+      { nodeId: "commit", status: "ok" },
+    ]);
+    expect(executed.has("commit")).toBe(true);
+  });
+
+  /**
+   * Reruns the SAME equality the real describe block's first `it` enforces
+   * (`missing.sort() === [...NEVER_EXECUTED].sort()`) over a tiny synthetic declared/
+   * NEVER_EXECUTED pair, to prove the pin itself — not just {@link executedNodeIdsFromSpans}
+   * in isolation — breaks in both directions when the list is not kept in sync.
+   */
+  function missingAgainst(declared: readonly string[], spans: readonly { nodeId: string; status: string }[]) {
+    const executed = executedNodeIdsFromSpans(spans);
+    return declared.filter((id) => !executed.has(id)).sort();
+  }
+
+  it("a covered node losing its only ok span fails the pin unless NEVER_EXECUTED grows to match", () => {
+    const declared = ["commit", "documenter"];
+    const staleNeverExecuted: string[] = []; // nobody added "commit"
+    const before = missingAgainst(declared, [
+      { nodeId: "commit", status: "ok" },
+      { nodeId: "documenter", status: "ok" },
+    ]);
+    expect(before).toEqual(staleNeverExecuted); // matches: both nodes were genuinely executed
+
+    // commit's status regresses to "interrupted" (a FailClosed refusal) with the stale list
+    // left unchanged, exactly the situation this sprint's fix was written for:
+    const after = missingAgainst(declared, [
+      { nodeId: "commit", status: "interrupted" },
+      { nodeId: "documenter", status: "ok" },
+    ]);
+    expect(after).not.toEqual(staleNeverExecuted);
+    expect(after).toEqual(["commit"]);
+  });
+
+  it("a blocked node gaining an ok span fails the pin unless NEVER_EXECUTED shrinks to match", () => {
+    const declared = ["documenter", "synthesize"];
+    const staleNeverExecuted = ["synthesize"]; // nobody removed it
+    const before = missingAgainst(declared, [{ nodeId: "documenter", status: "ok" }]);
+    expect(before).toEqual(staleNeverExecuted); // matches: synthesize was genuinely never executed
+
+    // synthesize starts producing an ok span (its claim stopped being true) with the stale
+    // list left unchanged:
+    const after = missingAgainst(declared, [
+      { nodeId: "documenter", status: "ok" },
+      { nodeId: "synthesize", status: "ok" },
+    ]);
+    expect(after).not.toEqual(staleNeverExecuted);
+    expect(after).toEqual([]);
   });
 });
