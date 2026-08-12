@@ -5,6 +5,8 @@ import { join } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { replaceIfNewer } from "../registry/reducers.js";
+import { createFixedClock } from "../runtime/commit.js";
 import { readFailureArtifact } from "../runtime/graceful-failure.js";
 import { CODING_GRAPH } from "../topology/coding.graph.js";
 import { anchorId } from "./anchors.js";
@@ -731,11 +733,13 @@ describe("the sprint subgraph, compiled from the committed artifact (sc-12-12)",
   it("runs end to end and produces the .bober/ artifacts the imperative cycle produces", async () => {
     const contract = sprintContractFixture();
     const persisted: string[] = [];
+    const versions: (number | undefined)[] = [];
     const run = await runSprint({
       projectRoot: root,
       bindings: stubSprintBindings({
         writeContract: async (_projectRoot, written) => {
           persisted.push(`${written.contractId}:${written.status}`);
+          versions.push(written.version);
         },
       }),
       contracts: [contract],
@@ -760,20 +764,86 @@ describe("the sprint subgraph, compiled from the committed artifact (sc-12-12)",
     });
     expect(persisted).toEqual([`${contract.contractId}:completed`]);
 
+    // sc-3-2: sprint_exit writes a monotone `version` on the settled contract, and it is
+    // the SAME number `branchStatus` records as `attempts` — the two channels agree on the
+    // ordering discriminator for this branch.
+    expect(versions).toEqual([1]);
+    expect(versions[0]).toBe(run.finalState.branchStatus[contract.contractId].attempts);
+
     // The commit boundary ALSO persisted the contract channel to `.bober/contracts/`, which
     // is the same path and the same shape the imperative pipeline writes.
     expect(run.artifactLog.contracts.some((id) => id === contract.contractId)).toBe(true);
 
     // KNOWN LIMITATION, asserted so it cannot change unnoticed rather than hidden: the
     // `sprintContracts` channel still carries `proposed`. `appendById` unions by
-    // `contractId` and resolves a duplicate by CANONICAL ORDER
-    // (`registry/reducers.ts:182`), and `"completed" < "proposed"`, so the settled copy
-    // cannot outrank the seeded one. `branchStatus` solves the same problem with an
-    // explicit `attempts` discriminator (`state/overall.ts:131-142`); `SprintContract` has
-    // no equivalent field, and adding one would change a shipped contract schema.
+    // `contractId` and resolves a duplicate by CANONICAL ORDER (`registry/reducers.ts:182`),
+    // and `"status"` sorts ahead of `"version"` in the canonical key order, so
+    // `"completed" < "proposed"` still decides and the settled copy cannot outrank the
+    // seeded one THROUGH THIS JOIN. `SprintContract` now carries the `version` field
+    // `versionRank` (`registry/reducers.ts:348-359`) would need to break that tie — this
+    // sprint supplies the field; switching `sprintContracts`'s join to consult it is a
+    // separate change (not made here).
     expect(
       run.finalState.sprintContracts.find((entry) => entry.contractId === contract.contractId)
         ?.status,
     ).toBe("proposed");
   }, 30_000);
+
+  it("the written version is REPLAY-STABLE: two independent runs over the same input write the same value (sc-3-3)", async () => {
+    const contract = sprintContractFixture({ contractId: "sprint-fixture-replay-stable" });
+    const versions: (number | undefined)[] = [];
+
+    for (let i = 0; i < 2; i++) {
+      const versionsForRun: (number | undefined)[] = [];
+      const run = await runSprint({
+        projectRoot: root,
+        bindings: stubSprintBindings({
+          writeContract: async (_projectRoot, written) => {
+            versionsForRun.push(written.version);
+          },
+        }),
+        contracts: [contract],
+      });
+      expect(run.result.status).toBe("completed");
+      expect(versionsForRun).toHaveLength(1);
+      versions.push(versionsForRun[0]);
+    }
+
+    // Derived only from `state.evaluations` (a count, order-invariant), which a fresh run
+    // over the same input rebuilds identically — no clock, superstep, or spanId involved.
+    expect(versions[0]).toBeDefined();
+    expect(versions[0]).toBe(versions[1]);
+  }, 30_000);
+});
+
+describe("the settled contract's `version` outranks the seeded copy under versionRank (sc-3-4)", () => {
+  it("replaceIfNewer.merge picks the settled copy over the seeded one, in both directions, with an IDENTICAL updatedAt", () => {
+    // The same instant `.bober/golden/replay-full-run-evaluation-passes.json` shows the
+    // seeded `plan.materialize` copy and the settled `sprint.exit` copy sharing byte for
+    // byte: proof `updatedAt` is a genuine tie here, not an artifact of this test's setup.
+    const updatedAt = createFixedClock("2026-08-05T00:00:00.000Z").nowIso();
+
+    const seeded = sprintContractFixture({ status: "proposed", updatedAt });
+    // The seeded copy carries no `version` key at all — exactly what `plan_materialize`
+    // produces (sc-3-1's absence guarantee), not `version: 0`.
+    expect("version" in seeded).toBe(false);
+
+    const settled = { ...seeded, status: "completed" as const, updatedAt, version: 1 };
+
+    expect(replaceIfNewer.merge(seeded, [settled])).toEqual(settled);
+    expect(replaceIfNewer.merge(settled, [seeded])).toEqual(settled);
+  });
+
+  it("control: with version absent from BOTH copies and updatedAt held equal too, the seeded copy wins instead — proving the test above is version deciding, not an accident of canonicalJson", () => {
+    const updatedAt = createFixedClock("2026-08-05T00:00:00.000Z").nowIso();
+
+    const seeded = sprintContractFixture({ status: "proposed", updatedAt });
+    // Same transition as above (`status: "proposed" -> "completed"`, same `updatedAt`) but
+    // with NO `version` on either copy — the pre-sc-3-2 world. `"completed" < "proposed"`
+    // lexically, so canonicalJson — the last tiebreak — favors the seeded copy.
+    const settledNoVersion = { ...seeded, status: "completed" as const, updatedAt };
+
+    expect(replaceIfNewer.merge(seeded, [settledNoVersion])).toEqual(seeded);
+    expect(replaceIfNewer.merge(settledNoVersion, [seeded])).toEqual(seeded);
+  });
 });

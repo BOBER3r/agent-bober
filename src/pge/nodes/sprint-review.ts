@@ -30,23 +30,25 @@ import { iterationOf, provisionalEvaluation, sprintVerdict } from "./sprint-eval
  * completed attempt would leave the branch looking permanently in flight. `gate_sprint_out`
  * checks exactly this, which is what its declared `branch-verdicts-recorded` means.
  *
- * ── KNOWN LIMITATION: the `sprintContracts` channel cannot express a status TRANSITION ──
+ * ── KNOWN LIMITATION: the `sprintContracts` channel still keeps the seeded copy ──
  *
  * `sprint_exit` declares `writes: ["branchStatus", "sprintContracts"]` and writes the settled
  * contract to both. The `branchStatus` write lands. The `sprintContracts` write does NOT
- * change the recorded status, and it cannot: `appendById` unions by `contractId` and resolves
+ * change the recorded status — not yet: `appendById` unions by `contractId` and resolves
  * a duplicate id by CANONICAL ORDER (`registry/reducers.ts:182`), which is what makes it
  * order-invariant under concurrency — and `"completed"` sorts before `"proposed"`, so the
  * seeded copy outranks the settled one.
  *
  * `branchStatus` solves the identical problem with an explicit `attempts` discriminator
- * (`state/overall.ts:131-142`). `SprintContract` has no equivalent monotone field, and adding
- * one would change a shipped contract schema every part of this repository reads. So the
+ * (`state/overall.ts:131-142`). `SprintContract` now has an equivalent monotone field,
+ * `version` (set to `attempts` above), so `versionRank` (`registry/reducers.ts:348-359`) CAN
+ * rank the settled copy ahead of the seeded one. The channel's reducer just doesn't consult
+ * it yet — `appendById`/`joinByCanonicalOrder` still decide by canonical JSON, unchanged by
+ * this file. Switching the join to read `version` is a separate change. Until then, the
  * settled contract reaches disk through the `sprint.exit` effect — the shipped `saveContract`,
  * at the path the imperative pipeline writes — and the channel is left describing the plan
  * rather than the outcome. `sprint-evaluate.test.ts` asserts BOTH facts, so neither can drift
- * unnoticed. This is a finding about the artifact and the reducer set, reported rather than
- * worked around: the fix belongs in a `SprintContract` revision, not in a node body.
+ * unnoticed.
  */
 
 export const SPRINT_REVIEW_NODE_IDS = {
@@ -202,6 +204,12 @@ export function sprintExitNode(spec: TopologySpec): NodeImpl<unknown, unknown> {
         ...contract,
         status: outcome.settled === "succeeded" ? "completed" : "failed",
         updatedAt: ctx.clock.nowIso(),
+        // `attempts` is a replay-stable count (filter().length over a channel a replay
+        // rebuilds identically), monotone across the seeded->settled transition (seeded has
+        // no `version` at all, which `versionRank` ranks `0`; `attempts >= 1` always beats
+        // that), and branch-local (filtered by `contractId`, immune to another branch's
+        // writes). See `versionRank`, `src/pge/registry/reducers.ts:348-359`.
+        version: attempts,
       };
 
       await ctx.effects.invoke(

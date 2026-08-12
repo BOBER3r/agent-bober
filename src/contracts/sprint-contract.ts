@@ -193,6 +193,24 @@ export const SprintContractSchema = z.object({
   iterationHistory: z.array(z.unknown()).default([]),
   lastEvalId: z.string().nullable().optional(),
   evalResults: z.array(z.unknown()).optional(),
+  /**
+   * ── `version` is the ordering discriminator, not decoration ──
+   *
+   * Read by `versionRank` (`src/pge/registry/reducers.ts:348-359`), the
+   * `replaceIfNewer` reducer's rank function: a missing/non-finite `version`
+   * ranks `0`, so any settled contract with `version >= 1` outranks a seeded
+   * one without a fight over `updatedAt` (which the golden harness's fixed
+   * clock can make byte-identical between seeded and settled copies, making
+   * it useless as a tiebreak on its own).
+   *
+   * DELIBERATELY `.optional()`, never `.default(...)`. A default would
+   * materialise `version` on the SEEDED copy too (every parse, including
+   * `OverallStateSchema.parse` at every commit boundary), collapsing seeded
+   * and settled to the same rank and destroying the exact ordering this
+   * field exists to provide. All ~250 committed contracts predate this
+   * field and must stay valid with it absent.
+   */
+  version: z.number().int().min(0).optional(),
 
   // Timestamps
   createdAt: z.string().datetime({ offset: true }).optional(),

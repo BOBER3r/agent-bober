@@ -31,6 +31,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { loadContract, saveContract } from "../state/sprint-state.js";
+
 // A reusable, schema-valid contract for tests that need a known-good base.
 function validContract(overrides: Partial<SprintContract> = {}): SprintContract {
   return {
@@ -452,5 +454,106 @@ describe("every committed contract's status is a legal ContractStatusSchema memb
       const committedEntries = await readContractStatusEntries(CONTRACTS_DIR);
       expect(findIllegalStatuses(committedEntries)).toEqual([]);
     });
+  });
+});
+
+// ── SprintContractSchema.version (sc-3-1) ───────────────────────────
+//
+// `version` is optional, never defaulted (see the field's JSDoc in
+// sprint-contract.ts and versionRank at src/pge/registry/reducers.ts:348-359).
+// A `.default(...)` would stamp a value onto every contract that lacks one —
+// including all ~250 committed contracts and the seeded copy `sprint_exit`
+// must outrank — so the anti-default assertion below is the load-bearing one.
+
+describe("SprintContractSchema.version (sc-3-1)", () => {
+  it("accepts a contract with no version field, so committed contracts stay valid without migration", () => {
+    const result = SprintContractSchema.safeParse(validContract());
+    expect(result.success).toBe(true);
+  });
+
+  it("leaves version genuinely ABSENT — not defaulted to 0 or any other value", () => {
+    const result = SprintContractSchema.safeParse(validContract());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.version).toBeUndefined();
+      expect("version" in result.data).toBe(false);
+    }
+  });
+
+  it("accepts an explicit version and preserves the exact value", () => {
+    const result = SprintContractSchema.safeParse(validContract({ version: 3 }));
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.version).toBe(3);
+    }
+  });
+
+  it("rejects a negative or non-integer version", () => {
+    expect(SprintContractSchema.safeParse(validContract({ version: -1 })).success).toBe(false);
+    expect(SprintContractSchema.safeParse(validContract({ version: 1.5 })).success).toBe(false);
+  });
+});
+
+// ── version round-trip through saveContract -> loadContract (sc-3-5) ─
+//
+// `saveContract` serialises the CALLER'S object verbatim (sprint-state.ts:63), while
+// `loadContract` returns `SprintContractSchema.safeParse(...).data` — a plain `z.object`,
+// which strips undeclared keys (zod 3.25.76 default "strip" mode, no `.strict()` or
+// `.passthrough()` anywhere on SprintContractSchema). That asymmetry is exactly why
+// `version` had to become a DECLARED schema field rather than an unknown key riding along:
+// an undeclared key survives the write and vanishes on the very next read.
+
+describe("version round-trip through saveContract -> loadContract (sc-3-5)", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop();
+      if (dir !== undefined) await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("a declared version field survives save then load", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "contracts-version-"));
+    tempDirs.push(dir);
+
+    const contract = validContract({ contractId: "sprint-version-roundtrip", version: 4 });
+    await saveContract(dir, contract);
+    const loaded = await loadContract(dir, contract.contractId);
+
+    expect(loaded.version).toBe(4);
+  });
+
+  it("a contract with no version field round-trips with version still absent", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "contracts-version-absent-"));
+    tempDirs.push(dir);
+
+    const contract = validContract({ contractId: "sprint-version-absent" });
+    await saveContract(dir, contract);
+    const loaded = await loadContract(dir, contract.contractId);
+
+    expect(loaded.version).toBeUndefined();
+  });
+
+  it("control: an UNDECLARED key on the same object does NOT survive the same round-trip — this is the asymmetry version had to avoid", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "contracts-version-control-"));
+    tempDirs.push(dir);
+
+    const contract = validContract({ contractId: "sprint-version-control" });
+    // saveContract writes the caller's object as-is, so an undeclared key reaches the file.
+    const withUndeclaredKey = {
+      ...contract,
+      undeclaredRideAlongField: "should not survive a load",
+    } as SprintContract;
+    await saveContract(dir, withUndeclaredKey);
+
+    const raw = await readFile(
+      join(dir, ".bober", "contracts", `${contract.contractId.replace(/[^a-zA-Z0-9_-]/g, "_")}.json`),
+      "utf-8",
+    );
+    expect(JSON.parse(raw)).toHaveProperty("undeclaredRideAlongField");
+
+    const loaded = await loadContract(dir, contract.contractId);
+    expect((loaded as Record<string, unknown>).undeclaredRideAlongField).toBeUndefined();
   });
 });
