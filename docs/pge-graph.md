@@ -804,7 +804,7 @@ configures, and it is a MEASURED-basis function, never a hand-picked literal —
 | run status / verdict | `completed` / `failed` (the interpreter's OWN richer verdict; see below) |
 | what `PgeEngine.run` returned | `success: true` — still, by the Option-A decision — **plus**, as of sprint 5, `errors: [{nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: …}]`, so the refusal does now reach the returned `PipelineResult` even though `success` does not account for it (next paragraph) |
 
-Four consequences a reader should not have to derive:
+Five consequences a reader should not have to derive:
 
 - **Raising the caps fixed exactly what it was scoped to fix, and nothing more.** The two
   `StateBloatError` rejections are gone — `byteSize(spec) < 131,072` and
@@ -851,6 +851,20 @@ Four consequences a reader should not have to derive:
   `verdict: "failed"` sitting next to `engineOutcome: {kind: "resolved", success: true}`; the
   returned `PipelineResult` now additionally carries
   `errors: [{nodeId: "commit", branchKey: null, errorClass: "FailClosed", message: "..."}]`.
+- **And as of sprint 6, a person sees it.** An error channel nobody surfaces closes nothing,
+  so the two places a human or a CI job actually meets a run now read it: `bober run` sets a
+  **non-zero exit code** and prints a `Refused:` block naming each failure's `nodeId` and
+  `errorClass` (`src/cli/commands/run.ts:250-261`, a branch *beside* the pre-existing
+  `!result.success` check — every `process.exitCode` site in that file only ever writes `1`,
+  so the two cannot fight), and the MCP run manager resolves such a run to
+  `RunState.status = "failed"` with `RunState.error` populated
+  (`src/mcp/run-manager.ts:227-233`) rather than the pre-existing unconditional
+  `"completed"`. Neither needed a schema change. **`success` is still `true` on that same
+  run** — so a refused MCP run now literally carries `status: "failed"` beside
+  `result.success: true`, a disagreement pinned by a test rather than tolerated by accident.
+  An operator sees the refusal and a CI job fails on it; a *programmatic* caller reading
+  `success` alone is still told the wrong thing, which is the Option-B question this spec
+  does not answer.
 
 Re-deriving the measurement is a deliberate act —
 `MEASURE_REAL_WORKLOAD=1 npx vitest run src/pge/engine/real-workload.test.ts` rewrites the
@@ -993,8 +1007,11 @@ serves both.
   deliberate decision (Option A, spec-20260812-pge-real-workload-errors
   resolvedClarifications D3) — but as of that spec's sprint 5, `PipelineResult` carries an
   optional `errors` array populated from the refusal, so the fact is no longer invisible to
-  a caller that checks it. Both engines still report `success: true`; the artifacts differ,
-  and now so does the presence of `errors`.
+  a caller that checks it, and as of sprint 6 the two shipped callers **do** check it:
+  `bober run` exits non-zero and prints a `Refused:` block naming the refused node and its
+  error class, and the MCP run manager reports `RunState.status = "failed"` with `error`
+  populated. Both engines still report `success: true`; the artifacts differ, and now so
+  does the presence of `errors`.
 
 ### The decision
 
@@ -1010,9 +1027,11 @@ serves both.
 
 Flipping the default is a separate decision that requires sustained green conformance
 across real runs. `PipelineResult` gained the error channel this paragraph used to say was
-missing (spec-20260812-pge-real-workload-errors, sprint 5) — `success` itself still cannot
-say a fail-closed refusal happened, by the same Option-A decision, so a flip still requires
-every caller that decides on `success` alone to be migrated to check `errors` too.
+missing (spec-20260812-pge-real-workload-errors, sprint 5), and sprint 6 migrated the two
+callers this repository ships — the `bober run` CLI and the MCP run manager — so a refusal
+is visible to an operator and fails a CI job. `success` itself still cannot say a
+fail-closed refusal happened, by the same Option-A decision, so a flip still requires every
+*remaining* caller that decides on `success` alone to be migrated to check `errors` too.
 
 **This decision is enforced, not just recorded.**
 `src/orchestrator/workflow/oracle-retention.test.ts` asserts that the schema still defaults

@@ -494,7 +494,7 @@ Add to your Windsurf MCP configuration:
 | `bober_principles` | read/write | Read or set project principles |
 | `bober_config` | read/write | Read or update `bober.config.json` |
 | `bober_list_pending_approvals` · `bober_approve_checkpoint` · `bober_reject_checkpoint` | careful-flow | List / approve / reject checkpoint approvals (careful mode) |
-| `bober_list_active_runs` · `bober_get_run_status` · `bober_abort_run` · `bober_run_in_worktree` | run-mgmt | Manage concurrent and isolated-worktree runs |
+| `bober_list_active_runs` · `bober_get_run_status` · `bober_abort_run` · `bober_run_in_worktree` | run-mgmt | Manage concurrent and isolated-worktree runs. A run whose `PipelineResult` carries a non-empty `errors` array (a **refused** node) resolves to `status: "failed"` with `error` naming each refused node and its error class — even though `result.success` may still be `true`, so poll `status`, not `result.success` |
 | `bober_subscribe_events` · `bober_unsubscribe_events` | events | Live run event stream |
 | `bober_get_project_state` · `bober_list_projects` · `bober_list_specs` | discovery | Multi-project state + spec discovery |
 | `bober_incident_start` · `bober_incident_status` · `bober_incident_list` · `bober_incident_abort` · `bober_rollback_start` · `bober_postmortem_get` · `bober_playbook_search` · `bober_playbook_list` | incident | Diagnose, roll back, postmortem, and search playbooks |
@@ -595,7 +595,7 @@ npx agent-bober plan answer <specId>                     # Resolve clarification
 npx agent-bober plan answer <specId> <questionId> "..."  # Resolve a single clarification question
 npx agent-bober sprint                                   # Execute next sprint (consumes plan's contracts)
 npx agent-bober eval                                     # Evaluate current sprint
-npx agent-bober run "feature"                            # Full autonomous loop
+npx agent-bober run "feature"                            # Full autonomous loop. exitCode=1 when the pipeline fails or throws — and also when the run was REFUSED (a non-empty PipelineResult.errors, which the graph engine populates); a refusal prints a "Refused:" block naming each refused node and its error class, and can occur while success is still true, so CI should read the exit code
 npx agent-bober run "feature" --team example             # Full autonomous loop using the 'example' team
 npx agent-bober chat                                     # Interactive chat REPL (roster + memory aware)
 npx agent-bober chat example                             # Interactive chat REPL using the 'example' team

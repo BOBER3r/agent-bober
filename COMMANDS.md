@@ -152,6 +152,22 @@ optional; this is how `bober chat`'s careful mode launches a gated run.
 `--mode` and `--checkpoint` flags override `bober.config.json` for the duration of the run.
 See [VISION.md](./VISION.md) for a full explanation of modes.
 
+**Exit code.** `bober run` exits `1` when the pipeline reports failure, when the pipeline
+throws, when `--approve-gates` is given an unknown gate name — and, additionally, when the
+run's `PipelineResult` carries a non-empty `errors` array, i.e. a node was **refused**. A
+refusal is printed as a `Refused:` block naming each refused node and its error class:
+
+```text
+Refused:
+  x commit (FailClosed)
+      FAIL_CLOSED: node "commit" declares effects (git) ...
+```
+
+That last case matters for CI: a refused run can still report `success: true` (only the
+graph engine populates `errors`, and its `success` is sprint-split based — see
+[docs/pge-graph.md](./docs/pge-graph.md)), so the exit code and the printed block are what
+tell you the run did not do everything it claims. Every other run keeps exit `0`.
+
 ---
 
 ### `bober mcp`
